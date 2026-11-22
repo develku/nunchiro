@@ -1,0 +1,242 @@
+/* Ticket 305: mockup v4's two columns (step list, chosen step) inside the Settings page. */
+/* Ticket 1041 A (N178): no frame and no divider; the step list is a tint step beside the panel. */
+.ob {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  border-radius: var(--r-8);
+  overflow: hidden;
+}
+.ob-list {
+  padding: var(--sp-12);
+  background: var(--tint-1);
+}
+.ob-list ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ob-sec {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 var(--sp-4) var(--sp-6);
+  font-size: var(--fs-11);
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.ob-step {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 7px var(--sp-8);
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-13);
+  text-align: left;
+  cursor: pointer;
+}
+.ob-step:hover {
+  background: var(--tint-1);
+}
+.ob-step[aria-current] {
+  background: var(--select-bg); /* the current step: the select step, aria-current="step" */
+  color: var(--select-text);
+}
+.ob-n {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid transparent; /* keeps the circle's size; the number sits on a tint disc */
+  background: var(--tint-2);
+  border-radius: 50%;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.ob-step[data-done='true'] .ob-n {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: var(--on-status);
+}
+.ob-step[data-done='true'] .ob-lbl {
+  color: var(--muted);
+}
+.ob-lbl small {
+  display: block;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.ob-step[aria-current] .ob-lbl small {
+  color: var(--select-text); /* muted read 4.3:1 on the select step over the list's tint */
+}
+.ob-panel {
+  padding: 22px 26px;
+  min-width: 0;
+  background: var(--panel);
+}
+.ob-head {
+  display: flex;
+  gap: var(--sp-12);
+  align-items: flex-start;
+  margin-bottom: var(--sp-16);
+}
+.ob-head h3,
+.ob-import h3 {
+  margin: 0;
+  font-size: var(--fs-3);
+}
+.ob-head p {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+.ob-pill {
+  margin-left: auto;
+  flex: none;
+  padding: 1px 9px;
+  border-radius: var(--r-pill);
+  background: var(--tint-1); /* ticket 1041 A: a tint pill, the word carries the state */
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.ob-pill[data-done='true'] {
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  color: var(--ok-text);
+  font-weight: 600;
+}
+/* Ticket 391 part 2 (scene d): the provider cards, the notify rows, the buttons and the recheck line inside a step. */
+.ob-panel .ob-cards,
+.ob-panel .ob-rows {
+  margin-bottom: var(--sp-12);
+}
+/* The step panel is narrower than Providers: the name and version stay whole (look v22 d: "Claude" read "C." under the Login
+   button); the button, chip, switch and chevron go to a second line when they do not fit beside them. */
+.ob-panel .ob-cards .prv-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-6) var(--sp-12);
+}
+.ob-panel .ob-cards .prv-row .prv-nm {
+  flex: 1 0 auto;
+}
+.ob-panel .ob-cards .prv-row .prv-meta {
+  flex: 0 0 auto;
+}
+.ob-panel .ob-base .ssec {
+  margin: 0 0 var(--sp-12);
+}
+.ob-acts {
+  display: flex;
+  gap: var(--sp-8);
+}
+.ob-why {
+  margin: 0;
+  font-size: var(--fs-12);
+  color: var(--text);
+}
+.ob-recheck {
+  margin: var(--sp-8) 0 0;
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+/* Ticket 1034 (mockup bot-statusbar-1121 3-1): the name field and the "Runs on" value sit beside their labels. The step
+   panel is narrower than a Settings page, where a row's text keeps 320 px and the control would go to a second line. */
+.settings[role='region'] .ob-panel .srow.ob-name > .slab {
+  flex-basis: 150px;
+}
+.settings[role='region'] .ob-panel .srow.ob-name input.sinp {
+  width: 180px;
+}
+/* Ticket 1034: what the assistant's seat runs on, said in the row's control place. */
+.ob-runs {
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.ob-skp {
+  margin-left: var(--sp-4);
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--tint-2);
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.ob-import {
+  margin-top: var(--sp-16);
+}
+@media (max-width: 760px) {
+  .ob {
+    grid-template-columns: 1fr;
+  }
+  .ob-list {
+    border-radius: var(--r-8) var(--r-8) 0 0;
+  }
+}
+
+/* Owner 11-15: the one-button start above the checklist; its lines are the recommended defaults, read-only here. */
+.ob-quick {
+  display: grid;
+  gap: var(--sp-12);
+  padding: var(--sp-16);
+  margin-bottom: var(--sp-16);
+  border: 0;
+  border-radius: var(--r-10);
+  background: var(--panel); /* ticket 1041 A: the card's surface step, no outline */
+}
+/* Ticket 991 (A20): the settings section rule leaves 30 px above a card for a title drawn outside it; this card's title is
+   inside, so that room was empty space under the page intro. */
+.settings[role='region'] .sbody > section.ob-quick:not(.sempty) {
+  margin-top: 0;
+}
+.ob-quick h3,
+.ob-quick p,
+.ob-quick dl,
+.ob-quick dd {
+  margin: 0;
+}
+.ob-quick p,
+.ob-quick dl {
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.ob-quick dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  gap: var(--sp-8);
+  padding: var(--sp-4) 0;
+}
+.ob-quick dd {
+  color: var(--text);
+}
+.ob-quick .ob-acts {
+  margin-top: var(--sp-8);
+}
+.ob-quick dd small {
+  display: block;
+  margin-top: var(--sp-4);
+  color: var(--muted);
+}
+/* The keys step (owner 2026-11-16): the prefix caps sit left of Change; the recorder and the letters take the row's width. */
+.ob-keys .sctl {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+}
+.ob-keys .klist {
+  margin-top: var(--sp-8);
+}
+.ob-keys .klist td:first-child {
+  padding-left: 0;
+}
+.ob-keys .klist td.kact {
+  display: none;
+}
+.ob-keys .hk-row .sinp {
+  flex: 1 1 100%; /* all the letters show without scrolling the field */
+}
+.ob-keys-line {
+  margin-bottom: var(--sp-12);
+}

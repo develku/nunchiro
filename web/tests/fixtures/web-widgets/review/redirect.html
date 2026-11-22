@@ -1,0 +1,12 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>redirect probe</title></head>
+<body>
+<script>
+// v1b-23: host A answers with a redirect to host B; the CSP must stop the follow-up, so B never sees a request.
+window.result = 'pending';
+fetch('https://api.nunchiro.test/hop').then(function (r) { return r.text(); }).then(
+  function (t) { window.result = 'followed: ' + t; },
+  function () { window.result = 'blocked'; }
+);
+</script>
+</body></html>

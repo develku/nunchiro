@@ -1,0 +1,167 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>배치 D5b 상단 배치</title><style>
+:root{--bg:#f6f6f4;--ink:#1f2328;--pbg:#fff;--fg:#1f2328;--mut:#59636e;--line:#d1d9e0;--hov:#f0f2f4;--you:#bc4c00;--youbg:#fff1e5;--bad:#cf222e;--run:#0969da;--ok:#1a7f37;--done:#8250df;--idle:#818b98}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1117;--ink:#e6edf3;--pbg:#151b23;--fg:#e6edf3;--mut:#9198a1;--line:#3d444d;--hov:#262c36;--you:#f0883e;--youbg:#3a2614;--bad:#f85149;--run:#4493f8;--ok:#3fb950;--done:#a371f7;--idle:#9198a1}}
+:root[data-theme="dark"]{--bg:#0d1117;--ink:#e6edf3;--pbg:#151b23;--fg:#e6edf3;--mut:#9198a1;--line:#3d444d;--hov:#262c36;--you:#f0883e;--youbg:#3a2614;--bad:#f85149;--run:#4493f8;--ok:#3fb950;--done:#a371f7;--idle:#9198a1}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;padding:20px 16px 40px;background:var(--bg);color:var(--ink);font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+h1{font-size:20px;margin:0 0 4px}h1+p{margin:0 0 14px;color:var(--mut);max-width:1100px;line-height:1.5}
+.tg{position:fixed;top:10px;right:12px;font:600 12px system-ui;border:1px solid var(--line);background:var(--pbg);color:var(--fg);border-radius:6px;padding:4px 10px;cursor:pointer;z-index:50}
+.btn{font:600 12px system-ui;border:1px solid var(--line);background:var(--pbg);color:var(--fg);border-radius:6px;padding:3px 9px;cursor:pointer}.btn:hover{background:var(--hov)}
+.btn.pri{background:var(--run);border-color:var(--run);color:#fff}
+.mw{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--pbg);display:flex;flex-direction:column;height:max(560px,calc(100vh - 130px));font-size:12px;user-select:none}
+.tb{display:flex;align-items:center;gap:6px;height:36px;padding:0 10px;border-bottom:1px solid var(--line);background:var(--hov);color:var(--mut);flex:none}.tb .sp{flex:1}
+.tb .dots i{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--line);margin-right:4px}
+.eb{display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--youbg);border-bottom:2px solid var(--you);color:var(--you);font-weight:700;flex:none}
+.eb .hint{font-weight:400;color:var(--mut);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0;flex:1}
+.body{display:flex;flex:1;min-height:0}
+.rail{flex:none;width:58px;display:flex;flex-direction:column;gap:3px;padding:8px 3px;align-items:center;border-right:1px solid var(--line)}
+.rail.r{border-right:0;border-left:1px solid var(--line)}
+.rail .sp{flex:1;width:100%}
+.ri{display:flex;flex-direction:column;align-items:center;font-size:9.5px;color:var(--mut);white-space:nowrap;border-radius:6px;padding:3px 4px;position:relative;cursor:pointer;width:50px;border:0;background:none;font-family:inherit}
+.ri b{font-size:15px;color:var(--fg);font-weight:400;line-height:1.3}.ri:hover,.ri.on{background:var(--hov)}
+.ri.on::before{content:"";position:absolute;left:-3px;top:5px;bottom:5px;width:3px;border-radius:2px;background:var(--run)}.rail.r .ri.on::before{left:auto;right:-3px}
+.ri.lay{border:1px solid var(--line);font-weight:700;color:var(--fg)}.mw.edit .ri.lay{background:var(--youbg);border-color:var(--you);color:var(--you)}
+.mw.edit .rail .ri:not(.lay){outline:1px dashed var(--mut);outline-offset:-1px;cursor:grab}
+.ri .rx{display:none;position:absolute;top:-4px;right:-2px;width:15px;height:15px;border-radius:50%;border:0;background:var(--bad);color:#fff;font:700 10px/15px system-ui;padding:0;cursor:pointer}
+.mw.edit .ri .rx{display:block}
+.ri .req{display:none;position:absolute;top:-5px;right:-4px;font:700 8px system-ui;color:var(--mut);background:var(--pbg);border:1px solid var(--line);border-radius:4px;padding:0 3px}.mw.edit .ri .req{display:block}
+.tlay{font:600 12px system-ui;border:1px solid var(--line);background:var(--pbg);color:var(--fg);border-radius:6px;padding:3px 10px;cursor:pointer}.tlay:hover{background:var(--hov)}
+.mw.edit .tlay{background:var(--you);border-color:var(--you);color:#fff}
+.ri.thot{background:color-mix(in srgb,var(--done) 22%,transparent);outline:2px solid var(--done)!important}
+.pick{position:fixed;z-index:80;background:var(--pbg);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 24px #0004;padding:4px;min-width:200px;color:var(--fg)}.pick .hd{font:700 10.5px system-ui;color:var(--mut);padding:4px 8px}.pick button{display:block;width:100%;text-align:left;border:0;background:none;color:inherit;font:inherit;padding:5px 8px;border-radius:5px;cursor:pointer}.pick button:hover{background:var(--hov)}
+.rail.hot{background:color-mix(in srgb,var(--run) 12%,transparent)}
+.ins{width:44px;height:3px;border-radius:2px;background:var(--run);flex:none}
+.sb{flex:none;width:250px;display:flex;flex-direction:column;min-height:0;background:var(--pbg)}
+#sbL{border-right:1px solid var(--line)}#sbR{border-left:1px solid var(--line)}
+.sbh{display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;font-weight:700;color:var(--fg);border-bottom:1px solid var(--line);background:var(--hov);flex:none}.sbh .sp{flex:1}.sbh small{color:var(--mut);font-weight:400}
+.sbb{flex:1;min-height:0;overflow:auto;padding:8px 10px;line-height:1.7}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;padding:3px}
+.zone{flex:1;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.zh{display:flex;height:28px;border-bottom:1px solid var(--line);background:var(--hov);flex:none}
+.tab{display:flex;align-items:center;padding:0 10px;font-weight:600;background:var(--pbg);color:var(--fg);box-shadow:inset 0 2px 0 var(--run);border-right:1px solid var(--line)}
+.zb{flex:1;min-height:0;padding:8px 10px;position:relative}
+.mono{font:11.5px/1.6 ui-monospace,Menlo,monospace;color:var(--mut);white-space:pre;overflow:hidden}.mono .g{color:var(--ok)}.mono .y{color:var(--you)}
+.comp{position:absolute;left:8px;right:8px;bottom:8px;border:1px solid var(--line);border-radius:6px;padding:5px 9px;color:var(--mut)}
+/* tree */
+.trow{--c:var(--idle);position:relative;display:flex;align-items:center;gap:6px;height:24px;margin:1px 0 1px 14px;padding:0 6px 0 11px;border-radius:5px;min-width:0;color:var(--fg);font-weight:600}
+.trow::before{content:"";position:absolute;left:3px;top:5px;bottom:5px;width:3px;border-radius:2px;background:var(--c)}
+.trow.you{--c:var(--you);background:var(--youbg)}.trow.run{--c:var(--run)}.trow.ok{--c:var(--ok)}.trow:hover{background:var(--hov)}
+.trow .n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.trow .n i{font-style:normal;font-weight:400;color:var(--mut)}
+.ph{display:flex;align-items:center;gap:4px;border-radius:5px;padding:0 4px;color:var(--fg);font-weight:700;margin-top:4px}
+.ph .fold{border:0;background:none;color:var(--mut);cursor:pointer;width:14px;padding:0;font-size:10px}
+.ph .attach{display:none;margin-left:auto;font:700 10px system-ui;color:#fff;background:var(--run);border-radius:9px;padding:0 7px}
+.mw.dragging .ph{outline:1px dashed var(--line);outline-offset:1px}
+.ph.hot{background:color-mix(in srgb,var(--run) 16%,transparent);outline:2px solid var(--run)!important}.ph.hot .attach{display:inline-block}
+.view{margin:1px 0 1px 14px}
+.vh{display:flex;align-items:center;gap:5px;height:22px;padding:0 4px 0 6px;border-radius:5px;cursor:pointer;color:var(--fg);font-weight:600}.vh:hover{background:var(--hov)}
+.vh .tagv{font:700 9px system-ui;color:var(--done);border:1px solid var(--done);border-radius:4px;padding:0 3px;line-height:13px}
+.vh .sp{flex:1}.vh .x{display:none;border:0;background:none;color:var(--mut);cursor:pointer}.mw.edit .vh .x{display:block}
+.vb{margin:0 0 3px 12px;padding:4px 6px;border-left:2px solid var(--done);background:var(--hov);border-radius:0 5px 5px 0;line-height:1.6}
+.chv{display:inline-block;width:10px;color:var(--mut);font-size:9px;transition:transform .1s}.open>.chv{transform:rotate(90deg)}
+.cd{background:var(--pbg);border:1px solid var(--line);border-radius:5px;padding:2px 6px;margin-bottom:4px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cd i{font-style:normal;color:var(--mut);font-size:10px}
+.li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg)}.li span{color:var(--mut)}
+.inp{border:1px solid var(--line);border-radius:6px;padding:3px 8px;color:var(--mut);margin-bottom:6px}
+.pvw{border:1px solid var(--line);border-radius:6px;overflow:hidden}.pvw .u{background:var(--hov);padding:3px 8px;color:var(--mut);font:11px ui-monospace,Menlo,monospace;border-bottom:1px solid var(--line)}.pvw .pg{padding:10px;display:flex;flex-direction:column;gap:6px}.blk{height:12px;border-radius:3px;background:var(--line)}
+/* library */
+.lib{flex:none;width:240px;border-left:1px solid var(--line);display:flex;flex-direction:column;background:var(--pbg);min-height:0}
+.lib .lh{padding:8px 10px 4px;font-weight:700}.lib .ll{flex:1;overflow:auto;padding:4px 10px}
+.card{display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:7px;padding:5px 8px;margin-bottom:5px;cursor:grab;background:var(--pbg)}.card:hover{border-color:var(--run)}
+.card .ic{width:24px;height:24px;border-radius:6px;background:var(--hov);display:grid;place-items:center;font-size:13px;flex:none}
+.card .tx{min-width:0;flex:1}.card .tx b{display:block;color:var(--fg)}.card .tx small{color:var(--mut)}
+.card .st{font:600 10px system-ui;color:var(--ok);white-space:nowrap}
+.trash{margin:6px 10px 10px;border:2px dashed var(--line);border-radius:8px;padding:10px;text-align:center;color:var(--mut)}.trash.hot{border-color:var(--bad);color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,transparent)}
+.lf{border-top:1px solid var(--line);padding:7px 10px;color:var(--mut);font-size:11px;line-height:1.5}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--fg);color:var(--pbg);padding:6px 12px;border-radius:8px;font-weight:600;font-size:12.5px;display:flex;gap:10px;align-items:center;z-index:90}
+.toast button{border:0;background:none;color:var(--run);font-weight:700;cursor:pointer}
+.note{max-width:1100px;margin-top:12px;color:var(--mut);line-height:1.6}.note b{color:var(--ink)}
+</style>
+<button class="tg" id="tg">테마</button>
+<h1>배치 D5b — 배치 버튼은 상단 제목줄, 트리 아이콘으로 하위 보기</h1>
+<p>왼쪽·오른쪽 아이콘 바의 아이콘 하나하나가 위젯입니다. 아이콘을 누르면 그쪽 사이드바에 그 위젯 하나만 열립니다(기본은 분할 없음). 창 맨 위 제목줄 오른쪽의 <b>배치</b>를 켜면 아이콘을 끌어 다른 바로 옮기거나 순서를 바꾸고, 위젯 보관함에서 새 아이콘을 끌어 넣고, ✕ 또는 보관함으로 끌어 빼낼 수 있습니다. 위젯을 트리의 프로젝트 줄에 놓거나, 트리가 닫혀 있으면 바의 트리 아이콘에 놓고 프로젝트를 고르면 그 프로젝트 아래 접히는 하위 보기가 됩니다.</p>
+<div class="mw" id="mw">
+  <div class="tb"><span class="dots"><i></i><i></i><i></i></span><span>Nunchiro</span><span class="sp"></span><button class="tlay" id="lay" title="배치 편집 켜기/끄기">⊞ 배치</button></div>
+  <div class="eb" id="eb" hidden>● 배치 중<span class="hint">아이콘을 끌어 양쪽 바로 옮기기 · 보관함에서 끌어 추가 · 프로젝트 줄이나 트리 아이콘에 놓으면 하위 보기 · 트리는 필수(옮기기만 가능)</span><button class="btn" id="reset">기본값</button></div>
+  <div class="body">
+    <nav class="rail" id="railL" data-side="L" aria-label="왼쪽 아이콘 바"></nav>
+    <aside class="sb" id="sbL"></aside>
+    <main class="main"><div class="zone"><div class="zh"><span class="tab">claude · nunchiro/ux-fix-2</span></div>
+      <div class="zb"><div class="mono"><span class="g">●</span> 트리 행 디자인 반영 중…
+  수정: web/src/tree/rows.ts  (+42 −9)
+  <span class="y">? 권한 요청: cargo test --workspace 실행</span>
+  <span class="g">✓</span> fmt · clippy 통과</div><div class="comp">에이전트에게 메시지…</div></div></div></main>
+    <aside class="sb" id="sbR"></aside>
+    <nav class="rail r" id="railR" data-side="R" aria-label="오른쪽 아이콘 바"></nav>
+    <aside class="lib" id="lib" hidden>
+      <div class="lh">위젯 보관함</div>
+      <div class="ll" id="ll"></div>
+      <div class="trash" id="trash">여기에 놓으면 바에서 제거</div>
+      <div class="lf">끌어서 아이콘 바(왼쪽·오른쪽) 또는 트리의 프로젝트 줄에 놓으세요.</div>
+    </aside>
+  </div>
+</div>
+<div class="note"><b>정적·가짜:</b> 위젯 내용, 에이전트 화면, 실행 취소(토스트의 되돌리기만 동작). <b>필수:</b> 트리는 어느 바로든 옮길 수 있지만 제거되지 않습니다. 같은 아이콘을 다시 누르면 사이드바가 접힙니다.</div>
+<div class="toast" id="toast" hidden><span id="tmsg"></span><button id="undo">되돌리기</button></div>
+<script>
+const W={tree:['🌳','트리'],files:['📁','파일'],search:['🔍','검색'],board:['🗂','보드'],preview:['🖥','미리보기'],agents:['🤖','에이전트'],git:['⎇','변경'],usage:['📊','사용량'],log:['📜','로그']};
+const DESC={tree:'프로젝트·작업트리·세션',files:'파일 탐색',search:'전체 검색',board:'할 일 보드',preview:'웹 미리보기',agents:'실행 중 에이전트',git:'변경 파일·diff',usage:'토큰·비용',log:'이벤트 기록'};
+const DEF=()=>({L:['tree','files','search'],R:['board','preview'],act:{L:'tree',R:'board'},nest:{nunchiro:['agents','files']},open:{'nunchiro:agents':true}});
+let S=DEF(),prev=null,edit=false,drag=null;
+const $=id=>document.getElementById(id),mw=$('mw');
+const save=()=>prev=JSON.stringify(S);
+function toast(m){$('tmsg').textContent=m;$('toast').hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>$('toast').hidden=true,4000)}
+$('undo').onclick=()=>{if(prev){S=JSON.parse(prev);prev=null;render()}$('toast').hidden=true};
+const PROJ={nunchiro:[['you','ux-fix-2','응답 필요'],['run','layout-d5','작업 중'],['ok','docs-1028h','완료']],lumen:[['run','backtest-v3','작업 중']]};
+function body(id){switch(id){
+ case 'tree':return Object.keys(PROJ).map(p=>`<div class="ph" data-proj="${p}"><button class="fold">▾</button>📦 ${p}<span class="attach">하위 보기로 넣기</span></div>`
+   +PROJ[p].map(([c,n,s])=>`<div class="trow ${c}"><span class="n">${n} <i>${s}</i></span></div>`).join('')
+   +(S.nest[p]||[]).map(w=>{const k=p+':'+w,o=S.open[k];return `<div class="view"><div class="vh ${o?'open':''}" data-k="${k}"><span class="chv">▶</span>${W[w][0]} ${W[w][1]} <span class="tagv">보기</span><span class="sp"></span><button class="x" data-unnest="${k}" title="하위 보기 빼기">✕</button></div>${o?`<div class="vb">${mini(w,p)}</div>`:''}</div>`}).join('')).join('');
+ case 'files':return `<div class="li">▾ crates/</div><div class="li">&nbsp;&nbsp;▸ nunchiro-core/</div><div class="li">▾ web/src/</div><div class="li">&nbsp;&nbsp;rows.ts <span>M</span></div><div class="li">&nbsp;&nbsp;layout.ts</div><div class="li">AGENTS.md</div><div class="li">ROADMAP.md</div>`;
+ case 'search':return `<div class="inp">검색…</div><div class="li">rows.ts <span>· 12건</span></div><div class="li">layout.ts <span>· 3건</span></div>`;
+ case 'board':return ['할 일','진행','완료'].map((h,i)=>`<div style="font-weight:700;color:var(--mut);font-size:10.5px;margin-top:4px">${h}</div>`+[['V2-14 언어 키','LANGS'],['배치 D5','LAYOUT'],['티켓 53','web-smoke']].slice(i,i+1+(i==0)).map(([a,b])=>`<div class="cd">${a} <i>${b}</i></div>`).join('')).join('');
+ case 'preview':return `<div class="pvw"><div class="u">localhost:5173</div><div class="pg"><div class="blk" style="width:60%"></div><div class="blk"></div><div class="blk" style="width:80%"></div></div></div>`;
+ default:return mini(id,'전체');}}
+function mini(w,p){return {agents:`<div class="li">🟠 claude · ux-fix-2 <span>응답 필요</span></div><div class="li">🔵 codex · layout-d5 <span>작업 중</span></div>`,
+ files:`<div class="li">▸ crates/</div><div class="li">▸ web/</div><div class="li">AGENTS.md</div>`,
+ git:`<div class="li">rows.ts <span>+42 −9</span></div>`,usage:`<div class="li">오늘 <span>1.2M 토큰 · $4.10</span></div>`,
+ log:`<div class="li">11:30 <span>${p} 결정 기록</span></div>`,search:`<div class="inp">${p} 안에서 검색…</div>`,
+ board:`<div class="cd">배치 D5 <i>LAYOUT</i></div>`,preview:`<div class="li">localhost:5173</div>`}[w]||''}
+function rail(side){const el=$('rail'+side);el.innerHTML=S[side].map(w=>`<button class="ri ${S.act[side]===w?'on':''}" draggable="true" data-w="${w}" data-from="${side}" title="${W[w][1]}"><b>${W[w][0]}</b>${W[w][1]}${w==='tree'?'<span class="req">필수</span>':`<span class="rx" data-rm="${w}" title="바에서 빼기">✕</span>`}</button>`).join('')
+ +'<div class="sp"></div>'}
+function side(sd){const el=$('sb'+sd),a=S.act[sd];if(!a||!S[sd].includes(a)){el.hidden=true;return}el.hidden=false;
+ el.innerHTML=`<div class="sbh">${W[a][0]} ${W[a][1]}<span class="sp"></span><small>${sd==='L'?'왼쪽':'오른쪽'} 사이드바</small></div><div class="sbb">${body(a)}</div>`}
+function lib(){$('ll').innerHTML=Object.keys(W).map(w=>{const where=S.L.includes(w)?'왼쪽 바':S.R.includes(w)?'오른쪽 바':'';return `<div class="card" draggable="true" data-w="${w}" data-from="lib"><span class="ic">${W[w][0]}</span><span class="tx"><b>${W[w][1]}</b><small>${DESC[w]}</small></span>${where?`<span class="st">${where}</span>`:''}</div>`}).join('')}
+function render(){rail('L');rail('R');side('L');side('R');lib();mw.classList.toggle('edit',edit);$('eb').hidden=!edit;$('lib').hidden=!edit;$('lay').textContent=edit?'● 배치 편집 중 · 완료':'⊞ 배치'}
+$('lay').onclick=()=>{edit=!edit;render()};
+function nest(p,w){save();S.nest[p]=S.nest[p]||[];if(!S.nest[p].includes(w))S.nest[p].push(w);S.open[p+':'+w]=true;toast(`${p} 아래에 ${W[w][1]} 보기를 넣었습니다`)}
+function picker(w,x,y){const d=document.createElement('div');d.className='pick';d.style.left=x+'px';d.style.top=y+'px';d.innerHTML=`<div class="hd">${W[w][1]} 보기를 넣을 프로젝트</div>`+Object.keys(PROJ).map(p=>`<button data-pick="${p}">📦 ${p}</button>`).join('')+'<button data-pick="" style="color:var(--mut)">취소</button>';document.body.append(d);d.onclick=e=>{const p=e.target.dataset.pick;if(p===undefined)return;d.remove();if(p){nest(p,w);const sd=S.L.includes('tree')?'L':'R';S.act[sd]='tree';render()}}}
+function removeFrom(w){for(const s of'LR'){S[s]=S[s].filter(x=>x!==w);if(S.act[s]===w)S.act[s]=S[s][0]||null}}
+function place(w,sd,idx){removeFrom(w);S[sd].splice(Math.min(idx,S[sd].length),0,w);S.act[sd]=w}
+// clicks
+document.addEventListener('click',e=>{const t=e.target;if(!t.closest('.pick'))document.querySelectorAll('.pick').forEach(x=>x.remove());
+ if(t.dataset.rm){save();removeFrom(t.dataset.rm);render();toast(`${W[t.dataset.rm][1]} 아이콘을 뺐습니다`);return}
+ if(t.dataset.unnest){save();const[p,w]=t.dataset.unnest.split(':');S.nest[p]=S.nest[p].filter(x=>x!==w);render();toast(`${p}에서 ${W[w][1]} 보기를 뺐습니다`);return}
+ const ri=t.closest('.ri[data-w]');if(ri){const sd=ri.dataset.from,w=ri.dataset.w;S.act[sd]=S.act[sd]===w&&!$('sb'+sd).hidden?null:w;render();return}
+ const vh=t.closest('.vh');if(vh){S.open[vh.dataset.k]=!S.open[vh.dataset.k];render();return}
+ const fold=t.closest('.fold');if(fold){fold.textContent=fold.textContent==='▾'?'▸':'▾';let n=fold.parentElement.nextElementSibling;while(n&&!n.classList.contains('ph')){n.hidden=fold.textContent==='▸';n=n.nextElementSibling}}});
+$('reset').onclick=()=>{save();S=DEF();render();toast('기본값으로 되돌렸습니다')};
+$('tg').onclick=()=>{const r=document.documentElement,d=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);r.dataset.theme=d?'light':'dark'};
+// drag
+document.addEventListener('dragstart',e=>{const s=e.target.closest('[draggable][data-w]');if(!s)return;
+ if(!edit){e.preventDefault();toast('배치를 켜야 아이콘을 옮길 수 있습니다');return}
+ drag={w:s.dataset.w,from:s.dataset.from};e.dataTransfer.setData('text/plain',drag.w);e.dataTransfer.effectAllowed='move';setTimeout(()=>mw.classList.add('dragging'))});
+document.addEventListener('dragend',()=>{drag=null;mw.classList.remove('dragging');clean()});
+function clean(){document.querySelectorAll('.ins').forEach(x=>x.remove());document.querySelectorAll('.hot,.thot').forEach(x=>x.classList.remove('hot','thot'))}
+function railIdx(r,y){const its=[...r.querySelectorAll('.ri[data-w]')];let i=its.findIndex(b=>{const q=b.getBoundingClientRect();return y<q.top+q.height/2});return i<0?its.length:i}
+document.addEventListener('dragover',e=>{if(!drag)return;clean();
+ const ti=e.target.closest('.ri[data-w=tree]');if(ti&&drag.w!=='tree'){e.preventDefault();ti.classList.add('thot');return}
+ const r=e.target.closest('.rail');if(r){e.preventDefault();r.classList.add('hot');const i=railIdx(r,e.clientY),its=r.querySelectorAll('.ri[data-w]'),ins=document.createElement('div');ins.className='ins';r.insertBefore(ins,its[i]||r.querySelector('.sp'));return}
+ const ph=e.target.closest('.ph');if(ph&&drag.w!=='tree'){e.preventDefault();ph.classList.add('hot');return}
+ const tr=e.target.closest('#trash');if(tr&&drag.from!=='lib'){e.preventDefault();tr.classList.add('hot');if(drag.w==='tree')tr.textContent='트리는 필수라 뺄 수 없습니다';return}});
+document.addEventListener('drop',e=>{if(!drag)return;e.preventDefault();const{w}=drag;
+ const r=e.target.closest('.rail'),ti=e.target.closest('.ri[data-w=tree]');
+ if(ti&&w!=='tree'){picker(w,e.clientX+8,e.clientY)}
+ else if(r){const sd=r.dataset.side;let i=railIdx(r,e.clientY);const old=S[sd].indexOf(w);if(old>-1&&old<i)i--;save();place(w,sd,i);toast(`${W[w][1]} → ${sd==='L'?'왼쪽':'오른쪽'} 바`)}
+ else if(e.target.closest('.ph')&&w!=='tree'){nest(e.target.closest('.ph').dataset.proj,w)}
+ else if(e.target.closest('#trash')&&w!=='tree'){save();removeFrom(w);toast(`${W[w][1]} 아이콘을 뺐습니다`)}
+ $('trash').textContent='여기에 놓으면 바에서 제거';drag=null;mw.classList.remove('dragging');clean();render()});
+render();

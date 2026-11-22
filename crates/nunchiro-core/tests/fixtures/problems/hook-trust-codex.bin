@@ -1,0 +1,7 @@
+error: unexpected argument '--dangerously-bypass-hook-trust' found
+
+  tip: to pass '--dangerously-bypass-hook-trust' as a value, use '-- --dangerously-bypass-hook-trust'
+
+Usage: codex [OPTIONS] [PROMPT]
+
+For more information, try '--help'.

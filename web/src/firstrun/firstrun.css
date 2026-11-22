@@ -1,0 +1,61 @@
+/* F11: the empty centre's Landing. */
+.landing {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-12);
+  color: var(--text); /* .empty's --muted is under 4.5:1 on some themes (Dracula) */
+}
+.landing-mark {
+  width: 48px;
+  height: 48px;
+  color: var(--muted);
+}
+.landing p {
+  margin: 0;
+}
+.landing-keys {
+  font-size: var(--fs-12);
+}
+/* V2.5-12: the import list scrolls inside its block. */
+.fr-hint {
+  color: var(--muted);
+}
+.fr-import {
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 6px 0;
+}
+.fr-import .tag {
+  margin-left: var(--sp-6); /* Ticket 552: the "imported" mark touched the conversation button */
+}
+.ob-import .btn {
+  margin: var(--sp-4) var(--sp-6) var(--sp-4) 0; /* Ticket 552: the buttons touched each other and the list */
+}
+.fr-import-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--sp-6);
+}
+.fr-import label,
+.fr-import-search {
+  display: block;
+}
+
+/* Ticket 370: the empty tree is a short note at the top left, not the centred .empty panel. */
+.tree .empty {
+  display: block;
+  place-items: normal; /* .empty's centring also moves block children */
+  height: auto;
+  padding: 12px;
+  text-align: left;
+}
+.tree .empty .btn {
+  display: block;
+  margin: 8px 0 0;
+}
+.fr-path {
+  color: var(--muted);
+  font-size: var(--fs-11);
+  overflow-wrap: anywhere;
+}

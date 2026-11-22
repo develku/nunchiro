@@ -1,0 +1,94 @@
+/* needs 168: the plan strip, a sibling of the .dline decision line (same width, radius and weight), solid so it reads
+   as a quiet fact and not a prompt. Orange is your turn and red is broken: neither appears; the blue arc is working. */
+.pstrip {
+  flex: none;
+  box-sizing: border-box;
+  width: calc(100% - 44px);
+  max-width: calc(var(--chat-w, 700px) - 20px);
+  margin: 0 auto 6px;
+  border-radius: var(--r-10);
+  font-size: var(--fs-13);
+  color: var(--muted);
+  background: var(--tint-1); /* ticket 1041: one tint step, no outline */
+}
+.phead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 28px; /* the 28 px folded line (no border now) */
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-10);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.phead:hover {
+  background: var(--tint-1);
+}
+.phead:focus-visible {
+  outline: 2px solid var(--ring-focus);
+  outline-offset: -2px;
+}
+.pc {
+  flex: none;
+  display: inline-flex;
+  color: var(--muted);
+}
+.pt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* At most 8 items tall, then the list scrolls inside the strip (the feed gets no new scroller). */
+.plist {
+  list-style: none;
+  margin: 0;
+  padding: 2px 10px 8px;
+  max-height: calc(8 * 24px + 10px);
+  overflow-y: auto;
+}
+.plist li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.plist li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.plist li svg {
+  flex: none;
+}
+.plist li[data-status='in_progress'] {
+  color: var(--text);
+  font-weight: 500;
+}
+.plist li[data-status='in_progress'] svg {
+  color: var(--run);
+}
+.pstrip .arc {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pstrip-spin 1s linear infinite;
+}
+@keyframes pstrip-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pstrip .arc {
+    animation: none;
+  }
+}

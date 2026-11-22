@@ -1,0 +1,234 @@
+/* AGENTVIEW side pane (frame-ko-e.html .pane / .tdh / .tt / .need / .tosel). Colours are the window's own tokens. */
+.sview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  min-width: 0;
+}
+.sview > .pane {
+  flex: 1;
+  min-width: 0;
+}
+.pdiv {
+  flex: none;
+  width: 5px;
+  margin: 0 -2px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 3;
+}
+.pdiv::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--tint-2);
+}
+.pdiv:hover::after,
+.pdiv:focus-visible::after {
+  width: 3px;
+  left: 1px;
+  background: var(--ring-focus); /* ticket 1041: neutral, blue is the working light only */
+}
+.spane {
+  position: relative;
+  flex: none;
+  min-width: 280px;
+  max-width: calc(100% - 321px); /* 320 px of chat and the divider's 1 px */
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  --focus-ring: var(--ring-focus);
+}
+.sview:has(> .spane[data-max]) > .pane,
+.sview:has(> .spane[data-max]) > .pdiv {
+  display: none;
+}
+.spane[data-max] {
+  flex: 1;
+  width: auto;
+  max-width: none;
+}
+.spane .tdh {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 30px;
+  padding: 0 4px;
+  flex: none;
+  overflow: hidden;
+  background: var(--page); /* ticket 1041 lane 7b: one tint step, no rule under it */
+}
+.spane .ptabs {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+}
+.spane .pt {
+  display: inline-flex;
+  align-items: center;
+}
+.spane .tt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: var(--muted);
+  font: 600 11.5px system-ui;
+  white-space: nowrap;
+}
+.spane .tt:hover {
+  color: var(--text);
+}
+.spane .tt[aria-selected='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+}
+.spane .tt i {
+  font: 600 9.5px ui-monospace, Menlo, monospace;
+  color: var(--muted);
+}
+.spane .px,
+.spane .lx {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: var(--muted);
+  font-size: var(--fs-12);
+  flex: none;
+}
+.spane .px:hover,
+.spane .lx:hover {
+  background: var(--tint-1);
+  color: var(--text);
+}
+.spane .sp {
+  flex: 1;
+}
+.spane .need {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: var(--r-8);
+  background: var(--you);
+  color: var(--on-status);
+  font: 700 11px system-ui;
+  white-space: nowrap;
+  box-shadow: var(--glow-you);
+}
+/* Ticket 1041 lane 7b (N147): a TUI that waits shows the warm edge light on the pane (.light-you .light-edge in
+   SidePane.tsx) and keeps the "Needs input" words; no outline over the terminal text. */
+.spane.tui .tdh {
+  background: var(--you-bg);
+}
+.spane .pbody {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.spane .pprev {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 6px; /* room for an artifact frame's 4 px focus ring (artifact-frame-focus.spec) */
+}
+.spane .perr {
+  padding: 4px 10px;
+  font-size: var(--fs-12);
+  color: var(--error);
+}
+/* Ticket 1041 N148: an action, so the ink primary, not the working blue. */
+.spane .tosel {
+  position: absolute;
+  z-index: 5;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--r-6);
+  background: var(--control-bg);
+  color: var(--control-text);
+  font: 600 11px system-ui;
+  box-shadow: var(--shadow-md);
+}
+
+/* The header is one line at any pane width: the PTY tab's name and the badge give way (ellipsis), the other controls keep their size. */
+.spane .tt,
+.spane .px,
+.spane .lx {
+  flex: none;
+}
+.spane .ptabs:first-of-type {
+  flex: 0 1 auto;
+}
+.spane .ptabs:first-of-type > .tt:first-child {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.spane .need {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* S10: the view tabs (Browser, Preview) keep their whole labels; the badge, then the PTY tab's name, give way before them. */
+.spane .ptabs[aria-label='Views'] {
+  flex: none;
+}
+.spane .need {
+  flex-shrink: 4;
+}
+
+/* v25-shell-chrome: the "Needs input" badge floats over the pane's top right (no row, so it never moves the terminal). */
+.spane > .need {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  z-index: 3;
+  margin: 0;
+  /* The badge is one sentence since ticket 991 (A19): it is cut inside the pane, never drawn over the chat beside it. */
+  max-width: calc(100% - 20px);
+  box-sizing: border-box;
+}
+
+/* Ticket 288 (needs 213): the Browser's space switcher sits over the view; the view takes the rest. */
+.bspaces {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+/* Ticket 997 L1: My browser as a centre tab fills the tab's pane as it fills the side pane. */
+:is(.pbody, .pane) > .bspaces {
+  position: absolute;
+  inset: 0;
+}
+.bspaces .bspace {
+  margin: 6px 6px 0;
+}
+.bspaces .bview {
+  position: relative;
+  inset: auto;
+  flex: 1;
+  min-height: 0;
+}
+/* Ticket 997: full-size Browser = the mockup's two rows over the page (docs/design/browser-widget-1119.html, "Proposed"). */
+html[data-browser-full] .shead,
+html[data-browser-full] .composer:not([data-pinned]),
+/* Ticket 997 (look v22 e): the page shows at its real 1280x800 when the window has room; the sidebars, the centre tab row and the
+   status bar give way too, so it is 1:1 from a 1402x916 window and 0.975 at 1440x900 (only the title row and the two rows stay), not 0.64. */
+html[data-browser-full] .sbar:not(:has([data-side-pane])),
+html[data-browser-full] .zh,
+html[data-browser-full] .status {
+  display: none;
+}

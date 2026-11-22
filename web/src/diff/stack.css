@@ -1,0 +1,101 @@
+/* Ticket 374: the stacked Diff (diff/Stack.tsx), syntax colours and the line note (diff/PatchView.tsx). */
+.diff .dbar .btn {
+  font-size: var(--fs-11);
+  padding: 0 6px;
+  color: var(--text);
+}
+.diff .dbar .btn:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+.diff .dstack {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--panel);
+}
+.diff .dsec {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+.diff .fhead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 27px;
+  padding: 3px 10px;
+  background: var(--page);
+  font-size: var(--fs-11);
+}
+.diff .fhead .chev {
+  width: 14px;
+  color: var(--muted);
+  font-size: var(--fs-10);
+  flex: none;
+}
+.diff .fhead .m {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  flex: none;
+}
+.diff .fhead .dbtn:first-of-type {
+  margin-left: 0;
+}
+.diff .dstack .dcode {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* The + on a changed line sits in the number cell's left gutter; it shows on row hover and on keyboard focus. */
+.diff .dl td.n {
+  position: relative;
+  padding-left: 20px;
+}
+.diff .dl .dplus {
+  position: absolute;
+  left: 2px;
+  top: 1px;
+  width: 15px;
+  height: 15px;
+  border-radius: var(--r-4);
+  background: var(--control-bg); /* N148: an action, the ink primary, not the working blue */
+  color: var(--control-text);
+  font: 600 12px/15px -apple-system, system-ui, sans-serif;
+  text-align: center;
+  padding: 0;
+  opacity: 0;
+}
+.diff .dl tr:hover .dplus,
+.diff .dl .dplus:focus-visible {
+  opacity: 1;
+}
+.diff .dl .dplus[aria-disabled='true'] {
+  background: var(--tint-2);
+  color: var(--faint);
+  cursor: default;
+}
+.diff .dl tr.dnoterow td {
+  padding: 0;
+  white-space: normal;
+}
+.diff .dnotebox {
+  padding: 6px 10px 8px;
+  background: var(--page);
+  font-family: -apple-system, system-ui, sans-serif;
+}
+.diff .dnotebox .fld {
+  display: block;
+  width: 100%;
+  padding: 4px 7px;
+}
+.diff .dnotebox p {
+  margin: 4px 0 0;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}

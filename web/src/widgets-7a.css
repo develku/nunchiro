@@ -1,0 +1,64 @@
+/* Ticket 1041 lane 7a (A+B+C, approved mockup docs/design/polish-1121/index.html; owner 2026-11-22, inventory 15.1 item 1):
+   inside Board, Decisions, Schedules, History and Team/Room the controls carry no outline: a quiet tint step, the ink
+   primary, the neutral focus ring. One rule here, so each widget's stylesheet only sets size and spacing. Text fields keep
+   the app's one field look (styles.css, inputs-one-style.spec), which the Settings kit lane restyles for every field. */
+:is(.board, .bedit, .dw, .schedv, .histv, .teamv, .roompane, .room) {
+  --focus-ring: var(--ring-focus);
+}
+:is(.board, .bedit, .dw, .schedv, .teamv, .roompane, .room) .btn {
+  border-color: transparent;
+  background: var(--control-quiet-bg);
+}
+:is(.board, .bedit, .dw, .schedv, .teamv, .roompane, .room) .btn:not(.p):hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--control-quiet-hover);
+}
+:is(.board, .bedit, .dw, .schedv, .teamv, .roompane, .room) .btn.p {
+  background: var(--control-bg);
+  color: var(--control-text);
+}
+
+/* C: a card's state edge, one shape language for the board's card, the watch card, the narrow list row and the hosted
+   decision cards (inventory N042, N044, N073; 15.2 item 4, point 1). No box around the card: a 3 px bar on its left
+   edge. Your turn is a solid warm bar with a glow; broken is a dashed red bar, so the two differ in shape as well as in
+   colour, beside the hand / x-circle glyph and the words. A task card in a decision column has no state of its own:
+   its hand (or x-circle) glyph is what says your turn, so the edge follows the glyph. Done (watch view) is a faint filled bar (owner 15.1 item 9). */
+:is(.bcard, .wcard, .bli, .deccard.hosted) {
+  position: relative;
+}
+:where(.bcard, .wcard, .bli, .deccard.hosted):where(
+    [data-you],
+    [data-bad],
+    [data-state='needs_decision'],
+    [data-state='waiting'],
+    [data-bucket='attention'],
+    [data-bucket='done'],
+    :has(.bt > .bdot[data-g]),
+    .hosted
+  )::before {
+  /* :where, so each state below outranks this one */
+  content: '';
+  position: absolute;
+  left: 0;
+  top: var(--sp-4);
+  bottom: var(--sp-4);
+  width: 3px;
+  border-radius: var(--r-2);
+  background: var(--light-you);
+  box-shadow: var(--glow-you);
+  pointer-events: none;
+}
+.wcard[data-bucket='done']::before {
+  background: var(--tint-2);
+  box-shadow: none;
+}
+:is(.bcard, .wcard, .bli)[data-bad]::before,
+.bcard:has(.bt > .bdot[data-g='fail'])::before,
+.deccard.hosted:is([data-stall], [data-schedule-card='failed'])::before {
+  background: repeating-linear-gradient(to bottom, var(--light-bad) 0 4px, transparent 4px 7px);
+  box-shadow: none;
+}
+/* A risky request is red (it carries the "Caution" word), solid: it asks you, it is not broken. */
+.deccard.hosted:has(.dc-item.risky)::before {
+  background: var(--light-bad);
+  box-shadow: var(--glow-bad);
+}

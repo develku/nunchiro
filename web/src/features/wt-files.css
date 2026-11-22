@@ -1,0 +1,22 @@
+/* Ticket 253: Shared files' path list: the path, its Link/Copy choice and remove on one line; the add box under it. */
+.wtfiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.wtfiles li,
+.wtfiles-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.wtfiles li > .mono {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.wtfiles-add > input {
+  flex: 1;
+  min-width: 0;
+}

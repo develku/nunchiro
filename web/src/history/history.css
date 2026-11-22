@@ -1,0 +1,566 @@
+/* Ticket 1022 (mockup docs/design/tree-done-1121 section 3): the History widget, drawn with tokens.css only.
+   Lane w59: every size here is the approved mockup's (docs/design/history-1121 direction A), named by its class there. */
+.histv {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  container-type: inline-size; /* the filter row asks its width (below) */
+  background: var(--panel);
+  font-size: var(--fs-13);
+  line-height: 1.4; /* the mockup's `.fr` */
+}
+/* The right sidebar's body is inset 7px for its resize handle (layout/rails.css, ticket 426). History's own 10px edge
+   already keeps every control clear of the handle, so it takes the whole width, as the mockup's 320px widget. */
+.body > .sbar.r[data-widget='history'] > .sbb {
+  padding-left: 0;
+}
+/* In the sidebar the title is the sidebar's own header: the button sits at its right end, as Schedules'. */
+.histv-head {
+  position: absolute;
+  top: 0;
+  right: var(--sp-6);
+  display: flex;
+  align-items: center;
+  height: 32px; /* styles.css .sbh (32 px since ticket 1041 lane 2) */
+}
+/* The mockup's `.ib`: an icon button with no border. */
+.histv-ib {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.histv-ib:is(:hover, :focus-visible) {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--text);
+}
+/* The filter row (mockup `.A .bar`): the search field on a line of its own, then the project, the agents, the toggle
+   and the count at the right end. */
+.histv-bar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-6);
+  padding: var(--sp-8) 10px var(--sp-2);
+}
+.histv-filters {
+  display: contents;
+}
+/* The controls' line never wraps: the list gives way (its name is cut) and the count keeps the right end. */
+.histv-ctl {
+  display: flex;
+  flex: 1 1 100%;
+  align-items: center;
+  gap: var(--sp-6);
+  min-width: 0;
+}
+.histv-q {
+  display: flex;
+  flex: 1 1 100%;
+  align-items: center;
+  gap: var(--sp-6);
+  min-width: 0;
+  height: 28px;
+  padding: 0 var(--sp-8);
+  /* Ticket 1041 (coordinator 11-22: history-1121 fixes the layout, A+B+C and the owner's answers the style): the mockup's
+     fields keep their sizes and order but lose the outline; the 1px line is kept transparent so no box moves. */
+  border: 1px solid transparent;
+  border-radius: var(--r-6);
+  background: var(--control-quiet-bg);
+  color: var(--faint);
+  font-size: var(--fs-12);
+}
+/* The mockup's 13px glass, not the window's 16px icon step (styles.css `.oi`, which keeps approved mockups' sizes). */
+.histv .histv-q svg.oi {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+.histv-q input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-overflow: ellipsis; /* the placeholder is longer than the field in a 250px sidebar */
+  outline: 0;
+  appearance: none;
+}
+.histv-q input::placeholder {
+  color: var(--faint);
+  opacity: 1;
+}
+.histv-q:has(input:focus-visible),
+.histv-sel:has(select:focus-visible) {
+  outline: var(--focus-width) solid var(--focus-ring);
+}
+/* The project list (mockup `.sel`): a drawn box with the native list over it, unseen (as search.css `.sclosed input`). */
+.histv-sel {
+  position: relative;
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: 24px;
+  padding: 0 5px 0 7px;
+  border: 1px solid transparent;
+  border-radius: var(--r-6);
+  background: var(--control-quiet-bg);
+  color: var(--faint);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+.histv-sel[data-on] {
+  background: var(--select-bg);
+}
+.histv-sel svg {
+  flex: none;
+}
+/* Real app, lane w59: a sidebar at its default 250px is too narrow for the mockup's row, and the toggle and the count
+   went to a line of their own. Under 270px the list drops its folder icon (its words and caret say what it is) and
+   the row is a little tighter. */
+@container (max-width: 270px) {
+  .histv-sel > svg:first-child {
+    display: none;
+  }
+  .histv-ctl {
+    gap: var(--sp-4);
+  }
+  .histv .histv-seg button {
+    width: 24px;
+  }
+}
+.histv-sel-t {
+  min-width: 0;
+  max-width: 132px;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+}
+.histv-sel select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  appearance: none;
+  cursor: pointer;
+}
+/* The agents (mockup `.seg`): one cell each, pressed while its sessions are listed. */
+.histv-seg {
+  display: inline-flex;
+  flex: none;
+  height: 24px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: var(--r-6);
+  background: var(--control-quiet-bg);
+}
+.histv-seg button {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+/* The divider is a 1px gap of the panel between the cells (no drawn line). */
+.histv-seg button + button {
+  border-left: 1px solid var(--panel);
+}
+.histv-seg button[aria-pressed='true'] {
+  background: var(--select-bg);
+}
+.histv-seg button[aria-pressed='false'] > * {
+  opacity: 0.75;
+}
+.histv-seg button:focus-visible,
+.histv-tg:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: -2px;
+}
+/* Stopped or failed only (mockup `.tg`). */
+.histv-tg {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 27px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-6);
+  background: var(--control-quiet-bg);
+  color: var(--muted);
+  cursor: pointer;
+}
+.histv-tg svg {
+  width: 14px;
+  height: 14px;
+}
+/* Pressed: the selected tint, its x-circle red (it lists the failed ones). */
+.histv-tg[aria-pressed='true'] {
+  background: var(--select-bg);
+  color: var(--tree-bad);
+}
+.histv-cnt {
+  flex: none;
+  margin-left: auto;
+  color: var(--faint);
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* As a tab (mockup `.th`): the title, the search and the filters in one 44px row. */
+.histv[data-where='tab'] .histv-ctl {
+  display: contents;
+}
+.histv[data-where='tab'] .histv-bar {
+  flex-wrap: nowrap;
+  gap: var(--sp-8);
+  height: 44px;
+  padding: 0 var(--sp-12) 0 var(--sp-16);
+  margin-bottom: var(--sp-4); /* spacing, not a rule (ticket 1041 A) */
+}
+.histv-bar > svg {
+  flex: none;
+}
+.histv-title {
+  margin-right: var(--sp-8);
+  font-size: var(--fs-13);
+}
+.histv[data-where='tab'] .histv-q {
+  flex: 0 1 280px;
+}
+/* The scroller is the rows' container: wide enough (the tab), a session is one row (below). */
+.histv-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  container-type: inline-size;
+}
+/* A day's head (mockup `.day`): its word, its date, and the tree's hollow bar with how many (tree/done.css `.dbar i`, `.num`). */
+.histv-day {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  margin: 0;
+  padding: 10px var(--sp-12) var(--sp-4);
+  color: var(--faint);
+  font-size: var(--fs-11);
+  font-weight: 400;
+}
+.histv-day b {
+  color: var(--muted);
+  font-weight: 600;
+}
+.histv .dbar {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  color: var(--tree-mut);
+}
+.histv-day .dbar {
+  margin-left: auto;
+}
+.histv-day .dbar .num {
+  margin-left: 2px;
+}
+.histv-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.histv-note {
+  margin: 0;
+  padding: var(--sp-4) var(--sp-12);
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+/* Nothing finished yet, or nothing matches (mockup `.empty`): in the middle of the room under the filters. */
+.histv-empty {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--sp-6);
+  height: 100%;
+  padding: var(--sp-16);
+  color: var(--muted);
+  text-align: center;
+}
+.histv-empty b {
+  color: var(--text);
+  font-weight: 600;
+}
+.histv-empty small {
+  color: var(--faint);
+  font-size: var(--fs-11);
+}
+.histv-empty > svg {
+  color: var(--faint);
+}
+.histv-empty button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link-text); /* ticket 1041 (owner 15.1 item 1): links in the text colour, underlined */
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font: inherit;
+  font-size: var(--fs-12);
+  cursor: pointer;
+}
+/* Ticket 1029 (mockup `.ar`): a row in the tree's language. A 3px hollow rail down both lines, the agent's icon, the
+   bold name (and a worktree's branch) with the run's start and length at the right; under it one muted line and the
+   project. Hovered or focused, three icons take the time's place. */
+.hr {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3px 14px minmax(0, 1fr) auto;
+  grid-template-rows: 20px 18px;
+  align-items: center;
+  gap: 0 var(--sp-8);
+  padding: 5px var(--sp-12) 5px 10px;
+}
+.hr:is(:hover, :focus-within) {
+  background: var(--hover);
+}
+.hr-rail {
+  grid-area: 1 / 1 / -1 / 2;
+  align-self: stretch;
+  margin: 1px 0;
+  border: 1px solid var(--tree-mut);
+  border-radius: var(--r-2);
+}
+.hr[data-end='fail'] :is(.hr-rail, .hr-dur) {
+  border-color: var(--tree-bad);
+  background: var(--tree-bad);
+}
+.hr-ag {
+  display: flex;
+  grid-area: 1 / 2;
+  color: var(--muted);
+}
+/* The name keeps its width; the branch beside it gives way (mockup `.w .ar .l1`). */
+.hr-l1 {
+  display: flex;
+  grid-area: 1 / 3;
+  align-items: center;
+  gap: var(--sp-6);
+  min-width: 0;
+  white-space: nowrap;
+}
+.hr-go {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.hr-go b {
+  font-weight: 600;
+}
+/* The whole row opens the conversation, as the mockup's row; the icons stay above it. */
+.hr-go::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.hr-go:focus-visible {
+  outline: 0;
+}
+.hr-go:focus-visible::after {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.hr-bn {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  color: var(--faint);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+.hr-bn svg {
+  flex: none;
+}
+.hr-bn span,
+.hr-sum,
+.hr-pj {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hr-meta {
+  display: none;
+}
+.hr-t,
+.hr-acts {
+  grid-area: 1 / 4;
+  justify-self: end;
+}
+.hr-t,
+.hr-len {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hr-len {
+  color: var(--faint);
+}
+.hr-mk {
+  display: flex;
+  color: var(--tree-mut);
+}
+.hr[data-end='fail'] .hr-mk {
+  color: var(--tree-bad);
+}
+.hr-mk svg {
+  width: 13px;
+  height: 13px;
+}
+/* The run-length bar (mockup `.dur`), in the wide row only. Ticket 1041 (owner 15.1 item 9): a finished run is a faint
+   filled bar (one tint step), not an outline; a failed run stays the red filled bar (below). The 1px line is kept
+   transparent so the length scale is unchanged. */
+.hr-dur {
+  display: none;
+  flex: none;
+  height: 6px;
+  border: 1px solid transparent;
+  background: var(--tint-2);
+  border-radius: var(--r-4); /* the mockup's `.dur`: a 6px bar with round ends (a radius over half the height stays round) */
+}
+.hr-sum {
+  grid-area: 2 / 3;
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.hr-pj {
+  grid-area: 2 / 4;
+  justify-self: end;
+  max-width: 96px;
+  color: var(--faint);
+  font-size: var(--fs-11);
+}
+.hr-acts {
+  position: relative; /* above the row's own click area */
+  display: none;
+  align-items: center;
+  gap: 2px;
+}
+.hr:is(:hover, :focus-within) .hr-t {
+  display: none;
+}
+.hr:is(:hover, :focus-within) .hr-acts {
+  display: inline-flex;
+}
+.hr-acts button {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.hr-acts button:is(:hover, :focus-visible) {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--text);
+}
+.hr-acts button:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: -1px;
+}
+/* Wide (mockup `.t .ar`): one line whose columns line up: rail, icon, name, project and branch, the line, mark, start,
+   the hollow bar with the length, and the icons' own column (there on hover, so nothing moves). */
+@container (min-width: 720px) {
+  .hr {
+    grid-template-columns: 3px 14px 168px 216px minmax(0, 1fr) 13px 40px 104px 70px;
+    grid-template-rows: 20px;
+    gap: 0 var(--sp-12);
+    padding: 6px var(--sp-12) 6px 14px;
+  }
+  .hr-rail {
+    margin: -2px 0;
+  }
+  .hr-l1 .hr-bn,
+  .hr-pj {
+    display: none;
+  }
+  .hr-meta {
+    display: flex;
+    grid-area: 1 / 4;
+    align-items: center;
+    gap: var(--sp-6);
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: var(--fs-12);
+    white-space: nowrap;
+  }
+  .hr-sum {
+    grid-area: 1 / 5;
+  }
+  .hr-t,
+  .hr:is(:hover, :focus-within) .hr-t {
+    display: contents;
+  }
+  .hr-mk {
+    grid-area: 1 / 6;
+  }
+  .hr-st {
+    grid-area: 1 / 7;
+    justify-self: end;
+  }
+  .hr-len {
+    grid-area: 1 / 8;
+    gap: var(--sp-6);
+  }
+  .hr-dur {
+    display: block;
+  }
+  .hr-acts,
+  .hr:is(:hover, :focus-within) .hr-acts {
+    display: inline-flex;
+    grid-area: 1 / 9;
+  }
+  .hr:not(:hover, :focus-within) .hr-acts {
+    visibility: hidden;
+  }
+}

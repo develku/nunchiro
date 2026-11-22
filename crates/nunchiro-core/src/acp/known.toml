@@ -1,0 +1,116 @@
+# The agents Settings > Agents offers a row for (V2-4b). Bundled, never fetched online. No Claude entry: a Claude ACP
+# agent is a custom entry and needs an API key (ADR 0001 Q3). `args` are each agent's documented ACP switch; a wrong
+# one only makes the setup sheet's check fail visibly. `acp = false` is a terminal-only CLI. `docs_url` and `source_url`
+# (ticket 358) are each confirmed to answer and https only (the test in mod.rs); a tool with no confirmed page has none.
+[[known]]
+name = "gemini"
+label = "Gemini CLI"
+command = "gemini"
+args = ["--experimental-acp"]
+env = ["GEMINI_API_KEY"]
+install_url = "https://github.com/google-gemini/gemini-cli"
+docs_url = "https://geminicli.com/docs/"
+source_url = "https://github.com/google-gemini/gemini-cli"
+acp = true
+
+[[known]]
+name = "opencode"
+label = "OpenCode"
+command = "opencode"
+args = ["acp"]
+env = []
+install_url = "https://opencode.ai"
+docs_url = "https://opencode.ai/docs"
+source_url = "https://github.com/anomalyco/opencode"
+acp = true
+
+[[known]]
+name = "goose"
+label = "goose"
+command = "goose"
+args = ["acp"]
+env = []
+install_url = "https://block.github.io/goose"
+docs_url = "https://goose-docs.ai/docs/quickstart"
+source_url = "https://github.com/aaif-goose/goose"
+acp = true
+
+[[known]]
+name = "aider"
+label = "Aider"
+command = "aider"
+args = []
+env = []
+install_url = "https://aider.chat"
+docs_url = "https://aider.chat/docs/"
+source_url = "https://github.com/Aider-AI/aider"
+acp = false
+
+# Confirmed in Cursor docs: https://cursor.com/docs/cli/acp ("You can run agent acp").
+[[known]]
+name = "cursor"
+label = "Cursor"
+command = "agent"
+args = ["acp"]
+env = []
+install_url = "https://cursor.com/docs/cli/overview"
+docs_url = "https://cursor.com/docs/cli/overview"
+acp = true
+
+# Confirmed in T3 Code provider-grok acpSupport.ts (grok agent stdio, XAI_API_KEY); ACP itself in the xAI Grok Build docs.
+[[known]]
+name = "grok"
+label = "Grok"
+command = "grok"
+args = ["agent", "stdio"]
+env = ["XAI_API_KEY"]
+install_url = "https://docs.x.ai/build/overview"
+docs_url = "https://docs.x.ai/build/overview"
+acp = true
+
+# Confirmed in Antigravity docs: https://antigravity.google/docs/cli/acp/ ("The agy acp command starts an ... ACP server").
+[[known]]
+name = "antigravity"
+label = "Antigravity"
+command = "agy"
+args = ["acp"]
+env = []
+install_url = "https://antigravity.google/download"
+docs_url = "https://antigravity.google/docs/cli/acp/"
+acp = true
+
+# API key services run through OpenCode. A variable name is filled in only when the service names it in its own docs:
+# openrouter.ai/docs/quickstart and platform.kimi.ai/docs/guide/start-using-kimi-api do; the Z.ai and BigModel pages name
+# none (they use opencode auth login or a placeholder), so GLM stays blank.
+[[known]]
+name = "openrouter"
+label = "OpenRouter"
+command = "opencode"
+args = ["acp"]
+env = ["OPENROUTER_API_KEY"]
+install_url = "https://opencode.ai"
+docs_url = "https://openrouter.ai/docs/quickstart"
+acp = true
+service = true
+
+[[known]]
+name = "glm"
+label = "GLM"
+command = "opencode"
+args = ["acp"]
+env = []
+install_url = "https://opencode.ai"
+docs_url = "https://docs.z.ai/guides/overview/quick-start"
+acp = true
+service = true
+
+[[known]]
+name = "kimi"
+label = "Kimi"
+command = "opencode"
+args = ["acp"]
+env = ["MOONSHOT_API_KEY"]
+install_url = "https://opencode.ai"
+docs_url = "https://platform.kimi.ai/docs/get-your-api-key"
+acp = true
+service = true

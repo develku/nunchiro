@@ -1,0 +1,10 @@
+[
+ {"kind":"tool_use","tool_id":"c1","name":"Bash","input":{"command":"gh pr create --title x --fill"}},
+ {"kind":"tool_result","tool_id":"c1","output":"Creating pull request\nhttps://github.com/develku/nunchiro/pull/12\n","is_error":false,"at":"2026-10-27T10:00:00.000Z"},
+ {"kind":"tool_use","tool_id":"c2","name":"Bash","input":{"command":"cd app && gh pr checks 12"}},
+ {"kind":"tool_result","tool_id":"c2","output":"build\tfail\t1m\thttps://github.com/develku/nunchiro/actions/runs/1\ntest\tpass\t2m\thttps://github.com/develku/nunchiro/actions/runs/2\n","is_error":false,"at":"2026-10-27T10:05:00.000Z"},
+ {"kind":"tool_use","tool_id":"c3","name":"Bash","input":{"command":"gh pr checks 12"}},
+ {"kind":"tool_result","tool_id":"c3","output":"HTTP 502","is_error":true,"at":"2026-10-27T10:30:00.000Z"},
+ {"kind":"tool_use","tool_id":"c4","name":"Bash","input":{"command":"gh pr view 12"}},
+ {"kind":"tool_result","tool_id":"c4","output":[{"type":"text","text":"title:\tx\nstate:\tMERGED\nauthor:\towner\nurl:\thttps://github.com/develku/nunchiro/pull/12\n"}],"is_error":false,"at":"2026-10-27T11:00:00.000Z"}
+]

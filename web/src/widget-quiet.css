@@ -1,0 +1,35 @@
+/* Ticket 1041 lane 7b (A+B+C, approved mockup docs/design/polish-1121/index.html; owner 2026-11-22, inventory 15.1 item 1):
+   inside the Terminal overlays, Browser, Diff, Artifacts and Preview, Files, Search, user and web widgets and the PR view,
+   buttons carry no outline: a quiet tint step, the ink primary, the neutral focus ring. One rule here, so each widget's
+   stylesheet only sets size and spacing. Text fields keep the app's one field look (styles.css, inputs-one-style.spec),
+   which the Settings kit lane restyles for every field at once. */
+:is(.tfind, .osc52, .perm-needed, .spane, .bview, .btabs, .diff, .aw, .preview, .artifact-frame, .files, .fview, .spanel, .uw, .ww-confirm, .pr-view) {
+  --focus-ring: var(--ring-focus);
+}
+:is(.tfind, .osc52, .perm-needed, .spane, .bview, .btabs, .diff, .aw, .preview, .artifact-frame, .files, .fview, .spanel, .uw, .ww-confirm, .pr-view) .btn {
+  border-color: transparent;
+  background: var(--control-quiet-bg);
+}
+:is(.tfind, .osc52, .perm-needed, .spane, .bview, .btabs, .diff, .aw, .preview, .artifact-frame, .files, .fview, .spanel, .uw, .ww-confirm, .pr-view)
+  .btn:not(.p):hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--control-quiet-hover);
+}
+:is(.tfind, .osc52, .perm-needed, .spane, .bview, .btabs, .diff, .aw, .preview, .artifact-frame, .files, .fview, .spanel, .uw, .ww-confirm, .pr-view) .btn.p {
+  background: var(--control-bg);
+  color: var(--control-text);
+}
+/* The widget head and the right dock lose their rules: the head is spacing and an 11 px caption, the dock sits on its own
+   surface. Only these widgets here; the shared frame of Board, Decisions, Schedules, History and Team is lane 7a's. */
+:is(.diff, .aw, .files, .spanel, .pdock) > .ph {
+  border-bottom: 0;
+}
+.dock.r:is(.diff, .aw, .pdock) {
+  border-left-color: transparent;
+}
+/* A selected row sits on the selected step (--select-bg), one step darker than the old opaque --hover: its muted words
+   (line numbers, git letters, the kind badge) take the selected text colour so they keep 4.5:1 there (contrast.spec). */
+.files .frow[aria-selected='true'],
+.spanel .hit[aria-selected='true'],
+.diff .it[aria-pressed='true'] {
+  --muted: var(--select-text);
+}

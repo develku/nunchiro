@@ -1,0 +1,321 @@
+/* Option A: owner-1029/machines-page.html .main, .m, .kv, .btn, .prob. Existing semantic tokens supply colors. */
+.machines-page {
+  font: var(--fs-14)/1.5 -apple-system,"Apple SD Gothic Neo",system-ui,sans-serif;
+  color: var(--text);
+  background: var(--panel);
+  padding: 12px;
+  min-width: 0;
+}
+
+
+.machine-diag {
+  margin-top: 12px; /* ticket 1041 A: space parts the panel, no rule */
+  font-size: calc((var(--fs-12) + var(--fs-13)) / 2);
+}
+
+.machine-diag p {
+  margin: 6px 0 0;
+}
+
+.machine-hops {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+}
+
+.machine-hops li {
+  display: flex;
+  gap: 6px;
+}
+
+.machine-hops .machine-hop-failed {
+  color: var(--error);
+}
+
+.machine-mark {
+  width: 14px;
+  text-align: center;
+}
+
+/* The page font above lost to `.settings .sbody > section:not(.ssearch) { font: inherit }` (settings-ia.css, one skeleton): the page fell to
+   13px/1.45 in the app stack, 2px short of the mockup, with the cards on a fractional y. Restored on this page only; the shared rule stays. */
+.settings .sbody > section.machines-page:not(.ssearch) {
+  font: var(--fs-14)/1.5 -apple-system,"Apple SD Gothic Neo",system-ui,sans-serif;
+}
+
+.machine-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 520px) {
+  .machine-head {
+    flex-wrap: wrap;
+  }
+}
+
+.machines-page .machine-btn {
+  font: inherit;
+  font-size: var(--fs-12);
+  line-height: 1.5;
+  border: 1px solid transparent; /* ticket 1041 A: a quiet tint button, no outline (the line keeps the size) */
+  background: var(--control-quiet-bg);
+  color: var(--text);
+  border-radius: var(--r-6);
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  margin: 0;
+  box-shadow: none;
+  min-height: 0;
+}
+
+.machines-page .machine-btn:hover:not(:disabled) {
+  background: var(--control-quiet-hover);
+}
+
+.machines-page .machine-btn.danger {
+  color: var(--error);
+}
+
+.machine-btn:focus-visible,.machine-add input:focus-visible {
+  outline: 2px solid var(--ring-focus);
+  outline-offset: 2px;
+}
+
+.machine-btn:disabled {
+  cursor: wait;
+  opacity: .6;
+}
+
+/* Ticket 336: one line per machine (final.html F.machines); the row is a button drawn with the row kit. */
+.settings[role='region'] .machine-row {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings[role='region'] .machine-row:hover {
+  background: var(--tint-1);
+}
+
+.settings[role='region'] .machine-row:focus-visible {
+  outline: 2px solid var(--ring-focus);
+  outline-offset: -2px;
+}
+
+/* The ssh line gives way first and ends in an ellipsis before the chip: one text line, not .prv-hd's flex items. */
+.machine-row .machine-line {
+  display: block;
+  line-height: 30px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.machine-row > svg {
+  justify-self: center;
+}
+
+.settings[role='region'] .machine-row .sctl {
+  color: var(--muted);
+}
+
+.machine-detail {
+  padding: var(--sp-8) var(--row-px) var(--row-py);
+}
+
+/* The rows' own card is the page's only box (final.html): no legacy section panel around it. */
+.settings[role='region'] .sbody > section.machines-page:not(.sempty) {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.machines-page .scard + .machine-add {
+  margin-top: var(--sp-8);
+}
+
+.machine-kv {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 3px 8px;
+  font-size: calc((var(--fs-12) + var(--fs-13)) / 2);
+  margin: 8px 0 1em;
+}
+
+.machine-kv dt {
+  color: var(--muted);
+}
+
+.machine-kv dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.machine-mono {
+  font: var(--fs-12) ui-monospace,Menlo,monospace;
+}
+
+/* Ticket 1041 (N161): a red tint block with the reason and the fix, no red outline; role="alert" says it. */
+.machine-problem {
+  margin-top: 8px;
+  border-radius: var(--r-6);
+  background: color-mix(in srgb, var(--bad) 9%, transparent);
+  padding: 6px 8px;
+  font-size: calc((var(--fs-12) + var(--fs-13)) / 2);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.machine-add {
+  border-radius: var(--r-8);
+  background: var(--tint-1); /* ticket 1041 A: a tint block, no dashed outline */
+  padding: 10px;
+  font-size: calc((var(--fs-12) + var(--fs-13)) / 2);
+  color: var(--muted);
+}
+
+.machine-add label {
+  display: block;
+}
+
+.machine-add div {
+  margin: 6px 0;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.machine-add input {
+  padding: 3px 6px;
+  width: 100%;
+  max-width: 280px;
+  font-family: 'SF Mono', Menlo, 'D2Coding', monospace;
+  font-size: var(--fs-12);
+}
+
+.machine-add p {
+  margin: 0 0 8px;
+}
+
+@media (max-width: 420px) {
+  .machine-kv {
+    grid-template-columns: 90px 1fr;
+  }
+}
+
+.machine-copy-failed {
+  color: var(--error);
+  font-size: var(--fs-12);
+}
+
+/* v25f: the guided Add form (docs/design/v25-machines/add-guided.html). */
+.machine-add .machine-combo {
+  display: block;
+  max-width: 320px;
+}
+
+.machine-add .machine-combo input {
+  max-width: none;
+}
+
+.machine-combo [role=listbox] {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 2px;
+  border-radius: var(--r-6);
+  background: var(--panel); /* in the page's flow, so solid, not glass (B); no outline */
+}
+
+.machine-combo [role=option] {
+  font: var(--fs-12) ui-monospace,Menlo,monospace;
+  color: var(--text);
+  padding: 3px 6px;
+  border-radius: var(--r-4);
+  cursor: pointer;
+}
+
+.machine-combo [role=option]:hover,.machine-combo [role=option][aria-selected=true] {
+  background: var(--select-bg); /* the select step, not the working blue */
+  color: var(--select-text);
+}
+
+.machine-add .machine-small {
+  width: 110px;
+}
+
+.machines-page .machine-btn.link {
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
+  padding: 3px 4px;
+}
+
+.machine-hint {
+  font-size: var(--fs-11);
+}
+
+.machine-probe {
+  font-size: var(--fs-12);
+  align-self: center;
+}
+
+.machine-probe.ok {
+  color: var(--ok);
+}
+
+.machine-probe.bad {
+  color: var(--error); /* "not reachable" is an error: red (owner 15.1 item 3); the ⚠ mark stays */
+}
+
+p.machine-probe {
+  margin: 0 0 4px;
+}
+
+/* The last measured latency, beside the state chip while the machine is up. */
+.machine-lat {
+  color: var(--muted);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+
+.machine-fix {
+  margin-top: 8px;
+  font-size: calc((var(--fs-12) + var(--fs-13)) / 2);
+}
+
+.machine-fix p {
+  margin: 0 0 4px;
+}
+
+.machine-fix code {
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+
+/* Ticket 980: the folder line of "New session" on a machine. */
+.machine-new {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+.machine-new input {
+  flex: 1 1 260px;
+  min-width: 0;
+}

@@ -1,0 +1,4 @@
+{"timestamp":"2026-10-27T08:15:15.000Z","type":"session_meta","payload":{"id":"01a17a48-3755-7943-8016-6371dcb1467d","cwd":"/project","cli_version":"0.161.0"}}
+{"timestamp":"2026-10-27T08:16:23.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Parent history line."}]}}
+{"timestamp":"2026-10-27T08:16:24.000Z","type":"response_item","payload":{"type":"function_call","call_id":"c1","name":"spawn_agent","arguments":"{\"task_name\":\"spec\",\"fork_turns\":\"all\",\"message\":\"gAAAAABfakefakefakefakefakefakefakefakefakefakefakefakefakefakefake0fake\"}"}}
+{"timestamp":"2026-10-27T08:16:25.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"{\"task_name\":\"/root/spec\"}"}}

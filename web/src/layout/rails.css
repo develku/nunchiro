@@ -1,0 +1,273 @@
+/* Ticket 1041 lane 2 (A+B+C, docs/design/polish-1121/index.html `.lrail` / `.rrail`): every icon bar rule is in this file
+   (styles.css and this file fought over the same selectors, inventory N112). Icons only, each name in its tooltip (owner
+   2026-11-22: ticket 283's label steps and bar-width drag are gone); a 48 px bar of 32 px buttons with a 4 px gap; no
+   border: the bar is the page's tint step beside the panels. */
+.ib {
+  position: relative;
+  flex: none;
+  width: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--sp-4) 0 var(--sp-8);
+  background: var(--page);
+  --focus-ring: var(--ring-focus);
+}
+/* v25-fix-layout: the tree's `.slot` rule (styles.css, a waiting-slot row) shares the class name; a bar slot resets it. */
+.ib .slot,
+.ib .slotmore {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  margin: 0 0 var(--sp-4);
+  padding: 0;
+  gap: 0;
+  overflow: visible;
+  display: block;
+  font-size: inherit;
+  border-radius: var(--r-8);
+}
+.ib .slot .aiw,
+.ib .slot .ai,
+.ib .more {
+  width: 32px;
+  height: 32px;
+  min-height: 0;
+}
+.aiw {
+  position: relative;
+}
+.aiw[data-dragging] {
+  opacity: 0.35;
+}
+.ib .ai,
+.ib .sidebtn,
+.ib .more {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: var(--r-8);
+  color: var(--muted);
+}
+.ib .ai .gl {
+  display: flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+}
+.ib .ai .gl svg {
+  width: 16px;
+  height: 16px;
+}
+.ib .ai:hover,
+.ib .sidebtn:hover,
+.ib .more:hover {
+  background: var(--tint-1);
+  color: var(--text);
+}
+/* The open widget, Settings while its panel is open and Layout while editing: one tint step (the mockup's pill), not an
+   accent fill (owner 2026-11-22, inventory 15.1 item 1). The pill is the shape cue; the tooltip and aria-pressed say it. */
+.ib .ai[aria-pressed='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+}
+/* V1A-60: a folded panel's icon stays the open one, one step lighter (its sidebar is out of sight; the name says
+   "folded" and the status bar says why). No dashed ring: A has no outlines. */
+.ib .ai[data-folded] {
+  background: var(--tint-1);
+}
+/* Placement (the owner on docs/design/v25-placement): the last slot is each bar's foot, Settings bottom-left and Layout
+   bottom-right by default. */
+.ib .slot[data-slot='9'] {
+  margin-top: auto;
+}
+/* Edit mode (A07) shows every drop place at once, before any drag, as a tint; the same while an icon is held. */
+.ib[data-editing='true'] .slot,
+.win[data-dragging='true'] .ib .slot {
+  background: var(--tint-1);
+}
+.ib[data-editing='true'] .aiw .ai {
+  cursor: grab;
+  touch-action: none;
+}
+.ib.hot,
+.ib[data-hot='true'] {
+  background: var(--tint-1);
+}
+/* ✕ only on hover or focus of its icon, so a bar in edit mode is not a row of red badges. */
+.aiw .rx {
+  position: absolute;
+  top: -5px;
+  right: -7px;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--bad);
+  color: var(--panel);
+  font-size: var(--fs-11);
+  font-weight: 700;
+  line-height: 16px;
+  z-index: 2;
+  opacity: 0;
+}
+.aiw:hover .rx,
+.aiw:focus-within .rx {
+  opacity: 1;
+}
+.aiw .rx:disabled {
+  opacity: 0.4;
+}
+/* Something waits inside the widget: a warm dot that glows (C), at the icon's top right, open or not. Ticket 993: a
+   failed scheduled run, the same dot in the broken red. The name and the tooltip say it too. */
+.ib .ai .wdot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--light-you);
+  box-shadow: var(--glow-you);
+  outline: 1.5px solid var(--page);
+  pointer-events: none;
+}
+.ib .ai .wdot[data-failed] {
+  background: var(--light-bad);
+  box-shadow: var(--glow-bad);
+}
+/* V2.5-60 (ticket 219 B13): the cards that need the owner, a filled pill in the your-turn orange under the dot. The
+   number is white or black, whichever reads better on the theme's --you (Solarized Light's yellow-orange is too light
+   for the page colour, 2.8:1); the page colour stays as the fallback where relative colours are not supported. */
+.ib .ai .rcount {
+  position: absolute;
+  top: 12px;
+  right: -7px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 var(--sp-4);
+  box-sizing: border-box;
+  border-radius: var(--r-8);
+  background: var(--you);
+  color: var(--page);
+  color: oklch(from var(--you) clamp(0, (0.6 - l) * 1000, 1) 0 0);
+  font: 700 var(--fs-11) / 16px var(--font-ui, inherit);
+  font-style: normal;
+  text-align: center;
+  pointer-events: none;
+}
+/* The hide / show button at the very top of each bar. */
+.ib .sidebtn {
+  width: 32px;
+  height: 32px;
+  margin: 0 0 var(--sp-4);
+}
+/* A short window: the slots it cuts off are behind ⋯, which counts them. */
+.ib .more {
+  font-size: var(--fs-15);
+}
+.ib .more i {
+  position: absolute;
+  top: -2px;
+  right: -6px;
+  font-style: normal;
+  font-size: var(--fs-11);
+  font-weight: 700;
+  color: var(--text);
+}
+.ib .pop {
+  position: absolute;
+  top: 0;
+  z-index: 60;
+  min-width: 170px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  border-radius: var(--r-12);
+}
+.ib.l .pop {
+  left: 40px;
+}
+.ib.r .pop {
+  right: 40px;
+}
+.ib .pop .hd {
+  padding: 3px 8px;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 700;
+}
+.ib .pop button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: var(--r-6);
+  text-align: left;
+  font-size: var(--fs-12);
+}
+.ib .pop button:hover {
+  background: var(--hover);
+}
+
+/* Sidebar inner edge (the owner finding 23): an 8 px hit zone from the border, col-resize cursor, a line on hover or focus.
+   The left one reaches into the main zone, so the tree (left sidebar) keeps every pixel; the right one reaches into its
+   own sidebar, so the main zone's scrollbar at that edge keeps its full width. */
+.sbar > .sdiv {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 4;
+  touch-action: none;
+}
+.sbar > .sdiv[data-side='left'] {
+  right: -8px; /* from the padding box: the 1 px border, then 7 px out */
+}
+.sbar > .sdiv[data-side='right'] {
+  left: -1px; /* the 1 px border, then 7 px into the sidebar */
+}
+/* Ticket 426: the right handle's 7 px inside the sidebar are an inset of the sidebar's body, so no control of a widget
+   lies under it (the Diff's 15 px "Note on line N" button lost 5 px to it). The handle keeps its 8 px and the main
+   zone's scrollbar its own; the header's 10 px padding already clears it. `.body >` outranks styles.css's per-widget
+   paddings (the Preview's 4 px), which load later. */
+.body > .sbar.r > .sbb {
+  padding-left: 7px;
+}
+.sbar > .sdiv:hover,
+.sbar > .sdiv:focus-visible {
+  background: linear-gradient(to right, var(--ring-focus) 3px, transparent 3px);
+  outline: none;
+}
+/* Layout's "Split session" group (placement item 3). */
+.estrip .esplit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* needs 157 (2), round 2: a Tree zone is 200 px wide by default (the approved frame), narrower than its sidebar. The
+   Tree's own "Projects · + Project · Expand all" row (web/src/tree, a 28 px line) then wrapped its buttons over each
+   other; in a zone the row grows a second line and the buttons move onto it, side by side. */
+.lz > .wg[data-widget='tree'] > .dock > .ph {
+  height: auto;
+  min-height: 28px;
+  flex-wrap: wrap;
+  row-gap: 2px;
+  padding-block: 3px;
+}
+.lz > .wg[data-widget='tree'] > .dock > .ph .r {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* Ticket 284 item 1: a Terminal / Board zone shows no tab strip. */
+.ztabs[hidden] {
+  display: none;
+}

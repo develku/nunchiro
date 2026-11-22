@@ -1,0 +1,12 @@
+[package]
+name = "nunchiro"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+nunchiro-core = { path = "../nunchiro-core" }
+serde_json.workspace = true
+
+[dev-dependencies]
+tungstenite = "0.30" # S6: the window's WebSocket in the core-swap test

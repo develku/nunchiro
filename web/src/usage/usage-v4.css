@@ -1,0 +1,546 @@
+/* The v4 Usage page (docs/design/usage-1106/usage.html v4): toolbar, row 1 (summary | limits), row 3 (three compact
+   cards), row 4 (one card, four tabs) and the retention note. Values from the mockup, on the window's tokens. */
+.usage4 {
+  /* Ticket 1041 (N089, owner 11-22): usage and heat are a neutral ramp of the text colour (blue means working); only a
+     near-limit bar glows, yellow then red. */
+  --heat-0: color-mix(in srgb, var(--text) 7%, var(--panel));
+  --heat-1: color-mix(in srgb, var(--text) 20%, var(--panel));
+  --heat-2: color-mix(in srgb, var(--text) 38%, var(--panel));
+  --heat-3: color-mix(in srgb, var(--text) 58%, var(--panel));
+  --heat-4: color-mix(in srgb, var(--text) 82%, var(--panel));
+}
+.usage4 h3 {
+  margin: 0 0 6px;
+  font-size: var(--fs-13);
+  font-weight: 600;
+}
+.usage4 .u4-toolbar {
+  display: flex;
+  gap: var(--sp-8);
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0 0 var(--sp-12);
+  font-size: var(--fs-12);
+}
+.usage4 .u4-gap {
+  flex: 1;
+}
+.usage4 .u4-r1 {
+  display: grid;
+  gap: 14px 16px;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  align-items: start;
+  margin-bottom: var(--sp-16);
+}
+.usage4 .u4-col {
+  display: grid;
+  gap: var(--sp-8);
+  min-width: 0;
+}
+.usage4 .tiles {
+  display: grid;
+  gap: var(--sp-8);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.usage4 .tile {
+  border-radius: var(--r-8);
+  background: var(--panel); /* ticket 1041 A: a card's surface step, no outline */
+  padding: 10px 12px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.usage4 .tile .k {
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.usage4 .tile .v {
+  font-size: var(--fs-3);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.usage4 .tile .s {
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.usage4 .u4-lims {
+  padding: 0;
+}
+.usage4 .lim {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sp-6) var(--sp-16);
+  align-items: center;
+  padding: 10px 14px;
+}
+.usage4 .lim .who {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--sp-8);
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-weight: 500;
+  font-size: var(--fs-13);
+}
+/* A linked default folder's note: its own line, and a long path breaks instead of pushing the card wider. */
+.usage4 .lim .who .mono {
+  flex-basis: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 400;
+  font-size: var(--fs-11);
+}
+.usage4 .lim .who small {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.usage4 .meter {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.usage4 .meter .t {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-8);
+  font-size: var(--fs-12);
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+.usage4 .track {
+  position: relative;
+  height: 8px;
+  border-radius: var(--r-4);
+  background: var(--heat-0);
+}
+.usage4 .track .used {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: var(--r-4);
+  background: var(--muted);
+}
+/* Past the pace line: the limited light with its glow (yellow); a used-up window is red (owner 15.1 item 2). */
+.usage4 .track.hot .used {
+  background: var(--light-limited);
+  box-shadow: var(--glow-limited);
+}
+.usage4 .track.full .used {
+  background: var(--light-bad);
+  box-shadow: var(--glow-bad);
+}
+.usage4 .track .pace {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--text);
+}
+.usage4 .meter.off .track {
+  background: repeating-linear-gradient(135deg, var(--heat-0) 0 6px, transparent 6px 12px);
+}
+.usage4 .rst {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-6) var(--sp-8);
+  align-items: center;
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.usage4 .u4-note {
+  margin: 0;
+  font-size: var(--fs-11);
+}
+.usage4 .cxr-logcard {
+  border-radius: var(--r-8);
+  background: var(--panel);
+  padding: 10px 12px;
+}
+.usage4 .cxr-log {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font-size: var(--fs-12);
+}
+.usage4 .cxr-log li {
+  display: grid;
+  grid-template-columns: 9em 1fr;
+  gap: 2px 10px;
+}
+.usage4 .cxr-log li > :last-child {
+  grid-column: 2;
+}
+.usage4 .u4-r3 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-12);
+  margin-bottom: var(--sp-16);
+}
+/* Look v22 d: at ~1000 px the middle card was ~40 px wide; every card has a floor and the cards wrap instead. */
+.usage4 .u4-r3 > * {
+  flex: 1 1 240px;
+}
+.usage4 .u4-r3 > :first-child {
+  flex: 1 1 220px;
+  max-width: 250px;
+}
+.usage4 .u4-r3 > :last-child {
+  flex: 1 1 260px;
+  max-width: 340px;
+}
+.usage4 .u4-card {
+  border-radius: var(--r-8);
+  background: var(--panel);
+  padding: 12px 14px;
+  min-width: 0;
+}
+.usage4 .hm-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-8);
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-12);
+}
+.usage4 .hm-head h4 {
+  margin: 0;
+  font-size: var(--fs-2);
+  font-weight: 600;
+}
+.usage4 .hm-head p {
+  margin: 2px 0 0;
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.usage4 .cal {
+  display: grid;
+  grid-template-columns: max-content repeat(6, 14px);
+  grid-auto-rows: 14px;
+  gap: 3px;
+  justify-content: start;
+}
+.usage4 .cal .wk {
+  font-size: var(--fs-11);
+  line-height: 14px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.usage4 .cal .dl {
+  font-size: var(--fs-11);
+  line-height: 14px;
+  color: var(--muted);
+  /* chat.css's global .dl (diff lines) pads and scrolls; a day label does neither. */
+  padding: 0 2px 0 0;
+  overflow: visible;
+}
+.usage4 .cell {
+  display: inline-block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-4);
+}
+.usage4 .cell.h0 {
+  background: var(--heat-0);
+}
+.usage4 .cell.h1 {
+  background: var(--heat-1);
+}
+.usage4 .cell.h2 {
+  background: var(--heat-2);
+}
+.usage4 .cell.h3 {
+  background: var(--heat-3);
+}
+.usage4 .cell.h4 {
+  background: var(--heat-4);
+}
+.usage4 .cell.fut {
+  background: transparent;
+  border: 1px dashed var(--line); /* a day still to come: the dashed edge is its mark, not a box */
+}
+.usage4 .cell.best {
+  outline: 2px solid var(--text);
+  outline-offset: -1px;
+}
+.usage4 .hm-foot {
+  margin-top: var(--sp-12);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-8);
+  flex-wrap: wrap;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.usage4 .hm-foot .steps {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+.usage4 .hm-foot .steps .cell {
+  width: 10px;
+  height: 10px;
+}
+.usage4 .hours {
+  display: grid;
+  /* Ticket 483 (owner 11-12): the 24 hour columns share the card's width, so none is cut and nothing scrolls. */
+  grid-template-columns: max-content repeat(24, minmax(0, 1fr));
+  /* Rows fit an 11px label (no text under 11px); the cells are 10px high. */
+  grid-auto-rows: 13px;
+  gap: 2px;
+}
+.usage4 .hours .dl {
+  font-size: var(--fs-11);
+  color: var(--muted);
+  line-height: 13px;
+  /* chat.css's global .dl (diff lines) pads and scrolls; a day label does neither. */
+  padding: 0 2px 0 0;
+  overflow: visible;
+}
+.usage4 .hours .cell {
+  height: 10px;
+  align-self: center;
+}
+.usage4 .mix {
+  display: flex;
+  height: 12px;
+  border-radius: var(--r-6);
+  overflow: hidden;
+  background: var(--heat-0);
+}
+.usage4 .mix span {
+  display: block;
+  height: 100%;
+}
+.usage4 .mixleg {
+  margin-top: var(--sp-12);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-8);
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.usage4 .mixleg div {
+  display: flex;
+  gap: var(--sp-6);
+  align-items: center;
+  min-width: 0;
+}
+.usage4 .mixleg b {
+  color: var(--text);
+  font-weight: 600;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.usage4 .sw {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-4);
+  flex: none;
+}
+/* The four kinds of token are four steps of the neutral ramp, darkest first; the legend names each with its count. */
+.usage4 .m-in {
+  background: var(--heat-4);
+}
+.usage4 .m-out {
+  background: var(--heat-3);
+}
+.usage4 .m-cw {
+  background: var(--heat-2);
+}
+.usage4 .m-cr {
+  background: var(--heat-1);
+}
+.usage4 .u4-tabs {
+  margin-bottom: var(--sp-12);
+}
+.usage4 .u4-tabbar {
+  display: flex;
+  gap: var(--sp-4);
+  padding: 6px 10px 0; /* ticket 1041 A: no rule under the tabs; the chosen tab's underline marks it */
+}
+.usage4 .u4-tabbar [role="tab"] {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-13);
+  padding: 6px 10px;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.usage4 .u4-tabbar [role="tab"][aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--text); /* the ink underline, not blue (15.2 item 7) */
+  font-weight: 600;
+}
+.usage4 .u4-panel {
+  overflow-x: auto;
+}
+.usage4 .u4-t {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-13);
+}
+.usage4 .u4-t th,
+.usage4 .u4-t td {
+  text-align: left;
+  padding: 7px 12px;
+  white-space: nowrap; /* ticket 1041 A: rows parted by space, no rules */
+}
+.usage4 .u4-t th {
+  font-size: var(--fs-12);
+  color: var(--muted);
+  font-weight: 500;
+}
+.usage4 .u4-t .n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.usage4 .u4-t .low {
+  color: var(--warn);
+  font-size: var(--fs-11);
+}
+.usage4 .bar-in {
+  display: inline-block;
+  vertical-align: middle;
+  width: 64px;
+  height: 6px;
+  border-radius: var(--r-4);
+  background: var(--heat-0);
+  overflow: hidden;
+  margin-right: 6px;
+}
+.usage4 .bar-in span {
+  display: block;
+  height: 100%;
+  background: var(--muted);
+}
+.usage4 .retain {
+  display: flex;
+  gap: var(--sp-12);
+  align-items: flex-start;
+  padding: 12px 16px;
+  font-size: var(--fs-13);
+  border-radius: var(--r-8);
+  background: var(--panel);
+}
+.usage4 .retain .ic {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-16);
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  color: var(--warn);
+  font-weight: 700;
+  flex: none;
+  font-size: var(--fs-12);
+}
+.usage4 .retain p {
+  margin: 0;
+}
+.usage4 .retain p + p {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+@media (max-width: 760px) {
+  .usage4 .u4-r1 {
+    grid-template-columns: 1fr;
+  }
+}
+/* The Agent tab's provider cards and each meter's pace line (usage.html `provs`, `.src`). */
+.usage4 .meter .u4-pace {
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.usage4 .provs {
+  padding: var(--sp-12);
+  display: grid;
+  gap: var(--sp-12);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.usage4 .prov {
+  display: grid;
+  gap: var(--sp-8);
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: var(--r-8);
+  background: var(--tint-1); /* ticket 1041 A: a tint card inside its panel, no outline */
+}
+/* An agent with no records here: no fill (the others sit on the tint); its words say "no records in this range". */
+.usage4 .prov.none {
+  background: transparent;
+}
+.usage4 .prov .h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-8);
+  font-size: var(--fs-12);
+}
+.usage4 .prov .h b {
+  font-size: var(--fs-2);
+}
+.usage4 .prov .sub {
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.usage4 .prov .nums {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-8);
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.usage4 .prov .nums b {
+  display: block;
+  color: var(--text);
+  font-size: var(--fs-2);
+  font-variant-numeric: tabular-nums;
+}
+.usage4 .prov .chip {
+  padding: 0 var(--sp-8);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--tint-1);
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.usage4 .prov .chip.ok {
+  color: color-mix(in srgb, var(--ok) 75%, var(--text));
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+.usage4 .share {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--heat-0);
+}
+.usage4 .share span {
+  display: block;
+  height: 100%;
+  background: var(--muted);
+}
+/* D2: where Accounts' "View usage" lands. */
+.usage4 .lim:focus {
+  outline: 2px solid var(--ring-focus);
+  outline-offset: -2px;
+}
+/* D2: Usage is a dashboard and uses the mockup's frame, wider than the shared settings column (the hours grid needs it).
+   Settings kit: Providers left this rule; every page of rows has the one column, so a title never moves between pages.
+   q67 look Q6-11 (896 px against 736 px): kept, for the reason above. Look v36 (S3-2): the 160 px more go to the right,
+   so the left edge is every page's. */
+.settings:has(#s-usage) {
+  --set-wide: 160px;
+}
+.usage4 .hours .hl {
+  font-size: var(--fs-11);
+  color: var(--muted);
+  text-align: center;
+}

@@ -1,0 +1,152 @@
+/* V2.5-8/9: the PR view dialog. */
+.pr-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--scrim);
+}
+.pr-view {
+  display: flex;
+  flex-direction: column;
+  width: min(820px, calc(100vw - 32px));
+  height: min(720px, calc(100vh - 48px));
+  background: var(--panel);
+  border-radius: var(--r-12);
+  /* ticket 1041: solid, no border (owner 15.1 item 6) */
+  box-shadow: var(--shadow-float);
+  font-size: var(--fs-13);
+  --focus-ring: var(--ring-focus);
+}
+.pr-view header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+}
+.pr-view [role='tab'] {
+  padding: 4px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.pr-view [role='tab'][aria-selected='true'] {
+  border-bottom-color: currentColor;
+  font-weight: 600;
+}
+.pr-body-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px;
+}
+.pr-view h3 {
+  margin: 0 0 6px;
+  font-size: var(--fs-16);
+}
+.pr-view h4 {
+  margin: 16px 0 4px;
+  font-size: var(--fs-13);
+}
+.pr-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+/* Ticket 1041 lane 7b (N079): failing checks and conflicts are red (broken), passing green; orange is only "needs you". */
+.pr-view .bad,
+.pr-facts [data-checks='fail'] {
+  color: var(--error);
+}
+.pr-view .ok,
+.pr-facts [data-checks='pass'] {
+  color: var(--ok-text);
+}
+.pr-body,
+.pr-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+.pr-label {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 8px;
+  border-radius: var(--r-10);
+  background: var(--tint-1); /* a label pill on a tint, no outline */
+}
+.pr-timeline {
+  margin: 0;
+  padding-left: 18px;
+}
+.pr-timeline li {
+  margin-bottom: 4px;
+}
+.pr-files {
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--fs-12);
+}
+.pr-diff {
+  overflow-x: auto;
+  padding: 6px;
+  border-radius: var(--r-6);
+  background: var(--page);
+  font-size: var(--fs-12);
+}
+.pr-diff [data-line='add'] {
+  color: var(--ok-text);
+}
+.pr-diff [data-line='del'] {
+  color: var(--bad-text); /* removed lines red as in Diff, not the your-turn orange */
+}
+.pr-merge {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.pr-confirm {
+  padding: 8px 12px;
+  border-radius: var(--r-6);
+  background: var(--you-bg); /* it asks you to confirm: the warm tint, no outline */
+}
+.pr-confirm p {
+  margin: 0 0 6px;
+}
+.pr-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pr-row {
+  display: grid;
+  grid-template-columns: 180px 1fr auto;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pr-row:hover {
+  background: var(--tint-1);
+}
+.pr-list [data-tier='0'] .pr-tier {
+  color: var(--ok-text);
+}
+.pr-list [data-tier='3'] .pr-tier {
+  color: var(--error); /* blocked */
+}
+.pr-detail ul {
+  margin: 0;
+  padding-left: 18px;
+}

@@ -1,0 +1,37 @@
+/* V2-10c Settings · Artifact libraries: final.html F.libraries' five columns and table.t spacing, over the Accounts table. */
+.libs-table tr > :nth-child(1) {
+  width: 30%;
+}
+.libs-table tr > :nth-child(2) {
+  width: 16%;
+}
+.libs-table tr > :nth-child(3) {
+  width: 22%;
+}
+.libs-table tr > :nth-child(4) {
+  width: 20%;
+}
+.libs-table tr > :nth-child(5) {
+  width: 12%;
+  text-align: right;
+}
+.libs-table th {
+  padding: 8px var(--row-px);
+  border-bottom: 0;
+  background: var(--tint-1);
+  font-size: var(--fs-1);
+  font-weight: 500;
+}
+.libs-table td {
+  height: auto;
+  padding: 10px var(--row-px);
+  border-top: 0; /* ticket 1041 A: rows parted by space, no rules */
+  border-bottom: 0;
+  font-size: var(--fs-13);
+}
+.libs-table td.mono {
+  font-size: var(--fs-12);
+}
+.libs-table .btn.flat {
+  height: 28px;
+}

@@ -1,0 +1,11 @@
+/* Ticket 391 (audit pick): each Terminal section's closed Advanced fold sits in its card, under the everyday rows. */
+.settings[role='region'] details.term-more {
+  border-top: 0; /* ticket 1041 A: the fold sits under the rows by space, no rule */
+}
+.settings[role='region'] details.term-more > :not(summary) {
+  margin-left: 0;
+  margin-right: 0;
+}
+.settings[role='region'] details.term-more[open] > summary svg {
+  transform: rotate(90deg);
+}

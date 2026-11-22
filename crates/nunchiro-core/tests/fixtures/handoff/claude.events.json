@@ -1,0 +1,21 @@
+[
+  {"kind":"version_banner","agent":"claude","version":"2.1.310 (Claude Code)"},
+  {"kind":"message","role":"user","text":"Fix the login bug\nin auth.rs"},
+  {"kind":"message","role":"assistant","text":"Looking at it."},
+  {"kind":"tool_use","tool_id":"t-1","name":"TodoWrite","input":{"todos":[{"content":"Old plan","status":"pending","activeForm":"Old"}]}},
+  {"kind":"turn","turn_id":"a","state":"started"},
+  {"kind":"edit","tool_id":"e-1","path":"/project/src/auth.rs","added":3,"removed":1,"hunks":[]},
+  {"kind":"edit","tool_id":"e-2","path":"/project/src/auth.rs","added":2,"removed":0,"hunks":[]},
+  {"kind":"edit","tool_id":"e-3","path":"/other/notes.txt","added":1,"removed":0,"hunks":[]},
+  {"kind":"final_text","turn_id":"a","text":"Fixed the login check."},
+  {"kind":"turn","turn_id":"a","state":"completed"},
+  {"kind":"message","role":"user","text":"Now add a test"},
+  {"kind":"image","role":"user","source":{"type":"path","path":"/project/shot.png"}},
+  {"kind":"tool_use","tool_id":"t-2","name":"TodoWrite","input":{"todos":[{"content":"Write test","status":"completed","activeForm":"Writing"},{"content":"Fix auth","status":"in_progress","activeForm":"Fixing"},{"content":"Update docs","status":"pending","activeForm":"Updating"}]}},
+  {"kind":"edit","tool_id":"e-4","path":"/project/tests/auth.rs","added":10,"removed":0,"hunks":[]},
+  {"kind":"edit","tool_id":"e-5","path":"/project/old.txt","added":0,"removed":null,"operation":"delete","hunks":[]},
+  {"kind":"final_text","turn_id":"b","text":"Added the test."},
+  {"kind":"turn","turn_id":"b","state":"completed"},
+  {"kind":"turn","turn_id":"c","state":"started"},
+  {"kind":"turn","turn_id":"c","state":"interrupted"}
+]

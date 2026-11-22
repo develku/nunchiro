@@ -1,0 +1,93 @@
+/* V2-3b: pending handoff above the composer, chain header and divider in the chat. Existing tokens only. */
+.hoff {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0 4px;
+}
+.hoff-div,
+.conv-div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.hoff-div::before,
+.hoff-div::after,
+.conv-div::before,
+.conv-div::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.hoff-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.hoff-chip {
+  border-color: transparent; /* ticket 1041: a tint step, no outline; the counts stay */
+  background: var(--tint-1);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hoff-btn {
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--r-6);
+  font-size: var(--fs-11);
+  color: var(--text);
+}
+.hoff-btn:hover,
+.hoff-btn:focus-visible {
+  background: var(--tint-1);
+}
+.hoff-err {
+  font-size: var(--fs-11);
+  color: var(--error);
+}
+.hoff-edit {
+  width: 100%;
+  min-height: 96px;
+  max-height: 40vh;
+  resize: vertical;
+  font: inherit;
+  font-size: var(--fs-12);
+  color: var(--text);
+  background: var(--tint-1);
+  border: 0;
+  border-radius: var(--r-8);
+  padding: 6px 8px;
+}
+/* Chat header chain "Claude 14 turns › Codex", the earlier session read-only above the divider. */
+.conv-chain {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.conv-chain button {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.conv-chain [aria-current] {
+  color: var(--text);
+  font-weight: 600;
+}
+.conv-earlier {
+  position: relative;
+  flex: 0 0 38%;
+  min-height: 80px;
+  background: var(--tint-1); /* the earlier, read-only session: one tint step instead of a rule */
+}
+.conv-div {
+  padding: 4px 12px;
+}

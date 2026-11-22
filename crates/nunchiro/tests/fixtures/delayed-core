@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+"""Exercise the real bind/listen readiness window without scheduling luck."""
+import json, os, socket, time
+home = os.environ['NUNCHIRO_HOME']
+with open(os.path.join(home, 'core.token'), 'w') as f:
+    f.write('fixture')
+s = socket.socket(socket.AF_UNIX)
+s.bind(os.path.join(home, 'core.sock'))
+time.sleep(.15)
+s.listen()
+while True:
+    c, _ = s.accept()
+    with c:
+        line = c.makefile().readline()
+        if not line:
+            continue
+        request = json.loads(line)['request']
+        stop = request['op'] == 'stop'
+        reply = {'type':'ack'} if stop else {'type':'snapshot','sessions':[]}
+        c.sendall((json.dumps({'Ok':reply})+'\n').encode())
+        if stop:
+            break

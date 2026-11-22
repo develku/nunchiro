@@ -1,0 +1,12 @@
+[
+  {"kind":"turn","turn_id":"turn-1","state":"started"},
+  {"kind":"tool_use","tool_id":"call-ok-1","name":"exec_command","input":{"cmd":"cargo test -p sample"}},
+  {"kind":"tool_result","tool_id":"call-ok-1","output":"Wall time: 1.5000 seconds\nProcess exited with code 0\nOutput:\ntest result: ok. 3 passed; 0 failed\n","is_error":false,"at":"2026-10-24T00:00:00.000Z"},
+  {"kind":"tool_use","tool_id":"call-bad-1","name":"exec_command","input":{"cmd":"cargo test -p broken"}},
+  {"kind":"tool_result","tool_id":"call-bad-1","output":"Wall time: 0.2000 seconds\nProcess exited with code 101\nOutput:\ntest result: FAILED. 1 passed; 2 failed\n","is_error":true,"at":"2026-10-24T00:00:00.000Z"},
+  {"kind":"tool_use","tool_id":"call-code-1","name":"exec","input":"tools.exec_command({cmd:\"pwd\"})"},
+  {"kind":"tool_result","tool_id":"call-code-1","output":"ok","is_error":false,"at":"2026-10-24T00:00:00.000Z"},
+  {"kind":"tool_use","tool_id":"call-lone-1","name":"exec_command","input":{"cmd":"true"}},
+  {"kind":"tool_result","tool_id":"call-lone-1","output":"Wall time: 0.0000 seconds\nProcess exited with code 0\nOutput:\n","is_error":false,"at":"2026-10-24T00:00:00.000Z"},
+  {"kind":"turn","turn_id":"turn-1","state":"completed","files":[],"files_partial":true}
+]

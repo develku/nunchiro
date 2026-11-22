@@ -1,0 +1,17 @@
+# SYNTHETIC (v1b-27): not recorded (no real-agent run this round). Built from Codex 0.161.0's approval strings
+# ("Would you like to run the following command?", "Yes, proceed", "No, and tell Codex what to do differently",
+# the "$ " command prefix) in the layout of its TUI approval overlay. Hook input assumed {"command": "touch done"}.
+=== own
+• I'll create the done file.
+
+  Would you like to run the following command?
+
+  Reason: create the done file
+
+  $ touch done
+
+› 1. Yes, proceed (y)
+  2. Yes, and don't ask again for commands that start with `touch done` (p)
+  3. No, and tell Codex what to do differently (esc)
+
+  Press enter to confirm or esc to cancel

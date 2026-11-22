@@ -1,0 +1,69 @@
+/* v25f F7: final.html's .row .lab, .icn, .sd, .vv and .chip, for the Connected services rows. */
+.settings[role='region'] .srow.prov .slab {
+  display: flex;
+  gap: var(--sp-12);
+}
+.settings[role='region'] .srow.prov .icn {
+  position: relative;
+  display: inline-flex;
+  align-self: flex-start;
+  height: var(--icon-size);
+  margin-top: 2px;
+  color: var(--text);
+}
+.settings[role='region'] .srow.prov svg.logo {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  fill: currentColor;
+}
+.settings[role='region'] .srow.prov svg.logo text {
+  font: 600 var(--fs-11) var(--font-ui);
+  letter-spacing: -0.02em;
+}
+.settings[role='region'] .srow.prov .sd {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--panel);
+}
+.settings[role='region'] .srow.prov .sd.ok {
+  background: var(--ok);
+}
+.settings[role='region'] .srow.prov .sd.warn {
+  background: var(--warn);
+}
+.settings[role='region'] .srow.prov .sd.idle {
+  background: var(--idle);
+}
+.settings[role='region'] .srow.prov .vv {
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: var(--fs-11);
+  color: var(--muted);
+  font-weight: 400;
+}
+/* final.html F.repoNew, F.wtRows: the inputs start at the draft's width and grow with a long path. */
+.settings[role='region'] input.sinp:is([data-setting='branchPrefix'], [data-setting='worktreeRoot']) {
+  field-sizing: content;
+  max-width: 320px;
+}
+.settings[role='region'] input.sinp[data-setting='branchPrefix'] {
+  min-width: 120px;
+}
+.settings[role='region'] input.sinp[data-setting='worktreeRoot'] {
+  min-width: 140px;
+  text-overflow: ellipsis;
+}
+/* Ticket 991: a long folder path makes the field narrower, never the row taller: the control keeps its place right of
+   the label (settings-shell.spec.ts settings_rows_follow_final_draft) and takes the room the label's 320 px leave, up to
+   the path's own width; the field's title has the whole path. The base is the field's 140 px floor and Browse; a row
+   too narrow for that still moves the control below (shell.css .srow). */
+.settings[role='region'] .srow.git-root > .sctl {
+  flex: 1000 1 240px;
+  max-width: max-content;
+}
+.settings[role='region'] .srow.git-root > .sctl > input {
+  flex: 0 1 auto;
+}

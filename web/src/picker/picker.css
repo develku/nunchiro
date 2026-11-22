@@ -1,0 +1,309 @@
+/* Model and effort chips (ticket 10): R8 chip tokens; the menu opens upward from the composer. */
+.pk {
+  position: relative; /* B8: the hint floats above the chips */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 134px; /* two chip floors (64px) and the gap */
+  flex: 0 1 auto;
+}
+/* Wave 8 (answer-strip, B8): opening a side pane must not change the composer's height, so the chips first shorten in
+   place: the row breaks lines on each chip's floor (about eight characters before its ellipsis, the full text in the
+   tooltip), never on its words. Only a really narrow composer (styles.css, the cbox container) sets the bases to the words,
+   so they wrap whole instead. */
+.composer .pk {
+  flex: 100000 1 calc(2 * (7ch + 24px) + 6px);
+  max-width: max-content;
+}
+/* Narrow composer (needs 121): the picker gives way before the permission chip, the effort chip before the model chip; the
+   menu (absolute, outside the button) is never clipped, only the chip's own text is. */
+.pk-anchor {
+  position: relative;
+  display: inline-flex;
+  /* The chip's floor: about eight characters before the ellipsis (B8). A plain length, not min(100%, …): a percentage
+     counts as 0 in the picker's own max-content, so a short chip ("Claude") under its floor cut the next one with room left
+     in the row (v11-C-NC14). The picker's own 134px floor keeps 100% above it anyway. */
+  min-width: calc(7ch + 24px);
+  flex: 0 1 auto;
+}
+/* Look v20 (Q5): a chip keeps its label whole in every language ("Cla…", "predeter…", "자"): the row wraps before a chip
+   shortens. Only a name wider than the whole row (max-width) still takes the ellipsis. */
+.composer .pk {
+  flex-basis: auto;
+  min-width: max-content;
+}
+.composer .pk-anchor {
+  min-width: max-content;
+}
+.composer .pk-chip {
+  min-width: 0;
+}
+.pk-anchor:last-child {
+  flex-shrink: 3;
+}
+.pk-chip {
+  font: inherit;
+  font-size: var(--fs-11);
+  cursor: pointer;
+  white-space: nowrap;
+  min-width: 64px; /* a floor: padding, caret and a readable word; below it the row wraps, never a neighbour (B8) */
+  max-width: 100%;
+  overflow: hidden;
+}
+.pk-chip svg {
+  flex: none;
+}
+.pk-text {
+  display: flex;
+  /* Look 1117 v6r (C S3-2): one line high and wrapping, the model's name first in line order (drawn second): an agent word
+     that does not fit whole goes to the hidden second line, so it is never cut mid-letter against the name ("Claud(Haiku"). */
+  flex-flow: row-reverse wrap;
+  height: 1lh;
+  min-width: 0;
+  overflow: hidden;
+  white-space: pre;
+}
+/* Look 1117 v5 (C S3-2): the agent word gives way first (whole), then the model's name takes the ellipsis. */
+.pk-agent {
+  order: 1;
+  flex: none;
+}
+.pk-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* needs 130: the mockup's `.ch`, flat text with a caret, no box of its own; hover and an open menu give it a quiet one. */
+.composer .pk-chip {
+  height: 28px;
+  padding: 0 6px; /* look v20 (Q5): the words stay whole, so the chip gives a little padding instead (was 8px) */
+  border: 0;
+  border-radius: var(--r-8);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-12);
+  font-weight: 400; /* W35 mockup 2: flat chips in plain weight, as Claude Desktop's */
+  gap: 4px;
+}
+.composer .pk-chip svg {
+  opacity: 0.7;
+}
+.composer .pk-chip[data-picker='model'] {
+  color: var(--text); /* W35 mockup 2: the model in text colour, the effort lighter */
+}
+/* W35 mockup 2: the chip shows the model or the level alone; the agent word stays in the tooltip and accessible name. */
+.composer .pk-agent {
+  display: none;
+}
+.pk-fast {
+  color: var(--text); /* Claude's own ↯; ticket 1041 (owner 11-22): on is the ink, orange stays "your turn" */
+}
+.pk-fast.cooling {
+  color: var(--muted); /* ticket 1010: Claude dims it while fast mode cools down */
+}
+.pk-ultra {
+  white-space: pre;
+}
+.composer .pk-chip:not([aria-disabled='true']):hover,
+.composer .pk-chip[aria-expanded='true'] {
+  background: var(--panel);
+  color: var(--text);
+}
+.pk-chip[aria-disabled='true'] {
+  color: var(--muted);
+  cursor: default;
+}
+.pk-chip:focus-visible,
+.pk-menu [role='menuitemradio']:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+/* Ko picker (round2 `#s02 .menu`): 13px rows, a group label above each group, rules between groups. */
+.pk-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--sp-4));
+  z-index: 30;
+  min-width: 260px;
+  max-width: 320px; /* help lines wrap; rows keep one line */
+  margin: 0;
+  padding: 5px;
+  list-style: none;
+  border-radius: var(--r-12);
+  color: var(--text);
+  font-size: var(--fs-14); /* W35 mockup 2: Claude Desktop's 14px rows */
+  line-height: 1.45; /* the ko mockups' body line height */
+}
+.pk-menu [role='menuitemradio'],
+.pk-menu [role='menuitem'],
+.pk-menu [role='menuitemcheckbox'] {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: var(--r-8);
+  color: var(--text);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pk-menu [role='menuitemradio']:hover,
+.pk-menu [role='menuitemradio']:focus,
+.pk-menu [role='menuitem']:hover,
+.pk-menu [role='menuitem']:focus,
+.pk-menu [role='menuitemcheckbox']:hover,
+.pk-menu [role='menuitemcheckbox']:focus {
+  background: var(--select-bg);
+  outline: none;
+}
+.pk-menu [role='menuitemradio'][aria-checked='true'] {
+  background: var(--select-bg);
+}
+/* W35 mockup 2: name, then pill and value, a tick column and the digit, right-aligned columns. */
+.pk-lab {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pk-val,
+.pk-chev {
+  color: var(--muted);
+}
+.pk-tick,
+.pk-key {
+  width: 12px;
+  text-align: right;
+  font-size: var(--fs-12);
+}
+.pk-key {
+  color: var(--faint);
+}
+.pk-menu .pk-dim,
+.pk-menu .pk-dim .pk-lab {
+  color: var(--muted);
+  cursor: default;
+}
+.pk-pill {
+  font-size: var(--fs-11);
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--hover);
+  color: var(--muted);
+}
+.pk-pill.amber {
+  background: var(--stale-bg);
+  color: var(--warn);
+}
+.pk-help {
+  padding: 6px 10px;
+  font-size: var(--fs-12);
+  color: var(--muted);
+  white-space: normal;
+  line-height: 1.4;
+}
+.pk-help.pk-why {
+  padding-top: 0; /* mockup `.why`: a row's own sentence sits right under it */
+}
+/* A switch: on is the text colour, off the line colour, not read yet dashed, unavailable faded. */
+.pk-tg {
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 16px;
+  border-radius: var(--r-pill);
+  background: var(--line);
+}
+.pk-tg::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--panel);
+  box-shadow: var(--shadow-card);
+}
+.pk-tg.on {
+  background: var(--text);
+}
+.pk-tg.on::after {
+  left: 14px;
+}
+.pk-tg.unk {
+  background: transparent;
+  border: 1px dashed var(--faint);
+}
+.pk-tg.unk::after {
+  top: 1px;
+  left: 7px;
+  background: var(--faint);
+  box-shadow: none;
+}
+.pk-tg.dis {
+  opacity: 0.45;
+}
+/* More models opens to the menu's right (mockup B2); `.left` when the window has no room there (Picker's flip). */
+.pk-menu.pk-sub {
+  right: auto;
+  left: calc(100% + 10px);
+  bottom: -5px;
+  cursor: default;
+}
+.pk-menu.pk-sub.left {
+  left: auto;
+  right: calc(100% + 10px);
+}
+.pk-menu.pk-sub.over {
+  left: auto;
+  right: 0;
+  bottom: calc(100% + 4px);
+}
+.pk-msg {
+  /* B8 (ticket 991): a popover above the chip row, never a flex item that squeezes the chips */
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  padding: 2px 8px;
+  border-radius: var(--r-8);
+  font-size: var(--fs-11);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 360px;
+}
+.pk-msg[data-error] {
+  color: var(--error);
+}
+/* v2-3b: the hand-off group under the models */
+.pk-sep {
+  height: 1px;
+  margin: var(--sp-4) var(--sp-2);
+  background: var(--hover);
+}
+.pk-group {
+  padding: var(--sp-3) 10px;
+  font-size: var(--fs-12);
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* Look 1117 v11 C-NC14: an agent word that gave way still held its width (a wrapped line keeps its box), so with a side
+   widget open at a 1280 pt window the folder and effort chips were cut beside that empty room. Below the width the whole
+   row needs, the agent words go and give their room back; the chip's name and tooltip still say what it is. */
+@container cbox (max-width: 680px) {
+  .composer .pk-agent {
+    display: none;
+  }
+}
+/* W35 mockup 2 frame E: at 440 px "· ultracode" goes whole first (the tooltip keeps it). */
+@container cbox (max-width: 440px) {
+  .composer .pk-ultra {
+    display: none;
+  }
+}

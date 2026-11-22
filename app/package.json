@@ -1,0 +1,12 @@
+{
+  "name": "nunchiro-app",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "build": "pnpm --filter nunchiro-web build && tauri build --no-bundle",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.1"
+  }
+}

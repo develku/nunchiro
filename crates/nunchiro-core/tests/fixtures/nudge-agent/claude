@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""V2.5-39 (ticket 187): a synthetic agent that runs a turn through the hook commands Nunchiro gave it (Claude's
+--settings file, or Codex's -c hooks.<event>=... args) and records every PTY input read and every UserPromptSubmit
+hook stdout. Never reads or writes agent configuration."""
+import json, os, re, shlex, socket, subprocess, sys, termios, time, tty
+if '--version' in sys.argv:
+    print('99.0.0 fixture')
+    sys.exit()
+home, me = os.environ['NUNCHIRO_HOME'], os.environ['NUNCHIRO_SESSION']
+commands = {}
+args = sys.argv[1:]
+for i, a in enumerate(args):
+    if a == '--settings':
+        for event, blocks in json.load(open(args[i + 1])).get('hooks', {}).items():
+            commands[event] = blocks[0]['hooks'][0]['command']
+    m = re.match(r'hooks\.(\w+)=.*command=("(?:[^"\\]|\\.)*")', a)
+    if m:
+        commands[m.group(1)] = json.loads(m.group(2))
+forge = args[args.index('--fixture-forge') + 1] if '--fixture-forge' in args else None
+
+def log(name, value):
+    with open(os.path.join(home, name + '-' + me + '.jsonl'), 'a') as f:
+        f.write(json.dumps(value) + '\n')
+
+def hook(event):
+    # A forged payload session id must change nothing (ticket 187 threat 5).
+    payload = {'session_id': forge} if forge else {}
+    start = time.monotonic()
+    out = subprocess.run(commands[event], shell=True, input=json.dumps(payload).encode(), capture_output=True)
+    return out.stdout.decode(), int((time.monotonic() - start) * 1000)
+
+def forged_id():
+    # The same session token naming another session's id.
+    with socket.socket(socket.AF_UNIX) as s:
+        s.connect(os.path.join(home, 'core.sock'))
+        s.sendall((json.dumps({'token': os.environ['NUNCHIRO_TOKEN'], 'request': {'op': 'hook', 'id': forge, 'event': 'UserPromptSubmit', 'payload': {}}}) + '\n').encode())
+        return s.recv(65536).decode()
+
+tty.setcbreak(0)
+attrs = termios.tcgetattr(0)
+attrs[3] &= ~termios.ECHO
+attrs[0] &= ~termios.ICRNL
+termios.tcsetattr(0, termios.TCSANOW, attrs)
+print('FIXTURE_READY\n❯ ', flush=True)
+line = ''
+while True:
+    raw = os.read(0, 65536)
+    if not raw:
+        break
+    log('pty', raw.decode('utf-8', 'replace'))
+    for ch in raw.decode('utf-8', 'replace'):
+        if ch != '\r':
+            line += ch
+            continue
+        out, ms = hook('UserPromptSubmit')
+        log('ctx', {'prompt': line, 'stdout': out, 'ms': ms, 'forged_id': forged_id() if forge else None})
+        log('composer', line)
+        print('ACK:' + line + '\n❯ ', flush=True)
+        hook('Stop')
+        line = ''

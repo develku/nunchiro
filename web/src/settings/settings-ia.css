@@ -1,0 +1,154 @@
+/* v25-fix-settings (designer panel Lane C). The body scrolls inside the window: without min-height 0 the flex column grew
+   to its content and the window cut it (conformance 106-settings-fills: 2073 px of a 900 px window). */
+.settings .sbody {
+  min-height: 0;
+}
+/* A page made of folded pages (Advanced, Agents, Appearance) stacks its sections full width, as each was
+   drawn on its own page, instead of placing them side by side in the body's grid. */
+.settings .sbody > section {
+  grid-column: 1 / -1;
+}
+/* V2.5-32 (needs 140 amendment, needs 162): one page skeleton. Every section on every page shares one left edge, no box and no
+   inset (the tree's .agents rule in styles.css and machines.css boxed two of them), and heading size alone carries the
+   hierarchy: h2 18, h3 15, body and lede 13. Specificity here beats those rules, which other areas own. The no-match
+   card keeps its own rules. */
+.settings .sbody > section:not(.sempty) {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  min-width: 0;
+}
+.settings .sbody > section:not(.sempty) h2 {
+  font-size: var(--fs-18);
+  line-height: inherit;
+}
+.settings .sbody > section:not(.sempty) h3:not(.sgroup) {
+  font-size: var(--fs-15);
+}
+.settings .sbody > section:not(.sempty) .lede {
+  font-size: var(--fs-13);
+}
+/* B17 (ticket 217): rows the search does not match hide in place (SettingsView filterRows); the matches sit in the nav. */
+.settings .sbody [data-sfilter] {
+  display: none !important;
+}
+.settings nav .smatches {
+  margin: 0;
+  gap: 0;
+}
+.settings nav .smatch {
+  width: 100%;
+  padding: 3px 10px;
+  font-size: var(--fs-12);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings nav .smatch .dim {
+  color: var(--muted);
+}
+/* The no-match card stands where the page was; the page stays drawn under it, hidden. */
+.settings .sbody.snone > :not(.sempty) {
+  display: none !important;
+}
+.settings .sbody > .sempty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--r-10);
+  background: var(--panel); /* ticket 1041 A: a card's surface step, no outline */
+}
+.settings .sbody > .sempty p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-13);
+}
+/* C8 (ticket 217): the gallery tile's mini window gets a title bar (three dots, an accent chip) above sidebar and main. */
+.tw.twin {
+  flex-direction: column;
+}
+.twin .twbody {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.twin .ttitle {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 10px;
+  padding: 0 4px;
+  border-bottom: 1px solid;
+}
+.twin .ttitle i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+}
+.twin .tchip {
+  margin-left: auto;
+  width: 14px;
+  height: 5px;
+  border-radius: var(--r-4);
+}
+/* C9 (ticket 217): the font sample beside the terminal font size stepper. */
+.fsample {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: var(--r-6);
+  background: var(--tint-1); /* ticket 1041 A: the sample is a tint block, no outline */
+  color: var(--text);
+  font-size: var(--fs-13);
+  line-height: 1.35;
+}
+.fsample .fs-chat:nth-child(2) {
+  color: var(--muted);
+}
+.fsample .fs-term,
+.fsample .fs-chat {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* v25c-about-polish (ticket 262): a row label's small mono value and a muted pill (About's "0.1.0 · sha" and "after the
+   RC", after T3 Code's About page). The kit had neither; the tree's .pill is a status colour, not a label. */
+.settings .srow .snm .sver {
+  /* The value sits inside the label's own span (Row's `<span id>`, 49caef92), out of reach of .snm's flex gap: the same
+     gap, as a margin. */
+  margin-inline-start: var(--sp-8);
+  font-size: var(--fs-12);
+  font-weight: 400;
+  color: var(--muted);
+}
+.settings .srow .snm .spill {
+  font-size: var(--fs-11);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--muted);
+  border-radius: var(--r-10);
+  background: var(--tint-1); /* ticket 1041 A: a tint pill, no outline */
+  padding: 0 6px;
+}
+/* Ticket 1041 (N180): About's licence list, a tint block with no outline (it was an inline outlined box). */
+.settings .about-lic {
+  margin: 0;
+  padding: var(--sp-8) var(--sp-12);
+  list-style: none;
+  max-height: 360px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  border-radius: var(--r-6);
+  background: var(--tint-1);
+  font-size: var(--fs-12);
+  line-height: 1.5;
+  color: var(--muted);
+}

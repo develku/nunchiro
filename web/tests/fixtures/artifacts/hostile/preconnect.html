@@ -1,0 +1,7 @@
+<!doctype html><title>preconnect</title>
+<link rel="preconnect" href="http://127.0.0.1:{{CANARY}}">
+<link rel="dns-prefetch" href="http://127.0.0.1:{{CANARY}}">
+<link rel="prefetch" href="http://127.0.0.1:{{CANARY}}/prefetch">
+<script>parent.postMessage({type:"fixture",result:"loaded"},"*")</script>
+<a id="blank" target="_blank" href="http://127.0.0.1:{{CANARY}}/blank">blank</a>
+<script>document.getElementById("blank").click();document.addEventListener("click",function(){document.getElementById("blank").click()})</script>

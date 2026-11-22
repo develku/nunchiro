@@ -1,0 +1,7 @@
+Upstream source of the licence texts in this folder (fetched 2026-10-28; compared byte-for-byte modulo trailing whitespace).
+LICENSE-APACHE: https://raw.githubusercontent.com/madsmtm/objc2/main/LICENSE-APACHE.txt
+  year line: Copyright 2026 Mads Marquart
+LICENSE-MIT: https://raw.githubusercontent.com/madsmtm/objc2/main/LICENSE-MIT.txt
+  year line: Copyright 2026 Mads Marquart
+LICENSE-ZLIB: https://raw.githubusercontent.com/madsmtm/objc2/main/LICENSE-ZLIB.txt
+  year line: Copyright 2026 Mads Marquart

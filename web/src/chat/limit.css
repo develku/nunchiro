@@ -1,0 +1,11 @@
+/* Ticket 372: the limit band, the problem card's band in the yellow of the tree's clock (372 mockup, option A). Ticket
+   1041 (N069): the yellow is its still edge light (LimitBand: light-limited light-edge) and the "!", on the band's tint. */
+.problem-band.limit > b {
+  color: var(--warn);
+}
+.problem-band.limit .sp {
+  flex: 1;
+}
+.problem-band.limit .err {
+  flex-basis: 100%;
+}

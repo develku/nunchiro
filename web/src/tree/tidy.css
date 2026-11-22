@@ -1,0 +1,103 @@
+/* V2-8g: the Tidy panel (WTDIALOGS Draft 3, compare-r3 "Merged / tidy"); the card look is .wtdlg in tree.css. */
+.wtdlg.tidy {
+  max-height: 80vh;
+  overflow: auto;
+}
+.tidy .wtttl {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+}
+.tidy .wtttl .btn {
+  margin: calc(var(--sp-2) * -1) 0 calc(var(--sp-2) * -1) auto; /* the toggle must not make the title row taller than the mockup's h4 */
+  padding: 1px 7px;
+  font-size: var(--fs-11);
+}
+.tidy .wtttl .btn[aria-pressed='true'] {
+  background: var(--hover);
+}
+.tidy .wtcap {
+  margin: var(--sp-6) 0 0;
+  font: 600 var(--fs-11) system-ui;
+  color: var(--muted);
+}
+.palette.tidy ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: none;
+}
+.palette.tidy li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-8);
+  padding: var(--sp-4) 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  font-size: var(--fs-12);
+  cursor: default;
+}
+.palette.tidy section:first-of-type li:first-child {
+  border-top: 0;
+}
+.tidy li label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-8);
+  flex: 1;
+  cursor: pointer;
+}
+/* The palette's text-field look (full width, bottom rule, raised fill) is not for a checkbox. The mockup draws the native
+   box in the light scheme on a dark page too: its blue is the UA's, not a token, so the box takes that scheme. */
+.tidy input[type='checkbox'] {
+  background: none;
+  color-scheme: light;
+  width: auto;
+  margin: 2px 3px 3px 4px;
+  padding: 0;
+  border: 0;
+  flex: none;
+}
+.tidy input[type='checkbox']:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.tidy .tn small {
+  display: block;
+  color: var(--muted);
+  font-size: smaller;
+}
+.tidy .resolve {
+  position: relative;
+  margin-left: auto;
+}
+/* The caret path leaves ~2px empty inside its 16-unit box: at the mockup's glyph size the button stays as wide as the mockup's. */
+.tidy .resolve .oi {
+  margin-right: -1px;
+}
+.palette.tidy li .btn {
+  padding: 1px 7px;
+  font-size: var(--fs-11);
+}
+.tidy .rmenu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--r-8); /* ticket 1041 (B): glass, no border */
+  white-space: nowrap;
+}
+.tidy .rmenu .btn {
+  padding: 5px 12px;
+  font-size: var(--fs-12);
+}
+.tidy .wtacts {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-8);
+  margin: var(--sp-8) 0 0;
+}

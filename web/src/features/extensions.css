@@ -1,0 +1,216 @@
+/* Ticket 391 part 2 (final.html scene b): the "내 확장" heading over the three own cards, and the kind line under a base row. */
+.settings[role='region'] .ssec-group > h2.ext-mine {
+  margin: var(--sp-8) 0 var(--sp-8);
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--text);
+}
+/* The side note sits right after the title, as in the mock. */
+.settings[role='region'] .sbody section.ssec.ext-base > h2 .sr-right {
+  margin-left: 0;
+  font-weight: 400;
+}
+
+/* Ticket 452: a kind or source tag beside a row's name (no status dot), the line saying what an item holds, the files
+   panel under an item's row, the New skill form and the empty state with its action. */
+.settings[role='region'] .srow .chip.tag::before {
+  display: none;
+}
+.settings[role='region'] .srow .ext-meta {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-12);
+}
+.settings[role='region'] .srow .sctl:has(> .btn + .stog) {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-12);
+}
+.settings[role='region'] .scard > .ext-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-8);
+}
+.settings[role='region'] .scard > .ext-empty p {
+  margin: 0;
+}
+.settings[role='region'] .ext-dir {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  vertical-align: bottom;
+}
+.settings[role='region'] .srow.ext-new {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-8);
+}
+.settings[role='region'] .srow.ext-new input.sinp {
+  flex: 3;
+  min-width: 0;
+}
+.settings[role='region'] .srow.ext-new input.sinp.mono {
+  flex: 1;
+}
+.settings[role='region'] .srow.ext-new .conflict {
+  flex-basis: 100%;
+  margin: 0;
+}
+.settings[role='region'] .extv {
+  padding: var(--sp-12) var(--row-px) var(--sp-16);
+  background: var(--page);
+}
+.settings[role='region'] .extv > .lede,
+.settings[role='region'] .extv > .conflict {
+  margin: 0 0 var(--sp-8);
+}
+.settings[role='region'] .extv-grid {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--sp-12);
+}
+.settings[role='region'] .extv-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.settings[role='region'] .extv-list button {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  width: 100%;
+  padding: var(--sp-6) var(--sp-8);
+  border-radius: var(--r-6);
+  font-size: var(--fs-12);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.settings[role='region'] .extv-list button:hover {
+  background: var(--tint-1);
+}
+.settings[role='region'] .extv-list button[aria-current] {
+  background: var(--select-bg);
+  font-weight: 600;
+}
+.settings[role='region'] .extv-dir {
+  color: var(--muted);
+  font-weight: 400;
+}
+.settings[role='region'] .extv-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.settings[role='region'] .extv-more {
+  padding: var(--sp-6) var(--sp-8);
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.settings[role='region'] .extv-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+  min-width: 0;
+}
+.settings[role='region'] .extv-pane textarea {
+  height: 320px;
+  padding: var(--sp-8) var(--sp-12);
+  line-height: 1.6;
+  tab-size: 2;
+}
+.settings[role='region'] .extv-pane textarea[readonly] {
+  color: var(--muted);
+}
+.settings[role='region'] .extv-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  min-height: 28px;
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+
+/* Ticket 455: a hook's lines (event, when, what runs) under its row or over an item's files. */
+.settings[role='region'] .exth {
+  padding: var(--sp-12) var(--row-px);
+  background: var(--page);
+}
+.settings[role='region'] .extv > .exth {
+  padding: 0 0 var(--sp-12);
+}
+.settings[role='region'] .exth table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: var(--fs-12);
+}
+.settings[role='region'] .exth th {
+  padding: 0 var(--sp-8) var(--sp-4) 0;
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+}
+.settings[role='region'] .exth th:first-child {
+  width: 170px;
+}
+.settings[role='region'] .exth th:nth-child(2) {
+  width: 36%;
+}
+.settings[role='region'] .exth td {
+  padding: var(--sp-4) var(--sp-8) var(--sp-4) 0;
+  vertical-align: top; /* ticket 1041 A: lines parted by space, no rules */
+  color: var(--text);
+}
+.settings[role='region'] .exth td:nth-child(2) {
+  color: var(--muted);
+}
+.settings[role='region'] .exth-m {
+  color: var(--muted);
+}
+.settings[role='region'] .exth-cmd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Ticket 456 round 2: in the Turn on sheet the command takes the width ("When" is left out, as the CLI prints it), wraps
+   only at spaces, and a word longer than the line scrolls. */
+.settings[role='region'] .exth.whole th:first-child {
+  width: 128px;
+}
+.settings[role='region'] .exth.whole th:nth-child(2),
+.settings[role='region'] .exth.whole td:nth-child(2) {
+  display: none;
+}
+.settings[role='region'] .exth.whole .exth-cmd {
+  overflow: visible;
+  white-space: normal;
+}
+.settings[role='region'] .exth-code {
+  display: block;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.settings[role='region'] .exth-note {
+  margin: var(--sp-8) 0 0;
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+/* Ticket 991 C11: Remove asks under its row, with where the folder goes. */
+.settings[role='region'] .ext-remove {
+  padding: var(--sp-8) var(--row-px);
+}
+.settings[role='region'] .ext-remove p {
+  margin: 0 0 var(--sp-8);
+}

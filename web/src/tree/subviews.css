@@ -1,0 +1,207 @@
+/* D5b lane B: widgets nested under a project row (B01-B08), the drop highlights and the project picker.
+   Look from ko/layout-d5b.html: .ph.hot, .view, .vh, .vb, .pick. */
+/* Ticket 1041: blue is the working light only; a drop target is the selected tint with the neutral ring (a visible target). */
+.row.head[data-hot] {
+  background: var(--select-bg);
+  outline: var(--focus-width) solid var(--ring-focus);
+}
+.tree .row.head[data-hot] > :is(.r, .d, .padd) {
+  display: none; /* the pill takes their place while a widget is over the row */
+}
+.row.head[data-hot]::after {
+  content: 'Add as sub-view';
+  margin-left: auto;
+  flex: none;
+  white-space: nowrap;
+  font-size: calc(var(--fs-11) * 0.9);
+  font-weight: 700;
+  color: var(--control-text);
+  background: var(--control-bg);
+  border-radius: var(--r-10);
+  padding: 0 7px;
+}
+nav[data-bar] [data-slot][data-hot] {
+  background: color-mix(in srgb, var(--done) 22%, transparent);
+  outline: 2px solid var(--done);
+}
+
+.view {
+  margin: 1px 0 1px 14px;
+  min-width: 0;
+  font-size: var(--fs-12); /* .mw font-size: var(--fs-12) in the mockup */
+}
+.vh {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  border-radius: var(--r-6); /* ko/layout-d5b.html .vh draws 5px; snapped to --r-6 (ticket 515) */
+  color: var(--text);
+  font-weight: 600;
+}
+.vh:hover {
+  background: var(--tint-1);
+}
+.vh .vt {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 4px 0 6px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.vh .vt svg {
+  flex: none;
+  width: 10px;
+  color: var(--muted);
+  transition: transform 0.12s;
+}
+.vh .vt[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+.vh .vt .nm {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vh .tagv {
+  font-size: calc(var(--fs-11) * 0.82);
+  font-weight: 700;
+  color: var(--select-text); /* ticket 1041 (N058, N117): a neutral tint mark, no outline; purple is not "view"; muted text is under 4.5:1 on the tint in dark */
+  background: var(--tint-2);
+  border-radius: var(--r-4);
+  padding: 0 3px;
+  line-height: 13px;
+}
+.vh .x {
+  flex: none;
+  display: flex;
+  align-items: center;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 var(--sp-4);
+}
+.vb {
+  margin: 0 0 3px 12px;
+  padding: var(--sp-4) var(--sp-6);
+  background: var(--tint-1); /* ticket 1041: a tint step, no purple edge */
+  border-radius: 0 var(--r-6) var(--r-6) 0; /* ko/layout-d5b.html .vb */
+  line-height: 1.6;
+  max-height: 130px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+/* A widget made for a whole sidebar fits the capped body: its own height rules give way to the cap. */
+.vb > * {
+  height: auto;
+  min-height: 0;
+  max-width: 100%;
+}
+
+.pick {
+  position: fixed;
+  z-index: 80;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-8);
+  box-shadow: var(--shadow-md);
+  padding: var(--sp-4);
+  min-width: 200px;
+  color: var(--text);
+}
+.pick .hd {
+  font-size: var(--fs-11);
+  font-weight: 700;
+  color: var(--muted);
+  padding: var(--sp-4) var(--sp-8);
+}
+.pick button {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 5px var(--sp-8);
+  border-radius: var(--r-6);
+  cursor: pointer;
+}
+.pick button:hover,
+.pick button:focus-visible {
+  background: var(--hover);
+}
+.pick button.cancel {
+  color: var(--muted);
+}
+
+/* The drag layer's preview for these targets is the target's own highlight (above); only the label shows, at the
+   bottom centre like a bar drop's, so it never covers the row. */
+.dropprev[data-kind='nest'],
+.dropprev[data-kind='picker'] {
+  border: 0;
+  background: none;
+}
+.dropprev[data-kind='nest'] .dropl,
+.dropprev[data-kind='picker'] .dropl {
+  position: fixed;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  max-width: 320px;
+}
+
+/* A library card armed for nesting (Alt+Enter); the live region says what to do. */
+.lcard[data-armed] {
+  outline: 2px solid var(--done);
+}
+
+/* needs 171: a project head dragged over a group head. Same highlight as a widget dropped on a project row (above); the
+   label takes the place of the head's counts and strip, and the ghost is the dragged project's name at the pointer. */
+.row.ghead[data-hot] {
+  background: var(--select-bg);
+  outline: var(--focus-width) solid var(--ring-focus);
+}
+.tree .row.ghead[data-hot] > :is(.r, .d, .bar) {
+  display: none;
+}
+.row.ghead .droplabel {
+  margin-left: auto;
+  flex: none;
+  white-space: nowrap;
+  font-size: calc(var(--fs-11) * 0.9);
+  font-weight: 700;
+  color: var(--control-text);
+  background: var(--control-bg);
+  border-radius: var(--r-10);
+  padding: 0 7px;
+}
+.pdrag {
+  position: fixed;
+  z-index: 90;
+  pointer-events: none;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: var(--sp-4) var(--sp-8);
+  border-radius: var(--r-8); /* ticket 1041 (B): glass, no border */
+  color: var(--text);
+  font-size: var(--fs-1);
+  font-weight: 600;
+}
+body.pdragging {
+  user-select: none;
+  cursor: grabbing;
+}

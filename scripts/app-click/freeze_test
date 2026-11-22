@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+"""no_freeze_detector (ticket 171): the harness reports a window that stops answering for 5 s as a hang failure.
+Starts hangapp (answers for 2 s, then blocks its main thread 30 s): a ping while it answers must pass, a ping after
+must raise harness.Hang within 5-12 s (not run into the 30 s subprocess timeout). Exit 0 = detector works."""
+import subprocess, sys, time
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import harness  # noqa: E402
+
+exe = harness.BUILD / "hangapp"
+harness.BUILD.mkdir(parents=True, exist_ok=True)
+subprocess.run(["swiftc", "-O", str(HERE / "hangapp.swift"), "-o", str(exe)], check=True)
+proc = subprocess.Popen([str(exe)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+try:
+    time.sleep(0.8)
+    harness.ax("ping", proc.pid)  # answering: must not report a hang
+    time.sleep(2.5)
+    t0 = time.monotonic()
+    try:
+        harness.ax("ping", proc.pid)
+        print("FAIL no_freeze_detector: a blocked window answered the ping")
+        sys.exit(1)
+    except harness.Hang as e:
+        dt = time.monotonic() - t0
+        ok = 4.5 <= dt <= 12
+        print(f"{'PASS' if ok else 'FAIL'} no_freeze_detector: reported as failure after {dt:.1f} s ({e})")
+        sys.exit(0 if ok else 1)
+    except subprocess.TimeoutExpired:
+        print("FAIL no_freeze_detector: ran into the timeout instead of reporting a hang")
+        sys.exit(1)
+finally:
+    proc.kill()  # our own fixture child only
+    proc.wait()

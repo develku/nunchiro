@@ -1,0 +1,15 @@
+# cargo-nextest config for the merge gate (V2.5-41). Passed as `--config-file scripts/nextest.toml`.
+# No retries anywhere: a test that needs a retry is flaky and fails (quarantine it, .gate-quarantine).
+# No default-filter: the gate's count guard (cargo-test-gate.sh) compares two lists and cannot see tests a default-filter hides.
+# fail-fast off in the default profile: one gate run lists every failing test.
+[profile.default]
+retries = 0
+fail-fast = false
+
+# target/nextest/default/junit.xml: scripts/gate-failures.sh names the gate's failing tests from it, never from the log.
+[profile.default.junit]
+path = "junit.xml"
+
+[profile.trial]
+retries = 0
+fail-fast = false

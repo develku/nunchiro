@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 develku</string>
+	<key>NSCameraUsageDescription</key>
+	<string>A web page in Nunchiro's browser asked for the camera. It gets it only if you allow it.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>A web page in Nunchiro's browser asked for the microphone. It gets it only if you allow it.</string>
+</dict>
+</plist>

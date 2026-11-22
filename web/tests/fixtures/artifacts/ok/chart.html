@@ -1,0 +1,6 @@
+<!doctype html><html><head><title>chart</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script></head>
+<body><canvas id="c" width="200" height="80"></canvas>
+<script>new Chart(document.getElementById("c"),{data:[3,5,2]});parent.postMessage({type:"fixture",result:"chart "+Chart.drawn},"*")</script>
+</body></html>

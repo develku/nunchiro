@@ -1,0 +1,10 @@
+[
+  {"label": "Yes", "changes_settings": false, "allows_once": true},
+  {"label": "yes, proceed", "changes_settings": false, "allows_once": true},
+  {"label": "Allow this time", "changes_settings": false, "allows_once": true},
+  {"label": "Yes, and switch to accept edits (auto-approve file edits and common file commands) for this session (shift+tab)", "changes_settings": true, "allows_once": false},
+  {"label": "Yes, and don't ask again for this command", "changes_settings": true, "allows_once": false},
+  {"label": "Always allow", "changes_settings": true, "allows_once": false},
+  {"label": "No", "changes_settings": false, "allows_once": false},
+  {"label": "No, and tell Claude what to do differently", "changes_settings": false, "allows_once": false}
+]

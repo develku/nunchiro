@@ -1,0 +1,14 @@
+Handoff from Codex (1 turns, session 019a1b2c)
+
+## Requests
+1. Add a --json flag
+
+## Results
+- The flag is wired.
+
+## Files changed
+- src/cli.rs +4 −2
+
+## Open todos
+- [ ] Wire the flag
+- [ ] Write tests

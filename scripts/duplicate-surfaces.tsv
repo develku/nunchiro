@@ -1,0 +1,28 @@
+# Places that show the same state or action twice (ticket 291 item 4, needs 210). Generated into .scratch/removal-round.md by
+# scripts/duplicate-surfaces.sh, which also fails on a stale row (the file or the label is gone). Columns, tab-separated:
+# state-or-action, surface, file, label (a fixed string the file must still hold: an i18n key, a class name or a code token).
+# A row is a candidate for the owner to cut, not a defect. Add a row when a lane finds one more; delete a row once the duplicate is gone.
+a decision waits for an answer	Decisions widget (the home of answers)	web/src/decisions/DecisionsWidget.tsx	DecisionCard
+a decision waits for an answer	Tree decision line under the session row	web/src/tree/DecisionLine.tsx	decisions.lineLabel
+a decision waits for an answer	Board session card (needs-decision column and dot)	web/src/board/CardView.tsx	needs_decision
+a decision waits for an answer	Answer strip (the layout widget "Answer strip")	web/src/layout/registry.tsx	Answer strip
+a decision waits for an answer	Quit dialog list of pending decisions	web/src/settings/lifetime/QuitDialog.tsx	settings.lifetime.pending
+a decision waits for an answer	Phone and browser app waiting list	web/src/pairing/BrowserApp.tsx	const waiting
+a decision waits for an answer	Desktop notification	web/src/queue/notify.tsx	s.pending
+N decisions waiting (count text)	Decisions widget count line	web/src/decisions/DecisionsWidget.tsx	decisions.waiting
+N decisions waiting (count text)	Decision card header	web/src/chat/DecisionCard.tsx	decisions.waiting
+N decisions waiting (count text)	Tree head colour strip (orange bars, ticket 388)	web/src/tree/strip.tsx	tree.strip.o
+session status dot (working, waiting, idle, done)	Tree session row	web/src/Sidebar.tsx	className="st"
+session status dot (working, waiting, idle, done)	Board session card	web/src/board/CardView.tsx	className="st"
+session status dot (working, waiting, idle, done)	Tab bar tab dot	web/src/chrome/CentreView.tsx	className="tdot"
+session status dot (working, waiting, idle, done)	Session header dot	web/src/chrome/CentreView.tsx	className="st"
+session status dot (working, waiting, idle, done)	Agents widget dots	web/src/layout/registry.tsx	className="dotl"
+start a new session	Tree project "+" button	web/src/Sidebar.tsx	tree.newSession
+start a new session	Tree empty-state action	web/src/Sidebar.tsx	tree.newSessionAction
+start a new session	Tab bar "+" button	web/src/chrome/CentreView.tsx	chrome.newSession
+start a new session	Landing button	web/src/firstrun/Landing.tsx	landing.addProject
+start a new session	Command palette command	web/src/chrome/commands.ts	session.new
+start a new session	Context menus (tab, tree row, worktree)	web/src/menu/surfaces.ts	session.new
+open Settings	Icon bar gear	web/src/layout/IconBar.tsx	gear
+a session's terminal screen	Terminal widget (library widget, follows or pinned)	web/src/layout/registry.tsx	kind: 'terminal'
+a session's terminal screen	Terminal pane beside the chat	web/src/pane/SidePane.tsx	terminals

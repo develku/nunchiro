@@ -1,0 +1,154 @@
+/* Ticket 1022 (mockup docs/design/tree-done-1121 4b): the heads' hollow bars, the "just finished" row and the bars'
+   popover. Theme colours and sizes from tokens.css only. */
+
+/* Hollow bars (mockup 4b `.dbar`): the strip's bar size and rule 3, an outline in the muted grey, 6px left of the strip.
+   They take the free room (the strip's own `margin-left: auto` moves to them), so the strip's 64px column and every bar
+   in it keep their place at the row's right end. Never dimmed: an open project has no finished rows below it. */
+.tree :is(.row.head, .row.ghead) > .dbar {
+  display: inline-flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+  margin: 0 6px 0 auto; /* with the head's 6px gap, as the mockup's `.dbar` margin in its 6px-gap row */
+  padding: 0 3px;
+  border: 0;
+  border-radius: var(--r-4);
+  background: none;
+  color: var(--tree-mut);
+  font: inherit;
+  font-family: var(--tree-font);
+  cursor: pointer;
+}
+.tree .row.ghead > .dbar {
+  cursor: default;
+}
+.tree :is(.row.head, .row.ghead) > .dbar + .cstrip {
+  margin-left: 0;
+}
+/* Ticket 1041 (owner 11-22, 15.1 item 9): "finished" is a faint filled bar, a step quieter than the strip's grey bar; no
+   outline. The count and the click are the same. */
+.dbar i {
+  display: block;
+  width: 3px;
+  height: 10px;
+  border-radius: var(--r-2);
+  background: var(--mark-done);
+}
+.dbar .num {
+  margin-left: 1px;
+  font-size: var(--fs-10);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 10px;
+}
+.tree .row.head > button.dbar:is(:hover, [aria-expanded='true']) {
+  background: var(--tint-2);
+}
+.tree .row.head > button.dbar:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 1px;
+}
+/* While the head's tools show (TREEHEAD (c)), the bars stay with the strip, after them. */
+.tree .row.head:is(:hover, :focus-within) > .dbar {
+  order: 3;
+}
+/* Ticket 1025 (look v26 a): and they keep their place. A hovered head's strip shrinks to its bars (tree.css, look 1117
+   v11-A-S3-4), which moved the bars from under the pointer; with done bars the strip keeps its column. */
+.tree .row.head:is(:hover, :focus-within):has(> .dbar) > .cstrip {
+  width: 64px;
+}
+
+/* A just-finished row (mockup 4b `.r.just`): its left edge is a faint filled bar (ticket 1041, the finished mark), fading
+   from 85 % to 25 % over its 10 minutes (`--fade`, DoneBars.tsx); the name at 65 %; no icon and no words (they are the
+   row's tip and label). The only row edge in the tree that is not a state light. */
+.row.wt2.just::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: var(--sp-8);
+  bottom: var(--sp-8);
+  width: 3px;
+  border-radius: var(--r-2);
+  background: var(--mark-done);
+  opacity: var(--fade, 0.85);
+}
+.row.wt2.just .nm {
+  font-weight: 400;
+  opacity: 0.65;
+}
+
+/* The popover (mockup `.pop`): 250px, under the bars. */
+.dpop {
+  position: fixed;
+  z-index: 30;
+  width: 250px;
+  max-width: calc(100vw - 16px);
+  padding: var(--sp-6);
+  border-radius: var(--r-12); /* ticket 1041 (B): glass (the .glass rule), no border */
+  color: var(--text);
+  font-size: var(--fs-2);
+}
+.dpop-h {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px var(--sp-6) var(--sp-4);
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.dpop-it,
+.dpop-ft {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 7px;
+  padding: var(--sp-4) var(--sp-6);
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dpop-it:is(:hover, :focus-visible) {
+  background: var(--tint-2);
+  outline: 0;
+}
+.dpop-it > .ic {
+  display: flex;
+  flex: none;
+  color: var(--tree-mut);
+}
+.dpop-it > .ic[data-kind='fail'] {
+  color: var(--tree-bad);
+}
+.dpop-it svg {
+  width: 14px;
+  height: 14px;
+}
+.dpop-tx {
+  display: grid;
+  min-width: 0;
+}
+.dpop-l1 .tm {
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+}
+.dpop-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.dpop-ft {
+  margin-top: var(--sp-4);
+  color: var(--link-text); /* ticket 1041 (15.1 item 1): a link in the text colour, underlined; spacing, not a rule */
+  text-decoration: underline;
+}
+.dpop-ft:is(:hover, :focus-visible) {
+  background: var(--tint-2);
+  outline: 0;
+}

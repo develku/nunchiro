@@ -1,0 +1,333 @@
+/* Settings > Team (features/team.tsx). Ticket 993 rule 7: a quiet row that opens, a short form, levels on one line. */
+
+/* A row: line 1 the name, the level chip and, small, the place and agent; line 2 one line of the job. The name is the
+   press target of the whole row (as the Schedules rows' .sched-go); what is pressed by itself sits above it. */
+.settings[role='region'] .team-row {
+  position: relative;
+}
+.settings[role='region'] .team-row:hover {
+  background: var(--tint-1);
+}
+.settings[role='region'] .team-go {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-6);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.settings[role='region'] .team-go > svg {
+  flex: none;
+  color: var(--muted);
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+.settings[role='region'] .team-go[aria-expanded='true'] > svg {
+  transform: rotate(90deg);
+}
+.settings[role='region'] .team-go::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.settings[role='region'] .team-go:focus-visible {
+  outline: none;
+}
+.settings[role='region'] .team-go:focus-visible::after {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.settings[role='region'] .team-row .sctl,
+.settings[role='region'] .team-row .team-detail {
+  position: relative;
+  z-index: 1;
+}
+/* A row's open menu reaches over the next row: its controls sit above that row's (found by levels-994: with the row
+   open, the next row's Open button took the press meant for Remove). */
+.settings[role='region'] .team-row .sctl:has(> .lead-menu) {
+  z-index: 2;
+}
+.settings[role='region'] .team-where {
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 400;
+  white-space: nowrap;
+}
+/* The job's one line and the open job sit under the name, past the chevron. */
+.settings[role='region'] .team-row .sds,
+.settings[role='region'] .team-row .team-detail {
+  margin-left: 18px;
+}
+.settings[role='region'] .team-row .sds {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.settings[role='region'] .team-detail {
+  margin-top: 2px;
+  max-width: 640px;
+  font-size: var(--fs-12);
+}
+.settings[role='region'] .team-job {
+  margin: 0;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.settings[role='region'] .team-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-8);
+  margin-top: var(--sp-8);
+  color: var(--muted);
+}
+/* The row menu opens under its "⋯" and past the card's edge on the last row (the card clips its children otherwise);
+   the first and last rows keep the card's corners under their hover. */
+.settings[role='region'] .team-sec > .scard {
+  overflow: visible;
+}
+.settings[role='region'] .team-sec > .scard > :first-child {
+  border-radius: var(--r-10) var(--r-10) 0 0;
+}
+.settings[role='region'] .team-sec > .scard > :last-child {
+  border-radius: 0 0 var(--r-10) var(--r-10);
+}
+.settings[role='region'] .team-sec > .scard > :only-child {
+  border-radius: var(--r-10);
+}
+.settings[role='region'] .team-row .lead-more {
+  height: 28px;
+  border-radius: var(--r-6);
+}
+.settings[role='region'] .team-row .lead-more:hover,
+.settings[role='region'] .team-row .lead-more[aria-expanded='true'] {
+  background: var(--control-quiet-hover);
+  color: var(--text);
+}
+.settings[role='region'] .team-row .lead-menu {
+  top: calc(100% + 2px);
+  right: 0;
+  min-width: 140px;
+}
+
+/* The empty state: what to do, in the card (as the Schedules widget's). */
+.settings[role='region'] .team-none {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-16);
+  color: var(--muted);
+  font-size: var(--fs-12);
+  text-align: center;
+}
+.settings[role='region'] .team-none p {
+  margin: 0;
+  text-wrap: balance;
+}
+.settings[role='region'] .team-none p:first-of-type {
+  margin-top: var(--sp-4);
+  color: var(--text);
+  font-size: var(--fs-13);
+}
+
+/* The add and edit form. */
+.settings[role='region'] .team-form {
+  display: grid;
+  gap: var(--sp-12);
+  padding: var(--sp-12) var(--row-px);
+}
+.settings[role='region'] .team-form label,
+.settings[role='region'] .team-f {
+  display: grid;
+  justify-items: start;
+  gap: var(--sp-4);
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.settings[role='region'] .team-form label > :is(input, textarea) {
+  justify-self: stretch;
+}
+.settings[role='region'] .team-form textarea {
+  resize: vertical;
+  font: inherit;
+  color: var(--text);
+}
+.settings[role='region'] .team-picks,
+.settings[role='region'] .team-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-12);
+}
+/* A caption with its "i". */
+.settings[role='region'] .team-k {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+.settings[role='region'] .team-info {
+  position: relative;
+  z-index: 1;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  cursor: help;
+}
+.settings[role='region'] .team-info:hover {
+  color: var(--text);
+}
+/* Ticket 519's 24 px hit target around the 16 px mark. */
+.settings[role='region'] .team-info::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-4));
+}
+/* Look 1117: Save needs both fields, so their labels say so (Name, Job). */
+.team-form .req {
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 400;
+}
+/* Ticket 994: the rule as text (a lead, an agent whose levels are all the same), with one quiet line of why. */
+.settings[role='region'] .team-rule {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  color: var(--text);
+  font-size: var(--fs-13);
+}
+.settings[role='region'] .team-rulewhy {
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.settings[role='region'] .team-row [data-rule] {
+  gap: var(--sp-4);
+}
+/* As the Schedules form's: level choices that do not fit one line of the form (Codex's "Default · medium", an ACP
+   agent's long model names, a narrow Settings window) are a column (LevelRule sets data-col when the line overflows). */
+.settings[role='region'] .team-level .sseg {
+  max-width: 100%;
+  overflow: hidden;
+}
+/* On the line a choice keeps its whole width, so a line too long for the form overflows and is measured as such. */
+.settings[role='region'] .team-level:not([data-col]) .sseg label {
+  flex: none;
+}
+.settings[role='region'] .team-level[data-col] .sseg {
+  display: inline-grid;
+}
+.settings[role='region'] .team-level[data-col] .sseg label {
+  min-width: 0;
+}
+/* Ticket 992: the level rule, one segmented choice; off (a custom model) it dims and says why on its own line. */
+.settings[role='region'] .team-level[data-off] .sseg {
+  opacity: 0.55;
+}
+.settings[role='region'] .team-level .swhy {
+  margin-top: 0;
+}
+/* Advanced sits in the form's own column, not inset as a page's fold. */
+.settings[role='region'] .team-form details.team-adv > summary {
+  padding: 0;
+  font-size: var(--fs-13);
+}
+.settings[role='region'] .team-form details.team-adv > :not(summary) {
+  margin: var(--sp-12) 0 0 18px;
+}
+/* "Leads this place" and its "i". */
+.settings[role='region'] .team-leads {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+}
+.settings[role='region'] .team-form label.team-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  color: var(--text);
+}
+
+/* Levels at rest: one line of what is stored, "▂ Haiku · ▂▄ Sonnet · ▂▄▆ Opus" (an agent's name before its line once a
+   second agent's levels are changed). */
+.settings[role='region'] .team-lvsum {
+  display: grid;
+  gap: var(--sp-4);
+  font-size: var(--fs-13);
+  font-weight: 400;
+}
+.settings[role='region'] .team-lvl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 2px;
+}
+/* A level's pair may hold a "·" of its own ("Sonnet · high"), so the three are set apart by space, each led by its bars. */
+.settings[role='region'] .team-lvl > .lvl-mark {
+  margin-right: var(--sp-16);
+  gap: var(--sp-6);
+  white-space: nowrap;
+}
+.settings[role='region'] :is(.team-lvl, .team-lvrow) .lvl {
+  color: var(--text);
+}
+.settings[role='region'] .team-lvagent {
+  color: var(--muted);
+}
+.settings[role='region'] .team-lvagent {
+  min-width: 52px;
+}
+/* Open (ticket 994): a row per agent, a column per level under one line of captions; an agent's line of models and,
+   under it, its line of efforts. The agent's name keeps a narrow column (the kit's text column is 320 px), so the three cells
+   stay on its line; in a narrower card they move under the name and share its width. */
+.settings[role='region'] .srow.team-lvrow > .slab {
+  flex: 1 1 112px;
+}
+.settings[role='region'] .srow.team-lvrow .snm {
+  font-size: var(--fs-13);
+  font-weight: 400;
+}
+.settings[role='region'] .srow.team-lvrow .team-lvcells {
+  display: grid;
+  grid-template-columns: minmax(44px, max-content) repeat(3, minmax(0, 148px)); /* right-aligned: a wider caption (another language) moves no column */
+  align-items: center;
+  gap: var(--sp-6) var(--sp-8);
+}
+.settings[role='region'] .team-lvcells > label {
+  display: block;
+  min-width: 0;
+}
+/* What a line of pickers sets, before it: "Model", "Effort". */
+.settings[role='region'] .team-lvk {
+  color: var(--muted);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+.settings[role='region'] .team-lvcap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-6);
+}
+.settings[role='region'] .team-lvcells .ssel {
+  display: flex;
+}
+.settings[role='region'] .team-lvcells .ssel select {
+  width: 100%;
+  min-width: 0;
+}
+.settings[role='region'] .srow.team-lvhead {
+  padding-top: var(--sp-6);
+  padding-bottom: var(--sp-6);
+  background: color-mix(in srgb, var(--page) 50%, var(--panel));
+  color: var(--muted);
+  font-size: var(--fs-11);
+}

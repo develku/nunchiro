@@ -1,0 +1,44 @@
+/* Needs 225: the reset confirm (in the limits card) and the policy's conditions box (mockup usage.html v4 `.confirm`,
+   `.conds`); rows and controls are the settings row kit's, the log's look is usage-v4.css. */
+.cxr-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: var(--r-6);
+  font-size: var(--fs-12);
+}
+/* Ticket 1041 A: on the Usage page a tint block, no outline (the status bar's popover draws it bare). */
+.usage4 .cxr-confirm {
+  background: var(--tint-1);
+}
+.cxr .cxr-conds {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: var(--r-8);
+  background: var(--tint-1); /* ticket 1041 A: a tint block, no outline */
+  font-size: var(--fs-13);
+}
+.cxr .cxr-conds .cxr-h {
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--muted);
+}
+.cxr .cxr-conds label,
+.cxr .cxr-cap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.cxr .cxr-conds input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--accent);
+}
+.cxr .cxr-cap input[type="number"] {
+  width: 48px;
+}

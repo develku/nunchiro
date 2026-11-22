@@ -1,0 +1,14 @@
+{"type":"session_meta","payload":{"id":"fixture-1","cwd":"/project","cli_version":"0.161.0"},"timestamp":"2026-10-24T00:00:00.000Z"}
+{"type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"},"timestamp":"2026-10-24T00:00:00.000Z"}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Read the sample."},{"type":"local_image","path":"/project/sample.png"}]},"timestamp":"2026-10-24T00:00:00.000Z"}
+{"type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"Check the file."}],"encrypted_content":"not projected"},"timestamp":"2026-10-24T00:00:00.000Z"}
+{"type":"response_item","payload":{"type":"function_call","call_id":"read-1","name":"exec_command","arguments":"{\"cmd\":\"cat sample.txt\"}"},"timestamp":"2026-10-24T00:00:00.000Z"}
+{"type":"response_item","payload":{"type":"function_call_output","call_id":"read-1","output":"old"},"timestamp":"2026-10-24T00:00:00.000Z"}
+{"type":"response_item","payload":{"type":"custom_tool_call","call_id":"edit-1","name":"apply_patch","input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-old\n+new\n*** End Patch"},"timestamp":"2026-10-24T00:00:00.000Z"}
+{"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"edit-1","output":"Success"},"timestamp":"2026-10-24T00:00:00.000Z"}
+{"type":"response_item","payload":{"type":"function_call","call_id":"task-1","name":"spawn_agent","arguments":"{\"message\":\"Check the result\"}"},"timestamp":"2026-10-24T00:00:00.000Z"}
+{"type":"response_item","payload":{"type":"function_call_output","call_id":"task-1","output":"Checked."},"timestamp":"2026-10-24T00:00:00.000Z"}
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done."}]},"timestamp":"2026-10-24T00:00:00.000Z"}
+{"type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1"},"timestamp":"2026-10-24T00:00:00.000Z"}
+{"type":"event_msg","payload":{"type":"turn_aborted","turn_id":"turn-2"},"timestamp":"2026-10-24T00:00:00.000Z"}
+{"type":"future","payload":{"opaque":"hidden","content":"hidden"},"timestamp":"2026-10-24T00:00:00.000Z"}

@@ -1,0 +1,8 @@
+[build]
+target-dir = "target"
+jobs = 2
+
+[env]
+# Ticket 457: a core a test starts keeps no start secrets in the owner's login keychain (a developer's shell may hold
+# secret variables, and test homes are many). A test that needs the item names its own keychain file.
+NUNCHIRO_KEYCHAIN = ""

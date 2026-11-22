@@ -1,0 +1,6 @@
+[
+ {"kind":"tool_use","tool_id":"x1","name":"exec_command","input":{"cmd":"gh pr create --draft --fill"}},
+ {"kind":"tool_result","tool_id":"x1","output":"https://github.com/develku/nunchiro/pull/12\n","is_error":false,"at":"2026-10-27T09:00:00.000Z"},
+ {"kind":"tool_use","tool_id":"x2","name":"shell","input":{"command":["bash","-lc","gh pr checks 12"]}},
+ {"kind":"tool_result","tool_id":"x2","output":"build\tpass\t1m\thttps://github.com/develku/nunchiro/actions/runs/1\n","is_error":false,"at":"2026-10-27T09:10:00.000Z"}
+]

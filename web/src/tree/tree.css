@@ -1,0 +1,1843 @@
+/* V2-9a: project groups in the tree. Rows keep the tree's row height; nothing here changes a box on hover. */
+.pgrp {
+  position: relative;
+  margin: 0 4px 2px 6px;
+}
+.pgrp > .row.ghead {
+  border-radius: 0 var(--r-4) var(--r-4) 0;
+  padding-left: 7px;
+  font-weight: 600;
+}
+.pgrp .ghead .n {
+  flex: 0 1 auto;
+}
+/* needs 130: the group's own name is never the item that gives way ("T…" is worse than any mockup). The "N projects"
+   after it shrinks first; in the mockup's own pane that text wraps to two lines and grows the row. */
+.tree .pgrp > .row.ghead > .n {
+  flex: 0 0 auto;
+}
+/* "N projects" stays on the name's line (ticket 388 mock: "Trading 3 projects") and is the word that gives way: when "1 new"
+   arrives it ellipsizes, so the folded head keeps its 25px and no row under the pointer moves (it used to wrap to 42px). */
+.tree .pgrp > .row.ghead > .d {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* The mockup's .proj .d: weight 400 and muted, unlike the head's 600 name. */
+  font-weight: 400;
+  color: var(--muted);
+}
+/* The strip is the at-a-glance signal: it never gives up a segment to the words beside it. */
+.tree .pgrp > .row.ghead > .cstrip {
+  flex: none;
+}
+.pgrp .gbody {
+  margin-left: 10px;
+}
+.tree .more {
+  height: auto;
+  margin: var(--sp-2) 0 0 calc(3 * var(--sp-12));
+  padding: 0;
+  font-size: var(--fs-1);
+}
+/* Folded waiting rows sit directly under the group, without an invisible project level. */
+.pgrp[data-folded] > .gbody {
+  margin-left: 0;
+}
+.pgrp[data-folded] > .gbody > .grp {
+  margin: 0;
+  padding: 0;
+}
+/* Q5 (look 11-17): the Tree's head never breaks inside a label (ja "プロジェク/ト" pushed "+ プロジェクト" above the row);
+   when the title and both buttons do not fit one line, the buttons move to a second line together. */
+.dock.l > .ph {
+  height: auto;
+  min-height: 28px;
+  padding-block: var(--sp-2);
+  flex-wrap: wrap;
+  white-space: nowrap;
+}
+.dock.l > .ph .r {
+  display: flex;
+  align-items: center;
+}
+/* Look v22 d: the title is never hidden (ja "プロジェクト" had zero width beside "+ プロジェクト" and "すべて展開"); it keeps its
+   whole width and, when the buttons do not fit beside it, they go to a second line together (.ph wraps). */
+.dock.l > .ph .pht {
+  flex: none;
+}
+.ph .xall {
+  font: inherit;
+  font-size: var(--fs-11);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  color: var(--muted);
+  padding: 0 6px;
+  height: 20px;
+  border-radius: var(--r-4);
+}
+.ph .xall:hover {
+  background: var(--tint-1);
+  color: var(--text);
+}
+.pin-mark {
+  color: var(--muted);
+  font-size: var(--fs-10);
+}
+.tpick li .dim {
+  margin-left: auto;
+  color: var(--muted);
+}
+.tpick li.none {
+  color: var(--muted);
+}
+.tpick .sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.tpick li .st {
+  align-self: center;
+}
+.gname .hint2 {
+  padding: 6px 12px 8px;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.gname .err {
+  padding: 0 12px 8px;
+  font-size: var(--fs-11);
+  color: var(--error); /* ticket 1041 (15.1 item 3): errors are red; orange is your turn only */
+}
+
+/* Ticket 1041 (mockup polish-1121 .grp: no band): a head is tinted only while its own main session is open
+   (aria-current) or under the pointer. The project whose tabs the strip shows (ticket 570, data-selected) draws no band:
+   the strip's tabs are that cue. */
+.row.head[aria-current='true'] {
+  background: var(--select-bg);
+}
+/* No hover tint on a head: the head row itself is not a control (its chevron and name are), and a hover fill would make
+   it look clickable (dead-click.spec.ts). */
+/* Ticket 377: the key that opens a session's tab, on its row while ⌘ is held for 200 ms (useHeldKeys sets data-held-tab). */
+.tree .row.wt2 .tkey {
+  display: none;
+  flex: none;
+  margin-left: 4px;
+}
+:root[data-held-tab] .tree .row.wt2 .tkey {
+  display: inline;
+}
+/* Ticket 570: the key that shows a project, while its modifier is held (useHeldKeys sets data-ctl). The row's hover buttons need the width, so the chip steps aside. */
+.tree .pjkey {
+  display: none;
+  flex: none;
+  margin-left: 4px;
+}
+:root[data-ctl] .tree .row.head:not(:is(:hover, :focus-within)) .pjkey {
+  display: inline;
+}
+/* The "· main" suffix sits on the selected row's grey: --g6 keeps 4.5:1 there. */
+.tree .head .n span {
+  color: var(--muted);
+}
+
+/* needs 130 (owner-check rows 02/14): the mockup's .proj/.pane is flat, while the wrapper kept a 6px+4px left and a 4px
+   right gutter from the days of that rail (removed above). Its 14px came off the waiting row: at the 250px default the
+   question box was 15px narrower than the mockup's at the same width and cut "npm test 실행 허용?" to "npm test 실행 …".
+   With the gutter gone the head and rows start where the mockup's do. */
+.tree .grp {
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 0;
+}
+/* Ticket 411 (388 mock: one strip column, the session icons' own): a group kept the 4px right gutter `.tree .grp` lost
+   above, so its head's strip and every row inside it ended 4px left of an ungrouped project's strip and icons. */
+.tree .pgrp {
+  margin-right: 0;
+}
+
+/* TREEROWS status colours (--you --you-bg --bad --run --ok --done --idle --on-status) come from tokens.css. */
+
+/* A worktree row: the tree's row height (32 by default), its state light (ticket 1041, light-glass.css; the 3 px rail is
+   gone), name, the state word, one icon. The tooltip keeps the whole words. --c colours the icon. */
+.row.wt2 {
+  /* Ticket 462 (owner 11-12): rails and icons in the approved 388 mockup's palette (--tree-*), by theme kind. */
+  --c: var(--tree-idle);
+  position: relative;
+  overflow: visible;
+  margin: 1px 0 1px 22px;
+  width: calc(100% - 22px);
+  padding: 0 8px 0 14px;
+  gap: 8px;
+  color: var(--text);
+}
+.row.wt2.you {
+  --c: var(--tree-you);
+}
+.row.wt2.bad {
+  --c: var(--tree-bad); /* ticket 462: the mockup's red in the tree, the theme's --bad elsewhere */
+}
+.row.wt2.run {
+  --c: var(--tree-run);
+}
+.row.wt2.ok {
+  --c: var(--ok);
+}
+.row.wt2.done {
+  --c: var(--done);
+}
+/* Ticket 462 round 2: a stale row's rail and sync icon are its head's yellow stale bar, as the mockup's stale row. */
+.row.wt2[data-kind='stale'] {
+  --c: var(--tree-stale);
+}
+/* The mockup's quiet icons (`.ic.mut`): an idle row's dashed circle and a resting row's check are muted text, not the rail's grey. */
+.row.wt2[data-kind='idle'] .ic {
+  color: var(--tree-mut);
+}
+.row.wt2:hover {
+  background: var(--tint-1);
+}
+.row.wt2[aria-current='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+}
+/* Ticket 1041 (C, mockup .v-c .row.you): your turn is a warm wash from the left edge, over the row's own tint. */
+.row.wt2.you {
+  background: var(--you-wash);
+}
+.row.wt2.you:hover {
+  background: var(--you-wash), var(--tint-1);
+}
+.row.wt2.you[aria-current='true'] {
+  background: var(--you-wash), var(--select-bg);
+}
+/* The hover and focus rings paint over the decision line's 1px overlap below, as the mockup's row does. */
+.row.wt2:is(:hover, :focus-visible) {
+  z-index: 1;
+}
+/* ko/hiderows-r6.html .row:focus-visible: keyboard focus shows the hover fill and the blue ring, your-turn rows too. */
+.row.wt2:focus-visible {
+  outline: 0;
+  background: var(--tint-1);
+  box-shadow: var(--split-ring);
+}
+.row.wt2.you:focus-visible {
+  background: var(--you-wash), var(--tint-1);
+}
+/* The right-edge bar on a folded head; the pills follow the name. The project name keeps its full width: "+" and
+   "⌄ worktree" show in the flow, left of the counts, on hover or keyboard focus (TREEHEAD (c), end of this file). */
+.tree .row.head {
+  position: relative;
+}
+/* More specific than styles.css `.tree .row.head .r { margin-right: 22px }`, the reserve the overlay buttons made unneeded. */
+.tree .grp > .row.head > .r,
+.tree .pgrp > .row.ghead > .r {
+  margin-right: 0;
+}
+/* V2-CF4: a main-folder session's `↳ N` holds the head row's right end, and the row keeps the count's width clear of
+   its in-flow content. "⌄ worktree" and "+" show on hover left of the count and leave its place alone. */
+.tree .row.head:has(> .kidcount) {
+  padding-right: 40px;
+}
+.tree .row.head > .kidcount {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.tree .row.head:has(> .kidcount) > .padd {
+  right: 40px;
+}
+.tree .row.head:has(> .kidcount):has(> .wtadd) > .wtadd {
+  right: 40px;
+}
+.tree .row.head:has(> .kidcount):has(> .wtadd) > .padd:not(.wtadd) {
+  right: 60px;
+}
+.tree .row.head > .padd {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 6px;
+  margin: 0;
+  background: var(--hover);
+}
+/* Ticket 1041 (merge with lane 2): the tree sits on --page; while the tools are in the flow (hover, focus) they need no
+   cover of their own. */
+.tree .row.head:is(:hover, :focus-within) > .padd {
+  background: none;
+}
+.tree .row.head:has(> .wtadd) > .padd:not(.wtadd) {
+  right: 26px;
+}
+/* UXFIX (a), TREEHEAD-FREEZE (tree4 r3): the worktree tool sits right of "+" and is an icon (its words stay for assistive tech and as the
+   tooltip), 18px not 74px, so a hovered head at the default sidebar width leaves the name about 50px. */
+.tree .row.head > .wtadd {
+  width: 18px;
+  color: var(--muted);
+}
+.tree .row.head > .wtadd {
+  line-height: 25px;
+}
+.tree .row.head > .wtadd > svg {
+  vertical-align: middle;
+}
+.tree .row.head > .wtadd > .vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.tree .row.head > .wtadd::before {
+  content: none;
+}
+.tree .row.head .r {
+  margin-left: 0;
+}
+/* ko/hiderows-r6.html .proj and ko/v2-8a-groups.html .proj.grp: project and group heads are 25px rows of 600 14px with
+   the counts right after the name (8px apart) and a muted "main" after them. */
+/* Ticket 1041 (A): heads are 13 px. Their height stays the ko/ 25 px .proj (settings.spec.ts and fidelity-tokens encode
+   it, lane 1's decision; session rows are 32): N122 is not taken. */
+.tree .row.head,
+.tree .pgrp > .row.ghead {
+  height: min(var(--row), 25px);
+  padding: 4px 8px;
+  gap: 6px;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  /* The mockup's .proj carries no line-height, so its 13px words are 16px tall; the tree's 1.45 made them 18.8 and every
+     head two pixels taller than the row it is measured against. */
+  line-height: normal;
+}
+.tree .row.head > .chev {
+  color: var(--muted);
+}
+.tree .pgrp > .row.ghead > .chev {
+  color: var(--text);
+}
+.tree :is(.row.head, .row.ghead) .n {
+  flex: 0 1 auto;
+}
+.tree :is(.row.head, .row.ghead) .n b {
+  font-weight: 600;
+}
+.tree .pgrp > .row.ghead .r {
+  margin-left: 0;
+}
+/* Target size (WCAG 2.5.8): the 10px chevron and the 16px name take --hit through padding that a negative margin of the
+   same size cancels, so the glyphs and the 25px head stay where the mockup draws them. The chevron's box starts at the
+   row's edge (the 8px row padding) and its right side stops at the 6px gap, so it does not reach under the name. */
+.tree :is(.row.head, .row.ghead) > .chev {
+  width: var(--hit);
+  padding: calc((var(--hit) - 10px) / 2) 6px calc((var(--hit) - 10px) / 2) 8px;
+  margin: calc((10px - var(--hit)) / 2) -6px calc((10px - var(--hit)) / 2) -8px;
+}
+.tree :is(.row.head, .row.ghead) > .n {
+  padding-block: calc((var(--hit) - 16px) / 2);
+  margin-block: calc((16px - var(--hit)) / 2);
+}
+/* ko/v2-8a-groups.html .grp .pn */
+.tree .pgrp > .row.ghead .n {
+  letter-spacing: 0.2px;
+}
+/* The empty live region keeps its place in the accessibility tree but takes no gap in the row. */
+.tree :is(.row.head, .row.ghead) .chip:empty {
+  position: absolute;
+}
+.tree .row.head > .d {
+  flex: none;
+  font-weight: 400;
+  color: var(--muted);
+}
+.row.wt2 .n {
+  display: flex;
+  flex: 1 1 auto; /* ticket 1041: the name holds its width; the word and the age give way first (end of this file) */
+  min-width: 0;
+  /* Ticket 1041 (mockup polish-1121 .row .n): row names are regular 13 px; the selected and your-turn rows read 500. */
+  font-weight: 400;
+  font-size: var(--fs-2);
+}
+.row.wt2:is([aria-current='true'], .you) .n {
+  font-weight: 500;
+}
+/* Keep "project · " whole; only the session tail elides when the row is narrow (needs 130). */
+.row.wt2 .n > * {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.row.wt2 .n > .pre {
+  flex: none;
+  white-space: pre;
+}
+.row.wt2 .n > .nm {
+  flex: 0 1 auto;
+}
+.row.wt2.done .n,
+.row.wt2.sub .n {
+  font-weight: 400;
+  color: var(--muted);
+}
+.row.wt2 .prn {
+  font-style: normal;
+  font-weight: 400;
+  font-size: var(--fs-1);
+  color: var(--muted);
+}
+.row.wt2 .ic {
+  /* the mockup's .ic: 14px, stroke 2 on the 24 grid */
+  display: flex;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--c);
+}
+.row.wt2 .ic svg {
+  width: 14px;
+  height: 14px;
+  overflow: visible;
+}
+/* Ticket 1041 (A, N116): the 1 px guide line down a project's rows is gone (a line is a border); the indent keeps the
+   column, and the row's ::after is its state light. */
+.row.wt2.sub {
+  margin-left: 40px;
+  width: calc(100% - 40px);
+}
+/* V2-CF4: the session's sub-agents. The count is the row's own right end (`↳ N` after the name, as option A draws it);
+   the children it opens are one step further in than the row, quieter, 24px high, a 2px rail. While folded there is no
+   extra row: the count is all that shows. */
+.kidcount {
+  flex: none;
+  font: inherit;
+  font-size: var(--fs-11);
+  font-weight: 400;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  border-radius: var(--r-4);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.kidcount:hover {
+  color: var(--text);
+}
+/* The count keeps its room on a narrow head: the project name takes the shortfall, not "main" or the count. */
+.tree .row.head > .n {
+  min-width: 0;
+}
+.tree .row.head > .n b {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* A row that is itself a button cannot hold a button: the count is its sibling, over the row's right end, and the row
+   gives that end up (its icon moves left). The row's ⋯ menu moves left with it, staying reachable under the count. */
+.wtwrap:has(> .kidcount) > .row.wt2 {
+  padding-right: 44px;
+}
+.wtwrap > .kidcount.over {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+}
+.wtwrap:has(> .kidcount) > .wtmore {
+  right: 52px;
+}
+.row.kid {
+  --c: var(--idle);
+  position: relative;
+  /* V2.5-30: a worker's own workers sit one 14px step further in per level (--depth). */
+  width: calc(100% - 42px - var(--depth, 0) * 14px);
+  margin: 0 0 0 calc(42px + var(--depth, 0) * 14px);
+  height: 24px;
+  padding: 0 8px 0 14px;
+  gap: 8px;
+  font-size: var(--fs-1);
+  color: var(--muted);
+}
+/* The rail is the same colour bar the session rows use: blue while it works, purple once done, red when it failed.
+   A child with no state anyone reported keeps the idle grey: unknown is not a claim that it is running. Ticket 462: the
+   same --tree-* palette as the session rows (blue, red, grey); done stays --done, as a session row's .done tone. */
+.row.kid[data-state='running'] {
+  --c: var(--tree-run);
+}
+.row.kid[data-state='done'] {
+  --c: var(--done);
+}
+.row.kid[data-state='failed'] {
+  --c: var(--tree-bad);
+}
+.row.kid[data-state='unknown'] {
+  --c: var(--tree-idle);
+}
+.row.kid .n {
+  flex: 1;
+  font-weight: 500;
+}
+.row.kid .s {
+  flex: none;
+  color: var(--muted);
+}
+.arc {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: arcspin 1s linear infinite;
+}
+@keyframes arcspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .arc {
+    animation: none;
+  }
+}
+/* The tooltip is out of flow: showing it moves no row (needs 49). Hover, keyboard focus and a tap show it; Escape hides it. */
+.row.wt2 .tip {
+  display: none;
+  position: absolute;
+  z-index: 5;
+  left: 14px;
+  top: calc(100% + 2px);
+  max-width: calc(100% - 20px);
+  color: var(--text); /* ticket 1041 (B, N121): a glass layer (.glass), the words as before */
+  font-size: var(--fs-1);
+  line-height: 1.45;
+  padding: 6px 9px;
+  border-radius: var(--r-8);
+  white-space: normal;
+  font-weight: 400;
+  pointer-events: none;
+}
+.row.wt2 .tip b {
+  font-weight: 600;
+}
+.row.wt2:is(:hover, :focus-visible, [data-tap]):not([data-off]) .tip {
+  display: block;
+}
+
+/* Ticket 388 (mock final/388.html): the head rows' colour strip in one fixed right column, one bar per session. Urgent bars
+   (failed, your turn) stand 14px, the rest 10px, on one baseline; 2px inside a colour, 4px between colours. */
+.cstrip {
+  display: inline-flex;
+  gap: 4px;
+  align-items: flex-end;
+  justify-content: flex-end;
+  flex: none;
+  width: 64px;
+  height: 16px;
+  margin-left: auto;
+  position: relative;
+}
+.sg {
+  --c: var(--tree-idle);
+  display: inline-flex;
+  gap: 2px;
+  align-items: flex-end;
+  height: 16px;
+  margin: 0;
+  padding: 0 1px;
+  border: 0;
+  border-radius: var(--r-4);
+  appearance: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.sg[data-tone='r'] {
+  --c: var(--tree-bad);
+}
+.sg[data-tone='o'] {
+  --c: var(--tree-you);
+}
+.sg[data-tone='w'] {
+  --c: var(--warn);
+}
+.sg[data-tone='y'] {
+  --c: var(--tree-stale);
+}
+.sg[data-tone='b'] {
+  --c: var(--tree-run);
+}
+.sg i {
+  display: block;
+  width: 3px;
+  height: 10px;
+  border-radius: var(--r-2);
+  background: var(--c);
+}
+.sg:is([data-tone='r'], [data-tone='o']) i,
+.gbox .sg i {
+  height: 14px;
+}
+/* Ticket 462 (owner 11-12): no notch on the failed bar, the mockup's solid shape. Its colour and the row's x icon say failed. */
+.sg .num {
+  font-size: var(--fs-10);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 10px;
+  color: var(--c);
+}
+/* The 388 mock's grey number is its muted text colour (`.n.tg`), not the idle bar's (they differ in the light theme). */
+.sg[data-tone='g'] .num {
+  color: var(--tree-mut);
+}
+.sg:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 1px;
+}
+/* Target size (WCAG 2.5.8): a --hit box behind each colour, 24px tall and reaching 15px left (the strip's free side) and
+   4px right, so a lone one-bar colour is 24px wide too (ticket 991 A7). It sits under the buttons (z -1 in the isolated strip), so where two boxes meet, a bar's own box still
+   wins over its neighbour's. */
+.cstrip,
+.gbox {
+  isolation: isolate;
+  font-family: var(--tree-font);
+}
+.sg {
+  position: relative;
+}
+.sg::after {
+  content: '';
+  position: absolute;
+  inset: calc((16px - var(--hit)) / 2) -4px calc((16px - var(--hit)) / 2) -15px;
+  z-index: -1;
+}
+/* An open head's strip says what its rows below say: 40 %. Under the pointer only the hovered colour stays full. The
+   bars fade, not the button: opacity on the button would make it a stacking context and lift its hit box over the
+   neighbour's bars. */
+.cstrip[data-dim] .sg > * {
+  opacity: 0.4;
+}
+.cstrip[data-on] .sg > * {
+  opacity: 0.35;
+}
+.cstrip[data-on] .sg[data-on] > * {
+  opacity: 1;
+}
+/* The one-line summary and the "]" hint, after 0.4 s like the rows' tips. */
+.cstrip .stip,
+.gbox .stip {
+  visibility: hidden;
+  position: absolute;
+  z-index: 6;
+  /* The mockup's .tip sits 27px below its 24px row's top and 6px past the strip's right end (the row's padding). */
+  right: -6px;
+  top: calc(100% + 7px);
+  /* Ticket 1041 (B, N119): a glass layer (.glass) with no border; was the 388 mockup's dark box (ticket 462). */
+  color: var(--text);
+  font-size: var(--fs-1);
+  font-weight: 400;
+  line-height: 1.6;
+  padding: 5px 9px;
+  border-radius: var(--r-8);
+  white-space: nowrap;
+  pointer-events: none;
+  transition: visibility 0s;
+}
+.cstrip .stip b,
+.gbox .stip b {
+  font-weight: 700;
+}
+/* A row clips what overflows it (styles.css .row); the head lets the summary out only while it shows, and rises over
+   the rows after it (ticket 462: they painted over the summary). */
+.tree :is(.row.head, .row.ghead):has(> .cstrip:is(:hover, :focus-within)) {
+  overflow: visible;
+  position: relative;
+  z-index: 7;
+}
+.cstrip:is(:hover, :focus-within) .stip,
+.gbox:hover .stip {
+  visibility: visible;
+  transition-delay: 0.4s;
+}
+.cstrip .stip .key {
+  display: block;
+  margin-top: var(--sp-4);
+  color: var(--muted);
+}
+.cstrip .stip kbd {
+  display: inline-block;
+  min-width: 14px;
+  margin-right: 5px;
+  padding: 0 3px;
+  background: var(--tint-2); /* ticket 1041: the key chip is a tint step, no outline; the "]" hint stays */
+  color: var(--text);
+  border-radius: var(--tree-key-radius);
+  font: 600 10.5px/15px ui-monospace, Menlo, monospace;
+  text-align: center;
+}
+/* Ticket 462: the row "]" / "[" walked to wears the mockup's one quiet 1px outline (`.s .r.focus`) on its own fill, not the
+   2px keyboard ring, and no tip until the pointer comes; the next Tab or click is ordinary focus again. */
+/* Ticket 1041 (N120): the walk's mark is the selected tint step, not an outline. */
+.tree .row.wt2[data-walk]:focus-visible {
+  background: var(--select-bg);
+  box-shadow: none;
+}
+.tree .cstrip .sg[data-walk]:focus-visible {
+  /* the walk's fallback when the row is not drawn: the head's colour, on the same tint */
+  outline: 0;
+  background: var(--select-bg);
+}
+.tree .row.wt2.you[data-walk]:focus-visible {
+  background: var(--you-wash), var(--select-bg);
+}
+.tree .row.wt2[data-walk]:not(:hover) .tip {
+  display: none;
+}
+/* The row a strip colour went to: for 1 s it takes the selected tint and its colour's glow (ticket 1041, N120: no outline). */
+.tree [data-pulse] {
+  background: var(--select-bg);
+}
+.tree [data-pulse='r'] {
+  box-shadow: var(--glow-bad);
+}
+.tree [data-pulse='o'] {
+  box-shadow: var(--glow-you);
+}
+/* Failed and your-turn sessions scrolled out of view gather at the tree's top or bottom edge, in the strip's column. */
+.gat {
+  position: sticky;
+  height: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+.gat.top {
+  top: 0;
+}
+.gat.bottom {
+  bottom: 0;
+}
+.gat::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 34px;
+}
+.gat.top::before {
+  top: -4px;
+  background: linear-gradient(var(--page) 45%, transparent);
+}
+.gat.bottom::before {
+  bottom: -4px;
+  background: linear-gradient(transparent, var(--page) 70%);
+}
+.gbox {
+  position: absolute;
+  right: 4px;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 3px 6px 3px 4px;
+  border-radius: var(--r-8); /* ticket 1041 (B, N119): a floating glass layer (.glass), no border */
+  pointer-events: auto;
+}
+.gat.top .gbox {
+  top: 0;
+}
+.gat.bottom .gbox {
+  bottom: 2px;
+}
+.gbox:hover {
+  background: var(--select-bg);
+}
+.gat.bottom .gbox .stip {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+/* The 12px arrow sits in a --hit square that reaches the strip's own top, bottom and left edges (its 3-4px padding and
+   1px border, cancelled by negative margins) and stops at the first colour, so the strip grows only 3px wider. */
+.gch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  margin: -4px -4px -4px -5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* "Ready to clean up (N)": a closed fold at the end of a project's rows. */
+.cleanup {
+  margin: 6px 0 0 22px;
+  font-size: var(--fs-1);
+  color: var(--muted);
+}
+.cleanup > summary {
+  display: flex;
+  align-items: center;
+  min-height: calc(var(--row) - 4px);
+  white-space: nowrap;
+  gap: var(--sp-2);
+  padding: 0;
+  list-style: none;
+  cursor: pointer;
+  border-radius: var(--r-4);
+}
+.cleanup > summary::-webkit-details-marker {
+  display: none;
+}
+.cleanup > summary:hover {
+  background: var(--tint-1);
+}
+.cleanup .cu {
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: underline;
+}
+
+/* V2-8e (HIDEROWS r6): the decision line under the session row that asked; icon buttons, the deny note and the peek. */
+.sess {
+  position: relative;
+}
+.sess > .row.wt2.you,
+.sess > .wtwrap > .row.wt2.you {
+  margin-bottom: 0;
+  border-radius: var(--r-6) var(--r-6) 0 0;
+}
+.sess .q {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -1px 0 4px 22px;
+  padding: 3px 6px 4px 14px;
+  /* One height for the one-line question (buttons, the answered mark), so answering moves no row (needs 49). The
+     question stays on one line with an ellipsis; the tooltip and the peek hold the full text (ko/hiderows-r6.html .q). */
+  /* One height for the one-line question (buttons, the answered mark), so answering moves no row (needs 49); the ko/
+     29 px .q that fix-menus-tree and shell-fix-tree encode. Ticket 1041: the block's warm edge and wash are drawn once on
+     .sess (end of this file), not as a tinted bar. */
+  min-height: calc(var(--row) - 1px);
+  box-sizing: border-box;
+  font-size: var(--fs-1);
+  color: var(--text);
+  border-radius: 0 0 var(--r-6) var(--r-6);
+  animation: qin 150ms ease-out;
+}
+/* Opacity only: a height animation would end in a jump of every row below (needs 49). */
+@keyframes qin {
+  from {
+    opacity: 0;
+  }
+}
+/* Under the project header (a main-folder or project-level decision): the line is its own row. */
+.sess.hl .q {
+  min-height: min(calc(var(--row) - 1px), 28px); /* V2.5-34: 28px */
+  margin-top: 1px;
+  border-radius: var(--r-6);
+  cursor: pointer;
+}
+.sess .q:focus-visible {
+  outline: 2px solid var(--ring-focus);
+  outline-offset: -2px;
+}
+.sess .q .who {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text);
+}
+.sess .q .qt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* A project-level line names who asks before the question, and in a narrow sidebar that name is a third of the row: with
+   both it and the 52px caution chip, the question got 54px of a 213px line and vanished (audit row 02). The name gives
+   way first, as the head's own name does (needs 130). */
+/* V2.5-34: the name keeps the width and is cut last; the question gives way first (its words stay in the tooltip and the peek).
+   Look 1117 v10 B N10-S3-1: a name that shrank at all, by a fraction of a pixel beside a long question, read "Le…". The
+   question's weight 1e5 against the name's 1 keeps the name's share under 1/64 px until the question is gone (a 50% cap
+   in its place cut a long name to 16 characters at 250 px). */
+.sess.hl .q .who {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: none;
+}
+.sess.hl .q .qt {
+  flex: 1 100000 auto;
+  min-width: 0;
+}
+/* The elapsed time sits on the session row, as ko/hiderows-r6.html draws it (.row .tm), not on the question line. */
+/* Ticket 995 (Lead row at 208 px read "L…"): the name wins. The age gives way after the model pair (lead.css, weight
+   1e9) and before the name (weight 1): weight × width keeps each step's share of the shortfall under 1/64 px. */
+.sess > .row.wt2 .tm,
+.sess > .wtwrap > .row.wt2 .tm {
+  flex: 0 100000000 auto; /* ticket 1041: 1e8, between the pair and the state word (end of this file) */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+/* Look 1117 v14 N14-S3-4: a background task is not the user's turn: the working tone, not orange. */
+.sess .q.note {
+  color: var(--tree-run);
+}
+/* Dimmed by colour, not opacity, so the text keeps its contrast while it waits to leave. */
+.sess .q.answered {
+  color: var(--muted);
+  background: transparent;
+}
+.dock[data-leaving='true'] .sess .q.answered {
+  animation: rowout 150ms ease-in forwards;
+}
+/* HIDEROWS r6 and TREEROWS (needs 92, 95): a risky permission is the same orange row; the small red Caution text label
+   is its only red, under a project head too (no red rail, no red status dot). */
+.sess .warn {
+  font: 700 10.5px system-ui;
+  color: var(--on-status);
+  background: var(--bad);
+  border-radius: var(--r-4);
+  padding: 1px 5px;
+  flex: none;
+}
+/* Ticket 1041 (N118): the count is a quiet number in the your-turn colour, no filled pill. */
+.two {
+  font: 700 var(--fs-1) system-ui;
+  color: var(--you);
+  padding: 0 2px;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.sess .ag,
+.peek .ag {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+}
+/* V2.5-34: a project-head line's actions are drawn over its right end only while the pointer or focus is in the row (or one is open),
+   so they take no width from the name. Opacity, not display: the buttons stay in the tab order and the tree. */
+.sess.hl .q > .ag,
+.sess.hl .q > .qib {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding-left: 14px;
+  background: linear-gradient(to right, transparent, var(--page) 10px);
+  opacity: 0;
+}
+.sess.hl .q > .qib {
+  padding-left: 0;
+  background: var(--page);
+}
+.sess.hl:is(:hover, :focus-within) .q > :is(.ag, .qib),
+.sess.hl .q:has([aria-expanded='true']) > .ag {
+  opacity: 1;
+}
+.peek .ag {
+  justify-content: flex-end;
+}
+.qib {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.qib.al {
+  color: var(--ok);
+}
+.qib.no {
+  color: var(--bad);
+}
+.qib.eye {
+  margin-left: 4px;
+}
+/* Ticket 1041 (N056): the answer buttons keep every icon and key word; hover is a tint step, not a border. */
+.qib:hover,
+.qib:focus-visible {
+  background: var(--tint-2);
+}
+.qib:focus-visible {
+  outline: 2px solid var(--ring-focus);
+  outline-offset: 1px;
+}
+/* The tooltip (the app's `data-tip`, Tooltip.tsx) says the key ("Allow (1)"); the row never prints it. */
+.peek:focus {
+  outline: 2px solid var(--ring-focus);
+  outline-offset: 1px;
+}
+.sess .b,
+.peek .b {
+  font: 600 var(--fs-1) system-ui;
+  border: 0;
+  background: var(--control-quiet-bg);
+  color: var(--text);
+  border-radius: var(--r-6);
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.sess .b.y,
+.peek .b.y {
+  background: var(--you);
+  color: var(--on-status);
+}
+.sess .b:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.sess .dd {
+  position: relative;
+  flex: none;
+}
+.sess .menu {
+  position: absolute;
+  z-index: 8;
+  right: 0;
+  top: 24px;
+  min-width: 150px;
+  border-radius: var(--r-8); /* ticket 1041 (B): glass (.glass), no border */
+  padding: 3px;
+  display: flex;
+  flex-direction: column;
+}
+.sess .menu button {
+  text-align: left;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: var(--fs-2) system-ui;
+  padding: 5px 7px;
+  border-radius: var(--r-4);
+  cursor: pointer;
+}
+.sess .menu button:hover,
+.sess .menu button:focus-visible {
+  background: var(--tint-2);
+}
+.sess .dn {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: -4px 0 4px 22px;
+  padding: 6px 8px 7px 14px;
+  background: var(--tint-1); /* ticket 1041: a tint step, no dashed rule */
+  border-radius: 0 0 var(--r-6) var(--r-6);
+}
+.sess .dn input {
+  flex: 1 1 100%;
+  padding: 4px 7px;
+}
+.sess .qerr {
+  margin: 0 0 4px 36px;
+  font-size: var(--fs-11);
+  color: var(--bad);
+}
+/* The compact peek: about 260 px, beside the tree; the row under it never moves. */
+.peek {
+  position: fixed;
+  z-index: 40;
+  width: 260px;
+  box-sizing: border-box;
+  color: var(--text);
+  /* Ticket 1041 (B+C, 15.2 item 7): glass (.glass); the orange 1px border is the warm edge light (.light-you.light-edge). */
+  border-radius: var(--r-12);
+  padding: 8px 10px;
+  font-size: var(--fs-2);
+}
+/* The mockup's pointer toward the row: the outer half of a glass square. */
+.peek::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 14px;
+  width: 10px;
+  height: 10px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  clip-path: polygon(0 0, 0 100%, 100% 100%);
+  transform: rotate(45deg);
+}
+.peek code {
+  display: block;
+  background: var(--tint-1);
+  border-radius: var(--r-6);
+  padding: 4px 7px;
+  font: 11.5px ui-monospace, Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0 0 4px;
+}
+.peek .why2 {
+  margin: 0 0 6px;
+  font-size: var(--fs-1);
+  color: var(--muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sess .q,
+  .dock[data-leaving='true'] .sess .q.answered {
+    animation: none;
+  }
+}
+
+/* V2-CF3: a managed worktree row keeps its place; the "⋯" and the head's "⌄ worktree" show with the row (hover or focus
+   inside), in space they already hold, so nothing moves under the pointer (needs 49). */
+.wtwrap {
+  display: flow-root; /* its row's margins stay inside: adopting a folder must not move any row (needs 49) */
+  position: relative;
+}
+.wtmore {
+  position: absolute;
+  top: 1px;
+  right: 34px;
+  height: 28px;
+  width: 22px;
+  padding: 0;
+  color: var(--muted);
+  opacity: 0;
+  z-index: 2; /* above a hovered or focused row, which rises over the decision line below it */
+}
+.wtwrap:is(:hover, :has(:focus-visible)) .wtmore,
+.wtmore:focus {
+  opacity: 1;
+}
+.wtmore:hover {
+  color: var(--text);
+}
+/* No hover on touch: the row's menu and the head's buttons stay drawn (they hold the space they use on hover). */
+@media (hover: none) {
+  .wtmore {
+    opacity: 1;
+  }
+  .tree .row.head .padd {
+    display: block;
+  }
+}
+
+/* Look v23 g (ticket 462): a project's "+N" sits in 388's sessions column (`.s` padding-left 22px: the folds' text column)
+   and carries the guide line, so the line runs unbroken from the first row to the "N done" fold. */
+.tree .grp > .more {
+  position: relative;
+  margin-left: 42px;
+}
+/* ko/v2-8a-groups.html .proj.sub2: a project inside a folded group is 13px. */
+.tree .pgrp .gbody .grp > .row.head {
+  height: 24px;
+  font-size: var(--fs-13);
+}
+/* ko/v2-8a-a-folds.html .new: the "new N" mark on a project head. Ticket 1041 (N118): a quiet word in the working
+   colour, no filled pill; the live region and the number stay. */
+.tree :is(.row.head, .row.ghead) .chip:not(:empty) {
+  display: block;
+  height: auto;
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  line-height: normal;
+  background: none;
+  color: var(--run);
+  font: 600 var(--fs-1) system-ui;
+}
+/* Ticket 388: no pills on heads; the counts group would still add a flex gap to the row, so it leaves the flow and only stays in the accessibility tree. */
+.tree .row.head .r,
+.tree .pgrp > .row.ghead > .r:not(:has(.chip:not(:empty))) {
+  position: absolute;
+}
+
+/* FIDELITY pass 4 (ticket 65): the worktree dialogs and the undo toast, ko/v2-8a-compare-r3.html (WTDIALOGS Draft 3, in its .sc frames). */
+.palette.wtdlg {
+  width: 420px;
+  padding: 10px 12px;
+  overflow: visible;
+  font-family: var(--font-ui);
+  font-size: var(--fs-12);
+  line-height: normal;
+  border-radius: var(--r-8);
+  border-color: var(--line);
+  background: var(--panel);
+}
+.palette.wtnew {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, round(nearest, -50%, 1px)); /* keep the centred card on whole pixels */
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+.wtnew .wtpreview {
+  overflow-wrap: anywhere;
+}
+.wtnew .wtpreview code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.wtnew .wtadvanced {
+  display: inline-flex;
+  gap: var(--sp-6);
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.wtnew .wtadvanced:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.wtdlg .wtttl {
+  margin: 0 0 4px;
+  font-size: var(--fs-13);
+  font-weight: 700;
+}
+.wtdlg .wtfld {
+  margin: 0;
+}
+.wtdlg .wtfld input {
+  width: 100%;
+  margin: 0; /* ticket 519: not the command palette's 8 px field margin (.palette input), as this dialog is a .palette */
+  padding: 4px 7px;
+  font-size: var(--fs-12); /* the WTDIALOGS mockup's field (pixel-tested); the spec's exceptions name it */
+}
+.wtdlg .wtfld input + input,
+.wtdlg .wtfld + .wtfld {
+  margin-top: 6px;
+}
+.wtdlg .wtfld input::placeholder {
+  color: var(--muted);
+}
+.wtdlg .wtfld input:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring); /* the mockup's .fld input.f: the global ring, 1 px off the field */
+  outline-offset: 1px;
+}
+.wtdlg .wthint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-6);
+  align-items: center;
+  margin: var(--sp-6) 0;
+  font-size: var(--fs-12); /* the mockup's `.dlg p` (12px, 6px 0) outranks its .hint (11.5px, 4px 0 0) */
+  color: var(--muted);
+}
+.wtdlg .wtkbd {
+  padding: 0 5px;
+  font: 600 var(--fs-11) ui-monospace, Menlo, monospace;
+  border: 1px solid var(--line);
+  border-radius: var(--r-4);
+  background: var(--hover);
+  color: var(--text);
+}
+.wtdlg .btn {
+  padding: 5px 12px;
+  font: 600 var(--fs-12) system-ui;
+  border: 1px solid var(--line);
+  border-radius: var(--r-6);
+  background: var(--panel);
+  color: var(--text);
+}
+.wtdlg .btn.x {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: var(--on-status);
+}
+.wtdlg .btn:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* Look 1117 v11 A S3-2: inside the Remove-project dialog's sheet (remove.css .rmdlg), whose gap spaces it. */
+.wtdirty .wtlist {
+  border: 1px solid var(--line);
+  border-radius: var(--r-6);
+  overflow: hidden;
+}
+.wtdirty .wtlist:empty {
+  display: none;
+}
+.wtdirty .wtcap {
+  margin: 0;
+  padding: var(--sp-6) 10px;
+  font-size: var(--fs-12);
+  font-weight: 700;
+  background: var(--hover);
+  color: var(--text);
+}
+.palette.wtdirty ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: none;
+}
+.palette.wtdirty li {
+  display: block;
+  padding: var(--sp-3) 10px;
+  font: var(--fs-12) ui-monospace, Menlo, monospace;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  cursor: default;
+}
+/* The one toast: the dark bar of the mockup (ground = the text colour, ink = the panel), Undo underlined. */
+.wtoast .wtbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-8);
+  min-width: 280px;
+  padding: 7px 10px;
+  border-radius: var(--r-12); /* ticket 1041 (B): a glass toast (.glass); was the dark bar */
+  color: var(--text);
+  font-size: var(--fs-2);
+  line-height: normal;
+}
+.wtoast .wtundo,
+.wtoast .wtdismiss {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+.wtoast .wtundo {
+  font-weight: 600;
+  text-decoration: underline;
+}
+.wtoast .wtdismiss {
+  margin-left: var(--sp-4);
+}
+.wtoast .wtundo:focus-visible,
+.wtoast .wtdismiss:focus-visible {
+  outline: var(--focus-width) solid var(--ring-focus);
+  outline-offset: 2px;
+}
+
+/* V2-8f: the optional start lives in Advanced, leaving the one-field default intact. */
+.wtnew .wtstart {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  margin-top: var(--sp-8);
+}
+.wtnew .wtstartfields {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-8);
+  margin-top: var(--sp-8);
+}
+.wtstartfields fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-8);
+  margin: 0;
+  padding: var(--sp-6);
+  border: 1px solid var(--line);
+  border-radius: var(--r-6);
+}
+.wtstartfields legend {
+  color: var(--muted);
+}
+.wtstartfields .wtfld textarea {
+  display: block;
+  width: 100%;
+  font-size: inherit; /* the dialog's 12 px, as its input fields */
+}
+.wtstartfields .wtmodels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+}
+.wtstartfields [aria-selected="true"] {
+  background: var(--hover);
+}
+.wtnew .wtstartacts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-6);
+}
+.wtnew .wtstart input,
+.wtstartfields input[type='radio'] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--focus-ring);
+}
+.wtstartfields fieldset label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-6);
+}
+.wtnew .wtstart input:focus-visible,
+.wtstartfields input:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Agents shares narrow sidebars with the tree: metadata gets its own line before either word is clipped. */
+.agents .ar {
+  grid-template-columns: 12px minmax(0, 1fr);
+  height: auto;
+  min-height: var(--arow);
+  padding-block: var(--sp-4);
+  row-gap: 0;
+}
+.agents .ar .s {
+  grid-column: 2;
+}
+/* Ticket 257: the prompt-cache countdown ends the agent row's line, after its state word. */
+.agents .ar .s .cache::before {
+  content: ' · ';
+}
+.tm.cache {
+  font-variant-numeric: tabular-nums;
+}
+.row.wt2 .tm.cache {
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.agents .ar :is(.n, .s) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.agents .ph {
+  height: auto;
+  min-height: 28px;
+  flex-wrap: wrap;
+  padding-block: var(--sp-4);
+}
+
+/* The row's ⋯ lands on its elapsed time: while the ⋯ shows, the time steps aside in place (no row moves, needs 49), as
+   t3code swaps a row's time for its actions on hover. Touch always shows the ⋯, so the time keeps clear of it there. */
+.wtwrap:has(> .wtmore):is(:hover, :has(:focus-visible), :has(> .wtmore:focus)) > .row.wt2 :is(.tm, .sw) {
+  opacity: 0; /* not visibility: a screen reader still reads the time; ticket 1041: and the state word, which sits there now */
+}
+@media (hover: none) {
+  .wtwrap:has(> .wtmore) > .row.wt2 :is(.tm, .sw):last-of-type {
+    margin-right: 22px;
+  }
+}
+/* A pointer passing over the tree no longer flashes a tooltip over the row below: hover waits 400 ms, then fades in.
+   Keyboard focus, a tap and a warm tree (a tooltip shown in the last second, data-warm) show it at once. Reduced motion
+   keeps the wait and drops the fade. */
+.row.wt2:hover:not(:focus-visible, [data-tap], [data-off], [data-warm]) .tip {
+  animation: tipin 120ms ease-out 400ms both;
+}
+@keyframes tipin {
+  from {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .row.wt2:hover:not(:focus-visible, [data-tap], [data-off], [data-warm]) .tip {
+    animation: tipin 0s linear 400ms both;
+  }
+}
+
+/* V2.5-15 (ticket 154): a chosen icon before the project name; "Open in editor" and "Set icon" show with the row, left of "+" and "⌄ worktree"; on hover they sit in the flow left of the counts (end of this file). */
+.tree .row.head .n .pico {
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  border-radius: var(--r-4);
+  object-fit: cover;
+  vertical-align: -2px;
+}
+.tree .row.head:has(> .kidcount) {
+  --ptool-k: 34px;
+}
+.tree .row.head > .ptool {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: none;
+  width: 20px;
+  padding: 0;
+  color: var(--faint);
+  text-align: center;
+}
+.tree .row.head:is(:hover, :focus-within) > .ptool {
+  display: block;
+}
+.tree .row.head > .ptool:hover {
+  color: var(--text);
+}
+.tree .row.head > .ped {
+  right: calc(50px + var(--ptool-k, 0px));
+}
+.tree .row.head > .pic {
+  right: calc(72px + var(--ptool-k, 0px));
+}
+.tree .row.head > .ped::before {
+  content: '↗';
+}
+.tree .row.head > .pic::before {
+  content: '◧';
+}
+/* F15: an added project with no session: remove it from the tree (shown with the tools, in their flow). */
+.tree .row.head > .pdrop::before {
+  content: '×';
+}
+
+/* needs 171: "+N" opens the rows it counts. A button now, drawn as it was (muted or orange text), with the row's focus ring. */
+.tree button.more {
+  appearance: none;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--r-6);
+}
+.tree button.more:hover {
+  text-decoration: underline;
+}
+.tree button.more:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 1px;
+}
+/* needs 72: the whole name leads a tip when the row cuts it; a long unbroken name wraps inside the tip. */
+.row.wt2 .tip .full {
+  overflow-wrap: anywhere;
+}
+/* TREEHEAD (c), owner 2026-11-02: while a project head is hovered or has focus inside, its tools ("Open in editor", "Set icon",
+   "+", "⌄ worktree") are in the flow between the name and the counts, so they sit left of the pills and overlap nothing; the name
+   truncates further to make room (its full-name tip still shows the whole name). Supersedes needs 26's "nothing moves": the
+   counts shift right while the tools show. Heads at rest are unchanged. */
+.tree .row.head:is(:hover, :focus-within) > :is(.ptool, .padd) {
+  position: static;
+  order: 2;
+  flex: none;
+  align-self: stretch;
+  margin: -4px 0; /* the head's 4px padding, so the targets keep the row's full height as when they were overlaid */
+}
+.tree .row.head:is(:hover, :focus-within) > :is(.ptool, .padd) ~ :is(.ptool, .padd) {
+  margin-left: -4px; /* the tools sit 2px apart, as they did when overlaid, so four of them cost 74px plus 2px gaps */
+}
+.tree .row.head:is(:hover, :focus-within) > :is(.r, .d, .chip, .cstrip) {
+  order: 3;
+}
+/* Look 1117 v11-A-S3-4: the name wins. While the tools show, the muted "main" leaves whole (it was cut to "ma"), and the tools
+   give way first, each down to its glyph (they shrink 1000 times faster than the name), before the name is cut. */
+.tree .row.head:is(:hover, :focus-within) > .d {
+  display: none;
+}
+.tree .row.head:is(:hover, :focus-within) > :is(.ptool, .padd) {
+  flex: 0 1000 auto;
+  min-width: 14px;
+  overflow: hidden;
+}
+/* Look 1117 v11-A-S3-4, at the tree's 208 px minimum the name still read "pro…": while the tools show, the colour strip is
+   only as wide as its bars (its fixed 64 px column lines heads up at rest), so the tools take the trailing room, not the name's. */
+.tree .row.head:is(:hover, :focus-within) > .cstrip {
+  width: auto;
+}
+/* TREEHEAD-FREEZE: while a head is held and an arrival has changed its new-N count, the chip's real text (the live region, announced at
+   once) paints nothing and takes no room; the text drawn is the one the hold began with, in `data-shown`. */
+.tree .row.head .chip[data-shown] {
+  font-size: 0;
+}
+.tree .row.head .chip[data-shown]::before {
+  content: attr(data-shown);
+  font-size: var(--fs-11);
+}
+.tree .row.head .chip[data-shown=''] {
+  position: absolute;
+  margin-left: -6px;
+  border: 0;
+  padding: 0;
+}
+
+/* V2.5-55 (needs 178 C2): a double-click or drag on a tree row opens or moves it; it never selects its name. The decision line
+   (.q, a sibling of the row's wrap) stays selectable, and so does a rename field inside a row (WebKit would not type into one). Descendants are listed because WebKit keeps `auto` on them. */
+.tree .row,
+.tree .row *,
+.tree .wtwrap {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.tree .row input {
+  -webkit-user-select: text;
+  user-select: text;
+}
+/* V2.5-61 B8: the existing-branch list under the create field; rows are the palette's (`.palette li`). */
+.wtnew .wtrefs {
+  max-height: none;
+  margin: var(--sp-4) 0 0;
+  padding: 0;
+}
+.wtnew .wtrefs li {
+  min-width: 0;
+}
+.wtnew .wtrefs .wtrefname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wtnew .wtrefs li[aria-disabled='true'] {
+  color: var(--muted);
+  cursor: default;
+}
+.wtnew .wtbaseerr {
+  margin: var(--sp-4) 0 0;
+  color: var(--bad);
+  font-size: var(--fs-12);
+}
+.wtnew .wtrefs .wttag {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+}
+/* V2.5-61 B8: opened from a head's worktree button, the card sits 4px under it, left-aligned to it, at least 8px inside
+   the window (no transform). Cmd+N, the palette and the move menu keep the centred card above.
+   --wt-room: the height kept free under the card's top near the window's bottom, so the field, about five list rows
+   and the preview show before the card scrolls (it moves up over the button instead of shrinking past that).
+   shortcut: a fixed allowance, not the card's measured height; Advanced and eight rows scroll inside the card. Upgrade:
+   measure the card after layout if a design review wants it never to scroll. */
+.palette.wtnew.anchored {
+  --wt-room: 240px;
+  --wt-at: min(calc(var(--wt-top) + var(--sp-4)), calc(100vh - var(--sp-8) - var(--wt-room)));
+  top: var(--wt-at);
+  /* The right side keeps the centred card's 16px gutter (`.palette` max-width 100% - 32px), so a narrow window shows
+     the same card as before (v2-8f-fidelity pins it). */
+  left: clamp(var(--sp-8), var(--wt-left), calc(100vw - var(--sp-16) - min(420px, 100vw - 32px)));
+  transform: none;
+  max-height: calc(100vh - var(--sp-8) - var(--wt-at));
+}
+/* Ticket 294 (1): Cancel sits at the end of the "Advanced" hint line, so the card keeps the height the mockup draws. */
+.wtnew .wthintrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-8);
+}
+.wtnew .wtcancel {
+  flex: none;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.wtnew .wtcancel:hover:not(:disabled) {
+  color: var(--text);
+  text-decoration: underline;
+}
+.wtnew .wtcancel:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* Ticket 372 (option A): a usage limit is a yellow clock; orange stays your turn and red stays broken. */
+.row.wt2.warn {
+  --c: var(--warn);
+}
+.row.wt2.warn .ic {
+  color: var(--warn);
+}
+.row.wt2 .tm.lim {
+  color: var(--warn);
+  font-size: var(--fs-1);
+}
+.bar .seg[data-tone='warn'] {
+  background: var(--warn);
+}
+
+/* Ticket 392 (providers-391 scene e): a project's past conversations. Grey, no rail, no state colour: a reference, not work. */
+.tree .row.past {
+  height: min(var(--row), 24px);
+  margin: var(--sp-4) 0 1px 22px;
+  width: calc(100% - 22px);
+  padding: 0 var(--sp-8);
+  gap: var(--sp-6);
+  font-size: var(--fs-1);
+  color: var(--muted);
+}
+.tree .row.past .c {
+  margin-left: auto;
+  flex: none;
+  font-size: var(--fs-11);
+}
+.tree .row.pitem {
+  height: min(var(--row), 24px);
+  margin-left: 40px;
+  width: calc(100% - 40px);
+  padding: 0 var(--sp-8) 0 var(--sp-6);
+  gap: var(--sp-8);
+  font-size: var(--fs-1);
+  color: var(--muted);
+}
+.tree .row.pitem .agent-logo {
+  flex: none;
+}
+.tree .row.pitem .n {
+  flex: 1;
+  color: var(--text);
+}
+.tree .row.pitem .tm {
+  flex: none;
+  font-size: var(--fs-11);
+}
+.tree .row.pitem.more {
+  padding-left: 30px;
+}
+.tree .pastfail {
+  margin: 0 0 var(--sp-2) 46px;
+  font-size: var(--fs-11);
+  color: var(--bad);
+  overflow-wrap: anywhere;
+}
+
+/* Ticket 1041 lane 4 (A+B+C, approved mockup docs/design/polish-1121/index.html; owner answers 2026-11-22): the tree's
+   state as light, the state word, the your-turn block and the quiet marks. Shared rules: light-glass.css. */
+.tree {
+  /* The tree's focus rings take the neutral ring (15.1 item 1): blue is the working light only. */
+  --focus-ring: var(--ring-focus);
+  --split-ring: inset 0 0 0 var(--focus-width) var(--ring-focus);
+  /* The mockup's .v-c .row.you wash: the warm light fading out from the row's left edge. */
+  --you-wash: linear-gradient(90deg, color-mix(in srgb, var(--light-you) 20%, transparent), transparent 58%);
+}
+/* The state word (owner 11-22, 15.1 item 4): one 11 px slot at the row's right, before the glyph. Your turn and broken
+   say it in their light's text colour; "Limit" in the limit's (above). The age stays beside it. */
+.row.wt2 .sw {
+  flex: none;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.row.wt2 .sw[data-word='you'] {
+  color: var(--you);
+}
+.row.wt2 .sw[data-word='bad'] {
+  color: var(--bad-text);
+}
+/* The name wins (needs 72, ticket 995): the model pair gives way first, then the age, then the state word, and the name
+   last (weight 1, above). Each weight is 1e4 times the next, so a step's share of the shortfall stays under 1/64 px until
+   it is gone (the pair was 1e9 and the age 1e5 in lead.css and above; the word sits between the age and the name now).
+   The word and the age stay whole in the row's tooltip and label. */
+.tree .row.wt2 > .lvl-mark {
+  flex-shrink: 1000000000000;
+}
+.tree .row.wt2 .tm:not(.sw, .cache) {
+  flex-shrink: 100000000;
+}
+.row.wt2 .sw {
+  flex: 0 10000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* N124: every row's age is the 11 px muted meta, not only a decision block's. */
+.row.wt2 .tm {
+  font-size: var(--fs-1);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.row.wt2 .tm:not(.sw, .cache) {
+  flex: 0 100000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* On the selected tint the muted words take the select text colour (4.5:1 on the tint step in every theme). */
+.tree .row.head[aria-current='true'] > .d,
+.tree .row.head[aria-current='true'] .n span,
+.tree .row.wt2[aria-current='true'] :is(.tm:not(.sw), .prn) {
+  color: var(--select-text);
+}
+/* N056: a your-turn row and its decision line are one block with one warm edge and one wash. The row's own edge
+   steps back while the block draws it; a project-level line (no session row) is a block of its own. */
+.sess:has(> .row.wt2.you, > .wtwrap > .row.wt2.you, > .q:not(.note, .answered)) {
+  background: var(--you-wash);
+  border-radius: var(--r-6);
+}
+.sess:has(> .row.wt2.you, > .wtwrap > .row.wt2.you, > .q:not(.note, .answered))::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: var(--sp-6);
+  bottom: var(--sp-6);
+  width: 2px;
+  border-radius: var(--r-2);
+  background: var(--light-you);
+  box-shadow: var(--glow-you);
+  pointer-events: none;
+  animation: light-breathe var(--motion-breathe) ease-in-out infinite alternate;
+}
+.sess:has(> .q) > .row.wt2.you,
+.sess:has(> .q) > .wtwrap > .row.wt2.you {
+  background: none;
+}
+.sess:has(> .q) > .row.wt2.you:is(:hover, :focus-visible),
+.sess:has(> .q) > .wtwrap > .row.wt2.you:is(:hover, :focus-visible) {
+  background: var(--tint-1);
+}
+.sess:has(> .q) > .row.wt2.you[aria-current='true'],
+.sess:has(> .q) > .wtwrap > .row.wt2.you[aria-current='true'] {
+  background: var(--select-bg);
+}
+.sess:has(> .q) > .row.wt2.you::after,
+.sess:has(> .q) > .wtwrap > .row.wt2.you::after {
+  content: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sess:has(> .row.wt2.you, > .wtwrap > .row.wt2.you, > .q:not(.note, .answered))::before {
+    animation: none;
+  }
+}
+/* The block's own margin, so its edge sits where a lone row's would. */
+.sess:has(> .q) {
+  margin-left: 22px;
+}
+.sess:has(> .q) > .row.wt2,
+.sess:has(> .q) > .wtwrap > .row.wt2,
+.sess:has(> .q) > .q,
+.sess:has(> .q) > .dn {
+  margin-left: 0;
+}
+.sess:has(> .q) > .row.wt2,
+.sess:has(> .q) > .wtwrap > .row.wt2 {
+  width: 100%;
+}
+/* The head strip and the edge gather strip keep every bar and number; the urgent colours glow (C, N119). */
+.sg:is([data-tone='r']) i {
+  box-shadow: var(--glow-bad);
+}
+.sg:is([data-tone='o']) i {
+  box-shadow: var(--glow-you);
+}
+/* N117: the "!" skip mark and the Lead tag are tint marks, not outlined chips; the "!" glyph stays (not colour alone). */
+.tree .row .skipm {
+  border: 0;
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn);
+}
+.tree .row .lead-tag {
+  border: 0;
+  background: var(--tint-2);
+  color: var(--muted); /* N058: purple is not "Lead" */
+}

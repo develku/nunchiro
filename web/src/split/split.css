@@ -1,0 +1,268 @@
+/* SPLITS (frame-ko-e.html .tsplit / .tmp / .tmh / .chipt / .dov / .tgrid). Colours are the window's own tokens. */
+.shost {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}
+.scol {
+  flex: 3 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.scol > .sview {
+  flex: 3 1 0;
+}
+/* One split takes 40 % of its axis by default (frame-ko-e `.tmp{flex:0 0 40%}`); the gutter changes it per split (15..85). */
+.split {
+  flex: 0 0 40%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+/* Ticket 1041 lane 2 (A): no dashed blue top and no side lines; the gutter's page tint (below) parts a split from the
+   chat, and its head's tint names it. Blue is the working light only. */
+.split:focus {
+  outline: none;
+}
+/* Look v35 a S3-5 (ticket 1041 A+C, inventory 1.7 "Split pane focus mark": restyle): the split that holds focus, by
+   click or keys, terminal and chat too, wears one constant tint step on its head; no ring or side edges (the inset ring
+   sat under the opaque head and body and showed as two heavy side lines). Controls inside keep their own Tab ring. */
+.split:focus-within > .sph {
+  background-image: linear-gradient(var(--tint-2), var(--tint-2));
+}
+.sph {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 4px 0 10px;
+  flex: none;
+  background: var(--page);
+  color: var(--text);
+  font: var(--fs-13) system-ui;
+}
+.sph b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sph .sp {
+  flex: 1;
+}
+/* "Temporary": its word on a tint step (it was a dashed blue outline, the only mark). */
+.sph .chipt {
+  font: 600 var(--fs-11) system-ui;
+  color: var(--text);
+  background: var(--tint-2);
+  border-radius: var(--r-10);
+  padding: 0 6px;
+  white-space: nowrap;
+}
+.sph .lx {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: var(--muted);
+  font-size: var(--fs-13);
+  flex: none;
+}
+.sph .lx:hover {
+  background: var(--tint-1);
+  color: var(--text);
+}
+.spb {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.spb > * {
+  flex: 1;
+  min-height: 0;
+}
+/* A chat or terminal in a split fills it (they are absolutely placed in the session view). */
+.spb > .chat,
+.spb > .term {
+  position: absolute;
+}
+
+/* An agent chat in a split, with its own composer under it. */
+.schat {
+  display: flex;
+  flex-direction: column;
+}
+.schatv {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.spb .composer .chip.pin {
+  display: none; /* the split header names the session already (NODUP) */
+}
+/* NODUP: the split header names the widget; the Diff widget's own title row keeps only its controls. */
+.spb .diff > .ph {
+  font-size: 0;
+}
+.spb .diff > .ph > * {
+  font-size: var(--fs-11);
+}
+.spb .diff > .ph > .grip,
+.spb .diff > .ph > .r {
+  display: none;
+}
+.spb .diff > .ph > .dbtn {
+  margin-left: auto;
+}
+
+/* The chooser (SPLITNEW). */
+.chooser {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px;
+  overflow: auto;
+}
+.chooser [role='option'] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--r-6);
+  color: var(--text);
+  font: var(--fs-13) system-ui;
+  cursor: pointer;
+}
+.chooser [role='option'] span {
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.chooser [role='option']:hover,
+.chooser [role='option']:focus {
+  outline: none;
+  background: var(--hover);
+}
+.chooser [role='option']:focus-visible {
+  box-shadow: var(--split-ring);
+}
+.chooser .first-widget {
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--r-6) var(--r-6);
+}
+
+/* The drop overlay over the session view (PEEKSPLIT, frame-ko-e `.dov`). */
+.dov {
+  position: fixed;
+  z-index: 30;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  pointer-events: none;
+}
+.dov .half {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--text) 14%, var(--panel));
+  border-radius: var(--r-8);
+  color: var(--text);
+  font: 700 13px system-ui;
+}
+.dov .cap {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--panel);
+  padding: 5px 12px;
+  border-radius: var(--r-8);
+  font: 600 12px system-ui;
+  white-space: nowrap;
+}
+
+/* The side pane's terminal grid (SPLITKEYS, frame-ko-e `.tgrid one|h|v`). */
+.tgrid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+}
+.tgrid[data-grid='h'] {
+  grid-template-columns: 1fr 1fr;
+}
+.tgrid[data-grid='v'] {
+  grid-template-rows: 1fr 1fr;
+}
+.tgrid > .term {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+.khint {
+  /* Gives way first in a narrow pane: it must never cover the tabs. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 6px;
+  color: var(--muted);
+  font: 11px system-ui;
+  white-space: nowrap;
+}
+/* The tabs overflow before they shrink, so the hint leaves a pane too narrow to hold both. */
+.spane {
+  container-type: inline-size;
+}
+@container (max-width: 640px) {
+  .khint {
+    display: none;
+  }
+}
+.spane .tt[data-moved] {
+  font-style: italic;
+}
+
+/* Item M: the gutter between a split and the chat, and a maximised split. */
+.sgutter {
+  flex: none;
+  background: var(--page);
+  touch-action: none;
+}
+.sgutter[data-axis='x'] {
+  width: 4px;
+  cursor: col-resize;
+}
+.sgutter[data-axis='y'] {
+  height: 4px;
+  cursor: row-resize;
+}
+.sgutter:hover,
+.sgutter:focus-visible {
+  background: var(--focus-ring);
+  outline: none;
+}
+/* Maximised: the split takes the whole centre; the chat view is hidden, not unmounted. */
+.shost[data-maxed] .sgutter,
+.shost[data-maxed] .split:not([data-maxed]),
+.shost[data-maxed] .scol > .sview {
+  display: none;
+}
+.shost[data-maxed='left'] .scol,
+.shost[data-maxed='right'] .scol {
+  display: none;
+}
+.shost[data-maxed] .split[data-maxed] {
+  flex: 1 1 0;
+}

@@ -1,0 +1,31 @@
+#!/bin/sh
+# Local transport fixture only. Never invokes SSH, shells the remote command, or installs anything.
+set -eu
+# V2-12m-a: the ControlMaster session runs the streaming relay; one-shots ride it with ControlMaster=no.
+if [ "$#" -ge 9 ] && [ "$1 $2 $3 $4 $5 $6" = '-o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=yes' ]; then
+    case "$7 $8" in
+    '-o ControlMaster=yes')
+        [ "$#" = 19 ] && [ "${19}" = "exec sh -c 'exec \"\${SHELL:-/bin/sh}\" -lc \"exec nunchiro machine relay --stream\"'" ] || {
+            echo 'unexpected master arguments' >&2; exit 2;
+        }
+        : "${NUNCHIRO_FAKE_REMOTE_HOME:?fake remote home required}"
+        : "${NUNCHIRO_BIN:?local binary required}"
+        exec env -u NUNCHIRO_TOKEN -u NUNCHIRO_MACHINE NUNCHIRO_HOME="$NUNCHIRO_FAKE_REMOTE_HOME" CLAUDE_CONFIG_DIR="$NUNCHIRO_FAKE_REMOTE_HOME/claude-data" CODEX_HOME="$NUNCHIRO_FAKE_REMOTE_HOME/codex-data" ZDOTDIR="$NUNCHIRO_FAKE_REMOTE_HOME" "$NUNCHIRO_BIN" machine relay --stream
+        ;;
+    '-o ControlMaster=no')
+        [ "$#" = 13 ] && [ "${11}" = -- ] || { echo 'unexpected SSH arguments' >&2; exit 2; }
+        set -- "$1" "$2" "$3" "$4" "$5" "$6" "${11}" "${12}" "${13}"
+        ;;
+    esac
+fi
+[ "$#" = 9 ] && [ "$1" = -o ] && [ "$2" = BatchMode=yes ] &&
+[ "$3" = -o ] && [ "$4" = ConnectTimeout=3 ] &&
+[ "$5" = -o ] && [ "$6" = StrictHostKeyChecking=yes ] && [ "$7" = -- ] || {
+    echo 'unexpected SSH arguments' >&2; exit 2;
+}
+[ "$9" = "exec sh -c 'exec \"\${SHELL:-/bin/sh}\" -lc \"exec nunchiro machine relay\"'" ] || {
+    echo 'unexpected remote command' >&2; exit 2;
+}
+: "${NUNCHIRO_FAKE_REMOTE_HOME:?fake remote home required}"
+: "${NUNCHIRO_BIN:?local binary required}"
+exec env -u NUNCHIRO_TOKEN -u NUNCHIRO_MACHINE NUNCHIRO_HOME="$NUNCHIRO_FAKE_REMOTE_HOME" CLAUDE_CONFIG_DIR="$NUNCHIRO_FAKE_REMOTE_HOME/claude-data" CODEX_HOME="$NUNCHIRO_FAKE_REMOTE_HOME/codex-data" ZDOTDIR="$NUNCHIRO_FAKE_REMOTE_HOME" "$NUNCHIRO_BIN" machine relay

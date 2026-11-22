@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+"""Gate only the fixture's worktree add, then delegate to the platform Git."""
+import os, pathlib, sys, time
+if os.environ.get('FIXTURE_GATE') == 'worktree' and 'worktree' in sys.argv and 'add' in sys.argv:
+    home = pathlib.Path(os.environ['NUNCHIRO_HOME'])
+    (home / 'probe-started').touch()
+    deadline = time.monotonic() + 5
+    while not (home / 'probe-release').exists():
+        if not home.exists() or time.monotonic() >= deadline: raise SystemExit(1)
+        time.sleep(.01)
+os.execv('/usr/bin/git', ['git', *sys.argv[1:]])

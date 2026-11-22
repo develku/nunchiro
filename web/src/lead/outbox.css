@@ -1,0 +1,65 @@
+/* Ticket 1002 lane 2: the Outbox card (docs/design/home-chief-of-staff-1120.html frame 2). */
+.obx .obx-kind {
+  margin-left: auto;
+  padding: 0 5px;
+  border-radius: var(--r-4);
+  background: var(--panel); /* ticket 1041: a lighter chip on the card tint, no outline */
+  color: var(--muted);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+.obx .obx-fields {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 3px 8px;
+  margin: 4px 0 6px;
+}
+.obx .obx-fields dt {
+  color: var(--muted);
+}
+.obx .obx-fields dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.obx .obx-new {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: var(--r-4);
+  background: var(--you-bg);
+  color: var(--you);
+  font-size: var(--fs-11);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.obx .obx-body {
+  max-height: 16em;
+  margin: 2px 0 6px;
+  padding: 8px 10px;
+  overflow-y: scroll; /* always shown (macOS hides overlay scrollbars): the box may hold more than one screen */
+  scrollbar-gutter: stable;
+  border-radius: var(--r-6);
+  background: var(--panel); /* one step lighter than the card's tint, no outline */
+  font: 12px/1.55 'SF Mono', Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.obx .obx-why {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.obx .obx-row {
+  display: contents;
+}
+.obx .obx-sending {
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.obx .obx-body::-webkit-scrollbar {
+  width: 8px;
+}
+.obx .obx-body::-webkit-scrollbar-thumb {
+  border-radius: var(--r-6);
+  background: var(--line);
+}

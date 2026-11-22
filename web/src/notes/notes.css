@@ -1,0 +1,95 @@
+/* Ticket 990 slice h: the merge card (team-j.html view ③) inside the Decisions widget, and the Notes page (view ④). */
+.mcard .mc-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin: 0 0 6px;
+}
+.mcard .mc-meta,
+.mcard .mc-quiet,
+.mcard small {
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.mcard .mc-meta {
+  margin-left: auto;
+}
+.mcard .mc-learned {
+  border-top: 1px solid var(--line);
+  margin: 0 -10px 8px;
+  padding: 0 10px;
+}
+.mcard .mc-lesson {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 6px 0;
+}
+.mcard .mc-lesson + .mc-lesson {
+  border-top: 1px solid var(--line);
+}
+.mcard .mc-words {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.mcard .mc-words p {
+  margin: 0 0 2px;
+}
+.mcard .mc-lesson[data-dropped] :is(.mc-words, .ssel) {
+  opacity: 0.45;
+}
+.mcard .mc-lesson[data-dropped] .mc-words p {
+  text-decoration: line-through;
+}
+.mcard .ssel select {
+  background-color: var(--panel);
+}
+.mcard .mc-drop {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+}
+.mcard .mc-btns {
+  align-items: center;
+}
+.mcard .mc-quiet {
+  margin-left: auto;
+}
+
+/* Notes page: one row per note, the scope pill beside its buttons. */
+.notes-list .srow .notes-pill {
+  font-size: var(--fs-11);
+  color: var(--muted);
+  border-radius: var(--r-10);
+  background: var(--tint-1); /* ticket 1041 A: a tint pill, no outline */
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.notes-list .notes-missing {
+  color: color-mix(in srgb, var(--warn) 70%, var(--text)); /* the plain colour is too light for text on the card */
+}
+.notes-list .notes-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+  padding: var(--row-py) var(--row-px);
+}
+.notes-list .notes-form .notes-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-8);
+}
+.notes-list .notes-form .notes-acts {
+  display: flex;
+  gap: var(--sp-6);
+}
+/* Q5 (look 11-17): the empty line sits inside the card's padding, as a row would (Team's .team-none); its text touched the card's edge. */
+.settings[role='region'] .notes-none {
+  margin: 0;
+  padding: var(--row-py) var(--row-px);
+}

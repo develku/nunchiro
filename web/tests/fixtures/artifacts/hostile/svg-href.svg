@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="80" height="40"><title>svg external href</title>
+<script>function r(v){parent.postMessage({type:"fixture",result:v},"*")}</script>
+<image href="https://img.nunchiro.test/pixel.png" width="10" height="10" onload="r('loaded')" onerror="r('blocked')"/>
+<image xlink:href="http://127.0.0.1:{{CANARY}}/xlink.png" width="10" height="10"/>
+<use href="http://127.0.0.1:{{CANARY}}/use.svg#x"/>
+<rect fill="url(http://127.0.0.1:{{CANARY}}/paint.svg#p)" width="10" height="10"/>
+</svg>

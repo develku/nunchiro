@@ -1,0 +1,4 @@
+<!doctype html><title>fetch loopback</title>
+<script>function r(v){parent.postMessage({type:"fixture",result:v},"*")}
+fetch("http://127.0.0.1:{{CANARY}}/fetch").then(function(){r("reached")},function(e){r("blocked")});
+navigator.sendBeacon("http://127.0.0.1:{{CANARY}}/beacon","x");</script>

@@ -1,0 +1,45 @@
+/* Ticket 364 (docs/design/m2-1109/364.html): the two slot rows are selectable. The label button's ::after stretches over the
+   row and the dropdown sits above it. The prefix matches shell.css's `.srow.sub`, or the selected background loses. */
+.settings[role='region'] .srow.sub.tslot {
+  position: relative;
+}
+.settings[role='region'] .srow.sub.tslot .sctl,
+.settings[role='region'] .srow.sub.tslot .sreset {
+  position: relative;
+  z-index: 1; /* above the label button's inset:0 ::after, or Reset cannot be clicked (ticket 562) */
+}
+/* Ticket 1041 A: hover and the chosen slot are tint steps over the sub row's own step; bold and the filled dot mark it. */
+.settings[role='region'] .srow.sub.tslot:hover {
+  background: var(--tint-2);
+}
+.settings[role='region'] .srow.sub.tslot.on {
+  background: var(--select-bg);
+}
+.settings[role='region'] .srow.sub.tslot.on .snm {
+  font-weight: 600;
+}
+/* The focus ring stays the app's own, on the button: the mockup's ring on ::after fails focus_ring_outside. */
+.settings[role='region'] .tslotbtn {
+  min-height: 24px; /* hit_targets_24: an inset:0 ::after adds nothing to it */
+  padding: 0;
+}
+.settings[role='region'] .tslotbtn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.settings[role='region'] .tslotbtn::before {
+  content: '';
+  box-sizing: border-box;
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  border: 1.5px solid var(--faint);
+}
+.settings[role='region'] .tslotbtn[aria-pressed='true']::before {
+  border: 4px solid var(--accent);
+}

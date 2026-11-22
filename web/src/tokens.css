@@ -1,0 +1,339 @@
+/* Design tokens (STYLE 2026-10-28): the ko/ mockups are canonical. One file; every value names its mockup source
+   (`ko/<file> <selector>`) or says `derived: <why>`. Roles first, then scales, then the R8 names rules still read
+   (aliases only; renaming the rules is a follow-up). User themes override the roles from themes/derive.ts. */
+:root,
+:root[data-theme='light'] {
+  --page: #f6f6f4; /* ko/hiderows-r6.html :root --bg */
+  --panel: #ffffff; /* ko/hiderows-r6.html :root --pbg */
+  --raised: #ffffff; /* ko/hiderows-r6.html .menu background var(--pbg) */
+  --text: #1f2328; /* ko/hiderows-r6.html :root --fg */
+  --muted: #59636e; /* ko/hiderows-r6.html :root --mut */
+  --faint: #818b98; /* ko/hiderows-r6.html :root --idle (icons and faint borders) */
+  --line: #d1d9e0; /* ko/hiderows-r6.html :root --line */
+  --hover: #f0f2f4; /* ko/hiderows-r6.html :root --hov */
+  --you: #bc4c00; /* ko/hiderows-r6.html :root --you */
+  --mark-current-line: #bc4c00; /* derived: --you as written here, fixed: terminal find current-match outline and ruler; imported themes do not derive it (round 2 review) */
+  --you-bg: #fff1e5; /* ko/hiderows-r6.html :root --youbg */
+  --bad: #cf222e; /* ko/hiderows-r6.html :root --bad */
+  --warn: #9a6700; /* derived: v25-machines draft :root --warn (V2.5-23) */
+  --stale: #7a5c00; /* ko/board-coord-b.html :root --st (needs 155 stale badge) */
+  --stale-bg: #fff8c5; /* ko/board-coord-b.html :root --stbg */
+  --stale-line: #d4a72c; /* ko/board-coord-b.html :root --stln */
+  --run: #0969da; /* ko/hiderows-r6.html :root --run */
+  --ok: #1a7f37; /* ko/hiderows-r6.html :root --ok */
+  --done: #8250df; /* ko/hiderows-r6.html :root --done */
+  --idle: #818b98; /* ko/hiderows-r6.html :root --idle */
+  --ok-text: var(--ok); /* derived: ticket 559, a catalog theme steps it to 4.5:1 for words (themes/derive.ts); the bundled pair reads --ok */
+  --bad-text: var(--bad); /* derived: ticket 559, same, for the danger menu item */
+  --on-status: #ffffff; /* ko/hiderows-r6.html .cnt color */
+  --diff-add: #eef5ee; /* derived: chat/chat.css diff tint, no ko/ source yet; a catalog theme mixes its own (themes/derive.ts) */
+  --diff-del: #f6eeee; /* derived: chat/chat.css diff tint, no ko/ source yet; a catalog theme mixes its own (themes/derive.ts) */
+  --syn-keyword: #cf222e; /* derived: GitHub light default syntax keyword (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+  --syn-string: #0a3069; /* derived: GitHub light default syntax string (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+  --syn-func: #6639ba; /* derived: GitHub light default syntax function, darkened from #8250df to pass 4.5:1 on --diff-del (decision page 11-12) (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+  --syn-const: #0550ae; /* derived: GitHub light default syntax constant (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+  --syn-type: #953800; /* derived: GitHub light default syntax type (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+  --syn-comment: var(--muted); /* derived: GitHub light default syntax comment, as --muted (decision page 11-12) (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+  --syn-punct: var(--text); /* derived: GitHub light default syntax punctuation (the foreground) (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+  --chat-code: #75507b; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 5 as written (6.6:1 on --panel, 6.1:1 on --page): inline code and file paths */
+  --chat-link: #058183; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 6 #06989a stepped 15% toward black (4.7:1 on --panel): links */
+  --chat-mark: #3972b6; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 4 mixed 25% toward --panel, stepped 10% toward black (4.9:1): list markers */
+  --shadow-card: 0 1px 3px #0000001f; /* derived: one quiet card level under the picker level; a catalog theme tints its own (themes/derive.ts) */
+  --tree-bad: #cf222e; /* derived: approved mockup docs/design/m3-1110/388.html .tree.light --r: the tree's failed bar, rail and icon (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-you: #bc4c00; /* derived: approved mockup docs/design/m3-1110/388.html .tree.light --o: the tree's your-turn bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-stale: #9a6700; /* derived: approved mockup docs/design/m3-1110/388.html .tree.light --y: the tree's stale bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-run: #0969da; /* derived: approved mockup docs/design/m3-1110/388.html .tree.light --b: the tree's working bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-idle: #8c959f; /* derived: approved mockup docs/design/m3-1110/388.html .tree.light --g: the tree's idle and resting bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-mut: #656d76; /* derived: approved mockup docs/design/m3-1110/388.html .tree.light --mut: the tree's the grey number (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-tip-bg: #1f2328; /* derived: approved mockup docs/design/m3-1110/388.html .tree.light --tipbg: the tree's strip summary (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-tip-text: #f6f8fa; /* derived: approved mockup docs/design/m3-1110/388.html .tree.light --tipfg: the tree's strip summary (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-tip-line: #1f2328; /* derived: approved mockup docs/design/m3-1110/388.html .tree.light --tipline: the tree's strip summary border (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-walk: rgba(188, 76, 0, 0.7); /* derived: approved mockup docs/design/m3-1110/388.html .tree.light --focus: the "]" walk's 1px outline (ticket 462) */
+  --tree-ring: #1f6f56; /* derived: approved mockup docs/design/m3-1110/388.html .tree.light --ring: the gathered strip's hover ring (ticket 462) */
+  /* Ticket 1041 lane 1 (A+B+C, owner 11-21; 15.1 answers 11-22): surface steps, glass and state lights. No rule reads them yet. */
+  --tint-1: rgb(15 20 30 / 0.045); /* derived: approved mockup docs/design/polish-1121/index.html .win --hov: quiet fill step (fields, quiet buttons, the open tab) */
+  --tint-2: rgb(15 20 30 / 0.085); /* derived: approved mockup docs/design/polish-1121/index.html .win --sel: selected fill step */
+  --glass-bg: rgb(255 255 255 / 0.6); /* derived: approved mockup docs/design/polish-1121/index.html .win --glass: floating layers only */
+  --glass-hi: rgb(255 255 255 / 0.85); /* derived: approved mockup docs/design/polish-1121/index.html .win --glass-hi: the glass's inner highlight */
+  --shadow-float: 0 12px 32px rgb(0 0 0 / 0.14), 0 1px 3px rgb(0 0 0 / 0.08); /* derived: approved mockup docs/design/polish-1121/index.html .win --float */
+  --ring-focus: #6e7781; /* derived: 15.1 item 1, the focus ring's own neutral colour (not blue = working, not orange = your turn); 3:1 on --page, --panel and --tint-2 */
+  /* Ticket 1043: the Settings side bar's page icons, a white glyph on a small rounded tile. No orange, red or blue (your turn,
+     broken, working); every tile keeps the glyph at 3:1 or more, and an imported theme leaves them as written. */
+  --nav-tone-purple: #8250df; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (light), 5.05:1 for the white glyph */
+  --nav-tone-indigo: #5e5ce6; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (light), 5.06:1 for the white glyph */
+  --nav-tone-teal: #1f8a8f; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (light), 4.13:1 for the white glyph */
+  --nav-tone-green: #2f8f4e; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (light), 4.07:1 for the white glyph */
+  --nav-tone-grey: #6e7781; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (light), 4.55:1 for the white glyph */
+  --nav-tone-pink: #c2367a; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (light), 5.12:1 for the white glyph */
+  --nav-tone-graphite: #3a3f47; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (light), 10.6:1 for the white glyph */
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --page: #0d1117; /* ko/hiderows-r6.html @media dark :root --bg */
+    --panel: #151b23; /* ko/hiderows-r6.html @media dark :root --pbg */
+    --raised: #151b23; /* ko/hiderows-r6.html @media dark .menu background var(--pbg) */
+    --text: #e6edf3; /* ko/hiderows-r6.html @media dark :root --fg */
+    --muted: #9198a1; /* ko/hiderows-r6.html @media dark :root --mut */
+    --faint: #9198a1; /* ko/hiderows-r6.html @media dark :root --idle */
+    --line: #3d444d; /* ko/hiderows-r6.html @media dark :root --line */
+    --hover: #262c36; /* ko/hiderows-r6.html @media dark :root --hov */
+    --you: #f0883e; /* ko/hiderows-r6.html @media dark :root --you */
+    --mark-current-line: #f0883e; /* derived: --you as written here, fixed: terminal find current-match outline and ruler; imported themes do not derive it (round 2 review) */
+    --you-bg: #3a2614; /* ko/hiderows-r6.html @media dark :root --youbg */
+    --bad: #f85149; /* ko/hiderows-r6.html @media dark :root --bad */
+    --warn: #d29922; /* derived: v25-machines draft :root --warn (V2.5-23) */
+    --stale: #e3b341; /* ko/board-coord-b.html :root[data-theme="dark"] --st */
+    --stale-bg: #2b2410; /* ko/board-coord-b.html :root[data-theme="dark"] --stbg */
+    --stale-line: #e3b341; /* ko/board-coord-b.html :root[data-theme="dark"] --stln */
+    --run: #4493f8; /* ko/hiderows-r6.html @media dark :root --run */
+    --ok: #3fb950; /* ko/hiderows-r6.html @media dark :root --ok */
+    --done: #a371f7; /* ko/hiderows-r6.html @media dark :root --done */
+    --idle: #9198a1; /* ko/hiderows-r6.html @media dark :root --idle */
+    --on-status: #151b23; /* derived: TREEROWS pill text on the dark panel (tree/tree.css) */
+    --diff-add: #1f2e21; /* derived: chat/chat.css diff tint, no ko/ source yet; a catalog theme mixes its own (themes/derive.ts) */
+    --diff-del: #33201f; /* derived: chat/chat.css diff tint, no ko/ source yet; a catalog theme mixes its own (themes/derive.ts) */
+    --syn-keyword: #ff7b72; /* derived: GitHub dark default syntax keyword (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+    --syn-string: #a5d6ff; /* derived: GitHub dark default syntax string (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+    --syn-func: #d2a8ff; /* derived: GitHub dark default syntax function (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+    --syn-const: #79c0ff; /* derived: GitHub dark default syntax constant (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+    --syn-type: #ffa657; /* derived: GitHub dark default syntax type (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+    --syn-comment: #8b949e; /* derived: GitHub dark default syntax comment (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+    --syn-punct: var(--text); /* derived: GitHub dark default syntax punctuation (the foreground) (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+    --chat-code: #987c9c; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 5 #75507b stepped 25% toward white (4.7:1 on --panel): inline code and file paths */
+    --chat-link: #06989a; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 6 as written (4.9:1 on --panel): links */
+    --chat-mark: #568acc; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 4 mixed 25% toward --panel, stepped 5% toward white (4.9:1): list markers */
+    --shadow-card: 0 1px 3px #0000005c; /* derived: the card level, deeper on dark; a catalog theme tints its own (themes/derive.ts) */
+    --tree-bad: #f85149; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --r: the tree's failed bar, rail and icon (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+    --tree-you: #f0883e; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --o: the tree's your-turn bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+    --tree-stale: #d4bf5e; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --y: the tree's stale bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+    --tree-run: #58a6ff; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --b: the tree's working bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+    --tree-idle: #7d8c86; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --g: the tree's idle and resting bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+    --tree-mut: #8fa39b; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --mut: the tree's the grey number (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+    --tree-tip-bg: #0b1512; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --tipbg: the tree's strip summary (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+    --tree-tip-text: #e6ece9; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --tipfg: the tree's strip summary (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+    --tree-tip-line: #2b4a40; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --tipline: the tree's strip summary border (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+    --tree-walk: rgba(240, 136, 62, 0.85); /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --focus: the "]" walk's 1px outline (ticket 462) */
+    --tree-ring: #9fd3c0; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --ring: the gathered strip's hover ring (ticket 462) */
+    /* Ticket 1041 lane 1, dark: as the light block. */
+    --tint-1: rgb(255 255 255 / 0.055); /* derived: approved mockup docs/design/polish-1121/index.html .win.dark --hov */
+    --tint-2: rgb(255 255 255 / 0.1); /* derived: approved mockup docs/design/polish-1121/index.html .win.dark --sel */
+    --glass-bg: rgb(48 52 60 / 0.5); /* derived: approved mockup docs/design/polish-1121/index.html .win.dark --glass */
+    --glass-hi: rgb(255 255 255 / 0.14); /* derived: approved mockup docs/design/polish-1121/index.html .win.dark --glass-hi */
+    --shadow-float: 0 12px 32px rgb(0 0 0 / 0.45), 0 1px 3px rgb(0 0 0 / 0.3); /* derived: approved mockup docs/design/polish-1121/index.html .win.dark --float */
+    --ring-focus: #8b949e; /* derived: 15.1 item 1, the focus ring's own neutral colour, dark; 3:1 on --page, --panel and --tint-2 */
+    /* Ticket 1043: the Settings side bar's page icons, a white glyph on a small rounded tile. No orange, red or blue (your turn,
+       broken, working); every tile keeps the glyph at 3:1 or more, and an imported theme leaves them as written. */
+    --nav-tone-purple: #9a5ce0; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (dark), 4.22:1 for the white glyph */
+    --nav-tone-indigo: #6b69e9; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (dark), 4.35:1 for the white glyph */
+    --nav-tone-teal: #2a9aa0; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (dark), 3.37:1 for the white glyph */
+    --nav-tone-green: #3a9a57; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (dark), 3.54:1 for the white glyph */
+    --nav-tone-grey: #7d8590; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (dark), 3.73:1 for the white glyph */
+    --nav-tone-pink: #d0458a; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (dark), 4.29:1 for the white glyph */
+    --nav-tone-graphite: #4a515b; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (dark), 8.02:1 for the white glyph */
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --page: #0d1117; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --bg */
+  --panel: #151b23; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --pbg */
+  --raised: #151b23; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --pbg */
+  --text: #e6edf3; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --fg */
+  --muted: #9198a1; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --mut */
+  --faint: #9198a1; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --idle */
+  --line: #3d444d; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --line */
+  --hover: #262c36; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --hov */
+  --you: #f0883e; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --you */
+  --mark-current-line: #f0883e; /* derived: --you as written here, fixed: terminal find current-match outline and ruler; imported themes do not derive it (round 2 review) */
+  --you-bg: #3a2614; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --youbg */
+  --bad: #f85149; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --bad */
+  --warn: #d29922; /* derived: v25-machines draft :root --warn (V2.5-23) */
+  --stale: #e3b341; /* ko/board-coord-b.html :root[data-theme="dark"] --st */
+  --stale-bg: #2b2410; /* ko/board-coord-b.html :root[data-theme="dark"] --stbg */
+  --stale-line: #e3b341; /* ko/board-coord-b.html :root[data-theme="dark"] --stln */
+  --run: #4493f8; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --run */
+  --ok: #3fb950; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --ok */
+  --done: #a371f7; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --done */
+  --idle: #9198a1; /* ko/ux-fixes-1028.html :root[data-theme="dark"] --idle */
+  --on-status: #151b23; /* derived: TREEROWS pill text on the dark panel (tree/tree.css) */
+  --diff-add: #1f2e21; /* derived: chat/chat.css diff tint, no ko/ source yet; a catalog theme mixes its own (themes/derive.ts) */
+  --diff-del: #33201f; /* derived: chat/chat.css diff tint, no ko/ source yet; a catalog theme mixes its own (themes/derive.ts) */
+  --syn-keyword: #ff7b72; /* derived: GitHub dark default syntax keyword (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+  --syn-string: #a5d6ff; /* derived: GitHub dark default syntax string (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+  --syn-func: #d2a8ff; /* derived: GitHub dark default syntax function (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+  --syn-const: #79c0ff; /* derived: GitHub dark default syntax constant (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+  --syn-type: #ffa657; /* derived: GitHub dark default syntax type (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+  --syn-comment: #8b949e; /* derived: GitHub dark default syntax comment (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+  --syn-punct: var(--text); /* derived: GitHub dark default syntax punctuation (the foreground) (ticket 482, owner 11-12: syntax follows the theme; a catalog theme maps its ANSI palette, themes/derive.ts) */
+  --chat-code: #987c9c; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 5 #75507b stepped 25% toward white (4.7:1 on --panel): inline code and file paths */
+  --chat-link: #06989a; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 6 as written (4.9:1 on --panel): links */
+  --chat-mark: #568acc; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 4 mixed 25% toward --panel, stepped 5% toward white (4.9:1): list markers */
+  --shadow-card: 0 1px 3px #0000005c; /* derived: the card level, deeper on dark; a catalog theme tints its own (themes/derive.ts) */
+  --tree-bad: #f85149; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --r: the tree's failed bar, rail and icon (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-you: #f0883e; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --o: the tree's your-turn bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-stale: #d4bf5e; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --y: the tree's stale bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-run: #58a6ff; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --b: the tree's working bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-idle: #7d8c86; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --g: the tree's idle and resting bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-mut: #8fa39b; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --mut: the tree's the grey number (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-tip-bg: #0b1512; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --tipbg: the tree's strip summary (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-tip-text: #e6ece9; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --tipfg: the tree's strip summary (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-tip-line: #2b4a40; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --tipline: the tree's strip summary border (ticket 462, owner 11-12: the mockup's palette by theme kind) */
+  --tree-walk: rgba(240, 136, 62, 0.85); /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --focus: the "]" walk's 1px outline (ticket 462) */
+  --tree-ring: #9fd3c0; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --ring: the gathered strip's hover ring (ticket 462) */
+  /* Ticket 1041 lane 1, dark: as the light block. */
+  --tint-1: rgb(255 255 255 / 0.055); /* derived: approved mockup docs/design/polish-1121/index.html .win.dark --hov */
+  --tint-2: rgb(255 255 255 / 0.1); /* derived: approved mockup docs/design/polish-1121/index.html .win.dark --sel */
+  --glass-bg: rgb(48 52 60 / 0.5); /* derived: approved mockup docs/design/polish-1121/index.html .win.dark --glass */
+  --glass-hi: rgb(255 255 255 / 0.14); /* derived: approved mockup docs/design/polish-1121/index.html .win.dark --glass-hi */
+  --shadow-float: 0 12px 32px rgb(0 0 0 / 0.45), 0 1px 3px rgb(0 0 0 / 0.3); /* derived: approved mockup docs/design/polish-1121/index.html .win.dark --float */
+  --ring-focus: #8b949e; /* derived: 15.1 item 1, the focus ring's own neutral colour, dark; 3:1 on --page, --panel and --tint-2 */
+  /* Ticket 1043: the Settings side bar's page icons, a white glyph on a small rounded tile. No orange, red or blue (your turn,
+     broken, working); every tile keeps the glyph at 3:1 or more, and an imported theme leaves them as written. */
+  --nav-tone-purple: #9a5ce0; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (dark), 4.22:1 for the white glyph */
+  --nav-tone-indigo: #6b69e9; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (dark), 4.35:1 for the white glyph */
+  --nav-tone-teal: #2a9aa0; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (dark), 3.37:1 for the white glyph */
+  --nav-tone-green: #3a9a57; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (dark), 3.54:1 for the white glyph */
+  --nav-tone-grey: #7d8590; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (dark), 3.73:1 for the white glyph */
+  --nav-tone-pink: #d0458a; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (dark), 4.29:1 for the white glyph */
+  --nav-tone-graphite: #4a515b; /* derived: approved mockup docs/design/settings-1122/index.html .nav i (dark), 8.02:1 for the white glyph */
+  color-scheme: dark;
+}
+
+/* Scales and theme-neutral roles. */
+:root {
+  --shade-12: rgb(0 0 0 / 0.12); /* derived: styles.css box-shadow colour of .perm-needed and .ecomp */
+  --shade-15: rgb(0 0 0 / 0.15); /* derived: styles.css box-shadow colour of .font-pick listbox and .ghost */
+  --shade-16: rgb(0 0 0 / 0.16); /* derived: styles.css box-shadow colour of .titlehint and .wnotice */
+  --shade-18: rgb(0 0 0 / 0.18); /* derived: styles.css box-shadow colour of .emenu, .prefix-help and .ib .pop */
+  --shade-25: rgb(0 0 0 / 0.25); /* derived: styles.css box-shadow colour of .toast */
+  --shadow-sm: 0 4px 12px var(--shade-16); /* derived: owner pick 2026-11-12 (ticket 515), small step: hint, toast and notice cards (were 4-6px offset, 10-18px blur, shades 12-25) */
+  --shadow-md: 0 8px 24px var(--shade-25); /* derived: owner pick 2026-11-12 (ticket 515), medium step: menus and pickers; was --shadow-pop 0 6px 24px #0004 (ko/layout-d5b.html .pick) */
+  --shadow-pop: 0 16px 40px var(--shade-25); /* derived: owner pick 2026-11-12 (ticket 515), pop step: the approval sheet */
+  --shade-30: rgb(0 0 0 / 0.3); /* derived: styles.css .modal::backdrop dim */
+  --shade-42: rgb(0 0 0 / 0.42); /* derived: styles.css .ovl modal scrim over the workspace */
+  --scrim: var(--shade-30); /* derived: ticket 1041 (N187, owner 15.1 item 6): the one dim behind every modal dialog and the Settings / Board overlay; with borders gone it parts the solid panel from the window */
+  --gutter-focus: rgb(127 127 127 / 0.35); /* derived: styles.css .gutter:focus-visible::before bar, grey that reads on both schemes */
+  --hint-bg: #ffd84d; /* derived: styles.css .hint, .hk-label and .copy-cursor yellow label, the same in both schemes */
+  --hint-text: #111; /* derived: styles.css .hint and .hk-label ink on --hint-bg */
+  --hint-line: #a07d00; /* derived: styles.css .hint and .hk-label border */
+  --hint-wash: rgb(255 216 77 / 0.3); /* derived: styles.css .copy-cursor fill, --hint-bg at 30% */
+  --accent: var(--run); /* derived: controls (radio, check, selected card, nav bar, focus) take the theme's blue, which a user theme sets through --run (themes/derive.ts) */
+  --focus-ring: var(--accent); /* ko/hiderows-r6.html .row:focus-visible inset 2px var(--run) */
+  --shadow-nav-on: inset 3px 0 0 var(--accent); /* ko/frame-ko-e.html .snav a.on box-shadow */
+  --run-track: color-mix(in srgb, var(--run) 25%, transparent); /* derived: the working arc's faint track, so it never reads as the grey idle ring */
+  --focus-width: 2px; /* ko/hiderows-r6.html .row:focus-visible inset 0 0 0 2px */
+  --split-ring: inset 0 0 0 var(--focus-width) var(--focus-ring); /* derived: the ko/ focus ring as one value (split panes, the main view and tree rows); was a split/split.css variable */
+  --tree-walk-ring: inset 0 0 0 1px var(--tree-walk); /* derived: approved mockup docs/design/m3-1110/388.html .s .r.focus box-shadow, the "]" walk's one 1px outline (ticket 462) */
+  --tree-tip-shadow: 0 4px 14px rgb(0 0 0 / 0.3); /* derived: approved mockup docs/design/m3-1110/388.html .tip box-shadow, the strip summary (ticket 462) */
+  --tree-key-radius: 3px; /* derived: approved mockup docs/design/m3-1110/388.html .tip .k border-radius, the "]" key box (ticket 462) */
+  --tree-font: -apple-system, 'Apple SD Gothic Neo', sans-serif; /* derived: approved mockup docs/design/m3-1110/388.html body font, for the strip's numbers and summary (ticket 462): without BlinkMacSystemFont a Chromium view of the mockup draws narrower digits than --font-ui; WebKit draws SF for both */
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Segoe UI', sans-serif; /* ko/hiderows-r6.html body font, plus the app's Hangul face */
+  --fs-10: 10px; /* derived: the calc(--fs-11 - 1px) it replaces in the search and menu captions */
+  --fs-11: 11px; /* ko/hiderows-r6.html .cap font-size */
+  --fs-12: 12px; /* ko/hiderows-r6.html .q font-size */
+  --fs-13: 13px; /* ko/hiderows-r6.html .n font-size */
+  --fs-14: 14px; /* ko/hiderows-r6.html body font */
+  --fs-145: 14.5px; /* derived: claude-feel-2.html .cmp textarea, the composer's input */
+  --fs-16: 16px; /* ko/hiderows-r6.html h2 font-size */
+  --fs-15: 15px; /* derived: v25-mock-a.html .emptyA p, the empty state's subline */
+  --fs-18: 18px; /* derived: v25-mock-a.html section 3 draft B: an answer's h2 */
+  --fs-22: 22px; /* derived: v25-mock-a.html section 3 draft B: an answer's h1 */
+  --fs-26: 26px; /* derived: approved mockup docs/design/settings-1122/index.html .hd h2, the Settings page title (ticket 1043) */
+  --fs-30: 30px; /* derived: v25-mock-a.html .emptyA h3, the empty state's headline */
+  /* ticket 258 (chat typography): today's chat values; features/chat-type.tsx overrides one on the root only when picked */
+  --font-chat: var(--font-ui); /* derived: .cin inherited the body face, the same list as --font-ui */
+  --fs-chat: calc(var(--fs-14) + .5px); /* derived: .cin font-size */
+  --lh-chat: 1.65; /* derived: .cin line-height */
+  --font-code: 'SF Mono', Menlo, 'D2Coding', monospace; /* derived: .md pre and .md code font-family */
+  --fs-code: 11.5px; /* derived: .md pre font-size; inline code is .5px larger */
+  --font-composer: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif; /* derived: styles.css .cbox textarea */
+  --fs-composer: var(--fs-145); /* derived: styles.css .cbox textarea font-size */
+  --sp-2: 2px; /* derived: half of --sp-4 */
+  --sp-3: 3px; /* derived: the calc(--sp-4 - 1px) it replaces in the search, menu and picker paddings */
+  --sp-4: 4px; /* ko/hiderows-r6.html .proj padding 4px 8px */
+  --sp-6: 6px; /* ko/hiderows-r6.html .proj gap */
+  --sp-8: 8px; /* ko/hiderows-r6.html .row gap */
+  --sp-12: 12px; /* ko/hiderows-r6.html .cols gap */
+  --sp-16: 16px; /* ko/hiderows-r6.html body padding 24px 16px */
+  --hit: 24px; /* derived: WCAG 2.5.8 minimum pointer target (the tree head chevron, name, colour bars and strip arrow) */
+  --icon-size: 16px; /* derived: one icon size (designer panel 2026-10-31): Octicons' own 16 grid */
+  --icon-size-inline: 12px; /* derived: icons inside a text line or a fold caret (designer panel 2026-10-31) */
+  --mark: #ffe27a; /* ko/06-search.html mark background */
+  --mark-text: #1f2328; /* derived: dark ink on --mark in both schemes; ko/06-search.html mark color is inherit */
+  --mark-current: #ff9f1a; /* derived: terminal find current match, the pre-token find bar orange; fixed in both schemes and every theme so it never matches --mark; outline in --mark-current-line (round 2 review) */
+  --r-2: 2px; /* derived: owner pick 2026-11-12 (ticket 515), the hairline step for the 1px, 1.5px and 2px radii */
+  --r-4: 4px; /* ko/hiderows-r6.html .menu button border-radius */
+  --r-6: 6px; /* ko/hiderows-r6.html .row border-radius */
+  --r-8: 8px; /* ko/hiderows-r6.html .comp border-radius */
+  --r-10: 10px; /* ko/hiderows-r6.html .pane border-radius */
+  --r-12: 12px; /* derived: styles.css .ovl-panel border-radius */
+  --r-16: 16px; /* ko/claude-feel-2.html .cmp border-radius */
+  --r-pill: 999px; /* derived: a fully rounded pill, wider than any height (settings onboarding step pill) */
+  --ring-accent: 0 0 0 1px var(--accent); /* derived: a 1px accent ring drawn as a box-shadow, so the border keeps its width (settings onboarding selected tile) */
+  --row-radius: var(--r-6); /* ko/hiderows-r6.html .row border-radius */
+  /* Motion language (needs 140, V2.5-26): one moving mark means one thing at work (the spinner arc of ko/frame-ko-e.html
+     .arc and TREEROWS "working = blue spinner arc"), so how many are working reads as how many arcs turn on the tab strip or in the tree; everything
+     else only fades or slides, briefly. Reduced motion zeroes the durations below and stops the arc. */
+  --motion-spin: 1s; /* ko/frame-ko-e.html .arc animation: spin 1s linear infinite */
+  --motion-fast: 120ms; /* derived: the title bar's auto-hide slide and the tooltip fade (styles.css 0.12s) */
+  --motion-base: 150ms; /* derived: the dock rows' rowin/rowout (styles.css 150ms) */
+  --ease-out: ease-out; /* derived: entering things decelerate */
+  --ease-in: ease-in; /* derived: leaving things accelerate */
+  /* Tree row names: 13px at the 30px row (ko/hiderows-r6.html .n 13px), 12px at compact's 22px. */
+  --nav-glyph: #ffffff; /* derived: approved mockup docs/design/settings-1122/index.html .nav i color, the glyph on a Settings page tile */
+  --row-rule: inset 0 1px 0 var(--tint-1); /* derived: approved mockup docs/design/settings-1122/index.html .row+.row, the faint line between a card's rows */
+  --row-font: clamp(12px, calc(var(--row, 30px) - 17px), 13px); /* derived: 13px at 30px rows, 12px at 22px */
+
+  /* Ticket 1041 lane 1: roles the area lanes move to (owner 15.1 items 1-3, 7). Bundled values point at existing roles;
+     themes/derive.ts steps the ones marked "derived" for an imported theme. --run, --you and --accent keep their meaning. */
+  --select-bg: var(--tint-2); /* derived: 15.1 item 1, selection is a tint step, not blue */
+  --select-text: var(--text); /* derived: text on --select-bg; an imported theme steps it to 4.5:1 there (themes/derive.ts) */
+  --control-bg: var(--text); /* derived: 15.1 item 1, the primary button in ink */
+  --control-text: var(--panel); /* derived: the primary button's label, 4.5:1 wherever --text is */
+  --control-quiet-bg: var(--tint-1); /* derived: a secondary button or field, one tint step, no outline */
+  --control-quiet-hover: var(--tint-2); /* derived: its hover, the next step */
+  --link-text: var(--text); /* derived: 15.1 item 1, links in the text colour, underlined */
+  --error: var(--bad-text); /* derived: 15.1 item 3, errors are red (--bad), the 4.5:1 text twin */
+  --diff-cb-add-ink: var(--chat-link); /* derived: ticket 1041 lane 7b (15.2 item 5): the Diff colour-blind set's added ink, the theme's cyan (palette 6, 4.5:1), not the working blue */
+  --diff-cb-del-ink: var(--chat-code); /* derived: ticket 1041 lane 7b (15.2 item 5): its removed ink, the theme's magenta (palette 5, 4.5:1), not the your-turn orange */
+  --light-run: var(--run); /* derived: ticket 1041 C, the working light stays blue (owner 11-21); 3:1 for an imported theme */
+  --light-you: var(--you); /* derived: ticket 1041 C, the your-turn glow; 3:1 for an imported theme */
+  --light-bad: var(--bad); /* derived: ticket 1041 C, broken; 3:1 for an imported theme */
+  --light-limited: var(--warn); /* derived: 15.1 item 2, near a limit stays yellow; 3:1 for an imported theme */
+  --mark-done: color-mix(in srgb, var(--tree-mut) 45%, transparent); /* derived: 15.1 item 9, "finished" as a faint filled bar, one step quieter than the strip's grey bar: the tree's done bars and just-finished edge, the tab and header done mark (one look) */
+  --run-light-track: color-mix(in srgb, var(--light-run) 14%, transparent); /* derived: approved mockup docs/design/polish-1121/index.html .row.run::after rgb(var(--run-light)/.14) */
+  --glow-you: 0 0 10px 1px color-mix(in srgb, var(--light-you) 75%, transparent); /* derived: approved mockup docs/design/polish-1121/index.html .row.you::before box-shadow */
+  --glow-bad: 0 0 10px 1px color-mix(in srgb, var(--light-bad) 75%, transparent); /* derived: the your-turn glow in red, for broken */
+  --glow-limited: 0 0 8px 1px color-mix(in srgb, var(--light-limited) 85%, transparent); /* derived: approved mockup docs/design/polish-1121/index.html .ub.hot i box-shadow, in --warn (15.1 item 2) */
+  --glass-blur: blur(28px) saturate(190%); /* derived: approved mockup docs/design/polish-1121/index.html .v-b .perm backdrop-filter */
+  --glass-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 0.5px var(--glass-hi), var(--shadow-float); /* derived: approved mockup docs/design/polish-1121/index.html .v-b .perm box-shadow */
+  --motion-travel: 3.2s; /* derived: approved mockup docs/design/polish-1121/index.html .row.run::after animation: travel 3.2s */
+  --motion-breathe: 3.6s; /* derived: approved mockup docs/design/polish-1121/index.html .row.you::before animation: breathe 3.6s */
+  --fs-1: var(--fs-11); /* derived: approved mockup docs/design/polish-1121/index.html .win --f1: captions, meta, the status bar */
+  --fs-2: var(--fs-13); /* derived: approved mockup docs/design/polish-1121/index.html .win --f2: the body size */
+  --fs-3: var(--fs-15); /* derived: approved mockup docs/design/polish-1121/index.html .win --f3: chat text and the palette input */
+
+  /* R8 names the rules still read; each points at a role. */
+  --bg: var(--panel); /* derived: R8 alias, the window surface */
+  --g0: var(--panel); /* derived: R8 alias, sidebars sit on the panel like ko/ .pane */
+  --g1: var(--page); /* derived: R8 alias, strips and wells */
+  --g2: var(--hover); /* derived: R8 alias, hover and selected fill */
+  --g3: var(--line); /* derived: R8 alias, dividers */
+  --g4: var(--faint); /* derived: R8 alias, faint borders */
+  --icon: var(--faint); /* derived: R8 alias, acting icons (3:1) */
+  --g5: var(--muted); /* derived: R8 alias, muted text */
+  --g6: var(--muted); /* derived: R8 alias, secondary text */
+  --g7: var(--text); /* derived: R8 alias, body text */
+  --ink: var(--text); /* derived: R8 alias, strong text */
+  --focus: var(--focus-ring); /* derived: R8 alias */
+  --signal: var(--you); /* derived: R8 orange becomes the your-turn hue */
+  --signal-text: var(--you); /* derived: R8 alias */
+  --signal-soft: var(--you-bg); /* derived: R8 alias */
+  --term-bg: var(--panel); /* derived: R8 alias, terminal well */
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0s; /* derived: reduced motion, nothing slides or fades */
+    --motion-base: 0s; /* derived: reduced motion */
+  }
+}

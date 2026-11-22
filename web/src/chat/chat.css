@@ -1,0 +1,891 @@
+/* Chat view (R8-final frame 1). Its diff line tints live in tokens.css. */
+/* The switch belongs to the 24 px session header just above the pane (.shead in App.tsx). */
+/* Ticket 1041 lane 5 (A+B+C, mockup docs/design/polish-1121): the chat has no outlined boxes. Bubbles, code, tool rows,
+   diff and changes cards are one tint step (--tint-1) with no border; buttons are quiet tints; focus is the neutral ring;
+   failures are red (--error), orange is only where you answer. The floating layers (the error strip, the "new" chip,
+   the docked card) are glass in light-glass.css. */
+.chat,
+.composer,
+.problem-band,
+.conv-chain {
+  --focus-ring: var(--ring-focus);
+}
+:is(.chat, .composer, .problem-band) .btn:not(.p) {
+  border-color: transparent;
+  background: var(--control-quiet-bg);
+  color: var(--text);
+}
+:is(.chat, .composer, .problem-band) .btn:not(.p):hover:not(:disabled) {
+  background: var(--control-quiet-hover);
+}
+
+/* Over the terminal, which stays mounted at its size underneath (switching never resizes the PTY). */
+.chat {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+.chat[data-off] {
+  visibility: hidden;
+  z-index: 1;
+}
+.pane:has(> .chat:not([data-off])) > .term {
+  /* Keeps the box (so the PTY size stays fitted) but skips layout and paint of the rows behind the chat. */
+  visibility: hidden;
+  content-visibility: hidden;
+}
+.cscroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-anchor: none;
+  position: relative;
+  padding: 18px 0;
+}
+/* v25-empty (needs 140, v25-mock-a .emptyA; ticket 363): headline and subline centred above the composer. */
+.cscroll > .empty {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 0 40px;
+}
+/* The read-only sentence of an ended session: the plain line the empty state used to be. */
+.cscroll > .empty.ro {
+  display: grid;
+  grid-template-rows: none;
+  place-items: center;
+  padding: 0 40px;
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.cscroll > .empty .ehead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.cscroll > .empty h3 {
+  font-size: var(--fs-30);
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+.cscroll > .empty .ehead p {
+  font-size: var(--fs-15);
+  color: var(--muted);
+}
+.clist {
+  position: relative;
+  width: 100%;
+}
+.crow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding-bottom: 10px;
+}
+.cin {
+  max-width: calc(var(--chat-w, 700px) + 24px);
+  font-family: var(--font-chat); /* ticket 258: chat typography (tokens.css defaults) */
+  font-size: var(--fs-chat);
+  line-height: var(--lh-chat);
+  margin: 0 auto;
+  padding: 0 22px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.msg.user,
+.message-user {
+  background: var(--tint-1);
+  border: 0; /* N136: the image-only bubble is the text bubble's look too */
+  border-radius: var(--r-10);
+  padding: 9px 12px;
+  align-self: flex-end;
+  max-width: 85%;
+}
+/* Q7 point 16: a steered message's small label. */
+.steer-tag {
+  display: block;
+  font-size: var(--fs-11, 11px);
+  color: var(--dim);
+  margin-bottom: 2px;
+}
+.ut {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.thumb {
+  width: 62px;
+  height: 42px;
+  border-radius: var(--r-6);
+  background: var(--line);
+  font-size: var(--fs-10);
+  color: var(--muted);
+  display: grid;
+  place-items: end center;
+  padding: 0 3px 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.md {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.md > * + * {
+  margin-top: 8px;
+}
+.md ul,
+.md ol {
+  padding-left: 20px;
+}
+/* v25-empty (needs 140): a heading inside an answer ranks by size, not weight alone; the body stays at .cin's 14.5px. */
+.md h1,
+.md h2,
+.md h3 {
+  line-height: 1.3;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.md h1 {
+  font-size: var(--fs-22);
+}
+.md h2 {
+  font-size: var(--fs-18);
+}
+.md h3 {
+  font-size: var(--fs-15);
+}
+.md code {
+  font-family: var(--font-code);
+  font-size: calc(var(--fs-code) + .5px);
+  background: var(--tint-1);
+  border-radius: var(--r-4);
+  padding: 0 3px;
+}
+.md pre,
+.tx pre {
+  font-family: var(--font-code);
+  font-size: var(--fs-code);
+  background: var(--tint-1);
+  border: 0;
+  border-radius: var(--r-8);
+  padding: 6px 8px;
+  overflow-x: auto;
+  white-space: pre;
+}
+.md pre code {
+  background: none;
+  padding: 0;
+}
+.md table {
+  border-collapse: collapse;
+  font-size: var(--fs-12);
+}
+/* No cell borders: the head row is one tint step, every other row a half step, and the cells keep their spacing. */
+.md th,
+.md td {
+  padding: 4px 8px;
+  text-align: left;
+}
+.md thead th,
+.md tr:nth-child(even) td {
+  background: var(--tint-1);
+}
+.md blockquote {
+  border-left: 2px solid var(--tint-2);
+  padding-left: 8px;
+  color: var(--muted);
+}
+.mdlink {
+  color: var(--run);
+  text-decoration: none;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: var(--fs-13);
+  cursor: pointer;
+}
+.mdlink.off {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+/* V2-10a: a Markdown image that is not shown inline, as a 22 px chip (R8 `.chip`): the path muted, a web address as a link. */
+.mdimg {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--r-12);
+  background: var(--tint-1);
+  font-size: var(--fs-11);
+  vertical-align: middle;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* N065: refused is the muted words on the tint, not a dashed border */
+.mdimg.off {
+  color: var(--muted);
+  display: inline-block;
+  line-height: 20px;
+}
+
+/* One look in every view (inventory 3.2): the mockup's quiet line, no box. */
+.tool {
+  font-size: var(--fs-12);
+  color: var(--muted);
+  min-width: 0;
+  border-radius: var(--r-8);
+}
+.tool .tl {
+  padding: 4px 9px;
+  width: 100%;
+  align-items: center;
+}
+.tool .tdone {
+  margin-left: auto;
+  color: var(--ok);
+  display: inline-flex;
+}
+.tool .tx {
+  margin: 0;
+  padding: 6px 10px;
+}
+/* The fenced block is one tint step; its header sits on the same step with no rule (inventory 3.3). */
+.codeblk {
+  border-radius: var(--r-8);
+  background: var(--tint-1);
+  overflow: hidden;
+  margin: 0 0 8px;
+}
+/* Look v34 S3-2: the rule above zeroed the block gap above it (a blockquote or paragraph sat on the code block). */
+.md > * + .codeblk {
+  margin-top: 8px;
+}
+.codeblk .ch2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 10px 0;
+  font: 11px 'SF Mono', Menlo, 'D2Coding', monospace;
+  color: var(--muted);
+}
+.codeblk .copy {
+  font-size: var(--fs-11);
+  color: var(--muted);
+  padding: 0 6px;
+  border-radius: var(--r-4);
+}
+.codeblk .copy:hover {
+  background: var(--tint-2);
+  color: var(--text);
+}
+.codeblk pre {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.tool .tl {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  max-width: 100%;
+  text-align: left;
+  color: var(--muted);
+}
+.tool .tn {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 1 auto;
+  min-width: 3em;
+}
+.tool .c,
+.tool .pm {
+  color: var(--muted);
+}
+.tool .pm {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 1000 auto;
+  min-width: 0;
+}
+.tool.err .tn {
+  color: var(--error);
+}
+.tx {
+  margin: 4px 0 2px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text);
+}
+.tx .lbl {
+  font-size: var(--fs-11);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* The failed output keeps a red edge (not colour of the text alone: the label says "failed"). */
+.tx pre.err {
+  border-left: 2px solid var(--light-bad);
+}
+.tx pre.think {
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+.showall {
+  align-self: flex-start;
+  font-size: var(--fs-12);
+  color: var(--muted);
+  text-decoration: underline;
+  padding: 2px 10px;
+}
+
+.dcard {
+  background: var(--tint-1);
+  border-radius: var(--r-8);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.dh {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  font-size: var(--fs-12);
+  min-height: 35px;
+}
+/* B10 (ticket 991): the name keeps one line and gives way before the counts; the answer buttons wrap under it. */
+.dh {
+  flex-wrap: wrap;
+}
+.dh .path {
+  display: flex;
+  min-width: 6em;
+  flex: 0 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.dh .path .hd {
+  flex: 0 1000 auto; /* the folders give way first */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dh .path .tl {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dh .r {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.dl {
+  font-size: var(--fs-11);
+  padding: 4px 0;
+  overflow-x: auto;
+}
+.dl div {
+  padding: 0 10px;
+  white-space: pre;
+  width: max-content;
+  min-width: 100%;
+}
+.dl .a {
+  background: var(--diff-add);
+}
+.dl .d {
+  background: var(--diff-del);
+}
+.dl .h {
+  color: var(--muted);
+}
+.turnx {
+  font-size: var(--fs-12);
+}
+
+/* Overlays: they never take layout space, so arriving or leaving moves nothing. In the main chat the note sits in the
+   mode button's row (.cview), left of the button, so the two never overlap (ticket 284). */
+.cview .skipped {
+  position: static;
+  align-self: center;
+  margin-right: 10px;
+}
+.skipped {
+  position: absolute;
+  top: 4px;
+  right: 12px;
+  z-index: 2;
+  font-size: var(--fs-11);
+}
+.vbanner {
+  flex: none;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 12px;
+  background: var(--tint-1);
+  font-size: var(--fs-12);
+}
+.vbanner span {
+  flex: 1;
+}
+.prchip {
+  flex: none;
+  padding: 4px 12px;
+  background: var(--tint-1);
+  font-size: var(--fs-12);
+}
+.prchip[data-state='checks_fail'] b,
+.prchip[data-state='closed'] b {
+  color: var(--error);
+}
+.chaterr {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px 6px 14px;
+  border-radius: var(--r-12);
+  font-size: var(--fs-12);
+  max-width: 90%;
+}
+.chaterr.light-edge::after {
+  top: var(--sp-8); /* clear of the 12 px corners */
+  bottom: var(--sp-8);
+}
+.newchip {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 2px 12px;
+  border-radius: var(--r-12);
+  font-size: var(--fs-12);
+  color: var(--text);
+}
+
+/* v1b-12: diff card actions. While the call is unresolved the answer slot keeps one width, with or without buttons. */
+.dacts {
+  align-items: center;
+  flex: none;
+}
+.dh .counts {
+  white-space: nowrap;
+  /* B10: a zero basis, so the counts never decide where the row wraps; they cut with an ellipsis instead */
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dask {
+  display: flex;
+  gap: 6px;
+  width: 176px;
+  height: 22px;
+  justify-content: flex-start;
+  align-items: center;
+}
+.dacts .btn {
+  height: 22px;
+  white-space: nowrap;
+}
+.dask .note {
+  font-size: var(--fs-11);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.dask .note.err {
+  color: var(--error);
+}
+.dwhy {
+  font-size: var(--fs-11);
+}
+/* V2-8c */
+.prchip .watch,
+.prchip .offer {
+  margin-left: 8px;
+}
+
+/* chrome: transcript views, turn summary, changes card, decision line (claude-feel-2 .sum .steps .card .wait) */
+.cview {
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 12px 0;
+  /* N23 (look 1117 v3 B): on the chat's own column, as wide as the composer box under it, not at the window's edge. */
+  width: 100%;
+  max-width: calc(var(--chat-w, 700px) + 24px);
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+.cview .btn {
+  font-size: var(--fs-11);
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* Ticket 1041: no outline; the quiet tint (the rule at the top) keeps it reading as a control, not a label */
+  color: var(--text);
+}
+.cview .btn:hover,
+.cview .btn:focus-visible {
+  background: var(--control-quiet-hover);
+  color: var(--text);
+}
+.turnsum .sum {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  color: var(--muted);
+  font-size: var(--fs-13);
+  padding: 2px 4px;
+  border-radius: var(--r-6);
+  text-align: left;
+}
+.turnsum .sum:hover {
+  background: var(--tint-1);
+}
+.turnsum .sum .n {
+  color: var(--text);
+}
+.turnsum .sum .ok {
+  color: var(--ok);
+}
+.turnsum .sum .t {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: var(--fs-12);
+}
+.turnsum .steps {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 2px 0 2px 6px;
+  padding: 2px 0 2px 14px; /* the indent alone sets the steps under their summary (no rule) */
+}
+.chcard {
+  border-radius: var(--r-10);
+  background: var(--tint-1);
+  font-size: var(--fs-13);
+  overflow: hidden;
+}
+.chcard .h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.chcard .h {
+  flex-wrap: wrap; /* vb-5 (look 1117): a narrow chat moves the button to its own line whole, never breaks its words */
+}
+.chcard .h .btn {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.chcard .rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.chcard .rows li {
+  display: flex;
+  gap: 10px;
+  padding: 5px 12px;
+  font-size: var(--fs-12);
+}
+.chcard .rows .p {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.chcard .add {
+  color: var(--ok);
+}
+.chcard .del {
+  color: var(--bad);
+}
+/* /chrome chat */
+
+/* CF5 actions hang below their row; opacity keeps Tab access. V2.5-34: the row keeps a slot for the 26px bar (the 10px of
+   .crow's padding plus this margin), so the bar covers no text of the next row or of the working line, as t3code's in-flow
+   action row (TimelineUserMessageRow) never does. The slot is always there, so showing the bar moves nothing. */
+.message-row {
+  position: relative;
+  margin-bottom: 16px;
+}
+.message-actions {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: max-content; /* one line even under a narrow user bubble, so it never grows into a tall block over the next row */
+  z-index: 3;
+  background: var(--panel);
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+}
+/* Keyboard focus anywhere in the row shows the bar, but only hover (or focus on the bar itself) makes it clickable: after
+   a click focus stays in the row, and a clickable bar would cover the next row's image. */
+.message-row:hover > .message-actions,
+.message-actions:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+.message-row:has(:focus-visible) > .message-actions {
+  opacity: 1;
+}
+.message-actions .btn {
+  border-radius: var(--r-6);
+  padding: 3px 10px;
+  line-height: 1.5;
+}
+
+.message-user {
+  border: 0;
+  border-radius: calc(var(--r-10) + var(--r-4));
+  padding: 9px 13px;
+  max-width: 80%;
+  margin-left: auto;
+  width: fit-content;
+}
+.message-user > .msg.user {
+  background: none;
+  border: 0;
+  padding: 0;
+  max-width: none;
+}
+
+/* Expanded summaries list steps without repeating the standalone tool boxes. */
+.turnsum .steps .tool {
+  border: 0;
+  background: none;
+}
+.turnsum .steps .tl {
+  padding: 2px 0;
+}
+.chcard .h .btn {
+  border-radius: var(--r-6);
+  padding: 2px 9px;
+  font-size: calc(var(--fs-12) + .5px);
+}
+.chcard .rows li {
+  font-size: calc(var(--fs-12) + .5px);
+}
+
+/* v25-design-chat (needs 140 motion): the working row ends the transcript while the agent works; the tree's blue arc
+   spins (still under reduced motion, tree.css). Status only: Stop stays the composer's one control (needs 109). */
+.wline {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 44px);
+  max-width: calc(var(--chat-w, 700px) - 20px);
+  margin: 0 auto 10px;
+  padding: 2px 4px;
+  font-size: var(--fs-13);
+  color: var(--muted);
+}
+.wline svg {
+  flex: none;
+  color: var(--run);
+  width: 12px; /* the summary chevron's size, so "Working" starts where the summary label does */
+  height: 12px;
+}
+
+/* v25-design-chat: under a shown chat the composer sits on the chat's own background, as the claude-feel-2 .dock
+   does, so no band splits the pane from its composer. Ticket 1041: the box is one tint step with no border and no
+   shadow (styles.css .cbox), as the polish mockup's .comp. */
+:root:has(.chat:not([data-off])) .composer:not([data-pinned]) {
+  background: var(--panel);
+}
+/* Ticket 991 C12 (5): an open side pane keeps the composer card out of its column (SidePane sets --pane-room). */
+.composer:not([data-pinned]) {
+  padding-right: calc(20px + var(--pane-room, 0px));
+}
+/* Reviewer r1: the hint line ends where the box ends (it was 760px against the box's 700px) and keeps air under it;
+   r2: the claude-feel-2 .hint size (11.5px), not 11. The input gets the mockup's .cmp textarea min-height (46px).
+   Only under a shown chat, as the dock rules above: a terminal tab's composer keeps the shell's styles (ticket 147). */
+:root:has(.chat:not([data-off])) .composer:not([data-pinned]) p.chint {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  font-size: calc(var(--fs-11) + .5px);
+}
+/* r3: the key caps get room for their glyphs (⏎ ⇧ ⌘); r4: at the hint's own size, so "Esc" is no heavier than the rest. */
+:root:has(.chat:not([data-off])) .composer:not([data-pinned]) p.chint .kbd {
+  font-size: inherit;
+  display: inline-block;
+  min-height: 16px;
+  line-height: 14px;
+}
+:root:has(.chat:not([data-off])) .composer:not([data-pinned]) .cbox textarea {
+  min-height: 46px;
+}
+/* With no band under it, the transcript fades out over its last 18px (the list's own bottom padding at rest), so text
+   scrolled up to the composer does not stop on a hard cut. */
+.chat:not([data-readonly]) > .cscroll {
+  mask-image: linear-gradient(to bottom, black calc(100% - 18px), transparent calc(100% - 6px)); /* r3: clear before the box */
+}
+
+/* needs 171: a path in the chat is a button. Links use the Markdown link colour (--run); the file name never looks like
+   plain text, and a keyboard focus shows the global ring. */
+.tool .tl.tl-path {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.tool .tl.tl-path .tgl {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: none;
+  color: inherit;
+  text-align: left;
+}
+.tpath,
+.dh button.path,
+.md .mdpath {
+  color: var(--run);
+  font-family: 'SF Mono', Menlo, 'D2Coding', monospace;
+  text-align: left;
+  cursor: pointer;
+}
+.tpath {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
+}
+.tpath:hover,
+.dh button.path:hover,
+.md .mdpath:hover,
+.chcard .frow:hover .p {
+  text-decoration: underline;
+}
+.md .mdpath {
+  display: inline;
+  padding: 0;
+  border-radius: var(--r-4);
+}
+.md .mdpath code {
+  color: inherit;
+}
+.dh button.path {
+  padding: 0;
+  font-size: inherit;
+}
+.chcard .rows li {
+  padding: 0;
+}
+.chcard .frow {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 12px;
+  font: inherit;
+  text-align: left;
+}
+.chcard .frow:hover {
+  background: var(--tint-1);
+}
+.chcard .frow .p {
+  color: var(--run);
+}
+.message-actions .btn [aria-live] {
+  display: inline-block;
+}
+/* needs 171: a message's action group (Fork, Copy) hangs below its row over the next one; the next row is later in the
+   list and would paint over it, so the row under the pointer or keyboard focus rises above its neighbours. */
+.crow:hover,
+.crow:focus-within {
+  z-index: 2;
+}
+
+/* Ticket 258 (chat typography): the composer's input font through variables on the composer root (tokens.css defaults
+   equal styles.css .cbox textarea), and High chat contrast lifts the chat's muted text role to the body text colour. */
+.composer .cbox textarea {
+  font-family: var(--font-composer);
+  font-size: var(--fs-composer);
+}
+:root[data-chat-contrast='high'] .chat {
+  --muted: var(--text);
+}
+/* Agent math stays inside its formula: a box pushed out (\llap, \rlap) is clipped, and a wide display formula scrolls.
+   The clip sits on each .base (KaTeX's inline-block line pieces): overflow does nothing on the inline .katex. */
+.md .katex .base {
+  max-width: 100%;
+  overflow: clip;
+}
+.md .katex-display {
+  overflow: auto hidden;
+}
+
+/* Ticket 990: a worker's wake line in a lead's chat: one quiet centred line, not a bubble. */
+.msg.wake {
+  align-self: center;
+  color: var(--dim);
+  font-size: var(--fs-12);
+  text-align: center;
+}
+
+/* Ticket 1039 (owner 2026-11-21; approved mockup docs/design/chat-theme-1121/index.html, "Theme accents"): the marks
+   that carry meaning take the theme's colours, each already stepped to 4.5:1 (themes/derive.ts; tokens.css for the
+   bundled pair): headings, bold and a running tool row's name (.toolname, the label's first word; look v35 b S3-2: a finished one keeps the row's muted text, blue is the working light) the accent; inline code and file paths magenta; links cyan; list markers
+   the muted accent; success words green and error words red. Body text stays --text and a fenced block keeps its syntax
+   colours. Settings > Appearance > Chat colours > Plain puts data-chat-colours="plain" on the root (themes/apply.ts):
+   then none of these rules apply and the chat is as it was before the ticket. */
+:root:not([data-chat-colours='plain']) .cin :is(.md :is(h1, h2, h3, h4, h5, h6, strong), .tool[data-running] > .tl .toolname) {
+  color: var(--run);
+}
+:root:not([data-chat-colours='plain']) .cin :is(.md :not(pre) > code, .md .mdpath, .tpath, .dh button.path, .chcard .frow .p) {
+  color: var(--chat-code);
+}
+:root:not([data-chat-colours='plain']) .cin .md .mdlink:not(.off) {
+  color: var(--chat-link);
+}
+:root:not([data-chat-colours='plain']) .cin .md li::marker {
+  color: var(--chat-mark);
+}
+:root:not([data-chat-colours='plain']) .cin :is(.tool .tdone, .turnsum .sum .ok, .chcard .add) {
+  color: var(--ok-text);
+}
+:root:not([data-chat-colours='plain']) .cin :is(.tool.err :is(.tn, .toolname), .chcard .del) {
+  color: var(--bad-text);
+}

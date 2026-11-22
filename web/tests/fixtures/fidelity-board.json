@@ -1,0 +1,155 @@
+{
+  "columns": [
+    {
+      "id": "todo",
+      "title": "할 일",
+      "states": [],
+      "needs_decision": false
+    },
+    {
+      "id": "working",
+      "title": "진행",
+      "states": [
+        "working"
+      ],
+      "needs_decision": false
+    },
+    {
+      "id": "review",
+      "title": "검토",
+      "states": [
+        "review"
+      ],
+      "needs_decision": false
+    },
+    {
+      "id": "done",
+      "title": "완료",
+      "states": [
+        "done"
+      ],
+      "needs_decision": false
+    }
+  ],
+  "cards": [
+    {
+      "id": "0",
+      "source": "integration",
+      "source_name": "mockup",
+      "title": "V2-14 언어 키",
+      "project": "/fixture/LANGS",
+      "note": "기획",
+      "session_id": null,
+      "column": "todo",
+      "state": null,
+      "stale": false,
+      "updated_at": 0
+    },
+    {
+      "id": "1",
+      "source": "integration",
+      "source_name": "mockup",
+      "title": "토큰 파일 tokens.css",
+      "project": "/fixture/FIDELITY",
+      "note": "디자인",
+      "session_id": null,
+      "column": "todo",
+      "state": null,
+      "stale": false,
+      "updated_at": 1
+    },
+    {
+      "id": "2",
+      "source": "integration",
+      "source_name": "mockup",
+      "title": "Octicon 아이콘 세트",
+      "project": "/fixture/FIDELITY",
+      "note": "디자인",
+      "session_id": null,
+      "column": "todo",
+      "state": null,
+      "stale": false,
+      "updated_at": 2
+    },
+    {
+      "id": "3",
+      "source": "integration",
+      "source_name": "mockup",
+      "title": "배치 D5b 제목줄 버튼",
+      "project": "/fixture/LAYOUT",
+      "note": "claude · layout-d5",
+      "session_id": null,
+      "column": "working",
+      "state": null,
+      "stale": false,
+      "updated_at": 3
+    },
+    {
+      "id": "4",
+      "source": "integration",
+      "source_name": "mockup",
+      "title": "트리 30px 행",
+      "project": "/fixture/ux-fix-2",
+      "note": "claude · ux-fix-2 · 응답 필요",
+      "session_id": null,
+      "column": "working",
+      "state": "needs_decision",
+      "stale": false,
+      "updated_at": 4
+    },
+    {
+      "id": "5",
+      "source": "integration",
+      "source_name": "mockup",
+      "title": "워크트리 이름 표시",
+      "project": "/fixture/티켓 47",
+      "note": "PR #210",
+      "session_id": null,
+      "column": "review",
+      "state": null,
+      "stale": false,
+      "updated_at": 5
+    },
+    {
+      "id": "6",
+      "source": "integration",
+      "source_name": "mockup",
+      "title": "Tidy 패널",
+      "project": "/fixture/티켓 50",
+      "note": "PR #208",
+      "session_id": null,
+      "column": "review",
+      "state": null,
+      "stale": false,
+      "updated_at": 6
+    },
+    {
+      "id": "7",
+      "source": "integration",
+      "source_name": "mockup",
+      "title": "composer 에이전트 칩",
+      "project": "/fixture/ux-polish-3",
+      "note": "ead49ed",
+      "session_id": null,
+      "column": "done",
+      "state": null,
+      "stale": false,
+      "updated_at": 7
+    },
+    {
+      "id": "8",
+      "source": "integration",
+      "source_name": "mockup",
+      "title": "V2-3b 후속",
+      "project": "/fixture/티켓 39",
+      "note": "b3df74b",
+      "session_id": null,
+      "column": "done",
+      "state": null,
+      "stale": false,
+      "updated_at": 8
+    }
+  ],
+  "error": null,
+  "revision": "mockup"
+}

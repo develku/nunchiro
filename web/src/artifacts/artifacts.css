@@ -1,0 +1,149 @@
+/* Artifact cards (chat rows) and Preview (ticket v1b-06). Heights are fixed: a 24 px bar plus the 320 px frame
+   for HTML/SVG, one 32 px line otherwise, whatever the card's state, so nothing moves when a card loads. */
+.acard {
+  min-width: 0;
+}
+.acard.frame {
+  height: 346px;
+}
+.acard.frame .artifact-frame {
+  height: 100%;
+}
+/* The frame keeps its reserved 320 px; a shorter page leaves white space instead of resizing the row. */
+.acard.frame iframe {
+  height: 320px !important;
+}
+.acard .abody {
+  flex: 1;
+  padding: 10px;
+  font-size: var(--fs-12);
+}
+/* 04's chip look, outside its frame bar too (one-line cards, Preview's bar and states). Ticket 1041 lane 7b (N151): chips
+   and state pills are tints with their words, no solid or dashed outline. */
+.acard .af-chip,
+.preview .af-chip {
+  border: 0;
+  border-radius: var(--r-8);
+  padding: 0 8px;
+  font-size: var(--fs-11);
+  line-height: 16px;
+  color: var(--text);
+  background: var(--tint-1);
+}
+.acard .af-chip.open {
+  background: var(--tint-2);
+  color: var(--text);
+}
+/* "changed · show" asks you to look: the warm tint and words. */
+.af-chip.changed {
+  color: var(--you);
+  background: var(--you-bg);
+}
+.astate {
+  font-size: var(--fs-11);
+  color: var(--muted);
+  background: var(--tint-1);
+  border-radius: var(--r-8);
+  padding: 0 8px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.acard.line {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-radius: var(--r-6);
+  background: var(--tint-1); /* a card: one tint step on the chat, no outline */
+  font-size: var(--fs-12);
+}
+.acard .ic {
+  flex: none;
+  font-size: var(--fs-11);
+  color: var(--muted);
+  background: var(--tint-1);
+  border-radius: var(--r-4);
+  padding: 1px 4px;
+}
+.acard .at,
+.preview .af-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acard .af-chip,
+.preview .af-chip {
+  flex: none;
+  white-space: nowrap;
+}
+
+.preview {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+.preview .empty {
+  margin: auto;
+  padding: 16px;
+  font-size: var(--fs-12);
+  color: var(--muted);
+  text-align: center;
+}
+.pv-frame,
+.pv-content,
+.pv-state {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pv-frame .artifact-frame {
+  flex: 1;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+.pv-frame iframe {
+  flex: 1;
+  height: auto !important;
+}
+.pv-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  flex: none;
+  padding: 0 6px;
+  background: var(--page);
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.pv-state p {
+  padding: 10px;
+  font-size: var(--fs-12);
+}
+.pv-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px;
+}
+.pv-body img {
+  display: block;
+  max-width: 100%;
+  margin: 0 auto;
+}
+.pdock {
+  min-height: 0;
+}
+.pdock .pclose {
+  color: var(--muted);
+  font-size: var(--fs-14);
+  line-height: 1;
+}

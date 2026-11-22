@@ -1,0 +1,22 @@
+# Edited by hand: a comment, a new column and Hangul titles.
+version = 1
+
+[[columns]]
+id = "todo"
+title = "할 일"
+
+[[columns]]
+id = "working"
+title = "진행 중"
+states = ["working"]
+
+[[columns]]
+id = "human"
+title = "사람 확인"
+states = ["needs_decision", "review"]
+needs_decision = true
+
+[[columns]]
+id = "done"
+title = "끝"
+states = ["done"]

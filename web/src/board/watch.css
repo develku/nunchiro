@@ -1,0 +1,415 @@
+/* V2.5-69 (ticket 289): the watch view. Tokens only; the grid follows LaneGrid's shape (header row, lane rows). */
+.board[data-mode='watch'] .bsplit {
+  min-width: 0;
+}
+.wcols {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  /* Ticket 447: a lane row is as tall as its tallest column. With auto rows the min-height below is a row's floor, and
+     rows past it only grow into the board's free height, so a long column ran over the next lane. */
+  grid-auto-rows: max-content;
+  gap: 8px;
+  padding: 8px 12px 12px;
+}
+.wch {
+  position: sticky;
+  top: -8px;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 2px;
+  background: var(--panel); /* sticky over the cards; no rule under it (ticket 1041 A) */
+  font-size: var(--fs-11);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wch b {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wch[data-bucket='attention'] b {
+  color: var(--you);
+}
+.wch[data-bucket='done'] b {
+  color: var(--done);
+}
+.wch .bcount {
+  margin-left: auto;
+}
+.wlane {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.wcol {
+  min-width: 0;
+  min-height: 24px;
+}
+.wcards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wnone {
+  margin: 0;
+  padding: 2px;
+  font-size: var(--fs-11);
+}
+.wcard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 8px;
+  /* Ticket 1041 (A, N041): no outline; one tint step over the board. Hover and open are tints, not the working blue. */
+  border: 0;
+  border-radius: var(--r-8);
+  background: var(--tint-1);
+  font-size: var(--fs-12);
+  line-height: 1.4;
+  cursor: pointer;
+}
+.wcard:hover {
+  background: var(--tint-2);
+}
+.wcard:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+.wcard[data-open] {
+  background: var(--select-bg);
+}
+/* Needs you, done and broken: the left state edge in widgets-7a.css, the same shapes as the columns view (N073). */
+.wt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.wt .bdot {
+  flex: none;
+  margin-right: 0; /* the title row's gap spaces it */
+}
+.wtt {
+  min-width: 0;
+  overflow: hidden;
+  /* ticket 303: two lines before the ellipsis, so the first words survive the 200 px grid floor; the full title is in `title`. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.wnote,
+.wfact {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.wfact {
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.wmeta {
+  font-size: var(--fs-11);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Ticket 407: the project tag's border keeps a gap from the age before it. */
+.wmeta .btag {
+  margin-left: var(--sp-4);
+}
+/* The detail panel beside the grid; over the grid in a zone too narrow for both. */
+.wdetail {
+  flex: none;
+  width: 320px;
+  min-width: 240px;
+  max-width: 55%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 0;
+  background: var(--page); /* one surface step beside the board's panel, no rule (ticket 1041 A) */
+  font-size: var(--fs-12);
+  color: var(--text);
+}
+.wdetail[data-sized] {
+  max-width: calc(100% - 201px); /* a width the window chose: the grid still keeps 200 px beside it */
+}
+/* Maximised (ticket 297 item 3): the panel takes the whole board; the grid and the edge step aside. */
+.wdetail[data-max] {
+  flex: 1;
+  width: auto;
+  max-width: none;
+}
+.bsplit:has(> .wdetail[data-max]) > .wcols {
+  display: none;
+}
+/* The edge: a 5 px grab strip over the panel's border, as the side pane's divider (pane.css). */
+.wdiv {
+  flex: none;
+  width: 5px;
+  margin: 0 -2px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 3;
+}
+.wdiv::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: transparent;
+}
+.wdiv:hover::after,
+.wdiv:focus-visible::after {
+  width: 3px;
+  left: 1px;
+  background: var(--ring-focus); /* neutral, as the sidebar edge: blue is the working light (N072) */
+}
+.wdh {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+}
+.wdh h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--fs-13, 13px);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wdx {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: var(--r-4);
+  padding: 2px 6px;
+}
+.wdx:hover {
+  background: var(--tint-1);
+  color: var(--text);
+}
+.wdx:focus-visible,
+.bvo button:focus-visible,
+.wcard:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.wdb {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wdr {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 8px;
+}
+.wdk {
+  color: var(--muted);
+}
+.wdv {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wdf {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+}
+@media (max-width: 760px) {
+  .wdiv {
+    display: none;
+  }
+  .wdetail {
+    position: absolute;
+    top: 34px;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    max-width: 100%;
+    /* Over the grid it floats, but it is a panel, not one of the layers B names (owner 15.1 item 6: glass only on the
+       permission card, popovers, menus and the palette): solid, on the float shadow, as the app's dialogs. */
+    background: var(--panel);
+    box-shadow: var(--shadow-float);
+  }
+}
+/* The view-options menu. */
+.bvo {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+}
+.bvomenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 6;
+  min-width: 200px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-radius: var(--r-12);
+  font-size: var(--fs-12);
+}
+.bvomenu hr {
+  width: 100%;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.bvomenu button {
+  display: flex;
+  gap: 6px;
+  text-align: left;
+  font: 400 var(--fs-12) system-ui;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: var(--r-4);
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.bvomenu button[aria-checked='true']::before {
+  content: '✓';
+}
+.bvomenu button[aria-checked='false']::before {
+  content: '';
+  display: inline-block;
+  width: 1em;
+}
+.bvomenu button:hover,
+.bvomenu button:focus-visible {
+  background: var(--hover);
+}
+.bvomenu .bkey {
+  padding: 3px 8px;
+  flex-wrap: wrap;
+}
+.bvocli {
+  padding: 3px 8px;
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+
+/* A card and what hangs from it: the subagents control and its list sit in the card's own cell, under the card. */
+.wcell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+/* Look v35 b S3-3: the ref link and "waits on" under a watch card (board.css .bmt), level with the card's text. */
+.wmt {
+  margin: 0 0 0 8px;
+}
+.wsub {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: var(--r-4);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-11);
+  cursor: pointer;
+}
+.wsub:hover {
+  background: var(--tint-1);
+  color: var(--text);
+}
+.wsub:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.wsub[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+.wkids {
+  list-style: none;
+  margin: 0 0 0 8px;
+  padding: 0 0 0 8px;
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-11);
+}
+.wkid {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+.wkn {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wks {
+  flex: none;
+}
+.wkid[data-state='failed'] .wks {
+  color: var(--bad);
+}
+
+/* The card-to-detail morph (watch.ts `morph`): Orca's easing (dashboard-popout/agent-board-transitions.css, MIT, notice in
+ * watch.ts). The page behind does not move, so the root skips its cross-fade; reduced motion turns the animations off. */
+::view-transition-group(watch-morph) {
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(watch-morph),
+  ::view-transition-old(watch-morph),
+  ::view-transition-new(watch-morph) {
+    animation: none !important;
+  }
+}

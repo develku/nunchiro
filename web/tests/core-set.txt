@@ -1,0 +1,64 @@
+# Core set of the merge gate's web stage (`scripts/web-smoke.sh --core`, header of that script for the format).
+# One line per entry: `<spec file>` takes every test of the file, `<spec file> | <title regex>` only the titles matching it.
+# Aim: the tests that prove the critical path; the full run is nightly (`scripts/web-smoke.sh --full-nightly`).
+# Keep the whole set between 100 and 230 tests (about 230; ticket 428, records-1114b; tests/scenario/test_web_smoke.py test_core_set_size_bounded).
+# Nightly only, never in the gate: noop-click-check.spec.ts (184 s a run; `nightly_only` in scripts/web-smoke.sh, ticket 428).
+
+# app loads, first run, shell frame
+shell.spec.ts
+first-run.spec.ts
+settings-onboarding.spec.ts
+
+# project tree and decision rows
+tree.spec.ts
+decision-rows.spec.ts
+
+# tabs: open, close, switch, rename, move
+tab-basics.spec.ts
+tabs.spec.ts | rename by double-click|tab\.move\.right|dragging a tab onto another
+
+# chat: send, stream, stop
+chat.spec.ts
+chat-stop.spec.ts
+
+# permission sheet and permission-needed card (strict layer: queue and hook permission answers)
+permission-sheet.spec.ts
+permission-needed.spec.ts
+
+# terminal tab and keys basics
+terminal.spec.ts
+keys-basics.spec.ts
+
+# diff: the changed-file list against the start commit (ticket 419: git-actions made diff_list 3x slower unseen)
+diff.spec.ts | lists exactly the changed and untracked files|two windows viewing the same diff|diff_list_arrows
+
+# board and settings open
+board.spec.ts
+settings.spec.ts
+settings-search.spec.ts
+
+# the existing gate's pixel and dead-click checks and the browser-access pair
+visual-conformance.spec.ts
+dead-click.spec.ts
+web-access-browser.spec.ts
+web-access-insecure.spec.ts
+
+# layout ratchet: no two visible controls overlap (ticket 291 overlap baseline; joined the core set in ticket 428)
+overlap-check.spec.ts
+
+# ticket 539: four cross-lane checks that only the nightly caught (each under 10 s on chromium, 2 ms to 56 ms of test time)
+# experiment: metric = cross-lane reds first seen by the nightly that these four checks would have caught, target 0;
+# kill = the core-set gate stage grows by more than 30 s, or one of the four goes red in a gate for a cause that is not a
+# real cross-lane clash, twice; close 2026-11-20; undo = delete these lines.
+hint-labels.spec.ts | no two default bindings share a chord
+home-guard.spec.ts | spec-home-guard: no spec runs the nunchiro binary
+i18n-glossary-terms.spec.ts
+i18n-translations.spec.ts | cjk_punctuation
+
+# ticket 377 / records-1114b: a lane landed an i18n key without its catalogue row and main went red on the remaining-catalogue spec,
+# because the gate's web set held no catalogue spec. Pure checks over the source and the tables (no page); the three take 7.5 s of test time together (chromium, 11 tests, 2026-11-14).
+# experiment: metric = i18n catalogue reds first seen after a merge instead of in the gate, target 0; kill = these three add more than
+# 30 s to the core-set stage, or one goes red in a gate for a cause that is not a real missing row, twice; close 2026-12-14; undo = delete these lines.
+i18n-remaining-catalogue.spec.ts
+i18n-chat-catalogue.spec.ts
+i18n-key-sets.spec.ts

@@ -1,0 +1,1137 @@
+/* V2-2a Settings · Accounts; Artifact libraries shares the table rules. */
+/* A narrow window scrolls the table sideways instead of clipping its columns. */
+.acct-scroll {
+  overflow-x: auto;
+}
+.acct-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: var(--fs-12);
+  /* Fixed columns: a row's signed-in state changing never moves another cell. */
+  table-layout: fixed;
+}
+.acct-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.acct-table td {
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--hover);
+  height: 26px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.acct-table tr > :nth-child(1) {
+  width: 20%;
+}
+.acct-table tr > :nth-child(2) {
+  width: 22%;
+}
+.acct-table tr > :nth-child(3) {
+  width: 14%;
+}
+.acct-table tr > :nth-child(4),
+.acct-table tr > :nth-child(5),
+.acct-table tr > :nth-child(6) {
+  width: 8%;
+}
+.acct-table .mono {
+  font-size: var(--fs-11);
+}
+.acct-badge {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: var(--r-4);
+  background: var(--tint-1); /* ticket 1041 A: a tint badge, no outline */
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+/* Ticket 178: a blocker on the row opens its session; the badge look, as a control. */
+.acct-link {
+  border: 0;
+  background: none;
+  color: var(--link-text);
+  font: inherit;
+  font-size: var(--fs-12);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.acct-link:hover {
+  text-decoration: underline;
+}
+/* Tickets 321 and 322 (usage.html, the accounts screen): per-agent sections, one card row per account. */
+.acct-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--sp-12);
+  align-items: center;
+  padding: var(--sp-12) var(--sp-16);
+}
+.acct-main {
+  min-width: 0;
+}
+.acct-name {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.acct-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 var(--sp-8);
+  border: 0; /* ticket 1041 A (N086): a tint pill, no outline; the dot and the word carry the state */
+  border-radius: var(--r-pill);
+  background: var(--tint-1);
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.acct-signed::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: currentColor;
+}
+.acct-signed[data-signed='yes'] {
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+  color: color-mix(in srgb, var(--ok) 75%, var(--text));
+}
+/* Ticket 1041 (N085, N089): a limit chip is a tint with a thin used-share line along its foot, grey as the status bar's
+   block draws it (blue meant working); near a limit the line is the limited light with its glow, then red at 100 %, and
+   the words go bold. The percent and the reset time stay in the words. */
+.acct-chip.lim {
+  position: relative;
+  overflow: hidden;
+  color: var(--text);
+}
+.acct-chip.lim::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: var(--used);
+  height: 2px;
+  background: var(--muted);
+}
+.acct-chip.lim[data-tone] {
+  font-weight: 600;
+}
+.acct-chip.lim[data-tone='warn']::after {
+  background: var(--light-limited);
+  box-shadow: var(--glow-limited);
+}
+.acct-chip.lim[data-tone='full']::after {
+  background: var(--light-bad);
+  box-shadow: var(--glow-bad);
+}
+.acct-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-6);
+}
+/* Check, Sign in and Sign out swap in one place; a longer translation may grow it. */
+.acct-acts .btn.acct-slot {
+  min-width: 84px;
+  justify-content: center;
+  text-align: center;
+}
+.acct-acts .btn.acct-danger {
+  color: var(--error);
+}
+@media (max-width: 560px) {
+  .acct-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .acct-acts {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+.acct-open {
+  background: none;
+  font-family: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+.acct-open:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+.acct-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 8px;
+  font-size: var(--fs-12);
+}
+.acct-add input {
+  padding: 2px 6px;
+  width: 220px;
+}
+.acct-add .cap {
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.acct-add .btn:disabled {
+  opacity: 0.55;
+}
+.acct-remove p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* Ticket 355, mockup C (.prv-row, .prv-exp, .prv-ln, .prv-tile, .prv-mr): fixed columns for name, version, detail, action, status. */
+.prv-sec {
+  margin-bottom: 22px;
+}
+.prv-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-8);
+  min-height: 28px;
+  margin-bottom: var(--sp-8);
+}
+/* Settings kit: a section title here is the kit's (shell.css `section.ssec > h2`): 13 px, muted, bold. */
+.settings[role='region'] .sbody section.accounts.ssec .prv-head h3 {
+  margin: 0;
+  font-size: var(--fs-13);
+  font-weight: 600;
+  color: var(--muted);
+}
+.prv-head .prv-pr {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-8);
+  font-size: var(--fs-13);
+  color: var(--muted);
+}
+.prv-card .btn.prv-ghost,
+.prv-head .btn.prv-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.prv-head .btn.flush,
+.prv-card .btn.flush {
+  margin-right: -8px;
+}
+.prv-card .btn.danger {
+  color: var(--error);
+}
+.prv-head .btn.icon {
+  padding: 0 var(--sp-6);
+}
+.prv-row {
+  display: grid;
+  grid-template-columns: 24px 104px 56px minmax(0, 1fr) auto 84px 12px;
+  gap: var(--sp-12);
+  align-items: center;
+  min-height: 46px;
+  padding: 8px 14px;
+}
+.prv-row.go {
+  cursor: pointer;
+}
+.prv-row.go:hover {
+  background: var(--tint-1);
+}
+.prv-row.nost .prv-act {
+  grid-column: 5 / -1;
+  justify-self: end;
+}
+.prv-card .prv-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0; /* ticket 1041 A: the monogram sits on a tint disc, no ring */
+  border-radius: 50%;
+  background: var(--tint-2);
+  color: var(--text); /* muted read 3.75:1 on the disc inside a tile in dark */
+  font-size: var(--fs-11);
+  font-weight: 600;
+}
+.mg-key {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.prv-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--fs-2);
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.prv-ver {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: 'SF Mono', Menlo, 'D2Coding', monospace;
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+.prv-meta {
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-12);
+  overflow-wrap: anywhere;
+}
+.prv-meta .mono {
+  color: var(--text);
+  font-size: var(--fs-11);
+}
+.prv-row .prv-act {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-8); /* ticket 494: Check and Sign in side by side */
+}
+.prv-card .prv-chv {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.prv-card .prv-chv.up svg {
+  transform: rotate(180deg);
+}
+.pchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 var(--sp-8);
+  border: 0; /* ticket 1041 A (N086): a tint pill, no outline; the dot and the word carry the state */
+  border-radius: var(--r-pill);
+  background: var(--tint-1);
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.pchip::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
+}
+.pchip.plain::before {
+  display: none;
+}
+/* The chip's tint follows its tone; the words reach 4.5:1 on it (the kit chip's mix, shell.css). */
+.pchip.ok {
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+  color: color-mix(in srgb, var(--ok) 75%, var(--text));
+}
+.pchip.warn {
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  color: color-mix(in srgb, var(--warn) 75%, var(--text));
+}
+.pchip.bad {
+  background: color-mix(in srgb, var(--bad) 10%, transparent);
+  color: color-mix(in srgb, var(--bad) 75%, var(--text)); /* the plain red read 4.2:1 on its own tint */
+}
+.prv-exp {
+  padding: 10px 14px 12px 50px;
+  background: var(--tint-1); /* ticket 1041 A: the open card's body is one tint step, no rule */
+}
+.prv-exp.f {
+  padding-left: 14px;
+}
+.prv-ln {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: var(--sp-12);
+  align-items: center;
+  min-height: 32px;
+  font-size: var(--fs-13);
+}
+.prv-ln .prv-k {
+  color: var(--muted);
+}
+.prv-ln .prv-k label {
+  color: inherit;
+}
+.prv-ln .prv-v {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-8);
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--fs-13);
+}
+.prv-ln .prv-v small {
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.prv-ln .prv-v .prv-end {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-8);
+  margin-left: auto;
+}
+.prv-ln.sp {
+  margin-top: 12px; /* ticket 1041 A: space parts the blocks, no rule */
+}
+.prv-ln .accts {
+  display: grid;
+  flex: 1;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.prv-card .prv-inp {
+  min-height: 28px;
+  padding: 3px var(--sp-8);
+}
+.prv-card .prv-inp.mono {
+  font-family: 'SF Mono', Menlo, 'D2Coding', monospace;
+  font-size: var(--fs-12);
+}
+.prv-card .prv-inp.w {
+  width: 100%;
+  resize: none;
+}
+.prv-card .prv-inp.envin {
+  width: 130px;
+}
+.prv-card .prv-inp[readonly] {
+  color: var(--muted);
+}
+.prv-card .prv-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 var(--sp-8);
+  border-radius: var(--r-4);
+  background: var(--tint-2); /* ticket 1041 A: a tint tag, no outline */
+  color: var(--text);
+  font: 11.5px 'SF Mono', Menlo, 'D2Coding', monospace;
+}
+.prv-card .prv-tag button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+}
+.prv-card .prv-note {
+  margin: 4px 0 2px;
+  padding-left: 116px;
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.prv-card .prv-note.bad {
+  color: var(--error);
+}
+.prv-card .acts2 {
+  display: flex;
+  gap: var(--sp-8);
+  margin-top: 10px;
+  padding-left: 116px;
+}
+.prv-card .acts2 .cmd-reset {
+  margin-left: auto;
+}
+.prv-fx {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-12);
+  font-size: var(--fs-13);
+}
+/* Ticket 519: the browser's own `small` is `smaller` (13 px / 1.2 = 10.83 px), under the 11 px floor. */
+.prv-checkfail small {
+  font-size: var(--fs-11);
+}
+.prv-fx .prv-tx {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-8);
+  min-width: 0;
+}
+.prv-exp.f .fx-wrap {
+  padding-left: 116px;
+}
+.prv-card .howto {
+  margin: var(--sp-8) 0 0;
+  color: var(--muted);
+  font-size: var(--fs-12);
+  overflow-wrap: anywhere;
+}
+.prv-card .acct-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-8);
+  min-height: 32px;
+  padding: 0;
+}
+.acct-card .acct-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-8);
+}
+.acct-card .acct-main small {
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.prv-card .acct-add {
+  margin: var(--sp-4) 0 0;
+}
+.prv-card .acct-add .prv-inp {
+  width: 220px;
+}
+.acct-more {
+  position: relative;
+}
+.acct-more > summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--muted);
+  list-style: none;
+  cursor: pointer;
+}
+.acct-more > summary::-webkit-details-marker {
+  display: none;
+}
+.acct-menu {
+  position: absolute;
+  z-index: 5;
+  top: 100%;
+  right: 0;
+  display: grid;
+  min-width: 140px;
+  padding: var(--sp-4);
+  border-radius: var(--r-12);
+}
+.acct-menu .acct-link {
+  padding: var(--sp-4) var(--sp-8);
+  color: var(--text);
+  text-align: left;
+}
+.acct-menu .acct-danger {
+  color: var(--error);
+}
+.prv-pick {
+  padding: 10px 14px 14px;
+}
+.prv-pick h6 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: var(--fs-12);
+  font-weight: 500;
+}
+.prv-grid {
+  display: grid;
+  gap: var(--sp-8);
+}
+.prv-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  min-width: 0;
+  min-height: 40px;
+  flex-wrap: wrap; /* look v20 (Q5): a status that does not fit beside the name goes under it whole */
+  row-gap: 0;
+  padding: 0 var(--sp-8);
+  border: 0; /* ticket 1041 A: a tint tile, no outline */
+  border-radius: var(--r-8);
+  background: var(--control-quiet-bg);
+  color: var(--text);
+  font-size: var(--fs-13);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.prv-tile.go {
+  cursor: pointer;
+}
+.prv-tile.go:hover {
+  background: var(--control-quiet-hover);
+}
+/* N159: the open tile is the select step and bold (aria-pressed carries it for a screen reader); its form opens below. */
+.prv-tile.on {
+  background: var(--select-bg);
+  font-weight: 600;
+}
+.prv-tile.on:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 0;
+}
+.prv-tile.done {
+  color: var(--muted);
+}
+.prv-tile .prv-st {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 400;
+}
+.tl-check,
+.tl-ext {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tl-check {
+  width: 14px;
+  height: 14px;
+}
+.prv-mds {
+  margin-left: 116px;
+}
+.prv-mr {
+  display: grid;
+  grid-template-columns: minmax(120px, 2fr) minmax(0, 3fr) auto;
+  gap: var(--sp-12);
+  align-items: center;
+  min-height: 30px;
+  font-size: var(--fs-13);
+}
+.prv-mr .mono {
+  color: var(--muted);
+  font-family: 'SF Mono', Menlo, 'D2Coding', monospace;
+  font-size: var(--fs-12);
+}
+/* Ticket 391 follow-up D: a model's name and id are one line each; a long one ends in an ellipsis (the name's title holds it). */
+.prv-mr > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.prv-mr.off span:first-child {
+  color: var(--muted);
+}
+@media (max-width: 640px) {
+  .prv-row {
+    grid-template-columns: 24px minmax(0, 1fr) auto 12px;
+  }
+  .prv-row .prv-ver,
+  .prv-row .prv-meta {
+    display: none;
+  }
+  .prv-ln,
+  .prv-card .prv-note,
+  .prv-card .acts2,
+  .prv-mds,
+  .prv-exp.f .fx-wrap {
+    display: block;
+    margin-left: 0;
+    padding-left: 0;
+  }
+  .prv-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+/* Ticket 358, mock #update. The three cells follow the version cell in the row and take the place of its own. */
+.upd {
+  display: inline-flex;
+  align-items: center;
+  padding-block: var(--sp-2);
+  margin-left: var(--sp-8);
+  padding-inline: var(--sp-6);
+  border-radius: var(--r-pill);
+  background: var(--tint-2); /* ticket 1041 A: the new-version mark is a tint pill in ink, no outline */
+  color: var(--text);
+  font-size: var(--fs-11);
+}
+.upd-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.upd-line {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.upd-line.wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.upd-meta .bar {
+  flex: none;
+  width: 56px;
+  height: var(--sp-4);
+  border-radius: var(--sp-2);
+  background: var(--run-light-track);
+  overflow: hidden;
+}
+/* The moving bar is a working light: blue, the one place on this page blue means "an install is running". */
+.upd-meta .bar i {
+  display: block;
+  width: 40%;
+  height: 100%;
+  background: var(--light-run);
+}
+.upd-meta .bar i.ind {
+  animation: upd-ind 1.2s linear infinite;
+}
+@keyframes upd-ind {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .upd-meta .bar i.ind {
+    animation: none;
+  }
+}
+.upd-act {
+  display: flex;
+  justify-content: flex-end;
+}
+.pchip.upd-run {
+  background: color-mix(in srgb, var(--light-run) 10%, transparent);
+  color: var(--text); /* the dot is the working light; the word stays ink */
+}
+.pchip.upd-run::before {
+  background: var(--light-run);
+}
+.upd-st ~ :not(:last-child) {
+  display: none;
+}
+@media (max-width: 640px) {
+  .prv-row .upd-meta {
+    display: none;
+  }
+}
+/* Ticket 358: a failed row's actions continue its fix line (#failed2); a tile's info mark sits beside its button (#tile). */
+.prv-exp.prv-failed {
+  padding-top: 0;
+  border-top: 0;
+}
+.prv-card .prv-failed .acts2 {
+  justify-content: flex-end;
+  margin-top: 0;
+  padding-left: 0;
+}
+.prv-card .prv-failed .prv-note {
+  padding-left: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+/* A display name can be 64 characters: the name gives way, the status and the info mark never move. */
+.prv-tname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Q5 (look 11-17): the agent's name keeps its width; a long status gives way first. Look v20: it goes under the name as one
+   piece (ja "インストール済 / み" broke inside the word), so it never takes the wrap itself. */
+.prv-tile .prv-st {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  text-align: right;
+  line-height: 1.15;
+}
+.prv-tile .prv-mark {
+  flex: none;
+}
+.prv-slot {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+.prv-slot > .prv-tile {
+  padding-right: calc(var(--sp-8) * 4);
+}
+.prv-info {
+  position: absolute;
+  top: var(--sp-6);
+  right: var(--sp-4);
+}
+.prv-info .acct-menu {
+  display: flex;
+  gap: var(--sp-4);
+  min-width: 0;
+  white-space: nowrap;
+}
+.prv-info .acct-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+/* Ticket 358: the rename row (358.html #rename), the ruled 사용 and 권한 rows, and a provider turned off (c-358.html #onoff). */
+.acct-rename {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.acct-rename-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-8);
+}
+.acct-rename-row .prv-inp {
+  flex: 0 1 220px;
+  min-width: 0;
+}
+.prv-card .acct-rename .prv-note {
+  margin-left: 0;
+  padding-left: 0;
+}
+.acct-menu-sep {
+  height: 0;
+  margin: 4px 0; /* ticket 1041 B: the glass menu's groups are parted by space; the separator role stays */
+}
+.prv-rule {
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+.prv-row:has(.prv-off) .prv-mark,
+.prv-row:has(.prv-off) .prv-name,
+.prv-row:has(.prv-off) .prv-ver,
+.prv-row:has(.prv-off) .prv-meta {
+  opacity: 0.5;
+}
+.prv-row:has(.prv-off) .prv-act {
+  visibility: hidden;
+}
+.upd-pop {
+  display: inline-block;
+}
+.acct-more.upd-pop > summary.upd {
+  width: auto;
+  height: auto;
+  color: var(--text);
+}
+.upd-pop .acct-menu {
+  top: calc(100% + var(--sp-4));
+  right: auto;
+  left: var(--sp-8);
+  white-space: nowrap;
+}
+.upd-err {
+  color: var(--error);
+  font-size: var(--fs-11);
+  white-space: normal;
+}
+/* The card clips its rows' corners; an open popover has to reach past the last row. */
+.settings[role='region'] .scard:has(.upd-pop[open]) {
+  overflow: visible;
+}
+
+/* Ticket 358, mock #models2: the model filter, its empty line, and a custom model's row and add row. */
+.prv-card .prv-mds > .prv-inp {
+  display: flex;
+  margin: 2px 0 6px;
+}
+.prv-mds-none {
+  padding: 4px 0 2px;
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.prv-mr-ac {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-6);
+}
+.prv-card .prv-inp.prv-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Ticket 391, final.html scene a: one-line card heads (head.tsx) and an open card's titled blocks. */
+.prv-row.prv-hd {
+  /* Ticket 391 follow-up B: the name column grows to its line under the name (version and New version whole), up to
+     .prv-nm's cap; the middle gives way and ends in an ellipsis before the chips. */
+  grid-template-columns: 24px minmax(110px, max-content) minmax(0, 1fr) auto auto 12px;
+  min-height: 48px;
+  padding: 9px 14px;
+}
+.prv-nm {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 280px;
+  line-height: 1.25;
+}
+.prv-sub {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  /* visible: the new-version popover opens from here and must not be clipped */
+  overflow: visible;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+.prv-sub .upd {
+  margin-left: var(--sp-6);
+  padding-block: 0;
+}
+/* The version and its New version mark never shrink; only the words before them end in an ellipsis. */
+.prv-sub > .prv-ver,
+.prv-sub > .upd,
+.prv-sub > .upd-pop {
+  flex: none;
+  overflow: visible;
+}
+.prv-sx {
+  /* its trailing space collapses at the flex item's end */
+  margin-right: var(--sp-4);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.prv-hd .prv-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* a Check or Install button coming and going never moves the row (min-height); look v20 (Q5): a cell that does not fit
+     goes to a second line whole ("デフォ…", "Predetermin…", "M…" were cut), never to an ellipsis */
+  min-height: 30px;
+  flex-wrap: wrap;
+  row-gap: 2px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.prv-hd .prv-meta > * {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+.prv-hd .prv-meta > button,
+.prv-hd .prv-meta > .prv-act {
+  flex: none;
+}
+/* Ticket 1021: a long ACP command ends in an ellipsis before the chips (its whole text in the title). */
+.prv-hd .prv-meta > .prv-cmd {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.prv-hd .prv-meta .prv-acc {
+  color: var(--text);
+}
+.prv-hd .prv-act:empty {
+  display: none;
+}
+.prv-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-6);
+}
+.prv-sw {
+  display: inline-flex;
+  align-items: center;
+}
+.pchip.prv-args {
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-11);
+}
+.prv-exp.prv-body {
+  padding: 0;
+}
+.prv-blk {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px 14px;
+}
+.prv-bh {
+  padding-top: 2px;
+  font-size: var(--fs-13);
+  font-weight: 600;
+}
+.prv-bh small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 400;
+}
+.prv-bb {
+  min-width: 0;
+}
+/* Inside a block the strips lose their own frame: the block is the frame. */
+.prv-body .prv-exp {
+  padding: 0;
+  border-top: 0;
+  background: none;
+}
+.prv-body .prv-exp + .prv-exp {
+  margin-top: var(--sp-8);
+}
+.prv-calm {
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.prv-bb:has(> :not(.prv-upd:empty, .prv-calm)) > .prv-calm {
+  display: none;
+}
+.prv-upd:not(:empty) {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-12);
+}
+.prv-closed .prv-upd:not(:empty) {
+  padding: 8px 14px 8px 50px;
+}
+/* Ticket 391 follow-up D: a line's divider separates it from a line above; the first line of a block has none. */
+.prv-bb > .prv-ln.sp:first-child,
+.prv-bb > :first-child > .prv-ln.sp:first-child,
+.prv-bb > .prv-upd:empty + .prv-ln.sp {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.prv-body .prv-upd:not(:empty) + * {
+  margin-top: var(--sp-8);
+}
+.sbody .prv-head h3 .prv-dim {
+  font-weight: 400;
+}
+.prv-scope {
+  padding: 0 6px;
+  border-radius: var(--r-8);
+  background: var(--tint-2); /* ticket 1041: a tint tag in ink (it was outlined blue, the working colour) */
+  color: var(--text);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+.prv-body .prv-ln .prv-v {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-8);
+}
+.prv-mds-top {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+}
+.prv-card .prv-mds-top > .prv-inp {
+  flex: 1;
+  margin: 2px 0 6px;
+}
+/* The block title is the key column now: the list and its notes start at the block's content edge. */
+.prv-card .prv-body .prv-mds,
+.prv-card .prv-body .prv-note {
+  margin-left: 0;
+  padding-left: 0;
+}
+.prv-body .cxr {
+  margin-top: var(--sp-12);
+}
+@media (max-width: 640px) {
+  .prv-row.prv-hd {
+    grid-template-columns: 24px minmax(0, 1fr) auto auto 12px;
+  }
+  .prv-hd .prv-meta {
+    display: none;
+  }
+  .prv-blk {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Settings kit: the agent list file's path in its row; a long path keeps its end (the file name) in view. */
+.prv-file {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  vertical-align: bottom;
+}
+
+/* Ticket 450: the rename pencil beside an added account's name, and the add form under the "Add account" button. */
+.acct-pencil {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: calc(-1 * var(--sp-4));
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.acct-pencil:hover,
+.acct-pencil:focus-visible {
+  color: var(--text);
+  background: var(--control-quiet-hover);
+}
+.acct-pencil:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.prv-card .acct-add .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-6);
+}
+.prv-card .acct-add.open {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-4);
+}
+.acct-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-8);
+}
+.prv-card .acct-add .prv-note {
+  margin-left: 0;
+  padding-left: 0;
+}
+.acct-add-row label {
+  color: var(--muted);
+}

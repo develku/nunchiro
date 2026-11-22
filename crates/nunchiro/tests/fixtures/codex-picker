@@ -1,0 +1,33 @@
+#!/usr/bin/env python3
+"""Codex fixture with a composer line (`› `), so a draft the user typed shows on the screen.
+
+Same launch and resume-id behaviour as the shared `codex` fixture. A file `codex-placeholder` in NUNCHIRO_HOME
+shows Codex 0.161.0's empty-composer placeholder instead of an empty line."""
+import json, os, re, signal, subprocess, sys
+if '--version' in sys.argv:
+    print('codex-cli 0.161.0')
+    raise SystemExit
+args = sys.argv[1:]
+home = os.environ['NUNCHIRO_HOME']
+# v1a-24: Codex 0.161.0 draws `›` above a blank row and its footer; the cursor goes back after `› ` for the echo.
+# A file `codex-no-footer` in NUNCHIRO_HOME draws the bare `› ` row, a box the core does not recognise.
+footer = '' if os.path.exists(os.path.join(home, 'codex-no-footer')) else '\n\n  gpt-fixture default \u00b7 ~/fixture\x1b[2A\r\x1b[2C'
+# The core's screen restarts at every PTY resize (the window's), so like real Codex this redraws on SIGWINCH,
+# marked `redrawn` so a test can wait for it.
+signal.signal(signal.SIGWINCH, lambda *_: (sys.stdout.write('› ' + footer.replace('default', 'redrawn')), sys.stdout.flush()))
+print('LAUNCH:' + json.dumps(args), flush=True)
+for arg in args:
+    if arg.startswith('hooks.SessionStart='):
+        command = json.loads(re.search(r'command=("(?:[^"\\]|\\.)*")', arg).group(1))
+        subprocess.run(command, shell=True, input=json.dumps({'session_id': 'FAKE-CODEX-123'}).encode(), check=True)
+rollout = open(os.path.join(home, 'rollout-' + os.environ['NUNCHIRO_SESSION'] + '.jsonl'), 'w+')
+rollout.write(json.dumps({'type': 'session_meta', 'payload': {'id': 'FAKE-CODEX-123', 'cwd': os.getcwd(), 'source': 'cli'}}) + '\n')
+rollout.flush()
+placeholder = 'Ask Codex to do anything' if os.path.exists(os.path.join(home, 'codex-placeholder')) else ''
+print('READY', flush=True)
+sys.stdout.write('› ' + placeholder + footer)
+sys.stdout.flush()
+for line in sys.stdin:  # the tty echoes typed text after the prompt
+    print('\x1b[JACK:' + line.strip(), flush=True)
+    sys.stdout.write('› ' + footer)
+    sys.stdout.flush()

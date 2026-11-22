@@ -1,0 +1,70 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Machines page draft</title><style>:root{--page:#fff;--panel:#f6f8fa;--line:#d1d9e0;--text:#1f2328;--muted:#59636e;--acc:#0969da;--you:#bc4c00;--youbg:#fff1e5;--ok:#1a7f37;--bad:#cf222e;--run:#0969da;--done:#8250df;--idle:#818b98}
+:root[data-theme=dark]{--page:#0d1117;--panel:#151b23;--line:#3d444d;--text:#e6edf3;--muted:#9198a1;--acc:#4493f8;--you:#f0883e;--youbg:#3a2614;--ok:#3fb950;--bad:#f85149;--run:#4493f8;--done:#a371f7;--idle:#9198a1}
+*{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--text);font:14px/1.5 -apple-system,"Apple SD Gothic Neo",system-ui,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:18px 16px 48px}h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:26px 0 4px}
+.lead,.note{color:var(--muted);margin:0 0 8px;font-size:13px}.rec{font-size:11px;font-weight:700;color:#fff;background:var(--ok);border-radius:9px;padding:1px 8px;margin-left:6px;vertical-align:middle}
+.tog{float:right;font:inherit;font-size:12px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:6px;padding:3px 10px;cursor:pointer}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+.card{border:1px solid var(--line);border-radius:10px;background:var(--page);padding:12px;overflow:hidden}.card h3{margin:0 0 2px;font-size:14px}
+.pl{font-size:12px;margin:8px 0 0;color:var(--muted)}.pl b{color:var(--text)}
+.mono{font:12px ui-monospace,Menlo,monospace}.chip{font:11px ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:4px;padding:0 5px;background:var(--panel);white-space:nowrap}
+.btn{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:6px;padding:3px 10px;cursor:pointer}.btn.p{background:var(--acc);border-color:var(--acc);color:#fff}.btn.d{color:var(--bad)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c,var(--idle));margin-right:5px}
+.ok{--c:var(--ok)}.bad{--c:var(--bad)}.you{--c:var(--you)}.run{--c:var(--run)}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}th{text-align:left;color:var(--muted);font-weight:600;border-bottom:1px solid var(--line);padding:4px 6px}td{padding:6px;border-bottom:1px solid var(--line);vertical-align:top}
+@media (max-width:420px){.opts{grid-template-columns:1fr}}
+
+.set{display:grid;grid-template-columns:130px 1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden;min-height:300px}
+.nav{background:var(--panel);border-right:1px solid var(--line);padding:8px;font-size:12.5px;color:var(--muted)}.nav div{padding:3px 6px}.nav .on{background:var(--page);color:var(--text);border-radius:5px;font-weight:600}
+.main{padding:12px;min-width:0}.mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.mh b{font-size:14px}
+.m{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px}.m .h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.m .h b{font-size:14px}.m .sp{flex:1}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:3px 8px;font-size:12.5px;margin-top:8px}.kv dt{color:var(--muted)}.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.prob{margin-top:8px;border:1px solid var(--bad);border-radius:6px;padding:6px 8px;font-size:12.5px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.add{border:1px dashed var(--line);border-radius:8px;padding:10px;font-size:12.5px;color:var(--muted)}.add input{font:12px ui-monospace,Menlo,monospace;border:1px solid var(--line);background:var(--page);color:var(--text);border-radius:5px;padding:3px 6px;width:100%;max-width:280px}
+/* Option A cards follow the shipped v25 Machines page (web/src/settings/machines/machines.css, MachinesPage.tsx; needs 142: a design derived from an approved concept follows the concept).
+   The app's semantic tokens are scoped to the card: its --page/--panel are the reverse of this draft's. The cards stay <div> because the spec crops them with .m:nth-of-type(n). */
+.machine-card{--page:#f6f6f4;--panel:#fff;--faint:#818b98;--warn:#9a6700;--on-status:#fff;--fs-11:11px;--fs-12:12px;--fs-13:13px;--fs-14:14px;--r-4:4px;--r-6:6px;--r-8:8px;background:var(--panel)}
+:root[data-theme=dark] .machine-card{--page:#0d1117;--panel:#151b23;--faint:#9198a1;--warn:#d29922;--on-status:#151b23}
+.machine-card .machine-head{display:flex;gap:8px;align-items:center}.machine-card .machine-head b{font-size:var(--fs-14)}.machine-card .machine-spacer{flex:1}
+.machine-card .machine-btn{font:inherit;font-size:var(--fs-12);line-height:1.5;border:1px solid var(--line);background:var(--page);color:var(--text);border-radius:var(--r-6);padding:3px 10px;cursor:pointer;white-space:nowrap;margin:0;box-shadow:none;min-height:0}
+.machine-card .machine-btn.danger{color:var(--bad)}
+.machine-card .machine-dot{display:inline-block;flex:none;width:8px;height:8px;border-radius:50%;background:var(--idle);margin-right:5px}.machine-card .machine-dot.up{background:var(--ok)}.machine-card .machine-dot.version_mismatch,.machine-card .machine-dot.down{background:var(--bad)}
+.machine-card .machine-chip{font:var(--fs-11) ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:var(--r-4);padding:0 5px;background:var(--page);white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.machine-card .machine-kv{display:grid;grid-template-columns:110px 1fr;gap:3px 8px;font-size:calc((var(--fs-12) + var(--fs-13)) / 2);margin:8px 0 1em}.machine-card .machine-kv dt{color:var(--muted)}.machine-card .machine-kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.machine-card .machine-mono{font:var(--fs-12) ui-monospace,Menlo,monospace}
+.machine-card .machine-problem{margin-top:8px;border:1px solid var(--bad);border-radius:var(--r-6);padding:6px 8px;font-size:calc((var(--fs-12) + var(--fs-13)) / 2);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+</style></head><body><div class="wrap">
+<button class="tog" onclick="T()">light / dark</button>
+<h1>V2-12m-b Settings &gt; Machines</h1>
+<p class="lead">Draft for needs 94 (ticket 41). Fields: alias, user@host:port, configured keys (never "used"), host key fingerprint, state since, remote version. Add and remove only list or forget an alias; Nunchiro edits no ssh config and installs nothing remotely. Fake data.</p>
+
+<h2>Option A <span class="rec">recommended</span></h2>
+<p class="note">One card per machine. Everything visible without a click; the problem card sits inside the card. Remove = forget the alias in Nunchiro (settings.json), ssh config untouched.</p>
+<div class="set"><div class="nav"><div>General</div><div>Keys</div><div class="on">Machines</div><div>Language</div></div><div class="main">
+<div class="mh"><b>Machines</b><button class="btn p">+ Add machine</button></div>
+<div class="m machine-card"><div class="machine-head"><span class="machine-dot up"></span><b>macbook</b><span class="machine-chip">connected since 09:12</span><span class="machine-spacer"></span><button class="machine-btn">Reconnect</button><button class="machine-btn">Test</button><button class="machine-btn">Diagnostics</button><button class="machine-btn danger">Remove</button></div>
+<dl class="machine-kv"><dt>SSH</dt><dd class="machine-mono">me@macbook.local:22</dd><dt>Keys (configured)</dt><dd class="machine-mono">~/.ssh/id_ed25519<br>~/.ssh/id_ed25519_work</dd><dt>Host key</dt><dd class="machine-mono">SHA256:Zp3k9Qm1vXc0aT8bR2yLw4HdN7sUeJfGq5oKiA6xYhE (ssh-ed25519)</dd><dt>Nunchiro</dt><dd>0.9.4, protocol 2 (this Mac: 2)</dd></dl></div>
+<div class="m machine-card"><div class="machine-head"><span class="machine-dot version_mismatch"></span><b>studio</b><span class="machine-chip">protocol window: remote 1, this Mac 2</span><span class="machine-spacer"></span><button class="machine-btn">Connect</button><button class="machine-btn">Test</button><button class="machine-btn">Diagnostics</button><button class="machine-btn danger">Remove</button></div>
+<dl class="machine-kv"><dt>SSH</dt><dd class="machine-mono">me@studio:2222</dd><dt>Keys (configured)</dt><dd class="machine-mono">~/.ssh/id_rsa</dd><dt>Host key</dt><dd class="machine-mono">SHA256:Hq8e... (ssh-rsa)</dd><dt>Nunchiro</dt><dd>last seen 0.7.1</dd></dl>
+<div class="machine-problem"><span>Remote protocol 1 is outside 1 version back. Update Nunchiro on studio yourself; its agents keep running.</span></div></div>
+<div class="add"><b style="color:var(--text)">Add machine</b> (opened by + Add machine): ssh alias from your <span class="mono">~/.ssh/config</span>
+<div style="margin:6px 0"><input value="mini-2" aria-label="alias"> <button class="btn p">Check and add</button></div>
+Check runs <span class="mono">ssh -G</span> and a one-shot status. Unknown host key: it shows "run <span class="mono">ssh mini-2</span> once in Terminal and verify the fingerprint". No install button.</div>
+</div></div>
+
+<h2>Option B</h2>
+<p class="note">Compact table; click a row to open details on the right. Denser for 4+ machines; fingerprint and keys cost a click.</p>
+<div class="set"><div class="nav"><div>General</div><div>Keys</div><div class="on">Machines</div><div>Language</div></div><div class="main">
+<div class="mh"><b>Machines</b><button class="btn p">+ Add machine</button></div>
+<table><tr><th>Alias</th><th>user@host:port</th><th>State</th><th>Version</th></tr>
+<tr style="background:var(--panel)"><td><b>macbook</b></td><td class="mono">me@macbook.local:22</td><td><span class="dot ok"></span>up 09:12</td><td>0.9.4</td></tr>
+<tr><td><b>studio</b></td><td class="mono">me@studio:2222</td><td><span class="dot bad"></span>mismatch</td><td>0.7.1</td></tr></table>
+<div class="pane" style="margin-top:8px"><b>macbook</b> <span class="note">details</span>
+<dl class="kv"><dt>Keys (configured)</dt><dd class="mono">~/.ssh/id_ed25519, ~/.ssh/id_ed25519_work</dd><dt>Host key</dt><dd class="mono">SHA256:Zp3k9Qm1vXc0aT8bR2yLw4HdN7sUeJfGq5oKiA6xYhE</dd><dt>Protocol</dt><dd>2 (this Mac: 2)</dd></dl>
+<button class="btn d">Remove</button> <button class="btn">Machine status</button></div></div></div>
+<p class="pl"><b>A</b> shows every promised field at once (matches test machines_page_shows_every_field). <b>B</b> scales to many machines. Both: Settings only, not in first run.</p>
+</div><script>function T(){var r=document.documentElement;r.dataset.theme=r.dataset.theme=='dark'?'light':'dark'}
+if(matchMedia('(prefers-color-scheme:dark)').matches)document.documentElement.dataset.theme='dark'
+
+</script></body></html>

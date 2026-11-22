@@ -1,0 +1,56 @@
+{
+  "write": [
+    {
+      "type": "assistant",
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "write",
+            "name": "Write",
+            "input": {
+              "file_path": "sample.txt",
+              "content": "<redacted report text>"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "tool_use_id": "write",
+            "type": "tool_result",
+            "content": "File created successfully at: sample.txt (file state is current in your context — no need to Read it back)"
+          }
+        ]
+      },
+      "toolUseResult": {
+        "type": "create",
+        "filePath": "sample.txt",
+        "content": "<redacted report text>",
+        "structuredPatch": [],
+        "originalFile": null,
+        "userModified": false
+      }
+    }
+  ],
+  "bashResult": {
+    "type": "user",
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "tool_use_id": "tests",
+          "type": "tool_result",
+          "content": "  ✓   8 [webkit] › tests/permission-sheet.spec.ts:131:1 › Cancel and Esc close without storing; focus starts on Cancel (745ms)\n\n  ✓   9 [webkit] › tests/permission-sheet.spec.ts:140:1 › an unknown widget shows the core error and cannot be approved (587ms)\n\n  ✓  10 [webkit] › tests/permission-sheet.spec.ts:147:1 › command runtime child-spawn restriction is visible before approval (543ms)\n\n  10 passed (10.7s)",
+          "is_error": false
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,164 @@
+/* CHAT-PERMCHIP: .ch.perm of ko/claude-feel-2.html (--you text; its 12.5px and 9px sizes are the nearest tokens, --fs-12 and --fs-10, for the raw-literal ratchet). */
+.ch.perm {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-8);
+  background: transparent;
+  color: var(--muted); /* ticket 1041 (owner 11-22): a mode word, not "your turn"; only bypass keeps a warning colour */
+  font: inherit;
+  font-size: var(--fs-12);
+  white-space: nowrap;
+  cursor: pointer;
+  min-width: 36px;
+  overflow: hidden;
+  flex: 0 1 auto; /* narrow composer: shrinks after the picker (its flex-shrink is higher), never over a neighbour */
+}
+.ch.perm:hover:not(:disabled, .ro) {
+  background: var(--tint-1);
+  color: var(--text);
+}
+/* Ticket 991 (B6 chip): Codex's chip only says the mode it was started in: no list, so no pointer and no hover. */
+.ch.perm.ro {
+  cursor: default;
+}
+.ch.perm:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.ch.perm:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.ch.perm .c {
+  font-size: var(--fs-10);
+  opacity: 0.7;
+  flex: none;
+}
+.ch.perm .pm-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* CHAT-MODELIST (ticket 285): the chip's wrapper keeps the chip's place in the chips row and anchors the list above it.
+   Skip permissions wears --warn (text and a border, so it is not colour alone) on the chip, its list row and the tree row. */
+.perm-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  min-width: max-content; /* look v20 (Q5): the mode word stays whole ("자동" -> "자"); the row wraps first */
+  /* Ticket 381: the row breaks lines on each item's base size, so the base is the chip's floor: its words never change the
+     row count or move the composer. Free space then goes here first, up to the full text. Look 1117 v3: a fixed reserve here
+     put a short mode alone on a second line at full width; the picker and project chips wrap by their own words (B8). */
+  flex: 1000000 1 36px;
+  max-width: max-content;
+}
+/* N066: no outline; the warning colour, a warm fill and the words ("Bypass permissions") are the cues. */
+.ch.perm.skip {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  font-weight: 500;
+}
+.ch.perm.skip:hover:not(:disabled, .ro) {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+}
+.ch.perm.skip:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+/* The tree row's mark (RowIcon.tsx WtRow): the chip's warning token, a bordered "!" so it is not colour alone. */
+.row .skipm {
+  flex: none;
+  margin-left: var(--sp-4);
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--warn);
+  border-radius: var(--r-4);
+  color: var(--warn);
+  font-size: var(--fs-10);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.perm-menu {
+  position: absolute;
+  right: 0; /* the chip sits at the right end of the composer's row: the list opens leftwards, inside the window */
+  bottom: calc(100% + var(--sp-6));
+  z-index: 6;
+  padding: var(--sp-4);
+  border-radius: var(--r-12);
+  font-size: var(--fs-13);
+  color: var(--text);
+}
+.perm-menu {
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+}
+.perm-menu .pi {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  padding: var(--sp-4) var(--sp-8);
+  border: 0;
+  border-radius: var(--r-6);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.perm-menu .pi:hover,
+.perm-menu .pi:focus-visible {
+  background: var(--select-bg);
+}
+.perm-menu .pi:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.perm-menu .pi[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: default;
+}
+.perm-menu .pi.skip {
+  color: var(--warn);
+}
+.perm-menu .ck {
+  width: 14px;
+  flex: none;
+  display: inline-flex;
+}
+.perm-menu .nm {
+  flex: 1;
+}
+.perm-menu .d {
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.perm-reason {
+  margin: var(--sp-4) var(--sp-8) var(--sp-2);
+  max-width: 260px;
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.perm-err {
+  color: var(--error);
+  font-size: var(--fs-11);
+}
+/* The footer's two fixed-size controls never give their width to a squeezed row (needs 121): the chips above shrink instead. */
+/* Look v18 A-O1: the mode chip, ring and Send are one unit (.tail), so a narrow row never wraps Send alone. B8: on a wrapped
+   line (no spacer there) the unit still sits at the right end; on one line the spacer takes the room first. */
+.composer .chips > .tail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  margin-left: auto;
+}
+.composer .tail > .send,
+.composer .tail > .context-ring {
+  flex: none;
+}

@@ -1,0 +1,12 @@
+#!/bin/sh
+# v1a-17: hold every git call while `$NUNCHIRO_HOME/hold-git` exists (bounded), so a test can show the core answers
+# other requests meanwhile; `git-held` tells the test a call got here.
+if [ -e "$NUNCHIRO_HOME/hold-git" ]; then
+    : >"$NUNCHIRO_HOME/git-held"
+    i=0
+    while [ -e "$NUNCHIRO_HOME/hold-git" ] && [ "$i" -lt 3000 ]; do
+        sleep 0.01
+        i=$((i + 1))
+    done
+fi
+exec /usr/bin/git "$@"

@@ -1,0 +1,16 @@
+{
+  "note": "Recorded workload for ticket 11 (docs/v1/figures.md). Change it only with a new figures entry that says why.",
+  "agent": [
+    "--model",
+    "haiku",
+    "--",
+    "--strict-mcp-config"
+  ],
+  "ready": "❯\\s+Try|(?:manual|auto) mode on|for shortcuts",
+  "busy_prompts": [
+    "Write the numbers from 1 to 1000 as English words, one per line. Do not use any tools.",
+    "1부터 1000까지의 숫자를 한글 단어로 한 줄에 하나씩 쓰세요. 도구는 쓰지 마세요."
+  ],
+  "keys": "QXZJKV눈치로한글입력확인QXZJKV가나다똠방각하읽었어요",
+  "keys_note": "Uppercase letters unlikely in either app's own UI redraws, plus Hangul syllables (whole UTF-8 syllables, as an IME commit sends them)."
+}

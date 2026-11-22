@@ -1,0 +1,13 @@
+/* Settings · Skills & hooks. Tokens from tokens.css only. */
+/* Ticket 326: the command is the long field; quoted paths need the room. */
+.settings[role='region'] .srow.ext-add {
+  display: flex;
+  gap: var(--sp-8);
+}
+.settings[role='region'] .srow.ext-add input {
+  flex: 1;
+  min-width: 0;
+}
+.settings[role='region'] .srow.ext-add input.mono {
+  flex: 3;
+}

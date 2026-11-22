@@ -1,0 +1,5 @@
+Upstream source of the licence texts in this folder (fetched 2026-10-28; compared byte-for-byte modulo trailing whitespace).
+LICENSE-APACHE: https://raw.githubusercontent.com/h4llow3En/mac-notification-sys/master/LICENSE-Apache
+  year line: none (Apache-2.0 appendix template only)
+LICENSE-MIT: https://raw.githubusercontent.com/h4llow3En/mac-notification-sys/master/LICENSE-MIT
+  year line: Copyright (c) 2017 Felix Döring

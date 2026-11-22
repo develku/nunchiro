@@ -1,0 +1,5 @@
+#!/bin/sh
+# Fast path: a Python start-up per git call took seconds under host load and pushed start and worktree chains past their deadlines.
+[ -n "$NUNCHIRO_HOME" ] || exit 1 # as the Python shim did (KeyError)
+[ -e "$NUNCHIRO_HOME/pause-remove" ] || exec /usr/bin/git "$@"
+exec python3 "$(dirname "$0")/git-gate.py" "$@"

@@ -1,0 +1,41 @@
+{
+  "use": {
+    "timestamp": "2026-10-20T14:14:22.342Z",
+    "ordinal": 183,
+    "type": "response_item",
+    "payload": {
+      "type": "function_call",
+      "id": "fc_04221f5d477f2221016ad7773b2a808191bde4ffe2d0f8c032",
+      "name": "exec_command",
+      "arguments": "{\"cmd\":\"ps -axo pid,ppid,ni,etime,%cpu,state,command | rg 'proj-r2|pytest-pins|closure.py|git show' ; cat /tmp/demo/run/proj-r2/cost.log; tail -5 /tmp/demo/run/proj-r2/pins.log /tmp/demo/run/proj-r2/closure-r1-nice.log\",\"max_output_tokens\":2500}",
+      "call_id": "call_b57ee20ac9df4d7088104a8ef6610d73",
+      "internal_chat_message_metadata_passthrough": {
+        "turn_id": "01a159a5-599e-7f22-aabd-98a719a23ac1",
+        "create_time": 1792505659.1686707
+      }
+    },
+    "metadata": {
+      "client_authored": false,
+      "user_input_order": 22
+    }
+  },
+  "result": {
+    "timestamp": "2026-10-20T14:14:22.430Z",
+    "ordinal": 186,
+    "type": "response_item",
+    "payload": {
+      "type": "function_call_output",
+      "id": "fco_01a159a9-cbde-7a71-ac4e-62f41296c535",
+      "call_id": "call_b57ee20ac9df4d7088104a8ef6610d73",
+      "output": "Chunk ID: 2babbb\nWall time: 0.0000 seconds\nProcess exited with code 0\nOriginal token count: 124\nOutput:\nzsh:1: operation not permitted: ps\n{\"nice\": 10, \"receipt_count\": 17, \"decisions\": 15, \"iterations\": 10000, \"us_per_tick\": 229.72897500148974}\n==> /tmp/demo/run/proj-r2/pins.log <==\n..                                                                       [100%]\nBR2 opt-in: 8 files not collected without numpy (add `--with numpy==2.4.3` to uv run)\n2 passed in 11.93s\n\n==> /tmp/demo/run/proj-r2/closure-r1-nice.log <==\n",
+      "internal_chat_message_metadata_passthrough": {
+        "turn_id": "01a159a5-599e-7f22-aabd-98a719a23ac1",
+        "create_time": 1792505662.430318
+      }
+    },
+    "metadata": {
+      "client_authored": false,
+      "fallback_token_limit_override": 12000
+    }
+  }
+}

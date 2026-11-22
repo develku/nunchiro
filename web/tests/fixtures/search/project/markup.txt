@@ -1,0 +1,2 @@
+<b>needle</b> stays text
+[31mneedle[0m stays text

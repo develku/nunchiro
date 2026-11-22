@@ -1,0 +1,3 @@
+Upstream source of the licence texts in this folder (fetched 2026-10-28; compared byte-for-byte modulo trailing whitespace).
+LICENSE-MIT: https://raw.githubusercontent.com/madsmtm/objc2/main/LICENSE-MIT.txt
+  year line: Copyright 2026 Mads Marquart

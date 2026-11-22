@@ -1,0 +1,3 @@
+#!/bin/sh
+# The nudge fixture with Codex hook arguments.
+FIXTURE_CODEX=1 exec "$(dirname "$0")/claude" "$@"

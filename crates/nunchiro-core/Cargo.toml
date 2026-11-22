@@ -1,0 +1,23 @@
+[package]
+name = "nunchiro-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+portable-pty.workspace = true
+libc.workspace = true
+# Window API (ticket 07): sync WebSocket over std threads, matching the unix-socket server.
+tungstenite = "0.30"
+# Approvals (ticket v1b-14): content hash of a widget folder and its manifest.
+sha2 = "0.11.1"
+toml = "1.1.8"
+# v1b-16: byte-stable GUI writes to board.toml (coordinator 01:57).
+toml_edit = "0.25.17"
+# File search honouring .gitignore (spec B3 Search).
+ignore = "0.4"
+# v1b-21 r3: Unicode 16 General Category and Default_Ignorable tables for the act text allowlist; already in the
+# lock through ignore -> globset (no new crate).
+regex-syntax = "0.8.11"

@@ -1,0 +1,105 @@
+# Paths left out of the public snapshot (scripts/export-public.sh). One git pathspec per line (a directory takes all it
+# holds; * and ? are wildcards), then "#" and the reason. A line starting with "+" puts that path back. Blank lines and lines starting with "#" are ignored.
+
+# Agent and owner process state: how this repository is run, not what it builds.
+.agents/                  # build-loop settings and playbooks for the owner's agents
+.claude/                  # owner's Claude Code project settings and hooks
+AGENTS.md                 # agent instructions for this checkout
+CLAUDE.md                 # agent instructions for this checkout
+PROJECT_STATE.md          # owner's running status page
+ROADMAP.md                # owner's internal roadmap (ticket numbers, dates, names)
+.gate-paths               # merge-gate stage map (owner build loop)
+.gate-precheck            # merge-gate pre-check list (owner build loop)
+.gate-strict              # merge-gate strict paths (owner build loop)
+.hot-files                # edit-lock trial list (owner build loop)
+.strict-paths             # frozen strict-layer globs (owner build loop)
+.githooks/                # commit and main-ref hooks of the owner build loop
+
+# Internal docs: tickets, requests, hand-offs, research, reviews, mockups, plans.
+docs/ACTIVE.md            # current-work page
+docs/acceptance.md        # owner acceptance card
+docs/agents/              # agent-facing process notes
+docs/areas/               # area records with owner decisions
+docs/decisions.toml       # owner decision log
+docs/goal.md              # current goal
+docs/handoffs/            # session hand-offs
+docs/needs.md             # owner request log
+docs/needs-archive.md     # owner request log, archived
+docs/peers/               # notes on peer apps
+docs/research/            # research notes, measurements and samples from the owner's Macs
+docs/review/              # review pages
+docs/scorecard.md         # owner scorecard
+docs/state/               # session state
+docs/tickets/             # tickets
+docs/v1/                  # v1 specs and spikes (internal plans)
+docs/v2/                  # v2 spec and owner packets (decision pages with mockups)
+docs/adr/                 # founding record of the owner's grill-me session; links into docs/research
+docs/brand/qa-v1b/        # design QA screenshots and their harness
+docs/brand/qa-v1b.md      # design QA record of those screenshots
+docs/brand/principles.md  # design principles written against the owner's requests and research (links into them)
+docs/release/            # internal publish scan verdicts (ticket 188), the public README draft and the owner's checklist
+docs/design/              # design mockups and screenshot sets (97 MB); the one design file the code reads is kept below
++docs/design/v25-threat-model.md  # kept (a line starting with + is put back): crates/nunchiro-core tests read it with include_str!
+
+# Owner build-loop scripts and their tests (the gate, nightly runs, merge guard, publish scan).
+scripts/launchd/          # owner's nightly launchd job
+scripts/merge-guard.py    # Claude Code hook of the owner's build loop
+scripts/gen-gate-paths.py # writes .gate-paths
+scripts/gate-failures.sh  # build-loop [gate] helper
+scripts/gate-scope.sh     # build-loop [gate] helper
+scripts/nightly-reds.py   # owner's nightly web run
+scripts/web-nightly.sh    # owner's nightly web run
+scripts/nextest-trial.py  # one-off runner comparison
+scripts/test-githooks.sh  # tests .githooks/, which leaves
+scripts/gate-quarantine.sh # merge-gate quarantine; checks each entry against ROADMAP.md, which leaves
+.gate-quarantine          # merge-gate quarantine list
+scripts/cargo-test-gate.sh # merge-gate cargo stage (reads gate-quarantine.sh)
+scripts/area-specs.sh     # merge-gate spec picker; reads docs/areas/, which leaves
+scripts/affected-specs.py # merge-gate spec picker (web-smoke.sh --affected)
+scripts/web-smoke.sh      # merge-gate web smoke (load wait, ratchets against origin/main, quarantine, area and affected
+                          # spec pickers); in the export run `pnpm --filter nunchiro-web test` instead
+scripts/publish-scan.sh   # internal publish scan; its verdicts live in docs/release/publish-check.md, which leaves
+scripts/scrub-owner.py    # export --scrub step; it lists the private names it replaces
+tests/scenario/test_build_loop_optin.py   # tests .agents/build-loop.toml and .strict-paths
+tests/scenario/test_gen_gate_paths.py     # tests scripts/gen-gate-paths.py
+tests/scenario/test_gate_failures.py      # tests scripts/gate-failures.sh
+tests/scenario/test_gate_scope.py         # tests scripts/gate-scope.sh
+tests/scenario/test_gate_widen.py         # tests .hot-files
+tests/scenario/test_nightly_reds.py       # tests scripts/nightly-reds.py
+tests/scenario/test_nextest_trial.py      # tests scripts/nextest-trial.py
+tests/scenario/test_githooks.py           # tests .githooks/
+tests/scenario/test_publish_scan.py       # tests scripts/publish-scan.sh against docs/release/publish-check.md
+tests/scenario/test_no_owner_names.py     # tests export --scrub; it lists the private names it looks for
+tests/scenario/test_gate_quarantine.py    # tests scripts/gate-quarantine.sh and the gate line in .agents/build-loop.toml
+tests/scenario/test_area_specs.py         # tests scripts/area-specs.sh against docs/areas/
+tests/scenario/test_affected_specs.py     # tests scripts/affected-specs.py
+tests/scenario/test_web_smoke.py          # tests the merge-gate web smoke, the nightly and .agents/build-loop.toml
+tests/scenario/test_review_page_1105.py   # tests a review page under docs/design
+tests/scenario/test_docs_followups_1104.py # greps internal docs
+tests/scenario/fixtures/tier_check_default_strict.txt  # fixture of test_build_loop_optin.py
+
+# Web specs that compare the window with a private mockup or write screenshots into docs/design.
+web/tests/accounts-head-414.spec.ts       # reads docs/design/providers-391
+web/tests/board-polish.spec.ts            # reads docs/design/v25-board
+web/tests/board-shots.spec.ts             # writes docs/design/v25-board
+web/tests/cf5-fork.spec.ts                # reads docs/v2/owner-packets
+web/tests/cf5-side-chat.spec.ts           # reads docs/v2/owner-packets
+web/tests/chat-calm-shots.spec.ts         # writes docs/design/v25-chat-calm
+web/tests/conformance-2.spec.ts           # writes docs/design/v25-bug-sweep
+web/tests/design-chat-shots.spec.ts       # writes docs/design/v25-design-chat
+web/tests/design-shell-shots.spec.ts      # writes docs/design/v25-design-shell
+web/tests/design-tree.spec.ts             # writes docs/design/v25-design-tree
+web/tests/fidelity-board.spec.ts          # reads docs/design/v25-board
+web/tests/leader-shots-990.spec.ts        # writes docs/design/leader-room
+web/tests/p5-sweep-870-shots.spec.ts      # writes docs/design/870-sweep
+web/tests/p5-sweep-960-shots.spec.ts      # writes docs/design/960-sweep
+web/tests/reshoot-1029-shots.spec.ts      # reads docs/v2/owner-packets
+web/tests/settings-git-providers.spec.ts  # reads docs/design/settings-1103
+web/tests/settings-git.spec.ts            # reads docs/design/settings-1103
+web/tests/settings-ia-copy.spec.ts        # reads docs/design/v25-bug-sweep
+web/tests/settings-polish.spec.ts         # writes docs/design/v25-settings-polish
+web/tests/settings-shell.spec.ts          # reads docs/design/settings-1103
+web/tests/tree-bars-462.spec.ts           # reads docs/design/m3-1110
+web/tests/v2-6d-shots.spec.ts             # reads docs/needs.md
+scripts/sweep-contact-sheet.mjs           # writes docs/design/552-sweep
+scripts/app-click/page_test               # reads docs/design/v25-bug-sweep

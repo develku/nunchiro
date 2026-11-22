@@ -1,0 +1,7 @@
+version = 1
+kind = "script"
+author = "owner"
+command = ["sh", "open-prs.sh", "--state", "open"]
+interval = 60
+permissions = ["read", "act"]
+network = ["api.github.com", "github.com"]

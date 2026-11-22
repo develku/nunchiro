@@ -1,0 +1,11 @@
+.scratch/
+node_modules/
+target/
+dist/
+.DS_Store
+
+# Worker returns (herdr lanes); never committed
+/REPORT.md
+/REPORT.r*.md
+/.claude/coordinator-run
+__pycache__/

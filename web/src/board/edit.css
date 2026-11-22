@@ -1,0 +1,333 @@
+/* V2.5-38 (ticket 186, draft B): the pencil, the edit panel (.ep, 290 px beside the board) and the one-line list of the
+   right-bar widget (.wbar/.wc). Values follow docs/design/v25-board/draft-b.html; colours are the token roles. */
+.bpen {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--r-10) / 2);
+  background: var(--control-quiet-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.bpen:hover:not(:disabled) {
+  background: var(--control-quiet-hover);
+}
+.bpen svg {
+  width: 14px;
+  height: 14px;
+}
+/* Pressed: the selected tint, not a blue outline (ticket 1041, N072). */
+.bpen[aria-pressed='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+}
+.bpen:focus-visible,
+.bepb:focus-visible,
+.bli:focus-visible,
+.bgrip:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.bsplit {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.bsplit > .bcols {
+  min-width: 0;
+}
+.bep {
+  flex: none;
+  width: 290px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 0;
+  background: var(--page); /* in the page's flow beside the board: one surface step, no rule (ticket 1041 A) */
+  font-size: var(--fs-12);
+  color: var(--text);
+}
+.bnarrow .bep {
+  flex: 1;
+  width: auto;
+  border-left: 0;
+}
+.beph {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  font-weight: 700;
+}
+.beph svg {
+  width: 14px;
+  height: 14px;
+}
+.beph .bsp {
+  flex: 1;
+}
+.bepb {
+  font: 600 var(--fs-11) system-ui;
+  border: 0;
+  background: var(--control-quiet-bg);
+  color: var(--text);
+  border-radius: calc(var(--r-10) / 2);
+  padding: 1px 7px;
+  cursor: pointer;
+}
+.bepbody {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.beg h4 {
+  margin: 0 0 4px;
+  font: 700 calc(var(--fs-10) + 0.5px) system-ui;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.berow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+.berow.dim {
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.bewrap {
+  flex-wrap: wrap;
+}
+.bewrap label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
+}
+/* Look v35 b S3-4: the Columns dialog's boxes too (it drew the UA's blue). */
+:is(.beg, .bcoled) input[type='checkbox']:not(.btg) {
+  accent-color: var(--control-bg); /* a control, not the working blue (owner 15.1 item 1) */
+  margin: 0;
+}
+/* Draft B .tg: a 26 x 14 switch, green when on. */
+.btg {
+  appearance: none;
+  flex: none;
+  margin: 0 0 0 auto;
+  width: 26px;
+  height: 14px;
+  border-radius: calc(var(--r-4) * 1.75);
+  background: var(--faint);
+  position: relative;
+  cursor: pointer;
+}
+.btg::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--on-status);
+}
+.btg:checked {
+  background: var(--ok);
+}
+.btg:checked::after {
+  left: auto;
+  right: 2px;
+}
+.btg:focus-visible,
+.bnum:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.bnum {
+  margin-left: auto;
+  width: 48px;
+  text-align: right;
+  padding: 0 6px;
+  font-family: 'SF Mono', Menlo, 'D2Coding', monospace;
+  font-size: var(--fs-12);
+}
+.bnum[aria-invalid='true'] {
+  border-color: var(--bad);
+}
+.bep .berr {
+  color: var(--bad);
+  font-size: var(--fs-11);
+}
+.bepfoot {
+  flex: none;
+  font-size: var(--fs-11);
+  color: var(--muted);
+  padding: 6px 10px;
+}
+/* The ColumnEditor inside the panel: draft B's .erow (handle, colour mark, title), controls on the row's second line. */
+.bep .bepcols {
+  width: auto;
+}
+.bep .bepcols ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+}
+.bep .bepcols li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  padding: 2px 0;
+  border-bottom: 0;
+}
+.bep .bepcols li > input {
+  flex: 1 1 60px;
+  min-width: 0;
+  padding: 0 4px;
+}
+.bep .bepcols li > input:hover,
+.bep .bepcols li > input:focus {
+  border-color: var(--line);
+}
+.bep .bepcols li label,
+.bep .bepcols .bstates {
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.bep .bepcols .btn {
+  font: 600 var(--fs-11) system-ui;
+  border: 0;
+  background: var(--control-quiet-bg);
+  color: var(--text);
+  border-radius: var(--r-4);
+  padding: 0 6px;
+}
+.bep .bepcols .brow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+}
+.bgrip {
+  color: var(--muted);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.bcoled li[data-dragging] {
+  opacity: 0.5;
+}
+.bcoled li[data-drop='true'] {
+  border-top: 2px solid var(--text); /* the drop line in ink, as the board's own (.bline) */
+}
+.bsw {
+  flex: none;
+  width: 3px;
+  height: 12px;
+  border-radius: calc(var(--r-6) / 4);
+  background: var(--idle);
+}
+.bsw[data-state='working'] { background: var(--light-run); }
+.bsw[data-state='needs_decision'] { background: var(--you); }
+.bsw[data-state='review'] { background: var(--ok); }
+.bsw[data-state='done'] { background: var(--done); }
+/* The right-bar widget's one-line list (draft B .wl/.wc). */
+/* (.board raises it above board.css's .board .bhead) */
+.board.bnarrow .bhead {
+  height: 32px;
+  padding: 0 10px;
+  gap: 6px;
+  font-weight: 700;
+}
+.bnarrow .bhead .bmsg {
+  flex: 1;
+  min-width: 0;
+}
+.blist {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.blsh {
+  font: 700 var(--fs-10) system-ui;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 4px 2px 0;
+}
+.bli {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-8);
+  background: var(--tint-1); /* ticket 1041 (A, N041): a tint step, no outline */
+  color: var(--text);
+  font-size: var(--fs-12);
+  text-align: left;
+  cursor: pointer;
+}
+.bli:hover {
+  background: var(--tint-2);
+}
+/* Your turn keeps its warm tint; your turn and broken take the left state edge in widgets-7a.css. */
+.bli[data-you] {
+  background: var(--you-bg);
+}
+.bli .bid {
+  color: var(--muted);
+}
+.bltt {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.blcol {
+  flex: none;
+  font-size: calc(var(--fs-10) + 0.5px);
+  color: var(--muted);
+}
+.bslug {
+  margin-left: auto;
+  /* One fixed share for every row, so the title fields beside it end at one width (468 review: ragged ends). */
+  flex: 0 0 45%;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-10);
+  color: var(--muted);
+}
+.bglyph {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.bep .bepcols li > input {
+  height: 18px;
+}

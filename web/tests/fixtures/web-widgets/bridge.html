@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>bridge client</title></head>
+<body>
+<p id="hello">리뷰 web widget</p>
+<pre id="log"></pre>
+<script>
+// A well-behaved widget: `call(method, params)` posts a bridge call; every reply lands in `replies()`.
+var n = 0, log = [];
+window.call = function (method, params) {
+  var id = ++n;
+  parent.postMessage({ nunchiro: 1, id: id, method: method, params: params }, '*');
+  return id;
+};
+window.post = function (m) { parent.postMessage(m, '*'); };
+window.replies = function () { return log; };
+window.addEventListener('message', function (e) {
+  if (e.source !== parent || !e.data || e.data.nunchiro !== 1) return;
+  log.push(e.data);
+  document.getElementById('log').textContent = JSON.stringify(log);
+});
+</script>
+</body></html>

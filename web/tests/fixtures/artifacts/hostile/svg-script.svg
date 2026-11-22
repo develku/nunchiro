@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><title>svg script</title>
+<script>function r(v){parent.postMessage({type:"fixture",result:v},"*")}
+fetch("http://127.0.0.1:{{CANARY}}/svg-fetch").then(function(){r("reached")},function(){r("blocked")});</script>
+<rect width="80" height="40"/></svg>

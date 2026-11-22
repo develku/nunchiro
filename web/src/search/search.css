@@ -1,0 +1,337 @@
+/* Search sidebar and widget (v1b-10), on the ko/ token roles (STYLE 2026-10-28; fid-66). */
+.dock.l.sdock {
+  flex: none;
+  width: 256px;
+}
+.spanel {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+.sfield {
+  flex: none;
+  padding: 6px 8px 4px;
+}
+.sfield input {
+  width: 100%;
+  height: 26px;
+  padding: 0 8px;
+}
+.sfield input::placeholder {
+  color: var(--muted);
+}
+.sfield input:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+/* a fixed two-line box, so a new state never moves the list; longer core messages clamp (full text in title) */
+.sstat {
+  flex: none;
+  height: 30px;
+  padding: 0 10px;
+  font-size: var(--fs-11);
+  line-height: 15px;
+  color: var(--muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+.sstat[role='alert'] {
+  color: var(--error); /* N079: a failure is red */
+}
+.hits {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 4px 4px;
+}
+.sfile,
+.hit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--row);
+  padding: 0 6px;
+  font-size: var(--fs-12);
+  white-space: nowrap;
+  overflow: hidden;
+  border-radius: var(--r-4);
+}
+.sfile {
+  color: var(--text);
+  font-weight: 600;
+  margin-top: 2px;
+}
+.sfile .n {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.sfile .d {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1 1 0;
+  font-weight: 400;
+  color: var(--muted);
+}
+.hit {
+  cursor: default;
+  padding-left: 12px;
+  color: var(--text);
+}
+.hit:hover {
+  background: var(--tint-1);
+}
+.hit[aria-selected='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+}
+.hit:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+.hit .sln {
+  flex: none;
+  min-width: 22px;
+  text-align: right;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.hit .stx {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: var(--fs-11);
+}
+.hit mark {
+  background: var(--mark);
+  color: var(--mark-text);
+  border-radius: var(--r-2);
+  padding: 0 1px;
+}
+.snote {
+  flex: none;
+  height: 18px;
+  padding: 0 10px;
+  font-size: var(--fs-11);
+  line-height: 18px;
+  color: var(--muted); /* a note, not your turn */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* V2-7 Sessions scope (draft 06 A): scope chips, filters, hits grouped by session. Each scope's part is a
+   `display: contents` box, so the panel's flex column (field, status, list) is the same in both. */
+.sscope {
+  display: contents;
+}
+.sscope[hidden] {
+  display: none;
+}
+/* Ticket 1041 lane 7b (N150): the scope switch is one quiet tint, the chosen scope the selected step, no outline. */
+.sscopes {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  width: max-content;
+  margin: 0 10px 6px;
+  padding: 2px;
+  border-radius: var(--r-6);
+  background: var(--tint-1);
+  overflow: hidden;
+  font-size: var(--fs-11);
+}
+.sscopes button {
+  flex: none;
+  padding: 0 var(--sp-8);
+  border: 0;
+  border-radius: var(--r-4);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+}
+.sscopes button[aria-checked='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+  font-weight: 600;
+}
+.sscopes button:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: -2px;
+}
+/* Filters are chips (draft 06): a select drawn as a pill with an Octicon caret, and a check pill for "Closed too". */
+.sfilt {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  padding: var(--sp-6) 10px;
+  font-size: var(--fs-11);
+  color: var(--text);
+}
+.spill,
+.sclosed {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+  height: 22px;
+  border-radius: var(--r-12);
+  padding: 0 var(--sp-8);
+  background: var(--control-quiet-bg); /* N150: pills on a tint, no outline */
+  white-space: nowrap;
+}
+.spill {
+  gap: 0;
+}
+.spill .oi {
+  margin: 0 -2px; /* the caret glyph sits inside its 12px box with room to spare */
+}
+.spill select {
+  max-width: 116px;
+  appearance: none;
+  field-sizing: content; /* the pill fits its current text; engines without it keep the widest option */
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  outline: 0;
+}
+.spill:has(select:focus-visible),
+.sclosed:has(input:focus-visible) {
+  outline: var(--focus-width) solid var(--focus-ring);
+}
+.sclosed:has(input:checked) {
+  background: var(--select-bg);
+  color: var(--select-text);
+}
+.sclosed:has(input:checked)::before {
+  content: '✓';
+}
+.sclosed input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.sempty {
+  flex: none;
+  padding: 0 10px 6px;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.sempty p {
+  margin: 0 0 var(--sp-3);
+}
+.sacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.hits.sh {
+  padding: 0;
+  line-height: 1.45; /* the ko mockups' body line height */
+}
+.sgh {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  padding: var(--sp-4) 10px var(--sp-2);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+.sgrp:first-child .sgh {
+  padding-top: var(--sp-3); /* the draft's first header sits 1px higher than the rule gives; measured, cause not found */
+}
+.sgh .n {
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.sgh .k {
+  color: var(--muted);
+  font-size: var(--fs-11);
+  flex: none;
+}
+.sgh .c {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+/* a session's state: filled while it runs, a ring once closed (the shape says it); N081: running takes the working light's
+   blue as the tree does, closed stays a muted ring */
+.sgd {
+  flex: none;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--muted);
+  border-radius: 50%;
+}
+.sgd[data-state='running'] {
+  border-color: var(--light-run);
+  background: var(--light-run);
+}
+.sgp,
+.sgnote {
+  padding: 0 10px var(--sp-2) 24px;
+  font-size: calc(var(--fs-11) - 0.5px);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sgnote {
+  color: var(--error); /* "not searched: reason" is a failure */
+}
+/* a hit wraps over lines: the snippet is prose with its match marked, not a one-line code row */
+.sgrp .hit {
+  display: block;
+  height: auto;
+  margin: 0 var(--sp-6) 1px 18px;
+  padding: var(--sp-3) var(--sp-6);
+  border-radius: var(--r-4);
+  font-size: calc(var(--fs-12) - 0.5px);
+  white-space: normal;
+  overflow: visible;
+  color: var(--text);
+}
+.sgrp .hit .sln {
+  display: inline;
+  min-width: 0;
+  margin-right: var(--sp-4);
+  font-size: var(--fs-10);
+  text-align: left;
+}
+.sgrp .hit .stx {
+  font-family: inherit;
+  font-size: inherit;
+  overflow: visible;
+}
+.sgrp .hit[aria-selected='true'] {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: -2px;
+}
+/* the event a hit opened: border plus colour, never colour alone; neutral (ticket 1041: orange is only "needs you") */
+.crow[data-hit] > .cin {
+  outline: 1.5px solid var(--ring-focus);
+  outline-offset: 2px;
+  border-radius: var(--r-6);
+  background: var(--select-bg);
+}

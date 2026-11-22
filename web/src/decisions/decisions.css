@@ -1,0 +1,14 @@
+/* V2-8e (DECISIONW): the Decisions widget body. Values from the approved mockup (frame-ko-d.html `.dw .dwi .dwh`). */
+.dw {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  line-height: 1.45;
+}
+.dw .dw-empty,
+.dw .dw-count {
+  margin: 0;
+  color: var(--muted); /* ticket 1041: the R8 alias --g6 is --muted (inventory N142) */
+  font-size: var(--fs-12);
+}

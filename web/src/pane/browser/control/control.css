@@ -1,0 +1,79 @@
+.bctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 40%;
+  padding: 0 8px;
+  border-radius: var(--r-16);
+  background: var(--tint-1); /* ticket 1041 lane 7b: a pill on a tint, no outline */
+  font-size: var(--fs-11);
+  font-weight: 600;
+  color: var(--muted); /* ticket 499: text, not an icon: --faint read 3.45:1 on the light panel */
+  white-space: nowrap;
+}
+.bctl > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Ticket 264: "signed in: <site>", a line under the toolbar. */
+.bsigned {
+  flex: none;
+  padding: 2px 8px;
+}
+.bsigned .bctl {
+  max-width: 100%;
+}
+
+/* Ticket 997 L7: the owner has the space: one orange button in the toolbar row. Ticket 1041 lane 7b (N144, 15.2 item 5):
+   no outline, the warm tint, the dot's warm glow; under 560 px "You have control" gives way and "Hand back" stays while it
+   fits, under 380 px only the icon; the tooltip says both at every width. */
+.bhb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-6);
+  background: var(--you-bg);
+  color: var(--you);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 28px;
+  overflow: hidden;
+}
+.bhb-said {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.bhb-said > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bhb-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--you);
+  opacity: 0.4;
+}
+@container (max-width: 560px) {
+  .bhb .bhb-said {
+    display: none;
+  }
+}
+@container (max-width: 380px) {
+  .bhb {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+  .bhb .bhb-word {
+    display: none;
+  }
+}

@@ -1,0 +1,209 @@
+/* Board grid (V2.5-37, draft B board-coord-b.html .cols/.lh/.lr): a sticky header row of columns, then one swimlane
+   per lane key with its progress bar, each lane a row of cells under the columns. More columns scroll sideways. */
+.bcols {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  column-gap: 8px;
+  align-content: start;
+  padding: 0 12px 12px;
+  overflow: auto;
+}
+.bcol {
+  /* The header cell of a column: sticky over the lanes. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  min-width: 0;
+  padding: 8px 0 6px;
+  background: var(--panel);
+  font-size: var(--fs-12);
+  line-height: normal;
+}
+.bch {
+  display: flex;
+  /* V2.5-48 item 2b: in a narrow column the needs-you mark and count move under the title, so the title is not
+     squeezed until a word breaks. */
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 6px;
+  border-radius: var(--r-6);
+  background: var(--tint-1); /* ticket 1041 (A): a tint step, no outline */
+  font-weight: 700;
+  font-size: var(--fs-12);
+}
+.bch::before {
+  content: '';
+  flex: none;
+  width: 3px;
+  height: 12px;
+  border-radius: calc(var(--r-6) / 4);
+  background: var(--idle);
+}
+.bcol[data-state='working'] .bch::before { background: var(--light-run); }
+.bcol[data-state='needs_decision'] .bch::before,
+.bcol:has(.bnd) .bch::before { background: var(--light-you); }
+.bcol[data-state='review'] .bch::before { background: var(--ok); }
+.bcol[data-state='done'] .bch::before { background: var(--done); }
+.bch b {
+  flex: 0 1 auto;
+  min-width: 0;
+  /* Draft B .chd: the full title, wrapping when the column is narrow (no ellipsis; V2.5-38 item 4b). */
+  overflow-wrap: anywhere;
+}
+.bnd {
+  flex: none;
+  padding: 0 4px;
+  border-radius: calc(var(--r-6) / 2);
+  background: var(--you-bg); /* ticket 1041: orange words on a warm tint, no outline */
+  color: var(--you);
+  font-size: calc(var(--fs-11) - 0.5px);
+}
+/* Nothing waits on you here: the neutral colours of the zero count, not the alert ones (ticket 210 C7a). */
+.bnd[data-zero="true"] {
+  background: var(--panel);
+  color: var(--muted);
+}
+.bcount {
+  flex: none;
+  font: 600 10.5px system-ui;
+  color: var(--muted);
+  padding: 0 6px;
+  border-radius: calc(var(--r-6) * 1.5);
+  background: var(--panel); /* a pill one step lighter than the head's tint, no outline */
+}
+.bproof {
+  flex: none;
+  margin-left: auto;
+  font: 600 10px ui-monospace, Menlo, monospace;
+  color: var(--done); /* the purple words carry it, no outline */
+  border-radius: var(--r-4);
+  padding: 0 4px;
+  background: var(--panel); /* AA contrast for 10 px purple on the header's grey */
+}
+
+/* Lane header: name, key tag, progress bar, n/m done (needs 155: the bar sits next to the title). */
+.blh {
+  line-height: normal;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 8px 0 5px;
+  padding: 0 2px;
+  font-weight: 700;
+  font-size: calc(var(--fs-12) + 0.5px);
+}
+.bcell + .blh {
+  margin-top: 0;
+  padding-top: 8px;
+}
+.blt {
+  flex: none;
+  width: 320px;
+  max-width: 50%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.blfold {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.blfold svg {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  color: var(--muted);
+}
+.blfold[aria-expanded='true'] svg { transform: rotate(90deg); }
+.blname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.blk {
+  flex: none;
+  font: 600 10px ui-monospace, Menlo, monospace;
+  color: var(--muted);
+  background: var(--tint-1);
+  border-radius: var(--r-4);
+  padding: 0 4px;
+}
+.bpbar {
+  flex: none;
+  width: 120px;
+  height: 6px;
+  border-radius: calc(var(--r-6) / 2);
+  background: var(--tint-2); /* the track is a tint, no outline */
+  overflow: hidden;
+}
+.bpbar i {
+  display: block;
+  height: 100%;
+  background: var(--done);
+}
+.bpt {
+  flex: none;
+  width: 70px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  font-size: calc(var(--fs-11) + 0.5px);
+  color: var(--muted);
+}
+
+.bcell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+  font-size: var(--fs-12);
+  line-height: normal;
+}
+.bcards {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bcards > li {
+  flex: none;
+}
+
+.badd {
+  flex: none;
+  border: 0;
+  border-radius: var(--r-6);
+  padding: 4px 8px;
+  color: var(--muted);
+  background: var(--tint-1); /* the empty-state affordance: its "+ Add" words on a tint, no dashed outline */
+  font: inherit;
+  font-size: calc(var(--fs-11) + 0.5px);
+  text-align: left;
+  cursor: pointer;
+}
+.badd:hover {
+  background: var(--tint-2);
+}
+.badd:focus-visible,
+.blfold:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+}

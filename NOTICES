@@ -1,0 +1,14 @@
+Nunchiro reuse notices: one line per upstream source whose code is copied or adapted (file-level detail in
+docs/reuse-ledger.md, full notices in THIRD_PARTY_NOTICES.md and in each file header). Checked by scripts/check-reuse-ledger.sh.
+
+Zeron (https://github.com/zeronsh/zeron): MIT, Copyright (c) 2026 Wing, commit 4231cb7b017d95e45f676fa80539fba30a1e75e5.
+Synara: MIT, Copyright (c) 2026 T3 Tools Inc.; Copyright (c) 2026 Emanuele Di Pietro, commit 29b11e1.
+Orca: MIT, Copyright (c) 2026 Lovecast Inc., commit 2eb0bb63.
+claude-code-viewer (https://github.com/d-kimuson/claude-code-viewer): MIT, Copyright (c) 2025 Claude Code Viewer, commit 9367cf006be9965c954e6cd36526f2195dce67ea.
+MonoCode: MIT, Copyright (c) 2026 Nick, commit 26465c6.
+T3 Code: MIT, Copyright (c) 2026 T3 Tools Inc., commit d14ace8.
+bb (https://github.com/get-bb/bb): MIT, Copyright (c) 2026 Michael Yong, commit 5e1acd765039e874643f34c4d35409e58484e408.
+iTerm2-Color-Schemes (https://github.com/mbadolato/iTerm2-Color-Schemes): MIT, Copyright (c) 2011 to Present Mark Badolato, commit 04a98db045eb5d71c2247ca6c050ab97290d081c; each bundled theme keeps its own notice in web/src/themes/catalog/NOTICES.md.
+Octicons (https://github.com/primer/octicons): MIT, Copyright (c) 2026 GitHub Inc., commit 9a274e212ee25c400ff666ce25a57866b7eacc25.
+Seti-UI (https://github.com/jesseweed/seti-ui): MIT, Copyright (c) 2014 Jesse Weed, commit 2d6c5e68b4ded73c92dac291845ee44e1182d511.
+jev-ultrafast (https://github.com/browser-use/jev-ultrafast): MIT, Copyright (c) 2026 Browser Use, commit 1231850a.

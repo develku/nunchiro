@@ -1,0 +1,4 @@
+{
+  "extends": "../tsconfig.json",
+  "include": [".", "../playwright.measure.config.ts", "../src/vite-env.d.ts", "../src/api.ts"]
+}

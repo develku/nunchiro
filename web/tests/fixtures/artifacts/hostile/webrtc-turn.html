@@ -1,0 +1,7 @@
+<!doctype html><title>webrtc turn</title>
+<script>function r(v){parent.postMessage({type:"fixture",result:v},"*")}
+function go(w){try{var P=w.RTCPeerConnection||w.webkitRTCPeerConnection;if(!P)return "absent";var pc=new P({iceServers:[{urls:["turn:127.0.0.1:{{CANARY}}?transport=tcp","stun:127.0.0.1:{{CANARY}}"],username:"u",credential:"c"}]});pc.createDataChannel("x");pc.createOffer().then(function(o){return pc.setLocalDescription(o)});return "created"}catch(e){return "threw "+e.name}}
+r("main "+go(window));
+var f=document.createElement("iframe");
+f.srcdoc="<script>var go="+go.toString()+";parent.parent.postMessage({type:'fixture',result:'srcdoc '+go(window)},'*')<\/script>";
+document.documentElement.appendChild(f);</script>

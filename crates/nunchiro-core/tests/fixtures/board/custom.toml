@@ -1,0 +1,12 @@
+version = 1
+
+[[columns]]
+id = "active"
+title = "Active"
+states = ["working", "review"]
+
+[[columns]]
+id = "human"
+title = "Human"
+states = ["needs_decision"]
+needs_decision = true

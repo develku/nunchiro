@@ -1,0 +1,222 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>v2 draft 03 · ACP agent setup (V2-4)</title><style>
+:root{--bg:#fff;--g0:#fafafa;--g1:#f3f3f3;--g2:#e9e9e9;--g3:#d4d4d4;--g4:#b5b5b5;--icon:#8a8a8a;--g5:#767676;--g6:#5f5f5f;--g7:#3a3a3a;--ink:#1b1b1b;
+--signal:#e8590c;--signal-text:#b3460a;--signal-soft:#fdeee5;--term-bg:#fbfbfb;--focus:#1b1b1b;
+/* proposed: fault state for problem cards (styles.css already falls back to #c0392b for --bad) */
+--bad:#c0392b;--bad-soft:#fbeceb;--ok:#2f7d32}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#e6e6e6;color:var(--ink);font:13px/1.45 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",sans-serif;padding:24px 24px 48px}
+a{color:var(--ink)}
+.mono{font-family:"SF Mono",Menlo,"D2Coding",monospace}
+.dim{color:var(--g5)}.sp{flex:1}
+h1{font-size:20px;margin-bottom:4px}
+.lede{color:var(--g7);max-width:1280px;margin-bottom:8px}
+.rec{max-width:1280px;background:var(--bg);border:1px solid var(--g3);border-left:4px solid var(--ink);border-radius:6px;padding:8px 12px;margin:10px 0 26px}
+.opt{margin-bottom:40px}
+.opt>h2{font-size:16px;margin-bottom:8px}
+.opt>h2 .tag{font-size:11px;font-weight:600;border:1px solid var(--ink);border-radius:3px;padding:0 5px;margin-left:8px;vertical-align:2px}
+.row{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.notes{width:1280px;background:var(--bg);border:1px solid var(--g3);border-top:0;padding:10px 14px;color:var(--g7)}
+.notes dt{font-weight:600;float:left;width:92px}.notes dd{margin-left:92px;margin-bottom:3px}
+.crops{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;max-width:1280px}
+.crop{background:var(--bg);border:1px solid var(--g4);border-radius:8px;overflow:hidden;position:relative}
+.crop>.cap{font-size:11px;font-weight:600;color:var(--g6);text-transform:uppercase;letter-spacing:.04em;padding:6px 10px;border-bottom:1px solid var(--g2);background:var(--g0)}
+:focus-visible,.fv{outline:2px solid var(--focus);outline-offset:2px}
+button{font:inherit;color:inherit;background:none;border:0}
+/* window frame (R8-final, compact density, live labels) */
+.frame{width:1280px;height:780px;background:var(--bg);border:1px solid var(--g4);display:flex;flex-direction:column;position:relative;overflow:hidden}
+.title{height:34px;flex:none;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--g3);background:var(--g0)}
+.tl{width:12px;height:12px;border-radius:50%;background:var(--g3);display:inline-block}
+.cmd{margin:0 auto;width:360px;height:22px;border:1px solid var(--g3);border-radius:6px;background:var(--bg);color:var(--g5);font-size:12px;display:flex;align-items:center;padding:0 8px;gap:6px}
+.cmd .kbd{margin-left:auto}
+.body{flex:1;display:flex;min-height:0}
+.ib{width:44px;flex:none;background:var(--g1);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:6px}
+.ib.l{border-right:1px solid var(--g3)}.ib.r{border-left:1px solid var(--g3)}
+.ai{position:relative;width:30px;height:30px;border-radius:6px;display:grid;place-items:center;color:var(--g6);font-size:14px}
+.ai.on{background:var(--g3);color:var(--ink)}
+.ai.gear{border:1px solid var(--g4);background:var(--bg)}
+.dock{width:232px;flex:none;display:flex;flex-direction:column;background:var(--g0);border-right:1px solid var(--g3);min-height:0}
+.ph{height:24px;flex:none;display:flex;align-items:center;gap:6px;padding:0 10px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--g6);border-bottom:1px solid var(--g2)}
+.ph .r{margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0;color:var(--g5)}
+.mach{display:flex;align-items:center;gap:6px;padding:6px 10px 2px;font-size:10px;color:var(--g5);text-transform:uppercase;letter-spacing:.04em}
+.grp{position:relative;margin:1px 6px 3px;padding-left:7px}
+.grp::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:3px;border-radius:2px;background:var(--g5)}
+.grp.wait::before{background:var(--signal)}.grp.idle::before{background:var(--g3)}.grp.bad::before{background:var(--bad)}
+.gh{display:flex;align-items:center;gap:6px;height:22px;padding:0 6px;font-size:12px;font-weight:600;border-radius:4px}
+.gh.sel{background:var(--g2)}.gh .br{font-weight:400;color:var(--g6)}
+.cnt{margin-left:auto;display:flex;gap:7px;font-size:11px;font-weight:400;color:var(--g6)}
+.act{display:flex;align-items:center;gap:6px;height:22px;margin-left:10px;padding:0 6px 0 8px;font-size:12px;border-radius:4px;background:var(--signal-soft)}
+.act .nm{font-weight:600}.act .wh{color:var(--signal-text);font-size:11px;font-weight:600}
+.act.bad{background:var(--bad-soft)}.act.bad .wh{color:var(--bad)}
+.emp{height:22px;margin:1px 0 1px 10px;border:1px dashed var(--g3);border-radius:4px}
+.more{height:20px;margin-left:10px;display:flex;align-items:center;padding:0 6px;font-size:11px;color:var(--g4);border:1px dashed var(--g2);border-radius:4px}
+.fold{display:flex;align-items:center;gap:6px;height:22px;padding:0 6px 0 16px;font-size:12px;color:var(--g7)}
+.agents{margin-top:auto;flex:none;border-top:1px solid var(--g3)}
+.ar{display:grid;grid-template-columns:12px 1fr auto;gap:6px;align-items:center;padding:0 10px;height:20px;font-size:11.5px}
+.ar .s{font-size:10.5px;color:var(--g5);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--g5);display:inline-block;flex:none}
+.dot.work{background:var(--g5)}.dot.wait{background:var(--signal);border-color:var(--signal)}
+.dot.bad{background:var(--bad);border-color:var(--bad);border-radius:1px;transform:rotate(45deg);width:7px;height:7px}
+.dot.ok{background:var(--ok);border-color:var(--ok)}
+.centre{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+.tabs{height:26px;flex:none;display:flex;align-items:stretch;padding:0 6px;border-bottom:1px solid var(--g3);background:var(--g1)}
+.tab{display:flex;align-items:center;gap:6px;padding:0 9px;font-size:11.5px;color:var(--g6);border-right:1px solid var(--g2);white-space:nowrap}
+.tab.on{background:var(--bg);color:var(--ink);box-shadow:inset 0 2px 0 var(--ink)}
+.tab .x{color:var(--g4);font-size:10px}
+.sh{height:26px;flex:none;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--g2);font-size:11.5px;white-space:nowrap}
+.sh .nm{font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--g4);border-radius:5px;overflow:hidden;font-size:11px}
+.seg>*{padding:1px 8px;color:var(--g6);display:inline-flex;align-items:center;gap:5px;border-right:1px solid var(--g3)}
+.seg>*:last-child{border-right:0}.seg .on{background:var(--ink);color:#fff}
+.main{flex:1;min-height:0;overflow:hidden;position:relative}
+.col{max-width:640px;margin:0 auto;padding:14px 22px;display:flex;flex-direction:column;gap:9px}
+.msg.user{background:var(--g1);border-radius:10px;padding:7px 11px;align-self:flex-end;max-width:85%}
+.tool{display:flex;gap:6px;align-items:center;color:var(--g6);font-size:12px}
+.dcard{border:1px solid var(--g3);border-radius:8px;overflow:hidden;font-size:12px}
+.dcard .dh{display:flex;gap:8px;padding:5px 10px;background:var(--g0);border-bottom:1px solid var(--g2)}
+.dcard .dl{font:11px/1.5 "SF Mono",Menlo,monospace;padding:3px 10px}.dcard .a{background:#eef5ee}.dcard .d{background:#f6eeee}
+.ro{opacity:.62}
+.divider{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--g6);margin:4px 0}
+.divider::before,.divider::after{content:"";flex:1;border-top:1px solid var(--g3)}
+.divider b{color:var(--ink)}
+.strip{height:58px;flex:none;border-top:1px dashed var(--g3);background:var(--g0);padding:5px 12px;font-size:10.5px;color:var(--g5)}
+.strip .e{text-align:center;margin-top:8px;font-size:11px}
+.comp{flex:none;padding:8px 12px 10px;border-top:1px solid var(--g2)}
+.cbox{border:1px solid var(--ink);border-radius:10px;padding:7px 10px 6px;background:var(--bg);max-width:780px;margin:0 auto}
+.cin{min-height:20px;color:var(--g5)}
+.cbar{display:flex;align-items:center;gap:5px;margin-top:6px}
+.chip{height:22px;border:1px solid var(--g3);border-radius:11px;padding:0 8px;font-size:11px;color:var(--g7);display:inline-flex;align-items:center;gap:4px;white-space:nowrap;background:var(--bg)}
+.chip.strong{border-color:var(--g6);color:var(--ink)}
+.send{width:24px;height:24px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:12px}
+.status{height:22px;flex:none;border-top:1px solid var(--g3);background:var(--g1);display:flex;align-items:center;gap:14px;padding:0 10px;font-size:11px;color:var(--g6)}
+.kbd{font-family:"SF Mono",Menlo,monospace;font-size:10.5px;border:1px solid var(--g4);border-bottom-width:2px;border-radius:4px;padding:0 4px;background:var(--bg);color:var(--g7);white-space:nowrap}
+.btn{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;border:1px solid var(--g4);border-radius:5px;background:var(--bg);font-size:12px;color:var(--ink);white-space:nowrap}
+.btn.p{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.sm{height:20px;font-size:11px;padding:0 7px}
+.btn.q{border-color:transparent;color:var(--g6)}
+.btn .k{font-family:"SF Mono",Menlo,monospace;font-size:10px;opacity:.7}
+.term{height:100%;background:var(--term-bg);font:12px/1.55 "SF Mono",Menlo,"D2Coding",monospace;padding:10px 14px;color:var(--g7);white-space:pre;overflow:hidden}
+.term .p{color:var(--ink);font-weight:600}.term .g{color:var(--g5)}
+/* settings */
+.set{flex:1;display:flex;min-height:0}
+.snav{width:168px;flex:none;border-right:1px solid var(--g2);padding:12px 8px;display:flex;flex-direction:column;gap:1px;font-size:12px}
+.snav div{padding:4px 10px;border-radius:5px;color:var(--g6)}.snav div.on{background:var(--g2);color:var(--ink);font-weight:600}
+.sbody{flex:1;padding:14px 22px;display:flex;flex-direction:column;gap:12px;overflow:hidden;min-width:0}
+.sbody h2{font-size:15px}.hint{font-size:11.5px;color:var(--g6)}
+.sec{font-size:10.5px;font-weight:600;color:var(--g6);text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:8px}
+table.k{width:100%;border-collapse:collapse;font-size:12px}
+table.k th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--g5);font-weight:600;padding:3px 8px;border-bottom:1px solid var(--g3)}
+table.k td{padding:5px 8px;border-bottom:1px solid var(--g2);vertical-align:middle;white-space:nowrap}
+.bars{display:inline-flex;gap:2px;align-items:flex-end;height:14px;vertical-align:middle}.bars i{width:5px;background:var(--g5);display:block;border-radius:1px}
+.pill{font-size:10.5px;border:1px solid var(--g4);border-radius:3px;padding:0 4px;color:var(--g6);white-space:nowrap}
+.pill.ink{background:var(--ink);color:#fff;border-color:var(--ink)}
+.input{height:24px;border:1px solid var(--g4);border-radius:5px;padding:0 8px;display:inline-flex;align-items:center;font-size:12px;background:var(--bg);min-width:140px}
+.input.f{outline:2px solid var(--focus);outline-offset:1px}
+.note{border:1px solid var(--g3);border-left:3px solid var(--g6);background:var(--g0);border-radius:6px;padding:6px 10px;font-size:11.5px;color:var(--g7)}
+/* sheets */
+.scrim{position:absolute;inset:34px 0 22px 0;z-index:10;background:rgba(30,30,30,.28)}
+.sheet{position:absolute;z-index:11;top:34px;left:50%;transform:translateX(-50%);width:600px;background:var(--bg);border:1px solid var(--g4);border-top:0;border-radius:0 0 12px 12px;box-shadow:0 16px 40px rgba(0,0,0,.22);padding:14px 18px;display:flex;flex-direction:column;gap:10px;font-size:12px}
+.sheet h3{font-size:15px}
+.sheet pre{font:11px/1.5 "SF Mono",Menlo,monospace;background:var(--g1);border:1px solid var(--g3);border-radius:5px;padding:6px 8px;white-space:pre-wrap}
+.acts{display:flex;gap:8px;align-items:center}
+.pop{position:absolute;z-index:12;background:var(--bg);border:1px solid var(--g4);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.16);padding:4px;font-size:12px}
+.pop .it{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:5px;white-space:nowrap}
+.pop .it.on{background:var(--g2)}.pop .it .r{margin-left:auto;font-size:10.5px;color:var(--g5)}
+.pop .hd{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--g5);padding:4px 8px 2px}
+.pop .ft{border-top:1px solid var(--g2);margin-top:3px;padding:5px 8px;font-size:11px;color:var(--g6);white-space:normal}
+.check{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--g2)}
+.check:last-child{border-bottom:0}
+.ck{font-weight:700;text-align:center}.ck.ok{color:var(--ok)}.ck.no{color:var(--bad)}.ck.sk{color:var(--g5)}
+/* problem card */
+.pcard{border:1px solid var(--g3);border-left:4px solid var(--bad);border-radius:6px;background:var(--bg);padding:8px 10px;font-size:12px;display:flex;flex-direction:column;gap:6px}
+.pcard .cause{display:flex;gap:8px;align-items:baseline}
+.pcard .bang{color:#fff;background:var(--bad);border-radius:3px;font-weight:700;font-size:10px;padding:0 4px}
+.pcard .det{font-size:11px;color:var(--g6)}
+.band{display:flex;align-items:center;gap:10px;padding:0 12px;height:30px;flex:none;border-bottom:1px solid var(--g3);background:var(--bad-soft);font-size:12px}
+.band .bang{color:#fff;background:var(--bad);border-radius:3px;font-weight:700;font-size:10px;padding:0 4px}
+</style></head><body>
+<header><h1>v2 draft 03 · ACP agent setup (V2-4)</h1><p class="lede">Add an ACP agent (Gemini CLI, Pi, OpenCode or any command speaking ACP v1): detect the binary, test it, show what it may do, and approve the exact command (Subject kind <span class='mono'>agent</span>). Nunchiro installs nothing and stores no API key.</p><p class="lede dim">Prototype drafts for the owner's pick (throwaway, not shipped). Nunchiro Light tokens from web/src/styles.css; window = R8-final at compact density with today's live labels. Proposed token: <code>--bad</code> for problem state (styles.css already falls back to #c0392b).</p>
+<div class="rec"><b>Recommendation:</b> <b>A, detected list + one sheet.</b> Detection makes the usual case two clicks, and the sheet is the approval itself, so the exact command and the permissions note are read at the moment they matter. Reuse B's “cause + one fix” row inside A's test list when a check fails.</div><p><a href="index.html">← all screens</a></p></header>
+<section class="opt" id="opt-a" aria-labelledby="h-A"><h2 id="h-A">Option A · Detected list, one sheet: test, note, approve<span class="tag">Recommended</span></h2>
+<div class="frame" role="img" aria-label="Nunchiro window mock">
+<div class="title"><span class="tl"></span><span class="tl"></span><span class="tl"></span><div class="cmd">⌕ Commands · sessions · settings <span class="kbd">⌘K</span></div></div>
+<div class="body">
+<nav class="ib l" aria-label="Left panels"><span class="ai on" aria-label="Projects">☰</span><span class="ai" aria-label="Files">▤</span><span class="ai" aria-label="Search">⌕</span><span class="sp"></span><span class="ai gear on" aria-label="Settings">⚙</span></nav>
+<aside class="dock"><div class="ph">Projects · where work runs<span class="r">＋</span></div><div class="mach">This Mac</div><div class="grp work"><div class="gh sel">nunchiro <span class="br">· main</span><span class="cnt">● <b>2</b></span></div><div class="emp"></div><div class="emp"></div><div class="more">＋N</div><div class="fold">▸ worktree 3 <span class="cnt">● 3</span></div></div><div class="grp work"><div class="gh ">lumen <span class="br">· main</span><span class="cnt">● <b>1</b></span></div><div class="emp"></div><div class="emp"></div><div class="more">＋N</div><div class="fold">▸ worktree 1 <span class="cnt">● 1</span></div></div>
+<div class="agents"><div class="ph">Agents<span class="r">spawn order</span></div><div class="ar"><span class="dot work"></span><span>core-serve</span><span class="s">nunchiro · Opus</span></div><div class="ar"><span class="dot work"></span><span>api-auth</span><span class="s">nunchiro · Opus</span></div><div class="ar"><span class="dot work"></span><span>v2-accounts</span><span class="s">nunchiro · Sonnet</span></div><div class="ar"><span class="dot work"></span><span>lumen-api</span><span class="s">lumen · Codex</span></div><div class="ar"><span class="dot "></span><span>ui-02</span><span class="s">lumen · done</span></div></div></aside>
+<main class="centre"><div class="tabs" role="tablist"><div class="tab "><span class="dot work"></span>api-auth<span class="x">✕</span></div><div class="tab on">⚙ Settings<span class="x">✕</span></div></div><div class="set"><div class="snav" role="navigation" aria-label="Settings sections"><div class="">Appearance</div><div class="">Theme</div><div class="">Alerts</div><div class="">Keys</div><div class="">Lifetime</div><div class="">Accounts</div><div class="on">Agents</div><div class="">Agent extensions</div></div><div class="sbody"><div><h2>Agents</h2><p class="hint">Claude and Codex run as your own CLIs in a terminal. Other agents connect over ACP; Nunchiro runs the command you approve and installs nothing.</p></div>
+<div class="sec">Terminal agents</div><table class="k"><tr><td><b>Claude</b></td><td class="mono dim">claude 2.3.1</td><td><span class="dot ok"></span> found</td></tr><tr><td><b>Codex</b></td><td class="mono dim">codex 0.48.0</td><td><span class="dot ok"></span> found</td></tr></table>
+<div class="sec">ACP agents<span class="sp"></span><button class="btn sm">＋ Custom command</button></div>
+<table class="k"><tr><th>Agent</th><th>Command</th><th>State</th><th></th></tr>
+<tr><td><b>Gemini CLI</b></td><td class="mono dim">/opt/homebrew/bin/gemini</td><td><span class="dot ok"></span> found 0.11.2</td><td><button class="btn sm p fv">Set up…</button></td></tr>
+<tr><td><b>OpenCode</b></td><td class="mono dim">opencode</td><td><span class="dot"></span> not on PATH</td><td><button class="btn sm">Install page ↗</button></td></tr>
+<tr><td><b>Pi</b></td><td class="mono dim">pi</td><td><span class="dot"></span> not on PATH</td><td><button class="btn sm">Install page ↗</button></td></tr></table></div></div></main>
+<nav class="ib r" aria-label="Right panels"><span class="ai" aria-label="Artifacts">◧</span><span class="ai" aria-label="Diff">±</span><span class="ai" aria-label="Preview">▶</span><span class="ai" aria-label="Board">▦</span><span class="sp"></span><span class="ai" aria-label="Widgets and layout">⊞</span></nav>
+</div>
+<div class="status"><span><span class="dot work" style="width:6px;height:6px"></span> core connected</span><span>1 machine</span><span class="sp"></span><span>density compact · tab 11.5</span><span>prefix · keys</span></div><div class="scrim"></div><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sa"><h3 id="sa">Set up Gemini CLI</h3>
+<div style="display:grid;grid-template-columns:96px 1fr;gap:8px;align-items:center"><span class="dim">Command</span><span class="input mono" style="width:100%">gemini --experimental-acp</span>
+<span class="dim">Env names</span><span><span class="chip mono">GEMINI_API_KEY ✕</span> <span class="chip">＋ name</span> <span class="hint">names only; values stay in your environment</span></span></div>
+<div class="acts"><button class="btn">Test again</button><span class="hint">Last test 12:41 · all passed</span></div><div><div class="check"><span class="ck ok">✓</span><span>Found <span class="mono">/opt/homebrew/bin/gemini</span> · 0.11.2</span><span class="dim">login-shell PATH</span></div>
+<div class="check"><span class="ck ok">✓</span><span>Speaks ACP v1 (initialize, session/new)</span><span class="dim">0.4 s</span></div>
+<div class="check"><span class="ck ok">✓</span><span>Asks for: file read/write, terminal</span><span class="dim">capabilities</span></div>
+<div class="check"><span class="ck ok">✓</span><span>Signed in (reported by Gemini)</span><span></span></div></div><div class="note"><b>What Gemini can do here.</b> Read and write files only inside the session folder (links out are refused). Terminals it asks for run in Nunchiro and show in the tab. Each permission request waits in the tree like Claude's; answers are Allow once or Reject once. Nunchiro stores no API key: Gemini's own login or the env names below provide it.</div>
+<pre>Approval covers exactly:
+/opt/homebrew/bin/gemini --experimental-acp   env: GEMINI_API_KEY
+Any change to this entry asks again.</pre>
+<div class="acts"><span class="sp"></span><button class="btn">Cancel</button><button class="btn p">Approve and add <span class="k">⏎</span></button></div></div></div><dl class="notes"><dt>Rationale</dt><dd>Detection does the work first, so the common case is Set up → read the test result → Approve; the exact command, env names and what the agent may do sit on the one sheet that is also the approval.</dd><dt>Trade-off</dt><dd>A failed check (signed out, wrong version) shows inside the same sheet, which grows long; Custom command users get the same sheet with an empty command.</dd><dt>A11y</dt><dd>Sheet is a modal dialog with aria-modal and a heading label, focus starts on Command and is trapped; check results are ✓/✗ glyphs plus words; Escape cancels.</dd></dl>
+</section><section class="opt" id="opt-b" aria-labelledby="h-B"><h2 id="h-B">Option B · Three-step sheet: pick, check, approve</h2>
+<div class="frame" role="img" aria-label="Nunchiro window mock">
+<div class="title"><span class="tl"></span><span class="tl"></span><span class="tl"></span><div class="cmd">⌕ Commands · sessions · settings <span class="kbd">⌘K</span></div></div>
+<div class="body">
+<nav class="ib l" aria-label="Left panels"><span class="ai on" aria-label="Projects">☰</span><span class="ai" aria-label="Files">▤</span><span class="ai" aria-label="Search">⌕</span><span class="sp"></span><span class="ai gear on" aria-label="Settings">⚙</span></nav>
+<aside class="dock"><div class="ph">Projects · where work runs<span class="r">＋</span></div><div class="mach">This Mac</div><div class="grp work"><div class="gh sel">nunchiro <span class="br">· main</span><span class="cnt">● <b>2</b></span></div><div class="emp"></div><div class="emp"></div><div class="more">＋N</div><div class="fold">▸ worktree 3 <span class="cnt">● 3</span></div></div><div class="grp work"><div class="gh ">lumen <span class="br">· main</span><span class="cnt">● <b>1</b></span></div><div class="emp"></div><div class="emp"></div><div class="more">＋N</div><div class="fold">▸ worktree 1 <span class="cnt">● 1</span></div></div>
+<div class="agents"><div class="ph">Agents<span class="r">spawn order</span></div><div class="ar"><span class="dot work"></span><span>core-serve</span><span class="s">nunchiro · Opus</span></div><div class="ar"><span class="dot work"></span><span>api-auth</span><span class="s">nunchiro · Opus</span></div><div class="ar"><span class="dot work"></span><span>v2-accounts</span><span class="s">nunchiro · Sonnet</span></div><div class="ar"><span class="dot work"></span><span>lumen-api</span><span class="s">lumen · Codex</span></div><div class="ar"><span class="dot "></span><span>ui-02</span><span class="s">lumen · done</span></div></div></aside>
+<main class="centre"><div class="tabs" role="tablist"><div class="tab "><span class="dot work"></span>api-auth<span class="x">✕</span></div><div class="tab on">⚙ Settings<span class="x">✕</span></div></div><div class="set"><div class="snav" role="navigation" aria-label="Settings sections"><div class="">Appearance</div><div class="">Theme</div><div class="">Alerts</div><div class="">Keys</div><div class="">Lifetime</div><div class="">Accounts</div><div class="on">Agents</div><div class="">Agent extensions</div></div><div class="sbody"><div><h2>Agents</h2><p class="hint">Claude and Codex run as your own CLIs in a terminal. Other agents connect over ACP; Nunchiro runs the command you approve and installs nothing.</p></div>
+<div class="sec">Terminal agents</div><table class="k"><tr><td><b>Claude</b></td><td class="mono dim">claude 2.3.1</td><td><span class="dot ok"></span> found</td></tr><tr><td><b>Codex</b></td><td class="mono dim">codex 0.48.0</td><td><span class="dot ok"></span> found</td></tr></table>
+<div class="sec">ACP agents<span class="sp"></span><button class="btn sm">＋ Custom command</button></div>
+<table class="k"><tr><th>Agent</th><th>Command</th><th>State</th><th></th></tr>
+<tr><td><b>Gemini CLI</b></td><td class="mono dim">/opt/homebrew/bin/gemini</td><td><span class="dot ok"></span> found 0.11.2</td><td><button class="btn sm p fv">Set up…</button></td></tr>
+<tr><td><b>OpenCode</b></td><td class="mono dim">opencode</td><td><span class="dot"></span> not on PATH</td><td><button class="btn sm">Install page ↗</button></td></tr>
+<tr><td><b>Pi</b></td><td class="mono dim">pi</td><td><span class="dot"></span> not on PATH</td><td><button class="btn sm">Install page ↗</button></td></tr></table></div></div></main>
+<nav class="ib r" aria-label="Right panels"><span class="ai" aria-label="Artifacts">◧</span><span class="ai" aria-label="Diff">±</span><span class="ai" aria-label="Preview">▶</span><span class="ai" aria-label="Board">▦</span><span class="sp"></span><span class="ai" aria-label="Widgets and layout">⊞</span></nav>
+</div>
+<div class="status"><span><span class="dot work" style="width:6px;height:6px"></span> core connected</span><span>1 machine</span><span class="sp"></span><span>density compact · tab 11.5</span><span>prefix · keys</span></div><div class="scrim"></div><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sb"><div style="display:flex;gap:6px;align-items:center"><span class="pill ink">1 Agent ✓</span><span>—</span><span class="pill ink">2 Check</span><span>—</span><span class="pill">3 Approve</span></div><h3 id="sb">Check Gemini CLI</h3>
+<div><div class="check"><span class="ck ok">✓</span><span>Found <span class="mono">/opt/homebrew/bin/gemini</span> · 0.11.2</span><span></span></div>
+<div class="check"><span class="ck ok">✓</span><span>Speaks ACP v1</span><span class="dim">0.4 s</span></div>
+<div class="check"><span class="ck no">✗</span><span><b>Not signed in.</b> Gemini said: “Please set an Auth method”.</span><button class="btn sm p fv">Log in in a terminal tab</button></div>
+<div class="check"><span class="ck sk">–</span><span class="dim">Capabilities (after sign-in)</span><span></span></div></div>
+<p class="hint">The login runs <span class="mono">gemini</span> itself in a tab you can see; come back and press Check again.</p>
+<div class="acts"><button class="btn">Back</button><span class="sp"></span><button class="btn">Check again</button><button class="btn" aria-disabled="true" style="opacity:.45">Next: Approve</button></div></div></div><dl class="notes"><dt>Rationale</dt><dd>Separates the three jobs so each screen has one decision; the check step is where things go wrong (not signed in, old version), and it gets the room to show the cause and one fix, the same shape as the problem card.</dd><dt>Trade-off</dt><dd>Three screens for what is usually a one-click success; Back/Next adds a mouse trip for keyboard users unless Enter advances.</dd><dt>A11y</dt><dd>Step pills carry text state, Next stays focusable with aria-disabled and says why; the failed row's fix button gets focus after a check run so Enter fixes.</dd></dl>
+<div class="crops"><figure class="crop" style="width:460px;"><figcaption class="cap">Step 1 · pick</figcaption><div style="padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-size:12px"><span class="pill ink" style="align-self:flex-start">1 Agent</span><b style="font-size:14px">Which agent?</b>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+<div style="border:2px solid var(--ink);border-radius:8px;padding:8px"><b>Gemini CLI</b><div class="hint">found 0.11.2</div></div>
+<div style="border:1px solid var(--g3);border-radius:8px;padding:8px"><b>OpenCode</b><div class="hint">not found · Install page ↗</div></div>
+<div style="border:1px solid var(--g3);border-radius:8px;padding:8px"><b>Pi</b><div class="hint">not found · Install page ↗</div></div>
+<div style="border:1px dashed var(--g4);border-radius:8px;padding:8px"><b>Custom command</b><div class="hint">any ACP v1 agent</div></div></div></div></figure></div></section><section class="opt" id="opt-c" aria-labelledby="h-C"><h2 id="h-C">Option C · agents.toml in a tab with a live checker</h2>
+<div class="frame" role="img" aria-label="Nunchiro window mock">
+<div class="title"><span class="tl"></span><span class="tl"></span><span class="tl"></span><div class="cmd">⌕ Commands · sessions · settings <span class="kbd">⌘K</span></div></div>
+<div class="body">
+<nav class="ib l" aria-label="Left panels"><span class="ai on" aria-label="Projects">☰</span><span class="ai" aria-label="Files">▤</span><span class="ai" aria-label="Search">⌕</span><span class="sp"></span><span class="ai gear " aria-label="Settings">⚙</span></nav>
+<aside class="dock"><div class="ph">Projects · where work runs<span class="r">＋</span></div><div class="mach">This Mac</div><div class="grp work"><div class="gh sel">nunchiro <span class="br">· main</span><span class="cnt">● <b>2</b></span></div><div class="emp"></div><div class="emp"></div><div class="more">＋N</div><div class="fold">▸ worktree 3 <span class="cnt">● 3</span></div></div><div class="grp work"><div class="gh ">lumen <span class="br">· main</span><span class="cnt">● <b>1</b></span></div><div class="emp"></div><div class="emp"></div><div class="more">＋N</div><div class="fold">▸ worktree 1 <span class="cnt">● 1</span></div></div>
+<div class="agents"><div class="ph">Agents<span class="r">spawn order</span></div><div class="ar"><span class="dot work"></span><span>core-serve</span><span class="s">nunchiro · Opus</span></div><div class="ar"><span class="dot work"></span><span>api-auth</span><span class="s">nunchiro · Opus</span></div><div class="ar"><span class="dot work"></span><span>v2-accounts</span><span class="s">nunchiro · Sonnet</span></div><div class="ar"><span class="dot work"></span><span>lumen-api</span><span class="s">lumen · Codex</span></div><div class="ar"><span class="dot "></span><span>ui-02</span><span class="s">lumen · done</span></div></div></aside>
+<main class="centre"><div class="tabs" role="tablist"><div class="tab "><span class="dot work"></span>api-auth<span class="x">✕</span></div><div class="tab on">agents.toml<span class="x">✕</span></div></div><div style="flex:1;display:flex;min-height:0"><div style="flex:1;min-width:0"><div class="term" style="white-space:pre;height:100%;font-size:12px"><span class="g"># ~/.nunchiro/agents.toml · read-only here · Open in editor ⌘O</span>
+<span class="g"> 1</span>  <span class="p">[agent.gemini]</span>                                        <span style="color:var(--signal-text)">● needs approval</span>
+<span class="g"> 2</span>  command = "gemini"
+<span class="g"> 3</span>  args = ["--experimental-acp"]
+<span class="g"> 4</span>  env = ["GEMINI_API_KEY"]
+<span class="g"> 5</span>
+<span class="g"> 6</span>  <span class="p">[agent.opencode]</span>                                      <span style="color:var(--bad)">✗ not on PATH</span>
+<span class="g"> 7</span>  command = "opencode"
+<span class="g"> 8</span>  args = ["acp"]
+<span class="g"> 9</span>
+<span class="g">10</span>  <span class="p">[agent.pi]</span>                                            <span style="color:var(--ok)">✓ approved · tested 12:02</span>
+<span class="g">11</span>  command = "/Users/me/.local/bin/pi"
+<span class="g">12</span>  args = ["--acp"]</div></div><aside style="width:300px;flex:none;border-left:1px solid var(--g3);background:var(--g0);padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-size:12px" aria-label="Check results">
+<div class="sec">Check · live as the file changes</div>
+<div class="pcard" style="border-left-color:var(--signal)"><b>gemini</b><span class="hint">✓ found 0.11.2 · ✓ ACP v1 · ✓ signed in</span><span>Not approved yet. It will not launch until you approve this exact command.</span><button class="btn sm p" style="align-self:flex-start">Review and approve…</button></div>
+<div class="pcard"><b>opencode</b><span>Not on the login-shell PATH.</span><button class="btn sm" style="align-self:flex-start">Install page ↗</button></div>
+<div class="pcard" style="border-left-color:var(--ok)"><b>pi</b><span class="hint">Approved · test passed 12:02</span></div>
+<div class="sec" style="margin-top:6px">Insert an entry</div><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip">＋ Gemini</span><span class="chip">＋ OpenCode</span><span class="chip">＋ Pi</span></div>
+<p class="hint">Inserting copies the entry to your clipboard and opens the file; Nunchiro does not write agents.toml for you.</p></aside></div></main>
+<nav class="ib r" aria-label="Right panels"><span class="ai" aria-label="Artifacts">◧</span><span class="ai" aria-label="Diff">±</span><span class="ai" aria-label="Preview">▶</span><span class="ai" aria-label="Board">▦</span><span class="sp"></span><span class="ai" aria-label="Widgets and layout">⊞</span></nav>
+</div>
+<div class="status"><span><span class="dot work" style="width:6px;height:6px"></span> core connected</span><span>1 machine</span><span class="sp"></span><span>density compact · tab 11.5</span><span>prefix · keys</span></div></div><dl class="notes"><dt>Rationale</dt><dd>Follows the layout.toml rule (needs 37): the file is the truth and the GUI explains it; power users edit in their editor, the checker shows found / ACP / signed in / approved per entry and the approval sheet does the rest.</dd><dt>Trade-off</dt><dd>No in-app editing (v2 builds no file editor) so a first-time user must leave the app to add an agent; the least friendly of the three for people new to the tool.</dd><dt>A11y</dt><dd>Results are a labelled complementary region with one card per entry, state in words; the read-only file view is a focusable region with line numbers announced; clipboard action announces “Entry copied”.</dd></dl>
+</section></body></html>

@@ -1,0 +1,2 @@
+<!doctype html><title>https loopback</title>
+<script>fetch("https://127.0.0.1:{{CANARY}}/",{mode:"no-cors"}).then(function(){parent.postMessage({type:"fixture",result:"reached"},"*")},function(){parent.postMessage({type:"fixture",result:"failed"},"*")})</script>

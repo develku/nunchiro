@@ -1,0 +1,6 @@
+<!doctype html><title>links</title>
+<script>function r(v){parent.postMessage({type:"fixture",result:v},"*")}
+function ask(u){parent.postMessage({type:"nunchiro:open-link",url:u},"*")}
+document.addEventListener("click",function(e){if(e.target.id==="forge"){ask("nunchiro://open?x=1");ask("javascript:alert(1)");ask("file:///etc/passwd");ask("data:text/html,x");ask("http://127.0.0.1:{{CORE}}/api/x");ask("http://localhost:{{CANARY}}/");ask("http://169.254.169.254/latest");ask("https://forged.nunchiro.test/")}});</script>
+<a id="app" href="nunchiro://open?x=1">app link</a> <a id="web" href="https://docs.nunchiro.test/page">web link</a> <button id="forge">forge</button>
+<script>setTimeout(function(){ask("https://forged-before-click.nunchiro.test/")},50)</script>

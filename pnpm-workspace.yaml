@@ -1,0 +1,6 @@
+packages:
+  - web
+  - app
+# Supply chain: only versions published at least 14 days ago; dependency install scripts stay blocked.
+minimumReleaseAge: 20160
+onlyBuiltDependencies: []

@@ -1,0 +1,42 @@
+[
+  {
+    "kind": "turn",
+    "turn_id": "01a1c0a7-5aa8-73a2-9248-6bb990a370a3",
+    "state": "started"
+  },
+  {
+    "kind": "message",
+    "role": "user",
+    "text": "Say hello please"
+  },
+  {
+    "kind": "message",
+    "role": "assistant",
+    "text": "Hello from the mock model."
+  },
+  {
+    "kind": "turn",
+    "turn_id": "01a1c0a7-5aa8-73a2-9248-6bb990a370a3",
+    "state": "completed"
+  },
+  {
+    "kind": "turn",
+    "turn_id": "01a1c0ab-c495-76c3-a3a0-4952531283d7",
+    "state": "started"
+  },
+  {
+    "kind": "message",
+    "role": "user",
+    "text": "And once more"
+  },
+  {
+    "kind": "message",
+    "role": "assistant",
+    "text": "Hello from the mock model."
+  },
+  {
+    "kind": "turn",
+    "turn_id": "01a1c0ab-c495-76c3-a3a0-4952531283d7",
+    "state": "completed"
+  }
+]

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><title>svg foreignObject</title>
+<foreignObject width="200" height="100"><div xmlns="http://www.w3.org/1999/xhtml">
+<img src="http://127.0.0.1:{{CANARY}}/fo-img"/>
+<iframe src="http://127.0.0.1:{{CANARY}}/fo-frame"></iframe>
+<form action="http://127.0.0.1:{{CANARY}}/fo-form" method="post"><input name="k" value="v"/></form>
+</div></foreignObject>
+<script>function r(v){parent.postMessage({type:"fixture",result:v},"*")}
+try{document.querySelector("form").submit()}catch(e){}
+r("done");</script>
+</svg>

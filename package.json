@@ -1,0 +1,10 @@
+{
+  "name": "nunchiro",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "test": "pnpm --filter nunchiro-web test",
+    "build": "pnpm --filter nunchiro-web build"
+  }
+}

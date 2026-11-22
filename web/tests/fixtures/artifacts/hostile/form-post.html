@@ -1,0 +1,6 @@
+<!doctype html><title>form post</title>
+<script>function r(v){parent.postMessage({type:"fixture",result:v},"*")}
+document.addEventListener("securitypolicyviolation",function(e){r("csp "+e.violatedDirective)});</script>
+<form id="f" method="post" action="http://127.0.0.1:{{CANARY}}/form"><input name="x" value="1"><button id="b">send</button></form>
+<script>try{document.getElementById("f").submit()}catch(e){r("threw "+e.name)}
+document.addEventListener("click",function(){document.getElementById("b").click()});</script>

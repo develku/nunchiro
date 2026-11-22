@@ -1,0 +1,44 @@
+/* V2-5b: the problem card, a one-line band between the session header and its pane (screen 04 B): it takes its own
+   row, so it never covers chat or terminal text. */
+.problem-band {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: 30px;
+  box-sizing: border-box;
+  padding: 4px 12px;
+  background: var(--tint-1); /* ticket 1041 (N068): one band style, a tint step with no rule; the state is its edge light */
+  font-size: var(--fs-12);
+}
+.problem-band > b {
+  color: var(--bad);
+}
+.problem-band.note {
+  background: var(--tint-1);
+}
+.problem-band .loss,
+.problem-band .err {
+  color: var(--muted);
+}
+.problem-band details[open] {
+  flex-basis: 100%;
+}
+.problem-band summary {
+  cursor: pointer;
+  width: max-content;
+}
+.problem-band pre {
+  margin: 4px 0 0;
+  max-height: 8em;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-11);
+}
+/* V2-5b: a session with a problem card has a red state dot in the tree and AGENTS (orange stays "your turn"). */
+.st[data-problem][data-s='failed'] {
+  border-color: var(--bad);
+  background: var(--bad);
+}

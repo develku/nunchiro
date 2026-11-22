@@ -1,0 +1,61 @@
+/* needs 169: the sub-agent output panel. Fixed at the window's right edge under the title bar; the parent's chat keeps
+   the left 60 percent of the centre. No approved mockup exists: shared tokens only. */
+.kidpeek {
+  position: fixed;
+  top: 36px;
+  right: 0;
+  bottom: 0;
+  width: min(440px, 38vw);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  color: var(--text); /* ticket 1041 (B): glass (the .glass rule), no border */
+}
+.kidpeek:focus {
+  outline: 0;
+}
+.kidpeek > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.kidpeek .kp-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kidpeek .kp-state,
+.kidpeek .kp-note,
+.kidpeek .kp-empty {
+  color: var(--muted);
+  font-size: var(--fs-1);
+}
+.kidpeek .kp-note {
+  margin: 0;
+  padding: 6px 12px;
+}
+.kidpeek .kp-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 12px;
+}
+.kidpeek .kp-row {
+  margin: 0 0 8px;
+}
+.kidpeek .kp-empty {
+  margin: 0;
+}
+.row.kid {
+  cursor: pointer;
+}
+/* The tree's status line when a child has no file of its own and its launch call is older than the loaded chat. */
+[data-kid-note] {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: var(--fs-12);
+  color: var(--muted);
+}

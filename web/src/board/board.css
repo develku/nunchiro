@@ -1,0 +1,957 @@
+/* Board widget (v1b-16): R8 tokens and density; columns side by side, each scrolling on its own. */
+.board {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  position: relative;
+  overflow: hidden;
+}
+.board .bhead {
+  /* Ticket 1041 (A): one 32 px row on the 8 px grid, no rule under it (inventory N140); 12 px body text */
+  height: 32px;
+  border-bottom: 0;
+  padding: 0 12px;
+  font-size: var(--fs-12);
+  font-weight: 400;
+  line-height: normal;
+  color: var(--text);
+}
+.bhead {
+  min-width: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--fs-12);
+  color: var(--text);
+  border-bottom: 0;
+}
+.bsummary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bsummary .dim {
+  font-weight: 400;
+}
+.bhead .btn {
+  flex: none;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 0 6px;
+}
+.bproj {
+  /* The chip gives way first, so + Card and Columns stay visible in a narrow zone. */
+  flex: 0 1 auto;
+  min-width: 48px;
+  max-width: 160px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.bprojw {
+  position: relative;
+  display: flex;
+  min-width: 48px;
+  flex: 0 1 auto;
+}
+button.bproj {
+  /* Look v34 S3-3 (rule A): a quiet tint chip, no outline, as the filter chips (.bfc). */
+  border-color: transparent;
+  background: var(--control-quiet-bg);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+button.bproj svg {
+  flex: none;
+}
+.bprojt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button.bproj:focus-visible,
+.bpop [role='option']:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.bpop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  width: 220px;
+  max-width: calc(100vw - 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: var(--r-12);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.bpop input {
+  padding: 2px 6px;
+  min-width: 0;
+}
+.bpop input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.bpop [role='listbox'] {
+  max-height: 220px;
+  overflow-y: auto;
+}
+.bpop [role='option'] {
+  padding: 3px 6px;
+  border-radius: var(--r-6);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bpop [role='option'][data-active='true'] {
+  background: var(--hover);
+}
+/* Ticket 1041: the chosen project is bold in the text colour (blue is the working light only, N072). */
+.bpop [role='option'][aria-selected='true'] {
+  font-weight: 600;
+}
+.bpnone {
+  padding: 3px 6px;
+  color: var(--dim);
+}
+.bsearch {
+  flex: 0 1 150px;
+  min-width: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+/* Look v34 S3-3: the neutral focus ring of the polished parts, not the accent outline. */
+.bsearch:focus-within {
+  outline: 2px solid var(--ring-focus);
+  outline-offset: 1px;
+}
+.bsearch input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: 0;
+  padding: 1px 0;
+}
+.bsearch input::placeholder {
+  color: var(--dim);
+}
+.bsclear {
+  flex: none;
+  font: inherit;
+  color: var(--dim);
+  background: none;
+  border: 0;
+  padding: 0 0 0 4px;
+  cursor: pointer;
+}
+.bsclear:hover {
+  color: var(--text);
+}
+.bsclear:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.bnew {
+  flex: none;
+  color: var(--muted); /* ticket 1041: arrivals are a count, not your turn */
+  font-weight: 400;
+}
+.bmsg {
+  flex: 1;
+  text-transform: none;
+  letter-spacing: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--error); /* ticket 1041 (owner 15.1 item 3): errors are red */
+  font-weight: 400;
+}
+.bcard {
+  /* draft B .cd */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 62px;
+  padding: 6px 8px;
+  /* Ticket 1041 (A, inventory N041): no outline; the card is one tint step over the board's panel. */
+  border: 0;
+  border-radius: var(--r-8);
+  background: var(--tint-1);
+  font-size: var(--fs-12);
+  line-height: 1.4;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.bcard:hover {
+  background: var(--tint-2); /* a tint, not the working blue (N072) */
+}
+.bcard:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+.bcard[data-inert] {
+  /* needs 172: no click action, so no pointer and no hover cue. */
+  cursor: default;
+}
+.bcard[data-inert]:hover {
+  background: var(--tint-1);
+}
+.bcard[data-dragging] {
+  opacity: 0.4;
+}
+.bt {
+  display: block;
+  min-width: 0;
+}
+.btag {
+  display: inline;
+  font: 600 var(--fs-10) system-ui;
+  border-radius: var(--r-4);
+  padding: 0 4px;
+  background: var(--panel); /* a lighter chip on the card's tint: muted words keep 4.5:1 (stacked tints fell to 3.8 in dark) */
+  color: var(--muted);
+  margin-right: 4px;
+  overflow-wrap: anywhere;
+}
+.btt {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  font-size: calc(var(--fs-12) + 0.5px);
+}
+.bdot {
+  /* draft B .ct .st: the task card's dot in its column's colour; orange your turn, red broken */
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+  background: var(--idle);
+}
+.bdot[data-s='working'] { background: var(--light-run); }
+.bdot[data-s='needs_decision'],
+.bdot[data-s='you'] { background: var(--you); }
+.bdot[data-s='review'] { background: var(--ok); }
+.bdot[data-s='done'] { background: var(--done); }
+.bdot[data-s='bad'] { background: var(--bad); }
+/* The glyph replaces the disc for your turn and broken (hand, x-circle): a second cue besides the colour. */
+.bdot[data-g] { position: relative; background: none; border-radius: 0; }
+.bdot[data-g] svg { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; transform: translate(-50%, -50%); }
+.bdot[data-g='hand'] { color: var(--you); }
+.bdot[data-g='fail'] { color: var(--bad); }
+.bid {
+  color: var(--muted);
+  font-size: calc(var(--fs-12) + 0.5px);
+}
+.bcard[data-source='manual'] .bt {
+  padding-right: 14px; /* the history chevron */
+}
+.bnote,
+.bmeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.bnote {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  line-height: 1.45; /* frame-ko-e's note; draft B draws none */
+}
+.bmeta {
+  font-size: calc(var(--fs-11) - 0.5px);
+}
+.bdrag {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+}
+.bghost {
+  position: fixed;
+  max-width: 200px;
+  padding: 2px 8px;
+  border-radius: calc(var(--r-10) / 2);
+  background: var(--raised);
+  box-shadow: var(--shadow-float);
+  font-size: var(--fs-12);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bline {
+  position: fixed;
+  height: 2px;
+  background: var(--text);
+}
+.bedit {
+  /* A dialog over the window, not inside the zone: a small board zone cannot clip it, and nothing shifts. */
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  width: min(360px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  /* Ticket 1041 (owner 15.1 item 6): a solid dialog, no outline, floating on its shadow as the app's other dialogs. */
+  border: 0;
+  border-radius: var(--r-12);
+  background: var(--panel);
+  box-shadow: var(--shadow-float);
+  font-size: var(--fs-12);
+}
+.bedit label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--muted);
+  min-width: 0;
+}
+.bedit input:not([type='checkbox']),
+.bedit textarea,
+.bedit select {
+  min-width: 0;
+}
+.bedit .brow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bedit .brow label {
+  flex: 1;
+}
+.berr {
+  color: var(--error);
+}
+.bcoled {
+  width: min(560px, calc(100vw - 32px));
+}
+.bcoled ol {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bcoled li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--hover);
+}
+.bcoled li > input {
+  flex: 1 1 140px;
+}
+.bcoled li label,
+.bstates label {
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+}
+.bstates {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Your turn and broken: the left state edge in widgets-7a.css (solid warm, dashed red: shape as well as colour). */
+.bcard[data-open] {
+  background: var(--select-bg);
+}
+.bnote {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* V2.5-34: Done card PR lines. Fact line first, quiet line second; the detail is opt-in (its button), never on the face. */
+.bmain {
+  display: block;
+  min-width: 0;
+  border-radius: var(--r-6);
+}
+.bmain:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.bfact,
+.bquiet {
+  display: block;
+  min-width: 0;
+  margin-top: 3px;
+  font-size: var(--fs-11);
+  overflow-wrap: anywhere; /* a narrow column wraps the fact line; the +/- lines are never cut off */
+}
+.bfact {
+  display: flex;
+  flex-wrap: wrap; /* one line at the default column width; a narrower column wraps whole items, never cuts */
+  align-items: center;
+  gap: 0 8px;
+}
+.bchk {
+  display: inline-flex;
+  align-items: center;
+}
+.bquiet {
+  margin-top: 0;
+  font-size: var(--fs-10);
+}
+.bdelta .add {
+  color: var(--ok);
+}
+.bdelta .del {
+  color: var(--bad);
+}
+.bmore {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--link-text);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.bdetail {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--hover);
+  font-size: var(--fs-11);
+  cursor: default;
+  user-select: text;
+  -webkit-user-select: text;
+  overflow-wrap: anywhere;
+}
+
+/* Header: colour key, coordinator indicator and its CLI line (draft B .ckey, .coord, .cli, .clir). */
+.bkey {
+  /* The key and the coordinator give way before + Card and Columns in a narrow zone. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font: 400 var(--fs-11) system-ui;
+  text-transform: none;
+  letter-spacing: 0;
+}
+/* V2.5-82: each item is its cue (the glyph the cards draw) in the live theme token, then the word for that cue. */
+.bkey [data-k] {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.bkey i {
+  display: inline-flex;
+  flex: none;
+}
+.bkey i svg {
+  width: 12px;
+  height: 12px;
+}
+.bkey [data-k='you'] i { color: var(--you); }
+.bkey [data-k='stale'] i { color: var(--stale-line); }
+.bkey [data-k='bad'] i { color: var(--bad); }
+.bcoord {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--r-6);
+  padding: 2px 8px;
+  background: var(--tint-1);
+  color: var(--text);
+  font: 600 var(--fs-12) system-ui;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.bcoord i {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--muted);
+}
+.bclib {
+  font: 700 9.5px ui-monospace, Menlo, monospace;
+  color: var(--muted);
+  border: 0;
+  border-radius: calc(var(--r-6) / 2);
+  padding: 0 3px;
+  background: var(--control-quiet-bg);
+  cursor: pointer;
+}
+.bcli {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+  padding: 3px 12px;
+  background: var(--tint-1);
+  color: var(--muted);
+  font: 11px ui-monospace, Menlo, monospace;
+}
+.bcli code {
+  color: var(--text);
+  border-radius: var(--r-4);
+  padding: 0 5px;
+  background: var(--panel);
+}
+
+/* Strip: lane key and filter chips (draft B .hs, .seg, .fc). */
+.bstrip {
+  line-height: normal;
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 8px; /* no rule: spacing parts it from the cards */
+  color: var(--muted);
+  font-size: var(--fs-12);
+  min-width: 0;
+}
+.bseg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-6);
+  background: var(--tint-1);
+  overflow: hidden;
+}
+.bseg button {
+  font: 600 11px system-ui;
+  color: var(--muted);
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-4);
+  background: var(--panel); /* opaque: the 3:1 against the selected ink fill is measured on it */
+  cursor: pointer;
+}
+/* V2.5-82 (board-polish.spec: 3:1 against an unselected segment in every theme, which no tint step reaches): the
+   selected segment stays the ink fill, the neutral control colour (owner 15.1 item 1), on the tint track. */
+.bseg button[aria-pressed='true'] {
+  background: var(--control-bg);
+  color: var(--control-text);
+}
+.bflt {
+  margin-left: 8px;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.bflt svg {
+  width: 14px;
+  height: 14px;
+}
+.bfc {
+  /* the pressed chip's x glyph sits beside its label without making the chip taller than the others */
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  font: 600 11px system-ui;
+  border: 0;
+  background: var(--tint-1);
+  color: var(--text);
+  border-radius: calc(var(--r-6) * 2);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+/* Pressed: the selected tint plus the x mark (Strip.tsx), not a blue outline: blue is the working light (N072). */
+.bfc[aria-pressed='true'],
+.bfc[data-on] {
+  background: var(--select-bg);
+  color: var(--select-text);
+}
+.bfc > span {
+  display: inline-flex;
+}
+.bfc select {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.bsp {
+  flex: 1;
+}
+.bhint {
+  white-space: nowrap;
+}
+.bseg button:focus-visible,
+.bfc:focus-visible,
+.bfc:focus-within,
+.bclib:focus-visible,
+.bexp:focus-visible,
+.bundo:focus-visible,
+.bref:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* Task card parts (draft B .mt, .ref, .ra, .wo, .stale, .rc, .miss, .hist, .ub). */
+.bmt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  align-items: center;
+  min-width: 0;
+}
+.bref {
+  font: 11px ui-monospace, Menlo, monospace;
+  color: var(--link-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.bref[aria-disabled] {
+  color: var(--muted);
+  cursor: default;
+}
+.bra {
+  display: inline-flex;
+  align-items: center;
+  font: 600 10.5px system-ui;
+  border-radius: var(--r-4);
+  background: var(--panel); /* lighter than the card's tint, so the muted state words keep 4.5:1 */
+  overflow: hidden;
+  max-width: 100%;
+}
+.bra b {
+  background: var(--tint-1); /* the role tab, one step darker than its state (two surfaces, no outline) */
+  padding: 0 5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.bra span {
+  padding: 0 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bra [data-tone='w'] { color: var(--run); }
+.bra [data-tone='y'] { color: var(--you); }
+.bra [data-tone='o'] { color: var(--muted); }
+.bwo {
+  font: 600 10.5px system-ui;
+  color: var(--muted);
+  background: var(--panel); /* the words "waits on #id" carry the pending state; a lighter chip on the card tint keeps 4.5:1 */
+  border-radius: var(--r-4);
+  padding: 0 5px;
+}
+.bstale {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  font: 700 10.5px system-ui;
+  color: var(--stale);
+  background: var(--stale-bg); /* the clock, the words and the yellow tint carry it; no dashed outline */
+  border-radius: calc(var(--r-6) * 1.5);
+  padding: 0 6px 0 4px;
+}
+.bstale svg {
+  width: 11px;
+  height: 11px;
+}
+.brc {
+  display: block;
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px dashed var(--line);
+  font: 10.5px ui-monospace, Menlo, monospace;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.brc b {
+  font-weight: 700;
+}
+.brc b[data-pass='true'] { color: var(--ok); }
+.brc b[data-pass='false'] { color: var(--bad); }
+.bmiss {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--fs-11);
+  color: var(--you);
+  background: var(--you-bg);
+  border-radius: var(--r-4);
+  padding: 2px 6px;
+}
+.bexp {
+  position: absolute;
+  top: 7px;
+  right: 6px;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.bexp svg {
+  width: 10px;
+  height: 10px;
+}
+.bexp[aria-expanded='true'] svg { transform: rotate(90deg); }
+.bhist {
+  cursor: default;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.bhist ol {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 1px 6px;
+  margin: 5px 0 0;
+  padding: 4px 0 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-11);
+  line-height: 1.45;
+  color: var(--muted);
+}
+.bhist li {
+  display: contents;
+}
+.bhist b {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bhist time {
+  font: 10.5px ui-monospace, Menlo, monospace;
+}
+.bhist li[data-last] { color: var(--text); }
+.bhist li[data-kind='refused'] { color: var(--bad); }
+.bundo {
+  margin-top: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 600 11px system-ui;
+  border: 0;
+  background: var(--tint-2);
+  color: var(--text);
+  border-radius: calc(var(--r-10) / 2);
+  padding: 2px 9px;
+  cursor: pointer;
+}
+.bundo svg {
+  width: 12px;
+  height: 12px;
+}
+.bundo:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Done card PR state mark and the detail popover (placement item 5; ticket 177 gaps folded into 185). */
+.bprs {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.bprm {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+.bcard .bdetail {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  width: min(300px, 90vw);
+  margin: 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: var(--r-12);
+  font-size: var(--fs-12);
+  color: var(--text);
+}
+.bdh {
+  font-weight: 600;
+  font-size: var(--fs-13);
+}
+.bdr {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+.bdk {
+  width: 62px;
+  flex: none;
+  color: var(--muted);
+}
+.bdacts {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+.bdbtn {
+  border: 0;
+  border-radius: var(--r-6);
+  padding: 1px 8px;
+  background: var(--control-quiet-bg);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.bdbtn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* Round 2 (draft B): the history chevron shows on the expanded card; on the others only under the pointer or focus. */
+.bcard .bexp {
+  opacity: 0;
+}
+.bcard:hover .bexp,
+.bcard:focus-within .bexp,
+.bcard .bexp[aria-expanded='true'] {
+  opacity: 1;
+}
+/* draft B .auto: "auto · session card" */
+.bauto {
+  font: 600 var(--fs-10) system-ui;
+  color: var(--muted);
+  background: var(--panel); /* a lighter chip on the card's tint: muted words keep 4.5:1 (stacked tints fell to 3.8 in dark) */
+  border-radius: var(--r-4);
+  padding: 0 4px;
+}
+/* draft B .fc.add and the role menu under it */
+.bfadd {
+  color: var(--muted);
+  background: none; /* its "+ Role" words say what it adds */
+}
+.bfadd-wrap {
+  position: relative;
+}
+.bfmenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 6;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-radius: var(--r-12);
+}
+.bfmenu:focus {
+  outline: none; /* the empty menu holds focus until roles arrive; the items carry the ring */
+}
+.bfmenu button {
+  text-align: left;
+  font: 600 var(--fs-11) system-ui;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: var(--r-4);
+  padding: 3px 8px;
+  cursor: pointer;
+}
+/* A checked role: a check mark and bold, as View options (watch.css), not the working blue. */
+.bfmenu button[aria-checked='true'] {
+  font-weight: 700;
+}
+.bfmenu button[aria-checked='true']::before {
+  content: '✓ ';
+}
+.bfmenu button:hover,
+.bfmenu button:focus-visible {
+  background: var(--select-bg);
+}
+.bfnone {
+  padding: 3px 8px;
+  color: var(--muted);
+}
+/* a session card in its project lane has no tag between its dot and title: keep draft B's 6 px gap */
+.bt > .st + .btt {
+  margin-left: 6px;
+}
+
+/* needs 171/172: the PR number, a live chip and the coordinator name are buttons that keep their text's look. */
+.bprn,
+.bcoordn,
+button.bra {
+  padding: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.bprn,
+.bcoordn {
+  border: 0;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.bprn:focus-visible,
+.bcoordn:focus-visible,
+button.bra:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* C7b: the narrow header holds the active chips, the search field and the pencil in one 34 px row at 208 px; a chip
+   gives way (one line, ellipsis) before the field does, and the saved-view line under the list names every filter. */
+.bnarrow .bhead .bfc {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

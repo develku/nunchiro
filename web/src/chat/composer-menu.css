@@ -1,0 +1,75 @@
+/* CHAT-MENUS (claude-feel-2 .pop, .gh, .i, .sel, .d in our tokens). The menu opens above the composer box. */
+.cbox {
+  position: relative;
+}
+.cmenus {
+  display: inline-flex;
+}
+.cmenus .cib {
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+/* Ticket 395: the empty Stash button keeps its width (no shift under the pointer) but is not seen, focused or announced. */
+.cmenus .cib.away {
+  visibility: hidden;
+}
+.composer-menu {
+  position: absolute;
+  left: var(--sp-12);
+  bottom: calc(100% + var(--sp-6));
+  width: 330px;
+  max-width: calc(100% - 2 * var(--sp-12));
+  max-height: 280px;
+  overflow-y: auto;
+  padding: var(--sp-4);
+  border-radius: var(--r-12);
+  font-size: var(--fs-13);
+  z-index: 5;
+}
+.composer-menu .gh {
+  padding: var(--sp-4) var(--sp-8);
+  color: var(--faint);
+  font-size: var(--fs-11);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.composer-menu .i {
+  display: flex;
+  gap: var(--sp-8);
+  padding: var(--sp-4) var(--sp-8);
+  border-radius: var(--r-6);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.composer-menu .i[aria-selected='true'] {
+  background: var(--hover);
+}
+.composer-menu .d {
+  color: var(--muted);
+  margin-left: auto;
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+.composer-menu .none {
+  padding: var(--sp-4) var(--sp-8);
+  color: var(--muted);
+}
+.composer-menu .i .oi {
+  flex: none;
+  align-self: center;
+  color: var(--muted);
+}
+
+/* V2.5-15 draft stash rows: a button that fills the row, and a small discard. */
+.composer-menu .apply {
+  flex: 1;
+  display: flex;
+  gap: var(--sp-8);
+  text-align: start;
+}
+.composer-menu .apply:disabled {
+  opacity: 0.5;
+}
+.composer-menu .discard {
+  color: var(--muted);
+}

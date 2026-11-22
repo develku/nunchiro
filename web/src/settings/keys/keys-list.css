@@ -1,0 +1,332 @@
+/* Settings > Keyboard, page A (needs 166; frame docs/design/v25-keys-redesign/fa-light.png): one scrollable list. The page
+   scrolls in .sbody and nowhere else; area headers stick at its top. */
+.keys-page {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.kshort {
+  min-width: 0;
+}
+.kshort .lede {
+  margin-bottom: 8px;
+}
+.kbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--sp-16);
+}
+.ksearch {
+  flex: 1 1 280px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 10px;
+  color: var(--muted); /* the glyph; the input keeps --text */
+}
+.ksearch input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  padding: 6px 0;
+  color: var(--text);
+}
+.ksearch:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+/* final.html: Record is a plain button, the filters one joined segment. */
+/* Ticket 1041 A: no outlines; Record and the filters are quiet tints, the pressed one the select step and bold. */
+.krecord,
+.kchip {
+  min-height: 28px; /* over the 24 px target floor (needs 149) */
+  padding: 0 10px;
+  background: var(--control-quiet-bg);
+  color: var(--text);
+  font-size: var(--fs-12);
+}
+.krecord {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: var(--r-6);
+}
+.krecord::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.kchip {
+  border: 0;
+  border-radius: var(--r-4);
+  background: none;
+}
+.kchip:focus-visible {
+  outline-offset: -2px;
+}
+/* Pressed: the select step and bold, not a fill in a state colour (recording is an input state, owner 11-22). */
+.krecord[aria-pressed='true'],
+.kchip[aria-pressed='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+  font-weight: 600;
+}
+/* Chip counts (the owner D1 2026-11-06, ticket 223 B15): muted; a non-zero Conflicts count warns; a pressed chip keeps its own colour. */
+.kcount {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.kcount.warn {
+  color: var(--warn);
+}
+.kchip[aria-pressed='true'] .kcount {
+  color: inherit;
+}
+.kchips {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-6);
+  background: var(--control-quiet-bg);
+  overflow: hidden;
+}
+.kfind {
+  margin: 0 0 8px;
+  font-size: var(--fs-12);
+}
+/* The list: area headers stick to the top of the page scroller; each area's rows are their own card (final.html .sec). */
+.karea {
+  min-width: 0;
+}
+.karea + .karea {
+  margin-top: var(--set-gap);
+}
+.khead {
+  position: sticky;
+  top: -16px; /* .sbody's own top padding (styles.css): the header sits at the scroller's top edge, not 16 px below it */
+  z-index: 2;
+  margin: 0;
+  padding: 4px 0 var(--sp-8);
+  background: var(--page); /* opaque: the rows scroll under a stuck heading */
+  font-size: var(--fs-13);
+  font-weight: 600;
+  color: var(--muted);
+}
+.khead small {
+  margin-left: 6px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.klist {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.klist .kc-title {
+  width: 46%;
+}
+.klist .kc-act {
+  width: 44px;
+}
+/* Narrow windows: the keys side keeps its room, so a recording row stays short. */
+@media (max-width: 1100px) {
+  .klist .kc-title {
+    width: 32%;
+  }
+}
+.klist td {
+  padding: 9px 8px;
+  border-bottom: 0; /* ticket 1041 A: rows parted by space, no rules */
+  vertical-align: middle;
+  font-size: var(--fs-13);
+  overflow-wrap: anywhere;
+}
+.klist td:first-child {
+  padding-left: var(--row-px);
+}
+.klist td.kact {
+  padding: 9px 12px 9px 0;
+}
+.klist td.kcell {
+  text-align: right;
+}
+.klist tr[data-command]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+/* Ticket 1041 (N093): recording and the jump-to mark are the select step, not the your-turn orange; the recorder box
+   with its "Press the shortcut" words says recording. */
+.klist tr[data-recording] {
+  background: var(--select-bg);
+}
+.klist tr[data-jump='true'] {
+  background: var(--select-bg);
+}
+.klist .kcell .kslot {
+  display: inline-flex;
+  align-items: center;
+  min-width: 24px;
+  min-height: 24px; /* the 24 px target floor (needs 149) */
+  cursor: pointer;
+}
+.klist .kcaps {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.klist .kgt {
+  color: var(--muted);
+}
+.klist .kor {
+  margin: 0 4px;
+}
+.kact {
+  text-align: right;
+}
+.kbtns {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.kmore {
+  display: inline-flex;
+  gap: 4px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+:is(.kact, .kmore, .kbtns) :is(.kedit, .kadd, .kreset) {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-4);
+  background: none;
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+:is(.kact, .kmore, .kbtns) :is(.kedit, .kadd, .kreset):hover {
+  background: var(--control-quiet-hover);
+  color: var(--text);
+}
+/* Opacity, not display: the + stays in the tab order, and shows while the row has the pointer or the focus. */
+.klist tr:not(:hover, :focus-within) .kadd {
+  opacity: 0;
+}
+.krec-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+.krec-row .krec {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.krec {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.krec:focus {
+  outline: none;
+}
+.krec-box {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px; /* the 2 px orange border is gone; the padding keeps the box's size */
+  border: 0;
+  border-radius: var(--r-8);
+  background: var(--panel);
+  min-height: 26px;
+}
+.krec:focus .krec-box,
+.krec:focus-within .krec-box {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.krec-hint {
+  font-size: var(--fs-11);
+}
+.krec .conflict {
+  line-height: 1.6;
+}
+.knone {
+  padding: 18px 8px;
+  color: var(--muted);
+}
+/* final.html .pfx: the prefix card's first row. */
+.kpfx {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-16);
+  padding: 14px var(--row-px);
+}
+.kpfx .kcell {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--fs-13);
+}
+.kpfx .kcell .kslot {
+  display: inline-flex;
+  align-items: center;
+  min-width: 24px;
+  min-height: 24px; /* the 24 px target floor, as .klist's slots (hit_targets_24); the row's buttons are taller, so it keeps its height */
+  cursor: pointer;
+}
+.kpfx .kor {
+  margin: 0 4px;
+}
+.kpfx .kbd {
+  font-size: var(--fs-13);
+}
+.kpfx .snm {
+  font-size: var(--fs-2);
+  font-weight: 500;
+}
+.kpfx .sds {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--fs-1);
+}
+.kpfx-text {
+  flex: 1;
+  min-width: 0;
+}
+/* Ticket 1041 (15.2 item 8): "changed from default" is a neutral mark (ink dot, muted word), not the working blue. */
+.kpfx .ov {
+  margin-left: 8px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.khead .oi {
+  margin-right: 4px;
+  vertical-align: -1px;
+}
+
+.klist .ov {
+  margin-left: 8px;
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font-weight: 400;
+}
+.klist .ov::before {
+  content: '● ';
+  color: var(--text);
+}

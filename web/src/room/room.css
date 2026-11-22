@@ -1,0 +1,88 @@
+/* Ticket 571 (room panel): docs/design/orchestration-room/index.html, in the app's tokens. */
+.room { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr auto; background: var(--panel); color: var(--text); font-size: var(--fs-13, 13px); container: room / inline-size; }
+.room-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+/* Ticket 1041 (A): no outlines in the room; chips, buttons and boxes are tint steps, the chosen one the selected tint and
+   bold (blue is the working light only, inventory N072, N138). */
+.room-filters { display: flex; gap: 6px; padding: 6px 12px; flex-wrap: wrap; flex: none; }
+.room-filters button, .room-composer button, .room-pin { font: inherit; padding: 2px 8px; border: 0; background: var(--control-quiet-bg); color: var(--text); border-radius: var(--r-6); cursor: pointer; }
+.room-filters button:hover, .room-composer button:hover:not(:disabled), .room-pin:hover { background: var(--control-quiet-hover); }
+.room-filters button[aria-pressed='true'] { background: var(--select-bg); color: var(--select-text); font-weight: 600; }
+.room-log { flex: 1; overflow: auto; padding: 10px 14px; }
+.room-empty, .room-chatempty { color: var(--muted); }
+.room-thread { border-radius: var(--r-8); background: var(--tint-1); margin: 0 0 10px; }
+.room-thead { display: flex; align-items: center; gap: 8px; padding: 6px 10px; color: var(--muted); }
+.room-thead b { color: var(--text); }
+.room-thead .sp { flex: 1; }
+.room-state { background: var(--you-bg); color: var(--you); border-radius: var(--r-pill); padding: 0 6px; font-size: var(--fs-11, 11px); }
+.room-msg { padding: 6px 10px; display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; align-items: baseline; }
+.room-msg + .room-msg { border-top: 1px dashed var(--line); }
+.room-who { font-weight: 600; white-space: nowrap; }
+.room-who[data-you] { color: var(--you); }
+.room-meta { color: var(--muted); font-size: var(--fs-11, 11px); }
+.room-pin { padding: 0 6px; font-size: var(--fs-11, 11px); color: var(--muted); }
+.room-pin[aria-pressed='true'] { background: var(--select-bg); color: var(--select-text); font-weight: 600; }
+.room-text { grid-column: 1 / -1; }
+.room-text blockquote, .room-pinned { margin: 2px 0 0; padding: 2px 8px; border-left: 3px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
+.room-kind { font-size: var(--fs-11, 11px); background: var(--panel); border-radius: var(--r-4); padding: 0 4px; color: var(--muted); }
+.room-kind[data-kind='ask'] { color: var(--warn); }
+.room-kind[data-kind='cap'], .room-kind[data-kind='timeout'], .room-kind[data-kind='lost'] { color: var(--bad-text); }
+.room-composer { padding: 8px 12px; display: flex; gap: 8px; align-items: center; flex: none; }
+/* Size and spacing only: the border, background, colour and font are the one field look (styles.css, tickets 468, 542). */
+.room-composer select, .room-composer input { padding: 5px 8px; }
+.room-composer input { flex: 1; min-width: 0; }
+.room-composer button { padding: 5px 10px; }
+.room-note { margin: 0; padding: 0 12px 8px; color: var(--bad); }
+.room-side { width: 250px; box-sizing: border-box; padding: 10px; overflow: auto; background: var(--tint-1); }
+.room-side h3 { font-size: var(--fs-11, 11px); text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
+.room-seat { background: var(--panel); border-radius: var(--r-8); padding: 8px; margin-bottom: 8px; }
+.room-seat-top { display: flex; align-items: center; gap: 6px; }
+.room-seat-name { flex: 1; font: inherit; font-weight: 600; background: none; border: 0; padding: 0; color: var(--text); text-align: left; cursor: pointer; }
+.room-last { overflow-wrap: anywhere; }
+.room-pinned { background: var(--panel); border-left-color: var(--ring-focus); margin-bottom: 6px; border-radius: 0 var(--r-6) var(--r-6) 0; }
+.room-role { font-size: var(--fs-11, 11px); background: var(--panel); border-radius: var(--r-4); padding: 0 4px; color: var(--muted); }
+/* Ticket 594: the lost-seat card, one next action. */
+.room-lost { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; padding: 6px 8px; border-left: 3px solid var(--light-bad); border-radius: var(--r-6); background: var(--tint-1); }
+.room-lost span { flex: 1; min-width: 0; }
+.room-lost button { font: inherit; padding: 2px 8px; border: 0; background: var(--control-quiet-hover); color: var(--text); border-radius: var(--r-6); cursor: pointer; }
+/* Ticket 990 (H2 ①): team lines written by the core are quiet one-line notes; the narrow room (under 560 px of its own width,
+   a pane beside the leader) drops the seats column and reads as a chat in time order. */
+.room-tnote { margin: 4px 10px; color: var(--muted); font-size: var(--fs-12); text-align: center; }
+.room-tnote time { margin-left: 4px; font-size: var(--fs-11); }
+.room-chat { display: none; flex: 1; min-height: 0; overflow: auto; flex-direction: column; gap: 10px; padding: 10px 12px; }
+.room-line { display: flex; gap: 8px; max-width: 96%; }
+.room-line[data-you] { align-self: flex-end; }
+.room-line > div { min-width: 0; }
+.room-line-head { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; } /* one line: a wrapped time put the text at two heights (look 1117 home S3) */
+.room-line-head > b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Look 1117 v9/v10 Home S3-9: a narrow room cut the time ("11:14 PI") and the sender ("Coun…", "Nunchiro a…"): the sender
+   and the time keep their width, the thread tag gives way. Look 1117 v12/v13 B N12-S3-3: the role, agent and addressee words
+   all giving way at once read "Lead L. c.. -> Builder . ...": they have their own line (.room-line-to), cut only at its end. */
+.room-line-head > b { flex-shrink: 0; max-width: 65%; } /* a share of a pixel taken from the name drew its ellipsis */
+.room-line-head > time { flex: none; }
+.room-line-head > .room-ttag { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.room-line-to { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.room-line blockquote { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-12); }
+.room-line[data-you] blockquote { padding: 4px 8px; border-radius: var(--r-8); background: var(--tint-1); }
+.room-rail { flex: none; align-self: stretch; width: 3px; border-radius: var(--r-2); background: var(--tree-idle); }
+.room-rail[data-tone='you'] { background: var(--tree-you); }
+.room-rail[data-tone='bad'] { background: var(--tree-bad); }
+.room-rail[data-tone='run'] { background: var(--tree-run); }
+.room-rail[data-tone='ok'] { background: var(--ok); }
+.room-rail[data-tone='done'] { background: var(--done); }
+.room-rail[data-tone='warn'] { background: var(--warn); }
+.room-ttag { font-size: var(--fs-11); background: var(--panel); border-radius: var(--r-4); padding: 0 4px; color: var(--muted); }
+@container room (max-width: 560px) {
+  .room-side, .room-log, .room-filters { display: none; }
+  .room-chat { display: flex; }
+  .room-composer { flex-wrap: wrap; }
+  .room-composer input { flex: 1 1 0; order: -1; }
+  /* Beside the leader one box and Send are enough: the line goes to the lead, in a new thread (the wide tab picks both). */
+  .room-composer select { display: none; }
+  .room-line blockquote { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+}
+/* Ticket 990: the room as a widget (RoomPane): its head, then the room filling the rest. */
+.roompane { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--panel); }
+.roompane-head { display: flex; align-items: baseline; gap: 8px; padding: 7px 12px; flex: none; }
+.roompane-head b { font-size: var(--fs-13); }
+.roompane-body { position: relative; flex: 1; min-height: 0; }
+.roompane-body > .room-empty { padding: 12px; margin: 0; }

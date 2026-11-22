@@ -1,0 +1,31 @@
+# My board — hand edited.
+version   =   1
+
+# Things in flight
+[[columns]]
+title = "작업 중"   # keep this comment
+id = 'working'
+states = [ "working" ]
+
+[[columns]]
+id="needs-decision"
+title="결정 필요"
+needs_decision=true
+states=["needs_decision"]
+
+  [[columns]]
+  id = "review"
+  title = "리뷰 대기"
+  states = ["review"]
+
+[[columns]]
+id = "done"
+title = "완료"   # trailing
+states = ["done"]
+
+[sources]
+version = 1
+[[sources.entries]]
+name = "roadmap"
+kind = "command"
+subject = "demo"

@@ -1,0 +1,9 @@
+/* Ticket 222 (B19b): the per-turn "N changed files / Open diff" row, quieter than the changes card. */
+.turnfiles {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: var(--fs-12);
+  color: var(--muted);
+}

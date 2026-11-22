@@ -1,0 +1,4 @@
+/* The claude.ai artifact link card reuses .acard.line from artifacts.css; only its spacing under the text is new. */
+.acard.line.claude-link {
+  margin: 4px 0;
+}

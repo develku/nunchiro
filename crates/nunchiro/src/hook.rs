@@ -1,0 +1,261 @@
+//! Bounded hook bridge. Journal before delivery; stdout is only an explicit user decision, or (V2.5-39, ticket 187,
+//! needs 154 item 12) the turn-end nudge's one context line on `UserPromptSubmit`, in exactly the shape
+//! `board::nudge::is_context` allows, or (ticket 571) the room's ask deny on `PreToolUse` and its notice line on
+//! `PostToolUse`, in exactly the shapes `room::is_hook_output` allows.
+use nunchiro_core::{
+    api::{Envelope, Reply, Request, Response},
+    queue::journal::{self, Event},
+};
+use std::{
+    env, fs,
+    io::{BufRead, BufReader, Read, Write},
+    os::unix::net::UnixStream,
+    path::{Path, PathBuf},
+    sync::mpsc,
+    thread,
+    time::Duration,
+};
+/// `hold` (ticket 991 B3): the agent gave this hook a long timeout (Claude's permission hook), so the core may keep
+/// it until the person answers the card (`queue::HOLD_MS`); the bounds here follow.
+pub fn run(home: &Path, event: &str, hold: bool) -> Result<(), String> {
+    let extra = Duration::from_millis(if hold {
+        nunchiro_core::queue::HOLD_MS
+    } else {
+        0
+    });
+    // V2.5-48: the 1.8 s bound below counts from here; the core counts the nudge budget from it too.
+    let started_ms = nunchiro_core::queue::now_ms();
+    let (tx, rx) = mpsc::channel();
+    let home = PathBuf::from(home);
+    let event = event.to_string();
+    thread::spawn(move || {
+        let _ = tx.send(forward(&home, &event, started_ms, hold, extra));
+    });
+    match rx.recv_timeout(Duration::from_millis(1800) + extra) {
+        Ok(Ok(Some(decision))) => println!(
+            "{}",
+            serde_json::to_string(&decision).map_err(|e| e.to_string())?
+        ),
+        Ok(Ok(None)) => {}
+        Ok(Err(e)) => eprintln!("nunchiro hook: {e}"),
+        Err(_) => eprintln!("nunchiro hook: bounded timeout; no decision"),
+    }
+    Ok(())
+}
+fn forward(
+    home: &Path,
+    event: &str,
+    started_ms: u64,
+    hold: bool,
+    extra: Duration,
+) -> Result<Option<serde_json::Value>, String> {
+    let id = env::var("NUNCHIRO_SESSION").map_err(|e| e.to_string())?;
+    let name = event.to_string();
+    let mut payload = vec![];
+    std::io::stdin()
+        .take(65537)
+        .read_to_end(&mut payload)
+        .map_err(|e| e.to_string())?;
+    if payload.len() > 65536 {
+        return Err("hook payload exceeds 64 KiB".into());
+    }
+    let mut payload: serde_json::Value =
+        serde_json::from_slice(&payload).map_err(|e| e.to_string())?;
+    if let Some(object) = payload.as_object_mut() {
+        // Ours alone: an agent's own payload never asks for the hold.
+        object.remove("nunchiro_hold");
+        if hold {
+            object.insert("nunchiro_hold".into(), true.into());
+        }
+    }
+    let event = Event::new(id, event.into(), payload)?;
+    // Q9 pin-J11-1: the journal is the replay copy for a core that is down; a full or failing one never keeps the
+    // event from the live core.
+    let path = journal::write(home, &event)
+        .inspect_err(|e| eprintln!("nunchiro hook: journal write failed: {e}"))
+        .ok();
+    // A missing/rotated session token never falls back to owner authority.
+    let token = env::var("NUNCHIRO_TOKEN").map_err(|e| e.to_string())?;
+    let mut stream = UnixStream::connect(home.join("core.sock")).map_err(|e| e.to_string())?;
+    stream
+        .set_read_timeout(Some(Duration::from_millis(1600) + extra))
+        .map_err(|e| e.to_string())?;
+    stream
+        .set_write_timeout(Some(Duration::from_millis(100)))
+        .map_err(|e| e.to_string())?;
+    let envelope = Envelope {
+        token,
+        request: Request::Hook {
+            id: event.session_id,
+            event: event.event,
+            payload: event.payload,
+        },
+    };
+    let mut envelope = serde_json::to_value(&envelope).map_err(|e| e.to_string())?;
+    envelope["started_ms"] = started_ms.into();
+    let mut bytes = serde_json::to_vec(&envelope).map_err(|e| e.to_string())?;
+    bytes.push(b'\n');
+    stream.write_all(&bytes).map_err(|e| e.to_string())?;
+    let mut line = String::new();
+    BufReader::new(stream.take(65536))
+        .read_line(&mut line)
+        .map_err(|e| e.to_string())?;
+    let response: Response = serde_json::from_str(&line).map_err(|e| e.to_string())?;
+    let reply = response?;
+    let decision = match reply {
+        Reply::HookDecision { decision } => decision,
+        Reply::Ack => None,
+        _ => return Err("unexpected hook reply".into()),
+    };
+    let decision = decision.filter(|d| match name.as_str() {
+        "UserPromptSubmit" => nunchiro_core::board::nudge::is_context(d),
+        "PreToolUse" | "PostToolUse" => nunchiro_core::room::is_hook_output(&name, d),
+        _ => true,
+    });
+    if let Some(path) = path
+        && let Err(error) = fs::remove_file(path)
+    {
+        eprintln!("nunchiro hook: journal cleanup failed: {error}");
+    }
+    Ok(decision)
+}
+
+/// Ticket 1002 lane 1, layer 2: the Home seat lock's PreToolUse hook (`nunchiro_core::home_lock::decide`). `args`:
+/// `--mode <name>` (the start's effective mode; anything else is Ask). Decided here; only an outward tool
+/// asks the core, to spend the owner's yes for this exact call. Fail closed (Fable check M1): a payload it cannot read
+/// exits 2 and a failed run blocks (`onFailure`), so Claude refuses the call; a core that is down or says no refuses it.
+/// The largest tool call the lock reads (a Write of a big file included); a larger one is refused, never judged in part.
+const PAYLOAD_MAX: u64 = 16 << 20;
+pub fn home_lock(home: &Path, args: &[String]) -> ! {
+    use nunchiro_core::home_lock::{Decision, NO_CARD, decide, hook_output, named, spend};
+    let mode = match args {
+        [flag, mode] if flag == "--mode" => named(mode),
+        _ => named(""), // no mode named: Ask, the strictest
+    };
+    let mut payload = vec![];
+    let call = std::io::stdin()
+        .take(PAYLOAD_MAX + 1)
+        .read_to_end(&mut payload)
+        .ok()
+        .filter(|n| *n as u64 <= PAYLOAD_MAX)
+        .and_then(|_| serde_json::from_slice::<serde_json::Value>(&payload).ok());
+    let Some((tool, input)) = call.and_then(|v| {
+        let tool = v.get("tool_name")?.as_str()?.to_string();
+        Some((tool, v.get("tool_input").cloned().unwrap_or_default()))
+    }) else {
+        eprintln!("Home seat lock: this tool call could not be read, so it is refused");
+        std::process::exit(2);
+    };
+    let out = match decide(&tool, &input, mode) {
+        Decision::Mode => None,
+        Decision::Allow(why) => Some(hook_output("allow", why)),
+        Decision::Ask(why) => Some(hook_output("ask", why)),
+        Decision::Deny(why) => Some(hook_output("deny", why)),
+        Decision::Spend => Some(
+            match env::var("NUNCHIRO_TOKEN")
+                .map_err(|e| e.to_string())
+                .and_then(|token| spend(&home.join("core.sock"), &token, &tool, &input))
+            {
+                Ok(_card) => hook_output(
+                    "allow",
+                    "Home seat: the owner said yes to this exact call on its Outbox card",
+                ),
+                Err(e) => {
+                    eprintln!("Home seat lock: {e}");
+                    hook_output("deny", NO_CARD)
+                }
+            },
+        ),
+    };
+    if let Some(out) = out {
+        println!("{out}");
+    }
+    std::process::exit(0);
+}
+
+/// Ticket 1036: Claude Code's status line command in a Nunchiro session. Claude pipes it JSON with `rate_limits`
+/// (`five_hour`, `seven_day`: `used_percentage`, `resets_at`); only `rate_limits` goes to the core, as a `StatusLine`
+/// hook of this session (its token), for the usage bar. The user's own status line command (project local, project,
+/// then their Claude settings, as Claude Code layers them) runs with the same input and its output is the line, so
+/// the user's status line is unchanged. The core is waited on at most `STATUS_WAIT`; it never blocks the line.
+const STATUS_WAIT: Duration = Duration::from_millis(500);
+pub fn statusline(home: &Path) {
+    let mut input = vec![];
+    if std::io::stdin()
+        .take(1 << 20)
+        .read_to_end(&mut input)
+        .is_err()
+    {
+        return;
+    }
+    let limits = serde_json::from_slice::<serde_json::Value>(&input)
+        .ok()
+        .map(|v| v["rate_limits"].clone())
+        .filter(|l| l.is_object());
+    let (tx, rx) = mpsc::channel();
+    if let Some(limits) = limits {
+        let home = home.to_path_buf();
+        thread::spawn(move || {
+            let _ = tx.send(tell(&home, limits));
+        });
+    }
+    if let Some(command) = own_status_line() {
+        let child = std::process::Command::new("/bin/sh")
+            .args(["-c", &command])
+            .stdin(std::process::Stdio::piped())
+            .spawn();
+        if let Ok(mut child) = child {
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(&input);
+            }
+            let _ = child.wait();
+        }
+    }
+    let _ = rx.recv_timeout(STATUS_WAIT);
+}
+fn tell(home: &Path, limits: serde_json::Value) -> Result<(), String> {
+    let id = env::var("NUNCHIRO_SESSION").map_err(|e| e.to_string())?;
+    let token = env::var("NUNCHIRO_TOKEN").map_err(|e| e.to_string())?;
+    let mut stream = UnixStream::connect(home.join("core.sock")).map_err(|e| e.to_string())?;
+    stream
+        .set_read_timeout(Some(STATUS_WAIT))
+        .map_err(|e| e.to_string())?;
+    stream
+        .set_write_timeout(Some(STATUS_WAIT))
+        .map_err(|e| e.to_string())?;
+    let envelope = Envelope {
+        token,
+        request: Request::Hook {
+            id,
+            event: "StatusLine".into(),
+            payload: serde_json::json!({ "rate_limits": limits }),
+        },
+    };
+    let mut bytes = serde_json::to_vec(&envelope).map_err(|e| e.to_string())?;
+    bytes.push(b'\n');
+    stream.write_all(&bytes).map_err(|e| e.to_string())?;
+    let mut line = String::new();
+    BufReader::new(stream.take(65536))
+        .read_line(&mut line)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+/// The status line command the user set, read as Claude Code layers settings: the folder's
+/// `.claude/settings.local.json`, then `.claude/settings.json`, then the account's (`CLAUDE_CONFIG_DIR`) or
+/// `~/.claude/settings.json`. Ours (in the session's `--settings` file) is never one of these.
+fn own_status_line() -> Option<String> {
+    let user = env::var_os("CLAUDE_CONFIG_DIR")
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join(".claude")));
+    let files = [
+        Some(PathBuf::from(".claude/settings.local.json")),
+        Some(PathBuf::from(".claude/settings.json")),
+        user.map(|u| u.join("settings.json")),
+    ];
+    files.into_iter().flatten().find_map(|f| {
+        let v: serde_json::Value = serde_json::from_slice(&fs::read(f).ok()?).ok()?;
+        let command = v["statusLine"]["command"].as_str()?.trim().to_string();
+        // A line that names this command again would run itself.
+        (!command.is_empty() && !command.contains("hook statusline")).then_some(command)
+    })
+}

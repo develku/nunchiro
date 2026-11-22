@@ -1,0 +1,110 @@
+/* 370 #remove #removeblocked: docs/design/m2-1109/370.html .scrim .modal .path .call .facts .why */
+.rmscrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--shade-30);
+}
+.palette.wtdlg.rmdlg {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, round(nearest, -50%, 1px)); /* keep the centred card on whole pixels */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 460px;
+  max-height: calc(100vh - 32px);
+  padding: 14px 16px;
+  overflow: auto;
+  border-color: var(--faint);
+}
+.palette.wtdlg.rmdlg.rmblocked {
+  width: 400px;
+}
+.rmdlg h2 {
+  margin: 0;
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+.rmdlg p {
+  margin: 0;
+}
+.rmdlg .rmmuted {
+  color: var(--muted);
+}
+.rmdlg .rmpath {
+  padding: var(--sp-6) var(--sp-8);
+  border-radius: var(--r-6);
+  background: var(--page);
+  font: var(--fs-12) ui-monospace, Menlo, monospace;
+  word-break: break-all;
+}
+.rmdlg .rmcall {
+  padding: var(--sp-8);
+  border-radius: var(--r-6);
+  background: var(--you-bg);
+  color: var(--you);
+  font-weight: 500;
+}
+.rmdlg .rmfacts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rmdlg .rmfacts li {
+  display: flex;
+  gap: var(--sp-8);
+  padding: 0;
+  cursor: default;
+}
+.rmdlg .rmfacts .gone svg {
+  color: var(--bad);
+}
+.rmdlg .rmfacts .stay svg {
+  color: var(--ok);
+}
+.rmdlg .rmwhy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.rmdlg .rmwhy h3 {
+  margin: 0;
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+.rmdlg .rmit {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-8);
+  padding: 3px var(--sp-8);
+  border-radius: var(--r-4);
+  background: var(--page);
+}
+.rmdlg .rmit > :first-child {
+  font: var(--fs-12) ui-monospace, Menlo, monospace;
+}
+/* Look 1117 v13 (A NEW-S2-A1): a worktree row's own Remove sits at its end; a long reason wraps beside it. */
+.rmdlg .rmit:has(> .btn) {
+  align-items: center;
+}
+.rmdlg .rmit > .btn {
+  flex: none;
+}
+.rmdlg .rmacts {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-8);
+}
+.rmdlg .rmerr {
+  color: var(--bad);
+}
+/* The default button shows its focus even when the dialog was opened by a click (the mock's ring). */
+.rmdlg .btn:focus {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 2px;
+}

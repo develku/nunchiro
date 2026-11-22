@@ -1,0 +1,48 @@
+[package]
+name = "nunchiro-app"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+# Kept out of the core workspace: the window is a client of `nunchiro serve`, not part of it.
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# v25-19: `unstable` is Tauri's child-webview API (Window::add_child), approved by the coordinator for the browser view.
+tauri = { version = "2", features = ["tray-icon", "unstable"] }
+serde_json = "1"
+tauri-plugin-opener = "2"
+tauri-plugin-notification = "2"
+# V2.5-34: the native folder picker behind "Choose folder…" / + Project (Tauri's own plugin, MIT/Apache).
+tauri-plugin-dialog = "2"
+# v1b-09: artifact hashes (same version line as the core)
+sha2 = "0.11.1"
+# v1a-67: O_NOFOLLOW and O_NONBLOCK for the font file open (already in the tree through tauri).
+libc = "0.2"
+# G2: the RC build's and the official release's self-update (src/rc_update.rs); no other build registers it. rustls: no second TLS stack.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls"] }
+# Already in the tree through tauri: the sleep between update checks.
+tokio = { version = "1", features = ["time"] }
+
+# v1a-67: Tauri's mock runtime for the font commands' IPC test (a feature of the same crate, no new crate).
+[dev-dependencies]
+tauri = { version = "2", features = ["tray-icon", "unstable", "test"] }
+
+# v1a-38: NSSound plays the allowlisted macOS system sounds (both crates are already in the tree through tauri).
+[target.'cfg(target_os = "macos")'.dependencies]
+# v1a-68: NSSavePanel for "Save to file…" (features only; no new package).
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSSound", "NSApplication", "NSButton", "NSControl", "NSPanel", "NSResponder", "NSSavePanel", "NSView", "NSWindow", "NSDockTile"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSBundle", "NSError", "NSNotification", "NSOperation", "NSString", "NSURL", "NSUserNotification"] }
+# Ticket 305: the OS notification permission; the plugin's own answer is always Granted on desktop (already in the tree).
+objc2-user-notifications = { version = "0.3.2", default-features = false, features = ["std", "block2", "UNNotificationSettings", "UNUserNotificationCenter"] }
+# v1a-67: CoreText reads a font file's family name (both crates are already in the tree through tauri).
+objc2-core-text = { version = "0.3.2", default-features = false, features = ["std", "CTFontDescriptor", "CTFontManager", "CTFontTraits"] }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFArray", "CFDictionary", "CFNumber", "CFString", "CFURL"] }
+# V2.5-20: WKWebView isolated-world calls and native NSEvent input for `nunchiro browser` (both already in the tree
+# through wry; no new package).
+objc2 = "0.6.5"
+block2 = "0.6.2"
+serde = { version = "1", features = ["derive"] }

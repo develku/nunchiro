@@ -1,0 +1,322 @@
+/* Diff (±) widget. */
+/* The +/- ink is the theme's own ok and bad colours pulled toward its text colour, so it reads on the shared --diff-add and
+   --diff-del tints (tokens.css) in every theme; a theme's bright green or red alone does not on a light page. */
+:root {
+  --diff-add-ink: color-mix(in srgb, var(--ok) 25%, var(--text));
+  --diff-del-ink: color-mix(in srgb, var(--bad) 25%, var(--text));
+}
+
+.dock.r.diff {
+  min-width: 0;
+}
+.dock.r.diff.wide {
+  width: min(560px, 45vw);
+}
+/* A layout zone sizes the widget. */
+.dock.zone.diff {
+  width: 100%;
+  height: 100%;
+}
+.diff .dbtn {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-4);
+  color: var(--muted);
+  font-size: var(--fs-13);
+  text-transform: none;
+}
+.diff .dbtn:first-of-type {
+  margin-left: 4px;
+}
+.diff .dbtn:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--tint-1);
+}
+.diff .dbtn[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+}
+/* Ticket 222: the "Latest turn / Changes" scope, a segmented radio group under the header. Ticket 1041 lane 7b (N150): no
+   outline; the group is one quiet tint, the chosen one the selected step. */
+.diff .dscope {
+  display: flex;
+  gap: 2px;
+  margin: 6px 10px 2px;
+  padding: 2px;
+  border-radius: var(--r-6);
+  background: var(--tint-1);
+  overflow: hidden;
+  flex: none;
+  align-self: flex-start;
+}
+.diff .dscope button {
+  padding: 1px 10px;
+  border-radius: var(--r-4);
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.diff .dscope button[aria-checked='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+}
+.diff .dscope button[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: default;
+}
+.diff .dbase {
+  padding: 4px 10px;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.diff .dstate {
+  padding: 16px 12px;
+  font-size: var(--fs-12);
+  line-height: 1.5;
+}
+.diff .dfiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.diff.wide .dfiles {
+  flex: 0 1 auto;
+  max-height: 32%;
+}
+.diff .it {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: var(--fs-12);
+  text-align: left;
+  color: var(--text);
+}
+.diff .it:hover {
+  background: var(--tint-1);
+}
+.diff .it[aria-pressed='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+}
+.diff .it .ic {
+  width: 34px;
+  height: 26px;
+  border-radius: var(--r-4);
+  background: var(--tint-1);
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: var(--fs-10);
+  color: var(--muted);
+}
+.diff .dname {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.diff .dname .mono {
+  font-size: var(--fs-11);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diff .dname .m {
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.diff .dst[data-s='A'],
+.diff .dst[data-s='?'] {
+  color: var(--diff-add-ink);
+}
+.diff .dst[data-s='D'] {
+  color: var(--diff-del-ink);
+}
+/* A note, not your turn: muted words on the quiet tint (orange is only "needs you"). */
+.diff .dnote {
+  padding: 6px 10px;
+  font-size: var(--fs-11);
+  color: var(--muted);
+  background: var(--tint-1);
+}
+.diff .dview {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.diff .dbar {
+  /* Ticket 261: in a narrow dock the view toggles wrap to a second row instead of cutting the path. */
+  min-height: 28px;
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 4px 10px;
+  background: var(--page); /* one tint step parts the bar from the list above and the stack below, no rules */
+}
+.diff .dopen {
+  display: inline-flex;
+  flex: none;
+}
+.diff .dpath {
+  font-size: var(--fs-11);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.diff .seg {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-6);
+  background: var(--tint-1);
+  overflow: hidden;
+  flex: none;
+}
+.diff .seg button {
+  padding: 0 8px;
+  border-radius: var(--r-4);
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.diff .seg button[aria-pressed='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+  font-weight: 600; /* the pressed state reads by weight too, not by the tint alone */
+}
+.diff .dcode {
+  flex: 1;
+  overflow: auto;
+  background: var(--panel);
+}
+.diff .dl {
+  border-collapse: collapse;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: var(--fs-11);
+  line-height: 17px;
+  min-width: 100%;
+}
+.diff .dl.dl-split {
+  table-layout: fixed;
+  width: 100%;
+}
+.diff .dl td {
+  padding: 0 6px;
+  white-space: pre;
+  vertical-align: top;
+}
+.diff .dl.dl-split td.c {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diff .dl.dl-split col.n {
+  width: 36px;
+}
+.diff .dl td.n {
+  width: 1%;
+  min-width: 28px;
+  text-align: right;
+  color: var(--muted);
+  user-select: none;
+}
+.diff .dl .sign {
+  display: inline-block;
+  width: 12px;
+  color: var(--muted);
+  user-select: none;
+}
+.diff .dl tr.add,
+.diff .dl td.add {
+  background: var(--diff-add);
+}
+.diff .dl tr.del,
+.diff .dl td.del {
+  background: var(--diff-del);
+}
+.diff .dl tr.add .sign,
+.diff .dl td.add .sign {
+  color: var(--diff-add-ink);
+}
+.diff .dl tr.del .sign,
+.diff .dl td.del .sign {
+  color: var(--diff-del-ink);
+}
+.diff .dl td.gap {
+  background: var(--page);
+}
+.diff .dl tr.hunk td {
+  color: var(--muted);
+  background: var(--page);
+  padding: 2px 8px;
+}
+.diff .dl tr.note td {
+  color: var(--muted);
+  font-style: italic;
+  padding: 0 8px;
+}
+/* Ticket 261 (G14): wrap long lines, the fold row of collapsed unchanged lines, and the colour-blind safe set. */
+.diff .dl.wrap td.c {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diff .dl tr.fold td {
+  background: var(--page);
+  padding: 0 8px;
+}
+.diff .dl .dfold {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.diff .dl .dfold:hover {
+  color: var(--text);
+}
+/* Ticket 1041 lane 7b (15.2 item 5): the colour-blind set has its own pair (tokens.css --diff-cb-add-ink and
+   --diff-cb-del-ink), never the state hues: blue is the working light and orange your turn. */
+.diff[data-colours='colour_blind'] {
+  --diff-add: color-mix(in srgb, var(--diff-cb-add-ink) 14%, var(--panel));
+  --diff-del: color-mix(in srgb, var(--diff-cb-del-ink) 14%, var(--panel));
+  --diff-add-ink: var(--diff-cb-add-ink);
+  --diff-del-ink: var(--diff-cb-del-ink);
+}
+/* Ticket 373: the one git button in the header (mock 373.html `.ph .btn`). */
+.diff .ph .dgit {
+  font-size: var(--fs-11);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+  padding: 0 6px;
+  line-height: 18px;
+  white-space: nowrap;
+  margin-left: 4px;
+  /* A narrow dock cuts the label (its tooltip shows it whole), never the refresh and close buttons. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.diff .ph .dbtn {
+  flex: none;
+}
+.diff .ph .r {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* N149: a disabled git button is dimmed with its label kept; the reason stays in the tooltip. */
+.diff .ph .dgit[aria-disabled='true'] {
+  color: var(--muted);
+  opacity: 0.7;
+  cursor: default;
+}

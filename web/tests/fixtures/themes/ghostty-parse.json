@@ -1,0 +1,54 @@
+{
+  "_comment": "V1A-47: one fixture for both Ghostty parsers (web/src/themes/ghostty.ts for import, crates/nunchiro-core/src/themes_online.rs for Browse online), so they cannot drift. `valid` bodies must parse to `colors` in both; `malformed` bodies are refused by the core (the import parser skips bad lines instead). `hex` is the body as bytes when it is not UTF-8.",
+  "valid": [
+    {
+      "name": "comments, blanks, spaces, upper-case hex, unknown keys",
+      "text": "# a comment\nbackground=#101820\n\n  foreground   =   #F0E0D0\npalette = 3=#aabbcc\npalette = 15=#ABCDEF\ncursor-color = #ff0000\nfont-family = Comic Sans\nselection-background = #333333\n",
+      "colors": {
+        "background": "#101820",
+        "foreground": "#f0e0d0",
+        "cursor": "#ff0000",
+        "cursorText": "#101820",
+        "selectionBackground": "#333333",
+        "palette": ["#2e3436", "#cc0000", "#4e9a06", "#aabbcc", "#3465a4", "#75507b", "#06989a", "#d3d7cf", "#555753", "#ef2929", "#8ae234", "#fce94f", "#729fcf", "#ad7fa8", "#34e2e2", "#abcdef"]
+      }
+    },
+    {
+      "name": "only background and foreground, CRLF",
+      "text": "background = #000000\r\nforeground = #ffffff\r\n",
+      "colors": {
+        "background": "#000000",
+        "foreground": "#ffffff",
+        "cursor": "#ffffff",
+        "cursorText": "#000000",
+        "selectionBackground": "#ffffff",
+        "selectionForeground": "#000000",
+        "palette": ["#2e3436", "#cc0000", "#4e9a06", "#c4a000", "#3465a4", "#75507b", "#06989a", "#d3d7cf", "#555753", "#ef2929", "#8ae234", "#fce94f", "#729fcf", "#ad7fa8", "#34e2e2", "#eeeeec"]
+      }
+    },
+    {
+      "name": "every key set",
+      "text": "palette = 0=#45475a\npalette = 9=#F7AEC2\nbackground = #1e1e2e\nforeground = #cdd6f4\ncursor-color = #f5e0dc\ncursor-text = #1e1e2e\nselection-background = #f5e0dc\nselection-foreground = #1e1e2e\n",
+      "colors": {
+        "background": "#1e1e2e",
+        "foreground": "#cdd6f4",
+        "cursor": "#f5e0dc",
+        "cursorText": "#1e1e2e",
+        "selectionBackground": "#f5e0dc",
+        "selectionForeground": "#1e1e2e",
+        "palette": ["#45475a", "#cc0000", "#4e9a06", "#c4a000", "#3465a4", "#75507b", "#06989a", "#d3d7cf", "#555753", "#f7aec2", "#8ae234", "#fce94f", "#729fcf", "#ad7fa8", "#34e2e2", "#eeeeec"]
+      }
+    }
+  ],
+  "malformed": [
+    { "name": "no background", "text": "foreground = #ffffff\n" },
+    { "name": "no foreground", "text": "background = #000000\n" },
+    { "name": "bad hex", "text": "background = #12345g\nforeground = #ffffff\n" },
+    { "name": "colour name, not hex", "text": "background = #000000\nforeground = #ffffff\ncursor-color = red\n" },
+    { "name": "palette index outside 0-15", "text": "background = #000000\nforeground = #ffffff\npalette = 16=#ff0000\n" },
+    { "name": "palette entry without index", "text": "background = #000000\nforeground = #ffffff\npalette = #ff0000\n" },
+    { "name": "NUL byte", "text": "background = #000000\u0000\nforeground = #ffffff\n" },
+    { "name": "not UTF-8", "hex": "6261636b67726f756e64203d2023303030303030ff0a666f726567726f756e64203d20236666666666660a" },
+    { "name": "empty", "text": "" }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "bundle": {
+    "active": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [],
+      "dangerousInsecureTransportProtocol": true,
+      "requireSignedVersion": true
+    }
+  }
+}

@@ -1,0 +1,29 @@
+.bview .bnotes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  max-height: 40%;
+  overflow: auto;
+  background: var(--page); /* ticket 1041 lane 7b: one tint step, no rule */
+  font-size: var(--fs-12);
+}
+.bview .bnote {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.bview .bnote code {
+  flex: none;
+  max-width: 30%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bview .bnote textarea {
+  flex: 1;
+  min-width: 0;
+}
+.bview .bnotes-to {
+  color: var(--muted);
+}

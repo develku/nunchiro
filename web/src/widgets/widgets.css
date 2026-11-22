@@ -1,0 +1,159 @@
+/* User widgets (ticket v1b-19): the gallery section (R8 frame 5) and the placed widget view. */
+.ugal {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: -6px;
+  padding-left: 14px;
+}
+/* Ticket 1041 lane 7b: the 11 px sentence-case caption, semantic tokens (N152). */
+.ugal .gsl {
+  font-size: var(--fs-11);
+  font-weight: 600;
+  color: var(--muted);
+  height: 15px;
+  white-space: nowrap;
+}
+.ugal .gsl span {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.ugal .ugal-off {
+  color: var(--muted);
+}
+.ugal-cards {
+  display: flex;
+  gap: 8px;
+}
+.ugal .wcard b {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.ugal .wcard b i {
+  font-style: normal;
+  color: var(--muted);
+}
+/* N082: the gallery's cards have their own look here, apart from the Board's .wcard: a tint, no outline, no blue hover. */
+.ugal .wcard {
+  border-color: transparent;
+  background: var(--tint-1);
+}
+.ugal .wcard:hover {
+  border-color: transparent;
+  background: var(--tint-2);
+}
+/* Not allowed yet or changed since: they need your allow, so the warm tint (the status words say which). */
+.ugal .wcard[data-state='unapproved'],
+.ugal .wcard[data-state='changed'] {
+  background: var(--you-bg);
+}
+.ugal .wcard.ask {
+  width: 118px;
+  color: var(--muted); /* the dashed outline is gone; the muted words tell it from a widget */
+}
+.ugal .wcard.ask .pv {
+  justify-content: center;
+  align-content: center;
+}
+.ugal .wcard .wrap {
+  white-space: normal;
+}
+
+.uw {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-size: var(--fs-12);
+}
+.uw-h {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 8px;
+  background: var(--page); /* ticket 1041 lane 7b: one tint step, no rule */
+}
+.uw-h .sp {
+  flex: 1;
+}
+.uw-note {
+  margin: 0;
+  padding: 8px;
+}
+.uw-err {
+  color: var(--error); /* N080: an error is red */
+}
+.uw-text {
+  flex: 1;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-family: 'SF Mono', Menlo, 'D2Coding', monospace;
+  font-size: var(--fs-11);
+}
+.uw-table {
+  flex: 1;
+  overflow: auto;
+}
+.uw-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--fs-11);
+}
+.uw-table th,
+.uw-table td {
+  text-align: left;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--tint-1);
+  vertical-align: top;
+  white-space: pre-wrap;
+}
+.uw-table th {
+  position: sticky;
+  top: 0;
+  background: var(--page);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* v1b-20: act rows and the one-line act status above the table; the session header's sender marker. */
+.uw-act {
+  flex: none;
+  margin: 0;
+  padding: 2px 8px;
+  height: 18px;
+  line-height: 14px;
+  font-size: var(--fs-11);
+  color: var(--muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Ticket 203: focusable so a key can reach the title with the whole text; the ring sits inside (the line clips). */
+.uw-act:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.uw-table tr.uw-act-row {
+  cursor: pointer;
+}
+.uw-table tr.uw-act-row:hover td {
+  background: var(--tint-1);
+}
+.sentby {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Ticket 872: the off note's "open the switch" button sits in the note's line. */
+.btn.wsw {
+  margin-left: 4px;
+}

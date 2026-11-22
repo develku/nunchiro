@@ -1,0 +1,7 @@
+<!doctype html><title>other channels</title>
+<script>function r(v){parent.postMessage({type:"fixture",result:v},"*")}
+new Image().src="http://127.0.0.1:{{CANARY}}/img";
+try{new EventSource("http://127.0.0.1:{{CANARY}}/sse")}catch(e){}
+var f=document.createElement("iframe");f.src="http://127.0.0.1:{{CANARY}}/frame";document.body&&document.body.appendChild(f);
+var l=document.createElement("link");l.rel="stylesheet";l.href="http://127.0.0.1:{{CANARY}}/css";document.head.appendChild(l);
+import("http://127.0.0.1:{{CANARY}}/module.js").catch(function(){r("done")});</script>

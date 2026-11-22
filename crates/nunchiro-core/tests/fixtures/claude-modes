@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Claude fixture for the mode list (CHAT-MODELIST): like claude-mode, but its Shift+Tab cycle follows the launch args
+the way Claude's does: manual, accept edits, plan, auto (dropped by `--no-auto`), then `bypass permissions` only with
+`--allow-dangerously-skip-permissions`; `--dangerously-skip-permissions` starts in it. A file named `stuck` in its
+folder makes it ignore Shift+Tab (the footer never moves; `stick-at-bypass` creates it on arriving in
+bypass permissions); `dialog` draws a permission dialog in place of the box.
+Every stdin read is logged as hex. No model calls."""
+import os, select, sys, tty
+
+if '--version' in sys.argv:
+    print('2.1.318 (Claude Code)')
+    raise SystemExit
+home = os.environ['NUNCHIRO_HOME']
+if '--fixture-token' in sys.argv:
+    with open(os.path.join(home, 'token-' + os.environ['NUNCHIRO_SESSION']), 'w') as f:
+        f.write(os.environ['NUNCHIRO_TOKEN'])
+log = open(os.path.join(home, 'stdin-' + os.environ['NUNCHIRO_SESSION'] + '.log'), 'a')
+NAMES = {'manual': '⏸ manual mode', 'accept edits': '⏵⏵ accept edits', 'plan': '⏸ plan mode', 'auto': '⏵⏵ auto mode',
+         'bypass permissions': '⏵⏵ bypass permissions'}
+cycle = ['manual', 'accept edits', 'plan']
+if '--no-auto' not in sys.argv:
+    cycle.append('auto')
+if '--allow-dangerously-skip-permissions' in sys.argv or '--dangerously-skip-permissions' in sys.argv:
+    cycle.append('bypass permissions')
+mode = cycle.index('bypass permissions') if '--dangerously-skip-permissions' in sys.argv else 0
+if '--permission-mode' in sys.argv:
+    named = sys.argv[sys.argv.index('--permission-mode') + 1]
+    mode = cycle.index({'manual': 'manual', 'acceptEdits': 'accept edits', 'plan': 'plan', 'auto': 'auto'}[named])
+dialog = False
+
+
+def draw():
+    rule = '─' * os.get_terminal_size(1).columns
+    out = ['\x1b[2J\x1b[H']
+    if dialog:
+        out.append('Bash command\r\n  ls\r\n Do you want to proceed?\r\n ❯ 1. Yes\r\n   2. No\r\n\r\n Esc to cancel\r\n')
+    else:
+        out.append(rule + '\r\n❯ \r\n' + rule + '\r\n  ' + NAMES[cycle[mode]] + ' on (shift+tab to cycle)\r\n')
+    sys.stdout.write(''.join(out))
+    sys.stdout.flush()
+
+
+tty.setraw(0)
+draw()
+while True:
+    if not select.select([0], [], [], 0.1)[0]:
+        if not dialog and os.path.exists('dialog'):
+            dialog = True
+            draw()
+        continue
+    data = os.read(0, 1024)
+    if not data:
+        break
+    log.write('READ ' + data.hex() + '\n')
+    log.flush()
+    if data == b'\x1b[Z' and not os.path.exists('stuck'):
+        mode = (mode + 1) % len(cycle)
+        if cycle[mode] == 'bypass permissions' and os.path.exists('stick-at-bypass'):
+            open('stuck', 'w').close()
+    elif data == b'D':
+        dialog = True
+    draw()

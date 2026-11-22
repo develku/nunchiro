@@ -1,0 +1,147 @@
+/* v1b-05: composer image chips, chat thumbnails, full-size viewer. Sizes follow R8 (`.chip` 22 px, `.thumb` 62×42). */
+.ichips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.ichip {
+  gap: 5px;
+  padding: 0 3px 0 3px;
+  max-width: 180px;
+}
+.ichip img {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--r-4);
+  object-fit: cover;
+  flex: none;
+}
+.ichip .ipic {
+  display: contents;
+}
+/* The thumbnail button takes the chip's 16 px picture slot. */
+.ichip .thumb.ithumb {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  background: none;
+  border-radius: var(--r-4);
+}
+.ichip .thumb.ithumb img {
+  border-radius: var(--r-4);
+}
+.ichip .iname {
+  cursor: zoom-in;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* N065: saving is the muted words (and the hidden "saving" text), not a dashed border */
+.ichip[data-saving] {
+  color: var(--muted);
+}
+.ichip .ix {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: var(--fs-10);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex: none;
+}
+.ichip .ix:hover,
+.ichip .ix:focus-visible {
+  background: var(--hover);
+  color: var(--text);
+}
+.ierr {
+  font-size: var(--fs-11);
+  color: var(--error);
+}
+
+/* Same reserved box as 03's `.thumb`, so a row never changes height when its image arrives. */
+.thumb.ithumb {
+  padding: 0;
+  border: 0;
+  cursor: zoom-in;
+}
+.thumb.ithumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--r-6);
+  display: block;
+}
+/* V2-10a: an inline Markdown image keeps this box from first render, so arriving bytes move nothing; small images keep their size. */
+.thumb.ithumb.inline {
+  width: 320px;
+  max-width: 100%;
+  height: 240px;
+  vertical-align: top;
+  display: inline-grid;
+  grid-template: 100% / 100%;
+  place-items: start;
+  background: var(--hover);
+}
+/* Loaded: the box keeps its height (no jump) but only the image shows. */
+.thumb.ithumb.inline:has(img) {
+  background: none;
+}
+.thumb.ithumb.inline img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 0;
+}
+.thumb.ithumb:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+.thumb.iph {
+  place-items: center;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.15;
+}
+
+.iview {
+  margin: auto;
+  padding: 8px;
+  max-width: calc(100vw - 64px);
+  max-height: calc(100vh - 64px);
+  color: var(--text);
+  background: var(--panel);
+  border: 0;
+  border-radius: var(--r-12);
+  /* ticket 1041: a solid dialog over the scrim */
+  box-shadow: var(--shadow-float);
+}
+.iview::backdrop {
+  background: var(--scrim);
+}
+.ivbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: var(--fs-12);
+}
+.ivbar .iname {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.iview img {
+  display: block;
+  max-width: calc(100vw - 82px);
+  max-height: calc(100vh - 112px);
+  object-fit: contain;
+}

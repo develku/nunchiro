@@ -1,0 +1,128 @@
+/* Ticket 1041 lane 7b: the frame is its bar's tint step over the white page, no outline (N152: semantic tokens). */
+.artifact-frame {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-8);
+  overflow: hidden;
+  background: var(--page);
+}
+.artifact-frame .af-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 6px;
+  background: var(--page);
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.artifact-frame .af-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.artifact-frame .af-chip {
+  border: 0;
+  border-radius: var(--r-8);
+  padding: 0 8px;
+  font-size: var(--fs-11);
+  line-height: 16px;
+  color: var(--text);
+  background: var(--tint-1);
+}
+/* N080: Network on is a plain state, so the selected step and its words ("Network: on"), not the your-turn orange. */
+.artifact-frame .af-chip[data-state='on'] {
+  color: var(--select-text);
+  background: var(--select-bg);
+  font-weight: 600;
+  cursor: default;
+}
+/* V2-10c library cards: the frame bar chips' look (needs 29 rule), a strip between the bar and the page. Ticket 1041 lane
+   7b (15.2 item 5): they stay in the frame's flow (not glass); the chip asks your Allow, so the warm tint and glow. */
+.artifact-frame .af-libs-chip {
+  flex: none;
+  color: var(--you);
+  background: var(--you-bg);
+  box-shadow: var(--glow-you);
+}
+.artifact-frame .af-libs {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--page);
+  font-size: var(--fs-12);
+  color: var(--text);
+}
+.artifact-frame .af-lib-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.artifact-frame .af-lib {
+  flex: 1 1 260px;
+  min-width: 0;
+  border-radius: var(--r-6);
+  padding: 6px 8px;
+  background: var(--panel); /* a card one step up from the strip's tint, with the warm edge light (.light-you .light-edge) */
+}
+.artifact-frame .af-lib-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.artifact-frame .af-lib-name,
+.artifact-frame .af-lib-file {
+  overflow-wrap: anywhere;
+}
+.artifact-frame .af-badge {
+  flex: none;
+  border-radius: var(--r-8);
+  padding: 0 8px;
+  font-size: var(--fs-11);
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--muted);
+  background: var(--tint-1);
+}
+/* Listed (cdnjs) keeps its own look apart from Unverified: the good ink on a tint, its word says which (N080). */
+.artifact-frame .af-badge[data-badge='listed'],
+.artifact-frame .af-badge[data-badge='verified'] {
+  color: var(--ok-text);
+  background: var(--tint-2);
+  font-weight: 600;
+}
+.artifact-frame .af-lib-line {
+  margin-top: 2px;
+}
+.artifact-frame .af-dim {
+  color: var(--muted);
+}
+.artifact-frame .af-lib-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.artifact-frame .af-lib-more,
+.artifact-frame .af-lib-note {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+.artifact-frame iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: #fff;
+}
+/* The iframe never matches :focus while the page inside holds it, so ArtifactFrame sets data-focus. The ring goes on the
+   window surface around the frame, outside it, so it never lies over the agent's white page. Not :focus-within: the
+   chips draw their own ring. */
+.artifact-frame[data-focus] {
+  outline: 2px solid var(--ring-focus);
+  outline-offset: 2px;
+}

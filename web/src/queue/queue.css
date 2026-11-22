@@ -1,0 +1,179 @@
+/* Answer strip cards (R8 frame 2: .sc lines). Strip on (needs 77, draft C1): one 26 px line, the card then its +N,
+   under a 2 px top border; nothing at all while nothing waits. */
+.qstrip {
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+/* Round 3: the strip clipped, and the anchored notify menu opens upward out of its 26 px row, so it never became
+   visible or clickable there. Only while a menu is open does the strip let it through. */
+.qstrip:has(.qlevel-menu) {
+  overflow: visible;
+}
+.strip[data-mode='on'] .qstrip {
+  flex-direction: row;
+  align-items: center;
+}
+.strip[data-mode='on'] .qcards {
+  order: -1;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0 2px 12px;
+}
+/* Its slot is kept, so "new N" appearing while the pointer is on the strip never narrows the card under it. */
+.strip[data-mode='on'] .qnew {
+  min-width: 6ch;
+}
+.strip[data-mode='on'] .sh {
+  height: auto;
+}
+.strip[data-mode='on'] .sh .sp {
+  display: none;
+}
+#waiting-strip:has(.qcard) {
+  border-top: 2px solid var(--signal);
+  background: var(--signal-soft);
+}
+/* Strip off or signal only: the card a tree row opened shows at the strip's place for that click, laid over
+   the composer. Taking layout space would shrink the terminal, resize the PTY and make the agent redraw the
+   very prompt being answered (the core then refuses the answer as "no longer on screen"). */
+.centre:has(> .strip[data-mode='off'] .qcard, > .strip[data-mode='signal'] .qcard) {
+  position: relative;
+}
+.strip[data-mode='off']:has(.qcard),
+.strip[data-mode='signal']:has(.qcard) {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  height: 96px;
+}
+.qcards {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 12px;
+  min-height: 0;
+}
+.qcard {
+  height: 22px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 4px 0 8px;
+  background: var(--bg);
+  border: 1px solid var(--g3);
+  border-left: 3px solid var(--signal);
+  border-radius: var(--r-6);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.qcard:focus-visible,
+.qcard:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.qcard .tg {
+  font-size: var(--fs-10);
+  color: var(--g6);
+  border: 1px solid var(--g4);
+  border-radius: var(--r-4);
+  padding: 0 4px;
+}
+.qcard .who {
+  font-weight: 600;
+}
+.qcard .what {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--g7);
+}
+.qcard .dim {
+  font-size: var(--fs-10);
+  color: var(--g6);
+}
+.qcard .qterm,
+.qcard .note {
+  font-size: var(--fs-10);
+  color: var(--g6);
+  max-width: 34%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qcard .note.err {
+  color: var(--signal-text);
+  font-weight: 600;
+}
+.qcard .btn {
+  height: 16px;
+  line-height: 14px;
+  font-size: var(--fs-11);
+  padding: 0 6px;
+  flex: none;
+}
+.qcard .qacts {
+  display: none;
+  gap: 4px;
+}
+.qcard:focus-within .qacts {
+  display: inline-flex;
+}
+.qcard:focus-within .qopen {
+  display: none;
+}
+.qcard.gone {
+  border-left-color: var(--g4);
+  color: var(--g6);
+}
+.qnew,
+.qmore {
+  color: var(--signal-text);
+  font-weight: 600;
+}
+/* Ticket 199: "+N" is a button (it opens the next item) but keeps the width of its text, so the card beside it never narrows. */
+button.qmore {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.qmore:hover {
+  text-decoration: underline;
+}
+/* needs 130: the control's own look lives in styles.css (header) and the chip is a button; the strip keeps it at the
+   right end of its line. */
+.qlevel {
+  position: relative; /* round 3: every call site (header, board strip) anchors its menu on the control itself */
+  margin-left: auto;
+  display: inline-flex;
+}
+/* v1b-18: a board question's full text, opened from its card into the top layer, so nothing in the window moves. */
+.qfull {
+  width: min(640px, 90vw);
+  max-height: 60vh;
+  overflow: auto;
+  padding: 12px 16px;
+  border-radius: var(--r-12);
+  color: var(--g7);
+  font-size: var(--fs-12);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.qfull-h {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.qfull p {
+  margin: 0;
+}

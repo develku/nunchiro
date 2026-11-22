@@ -1,0 +1,14 @@
+anthropic sk-ant-api03-FAKEfakeFAKEfake0000-notreal
+openai curl -u sk-proj-FAKEfakeFAKEfake0000notreal
+secret OPENAI_API_KEY=FAKEfakeFAKEnotreal
+secret {"refresh_token":"rt_FAKEfakenotreal","account_id":"x"}
+github ghp_FAKEfakeFAKEfake0000notreal000
+github gho_FAKEfakeFAKEfake0000notreal000
+github github_pat_FAKEfakeFAKEfake0000_notreal
+slack xoxb-0000-FAKE-notreal
+slack chat.postMessage xoxp-0000-FAKE-notreal
+aws AKIAIOSFODNN7EXAMPLE
+jwt eyJhbGciOiJub25lIn0.eyJzdWIiOiJmYWtlIn0.ZmFrZXNpZ25hdHVyZQ
+authorization Authorization: Basic RkFLRTpub3RyZWFs
+authorization {"authorization":"Bearer FAKEfakeFAKEfake0000"}
+bearer curl -H 'x: Bearer FAKEfake0000notreal'

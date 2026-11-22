@@ -1,0 +1,352 @@
+.bview {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  container-type: inline-size;
+}
+/* Ticket 997 L7 (mockup docs/design/browser-widget-1119.html): every chrome row is 36 px with one padding and one border;
+   the buttons are 28 px ghost icons; the field is 28 px and gives way first. */
+.bview .btool {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 6px;
+  flex: none;
+  min-width: 0;
+  background: var(--panel); /* ticket 1041 lane 7b: no rule under the row; the page slot is its own surface */
+}
+.bview .btool > * {
+  flex: none;
+}
+.bgrp {
+  display: flex;
+}
+.bib {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: var(--muted);
+  flex: none;
+}
+.bib:hover:not(:disabled) {
+  background: var(--tint-1);
+  color: var(--text);
+}
+.bib:active:not(:disabled),
+.bib.on,
+.bib[aria-pressed='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+}
+.bib:disabled {
+  opacity: 0.45;
+}
+/* Ticket 1038: an inert icon that keeps its focus and tooltip (Annotate with no session or no page). */
+.bview .bib[aria-disabled='true'] {
+  opacity: 0.45;
+  background: none;
+  color: var(--muted);
+}
+.bview .baddr {
+  flex: 1 1 8em;
+  min-width: 3em;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 0 8px;
+  color: var(--muted);
+}
+.bview .baddr input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 8px 0 0;
+  border: 0;
+  background: none;
+}
+.bview .bmore {
+  position: relative;
+  display: inline-flex;
+}
+.bview .bmenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 5;
+  width: 230px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-radius: var(--r-12);
+}
+.bview .bmenu button {
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--r-4);
+  background: none;
+  text-align: left;
+  font-size: var(--fs-13);
+}
+.bview .bmenu button:hover:not(:disabled) {
+  background: var(--tint-1);
+}
+.bview .bmenu small {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  line-height: 1.35;
+}
+/* A narrow pane drops the field's site icon; the owner's control is an orange icon only (control.css). */
+@container (max-width: 320px) {
+  .bview .baddr > .bi {
+    display: none;
+  }
+}
+/* Ticket 328: at 280 px or less Forward moves into More, so every language's address hint fits whole at the 250 px default. */
+.bview .bmenu .bmfwd,
+.bview .bmenu .bmann {
+  display: none;
+}
+/* Ticket 1038 (mockup: under about 260 px Annotate moves into ⋯), so the 250 px widget keeps its whole address hint. */
+@container (max-width: 260px) {
+  .bview .btool .bann {
+    display: none;
+  }
+  .bview .bmenu .bmann {
+    display: block;
+  }
+}
+@container (max-width: 280px) {
+  .bview .btool .bfwd {
+    display: none;
+  }
+  .bview .btool {
+    gap: 4px;
+  }
+  .bview .baddr input {
+    padding-right: 4px;
+  }
+  .bview .bmenu .bmfwd {
+    display: block;
+  }
+}
+.bview .berr {
+  padding: 4px 10px;
+  font-size: var(--fs-12);
+  color: var(--error);
+}
+.bview .bslot {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.bview .bfail {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+  overflow: auto;
+}
+.bview .bfail-title {
+  font-weight: 600;
+}
+.bview .bfail-url,
+.bview .bfail-note {
+  font-size: var(--fs-12);
+  opacity: 0.7;
+  overflow-wrap: anywhere;
+}
+.bview .bfail-acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* Ticket 264: the new-space profile picker, under the empty state's text (`.empty` is a grid: without this each child gets half). */
+.bview .bslot .empty {
+  align-content: center;
+}
+.bview .bprofile {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* Ticket 328: the browser's tab row; ticket 997 L7: one 36 px row with the space chip first, flat tabs with the close inside
+   the pill, no gap above. Scoped here because the Browser also shows in a layout widget, outside .spane. */
+.btabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 6px;
+  flex: none;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--panel);
+  --focus-ring: var(--ring-focus);
+}
+.btabs .btablist {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow-x: auto; /* more tabs than fit scroll sideways; the shown one is scrolled into view */
+  scrollbar-width: none;
+}
+.btabs .bt {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+  min-width: 56px; /* about four letters and the close stay readable; past that the strip scrolls */
+  max-width: 150px;
+  padding: 0 3px 0 0;
+  border-radius: var(--r-6);
+  color: var(--muted);
+}
+.btabs .bt.ro {
+  padding-right: 0;
+}
+.btabs .bt:hover {
+  color: var(--text);
+}
+.btabs .bt[data-on] {
+  background: var(--select-bg);
+  color: var(--select-text);
+}
+.btabs .bstab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: inherit;
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+.btabs .bt[data-on] .bstab {
+  font-weight: 600;
+}
+.btabs .bt:not(.ro) .bstab {
+  padding-right: 2px;
+}
+.btabs .bag {
+  display: inline-flex;
+  flex: none;
+  color: var(--light-run); /* the agent's pointer: the working light */
+}
+.btabs .bsx {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-4);
+  background: none;
+  color: var(--muted);
+  flex: none;
+  opacity: 0; /* the shown tab's close shows; another's on hover (still clickable, as a pointer target) */
+}
+.btabs .bt[data-on] .bsx,
+.btabs .bt:hover .bsx,
+.btabs .bsx:focus-visible {
+  opacity: 1;
+}
+.btabs .bsx:hover {
+  background: var(--tint-2);
+  color: var(--text);
+}
+/* The space switcher: a chip whose native select lies over it, so the keyboard and the list stay the platform's. */
+.bchip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  max-width: 42%;
+  padding: 0 5px 0 7px;
+  border-radius: var(--r-6);
+  background: var(--tint-1); /* N145: a chip on a tint, no outline */
+  color: var(--text);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  white-space: nowrap;
+  flex: none;
+}
+.bchip:hover {
+  background: var(--tint-2);
+}
+.bchip:focus-within {
+  outline: var(--focus-width, 2px) solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.bchip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bchip > .bi:last-of-type {
+  color: var(--muted);
+}
+.bchip .bspace {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.bsdot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faint);
+  flex: none;
+}
+/* The dot is a light: blue while the agent drives, the warm glow while you hold the space (C). */
+.bsdot.run {
+  background: var(--light-run);
+}
+.bsdot.you {
+  background: var(--light-you);
+  box-shadow: var(--glow-you);
+}
+.btabbody {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.btabbody > .bview {
+  position: relative;
+  inset: auto;
+  flex: 1;
+  min-height: 0;
+}

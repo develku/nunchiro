@@ -1,0 +1,77 @@
+/* Web widgets (ticket v1b-22): the one-line act confirm under the widget header and the sandboxed frame. */
+.ww-confirm {
+  position: relative;
+  flex: none;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  height: 26px;
+  padding: 0 8px;
+  border-bottom: 1px solid transparent; /* ticket 1041 lane 7b: no visible rule; the 1 px stays so the frame below keeps its size */
+  background: var(--page); /* one tint step */
+  font-size: var(--fs-11);
+  white-space: nowrap;
+  overflow: hidden;
+}
+/* The send confirm asks you: the warm tint while it is open (its words and the count say what). */
+.ww-confirm[data-confirm='open'] {
+  background: var(--you-bg);
+}
+.ww-confirm > span[data-act-note] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ww-confirm > span[data-act-note]:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.ww-confirm .ww-reload {
+  flex: none;
+}
+.ww-confirm .ww-to {
+  flex: none;
+  font-weight: 600;
+}
+.ww-confirm .ww-count {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* r2: the whole text, wrapped and scrollable with a visible scrollbar, over the top of the frame and capped by it, so it
+   never leaves the widget and nothing moves. */
+.ww-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.ww-body .ww-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  max-height: min(128px, 100%);
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  padding: 6px 8px; /* WebWidget.tsx `onScreen` probes inside this padding */
+  line-height: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid transparent; /* no visible rule; the 1 px stays so the box keeps the size its seen-the-end check is tuned to */
+  font-family: 'SF Mono', Menlo, 'D2Coding', monospace;
+  color: var(--text);
+}
+/* A styled scrollbar is always drawn (macOS overlay scrollbars hide until scrolled). */
+.ww-body .ww-text::-webkit-scrollbar {
+  width: 8px;
+}
+.ww-body .ww-text::-webkit-scrollbar-track {
+  background: var(--tint-1);
+}
+.ww-body .ww-text::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: var(--r-4);
+}

@@ -1,0 +1,42 @@
+/* Ticket 309: the load line under the toolbar. Always 2px tall, so a load never resizes the native view below it. */
+.bview .bprog {
+  flex: none;
+  height: 2px;
+  overflow: hidden;
+}
+.bview .bprog i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  transition: transform 0.15s ease-out;
+  animation: bprog-in 0.1s 0.2s backwards; /* a load that finishes sooner shows nothing */
+}
+@keyframes bprog-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bview .bprog i {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* Ticket 307: what a page asked to open in a new window. */
+.bview .bnotice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: var(--fs-12);
+  background: var(--tint-1); /* ticket 1041 lane 7b: a tint row, no rule */
+}
+.bview .bnotice span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

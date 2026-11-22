@@ -1,0 +1,205 @@
+/* Files sidebar and read-only viewer (v1b-09). R8 tokens and densities; no Files screen exists in R8. */
+.ftree {
+  position: relative;
+  padding: 4px 4px;
+}
+.frow {
+  cursor: default;
+  color: var(--text);
+  width: calc(100% - 8px);
+}
+.frow:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+/* Ticket 1041 lane 7b: the open file's row is the selected tint step (the tree's hover stays one step lighter). */
+.files .frow[aria-selected='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+}
+.files .frow:hover:not([aria-selected='true']) {
+  background: var(--tint-1);
+}
+.frow .chev {
+  width: 10px;
+  flex: none;
+  color: var(--muted);
+  font-size: var(--fs-10);
+}
+/* V1A-63 icons: shapes in currentColor from sprite.ts; --g5 reads at 3:1 or more on every row surface */
+#file-icons {
+  display: none;
+}
+.frow .fi {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: currentColor;
+  color: var(--muted);
+}
+.frow[data-ignored] {
+  color: var(--muted);
+}
+.fgit {
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: var(--fs-11);
+  width: 12px;
+  justify-content: center;
+}
+/* N153: added green and deleted red as in Diff; modified and renamed in the text colour, bold; never the your-turn orange.
+   The letter itself still says it. */
+.fgit[data-git='A'],
+.fgit[data-git='?'] {
+  color: var(--ok-text);
+}
+.fgit[data-git='D'] {
+  color: var(--bad-text);
+}
+.fgit[data-git='M'],
+.fgit[data-git='R'] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tab .tfile {
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+
+/* Under a file tab the composer (a zone of its own) is hidden, not unmounted, so a draft survives a look at a file;
+   a pinned composer types to its own session and stays, as for v1b-03's read-only chat. */
+.layout:has(.pane > .fview:not([hidden])) .composer:not([data-pinned]) {
+  display: none;
+}
+/* ▤ dock: the R8 left sidebar width (main's .dock.l fills its zone instead) */
+.dock.l.fdock {
+  flex: none;
+  width: 256px;
+}
+.files {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+
+/* the viewer fills the pane before content arrives, so nothing in the centre moves when it does */
+.fview {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+.fview[hidden] {
+  display: none;
+}
+.fv-bar {
+  height: 24px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  font-size: var(--fs-12);
+  background: var(--page); /* ticket 1041 lane 7b: the bar is one tint step over the file, no rule */
+  white-space: nowrap;
+  overflow: hidden;
+}
+.fv-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.fv-ro {
+  font-size: var(--fs-11);
+  color: var(--muted);
+  background: var(--tint-2);
+  border-radius: var(--r-4);
+  padding: 0 6px;
+}
+/* "Unsaved", "File deleted", "changed on disk": they ask you to act, so they keep the warm ink and bold words. */
+.fv-state {
+  font-size: var(--fs-11);
+  color: var(--you);
+  font-weight: 600;
+}
+.fv-bar .btn {
+  height: 18px;
+  padding: 0 8px;
+  font-size: var(--fs-11);
+}
+.fview .fv-bar .btn[aria-pressed='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+  font-weight: 600;
+}
+/* ticket 820: a refused save, under the bar, until the next save or Revert */
+.fv-save-error {
+  flex: none;
+  padding: 4px 12px;
+  font-size: var(--fs-12);
+  color: var(--error);
+}
+/* N150: the Rendered / Source switch is one quiet tint, the chosen one the selected step, no outline. */
+.fv-seg {
+  display: flex;
+  gap: 2px;
+  padding: 1px;
+  background: var(--tint-1);
+  border-radius: var(--r-4);
+  overflow: hidden;
+}
+.fv-seg button {
+  font-size: var(--fs-11);
+  padding: 0 8px;
+  height: 18px;
+  border-radius: var(--r-4);
+  color: var(--muted);
+}
+.fv-seg button[aria-pressed='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+  font-weight: 600;
+}
+.fv-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.fv-code,
+.fv-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+.fv-md {
+  padding: 12px 20px;
+  font-size: var(--fs-13);
+  line-height: 1.55;
+  max-width: 820px;
+}
+.fv-img {
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--panel);
+}
+.fv-img img {
+  max-width: 100%;
+  max-height: 100%;
+  image-rendering: auto;
+}
+.fv-meta .btn {
+  margin-top: 10px;
+}
+.fv-meta b {
+  font-size: var(--fs-13);
+  color: var(--text);
+  word-break: break-all;
+}
+.fv-error {
+  color: var(--error); /* N079: a failure is red */
+}

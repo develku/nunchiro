@@ -1,0 +1,74 @@
+/* Keys page: the whole page scrolls (designer panel Lane C, finding 07). The lists above the keyboard used to scroll
+   inside a strip of the window, which showed 3-5 rows per card at 1440x900; now every row is drawn and the settings
+   body scrolls to the keyboard. */
+.keys-page {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+}
+/* As tall as the keyboard: the lists above it give up the height instead. */
+.hints-set {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+}
+/* final.html .callouts: a letter per kind under the small screen. */
+.hk-callouts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px 16px;
+  margin-top: 12px;
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.hk-callouts div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* final.html HINT_ADV: the shape keeps hint letters apart from kinds; ink, as every dot (ticket 1041): a label key's dot
+   is a diamond, a Shift filter's a square, a kind's a circle. */
+.hints-set :is(.hk-board, .hk-legend) .dot[data-type='index'] {
+  background: var(--text);
+  transform: rotate(45deg) scale(0.85);
+}
+.hk-adv > summary .oi {
+  transition: transform 0.12s;
+}
+.hk-adv[open] > summary .oi {
+  transform: rotate(90deg);
+}
+.hk-adv > summary::-webkit-details-marker {
+  display: none;
+}
+.settings[role='region'] details.hk-adv > .hk-scroll {
+  margin-left: 0;
+  margin-right: 0;
+}
+/* Ticket 389: a label key's bar is the screen region it labels; a Shift filter key's dot is square, not round.
+   Ticket 1041 (N094, 15.2 item 8): the region is the bar's pattern in ink (left solid, top dashed, right dotted,
+   composer double), named in the legend; it was blue / green / orange / ink, colours that mean agent state now. */
+.hints-set :is(.hk-board, .hk-legend) [data-region='left'] {
+  --region: solid;
+}
+.hints-set :is(.hk-board, .hk-legend) [data-region='top'] {
+  --region: dashed;
+}
+.hints-set :is(.hk-board, .hk-legend) [data-region='right'] {
+  --region: dotted;
+}
+.hints-set :is(.hk-board, .hk-legend) [data-region='composer'] {
+  --region: double;
+}
+.hints-set .hk-key[data-region] {
+  border-bottom: 3px var(--region) var(--text);
+}
+.hints-set .hk-legend .swatch {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  border-bottom: 3px var(--region) var(--text);
+}
+.hints-set :is(.hk-board, .hk-legend) .dot[data-type='filter'] {
+  border-radius: 0;
+}

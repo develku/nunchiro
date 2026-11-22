@@ -1,0 +1,43 @@
+#!/bin/sh
+# V2-12m-a: fake OpenSSH and scripted remote core for the machine channel tests. It never connects anywhere and never
+# installs, enables or restarts anything. Every spawn is logged to $NUNCHIRO_HOME/fake/spawns; the remote plays from
+# files there: `protocol` (hello), `v1a` (a v1a relay: no --stream), `state` (one pushed line, resent when it changes), `junk` and `oversize` (lines sent
+# once after the hello), `hostkey` (fail as an unknown host key). One-shot requests are logged to `requests`; `reply` replaces the ack, and
+# `lost-reply` applies (logs) the request, then fails like a dropped connection.
+set -eu
+fake="$NUNCHIRO_HOME/fake"
+printf '%s\n' "$*" >> "$fake/spawns"
+case " $* " in *" -o BatchMode=yes "*) ;; *) echo 'BatchMode missing: a prompt could appear' >&2; exit 3 ;; esac
+if [ -e "$fake/hostkey" ]; then
+    echo 'No ED25519 host key is known for fake and you have requested strict checking.' >&2
+    echo 'Host key verification failed.' >&2
+    exit 255
+fi
+for command; do :; done
+case "$command" in
+*"machine relay --stream"*)
+    if [ -e "$fake/v1a" ]; then echo 'use nunchiro machine status [<label>]' >&2; exit 1; fi
+    echo $$ > "$fake/master.pid"
+    # Like a real master, it ends when the core closes its stdin (the core exited or died).
+    exec 3<&0
+    { cat <&3; kill $$; } >/dev/null 2>&1 &
+    printf '{"type":"hello","protocol":%s,"version":"0.0.0-fake"}\n' "$(cat "$fake/protocol" 2>/dev/null || echo 2)"
+    if [ -e "$fake/junk" ]; then cat "$fake/junk"; fi
+    if [ -e "$fake/oversize" ]; then rm "$fake/oversize"; head -c 9000000 /dev/zero | tr '\0' a; echo; fi
+    sent=
+    i=0
+    # It also ends once its test home is gone, and after about 2 minutes at most (w25-r).
+    while [ $i -lt 2400 ] && [ -d "$fake" ]; do
+        state=$(cat "$fake/state" 2>/dev/null || true)
+        if [ -n "$state" ] && [ "$state" != "$sent" ]; then printf '%s\n' "$state"; sent=$state; fi
+        sleep 0.05
+        i=$((i + 1))
+    done
+    ;;
+*"machine relay"*)
+    { cat; echo; } >> "$fake/requests"
+    if [ -e "$fake/lost-reply" ]; then echo 'Connection closed by remote host' >&2; exit 255; fi
+    if [ -e "$fake/reply" ]; then cat "$fake/reply"; else echo '{"Ok":{"type":"ack"}}'; fi
+    ;;
+*) echo 'unexpected remote command' >&2; exit 2 ;;
+esac

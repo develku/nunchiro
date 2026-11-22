@@ -1,0 +1,22 @@
+; Throwaway seatbelt profile for the V1B-01 spike (script widget sandbox).
+; Parameters: CACHE (the widget's cache folder), PROXY_PORT (the core proxy's loopback port),
+; DENY_READ (stand-in for ~/.claude, ~/.codex and other secret folders; the core passes one rule per folder).
+(version 1)
+(deny default)
+
+; run the approved argv and its children
+(allow process-fork)
+(allow process-exec)
+(allow signal (target self))
+(allow sysctl-read)
+
+; reads are open (the widget needs its interpreter, libraries, project files); secrets stay out by env, not by path
+(allow file-read*)
+(deny file-read* (subpath (param "DENY_READ")))
+
+; the only writable places: the widget cache and the null/tty devices
+(allow file-write* (subpath (param "CACHE")))
+(allow file-write* (literal "/dev/null") (literal "/dev/dtracehelper"))
+
+; the only network: TCP to the core proxy on loopback. No DNS, no other port, no Unix socket.
+(allow network-outbound (remote ip (string-append "localhost:" (param "PROXY_PORT"))))

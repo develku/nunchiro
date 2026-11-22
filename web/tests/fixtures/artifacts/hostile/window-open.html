@@ -1,0 +1,5 @@
+<!doctype html><title>window open</title>
+<script>function r(v){parent.postMessage({type:"fixture",result:v},"*")}
+function go(t){var w=null;try{w=window.open("http://127.0.0.1:{{CANARY}}/popup","_blank")}catch(e){}r(t+(w?" opened":" null"))}
+go("load");document.addEventListener("click",function(){go("click")});</script>
+<p>click me</p>

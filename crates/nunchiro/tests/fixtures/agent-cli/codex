@@ -1,0 +1,3 @@
+#!/bin/sh
+# Use the synthetic worker with Codex's composer, never the installed CLI.
+FIXTURE_CODEX=1 exec "$(dirname "$0")/claude" "$@"

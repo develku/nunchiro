@@ -1,0 +1,3 @@
+Upstream source of the licence texts in this folder (fetched 2026-10-28; compared byte-for-byte modulo trailing whitespace).
+LICENSE: https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/master/LICENSE
+  year line: Copyright (c) 2016 Dropbox, Inc.

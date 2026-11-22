@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""Synthetic CLI worker. Never reads or writes agent configuration."""
+import json, os, socket, sys, termios, tty, pathlib
+if '--version' in sys.argv:
+    print('99.0.0 fixture')
+    sys.exit()
+if '--fixture-fail' in sys.argv:  # w73: Claude ends with exit code 3 and leaves its shell
+    print('fixture failure', flush=True)
+    sys.exit(3)
+
+def hook(event, payload=None):
+    with socket.socket(socket.AF_UNIX) as s:
+        s.connect(os.path.join(os.environ['NUNCHIRO_HOME'], 'core.sock'))
+        s.sendall((json.dumps({'token': os.environ['NUNCHIRO_TOKEN'], 'request': {'op':'hook', 'id':os.environ['NUNCHIRO_SESSION'], 'event':event, 'payload':payload or {}}})+'\n').encode())
+        s.recv(65536)
+
+tty.setcbreak(sys.stdin.fileno())
+attrs=termios.tcgetattr(sys.stdin.fileno())
+attrs[3] &= ~termios.ECHO
+if '--fixture-keep-composer' in sys.argv: attrs[3] &= ~termios.ISIG
+termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, attrs)
+if '--fixture-transcript' in sys.argv:
+    agent_id=sys.argv[sys.argv.index('--session-id')+1]
+    slug=''.join(c if c.isascii() and c.isalnum() else '-' for c in os.getcwd())
+    path=pathlib.Path(os.environ['CLAUDE_CONFIG_DIR'])/'projects'/slug/(agent_id+'.jsonl')
+    path.parent.mkdir(parents=True,exist_ok=True)
+    path.write_text(json.dumps({'type':'assistant','message':{'content':[{'type':'text','text':'transcript-only result'}]}})+'\n')
+    hook('SessionStart',{'session_id':agent_id,'transcript_path':str(path)})
+PASTE='--fixture-paste-detect' in sys.argv
+CODEX=bool(os.environ.get('FIXTURE_CODEX'))
+def box(text=''):
+    # v1a-24: the input box as the real agents draw it. Claude 2.1.310 frames its `❯` row with full-width `─`
+    # rules; Codex 0.161.0 draws `›` above a blank row and its footer.
+    # v1a-24 r4: --fixture-status-line adds footer rows led by numbers, as status lines show (`45.2%`, `2.1.310`).
+    status='--fixture-status-line' in sys.argv
+    if CODEX: return '\u203a '+text+'\n\n  fixture-model default \u00b7 ~/fixture'+('\n  45.2% context left' if status else '')
+    rule='\u2500'*os.get_terminal_size(1).columns
+    return rule+'\n\u276f '+text+'\n'+rule+('\n  45.2% ctx \u00b7 2.1.310 \u00b7 3.5k tokens\n  \u23f5\u23f5 auto mode on' if status else '')
+if PASTE: print('\x1b[?2004h', end='', flush=True)  # bracketed paste on, like Claude Code and Codex
+print('FIXTURE_READY', flush=True)
+mode='dialog' if '--fixture-dialog' in sys.argv else 'permission' if '--fixture-permission' in sys.argv else 'question' if '--fixture-question' in sys.argv else 'ready'
+if mode == 'dialog':
+    print('Trust this folder?\n1. Yes, trust this folder\n2. No, exit', flush=True)
+elif mode == 'permission':
+    print('Do you want to proceed?\n1. Yes, this time only\n2. Yes, always allow', flush=True)
+elif mode == 'question':
+    print('Question 1/1:\n1. Red\n2. Blue\nEnter to select',flush=True)
+elif '--fixture-busy' in sys.argv:
+    hook('UserPromptSubmit')
+else:
+    if '--fixture-slow-box' in sys.argv:  # ticket 1025: as real Claude, keys typed before the input box are lost
+        import time; time.sleep(1.5); termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+    print('❯ \u200b/MoDeL haiku' if '--fixture-composer-model' in sys.argv else 'Loading...' if '--fixture-unknown' in sys.argv else box(),flush=True)
+line=''
+if PASTE:
+    # One os.read is one input chunk: only a lone '\r' read submits; a '\r' inside a longer read or a
+    # bracketed paste is a newline (Claude's paste handling). Every read is logged for write-boundary tests.
+    import codecs
+    attrs[0] &= ~termios.ICRNL  # raw like the real agents: a '\r' arrives as '\r'
+    termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, attrs)
+    reads=open(os.path.join(os.environ['NUNCHIRO_HOME'], 'reads-'+os.environ['NUNCHIRO_SESSION']+'.jsonl'), 'a')
+    decode=codecs.getincrementaldecoder('utf-8')()
+    pasting=False
+    pastes=0
+    SWALLOW='--fixture-swallow-enter' in sys.argv or '--fixture-swallow-all-enters' in sys.argv
+    # v1a-24 r4: a thread only reads, so the terminal drains however slowly each read is handled (the core gives a
+    # write 100 ms); every os.read stays one chunk.
+    import queue, threading
+    chunks=queue.Queue()
+    def pump():
+        if '--fixture-stall-first-read' in sys.argv or '--fixture-slow-first-read' in sys.argv:
+            # v1a-24 r4: a host too loaded to read the first paste in time (longer than the core's 1.5 s drain bound).
+            # Ticket 991 C1: `slow` is an agent busy drawing right after its start: late, but inside the bound.
+            import select, time
+            select.select([0], [], [])
+            time.sleep(2.0 if '--fixture-stall-first-read' in sys.argv else 0.3)
+        while True:
+            raw=os.read(0, 65536)
+            chunks.put(raw)
+            if not raw: break
+    threading.Thread(target=pump, daemon=True).start()
+    while True:
+        raw=chunks.get()
+        if not raw: break
+        chunk=decode.decode(raw)
+        reads.write(json.dumps(chunk)+'\n'); reads.flush()
+        if chunk == '\r' and not pasting and SWALLOW:
+            # Look 11-17 v8 N1: a first Enter that comes too early is lost; the box keeps the words.
+            SWALLOW='--fixture-swallow-all-enters' in sys.argv
+            continue
+        if chunk == '\r' and not pasting:
+            hook('UserPromptSubmit')
+            print('ACK:'+line.replace('\n','\\n'), flush=True)
+            print(box(), flush=True)
+            hook('Stop')
+            line=''
+            continue
+        rest=chunk
+        while rest:
+            if rest.startswith('\x1b[200~'): pasting=True; rest=rest[6:]; continue
+            if rest.startswith('\x1b[201~'):
+                pasting=False; rest=rest[6:]
+                # Echo redraws the composer holding the paste; the other flags draw a dialog or the model picker instead.
+                if '--fixture-paste-permission' in sys.argv:
+                    print('Do you want to proceed?\n1. Yes, this time only\n2. Yes, always allow', flush=True)
+                elif '--fixture-paste-box-then-dialog' in sys.argv:
+                    # v1a-24 r2: the box holding the paste stays drawn; a dialog no phrase detects shows below it,
+                    # its cursor indented as Claude 2.1.310 draws one.
+                    print(box(line[:40].replace('\n', ' '))+'\n Pick one\n \u276f 1. Yes\n   2. No', flush=True)
+                elif '--fixture-paste-cursor-dialog' in sys.argv:
+                    # v1a-20: a dialog no phrase detects, whose cursor row looks like a composer holding text.
+                    print('Pick one\n\u276f 1. Yes\n  2. No', flush=True)
+                elif '--fixture-paste-collapse' in sys.argv and CODEX and len(line) > 1000:
+                    # v1a-24: Codex 0.161.0 collapses a paste over 1000 chars, newlines counted, into a placeholder.
+                    print(box('[Pasted Content %d chars]' % len(line)), flush=True)
+                elif '--fixture-paste-collapse' in sys.argv and not CODEX and (len(line) > 800 or line.count('\n') > 2):
+                    # v1a-20 r2: Claude 2.1.310 collapses a paste over 800 chars or 2 newlines into a placeholder.
+                    pastes+=1
+                    n=line.count('\n')
+                    print(box('[Pasted text #%d%s]' % (pastes, ' +%d lines' % n if n else '')), flush=True)
+                elif '--fixture-paste-menu' in sys.argv:
+                    # v1a-24: a menu cursor row in a frame, reading the paste's last word (the old tail echo).
+                    print(box(line.split()[-1]), flush=True)
+                elif '--fixture-paste-picker' in sys.argv:
+                    print('Select model\n\u276f 1. Default (recommended)\n  2. Sonnet', flush=True)
+                elif '--fixture-paste-silent' not in sys.argv:
+                    print(box(line[:40].replace('\n', ' ')), flush=True)
+                continue
+            ch, rest = rest[0], rest[1:]
+            if ch in '\x1b\x03' and not pasting:
+                print('ESC_ACCEPTED', flush=True)
+                line=''
+                hook('Stop')
+            elif ch in '\r\n': line+='\n'
+            else: line+=ch
+    sys.exit()
+while True:
+    ch=sys.stdin.read(1)
+    if not ch: break
+    if ch == '\x1b' or ch == '\x03' and '--fixture-keep-composer' in sys.argv:
+        print('\x1b[2J\x1b[HLoading...' if '--fixture-keep-composer' in sys.argv else '\x1b[2J\x1b[HESC_ACCEPTED\n'+box(), flush=True)
+        mode='ready'
+        hook('Stop')
+        if '--fixture-keep-composer' not in sys.argv: line=''
+    elif ch in '\r\n':
+        if mode != 'ready':
+            print('\x1b[2J\x1b[HCHOICE:'+line, flush=True)
+            mode='ready'
+            hook('Stop')
+        elif line == 'FINISH':
+            hook('Stop')
+        elif '--fixture-silent' not in sys.argv:
+            hook('UserPromptSubmit')
+            print('ACK:'+line, flush=True)
+            if '--fixture-busy' not in sys.argv: hook('Stop')
+        line=''
+    else:
+        line+=ch

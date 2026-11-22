@@ -1,0 +1,13 @@
+Relevant pull requests in develku/nunchiro
+
+Current branch
+  #12  Add the PR chip [herdr/v2-8b]
+   - Checks failing - Review required
+
+Created by you
+  #9  Older work [herdr/old]
+   - Checks passing - Approved
+
+Requested by you
+  #7  Someone else [x]
+   - Approved

@@ -1,0 +1,1183 @@
+/* Ticket 990 (leader and room, docs/design/leader-room/index.html H2): the leader dialog, header, band and room pane. */
+.ldlg label {
+  display: grid;
+  gap: var(--sp-4);
+  color: var(--muted);
+}
+.ldlg input:not([type]) {
+  padding: var(--sp-6) var(--sp-8);
+  border: 1px solid var(--line);
+  border-radius: var(--r-6);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.ldlg-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-12);
+}
+/* The Team form's selects outside Settings: the system menu, without the Settings chevron. */
+.ldlg .ssel svg {
+  display: none;
+}
+.ldlg .ssel select {
+  font: inherit;
+  color: var(--text);
+}
+.ldlg-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-8);
+}
+/* The Lead tag after a lead's name: the session header, Settings > Team and the Home rows. */
+.lead-tag {
+  flex: none;
+  padding: 0 var(--sp-6);
+  border: 1px solid var(--done);
+  border-radius: var(--r-4);
+  color: var(--done);
+  font-size: var(--fs-11);
+  font-weight: 600;
+}
+/* Owner 11-17: the lead's header chip (mockup J's room button), a pill with the running seats' faces and the task count. */
+/* Look 1117 v10 Home S3-3: the chip never shrinks ("3 projects · 1 needs yo"); the header's place text gives way. */
+.lead-room {
+  display: inline-flex;
+  flex: none;
+  white-space: nowrap;
+  align-items: center;
+  gap: var(--sp-8);
+  padding: 2px var(--sp-8) 2px var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-16);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  cursor: pointer;
+}
+.lead-n {
+  padding: 0 var(--sp-6);
+  border-radius: var(--r-pill);
+  background: var(--you);
+  color: var(--on-status);
+  font-size: var(--fs-11);
+}
+/* A seat's face (mockup J .av): its role's letter in its own colour, with one state dot. */
+.lead-av {
+  --c: var(--idle);
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-6);
+  background: color-mix(in srgb, var(--c) 16%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--c) 35%, transparent);
+  box-sizing: border-box;
+  color: var(--c);
+  font-size: var(--fs-11);
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
+}
+.lead-av[data-sm] {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-6);
+  font-size: var(--fs-10);
+}
+.lead-av[data-face]::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  background: var(--idle);
+}
+/* Ticket 1041 (C, inventory N076): the dot is the light: your turn glows warm, working is the blue light, still (the
+   lead-pulse blink was a third animation for working; the travelling light needs a line, and the label says the state). */
+.lead-av[data-face='you']::after {
+  background: var(--light-you);
+  box-shadow: var(--glow-you);
+}
+.lead-av[data-face='work']::after {
+  background: var(--light-run);
+}
+.lead-av[data-face='idle']::after {
+  background: var(--ok);
+}
+/* Ticket 995 S3 (Team view and room): blue means working only, so no identity hue takes --run. */
+[data-c='1'] {
+  --c: var(--muted);
+}
+[data-c='2'] {
+  --c: var(--ok);
+}
+[data-c='3'] {
+  --c: var(--done);
+}
+/* Look v10 Home S3-11: an identity hue never takes a state's colour; 4 was the syntax red (red is broken) and 5 the
+   warning orange (orange is your turn), so an idle lead's "L" read as failed. */
+[data-c='4'] {
+  --c: var(--chat-link);
+}
+[data-c='5'] {
+  --c: var(--chat-code);
+}
+[data-c='6'] {
+  --c: var(--syn-const);
+}
+.lead-stack {
+  display: flex;
+  flex: none;
+}
+.lead-stack .lead-av + .lead-av {
+  margin-left: -6px;
+  outline: 2px solid var(--panel);
+}
+.lead-room:focus-visible,
+.teamv button:focus-visible,
+.lead-crumb button:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 1px;
+}
+/* Owner 11-17: the Team view (TeamView.tsx), a lead's tasks and room in the right sidebar or a centre tab. Narrow, its two parts
+   are tabs; wide (its own width, measured), they sit side by side. */
+.teamv {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  /* N3 (look 1117 v4 home): the view is as wide as its place, never as wide as its columns' floors, so the column choice
+     below reads the real width (a right panel open narrows it). */
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  contain: inline-size; /* its columns' floors never widen the zone it sits in */
+  background: var(--panel);
+  font-size: var(--fs-12);
+}
+.teamv-head {
+  container-type: inline-size;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  padding: var(--sp-4) var(--sp-8);
+  flex: none; /* no rule under it (ticket 1041 A, N074) */
+}
+.teamv-tabs {
+  display: flex;
+  flex-wrap: wrap; /* look 1117 v12/v13 Home S3-2: three parts in a narrow widget ran under Open as a tab; a tab that has no room goes to a second row, whole */
+  gap: var(--sp-4);
+  flex: 1;
+  min-width: 0;
+}
+.teamv-head > .room-meta {
+  flex: 1;
+}
+.teamv-tabs button,
+.teamv-move {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: 2px var(--sp-8);
+  border: 1px solid transparent;
+  border-radius: var(--r-6);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+/* Ticket 1041 (A): the selected part is the selected tint and bold; no outline. */
+.teamv-tabs button[aria-selected='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+  font-weight: 600;
+}
+.teamv-tabs button:hover:not([aria-selected='true']) {
+  background: var(--tint-1);
+}
+/* Open as a tab / Back to the side and Schedules' +: quiet tint buttons with History's widen glyph (N075). */
+.teamv-move {
+  flex: none;
+  background: var(--control-quiet-bg);
+  color: var(--text);
+  white-space: nowrap;
+}
+.teamv-move:hover {
+  background: var(--control-quiet-hover);
+}
+/* Real app 11-17: in a narrow widget the label pressed against the Room tab's count; there the button is its arrow alone
+   (the label stays its accessible name, as .sr). */
+@container (max-width: 300px) {
+  .teamv-move-l {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+}
+.teamv-body {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+.teamv[data-wide] .teamv-body {
+  grid-template-columns: minmax(320px, 2fr) minmax(0, 3fr);
+}
+/* Home view: Projects | Assistants | Room side by side. */
+.teamv[data-wide][data-three] .teamv-body[data-parts='3'] {
+  grid-template-columns: minmax(340px, 3fr) minmax(240px, 2fr) minmax(280px, 3fr);
+}
+/* N3 (look 1117 v4 home): under the three columns' width (a right panel open) Projects and Assistants stack on the left and
+   the Room keeps the right column whole; nothing of it is cut. */
+.teamv[data-wide]:not([data-three]) .teamv-body[data-parts='3'] {
+  grid-template-columns: minmax(260px, 2fr) minmax(300px, 3fr);
+  grid-template-rows: minmax(0, auto) minmax(0, 1fr);
+}
+.teamv[data-wide]:not([data-three]) .teamv-body[data-parts='3'] > [data-part='projects'] {
+  grid-column: 1;
+  grid-row: 1;
+}
+.teamv[data-wide]:not([data-three]) .teamv-body[data-parts='3'] > [data-part='assistants'] {
+  grid-column: 1;
+  grid-row: 2;
+  border-left: 0;
+  margin-top: var(--sp-8); /* spacing, not a rule (ticket 1041 A) */
+}
+.teamv[data-wide]:not([data-three]) .teamv-body[data-parts='3'] > .teamv-room {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+/* A project row (look 1117 v3 N3): the name whole on one line (cut with an ellipsis, never inside a word), the time at
+   the end of that line, the counts on the second line. */
+.home-prow .lead-go {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: var(--sp-8);
+  row-gap: 1px;
+}
+.home-prow .lead-go > .lead-av {
+  grid-row: 1 / span 2;
+  align-self: start;
+}
+.home-pname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-prow .lead-tm {
+  grid-column: 3;
+  grid-row: 1;
+}
+.home-prow .lead-who {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  min-width: 0;
+}
+/* Look v15 Home R17-8: what waits (a seat's question, the lead's own, a failed run) was cut to one line, "Should Lister
+   list th…" in the side view; it wraps up to three lines as the failed run's does (the row's tooltip has all of it). */
+.home-prow[data-word='needs'] .lead-who,
+.home-prow[data-word='broken'] .lead-who {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  white-space: normal;
+}
+.teamv[data-wide] .teamv-body[data-parts='3'] > [data-part='assistants'] {
+  border-left: 0; /* the columns are apart by their gap (ticket 1041 A) */
+}
+/* A project row with no leader: a quiet link to the Add a leader dialog. */
+.home-add {
+  flex: none;
+  padding: 0 var(--sp-6);
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-11);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.teamv-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--sp-4) var(--sp-8) var(--sp-6);
+}
+.teamv-room {
+  position: relative;
+  min-height: 0;
+}
+.teamv[data-wide] .teamv-room {
+  border-left: 0;
+  background: var(--page); /* the room is one surface step beside the tasks, no rule (ticket 1041 A) */
+}
+/* Look 1117 v4 (home S3): a Room heading sits above the room, which then takes the rest; the room no longer covers it. */
+.teamv-room:has(> .lead-gh) {
+  display: flex;
+  flex-direction: column;
+}
+.teamv-room > .lead-gh + .room {
+  position: relative;
+  inset: auto;
+  flex: 1;
+  min-height: 0;
+}
+.teamv-tasks[hidden],
+.teamv-room[hidden] {
+  display: none;
+}
+.teamv > .room-empty {
+  padding: var(--sp-12);
+  margin: 0;
+}
+/* Narrow (owner 11-17), a task row is two lines: the title across the whole row (up to two lines); then who sits on it, with the
+   state word or the Answer button at the end. */
+.teamv:not([data-wide]) .lead-row[data-task] {
+  align-items: flex-start;
+}
+.teamv:not([data-wide]) .lead-row[data-task] .lead-go {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  row-gap: 2px;
+}
+.teamv:not([data-wide]) .lead-row[data-task] .lead-go > .lead-stack {
+  grid-row: 1 / span 2;
+  align-self: start;
+}
+.teamv:not([data-wide]) .lead-row[data-task] .lead-title {
+  grid-column: 2 / -1;
+  align-items: flex-start;
+}
+.teamv:not([data-wide]) .lead-row[data-task] .lead-title > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.teamv:not([data-wide]) .lead-row[data-task] .lead-title i {
+  margin-top: 2px;
+}
+.teamv:not([data-wide]) .lead-row[data-task] .lead-who {
+  grid-column: 2;
+  grid-row: 2;
+}
+.teamv:not([data-wide]) .lead-row[data-task] .lead-tm {
+  display: none;
+}
+/* Real app 11-17: beside Answer the question is what the person must read; it takes up to two lines before it is cut. */
+.teamv:not([data-wide]) .lead-row[data-task]:has(.lead-answer) .lead-who {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.teamv:not([data-wide]) .lead-row[data-task] .lead-st {
+  grid-column: 3;
+  grid-row: 2;
+}
+/* The Answer button sits outside the row's own button (a button holds no button), drawn at the end of the second line. */
+.teamv:not([data-wide]) .lead-row[data-task]:has(.lead-answer) .lead-go {
+  grid-template-columns: auto minmax(0, 1fr) 6em;
+}
+.teamv:not([data-wide]) .lead-row[data-task] .lead-answer {
+  position: absolute;
+  right: var(--sp-6);
+  bottom: var(--sp-4);
+}
+/* The header chip turns the your-turn colour while a task needs the person. */
+.lead-room[data-needs] {
+  border-color: var(--you);
+  color: var(--you);
+  background: var(--you-bg);
+}
+.lead-gh {
+  padding: var(--sp-4) var(--sp-6) 1px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-11);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.lead-grp[data-group='needs'] .lead-gh {
+  color: var(--you);
+}
+.lead-empty {
+  margin: 0;
+  padding: var(--sp-4) var(--sp-6);
+  color: var(--muted);
+}
+.lead-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  border-radius: var(--r-8);
+}
+.lead-row:hover {
+  background: var(--tint-1);
+}
+/* Your turn (C): the warm tint plus a glowing bar on the row's left edge, the board cards' shape (widgets-7a.css). The
+   "Needs you" head and "Answer" say it in words. */
+.lead-row[data-word='needs'] {
+  background: var(--you-bg);
+}
+.lead-row[data-word='needs']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: var(--sp-6);
+  bottom: var(--sp-6);
+  width: 2px;
+  border-radius: var(--r-2);
+  background: var(--light-you);
+  box-shadow: var(--glow-you);
+  pointer-events: none;
+}
+.lead-go {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: var(--sp-8);
+  padding: 5px var(--sp-6);
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+/* A task row lines up like the mockup's grid: faces, title, what is said, time, state. */
+.lead-row[data-task] .lead-go {
+  display: grid;
+  /* A task's title is a sentence (an outcome), so it takes up to two fifths of the row (the real app cut it at 180px). */
+  /* Owner 11-17: the title takes its full width first; what is said gets what is left, and the title is cut only when the row has no room. */
+  grid-template-columns: 48px minmax(0, max-content) minmax(0, 1fr) auto auto;
+}
+button.lead-go {
+  cursor: pointer;
+}
+/* Look v9 B N2-S3-2: a "Needs you" ask row cut the seat's name to "P…" while the question took the row; the name is
+   the only word that says who asks, so it keeps its width (up to half the row) and the question gets what is left. */
+.lead-row[data-ask] .lead-title {
+  flex: 0 0 auto;
+  max-width: 50%;
+}
+.lead-row[data-ask] .lead-who {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.lead-go .room-rail {
+  height: 15px;
+}
+.lead-row:not([data-task]) .lead-st {
+  margin-left: auto;
+}
+/* An Assistants row is one line (a long name wrapped word by word beside the level chip in the 250 px side view): the name
+   takes its width first and is cut with an ellipsis only when the row has no room (its tooltip has the whole name), what
+   is said gets what is left, and the status word and the level chip keep their size. */
+.lead-row[data-mate] .lead-go > b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lead-row[data-mate] .lead-who {
+  flex: 1 1 0;
+  min-width: 0;
+  container-type: inline-size;
+}
+/* Owner 11-18: a job cut to one or two letters ("S…", "P") says nothing: where fewer than about 8 characters of it fit
+   it is not drawn (the open row and Settings > Team have it), and the name has the room. */
+@container (max-width: 64px) {
+  .lead-row[data-mate] .lead-who > span {
+    display: none;
+  }
+}
+.lead-row > .lvl-chip {
+  flex: none;
+}
+/* Look v9 Home S2-7: in es and ko the status word ("no se está ejecutando") kept its whole width and cut the name to
+   "Co…"; the name says which teammate the row is, so it keeps its width (up to 60% of the row) and the status word is
+   cut instead (whole in its tooltip). */
+.lead-row[data-mate] .lead-go > b {
+  flex-shrink: 0;
+  max-width: 60%; /* v10 Home S3-7: 45% cut "Counter" once the chip had its whole pair */
+}
+.lead-row[data-mate] .lead-st {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Ticket 994: the chip is as wide as its pair, from 84 px (a Claude team's chips, "Haiku" to "Sonnet", are then one
+   width and the status words line up) to 124 px. Beside a longer pair ("Default · medium") the name and the status keep
+   their room and the chip gives way down to those 84 px, its pair cut there and whole in its tooltip; only then is
+   the name cut. What is said takes what is left (it adds nothing to the row's own width). */
+.lead-row[data-mate]:has(.lvl-chip) .lead-go {
+  flex: 1 1 auto;
+}
+.lead-row[data-mate]:has(.lvl-chip) .lead-who {
+  width: 0;
+}
+/* Look 1117 v10 Home S3-7: in the 250 px side view the chip read "Opus…" and the status "i…" while the row spent 24 px on
+   spacing: a job that is not drawn takes no gap of its own (the job keeps its gap as its own padding), and the status word,
+   plain text here, has no pill padding. */
+.lead-row[data-mate] .lead-who {
+  margin-left: calc(-1 * var(--sp-8));
+}
+.lead-row[data-mate] .lead-who > span {
+  padding-left: var(--sp-8);
+}
+.lead-row[data-mate] .lead-st {
+  padding: 0;
+}
+.lead-row[data-mate] .lvl-menu,
+.lead-row[data-mate] > .lvl-chip {
+  flex: 0 1000 auto;
+  min-width: 84px;
+}
+.lead-row[data-mate] .lvl-menu > .lvl-chip {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.lead-title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.lead-title > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lead-title i {
+  flex: none;
+  width: 3px;
+  height: 14px;
+  border-radius: var(--r-2);
+  background: var(--c, var(--idle));
+}
+.lead-who {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lead-row[data-word='needs'] .lead-who {
+  color: var(--text);
+}
+/* Look v15 B: "Yes given; merges once Lead is resumed" was cut in the side view; it wraps up to three lines. */
+.lead-row[data-word='merge'] .lead-who {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  white-space: normal;
+}
+/* Look v14 Home S3: a failed run's "Scheduled run failed: <why>" was cut to "Scheduled run faile…" in the side view; it
+   wraps (up to three lines; the row's tooltip has all of it). */
+.lead-row[data-failed-run] .lead-who {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  white-space: normal;
+}
+.lead-tm {
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.lead-st {
+  padding: 0 var(--sp-8);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-11);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.lead-st[data-tone='work'] {
+  color: var(--run);
+  background: var(--run-light-track); /* the working light's own faint blue */
+}
+.lead-st[data-tone='rev'] {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
+.lead-st[data-tone='ok'] {
+  color: var(--ok-text);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+.lead-st[data-tone='you'] {
+  color: var(--on-status);
+  background: var(--you);
+}
+.lead-st[data-tone='idle'] {
+  color: var(--muted);
+}
+.lead-answer {
+  flex: none;
+  padding: 2px var(--sp-8);
+  border: 0;
+  border-radius: var(--r-6);
+  background: var(--control-bg); /* the ink primary (owner 15.1 item 1) */
+  color: var(--control-text);
+  font: inherit;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  cursor: pointer;
+}
+.lead-row[data-gone] {
+  color: var(--muted);
+}
+.lead-row[data-gone] b {
+  font-weight: 500;
+}
+.lead-row.lead-closed .lead-go {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+}
+.lead-more {
+  padding: 0 var(--sp-8);
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.lead-free {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  padding: var(--sp-6) var(--sp-8);
+  margin-top: var(--sp-4);
+  border-radius: var(--r-8);
+  background: var(--tint-1); /* a tint, no dashed outline (ticket 1041 A) */
+  color: var(--muted);
+}
+.lead-free .lead-hand {
+  margin-left: auto;
+  color: var(--link-text);
+}
+.lead-menu {
+  position: absolute;
+  top: 100%;
+  right: var(--sp-8);
+  z-index: 5;
+  display: grid;
+  min-width: 180px;
+  padding: var(--sp-4);
+  border-radius: var(--r-12);
+}
+.lead-menu button {
+  padding: var(--sp-4) var(--sp-8);
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lead-menu button:hover {
+  background: var(--select-bg);
+}
+/* H2 ②: a session of a lead's team: one quiet line and the way back. */
+.lead-crumb {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  padding: var(--sp-4) var(--sp-12);
+  border-bottom: 1px solid var(--line);
+  background: var(--hover);
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.lead-crumb button {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--run);
+  font: inherit;
+  cursor: pointer;
+}
+/* A Home lead's tag in its tree row, clear of the name. */
+.row.wt2 .lead-tag {
+  margin-left: var(--sp-6);
+}
+/* Slice i: the way chip in a lead's composer row, its menu, and the day-one way card (mockup J ① and ②). */
+.way-wrap {
+  position: relative;
+  display: inline-flex;
+}
+button.way-chip {
+  cursor: pointer;
+  font: inherit;
+}
+.way-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: var(--sp-4);
+  width: 320px;
+  padding: var(--sp-6);
+  border-radius: var(--r-12);
+  font-size: var(--fs-12);
+  text-align: left;
+}
+.way-card .way-menu {
+  top: calc(100% + 4px);
+  bottom: auto;
+}
+.way-menu h4 {
+  margin: var(--sp-4) var(--sp-6) 2px;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.way-item {
+  display: flex;
+  gap: var(--sp-6);
+  width: 100%;
+  padding: var(--sp-4) var(--sp-6);
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.way-item:hover,
+.way-item:focus-visible {
+  background: var(--hover);
+  outline: none;
+}
+.way-item small {
+  display: block;
+  color: var(--muted);
+}
+.way-item b {
+  font-weight: 600;
+}
+.way-ck {
+  flex: none;
+  width: 14px;
+  color: var(--text); /* the check mark carries it; blue is the working light */
+}
+.way-quiet {
+  margin: 2px var(--sp-6) var(--sp-4);
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.way-err {
+  margin-left: var(--sp-6);
+  color: var(--bad-text);
+  font-size: var(--fs-11);
+}
+.way-card {
+  display: grid;
+  gap: var(--sp-6);
+  max-width: 640px;
+  margin: var(--sp-4) var(--sp-6);
+  padding: var(--sp-8) var(--sp-12);
+  border-radius: var(--r-8);
+  background: var(--tint-1); /* ticket 1041 (A): a tint step, no outline */
+}
+.way-card p {
+  margin: 0;
+}
+.way-line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  color: var(--muted);
+}
+.way-pill {
+  padding: 0 var(--sp-8);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--control-quiet-hover);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.way-pill:focus-visible,
+button.way-chip:focus-visible,
+.rcard button:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.way-roles {
+  display: grid;
+  gap: var(--sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.way-roles li {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  min-width: 0;
+}
+.way-roles li span {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The role card (mockup J ④, lower card), in the merge card's frame (notes.css .mcard). */
+.rcard .mc-head {
+  align-items: center;
+}
+.rc-role {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--sp-4) var(--sp-8);
+  margin: 0 0 var(--sp-8);
+}
+.rc-words {
+  min-width: 0;
+}
+.rc-words p {
+  margin: 2px 0;
+  color: var(--muted);
+}
+.rc-pills {
+  display: flex;
+  grid-column: 2;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+}
+.rc-pill {
+  padding: 0 var(--sp-8);
+  border-radius: var(--r-pill);
+  background: var(--panel); /* ticket 1041: a lighter pill on the card tint, no outline */
+  color: var(--muted);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+.mcard .mc-head .lead-stack {
+  align-self: center;
+}
+.way-roles .rc-pill {
+  font-style: normal;
+}
+/* As a centre tab the Team view fills the pane, as the Room tab did. */
+.pane > .teamv {
+  position: absolute;
+  inset: 0;
+  height: auto;
+}
+/* Narrow: a row's ⋯ sits at the top right, clear of the title; the Answer button stays at the end of the second line. */
+.teamv:not([data-wide]) .lead-row[data-task] > .lead-more {
+  position: absolute;
+  top: var(--sp-4);
+  right: 0;
+}
+.teamv:not([data-wide]) .lead-row[data-task]:has(> .lead-more) .lead-title {
+  padding-right: 1.5em;
+}
+/* In the Team view the Tasks part shows who sits where, so the room drops its seats column (pinned decisions stay, when there
+   are any); its composer keeps one row that fits, the text box taking the free width. */
+.teamv .room-side > h3:first-child,
+.teamv .room-seat {
+  display: none;
+}
+.teamv .room-side:not(:has(.room-pinned)) {
+  display: none;
+}
+.teamv .room-composer {
+  flex-wrap: wrap;
+}
+.teamv .room-composer select {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 12em;
+}
+.teamv .room-composer input {
+  flex: 1 1 12em;
+  min-width: 8em;
+}
+/* Owner 11-17: the tree's one-line "a leader can run these" suggestion (two or more agents at work, no leader). */
+.lead-suggest {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  margin: var(--sp-4) var(--sp-8) var(--sp-4) var(--sp-16);
+  padding: var(--sp-4) var(--sp-6);
+  /* Look v34 S3-3 (rule A): a tint field, no dashed outline; its button is a quiet one. */
+  border-radius: var(--r-6);
+  background: var(--tint-1);
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.lead-suggest > .btn {
+  border-color: transparent;
+  background: var(--control-quiet-bg);
+}
+.lead-suggest > .btn:hover {
+  background: var(--control-quiet-hover);
+}
+.lead-suggest > span {
+  flex: 1;
+  min-width: 0;
+}
+.lead-suggest > .x {
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+/* Ticket 992: a seat's level (level.tsx): three ascending bars in the quiet text colour, and the menu for the bot's next
+   task (NotifyLevel's chip and menu). Ticket 994: after the bars, the model and effort they stand for (.lvl-mark), cut
+   with an ellipsis where a row is narrow. */
+.lvl-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+/* The pair's box is as wide as its whole text, or the room it has: the whole text sits in it unseen (::before), so the
+   box does not follow what is drawn. LevelMark reads the two widths and draws the whole pair, its short form, or whole
+   words and an ellipsis; the ellipsis here is only for one word that does not fit. */
+.lvl-pair {
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.lvl-pair::before {
+  content: attr(data-base);
+  grid-area: 1 / 1;
+  height: 0;
+  visibility: hidden;
+}
+.lvl-pair > span {
+  grid-area: 1 / 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* On a picked segment (the forms' level choices) the bars take the segment's own text colour. */
+.sseg label:has(input:checked) .lvl {
+  color: inherit;
+}
+/* A tree row: the pair in the row's quiet small type, never more than the name's share. Look 1117 v10 (Home S3-4, B
+   N10-S3-1): the name read "Ste…" and "L…" beside a whole "Sonnet…": the name keeps its width and the pair gives way
+   first, down to its bars (the pair stays in the tooltip). Look 1117 v12 (A S2-2): no max-width: a pair clamped at it
+   is frozen there by the flex algorithm, and what was still too wide came off the name ("Le…" beside "Sonnet…"). Look
+   1117 v13 (A S2-2): shrink is shared by weight × width, so at 100 the name still took a fraction of a pixel, and its
+   one-line word clamp (.wordcut) turns any shortfall into "Le…": the pair's weight leaves the name nothing (under 1/64
+   px, the layout unit) until the pair is down to its bars. */
+.row.wt2 > .lvl-mark {
+  flex: 0 1000000000 auto; /* ticket 995: above the age's 1e5 (tree.css .tm), which in turn is above the name */
+  min-width: 12px;
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.row.wt2:has(> .lvl-mark) > .n {
+  flex: 1 1 auto;
+}
+.lvl {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--sp-4);
+  color: var(--muted);
+}
+.lvl svg {
+  display: block;
+  flex: none;
+}
+.lvl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+/* Look 1117 v12 Home S3-5: the level picked for the next task, after the running seat's pair (whole in the tooltip). */
+.lvl-next {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+}
+.lvl-menu {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+.lead-row .lvl-menu,
+.lead-row > .lvl-chip {
+  margin-right: var(--sp-6);
+}
+.lead-row .lvl-chip {
+  max-width: 124px; /* a longer pair is cut here (see .lead-row[data-mate] .lvl-menu) */
+  height: 20px;
+  padding: 0 var(--sp-6);
+  border: 0;
+  border-radius: var(--r-6);
+  background: var(--tint-1); /* ticket 1041 (A): a tint, no outline */
+  color: var(--muted);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+.lead-row button.lvl-chip > svg:last-child {
+  margin-left: auto;
+}
+.lead-row button.lvl-chip:hover {
+  background: var(--tint-2);
+  color: var(--text);
+}
+/* The menu opens downward under its chip: rightward in the chat header (the chip sits after the name), leftward in a Team
+   view row (the chip ends the row). */
+.qlevel .qlevel-menu.lvl-list {
+  top: calc(100% + 4px);
+  bottom: auto;
+  left: 0;
+  right: auto;
+  width: 280px;
+  max-width: calc(100vw - 32px);
+}
+/* Sixth look: the Team side view is narrower than the menu, so in a row the menu and its note card are laid out in the
+   row's own width (the row is the anchor, not the chip), and never run out of the pane's left edge. */
+.lead-row .qlevel.lvl-menu {
+  position: static;
+}
+.lead-row .qlevel .qlevel-menu.lvl-list {
+  left: auto;
+  right: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+.lvl-list [role='menuitemradio'] {
+  align-items: flex-start;
+}
+.lvl-list [role='menuitemradio'] .lvl {
+  padding-top: 3px;
+}
+.lvl-check {
+  display: inline-flex;
+  flex: none;
+  width: 12px;
+  padding-top: 3px;
+}
+.lvl-words {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.lvl-words b {
+  font-weight: 500;
+  color: var(--text);
+}
+.lvl-words small {
+  color: var(--muted);
+  font-size: var(--fs-11);
+  white-space: normal;
+}
+.lvl-foot {
+  margin: var(--sp-4) 0 0;
+  padding: var(--sp-6) var(--sp-8) 2px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--fs-11);
+  white-space: normal;
+}
+.lvl-foot.err {
+  border-top: 0;
+  color: var(--bad);
+}
+.lvl-ask {
+  margin: 2px var(--sp-8) var(--sp-6);
+  color: var(--text);
+  font-size: var(--fs-12);
+}
+.lvl-offer input {
+  margin: 0 var(--sp-8);
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-6);
+  background: var(--panel);
+  color: var(--text);
+  font-size: var(--fs-12);
+}
+.lvl-acts {
+  display: flex;
+  gap: var(--sp-6);
+  padding: var(--sp-8) var(--sp-8) 0;
+}
+.plusmenu .lvl-acts button {
+  padding: 3px 10px;
+  font-size: var(--fs-12);
+}
+
+/* Ticket 1002 (mockup frame 1 .brief1): the chief's latest brief, one line above Needs you; the rest is its tooltip. */
+.home-brief {
+  display: flex;
+  gap: var(--sp-6);
+  align-items: center;
+  min-width: 0;
+  margin: var(--sp-6) var(--sp-8) 2px;
+  font-size: var(--fs-12);
+}
+.home-brief-w {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Ticket 1002 (mockup frame 3 .turnon): a switched-off row's Turn on sits above the row's own press, as the switch. */
+.sched-name > .sched-on {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  padding: 0 var(--sp-8);
+  font-size: var(--fs-11);
+}
+
+/* Ticket 1032 (mockup docs/design/bot-statusbar-1121/index.html 3-5): the set-up row of a place with no assistant yet.
+   Quiet: grey rail, muted name; "Set up" says what a press does, in the accent links take. */
+.home-setup > .row.wt2 .n {
+  font-weight: 500;
+  color: var(--muted);
+}
+.home-setup > .row.wt2 .tm {
+  font-size: var(--fs-11);
+  font-weight: 600;
+  color: var(--accent);
+}
+.home-setup > .row.wt2 .ic {
+  color: var(--tree-mut);
+}

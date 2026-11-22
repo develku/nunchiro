@@ -1,0 +1,342 @@
+/* V2-8e: the decision card above the composer, under the agent output, in the flow (HIDEROWS r6 `.card`): the output
+   above gives up the room. The card's own height is capped and scrolls. Colours are the tree's tokens (tree.css). */
+.deccard {
+  margin: 0 0 8px;
+  max-height: 40vh;
+  overflow: auto;
+  border: 1px solid var(--you);
+  background: var(--you-bg);
+  border-radius: var(--r-8);
+  padding: 0 12px 10px;
+  font-size: var(--fs-13);
+  color: var(--text);
+}
+.deccard h4 {
+  margin: 10px 0 6px;
+  font-size: var(--fs-13);
+}
+.deccard .dc-back {
+  display: block;
+  width: calc(100% + 24px);
+  margin: 0 -12px;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--you);
+  background: var(--you-bg);
+  color: var(--you);
+  font: 600 12px system-ui;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.deccard .dc-item {
+  margin: 0 0 8px;
+}
+.deccard .dc-item + .dc-item {
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+}
+.deccard p {
+  margin: 0 0 4px;
+}
+.deccard .dc-code {
+  display: block;
+  max-height: 96px;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-6);
+  padding: 4px 7px;
+  font: 11.5px ui-monospace, Menlo, monospace;
+  white-space: pre-wrap;
+  margin: 0 0 6px;
+}
+.deccard .dc-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.deccard .b {
+  font: 600 12px system-ui;
+  border: 1px solid var(--line);
+  background: var(--hover);
+  color: var(--text);
+  border-radius: var(--r-6);
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.deccard .b.y {
+  background: var(--you);
+  border-color: var(--you);
+  color: var(--on-status);
+}
+.deccard .b.d {
+  border-color: var(--bad);
+  background: var(--panel);
+  color: var(--bad);
+}
+.deccard .b.r {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: var(--on-status);
+}
+.deccard .b:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.deccard .b:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.deccard .warn {
+  font: 700 10.5px system-ui;
+  color: var(--on-status);
+  background: var(--bad);
+  border-radius: var(--r-4);
+  padding: 1px 5px;
+  margin-right: 5px;
+}
+.deccard .dc-note {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 4px 7px;
+}
+.deccard .dc-hint {
+  color: var(--muted);
+  font-size: var(--fs-11);
+  margin: 6px 0 0;
+}
+.deccard .dc-hint.err {
+  color: var(--bad);
+}
+
+/* decisionw: hosted in the Decisions widget (mockup `.dwi`): one bordered card per session, the sidebar scrolls. */
+.deccard.hosted {
+  margin: 0;
+  max-height: none;
+  overflow: visible;
+  padding: 8px 10px;
+}
+.deccard.hosted .dwh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 3px;
+}
+.deccard.hosted .dwh .tm {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.deccard.hosted:has(.dc-item.risky) {
+  border-color: var(--bad);
+}
+
+/* Ticket 294 item 3: the prompt's options the window never sends (a dialog's, one that changes the agent's settings) are
+   listed beside the card's own buttons, disabled, in the prompt's numbering. */
+/* Ticket 991 B4: text, not a button: the window never sends it. */
+.deccard .opt {
+  font-size: var(--fs-12);
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: var(--r-6);
+  padding: 2px 8px;
+  /* Home N-D (look 1117 v4f): a long path in an option wraps inside the card instead of running past its edge. */
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Ticket 1030 (docs/design/permcard-1121 `.pc`): the session in front's card, docked right above its composer: one
+   quiet row, the request and its reason on the left, the buttons on the right. */
+/* Ticket 1041 lane 5 (owner 2026-11-22: the polish mockup's look, docs/design/polish-1121 .v-c .perm): glass floating
+   over the chat's lower edge (light-glass.css), no border, a warm wash from the left and the breathing your-turn edge
+   light (DecisionCard adds light-edge light-you); a risky card's edge is the still red light, with no wash. */
+.deccard.docked {
+  padding: 12px 12px 12px 16px;
+  border-radius: var(--r-16);
+}
+.composer > .dock .deccard.docked {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--light-you) 10%, transparent), transparent 40%), var(--glass-fill);
+}
+.composer > .dock .deccard.docked:has(.dc-item.risky) {
+  background: var(--glass-fill);
+}
+.deccard.docked.light-edge::after {
+  top: var(--sp-12);
+  bottom: var(--sp-12);
+}
+.deccard.docked .dc-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  align-items: center;
+  margin: 0;
+}
+.deccard.docked .dc-item > * {
+  grid-column: 1 / -1;
+}
+.deccard.docked .dc-what,
+.deccard.docked .dc-why {
+  grid-column: 1;
+  margin: 0;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.deccard.docked .dc-what {
+  font-weight: 600;
+}
+.deccard.docked .dc-why {
+  color: var(--muted);
+  font-size: var(--fs-1);
+}
+/* Look v35 b S3-1: a pending edit's diff under the request; tall diffs scroll inside, the card stays over the chat's edge. */
+.deccard.docked .dcard {
+  margin-top: var(--sp-8);
+}
+.deccard.docked .dcard .dl {
+  max-height: 180px;
+  overflow: auto;
+}
+.deccard.docked .dc-btns {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  flex-wrap: nowrap;
+}
+/* N133: the key digit is plain text in the button's own colour, as the model menu's digits (picker.css .pk-key): no box. */
+.deccard .b .k {
+  margin-left: 6px;
+  font: 600 11px ui-monospace, Menlo, monospace;
+  color: inherit;
+  opacity: 0.7;
+}
+/* Muted, not faint: it is read on glass over the chat (4.5:1). */
+.dc-hint.dc-also {
+  font-size: var(--fs-11);
+  color: var(--muted);
+  margin: 2px 0 0;
+}
+/* Over the bottom edge of the output, aligned with the composer's box; the output keeps its room (no resize). */
+.composer:has(> .dock) {
+  position: relative;
+  z-index: 6;
+}
+.composer > .dock {
+  position: absolute;
+  bottom: 100%;
+  left: 20px;
+  right: calc(20px + var(--pane-over, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 6px;
+}
+.composer > .dock > * {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--chat-w, 700px);
+  margin: 0 auto;
+}
+/* The output's last lines and its "new" chip stay clear of the card (ComposerWidget sets --dock-h). */
+:root:has(.composer > .dock) .chat:not([data-off]) .cscroll {
+  padding-bottom: calc(18px + var(--dock-h, 0px));
+}
+:root:has(.composer > .dock) .chat:not([data-off]) .newchip {
+  bottom: calc(12px + var(--dock-h, 0px));
+}
+/* Ticket 1030 (mockup .pc .l1 / .bt): "Bash · npm test", tool bold and the argument in mono; the buttons in the
+   mockup's order (allow, the session-only allow, deny) and the session-only one quiet. */
+.deccard.docked .dc-what .dc-tool {
+  font-weight: 600;
+}
+.deccard.docked .dc-what .dot {
+  color: var(--faint);
+  font-weight: 400;
+}
+.deccard.docked .dc-what code {
+  background: none;
+  padding: 0;
+  font: 12px ui-monospace, Menlo, monospace;
+  font-weight: 400;
+}
+/* The polish mockup's buttons: 28 px, no outline; Allow once keeps the your-turn fill (orange only where you answer),
+   the session-only allow a quiet tint, Deny its red words on no fill. */
+.deccard.docked .b {
+  height: 28px;
+  padding: 0 12px;
+  border-color: transparent;
+  border-radius: var(--r-8);
+  font-weight: 500;
+}
+.deccard.docked .b:not(.y, .r) {
+  background: transparent;
+}
+.deccard.docked .b:not(.y, .r):hover:not(:disabled) {
+  background: var(--control-quiet-hover);
+}
+.deccard.docked .b.d {
+  color: var(--bad-text);
+}
+.deccard.docked .dc-btns > [data-act='allow-always'] {
+  order: 1;
+  background: var(--tint-2);
+  color: var(--text);
+}
+.deccard.docked .dc-btns > [data-act='deny'] {
+  order: 2;
+}
+/* permcard-1121 C: the docked risky Allow is drawn in the "your turn" colour, as the mockup (Decisions keeps its red). */
+.deccard.docked .b.r.risky {
+  background: var(--you);
+  border-color: var(--you);
+}
+
+/* Ticket 1041 lane 7a (A+C, inventory N044): a card in the Decisions widget has no outline. It is one tint step with a
+   faint warm wash from its left edge (the polish mockup's C permission card), and the left state edge in widgets-7a.css:
+   a solid warm bar with a glow for your turn, red for a risky request (with its "Caution" word), dashed red for a failed
+   run or a stalled task. Its buttons are tints with no outline; Allow keeps the your-turn fill (orange only where you
+   answer), a risky Allow keeps red. The docked card above the composer is the chat lane's (lane 5). */
+.deccard.hosted {
+  border: 0;
+  border-radius: var(--r-8);
+  background: linear-gradient(90deg, var(--you-bg), transparent 45%), var(--tint-1);
+  --focus-ring: var(--ring-focus);
+}
+.deccard.hosted:has(.dc-item.risky),
+.deccard.hosted:is([data-stall], [data-schedule-card='failed']) {
+  background: var(--tint-1);
+}
+.deccard.hosted .dc-code {
+  border: 0;
+  background: var(--panel);
+}
+.deccard.hosted .b {
+  border-color: transparent;
+  background: var(--control-quiet-bg);
+}
+.deccard.hosted .b:hover:not(:disabled) {
+  background: var(--control-quiet-hover);
+}
+.deccard.hosted .b.y {
+  background: var(--you);
+  color: var(--on-status);
+}
+.deccard.hosted .b.d {
+  color: var(--bad-text);
+}
+.deccard.hosted .b.r {
+  background: var(--bad);
+  color: var(--on-status);
+}
+.deccard.hosted .b:focus-visible {
+  outline-color: var(--ring-focus);
+}
+.deccard.hosted .opt {
+  border: 0;
+  background: var(--tint-1);
+}
+.deccard.hosted .dc-back {
+  border-bottom: 0;
+}

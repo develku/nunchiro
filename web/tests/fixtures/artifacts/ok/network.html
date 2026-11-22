@@ -1,0 +1,6 @@
+<!doctype html><title>network</title>
+<script>function r(v){parent.postMessage({type:"fixture",result:v},"*")}
+fetch("https://api.nunchiro.test/data").then(function(x){return x.text()}).then(function(t){r("fetch "+t)},function(){r("fetch blocked")});
+fetch("http://127.0.0.1:{{CANARY}}/after-grant",{mode:"no-cors"}).then(function(){r("loopback reached")},function(){r("loopback blocked")});
+try{var w=new WebSocket("ws://127.0.0.1:{{CORE}}/");w.onopen=function(){r("ws reached")};w.onerror=function(){r("ws blocked")}}catch(e){r("ws blocked")}</script>
+<img src="https://img.nunchiro.test/pixel.png" onload="r('image loaded')" onerror="r('image blocked')">

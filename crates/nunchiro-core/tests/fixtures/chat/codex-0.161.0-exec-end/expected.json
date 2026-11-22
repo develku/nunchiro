@@ -1,0 +1,10 @@
+[
+  {"kind":"turn","turn_id":"turn-1","state":"started"},
+  {"kind":"tool_use","tool_id":"call-end-1","name":"exec_command","input":{"cmd":"pytest"}},
+  {"kind":"tool_result","tool_id":"call-end-1","output":"Wall time: 2.0000 seconds\nProcess exited with code 0\nOutput:\n1 passed\nwarn\n","is_error":false,"at":"2026-10-24T00:00:00.000Z"},
+  {"kind":"tool_use","tool_id":"call-noexit-1","name":"exec_command","input":{"cmd":"pytest"}},
+  {"kind":"tool_use","tool_id":"call-string-exit-1","name":"exec_command","input":{"cmd":"pytest"}},
+  {"kind":"tool_use","tool_id":"call-fail-1","name":"exec_command","input":{"cmd":"pytest"}},
+  {"kind":"tool_result","tool_id":"call-fail-1","output":"Wall time: 2.0000 seconds\nProcess exited with code 2\nOutput:\n1 passed\nwarn\n","is_error":true,"at":"2026-10-24T00:00:00.000Z"},
+  {"kind":"turn","turn_id":"turn-1","state":"completed","files":[],"files_partial":true}
+]

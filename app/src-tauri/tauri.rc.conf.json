@@ -1,0 +1,14 @@
+{
+  "productName": "Nunchiro RC",
+  "identifier": "dev.nunchiro.app.rc",
+  "bundle": {
+    "active": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [],
+      "dangerousInsecureTransportProtocol": true,
+      "requireSignedVersion": true
+    }
+  }
+}

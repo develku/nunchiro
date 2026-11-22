@@ -1,0 +1,4 @@
+<!doctype html><title>fetch core port</title>
+<script>function r(v){parent.postMessage({type:"fixture",result:v},"*")}
+fetch("http://127.0.0.1:{{CORE}}/",{mode:"no-cors"}).then(function(){r("reached")},function(e){r("blocked")});
+fetch("http://localhost:{{CORE}}/",{mode:"no-cors"}).catch(function(){});</script>

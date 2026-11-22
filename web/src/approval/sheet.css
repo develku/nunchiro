@@ -1,0 +1,139 @@
+/* Permission sheet, R8-final frame 5: a sheet hanging from the top edge over a dimmed window. */
+.ps-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--scrim);
+}
+.ps {
+  position: fixed;
+  z-index: 41;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 620px;
+  max-width: calc(100% - 32px);
+  max-height: 100%;
+  overflow: auto;
+  background: var(--bg);
+  border-radius: 0 0 var(--r-12) var(--r-12);
+  /* ticket 1041: a modal sheet is solid, no border (owner 15.1 item 6) */
+  box-shadow: var(--shadow-float);
+  --focus-ring: var(--ring-focus);
+  padding: 16px 20px 14px;
+  font-size: var(--fs-12);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ps h3 {
+  font-size: var(--fs-15);
+}
+.ps-meta {
+  color: var(--g6);
+  font-size: var(--fs-11);
+}
+.ps pre {
+  font-family: 'SF Mono', Menlo, 'D2Coding', monospace;
+  font-size: var(--fs-11);
+  background: var(--g1);
+  border: 1px solid var(--g3);
+  border-radius: var(--r-6);
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ps-error,
+.ps-changed {
+  padding: 6px 10px;
+  border-radius: var(--r-6);
+  background: var(--signal-soft);
+  color: var(--signal-text);
+}
+.ps-perm {
+  border: 1px solid var(--g3);
+  border-radius: var(--r-6);
+}
+.ps-row {
+  display: grid;
+  grid-template-columns: 96px 1fr auto;
+  gap: 10px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--g2);
+  align-items: start;
+}
+.ps-row:last-child {
+  border-bottom: 0;
+}
+.ps-pk {
+  font-weight: 700;
+}
+.ps-never {
+  background: var(--g1);
+}
+.ps-row ul {
+  margin-left: 14px;
+}
+.ps-tag {
+  font-size: var(--fs-11);
+  color: var(--g6);
+}
+.ps-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-11);
+  color: var(--g6);
+}
+.ps-switch i {
+  width: 24px;
+  height: 14px;
+  border-radius: var(--r-8);
+  background: var(--g3);
+  position: relative;
+  display: inline-block;
+}
+.ps-switch i::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--raised);
+  box-shadow: 0 0 0 1px var(--g4);
+}
+.ps-switch i.on {
+  background: var(--ink);
+}
+.ps-switch i.on::after {
+  left: 12px;
+}
+.ps-acts {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ps-acts .dim {
+  font-size: var(--fs-11);
+}
+/* v1b-33: a read scope covering the whole home. Red, not the signal orange: it widens what the widget can see. A safety
+   cue: a fixed red pair, never the theme's palette, so no theme can make it faint (round 2 security review). */
+.ps {
+  --ps-danger: #c92a2a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .ps {
+    --ps-danger: #ff6b6b;
+  }
+}
+:root[data-theme='dark'] .ps {
+  --ps-danger: #ff6b6b;
+}
+.ps-danger {
+  margin-top: 4px;
+  color: var(--ps-danger);
+  font-weight: 600;
+}

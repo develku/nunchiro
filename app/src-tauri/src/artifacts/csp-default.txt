@@ -1,0 +1,1 @@
+sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline' nunchiro-artifact://localhost/lib/; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src data: https://fonts.gstatic.com; img-src data: blob:; media-src data: blob:; worker-src blob:; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'

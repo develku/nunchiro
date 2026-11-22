@@ -1,0 +1,326 @@
+/* Ticket 1031: the status bar's usage block and its popover (chrome/UsageBlock.tsx; mockup docs/design/usage-home-1121
+   part 1). The popover is placed against the window (fixed), above the block, as the account switch's menu is.
+   Ticket 1041 lane 3 (mockup docs/design/polish-1121 .use, .ub, .upop): the block is one tinted step, the bars glow yellow
+   from 80 % and red at 100 % (still, so reduced motion changes nothing), the popover is glass, and nothing is outlined. */
+.usg-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+/* The tint is the mockup's 20 px block; the transparent borders keep the bar's full 24 px as the hit target (hit_targets_24). */
+.status .usg {
+  gap: 8px;
+  height: 24px;
+  min-width: 0;
+  padding: 0 8px;
+  margin-left: -4px;
+  border-block: 2px solid transparent;
+  background: var(--tint-1) padding-box;
+  border-radius: var(--r-8);
+  overflow: hidden;
+}
+.status .usg:hover,
+.status .usg.on {
+  background-color: var(--tint-2);
+}
+.status .usg-ref:hover:not(:disabled),
+.usg-pop .u-refresh:hover:not(:disabled),
+.usg-pop .u-foot:hover,
+.usg-pop .u-foot:focus-visible {
+  background: var(--tint-1);
+}
+.usg-w {
+  color: var(--muted);
+  font-weight: 500;
+}
+.usg-p {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.usg-p .agent-logo:not(.claude) {
+  color: var(--text);
+}
+.usg-t {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.usg-t.dim {
+  color: var(--muted);
+}
+/* On the bar a near-limit number is ink and bold (mockup .hotv): the bar's glow carries the yellow or red, and yellow
+   text would fall under 4.5:1 on the block's tint. The popover keeps the toned text. */
+.usg-t[data-tone] {
+  font-weight: 600;
+}
+.usg-pop .v[data-tone='warn'] {
+  color: var(--warn);
+  font-weight: 600;
+}
+.usg-pop .v[data-tone='full'] {
+  color: var(--bad);
+  font-weight: 600;
+}
+/* Ticket 1041 N154: the reset count is bold ink on a faint yellow fill, no outline (yellow text on the block's tint would
+   fall under 4.5:1). */
+.usg-rst {
+  color: var(--text);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  border-radius: var(--r-4);
+  padding: 0 4px;
+  line-height: 16px;
+}
+.status .usg-ref {
+  width: 24px;
+  height: 24px;
+  justify-content: center;
+  border-radius: var(--r-4);
+}
+/* The mockup's .ub: a 3 px line on the selected step; the fill is grey, and near a limit it is the limited light with
+   its glow (owner 11-22: yellow from 80 %, red at 100 %). The glow needs the track's overflow visible. */
+.usg .mini,
+.usg-pop .bar {
+  display: block;
+  flex: none;
+  width: 32px;
+  height: 3px;
+  border-radius: var(--r-2);
+  background: var(--tint-2);
+  overflow: visible;
+}
+.usg .mini b,
+.usg-pop .bar b {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-2);
+  background: var(--muted);
+}
+.usg .mini[data-tone='warn'] b,
+.usg-pop .bar[data-tone='warn'] b {
+  background: var(--light-limited);
+  box-shadow: var(--glow-limited);
+}
+.usg .mini[data-tone='full'] b,
+.usg-pop .bar[data-tone='full'] b {
+  background: var(--light-bad);
+  box-shadow: var(--glow-bad);
+}
+
+/* Glass (.glass in light-glass.css carries the fill, blur and float shadow); no border (ticket 1041 B). */
+.usg-pop {
+  position: fixed;
+  z-index: 60;
+  width: 380px;
+  max-width: calc(100vw - 8px);
+  box-sizing: border-box;
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  border-radius: var(--r-16);
+  font-size: var(--fs-1);
+  white-space: normal;
+  --focus-ring: var(--ring-focus);
+}
+.usg-pop .grow {
+  flex: 1;
+}
+.usg-pop .dim {
+  color: var(--muted);
+}
+.usg-pop .u-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 8px 16px;
+}
+.usg-pop .u-head b {
+  font-size: var(--fs-2);
+  font-weight: 500;
+}
+.usg-pop .u-refresh {
+  display: flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-6);
+  color: var(--muted);
+}
+/* A's segmented control: one tint track, the pick a step up, no outline (the global .dseg keeps its look elsewhere). */
+.usg-pop .u-seg {
+  padding: 0 16px 8px;
+}
+.usg-pop .u-seg .dseg {
+  display: flex;
+  border: 0;
+  background: var(--tint-1);
+}
+.usg-pop .u-seg .dseg label {
+  flex: 1;
+  text-align: center;
+  font-size: var(--fs-1);
+}
+.usg-pop .u-seg .dseg label:has(input:checked) {
+  background: var(--tint-2);
+  outline: 0;
+  font-weight: 500;
+}
+.usg-pop .u-seg .dseg label:has(input:focus-visible) {
+  outline: var(--focus-width) solid var(--focus-ring);
+}
+.usg-pop .u-rows {
+  max-height: min(420px, 60vh);
+  overflow-y: auto;
+}
+.usg-pop .u-row {
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.usg-pop .u-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.usg-pop .u-ic {
+  display: flex;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-6);
+  background: var(--tint-1);
+}
+.usg-pop .u-name {
+  font-size: var(--fs-2);
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usg-pop .u-name .dim {
+  font-weight: 400;
+}
+.usg-pop .u-reset {
+  font-size: var(--fs-11);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* :not([data-tone]): a toned Compact % keeps its yellow or red (the plain rule came later and won before 1041). */
+.usg-pop .u-reset .v:not([data-tone]) {
+  color: var(--text);
+  font-weight: 500;
+}
+.usg-pop .u-reset .v {
+  margin-left: 4px;
+}
+.usg-pop .u-bars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding-left: 28px;
+}
+.usg-pop .u-m {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.usg-pop .u-m .l,
+.usg-pop .u-reset .l {
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.usg-pop .u-m .v {
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+}
+.usg-pop .u-line,
+.usg-pop .rst {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-left: 28px;
+  font-size: var(--fs-1);
+  min-height: 24px;
+}
+/* The reset line (usage/CodexResets ResetLineView): the count takes the room, the button sits at the right; the outcome
+   reads first, and an open confirm replaces the count (mockup 1-4, 1-4b). */
+.usg-pop .rst > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.usg-pop .rst > [role='status'] {
+  order: -1;
+  color: var(--ok);
+  font-weight: 600;
+}
+.usg-pop .rst[data-ask] > span:first-child {
+  display: none;
+}
+/* The question takes the row's whole width, so it stays one line in English (mockup `.u-line.ask`). An attribute, not
+   :has(): the real app's WebKit kept the :has() match after the confirm closed (look on the RC, 11-21). */
+.usg-pop .rst[data-ask] {
+  padding-left: 0;
+  margin: 0 -4px;
+}
+/* No outlined buttons (A): quiet tint, the primary in ink (15.1 item 1), the line's one accent. */
+.usg-pop .rst .btn {
+  border: 0;
+  background: var(--control-quiet-bg);
+  color: var(--text);
+}
+.usg-pop .rst .btn:hover:not(:disabled) {
+  background: var(--control-quiet-hover);
+}
+.usg-pop .rst .btn.pri {
+  background: var(--control-bg);
+  color: var(--control-text);
+}
+.usg-pop .rst .cxr-confirm {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: var(--fs-1);
+}
+.usg-pop .rst .cxr-confirm > span {
+  flex: 1;
+}
+.usg-pop .rst .btn {
+  padding: 2px 8px;
+  border-radius: var(--r-6);
+  font-size: var(--fs-1);
+  line-height: 16px;
+  white-space: nowrap;
+}
+.usg-pop .rst .conflict {
+  flex-basis: 100%;
+}
+.usg-pop .u-hint {
+  padding-left: 28px;
+  font-size: var(--fs-1);
+  color: var(--muted);
+  line-height: 1.35;
+}
+.usg-pop .u-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  margin: 0 8px;
+  padding: 0 8px;
+  border-radius: var(--r-6);
+  color: var(--muted);
+  font-size: var(--fs-2);
+  text-align: left;
+}

@@ -1,0 +1,475 @@
+/* Ticket 993: the Schedules widget (SchedulesView.tsx), drawn with the Team view's tokens and classes (lead.css
+   .teamv-head, .teamv-move, .lead-more, .lead-menu) and the settings kit's switch, segments and select (shell.css).
+   Narrow (the right sidebar, about 250 px) a row is three lines; wide (the centre tab) it is one line in columns. */
+.schedv {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  contain: inline-size; /* as .teamv: its columns never widen the zone it sits in */
+  background: var(--panel);
+  font-size: var(--fs-12);
+}
+.schedv-title {
+  flex: 1;
+  min-width: 0;
+}
+.schedv-head {
+  justify-content: flex-end;
+}
+.schedv-head .teamv-move {
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 var(--sp-4);
+}
+/* In the sidebar the title is the sidebar's own header: the two buttons sit at its right end, on the same line. */
+.sbar[data-widget='schedules'] .schedv-head {
+  position: absolute;
+  top: 0;
+  right: var(--sp-6);
+  height: 32px; /* styles.css .sbh (32 px since ticket 1041 lane 2) */
+  padding: 0;
+  border: 0;
+}
+.schedv-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.schedv-body > .conflict {
+  margin: var(--sp-6);
+}
+.schedv-empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-16) var(--sp-12);
+  color: var(--muted);
+  text-align: center;
+}
+.schedv-empty p {
+  margin: 0;
+  text-wrap: balance; /* no one-word last line */
+}
+.schedv-empty p:first-of-type {
+  margin-top: var(--sp-4);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sched-list {
+  margin: 0;
+  padding: var(--sp-4);
+  list-style: none;
+}
+.sched-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 2px var(--sp-8);
+  padding: var(--sp-6);
+  border-radius: var(--r-8);
+}
+.sched-list .sched-row:hover {
+  background: var(--tint-1);
+}
+/* The kit's switch, smaller: in a list row the name is what the eye lands on first. Its press area stays 24 px high.
+   The selectors name the list, so they outrank the kit's (shell.css `:is(.settings[role='region'], .schedv) input.stog`). */
+.schedv .sched-list .sched-row > input.stog {
+  grid-area: 1 / 1;
+  width: 28px;
+  height: 16px;
+  border-radius: var(--r-8);
+}
+.schedv .sched-list .sched-row > input.stog::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+.schedv .sched-list .sched-row > input.stog::after {
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+}
+.schedv .sched-list .sched-row > input.stog:checked::after {
+  left: 14px;
+}
+/* Narrow: a hairline between rows, and an open row's cut task gives way to the whole task in its detail. */
+.schedv:not([data-wide]) .sched-item + .sched-item {
+  border-top: 1px solid var(--line);
+}
+.schedv:not([data-wide]) .sched-item[data-open] .sched-task {
+  display: none;
+}
+.sched-name {
+  grid-area: 1 / 2;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  min-width: 0;
+}
+/* The row is the press: the button's own box is its name, and it covers the whole row. The switch, the bars, the dot
+   and the menu sit above it. */
+.sched-go {
+  display: flex;
+  min-width: 0;
+  padding: 0;
+  color: var(--text);
+  text-align: left;
+}
+/* Ticket 994: the name keeps its room; the model after it is what gives way. */
+.sched-name > .sched-go {
+  flex: 0 1 auto;
+}
+.sched-name > .lvl-mark {
+  flex: 0 100 auto;
+}
+/* The ellipsis is the name's own (a button's text is not cut with one in every engine), as lead.css .home-pname. */
+.sched-go > b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sched-go::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-8);
+}
+.sched-go:focus-visible {
+  outline: none;
+}
+.sched-go:focus-visible::after {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.sched-row > .stog,
+.sched-row > .lead-more,
+.sched-row > .lead-menu,
+.sched-name > .lvl-mark,
+.sched-dot {
+  position: relative;
+  z-index: 1;
+}
+/* Ticket 994: the bars and the model they start, small and quiet after the name. */
+.sched-name > .lvl-mark {
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 400;
+}
+.sched-l2 {
+  grid-area: 2 / 1 / auto / -1;
+  display: flex; /* one line: the next run whole, the time cut with an ellipsis if it must */
+  column-gap: var(--sp-4);
+  min-width: 0;
+  color: var(--muted);
+}
+.sched-l2 > .sched-next {
+  flex: none;
+}
+.sched-when,
+.sched-next,
+.sched-task {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sched-when::after {
+  content: ' ·';
+}
+.sched-task {
+  grid-area: 3 / 1 / auto / -1;
+  color: var(--muted);
+}
+.sched-task:empty {
+  display: none;
+}
+.sched-dot {
+  grid-area: 1 / 3;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: var(--r-6);
+}
+button.sched-dot:hover {
+  background: var(--tint-2);
+}
+.sched-item[data-paused] .sched-go,
+.sched-item[data-paused] .sched-name > .lvl-mark {
+  color: var(--muted);
+}
+.sched-row > .lead-menu {
+  position: absolute;
+}
+
+/* Wide: switch | name and bars | task | when | next run | dot | more. Fixed tracks, so the rows and the heads line up. */
+.schedv[data-wide] .sched-row {
+  grid-template-columns: 28px minmax(110px, 220px) minmax(0, 1fr) 200px 110px 24px 28px;
+  column-gap: var(--sp-12);
+}
+.schedv[data-wide] .sched-row > *,
+.schedv[data-wide] .sched-l2 > * {
+  grid-area: auto;
+}
+.schedv[data-wide] .sched-l2 {
+  display: contents;
+}
+.schedv[data-wide] .sched-when::after {
+  content: none;
+}
+.schedv[data-wide] .sched-task {
+  display: block; /* an empty task still holds its column */
+  color: var(--text);
+}
+.sched-heads {
+  margin: var(--sp-4) var(--sp-4) 0;
+  padding-block: 0;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.sched-heads + .sched-list {
+  padding-top: 0;
+}
+
+/* A row's detail, in place: the whole task, the last run, the buttons. */
+.sched-detail {
+  display: grid;
+  gap: var(--sp-6);
+  margin: 0 var(--sp-6) var(--sp-6);
+  padding: var(--sp-8);
+  border-radius: var(--r-8);
+  background: var(--tint-1); /* ticket 1041 (A): one tint step, no outline */
+}
+.sched-whole,
+.sched-last {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.sched-whole {
+  white-space: pre-wrap;
+}
+.sched-last {
+  color: var(--muted);
+}
+.sched-last > span {
+  margin-right: var(--sp-4);
+  font-weight: 600;
+}
+/* Ticket 1002 (mockup frame 3 `.runlog`): one line per earlier run, when, result, reason. */
+.sched-log h4 {
+  margin: 0 0 var(--sp-4);
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 600;
+}
+.sched-log ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sched-log li {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: var(--sp-8);
+  align-items: baseline;
+  padding: 2px 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: var(--fs-12);
+}
+.sched-log-when {
+  color: var(--muted);
+}
+.sched-log li > span:last-child {
+  overflow-wrap: anywhere;
+}
+.sched-log li[data-result='failed'] b {
+  color: var(--bad);
+}
+.sched-log li[data-result='finished'] b {
+  color: var(--ok);
+}
+.sched-log li[data-result='skipped'] b {
+  color: var(--muted);
+}
+.sched-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-6);
+}
+.sched-ask {
+  flex: 1 0 100%;
+}
+.schedv .sdel {
+  border-color: transparent;
+  background: transparent;
+  color: var(--bad);
+}
+
+/* The form: in the narrow widget a label sits above its control (three level words do not fit beside a label in every
+   language) and the When segments are two by two; wide, a label and its control share a line. The segment rules
+   name the widget and the form, so they outrank the kit's (shell.css `:is(.settings[role='region'], …) .sseg`). */
+.sched-form {
+  container-type: inline-size;
+  display: grid;
+  gap: var(--sp-8);
+  margin: var(--sp-6);
+  padding: var(--sp-8);
+  border-radius: var(--r-8);
+  background: var(--tint-1); /* ticket 1041 (A): one tint step, no outline */
+}
+.sched-f {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 2px var(--sp-8);
+}
+.sched-k {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sched-c,
+.sched-at {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-6);
+  min-width: 0;
+}
+.sched-c > .ssel,
+.sched-c > .ssel select,
+.sched-c > input,
+.sched-c > textarea {
+  width: 100%;
+  min-width: 0;
+}
+.sched-c input,
+.sched-at .ssel select {
+  height: 28px;
+}
+.sched-at .ssel select {
+  min-width: 0;
+}
+.sched-c > .swhy {
+  flex: 1 0 100%;
+}
+/* Look v35 b S3-4: the kit's segmented control (tint track, raised chosen part, 2px gaps): no hairlines between parts. */
+.schedv .sched-form .sched-c .sseg {
+  display: flex;
+  width: 100%;
+}
+.schedv .sched-form .sched-c .sseg label {
+  flex: 1 1 auto; /* each segment as wide as its word needs, the rest shared */
+  justify-content: center;
+  padding: 2px var(--sp-6);
+  text-align: center;
+  white-space: normal;
+}
+.schedv .sched-form .sched-c .sseg:has(input[name='sched-mode']) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+/* Ticket 994: a level reads as a model and its effort ("Default · medium", an ACP agent's long model name): three of
+   them do not fit one line of the narrow widget, so they are a column there, each led by its bars. */
+.schedv .sched-form .sched-c .sseg:has(input[name='sched-level']) {
+  display: grid;
+}
+.schedv .sched-form .sched-c .sseg:has(input[name='sched-level']) label {
+  justify-content: flex-start;
+  min-width: 0;
+}
+/* One line only where three of the longest pairs fit beside the caption (wider than the other fields' break). */
+@container (min-width: 520px) {
+  .schedv .sched-form .sched-c .sseg:has(input[name='sched-level']) {
+    display: flex;
+  }
+  .schedv .sched-form .sched-c .sseg:has(input[name='sched-level']) label {
+    justify-content: center;
+  }
+}
+@container (min-width: 420px) {
+  .sched-f {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+  .sched-k {
+    font-size: inherit;
+    line-height: 28px;
+  }
+  .schedv .sched-form .sched-c .sseg:has(input[name='sched-mode']) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .sched-c > .ssel,
+  .sched-c > input {
+    width: auto;
+    flex: 1 1 160px;
+  }
+}
+.sched-form > .conflict {
+  margin: 0;
+}
+
+/* The Decisions card of a proposed schedule (ScheduleCard.tsx): who, when and the level on a line; the task under it,
+   three lines until "Show all"; who asked. */
+.sched-line {
+  margin: 0 0 var(--sp-4);
+  overflow-wrap: anywhere;
+}
+.sched-line .lvl-mark {
+  vertical-align: bottom;
+}
+/* The form's Level for a lead or a one-level agent: what the seat opens with, as text. */
+.sched-rule {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  color: var(--text);
+}
+.sched-cname {
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.sched-line .lvl {
+  white-space: nowrap;
+}
+.sched-ctask {
+  display: -webkit-box;
+  margin: 0 0 var(--sp-4);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.sched-ctask[data-all] {
+  display: block;
+  -webkit-line-clamp: none;
+}
+.sched-more {
+  display: block;
+  margin: 0 0 var(--sp-4);
+  padding: 0;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  text-decoration: underline;
+}
+.sched-by {
+  display: block;
+  margin: 0 0 var(--sp-8);
+}

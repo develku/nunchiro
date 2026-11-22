@@ -1,0 +1,23 @@
+version = 1
+locked = false
+
+[root]
+id = "centre"
+split = "column"
+
+[[root.children]]
+id = "board"
+widgets = ["board"]
+
+[[root.children]]
+id = "terminal"
+size = 160
+widgets = ["terminal"]
+
+[[root.children]]
+id = "waiting"
+widgets = ["waiting"]
+
+[[root.children]]
+id = "composer"
+widgets = ["composer"]

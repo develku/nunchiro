@@ -1,0 +1,285 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HIDEROWS r6 아이콘 행과 작은 미리보기</title><style>
+:root{--bg:#f6f6f4;--ink:#1f2328}
+body{margin:0;padding:24px 16px 48px;background:var(--bg);color:var(--ink);font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+h1{font-size:20px;margin:0 0 4px}h1+p{margin:0 0 20px;color:#59636e}
+section{max-width:760px;margin:0 0 30px}h2{font-size:16px;margin:0 0 2px}section>p{margin:0 0 10px;color:#59636e;font-size:13px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.pane,.leg{
+ background:var(--pbg);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px 8px 8px;max-width:300px}
+.cap{font-size:11px;color:var(--mut);padding:0 8px 6px}
+.proj{display:flex;align-items:center;gap:6px;padding:4px 8px;font-weight:600}.proj .d{font-weight:400;color:var(--mut)}
+.ch{width:10px;height:10px;flex:none;color:var(--mut)}
+.cnt{font:700 11px system-ui;color:#fff;border-radius:9px;padding:1px 6px;margin-left:2px}.cnt.you{background:var(--you)}.cnt.bad{background:var(--bad)}
+.row{--c:var(--idle);position:relative;display:flex;align-items:center;gap:8px;height:30px;margin:1px 0 1px 22px;padding:0 8px 0 14px;border-radius:6px;outline:none}
+.row.you{--c:var(--you);background:var(--youbg)}.row.bad{--c:var(--bad)}.row.run{--c:var(--run)}.row.ok{--c:var(--ok)}.row.done{--c:var(--done)}
+.row::before{content:"";position:absolute;left:4px;top:5px;bottom:5px;width:3px;border-radius:2px;background:var(--c)}
+.row::after,.clean::after{content:"";position:absolute;left:-12px;top:-2px;bottom:-2px;width:1px;background:var(--line)}
+.row:hover,.row.hov,.row:focus-visible{background:var(--hov)}.row.you:hover,.row.you.hov{background:var(--youbg);box-shadow:inset 0 0 0 1px var(--you)}
+.row:focus-visible{box-shadow:inset 0 0 0 2px var(--run)}
+.n{flex:1;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.n i{font-style:normal;font-weight:400;color:var(--mut);font-size:12px}
+.row.done .n,.row.sub .n{font-weight:500;color:var(--mut)}
+.ic{display:flex;width:16px;height:16px;flex:none;color:var(--c)}.ic svg{width:16px;height:16px;overflow:visible}
+.arc{transform-box:fill-box;transform-origin:center;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.arc{animation:none}}
+.tip{display:none;position:absolute;z-index:5;left:14px;top:31px;background:var(--fg);color:var(--hov);font-size:12px;line-height:1.45;padding:6px 9px;border-radius:6px;white-space:nowrap;font-weight:400}
+.pane.dk .tip{background:#e6edf3;color:#151b23}.tip b{font-weight:600}
+.row:hover .tip,.row:focus .tip{display:block}
+.act{display:none;gap:4px}.row:hover .act,.row.hov .act,.row:focus-within .act{display:flex}.row:hover .act~.ic,.row.hov .act~.ic{display:none}
+.row.hov .tip{display:none}
+.b{font:600 11px system-ui;border:1px solid var(--line);background:var(--hov);color:var(--fg);border-radius:5px;padding:2px 7px;cursor:pointer}.b.y{background:var(--you);border-color:var(--you);color:#fff}
+.cb{position:relative}.clean{position:relative;display:flex;align-items:center;gap:6px;list-style:none;cursor:pointer;margin:6px 0 0 22px;padding:5px 8px;color:var(--mut);font-size:12.5px}
+.clean::-webkit-details-marker{display:none}.cb[open]>.clean .ch{transform:rotate(90deg)}.clean b{color:var(--fg);text-decoration:underline;margin-left:2px}
+.row.sub{margin-left:40px}.row.sub::after{left:-30px}
+.leg{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12px;color:#59636e}
+.li{display:flex;align-items:center;gap:5px}
+.li.you .ic{color:var(--you)}.li.bad .ic{color:var(--bad)}.li.run .ic{color:var(--run)}.li.ok .ic{color:var(--ok)}.li.done .ic{color:var(--done)}.li.idle .ic{color:var(--idle)}
+
+.tag{font-size:11px;color:var(--mut);padding:12px 8px 4px;border-top:1px dashed var(--line);margin-top:8px}.tag:first-of-type{border-top:0;margin-top:0;padding-top:0}
+.pn{font-weight:600}.grp .pn{text-transform:none;letter-spacing:.2px}.grp .ch,.grp .pn{color:var(--fg)}
+.quiet .pn{font-weight:500;color:var(--mut)}
+.bar{margin-left:auto;display:flex;gap:2px;align-items:center}.bar .s{display:block;width:3px;height:12px;border-radius:1.5px;background:var(--idle)}
+.s.you{background:var(--you)}.s.bad{background:var(--bad)}.s.run{background:var(--run)}.s.ok{background:var(--ok)}.s.done{background:var(--done)}
+.bar em{font:600 10px system-ui;color:var(--mut);margin-left:3px;font-style:normal}
+.more{margin:2px 0 0 36px;font-size:12px;color:var(--you);font-weight:600}
+.new{font:600 10.5px system-ui;color:#fff;background:var(--run);border-radius:9px;padding:1px 6px;margin-left:4px}
+.pop{animation:pop 2.4s ease-out infinite}@keyframes pop{0%{background:var(--hov)}60%,100%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.pop{animation:none}}
+.proj{border-radius:6px}
+.chips{display:flex;flex-wrap:wrap;gap:4px 10px;margin:2px 0 4px 36px;font-size:12px;color:var(--mut)}.pc{display:flex;align-items:center;gap:5px}.pc .bar{margin-left:0}
+.proj.sub2{margin-left:18px;font-size:13px}.proj.sub2 .pn{font-weight:600}.row.l40{margin-left:40px}.row.l40::after{left:-30px}
+.seg{gap:0}.pg{display:flex;gap:2px}.gap{width:7px}.hot{margin:0 0 4px 36px;font-size:12px;color:var(--mut)}.hot b{color:var(--fg);font-weight:600}
+:root{--bg:#f6f6f4;--ink:#1f2328;--pbg:#fff;--fg:#1f2328;--mut:#59636e;--line:#d1d9e0;--hov:#f0f2f4;--you:#bc4c00;--youbg:#fff1e5;--bad:#cf222e;--run:#0969da;--ok:#1a7f37;--done:#8250df;--idle:#818b98}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--ink:#e6edf3;--pbg:#151b23;--fg:#e6edf3;--mut:#9198a1;--line:#3d444d;--hov:#262c36;--you:#f0883e;--youbg:#3a2614;--bad:#f85149;--run:#4493f8;--ok:#3fb950;--done:#a371f7;--idle:#9198a1}}
+body{background:var(--bg);color:var(--ink)}h1+p,section>p{color:var(--mut)}
+.pane{max-width:none;}.cols{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+table{border-collapse:collapse;margin:14px 0;font-size:13px}th,td{border:1px solid var(--line);padding:6px 12px;text-align:left}th{color:var(--mut);font-weight:600}
+.why{max-width:760px;margin:6px 0;font-size:13.5px}.foot{max-width:760px;margin-top:22px;padding-top:12px;border-top:1px dashed var(--line);color:var(--mut);font-size:13px}
+.sess{position:relative}.q{display:flex;gap:8px;margin:0 0 3px 22px;padding:2px 8px 5px 14px;font-size:12px;color:var(--you);background:var(--youbg);border-radius:0 0 6px 6px;margin-top:-3px}
+.q em{font-style:normal;color:var(--mut);margin-left:auto}.sess .row.you{margin-bottom:0;border-radius:6px 6px 0 0;cursor:pointer}
+.ans{display:none;margin:0 0 4px 22px;padding:7px 10px 8px 14px;background:var(--youbg);border-top:1px dashed var(--line);border-radius:0 0 6px 6px;font-size:12px}
+.sess.open .ans{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.sess.open .q{border-radius:0;margin-bottom:0}
+.sess.open .row.you{box-shadow:inset 0 0 0 1px var(--you)}
+.sess.done{display:none}
+.b:focus-visible{outline:2px solid var(--run);outline-offset:1px}.b.y{padding:3px 10px}
+.hint{flex-basis:100%;color:var(--mut);font-size:11px}
+.res{font-size:12px;color:var(--ok);margin:4px 0 0 22px}
+.proj .pill{font:600 10.5px system-ui;color:#fff;background:var(--run);border-radius:9px;padding:1px 6px}
+.step{font-size:12px;color:var(--mut);margin:0 0 4px}
+.ptr{display:inline-block;font-size:11px;border:1px solid var(--line);border-radius:9px;padding:0 7px;margin-left:6px}
+.btn{font:600 12px system-ui;border:1px solid var(--line);background:var(--hov);color:var(--fg);border-radius:6px;padding:5px 10px;cursor:pointer;margin:8px 0 4px}
+.note{font-size:12.5px;color:var(--mut);margin:8px 0 0;max-width:760px}
+.rule{max-width:760px;background:var(--youbg);border-left:3px solid var(--you);padding:8px 12px;border-radius:0 6px 6px 0;margin:0 0 22px;font-size:13.5px}
+.pdec{margin-left:22px}.pdec .row{margin-left:0;--c:var(--you)}.pdec .tag{display:none}
+.pane.hovered{outline:2px solid var(--run)}
+
+.q{margin-bottom:0;border-radius:0;align-items:flex-start}.q span{white-space:normal;flex:1}
+.qa{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 4px 22px;padding:0 8px 6px 14px;background:var(--youbg);border-radius:0 0 6px 6px}
+.kc{display:none;margin-left:auto;font:11px ui-monospace,Menlo,monospace;color:var(--mut);border:1px solid var(--line);border-radius:5px;padding:1px 6px;background:var(--pbg)}
+.sess:focus-within .kc{display:inline-block}
+.warn{font:700 10.5px system-ui;color:#fff;background:var(--bad);border-radius:4px;padding:1px 5px;margin-right:5px}
+.b.d{border-color:var(--bad);color:var(--bad)}.b.r{background:var(--bad);border-color:var(--bad);color:#fff}
+.sess.sel .row{box-shadow:inset 0 0 0 1px var(--you)}
+.det{display:none;margin:0 0 4px 22px;padding:8px 10px;background:var(--youbg);border-top:1px dashed var(--line);border-radius:0 0 6px 6px;font-size:12px}
+.sess.open .det{display:block}.det p{margin:0 0 6px}.det code,.box code{display:block;background:var(--pbg);border:1px solid var(--line);border-radius:5px;padding:4px 7px;font:11.5px ui-monospace,Menlo,monospace;white-space:pre-wrap;margin:0 0 6px}
+.btns{display:flex;flex-wrap:wrap;gap:6px}.lab{font-size:11px;color:var(--mut);font-weight:600;margin:0 0 2px}
+.stage{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;position:relative;max-width:760px}
+.stage .pane{width:300px;flex:none}
+.main{flex:1;min-width:260px;min-height:400px;border:1px solid var(--line);border-radius:10px;background:var(--pbg);position:relative;display:flex;flex-direction:column;overflow:hidden}
+.mh{padding:8px 12px;border-bottom:1px solid var(--line);font-weight:600;font-size:13px}.mh i{font-style:normal;font-weight:400;color:var(--mut)}
+.mb{flex:1;padding:10px 12px;font-size:12.5px;color:var(--mut)}.mb p{margin:0 0 8px}
+.comp{margin:8px 12px 12px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--mut);font-size:12.5px}
+.card{display:none;margin:0 12px;border:1px solid var(--you);background:var(--youbg);border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--fg)}
+.card.on{display:block}.card h4{margin:0 0 6px;font-size:13px}.card p{margin:0 0 6px}
+.pop{display:none;position:absolute;z-index:9;width:290px;max-width:calc(100% - 16px);background:var(--pbg);color:var(--fg);border:1px solid var(--you);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);padding:10px 12px;font-size:12.5px;animation:none}
+.pop.on{display:block}.pop::before{content:"";position:absolute;left:-6px;top:var(--ay,14px);width:10px;height:10px;background:var(--pbg);border-left:1px solid var(--you);border-bottom:1px solid var(--you);transform:rotate(45deg)}
+.pop h4{margin:0 0 6px;font-size:13px}.pop p{margin:0 0 6px}.esc{float:right;font:11px ui-monospace,monospace;color:var(--mut);border:1px solid var(--line);border-radius:5px;padding:0 5px}
+.msg{font-size:12px;color:var(--ok);margin:6px 0 0;min-height:16px}
+.rec{max-width:760px;background:var(--hov);border-radius:6px;padding:8px 12px;margin:10px 0;font-weight:600}
+
+.draft{max-width:760px}.k{font:600 10px ui-monospace,Menlo,monospace;opacity:.8;margin-right:4px;border:1px solid currentColor;border-radius:3px;padding:0 3px}.k:empty{display:none}
+.sess{max-height:240px;transition:max-height .35s ease,opacity .3s ease,margin .35s ease}
+.sess.gone{max-height:0;opacity:0;overflow:hidden;margin:0;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.sess{transition:none}}
+.q.ok{color:var(--ok);background:var(--hov)}.q.ok+.qa{display:none}
+.dd{position:relative}.menu{display:none;position:absolute;z-index:8;left:0;top:26px;min-width:150px;background:var(--pbg);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.25);padding:3px}
+.menu.on{display:block}.menu button{display:flex;align-items:center;width:100%;border:0;background:none;color:var(--fg);font:12px system-ui;padding:5px 7px;border-radius:4px;cursor:pointer;text-align:left}.menu button:hover,.menu button:focus-visible{background:var(--hov)}
+.two{font:700 10.5px system-ui;color:#fff;background:var(--you);border-radius:9px;padding:1px 6px;margin-left:4px}
+.dn{margin:0 0 4px 22px;padding:6px 8px 7px 14px;background:var(--youbg);border-top:1px dashed var(--line);border-radius:0 0 6px 6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.dn input{flex:1 1 100%;font:12px system-ui;padding:4px 7px;border:1px solid var(--line);border-radius:5px;background:var(--pbg);color:var(--fg)}
+.dn input:focus{outline:2px solid var(--run);outline-offset:0}.b:disabled{opacity:.45;cursor:default}
+.main{min-height:300px}.card code{display:block;background:var(--pbg);border:1px solid var(--line);border-radius:5px;padding:4px 7px;font:11.5px ui-monospace,Menlo,monospace;white-space:pre-wrap;margin:0 0 6px}
+.card .hint{margin:6px 0 0}.it{margin:0 0 4px}.card .k{opacity:1}
+.term{max-width:760px;margin:0 0 10px;background:#0d1117;color:#e6edf3;border-radius:8px;padding:10px 12px;font:12px/1.5 ui-monospace,Menlo,monospace;white-space:pre-wrap}
+.sw .btn{margin:0 6px 0 0}.btn.on{background:var(--run);border-color:var(--run);color:#fff}
+.stage .pane.ph{width:250px}
+.sess:has(.menu.on){margin-bottom:105px}
+
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;max-width:760px;margin:0 0 20px;font-size:12.5px;color:var(--mut)}
+.flow span{border:1px solid var(--line);border-radius:9px;padding:2px 10px;background:var(--pbg)}.flow span.on{background:var(--you);border-color:var(--you);color:#fff}.flow i{font-style:normal}
+.sess .kc{display:block;flex-basis:100%;margin:0;white-space:nowrap;font-size:10.5px;text-align:left;border:0;padding:0 2px;background:none}.kc2{font:600 11px ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:9px;padding:1px 8px;color:var(--mut);background:var(--hov);vertical-align:2px}
+.bc{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--you);background:var(--youbg);color:var(--you);font:600 12px system-ui;padding:6px 12px;cursor:pointer}.bc[hidden]{display:none}
+.term2{flex:1;min-height:90px;max-height:150px;overflow:auto;margin:0;background:#0d1117;color:#e6edf3;padding:8px 12px;font:11.5px/1.5 ui-monospace,Menlo,monospace;white-space:pre-wrap}
+.ci{width:100%;box-sizing:border-box;margin-top:6px;font:12px system-ui;padding:4px 7px;border:1px solid var(--line);border-radius:5px;background:var(--pbg);color:var(--fg)}
+.qk{display:none;position:absolute;z-index:9;width:280px;background:var(--pbg);color:var(--fg);border:1px solid var(--you);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);padding:10px 12px;font-size:12.5px}
+.qk.on{display:block}.qk h4{margin:0 0 4px;font-size:13px}.qk p{margin:0 0 6px}.qk .why2{color:var(--mut)}.qk code{display:block;background:var(--hov);border:1px solid var(--line);border-radius:5px;padding:4px 7px;font:11.5px ui-monospace,Menlo,monospace;margin:0 0 6px}
+.stage{max-width:none}
+.row .tm{font-size:11px;color:var(--mut);flex:none}
+.q{margin:-3px 0 4px 22px;padding:3px 6px 4px 14px;align-items:center;gap:6px}
+.q:has(+.dn){margin-bottom:0;border-radius:0}
+.q .qt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.q .dd{flex:none;white-space:nowrap;overflow:visible}.q .dd .menu{left:auto;right:0}
+.q .b{padding:1px 8px}
+.ag{display:flex;align-items:center;gap:1px;flex:none}
+.ib{position:relative;width:22px;height:22px;display:grid;place-items:center;padding:0;border:1px solid transparent;border-radius:5px;background:none;color:var(--mut);cursor:pointer}
+.ib svg{width:14px;height:14px}.ib.al{color:var(--ok)}.ib.no{color:var(--bad)}.ib.eye{margin-left:4px}
+.ib:hover,.ib:focus-visible{background:var(--hov);border-color:var(--line)}.ib:focus-visible{outline:2px solid var(--run);outline-offset:1px}
+.ib[data-tip]::after{content:attr(data-tip);display:none;position:absolute;z-index:12;bottom:calc(100% + 5px);right:0;white-space:nowrap;background:var(--fg);color:var(--pbg);font:500 11px system-ui;padding:3px 7px;border-radius:5px;pointer-events:none}
+.ib:hover::after,.ib:focus-visible::after{display:block}
+.qk{width:auto;min-width:190px;max-width:260px;padding:8px 10px}
+.qk::before{content:"";position:absolute;left:-6px;top:14px;width:10px;height:10px;background:var(--pbg);border-left:1px solid var(--you);border-bottom:1px solid var(--you);transform:rotate(45deg)}
+.qk code{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0 0 4px}.qk .why2{margin:0 0 6px;font-size:12px}
+.qk .ag{justify-content:flex-end}.qk .b{padding:2px 8px}
+.coach{position:absolute;z-index:10;right:4px;top:calc(100% - 2px);width:236px;background:var(--pbg);color:var(--fg);border:1px solid var(--run);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);padding:9px 11px;font-size:12.5px}
+.coach::before{content:"";position:absolute;right:24px;top:-6px;width:10px;height:10px;background:var(--pbg);border-left:1px solid var(--run);border-top:1px solid var(--run);transform:rotate(45deg)}
+.coach p{margin:0 0 6px}.coach .why2{color:var(--mut);font-size:12px}
+.sess.coached .ag{outline:2px solid var(--run);outline-offset:2px;border-radius:6px}
+</style><body><svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="hand" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></g></symbol>
+<symbol id="ask" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.6L3 21l1.7-5A8.5 8.5 0 1 1 21 11.5z"/><path d="M9.6 9.2a2.5 2.5 0 0 1 4.8.9c0 1.6-2.4 2.1-2.4 3.4"/><path d="M12 16.6h.01" stroke-width="2.6"/></g></symbol>
+<symbol id="spin" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5" opacity=".25"/><circle class="arc" cx="12" cy="12" r="8.5" pathLength="100" stroke-dasharray="28 100"/></g></symbol>
+<symbol id="idle" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2.3"/><circle cx="6" cy="19" r="2.3"/><circle cx="18" cy="7" r="2.3"/><path d="M6 7.3v9.4"/><path d="M18 9.3c0 4.2-6.5 4-11.2 7.6"/></g></symbol>
+<symbol id="bad" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></g></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6h.01" stroke-width="2.6"/></g></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></g></symbol>
+<symbol id="chev" viewBox="0 0 10 10"><path d="M3.5 2l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol></defs></svg><h1>HIDEROWS r6 · 아이콘 버튼 행, 눈 아이콘 = 미리보기</h1>
+<p>행 아래 힌트 줄을 모두 없앴습니다. 행은 질문 한 줄과 아이콘 버튼(✓ 허용 · ⓘ 자세히 · ✕ 거절 · 눈 미리보기)뿐입니다. 번호 키 1·2·3과 Space는 그대로 동작하지만 화면에는 쓰지 않고, 마우스를 올리거나 포커스하면 "허용 (1)" 처럼 툴팁으로 알려 줍니다. 키는 처음 한 번 안내(5번)로 가르칩니다. 행에 포커스한 뒤 Space, Enter, 1, 2, 3, Esc.</p>
+<div class="flow" id="flow"><span data-f="0">첫 안내 (한 번)</span><i>→</i><span data-f="1">행 보기</span><i>→</i><span data-f="2">(눈 아이콘 · Space) 미리보기</span><i>→</i><span data-f="3">(ⓘ · Enter · 2) 패널</span><i>→</i><span data-f="4">(답 · Esc) 원래 세션</span></div>
+
+<section data-sec="1"><h2>1. 자세히 = 그 세션 패널로 이동</h2><p>행 클릭, ⓘ, Enter, 2 중 하나로 메인 창이 그 세션으로 바뀌고, 입력창 위에 결정 카드가 올라옵니다. 위의 터미널 출력은 스크롤해서 왜 묻는지 볼 수 있습니다. "다시 묻지 않기"는 이 카드에만 있습니다.</p>
+<div class="stage"><div class="pane" data-rows="cur,simple,cplx"></div><div class="main" data-main></div><div class="qk" role="dialog" aria-label="미리보기"></div></div><div class="msg" aria-live="polite"></div><button class="btn" data-reset>다시 시작</button></section>
+
+<section data-sec="2"><h2>2. 돌아가기</h2><p>카드가 열려 있는 동안 위에 "← lumen/feature-x 로 돌아가기 (⌘[)" 가 보입니다. 답하거나 Esc, ⌘[ (여기서는 Ctrl+[ 도 됨), 이 줄 클릭으로 처음 보던 세션에 돌아갑니다.</p>
+<div class="stage"><div class="pane" data-rows="cur,simple,risky"></div><div class="main" data-main></div><div class="qk" role="dialog" aria-label="미리보기"></div></div><div class="msg" aria-live="polite"></div><button class="btn" data-reset>다시 시작</button></section>
+
+<section data-sec="3"><h2>3. 눈 아이콘 / Space 미리보기</h2><p>행 오른쪽 끝의 눈 아이콘을 누르거나 행에서 Space: 세션을 바꾸지 않고 행 옆에 260px 이하의 작은 말풍선이 뜹니다. 명령 한 줄(길면 줄임, 마우스를 올리면 전체), 이유 한 줄, ✓ ✕ 아이콘만 있고 "다시 묻지 않기"는 없습니다. 위험한 행(sizing-v2)과 선택 질문·2건 행은 "패널에서 열기"만. Space 다시 또는 Esc 로 닫습니다.</p>
+<div class="stage"><div class="pane" data-rows="cur,simple,risky,cplx"></div><div class="main" data-main></div><div class="qk" role="dialog" aria-label="미리보기"></div></div><div class="msg" aria-live="polite"></div><button class="btn" data-reset>다시 시작</button></section>
+
+<section data-sec="4"><h2>4. r4에서 그대로: 거절 + 한 줄 지시, 같은 세션 2건</h2><p>✕는 선택 입력칸을 엽니다(Enter 보내기, Esc 취소). migrate-db 는 "2건"이라 행에 허용/거절이 없고, 열면 목록이 뜨며 "모두 허용"은 없습니다.</p>
+<div class="stage"><div class="pane" data-rows="cur,simple,multi"></div><div class="main" data-main></div><div class="qk" role="dialog" aria-label="미리보기"></div></div><div class="msg" aria-live="polite"></div><button class="btn" data-reset>다시 시작</button></section>
+
+<section data-sec="5"><h2>5. 처음 한 번 알려주기</h2><p>결정 행이 처음 나타날 때 한 번만, 아이콘 버튼과 눈 아이콘을 가리키는 안내 말풍선이 뜹니다. "알겠어요"를 누르거나 처음 답하면 다시는 뜨지 않습니다(실제 앱에서는 이 기기에 저장). 아래에서 "새 질문 도착"을 눌러 보세요. 이 안내는 이 5번 섹션에서만 보이고, 위 1~4번은 이미 안내를 마친 상태입니다.</p>
+<div class="stage"><div class="pane" data-rows="cur"></div><div class="main" data-main></div><div class="qk" role="dialog" aria-label="미리보기"></div></div><div class="msg" aria-live="polite"></div><button class="btn" data-arrive>새 질문 도착</button><button class="btn" data-reset>다시 시작</button>
+<p class="note">전체 단축키는 Settings &gt; 단축키 에서 언제든 볼 수 있습니다. 행 아래에는 키 힌트를 두지 않습니다.</p></section>
+
+<p class="foot">r5에서 바뀐 점: (1) 행 아래 힌트 줄과 Space 칩 삭제, 행은 질문 한 줄 + 아이콘 버튼. (2) 버튼은 ✓ ⓘ ✕, 선택 질문은 "선택 ▾" + ⓘ, 키는 툴팁에만 표시. (3) 맨 오른쪽 눈 아이콘 = 미리보기(Space). (4) 미리보기는 260px 이하 말풍선, 명령 한 줄 + 이유 한 줄 + ✓ ✕ (위험: 패널에서 열기만). (5) 패널 카드는 1 허용, 3 거절만 숫자 키, "다시 묻지 않기"는 마우스 전용. (6) 처음 한 번 안내와 Settings &gt; 단축키. 패널 이동, 돌아가기 ⌘[, 위험 행, 거절 + 한 줄 지시, "2건" 행은 r5 그대로입니다. 코디네이터에게 "이대로" 또는 바꿀 점을 알려 주세요.</p>
+<script>
+const $=(r,s)=>r.querySelector(s),$$=(r,s)=>[...r.querySelectorAll(s)];
+const OPT=['고치고 계속','건너뛰기','멈추기','직접 지시'],CUR='feature-x';
+const TERM={
+ 'feature-x':['$ cargo build','   Compiling nunchiro-core v0.3.1','   Compiling nunchiro-web v0.3.1','   … 3/12 crates'],
+ 'build-fix':['$ git diff --stat',' src/lib.rs | 4 ++--','Edited tests/smoke.rs: 사용하지 않는 import 제거','린트는 통과했습니다. 이제 전체 테스트로 확인하려 합니다.','왜 묻나: package.json 의 test 스크립트는 허용 목록에 없어서 매번 확인합니다.','Bash command: npm test'],
+ 'v2-theme':['$ cargo test','running 41 tests','test theme::dark_contrast ... FAILED','test theme::focus_ring ... FAILED','test theme::tokens ... FAILED','failures: 3, 원인: --line 토큰이 dark 에서 대비 3.1:1','토큰을 고칠지, 테스트 기준을 바꿀지 정해야 합니다.'],
+ 'sizing-v2':['$ du -sh build/','2.1G build/','오래된 산출물이 디스크를 차지합니다.','왜 묻나: 정리를 위해 build/ 를 통째로 지우려 합니다.','Bash command: rm -rf build/'],
+ 'migrate-db':['$ cat package.json','"dependencies": {}','스키마 검증을 위해 zod 가 필요합니다.','왜 묻나: 의존성 추가는 네트워크와 lockfile 을 바꿉니다.','Bash command: npm install zod']};
+const pad=n=>[...Array(8)].map((_,i)=>`[${String(i+1).padStart(2,'0')}] 이전 작업 로그 ${n} … ok`);
+const IB=(a,tip,sym,c='')=>`<button class="ib ${c}" data-a="${a}" data-tip="${tip}" aria-label="${tip}"><svg viewBox="0 0 24 24"><use href="#${sym}"/></svg></button>`;
+const PB=(p,key,tip,sym,c)=>`<button class="ib ${c}" data-p="${p}" data-key="${key}" data-tip="${tip}" aria-label="${tip}"><svg viewBox="0 0 24 24"><use href="#${sym}"/></svg></button>`;
+const AL=IB('allow','허용 (1)','i-check','al'),OP=IB('open','자세히 (2)','i-info'),DN=IB('deny','거절 (3)','i-x','no');
+const AG=x=>`<span class="ag">${x}${IB('peek','미리보기 (Space)','i-eye','eye')}</span>`;
+const COACH=`<div class="coach" role="note"><p><b>처음 한 번만 알려드려요</b></p><p>숫자 1·2·3으로 답하고, Space로 미리보기</p><p class="why2">Settings &gt; 단축키 에서 다시 볼 수 있어요.</p><button class="b y" data-coach>알겠어요</button></div>`;
+const IC=i=>`<span class="ic"><svg><use href="#${i}"/></svg></span>`;
+const S=(k,n,ic,q,t,qa,x='')=>`<div class="sess" data-k="${k}" data-n="${n}"><div class="row you" tabindex="0"><span class="n">${n}</span>${x}<span class="tm">${t}</span>${IC(ic)}</div><div class="q"><span class="qt" title="${q.replace(/<[^>]+>/g,'')}">${q}</span>${qa}</div></div>`;
+const ROW={
+ cur:()=>`<div class="sess" data-n="${CUR}"><div class="row run" tabindex="0"><span class="n">${CUR}</span>${IC('spin')}</div></div>`,
+ simple:()=>S('simple','build-fix','ask','npm test 실행 허용?','2분',AG(AL+OP+DN)),
+ cplx:()=>S('cplx','v2-theme','ask','테스트 3건 실패, 진행?','3분',AG(`<span class="dd"><button class="b y" data-a="pick">선택 ▾</button><div class="menu">${OPT.map((o,i)=>`<button data-o="${i}"><kbd class="k" style="opacity:1">${i+1}</kbd>${o}</button>`).join('')}</div></span>`+OP)),
+ risky:()=>S('risky','sizing-v2','hand','<b class="warn">주의</b>build/ 삭제 허용?','12분',AG(OP+DN)),
+ multi:()=>S('multi','migrate-db','ask','npm install zod 허용?','1분',AG(OP),'<span class="two">2건</span>')};
+const WHY={simple:['npm test','허용 목록에 없는 명령이라 묻습니다. 읽기만 합니다.'],risky:['rm -rf build/  (214개 파일)','build/ 통째 삭제, 되돌릴 수 없습니다.'],cplx:['cargo test  (3 failed)','선택지가 있어 패널에서 답합니다.'],multi:['npm install zod  +1건','2건이 대기 중입니다. 패널에서 확인.']};
+const CARD=(s)=>{const k=s.dataset.k,n=s.dataset.n,dn=`<input class="ci" placeholder="거절할 때 한 줄 지시 (선택)" aria-label="거절과 함께 보낼 한 줄 지시 (선택)">`;
+ if(k==='simple')return `<h4>${n} · 권한 요청</h4><p><b>무엇</b> npm test 실행 · <b>왜</b> 위 출력 마지막 줄 참고</p><code>npm test</code><div class="btns"><button class="b y" data-c="allow"><kbd class="k">1</kbd>허용</button><button class="b" data-c="always">다시 묻지 않기 (항상 허용)</button><button class="b d" data-c="deny"><kbd class="k">3</kbd>거절</button></div>${dn}<p class="hint">Esc 또는 ⌘[ 로 결정 없이 돌아가기 · "다시 묻지 않기"는 마우스로만</p>`;
+ if(k==='risky')return `<h4><b class="warn">주의</b>${n} · 삭제 명령</h4><p><b>무엇</b> build/ 통째 삭제 · <b>왜</b> 디스크 정리</p><code>rm -rf build/\n(214개 파일 삭제)</code><div class="btns"><button class="b d" data-c="deny"><kbd class="k">3</kbd>거절</button><button class="b r" data-c="rallow">허용 (포커스 후 Enter)</button></div>${dn}<p class="hint">허용은 클릭·숫자 키로 안 됩니다. 이 명령에 "다시 묻지 않기"는 없습니다.</p>`;
+ if(k==='cplx')return `<h4>${n} · 선택 필요</h4><p><b>무엇</b> 테스트 3건 실패 · <b>왜</b> theme 변경 뒤 깨짐</p><code>3 failed: theme::dark_contrast, theme::focus_ring, theme::tokens</code><div class="btns">${OPT.map((o,i)=>`<button class="b ${i?'':'y'}" data-c="opt" data-i="${i}"><kbd class="k">${i+1}</kbd>${o}</button>`).join('')}</div>`;
+ return `<h4>${n} · 대기 ${s._items.length}건</h4>${s._items.map((t,i)=>`<div class="it"><code>${t}</code><div class="btns"><button class="b y" data-c="m-allow" data-i="${i}">허용</button><button class="b" data-c="m-deny" data-i="${i}">거절</button></div></div>`).join('')}<p class="hint">"모두 허용"은 없습니다. 한 건씩 확인합니다.</p>`};
+const say=(sec,t)=>$(sec,'.msg').textContent=t;
+const flow=n=>$$(document,'#flow span').forEach(x=>x.classList.toggle('on',x.dataset.f==n));
+function recount(sec){$$(sec,'.pane').forEach(p=>{const c=$$(p,'.sess[data-k]:not(.gone)').length,e=$(p,'[data-cnt]');e.textContent=c;e.hidden=!c})}
+function show(sec,name){const m=$(sec,'[data-main]');sec._cur=name;$(m,'[data-t]').textContent='lumen/'+name;
+ const t=$(m,'.term2');t.textContent=pad(name).concat(TERM[name]||[]).join('\n');t.scrollTop=t.scrollHeight;
+ $$(sec,'.sess').forEach(x=>x.classList.toggle('sel',x.dataset.n===name))}
+function build(sec){$$(sec,'.pane[data-rows]').forEach(p=>{p.innerHTML=`<div class="proj"><svg class="ch" style="transform:rotate(90deg)"><use href="#chev"/></svg><span class="pn">lumen</span><span class="cnt you" data-cnt></span></div>`+p.dataset.rows.split(',').map(r=>ROW[r]()).join('')});
+ const m=$(sec,'[data-main]');m.innerHTML=`<button class="bc" hidden></button><div class="mh"><span data-t></span> <i>· 메인 창 (가짜)</i></div><div class="term2" tabindex="0" aria-label="에이전트 터미널 출력"></div><div class="card"></div><div class="comp">메시지 입력…</div>`;
+ sec._card=null;sec._ret=null;sec._coached=false;closePop(sec);show(sec,CUR);recount(sec)}
+function dismissCoach(sec){sec._coached=true;$$(sec,'.coach').forEach(c=>c.remove());$$(sec,'.coached').forEach(x=>x.classList.remove('coached'))}
+function arrive(sec){const p=$(sec,'.pane');$$(p,'.sess.gone').forEach(x=>x.remove());if($(p,'.sess[data-k]'))return;
+ p.insertAdjacentHTML('beforeend',ROW.simple());recount(sec);const s=$(p,'.sess[data-k]');
+ if(sec._coached)return say(sec,'이미 안내했으므로 이번에는 안내 없이 행만 나타납니다.');
+ s.classList.add('coached');s.insertAdjacentHTML('beforeend',COACH);flow(0);say(sec,'')}
+function openPanel(sec,s){closePop(sec);dismissCoach(sec);const m=$(sec,'[data-main]'),k=s.dataset.k;if(k==='multi')s._items=s._items||['npm install zod','cargo add serde'];
+ if(!sec._card)sec._ret=sec._cur;sec._card=s;show(sec,s.dataset.n);
+ const bc=$(m,'.bc');bc.hidden=false;bc.textContent=`← lumen/${sec._ret} 로 돌아가기 (⌘[)`;
+ const c=$(m,'.card');c.innerHTML=CARD(s);c.classList.add('on');flow(3);say(sec,'');
+ const f=$(c,k==='risky'?'[data-c=deny]':'[data-c]');f&&f.focus()}
+function leave(sec,msg){const s=sec._card;if(!s)return;const m=$(sec,'[data-main]');$(m,'.card').classList.remove('on');$(m,'.bc').hidden=true;
+ sec._card=null;show(sec,sec._ret);flow(4);say(sec,msg||`${sec._ret} 로 돌아왔습니다. 결정은 그대로 대기 중입니다.`);if(!s.classList.contains('gone'))$(s,'.row').focus()}
+function resolve(sec,s,t){dismissCoach(sec);const inCard=sec._card===s;s.classList.add('gone');closePop(sec);if(inCard)leave(sec,`${s.dataset.n}: ${t} → ${sec._ret} 로 돌아왔습니다.`);else say(sec,`${s.dataset.n}: ${t}`);recount(sec);if(inCard)flow(4)}
+function item(sec,s,i,t){const g=s._items.splice(i,1)[0];if(!s._items.length)return resolve(sec,s,`${g} ${t}, 2건 모두 처리됨`);
+ $(s,'.two')?.remove();$(s,'.qt').textContent=s._items[0]+' 허용?';openPanel(sec,s);say(sec,`${g} ${t}`)}
+function openDn(sec,s){if($(s,'.dn'))return;const d=document.createElement('div');d.className='dn';
+ d.innerHTML='<input placeholder="대신 이렇게 해 줘…" aria-label="거절과 함께 보낼 한 줄 지시 (선택)"><button class="b y" data-dn="send" disabled>보내기</button><button class="b" data-dn="plain">그냥 거절</button><span class="hint" style="flex:1">선택 사항 · Enter 보내기 · Esc 취소</span>';
+ $(s,'.q').after(d);$(d,'input').oninput=e=>$(d,'[data-dn=send]').disabled=!e.target.value.trim();$(d,'input').focus()}
+function closePop(sec){const p=$(sec,'.qk');if(p){p.classList.remove('on');p._s=null}}
+function togglePop(sec,s){const p=$(sec,'.qk');if(!p)return;dismissCoach(sec);if(p._s===s)return closePop(sec),s.querySelector('.row').focus();
+ const k=s.dataset.k,w=WHY[k],ok=k==='simple',st=$(sec,'.stage').getBoundingClientRect(),r=s.getBoundingClientRect(),pn=$(sec,'.pane').getBoundingClientRect();
+ p.innerHTML=`<code title="${w[0]}">${w[0]}</code><p class="why2">${w[1]}</p><div class="ag">${ok?PB('allow',1,'허용 (1)','i-check','al')+PB('deny',3,'거절 (3)','i-x','no'):'<button class="b y" data-p="open" data-key="2">패널에서 열기</button>'}</div>`;
+ p._s=s;p.classList.add('on');p.style.left=(pn.right-st.left+10)+'px';p.style.top=Math.max(0,r.top-st.top-4)+'px';flow(2)}
+document.addEventListener('click',e=>{
+ const sec=e.target.closest('section');if(!sec)return;
+ if(!e.target.closest('[data-a=pick]'))document.querySelectorAll('.menu.on').forEach(m=>m.classList.remove('on'));
+ if(e.target.closest('[data-reset]')){say(sec,'');flow(1);build(sec);return}
+ if(e.target.closest('[data-arrive]'))return arrive(sec);
+ if(e.target.closest('[data-coach]')){dismissCoach(sec);say(sec,'안내를 닫았습니다. 다음부터는 뜨지 않습니다.');return}
+ if(e.target.closest('.bc'))return leave(sec,`${sec._ret} 로 돌아왔습니다. 결정은 그대로 대기 중입니다.`);
+ const pb=e.target.closest('[data-p]');if(pb){const s=$(sec,'.qk')._s,a=pb.dataset.p;if(a==='open')return openPanel(sec,s);return resolve(sec,s,a==='allow'?'허용':'거절')}
+ const dn=e.target.closest('[data-dn]');
+ if(dn){const s=dn.closest('.sess'),v=$(s,'.dn input').value.trim();return resolve(sec,s,dn.dataset.dn==='send'?`거절 + 지시 "${v}" 를 에이전트에 보냄`:'거절 (지시 없음)')}
+ const o=e.target.closest('[data-o]');if(o)return resolve(sec,o.closest('.sess'),`"${OPT[+o.dataset.o]}" 선택`);
+ const c=e.target.closest('[data-c]');
+ if(c){const s=sec._card,a=c.dataset.c,i=+c.dataset.i,v=$(sec,'.ci')?.value.trim();
+  if(a==='allow')return resolve(sec,s,'허용');
+  if(a==='always')return resolve(sec,s,'허용 + 다시 묻지 않기 (이 명령 항상 허용 규칙 추가)');
+  if(a==='deny')return resolve(sec,s,v?`거절 + 지시 "${v}" 를 에이전트에 보냄`:'거절');
+  if(a==='opt')return resolve(sec,s,`"${OPT[i]}" 선택`);
+  if(a==='m-allow')return item(sec,s,i,'허용');
+  if(a==='m-deny')return item(sec,s,i,'거절');
+  if(a==='rallow'){c.focus();$(sec,'.card .hint').textContent='마우스 클릭으로는 허용되지 않습니다. 이 버튼에 포커스를 둔 채 Enter 를 누르세요.';return}}
+ const b=e.target.closest('[data-a]');
+ if(b){const s=b.closest('.sess'),a=b.dataset.a;
+  if(a==='pick')return $(s,'.menu').classList.toggle('on');
+  if(a==='open')return openPanel(sec,s);
+  if(a==='peek')return togglePop(sec,s);
+  if(a==='deny')return openDn(sec,s);
+  return resolve(sec,s,'허용')}
+ const r=e.target.closest('.row'),s=r&&r.closest('.sess[data-k]');if(s)openPanel(sec,s)});
+document.addEventListener('keydown',e=>{
+ const t=e.target,sec=t.closest&&t.closest('section');if(!sec)return;
+ if(e.key==='['&&(e.metaKey||e.ctrlKey)){e.preventDefault();return leave(sec)}
+ if(t.matches('.dn input')){const s=t.closest('.sess');if(e.key==='Enter'&&t.value.trim()){e.preventDefault();$(s,'[data-dn=send]').click()}else if(e.key==='Escape'){$(s,'.dn').remove();$(s,'.row').focus()}return}
+ if(t.matches('.ci')&&e.key==='Enter'){e.preventDefault();return $(sec,'[data-c=deny]').click()}
+ if(t.matches('input'))return;
+ const p=$(sec,'.qk');
+ if(e.key==='Escape'){if(p&&p._s){const s=p._s;closePop(sec);$(s,'.row').focus();return}const mn=$(sec,'.menu.on');if(mn){mn.classList.remove('on');return}return leave(sec,`Esc: ${sec._ret} 로 돌아왔습니다. 결정은 그대로 대기 중입니다.`)}
+ if(t.dataset&&t.dataset.c==='rallow'&&e.key==='Enter'){e.preventDefault();return resolve(sec,sec._card,'위험 허용 (포커스 + Enter)')}
+ if(p&&p._s&&(e.key===' '||/^[123]$/.test(e.key))){e.preventDefault();if(e.key===' ')return togglePop(sec,p._s);const b=$(p,`[data-key="${e.key}"]`);if(b)b.click();else if(e.key==='2')openPanel(sec,p._s);return}
+ if(t.matches('.row')&&e.key===' '){const s=t.closest('.sess[data-k]');if(s){e.preventDefault();return togglePop(sec,s)}}
+ if(t.matches('.row')&&e.key==='Enter'){const s=t.closest('.sess[data-k]');if(s){e.preventDefault();return openPanel(sec,s)}}
+ if(!/^[1-9]$/.test(e.key))return;
+ if(sec._card&&t.closest('.main')){const k=$$(sec,'.card .k').find(k=>k.textContent===e.key);k&&k.closest('button').click();return}
+ const s=t.closest('.sess[data-k]');if(!s)return;
+ const mn=$(s,'.menu.on');if(mn){const o=$(mn,`[data-o="${+e.key-1}"]`);o&&o.click();return}
+ const a={1:'allow',2:'open',3:'deny'}[e.key],b=a&&$(s,`.ag [data-a="${a}"]`);if(b){e.preventDefault();b.click()}});
+document.querySelectorAll('section[data-sec]').forEach(build);flow(1);document.querySelectorAll('section[data-sec]:not([data-sec="5"])').forEach(dismissCoach);
+</script></html>

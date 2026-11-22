@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Claude fixture with the 2.1.310 model picker (meta+p): records every stdin read, no model calls.
+
+Screen texts follow the installed binary's strings: "Select model", "Type to search", "<Level> effort",
+"s to use this session only", "Set model to <Label> for this session only". `--fixture-picker=newer`
+draws an unrecognised picker; `--fixture-placeholder` shows Claude's `Try "…"` placeholder."""
+import json, os, signal, sys, time, tty
+
+if '--version' in sys.argv:
+    print('2.1.310 (Claude Code)')
+    raise SystemExit
+args = sys.argv[1:]
+home = os.environ['NUNCHIRO_HOME']
+log = open(os.path.join(home, 'stdin-' + os.environ['NUNCHIRO_SESSION'] + '.log'), 'a')
+log.write('LAUNCH ' + json.dumps(args) + '\n')
+log.flush()
+if '--fixture-token' in args:  # lets a test call the core as this session
+    open(os.path.join(home, 'token-' + os.environ['NUNCHIRO_SESSION']), 'w').write(os.environ['NUNCHIRO_TOKEN'])
+newer = '--fixture-picker=newer' in args
+placeholder = '--fixture-placeholder' in args
+slow = '--fixture-slow' in args  # redraws 400 ms after each key, like a busy terminal
+# W35: like Claude, a conversation is on disk only after its first finished turn (a submit here); with
+# `--fixture-strict-resume` a `--resume` of one that is not exits as Claude does.
+sid = args[args.index('--resume') + 1] if '--resume' in args else args[args.index('--session-id') + 1] if '--session-id' in args else ''
+if '--fixture-strict-resume' in args and '--resume' in args and not os.path.exists(os.path.join(home, 'conv-' + sid)):
+    print(f'No conversation found with session ID: {sid}')
+    raise SystemExit(1)
+
+MODELS = ['Default (recommended)', 'Fable', 'Opus', 'Sonnet', 'Haiku']
+EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
+model = args[args.index('--model') + 1].capitalize() if '--model' in args else 'Default (recommended)'
+effort = args[args.index('--effort') + 1] if '--effort' in args else 'medium'
+typed, note, picker = '', '', None
+
+
+def transcript(records):
+    root = os.environ.get('CLAUDE_CONFIG_DIR') or os.path.join(os.environ['HOME'], '.claude')
+    folder = os.path.join(root, 'projects', ''.join(c if c.isascii() and c.isalnum() else '-' for c in os.getcwd()))
+    os.makedirs(folder, exist_ok=True)
+    with open(os.path.join(folder, sid + '.jsonl'), 'a') as f:
+        for r in records:
+            stamp = time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime()) + '.000Z'
+            f.write(json.dumps({**r, 'uuid': os.urandom(8).hex(), 'timestamp': stamp, 'sessionId': sid}) + '\n')
+# W35 round 5: the mode Claude starts in, from its own flags; `--fixture-footer` draws it under the box as Claude does
+# (a test moves it with a mode-<session> file).
+named = next((a.split('=', 1)[1] for a in args if a.startswith('--permission-mode=')), None)
+if '--permission-mode' in args:
+    named = args[args.index('--permission-mode') + 1]
+start_mode = {'acceptEdits': 'accept edits', 'bypassPermissions': 'bypass permissions', 'plan': 'plan', 'auto': 'auto'}.get(
+    named, 'bypass permissions' if '--dangerously-skip-permissions' in args else 'manual')
+# W35 picker: Claude draws ↯ under its box while fast mode is on (here: `fastMode` in the --settings file).
+fast = '--settings' in args and json.load(open(args[args.index('--settings') + 1])).get('fastMode') is True
+
+
+def fast_notice():
+    path = os.path.join(home, 'fast-' + os.environ['NUNCHIRO_SESSION'])
+    return open(path).read().strip() if os.path.exists(path) else ''
+
+
+def draw():
+    out = ['\x1b[2J\x1b[H', f'MODEL:{model} EFFORT:{effort}\r\n']
+    if picker is None:
+        if note:
+            out.append(note + '\r\n')
+        rule = '─' * os.get_terminal_size(1).columns  # v1a-24: Claude 2.1.310 frames its input box with rules
+        out.append(rule + '\r\n❯ ' + (typed or ('Try "fix lint errors"' if placeholder else '')) + '\r\n' + rule + '\r\n')
+        # Ticket 1010: Claude 2.1.330's fast mode notice, as a test wrote it in fast-<session>, in the footer as Claude
+        # draws it: a pause ("... · resets in 5m") dims the ↯, a refusal ("Fast mode disabled · ...") turns fast mode off.
+        notice = fast_notice()
+        paused = ' in ' in notice
+        if fast and (paused or not notice.startswith('Fast mode')):
+            out.append('  Opus 5.5 ' + ('\x1b[2m\u21af\x1b[22m' if paused else '\u21af') + '\r\n')
+        # W35: the footer's permission mode, as a test set it in mode-<session> (Claude draws it under its box).
+        mode_file = os.path.join(home, 'mode-' + os.environ['NUNCHIRO_SESSION'])
+        if os.path.exists(mode_file) or '--fixture-footer' in args:
+            out.append('  \u23f8 ' + (open(mode_file).read().strip() if os.path.exists(mode_file) else start_mode) + ' mode on (shift+tab to cycle)'
+                       + ('      ' + notice if notice else '') + '\r\n')
+        elif notice:
+            out.append('  ' + notice + '\r\n')
+    elif newer:
+        out.append('Choose a model\r\n  [Sonnet] [Opus]\r\n')
+    else:
+        out.append('Select model\r\nSwitch between Claude models. Your pick becomes the default for new sessions.\r\n\r\n')
+        for i, m in enumerate(MODELS):
+            cur = '❯' if i == picker['focus'] and not picker['search'] else ' '
+            mark = ' ✔' if m == model else ''
+            out.append(f' {cur} {i + 1}. {m}{mark}   {m} description\r\n')
+        e = picker['effort']
+        out.append(f'\r\n◐ {"xHigh" if e == "xhigh" else e.capitalize()} effort ← → to adjust\r\n\r\n')
+        if picker['search']:
+            out.append('Type to search · Enter to set as default · ↓ to list · Esc to cancel\r\n')
+        else:
+            out.append('Enter to set as default · s to use this session only · Esc to cancel\r\n')
+    sys.stdout.write(''.join(out))
+    sys.stdout.flush()
+
+
+tty.setraw(0)
+signal.signal(signal.SIGWINCH, lambda *_: draw())  # like Claude: a resize redraws the screen
+# Ticket 1010: Claude draws a notice by itself, with no key pressed: a changed fast-<session> file redraws.
+drawn_notice = fast_notice()
+
+
+def notice_tick(*_):
+    global drawn_notice
+    if fast_notice() != drawn_notice:
+        drawn_notice = fast_notice()
+        draw()
+
+
+signal.signal(signal.SIGALRM, notice_tick)
+signal.setitimer(signal.ITIMER_REAL, 0.2, 0.2)
+draw()
+while True:
+    data = os.read(0, 1024)  # retried by Python after SIGWINCH (PEP 475)
+    if not data:
+        break
+    log.write('READ ' + data.hex() + '\n')
+    log.flush()
+    if picker is None:
+        if data == b'\x1bp':
+            picker = {'focus': MODELS.index(model), 'search': True, 'effort': effort}
+        elif data == b'\r':
+            note, typed = f'SUBMIT:{typed}', ''
+            # W35: Claude 2.1.329's own answers to /effort ultracode (`--fixture-no-workflows`: its refusal).
+            said = note.replace('\x1b[200~', '').replace('\x1b[201~', '').rstrip('\r')  # a paste, an Enter typed with it
+            if said in ('SUBMIT:/effort ultracode on', 'SUBMIT:/effort ultracode off'):
+                on = said.endswith(' on')
+                note += '\r\n  \u23bf  ' + ('Ultracode needs dynamic workflows turned on (see /config). Options: low, medium, high, xhigh, max, auto'
+                                           if on and '--fixture-no-workflows' in args else
+                                           f'Ultracode on (this session only): dynamic workflows on every task. Effort stays {effort}.' if on else
+                                           f'Ultracode off. Effort stays {effort}.')
+            if sid:
+                open(os.path.join(home, 'conv-' + sid), 'w').close()
+            # W35 look v23 S2-1: `--fixture-transcript` writes Claude 2.1.329's records: a prompt and its reply, or a slash
+            # command line and its local answer (no model turn, no Stop).
+            if '--fixture-transcript' in args and sid:
+                line = said[len('SUBMIT:'):]
+                if line.startswith('/'):
+                    name, _, rest = line[1:].partition(' ')
+                    answer = note.split('\u23bf  ', 1)[1] if '\u23bf  ' in note else ''
+                    records = [f'<command-name>/{name}</command-name>\n<command-message>{name}</command-message>\n<command-args>{rest}</command-args>',
+                               f'<local-command-stdout>{answer}</local-command-stdout>']
+                    transcript([{'type': 'user', 'message': {'role': 'user', 'content': r}} for r in records])
+                else:
+                    transcript([{'type': 'user', 'message': {'role': 'user', 'content': line}},
+                                {'type': 'assistant', 'effort': effort, 'message': {'role': 'assistant', 'model': 'claude-opus-5-5', 'stop_reason': 'end_turn',
+                                                                  'content': [{'type': 'text', 'text': 'ok'}]}}])
+        elif data == b'\x7f':
+            typed = typed[:-1]
+        elif data != b'\x1b':
+            typed += data.decode(errors='replace')
+    elif data == b'\x1b':
+        picker = None
+    elif data == b'\r':
+        note, picker = 'SAVED DEFAULT (must never happen)', None
+    elif picker['search']:
+        if data == b'\x1b[B':
+            picker['search'] = False
+        else:
+            note, picker = 'SEARCH TYPED (must never happen)', None
+    elif data in (b'\x1b[A', b'\x1b[B'):
+        picker['focus'] = max(0, min(len(MODELS) - 1, picker['focus'] + (1 if data == b'\x1b[B' else -1)))
+        picker['effort'] = 'medium'
+    elif data in (b'\x1b[C', b'\x1b[D'):
+        i = EFFORTS.index(picker['effort']) + (1 if data == b'\x1b[C' else -1)
+        picker['effort'] = EFFORTS[max(0, min(len(EFFORTS) - 1, i))]
+    elif data == b's':
+        model, effort = MODELS[picker['focus']], picker['effort']
+        note, picker = f'Set model to {model} for this session only with {effort} effort', None
+    if slow:
+        time.sleep(0.4)
+    draw()

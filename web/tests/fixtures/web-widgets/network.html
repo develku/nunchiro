@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>network per approved host</title></head>
+<body>
+<script>
+// Approved: api.nunchiro.test and img.nunchiro.test (plus 127.0.0.1 and localhost, which the core drops).
+function r(v) { parent.postMessage({ type: 'fixture', result: v }, '*'); }
+function get(tag, url) {
+  fetch(url, { mode: 'cors' }).then(function (x) { return x.text(); }).then(function (t) { r(tag + ' ' + t); }, function () { r(tag + ' blocked'); });
+}
+get('api', 'https://api.nunchiro.test/data');
+get('other', 'https://other.nunchiro.test/data');
+get('http', 'http://api.nunchiro.test/data');
+get('https-loopback', 'https://127.0.0.1:{{CANARY}}/x');
+get('http-loopback', 'http://127.0.0.1:{{CANARY}}/x');
+get('localhost', 'https://localhost:{{CANARY}}/x');
+try {
+  var w = new WebSocket('wss://api.nunchiro.test/ws');
+  w.onopen = function () { r('wss reached'); };
+  w.onerror = function () { r('wss blocked'); };
+} catch (e) { r('wss blocked'); }
+var i = new Image();
+i.onload = function () { r('img loaded'); };
+i.onerror = function () { r('img blocked'); };
+i.src = 'https://img.nunchiro.test/pixel.png';
+var j = new Image();
+j.onload = function () { r('other-img loaded'); };
+j.onerror = function () { r('other-img blocked'); };
+j.src = 'https://other.nunchiro.test/pixel.png';
+</script>
+</body></html>
