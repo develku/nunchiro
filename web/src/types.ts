@@ -32,6 +32,7 @@ export interface Decision {
 export type OwnerAsk =
   | { type: 'approval'; subject: 'widget' | 'source'; name: string; level: 'read' | 'act'; hash: string }
   | { type: 'permission_answers'; project: string }
+  | { type: 'lead_accounts' } // owner 2026-11-25: "Leads may use any of my accounts", asked by a session
   // Ticket 259: a new worktree's repo setup script (`orca.yaml`) waits for approval in the setup sheet.
   | { type: 'setup'; path: string; hash: string }
   // Needs 225: an agent's ask to use one Codex reset ticket; `folder` null is "Your own". Allow or Deny, window only.
@@ -42,6 +43,8 @@ export type OwnerAsk =
   | { type: 'role'; role: { name: string; job: string; kind: string; model?: string; effort?: string; writes: boolean }; why: string; place: string }
   // Home view change 4: the Home lead (`from`) asks to give the lead (teammate id) of `place` a goal; Send or Not now.
   | { type: 'goal'; place: string; lead: string; from: string; text: string }
+  | { type: 'session_close'; from?: string; target: string; label: string; place: string; why: string } // ticket 1113
+  | { type: 'cap'; place: string; was: number; cap: number; why: string } // ticket 1099 panel 4
   // Ticket 1004: the core's own card for a stalled task (two check-ins of its seats with nothing moved, or the same
   // error three times). `seat` is the name of the seat that checked in last (`session_id` its session); deny dismisses.
   | { type: 'stall'; task: string; title: string; place: string; seat: string; error?: string }

@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
-import { type Core, REPO, agentsZone, expect, openWindow, test } from './fixtures';
+import { type Core, REPO, stripOnTop, expect, openWindow, test } from './fixtures';
 import { append, chat, openChat, rec, test as chatTest } from './fixtures/chat/harness';
 import { defaultBars } from '../src/layout/bars';
 import { icon, startEdit } from './d5b';
@@ -93,7 +93,7 @@ test('layout A/B: edit library and nested subviews', async ({ app, core }) => {
   core.cli('session', 'close', core.shell(p, 'docs-1028h').id);
   core.shell(core.project('lumen'), 'backtest-v3');
   openQuiet(core, 'nunchiro', 'lumen');
-  const bars = { ...defaultBars(), nest: { [p]: ['agents', 'files'] }, open: { [`${p}::agents`]: true } };
+  const bars = { ...defaultBars(), nest: { [p]: ['files'] }, open: { [`${p}::files`]: true } };
   await app.addInitScript((b) => localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ bars: b })), bars);
   await patchSnapshots(app, { 'ux-fix-2': { waiting: 'permission', text: 'cargo test --workspace' }, 'layout-d5': { working: true }, 'backtest-v3': { working: true } });
   await openWindow(app);
@@ -308,7 +308,7 @@ test('CHAT-STOP: same working turn, queued text and Stop', async ({ app, core })
 });
 
 test('Undo: clear two done sessions, live status action', async ({ app, core }) => {
-  agentsZone(core);
+  stripOnTop(core);
   const p = core.project('nunchiro');
   for (const name of ['ux-fix-2', 'layout-d5']) core.cli('session', 'close', core.shell(p, name).id);
   core.shell(p, 'docs-1028h');

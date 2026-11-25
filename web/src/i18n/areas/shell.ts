@@ -11,7 +11,6 @@ declare module '../index' {
     'shell.menu.iconSplit': true;
     'shell.status.staleTip': true;
     'shell.widget.tree': true;
-    'shell.widget.agents': true;
     'shell.widget.waiting': true;
     'shell.widget.terminal': true;
     'shell.widget.composer': true;
@@ -22,6 +21,23 @@ declare module '../index' {
     'shell.widget.preview': true;
     'shell.widget.artifacts': true;
     'shell.widget.decisions': true;
+    'shell.widget.context': true;
+    'shell.context.used': true;
+    'shell.context.source': true;
+    'shell.context.none': true;
+    'shell.context.agent': true;
+    'shell.context.remote': true;
+    'shell.context.noTurn': true;
+    'shell.context.noWindow': true;
+    'shell.context.show': true;
+    'shell.context.refresh': true;
+    'shell.context.reading': true;
+    'shell.context.note': true;
+    'shell.context.asOf': true;
+    'shell.context.unread': true;
+    'shell.context.onlyClaude': true;
+    'shell.context.idle': true;
+    'shell.context.asking': true;
     'shell.widget.settings': true;
     'shell.widget.layout': true;
     'shell.widget.browser': true;
@@ -74,7 +90,6 @@ export const en = {
   'shell.status.staleTip': 'Jump to a stale session',
   // V2.5-54 A12: the rails, their tooltips and the zone tab strip follow the language (English kind ids stay searchable).
   'shell.widget.tree': 'Tree',
-  'shell.widget.agents': 'Agents',
   'shell.widget.waiting': 'Answer strip',
   'shell.widget.terminal': 'Terminal',
   'shell.widget.composer': 'Composer',
@@ -85,6 +100,25 @@ export const en = {
   'shell.widget.preview': 'Preview',
   'shell.widget.artifacts': 'Artifacts',
   'shell.widget.decisions': 'Decisions',
+  'shell.widget.context': 'Context', // ticket 1048: English only until the ticket 1035 pass
+  // Ticket 1048 (Context widget): English only until the ticket 1035 pass.
+  'shell.context.used': '{pct}% used',
+  'shell.context.source': 'From the last response',
+  'shell.context.none': 'No session in view.',
+  'shell.context.agent': 'Not available: this agent does not report its context.',
+  'shell.context.remote': 'Not available: the context of a session on another machine is not read.',
+  'shell.context.noTurn': "No number yet: it appears after the agent's first response.",
+  'shell.context.noWindow': 'No number: {model} did not report its context window.',
+  // Ticket 1059 (the breakdown on request): English only until the ticket 1035 pass.
+  'shell.context.show': 'Show breakdown',
+  'shell.context.refresh': 'Refresh',
+  'shell.context.reading': 'Reading…',
+  'shell.context.note': 'Sends /context to the agent. It adds a short note (about 1 to 2 thousand tokens) to the conversation.',
+  'shell.context.asOf': 'As of {time}',
+  'shell.context.unread': 'Could not read the breakdown.',
+  'shell.context.onlyClaude': 'Only for a Claude session on this Mac.',
+  'shell.context.idle': 'Available when the agent is idle.',
+  'shell.context.asking': 'Not now: a question waits for an answer.',
   'shell.widget.settings': 'Settings',
   'shell.widget.layout': 'Layout',
   'shell.widget.browser': 'Browser',
@@ -140,7 +174,6 @@ export const ko = {
   'shell.status.staleTip': "멈춘 세션으로 이동",
   // V2.5-54 A12: the rails, their tooltips and the zone tab strip follow the language (English kind ids stay searchable).
   'shell.widget.tree': '트리',
-  'shell.widget.agents': '에이전트',
   'shell.widget.waiting': '답변 띠',
   'shell.widget.terminal': '터미널',
   'shell.widget.composer': '입력창',
@@ -204,7 +237,6 @@ export const ja = {
   'shell.status.staleTip': "停滞中のセッションへ移動",
   // V2.5-54 A12: the rails, their tooltips and the zone tab strip follow the language (English kind ids stay searchable).
   'shell.widget.tree': 'ツリー',
-  'shell.widget.agents': 'エージェント',
   'shell.widget.waiting': "回答ストリップ",
   'shell.widget.terminal': 'ターミナル',
   'shell.widget.composer': '入力欄',
@@ -268,7 +300,6 @@ export const zhHans = {
   'shell.status.staleTip': '跳到停滞的会话',
   // V2.5-54 A12: the rails, their tooltips and the zone tab strip follow the language (English kind ids stay searchable).
   'shell.widget.tree': '树',
-  'shell.widget.agents': '代理',
   'shell.widget.waiting': "回答栏",
   'shell.widget.terminal': '终端',
   'shell.widget.composer': '输入框',
@@ -332,7 +363,6 @@ export const zhHant = {
   'shell.status.staleTip': '跳到停滯的工作階段',
   // V2.5-54 A12: the rails, their tooltips and the zone tab strip follow the language (English kind ids stay searchable).
   'shell.widget.tree': '樹狀清單',
-  'shell.widget.agents': "代理",
   'shell.widget.waiting': '回答列',
   'shell.widget.terminal': '終端',
   'shell.widget.composer': '輸入框',
@@ -396,7 +426,6 @@ export const es = {
   'shell.status.staleTip': 'Ir a una sesión estancada',
   // V2.5-54 A12: the rails, their tooltips and the zone tab strip follow the language (English kind ids stay searchable).
   'shell.widget.tree': 'Árbol',
-  'shell.widget.agents': 'Agentes',
   'shell.widget.waiting': "Franja de respuestas",
   'shell.widget.terminal': 'Terminal',
   'shell.widget.composer': "Campo de escritura",
@@ -460,7 +489,6 @@ export const fr = {
   'shell.status.staleTip': "Aller à une session immobile",
   // V2.5-54 A12: the rails, their tooltips and the zone tab strip follow the language (English kind ids stay searchable).
   'shell.widget.tree': 'Arborescence',
-  'shell.widget.agents': 'Agents',
   'shell.widget.waiting': "Bande de réponse",
   'shell.widget.terminal': 'Terminal',
   'shell.widget.composer': 'Zone de saisie',
@@ -524,7 +552,6 @@ export const pt = {
   'shell.status.staleTip': 'Ir para uma sessão parada',
   // V2.5-54 A12: the rails, their tooltips and the zone tab strip follow the language (English kind ids stay searchable).
   'shell.widget.tree': 'Árvore',
-  'shell.widget.agents': 'Agentes',
   'shell.widget.waiting': "Faixa de respostas",
   'shell.widget.terminal': 'Terminal',
   'shell.widget.composer': "Caixa de mensagem",

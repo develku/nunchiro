@@ -3,13 +3,20 @@
 // CoreContent, the bytes come only from the real core's `file_read` reply (HTML or SVG text, never over 2 MB), and
 // the id is stable for `(root, path)` so a reopened file keeps its id while its bytes keep their hash.
 import crypto from 'node:crypto';
-import type { Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import type { artifactServer } from '../../../sandbox-server';
 
 type Art = Awaited<ReturnType<typeof artifactServer>>;
 
 export const idFor = (root: string, path: string) =>
   'f' + crypto.createHash('sha256').update(`nunchiro-file-artifact-v1\0${root.length}:${root}${path}`).digest('hex').slice(0, 32);
+
+/** Ticket 1088: an HTML or SVG card is one line by default; its chevron (any language) shows the frame in place. */
+export async function showFrame(card: Locator) {
+  await card.locator('.af-chip.fold').click();
+  await expect(card).toHaveClass(/\bframe\b/);
+  await expect(card).not.toHaveAttribute('data-state', 'loading');
+}
 
 export async function installHost(page: Page, art: Art, opened: string[] = []) {
   // The dev page's own CSP allows frames from 'self' only (the app's adds the artifact scheme), so frames load from

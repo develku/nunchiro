@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useState } from 'react';
 import type { T } from '../i18n';
 import { useHtmlLangT } from '../i18n/lib/useHtmlLangT';
 import { zoneLabel } from './LayoutView';
-import { PSEUDO, refuses, targetAt, WIDGET_LABEL, type BarDrop, type Side } from './bars';
+import { HISTORY, PSEUDO, refuses, targetAt, WIDGET_LABEL, type BarDrop, type Side } from './bars';
 import { apply, edgeSize, find, isLeaf, kindOf, MIN, minOf, pinOf, TITLE, type Dir, type Item, type Layout, type Measure, type Op } from './model';
 import { rawError } from '../errors';
 
@@ -71,7 +71,8 @@ function hitAt(x: number, y: number, src: DragSource, layout: Layout, t: T): Dro
   const kind = kindOf(src.widget);
   // Settings, Layout and Browser are bar icons, not widgets: no zone takes them. Before this check a drag that crossed
   // the main area read MIN of a kind that has none and the window crashed blank (v25-fix-layout, the owner finding 2).
-  if (PSEUDO.includes(src.widget)) {
+  // Ticket 1073: History is the same kind of bar icon (its view covers a sidebar; it has no zone form).
+  if (PSEUDO.includes(src.widget) || src.widget === HISTORY) {
     const reason = t('leftovers.drag.staysOnBar', { name: WIDGET_LABEL(src.widget) });
     return { landing: { type: 'refuse', reason }, rect: box(root), what: t('leftovers.drag.mainArea'), sizes: '', error: reason };
   }

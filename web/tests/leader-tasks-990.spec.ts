@@ -192,7 +192,8 @@ test('team_places (990, owner 11-17): the Team view lives in one place at a time
   const wide = app.locator('.pane > .teamv');
   await expect(wide).toHaveAttribute('data-wide');
   await expect(wide.getByRole('tablist')).toHaveCount(0);
-  await expect(wide.locator('.teamv-tasks .lead-row[data-task]')).toHaveCount(6);
+  // Ticket 1115 step 2: the tab shows one card per task, the two closed today too (the side keeps its rows).
+  await expect(wide.locator('.teamv-tasks .tcard[data-task]')).toHaveCount(8);
   await expect(wide.locator('.teamv-room .room-log')).toBeVisible();
   await expect(wide.locator('.teamv-room .room-side')).toBeHidden(); // its seats column repeats the Tasks part
   // The room's composer fits its row: the text box takes the free width, Send stays whole.
@@ -327,26 +328,28 @@ plain('team_task_state_follows_the_seats (q67 look L10-2): a task read "idle" a 
   expect(nowState(task({ state: 'asked', asking: ['b'] }), seen(true, true)).state).toBe('review'); // another seat's work still reads
 });
 
-test('lead_way (990 i): the lead\'s composer has the way chip; its menu sets the way and what seats may do, shows the stored value and says who grants permissions; no other seat has it', async ({ app, core }) => {
-  const { ids, asked } = await taskScene(app, core);
-  const chip = app.locator('.composer .way-chip, .cbox .way-chip').first();
-  await expect(chip).toHaveText('Mode: build + review ▾');
-  await chip.click();
-  const menu = app.getByRole('menu', { name: 'Working mode of this project' });
-  await expect(menu.getByRole('group', { name: 'Working mode' }).getByRole('menuitemradio')).toHaveCount(3);
-  await expect(menu.getByRole('menuitemradio', { name: /^build \+ review/ }).first()).toHaveAttribute('aria-checked', 'true');
-  await expect(menu.getByRole('menuitemradio', { name: 'Ask before each edit and command' })).toHaveAttribute('aria-checked', 'true');
-  await expect(menu).toContainText('A role has no permissions of its own. The project gives them.');
-  await menu.getByRole('menuitemradio', { name: /^build only/ }).click();
-  await expect(chip).toHaveText('Mode: build only ▾');
-  await chip.click();
-  await menu.getByRole('menuitemradio', { name: 'Edit files without asking; commands still ask' }).click();
-  await chip.click();
-  await expect(menu.getByRole('menuitemradio', { name: 'Edit files without asking; commands still ask' })).toHaveAttribute('aria-checked', 'true');
+test('lead_way (990 i, 1053, 1099): the day-one card says the way in one sentence and Change opens Settings > Team > How this place works, which sets the way and what seats may do, shows the stored value and says who grants permissions; the lead\'s composer has no way chip', async ({ app, core }) => {
+  const { ids, asked } = await taskScene(app, core, false, { none: true });
+  const card = (await openTeam(app)).locator('[data-way-card]');
+  await expect(card.locator('[data-way-line]')).toHaveText('Reviewers check each task automatically · Change');
+  await expect(card.locator('.way-pill')).toHaveCount(0);
+  await card.getByRole('button', { name: 'Change' }).click();
+  const sec = app.locator('.settings .place-sec');
+  await expect(sec.getByRole('heading')).toContainText('How this place works');
+  const way = sec.getByRole('radiogroup', { name: 'Way of working' });
+  await expect(way.getByRole('radio')).toHaveCount(3);
+  await expect(way.getByRole('radio', { name: 'Build + review' })).toBeChecked();
+  await expect(sec.getByRole('radiogroup', { name: 'What seats may do' }).getByRole('radio', { name: 'Ask first' })).toBeChecked();
+  await expect(sec).toContainText('Seats ask you before each edit and command.'); // 1099: the mockup's sentence; who grants: "Only you change these."
+  await expect(sec).toContainText('Only you change these.');
+  await way.getByRole('radio', { name: 'Build only' }).click();
+  await sec.getByRole('radiogroup', { name: 'What seats may do' }).getByRole('radio', { name: 'Edit files' }).click();
+  await expect.poll(() => asked.filter((r) => r.operation === 'way' || r.operation === 'grant').map((r) => [r.operation, r.text])).toEqual([['way', 'solo'], ['grant', 'edits']]);
   await app.keyboard.press('Escape');
-  await expect(menu).toHaveCount(0);
-  expect(asked.filter((r) => r.operation === 'way' || r.operation === 'grant').map((r) => [r.operation, r.text])).toEqual([['way', 'solo'], ['grant', 'edits']]);
-  // Another seat of the place has no chip.
+  await expect(sec).toHaveCount(0);
+  // 1053: no way chip in the lead's composer row, nor in another seat's.
+  await expect(app.locator('.composer, .cbox').first()).toBeVisible();
+  await expect(app.locator('.composer .way-chip, .cbox .way-chip')).toHaveCount(0);
   await app.locator(`.tab[data-tab="${ids.search}"]`).click();
   await expect(app.locator('.way-chip')).toHaveCount(0);
 });
@@ -361,8 +364,21 @@ test('lead_day_one (990 i): a place with no task shows the way card: what to do,
   await expect(app.locator('.shead [data-team-chip]')).toHaveAccessibleName('0 tasks · 1 needs you');
   await expect(app.locator('.teamv-tasks .lead-grp[data-group="needs"] .lead-gh')).toHaveText('Needs you · 1');
   await expect(app.locator('.teamv-tasks .lead-row[data-ask] .lead-who')).toHaveText('Round to 2 decimals, or keep the full value?');
-  await card.getByRole('button', { name: 'build + review' }).click();
-  await expect(card.getByRole('menuitemradio')).toHaveCount(5);
+  // Ticket 1099: no pill and no menu on the card; Change is the one way to the setting.
+  await expect(card.getByRole('button')).toHaveText(['Change']);
+});
+
+test('lead_way_head (1060, 1099): with a task the Team view head has no way pill but a gear, which opens this project\'s section in Settings > Team; choosing another way changes the place', async ({ app, core }) => {
+  const { asked } = await taskScene(app, core, false);
+  await expect(app.locator('[data-way-card]')).toHaveCount(0);
+  await expect(app.locator('.teamv-head .way-pill')).toHaveCount(0);
+  const gear = app.locator('.teamv-head [data-place-gear]');
+  await expect(gear).toHaveAccessibleName('How this place works');
+  await gear.click();
+  const sec = app.locator('.settings .place-sec');
+  await expect(sec.getByRole('combobox', { name: 'Project' })).toBeVisible();
+  await sec.getByRole('radiogroup', { name: 'Way of working' }).getByRole('radio', { name: 'Build only' }).click();
+  await expect.poll(() => asked.find((r) => r.operation === 'way')?.text).toBe('solo');
 });
 
 test('lead_role_card (990 i): a lead\'s role proposal is a card in Decisions with the role\'s face, job, reason, program and model, and "reviews, never edits"; Add the role is the confirmed yes', async ({ app, core }) => {
@@ -421,8 +437,5 @@ test('lead_tasks_shots (990 g): the band in light and dark for the look beside m
     await app.screenshot({ path: path.join(out, `band-${scheme}.png`) });
     await app.locator('.teamv').screenshot({ path: path.join(out, `band-strip-${scheme}.png`) });
     await app.locator('.shead').screenshot({ path: path.join(out, `band-head-${scheme}.png`), scale: 'device' });
-    await app.locator('.way-chip').click();
-    await app.screenshot({ path: path.join(out, `way-menu-${scheme}.png`) });
-    await app.keyboard.press('Escape');
   }
 });

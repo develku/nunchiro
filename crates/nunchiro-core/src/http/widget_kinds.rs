@@ -5,7 +5,6 @@
 /// fail when they drift).
 pub const WIDGET_KINDS: &[&str] = &[
     "tree",
-    "agents",
     "waiting",
     "terminal",
     "composer",
@@ -16,5 +15,6 @@ pub const WIDGET_KINDS: &[&str] = &[
     "preview",
     "artifacts",
     "decisions",
-    "room", // ticket 990
+    "room",    // ticket 990
+    "context", // ticket 1048
 ];

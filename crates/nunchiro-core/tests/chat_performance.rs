@@ -5,8 +5,8 @@ use nunchiro_core::{
 use serde_json::json;
 use std::{fs, io::Write, path::PathBuf, time::Instant};
 
+// Release-mode 113 MB indexing/poll/RSS probe: `cargo test --release -p nunchiro-core --features measure --test chat_performance -- --nocapture`.
 #[test]
-#[ignore = "release-mode 113 MB indexing/poll/RSS probe; run with --release --ignored --nocapture"]
 fn chat_release_100mb_poll_and_memory_budget() {
     if std::env::var_os("CHAT_PERF_CHILD").is_none() {
         let home = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -18,7 +18,6 @@ fn chat_release_100mb_poll_and_memory_budget() {
             .args([
                 "--exact",
                 "chat_release_100mb_poll_and_memory_budget",
-                "--ignored",
                 "--nocapture",
             ])
             .env("CHAT_PERF_CHILD", &home)
@@ -49,6 +48,7 @@ fn chat_release_100mb_poll_and_memory_budget() {
     drop(f);
     let session = Session {
         side_chat: false,
+        stopped_sends: Vec::new(),
         side_parent: None,
         teammate: None,
         resumed_from: vec![],

@@ -313,8 +313,8 @@ export function UsagePage({ t, core }: { t: T; core: CoreClient }) {
                     <small>{t(r.session || r.weekly ? 'usage.v4.fromRecords' : 'usage.v4.noRecords')}</small>
                     {r.link && <LinkNote t={t} link={r.link} onAllow={allow} />}
                   </div>
-                  <Meter t={t} label={t('usage.v4.session')} limit={r.session} span={5 * 3600} now={now} />
-                  <Meter t={t} label={t('usage.v4.weekly')} limit={r.weekly} span={7 * 86_400} now={now} />
+                  <Meter t={t} label={t('usage.v4.session')} limit={r.session} span={5 * 3600} now={now} seen={r.limits_at} />
+                  <Meter t={t} label={t('usage.v4.weekly')} limit={r.weekly} span={7 * 86_400} now={now} seen={r.limits_at} />
                   {agent === 'codex' && resetsOn && (
                     <ResetLineView
                       t={t}

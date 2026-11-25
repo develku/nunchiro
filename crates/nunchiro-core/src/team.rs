@@ -236,6 +236,9 @@ pub enum Op {
     /// a schedule and a lead (`nunchiro team open`).
     TeamOpen {
         id: String,
+        /// Ticket 1096: a new conversation for a lead (never `--resume`), with the old seat's handover first.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fresh: Option<Fresh>,
     },
     /// Ticket 992 rule 6: the user picked a level on a seat's row. The running seat does not change; the level is
     /// kept for the teammate's next task (`None` takes the pick back). The window then offers the lesson as a note
@@ -772,6 +775,7 @@ fn brief_text(
              - Give each task a level when you open a teammate for it: `nunchiro team open <name> --level light|standard|deep`. Light for quick, routine work (sorting, short replies, lookups); deep for hard or risky work (a contract, a design, a tricky bug); standard when you are not sure. The reply says which level was used.\n\
              - Kept notes may say which level a kind of task needs (\"<name>: Haiku (light) for tasks like ...\": the word in brackets is the level). Follow them.\n\
              - A job a teammate should do at a set time (every day, on weekdays, weekly, once): `nunchiro schedule propose --who <name> --when \"daily 21:00\" --task \"...\" [--level light|standard|deep]` asks the user on a card; nothing is scheduled before their yes. `nunchiro schedule list` shows this place's schedules and how each last run ended; `nunchiro schedule change <id> pause|resume|remove` asks likewise.\n\
+             - Only the user sets how many seats of this place work at once. When that cap holds the work back, `nunchiro task ask-cap 2|4|6|8 --why \"<what you saw>\"` asks them on a card.\n\
              - The record of the work is the core's task ledger, not your memory: run `nunchiro task list` first in every new conversation. It shows each open task with its seats, what the user told a seat directly, open questions and the review. Never start again what it shows as running. `nunchiro task new|attach|staff|ask-merge|done` keep it current (`nunchiro skill get orchestration`, section \"The task ledger\").\n\
              - You talk with your team through the room: `nunchiro agent send|ask|reply|check`. The user can switch the room on and read it.\n\
              - When you need the user's decision (a worker's question you cannot answer, a merge, a scope change), ask with your question tool, one question at a time with its options, so the user sees a card that waits for them. Do not leave a question only as a line in a long message. Pass the answer on to who asked (`nunchiro agent reply`).\n"
@@ -831,6 +835,8 @@ fn task_note(task: &str) -> String {
 /// place's lead (the seat starts as its worker, so wake lines and questions reach the lead).
 pub(crate) enum Opener<'a> {
     Window,
+    /// Ticket 1096: the window's "New Lead conversation": a new session, never the old conversation resumed.
+    Fresh,
     /// A scheduled run, with its schedule's id: the seat is marked before its task reaches it.
     Schedule(&'a str),
     Lead(&'a crate::grants::Caller),
@@ -875,14 +881,24 @@ pub(crate) fn seat_level(mate: &Teammate, asked: Option<Level>) -> Option<(Level
             }),
         ));
     }
+    Some(rule_level(&mate.name, mate.level, mate.level_max, asked))
+}
+
+/// Ticket 992 rule 3, for a teammate (`seat_level`) and, ticket 1055, for every role seat (`Workers`): a pin wins;
+/// Auto takes the asked level (none asked: standard) up to its limit. `who` names the seat in the why line.
+pub(crate) fn rule_level(
+    who: &str,
+    pin: Option<Level>,
+    max: Option<Level>,
+    asked: Option<Level>,
+) -> (Level, Option<String>) {
     let want = asked.unwrap_or(Level::Standard);
-    Some(match (mate.level, mate.level_max) {
+    match (pin, max) {
         (Some(pin), _) => (
             pin,
             asked.filter(|a| *a != pin).map(|a| {
                 format!(
-                    "{} is pinned to {} in Settings > Team, so {} was not used",
-                    mate.name,
+                    "{who} is pinned to {} in Settings > Team, so {} was not used",
                     pin.word(),
                     a.word()
                 )
@@ -891,14 +907,31 @@ pub(crate) fn seat_level(mate: &Teammate, asked: Option<Level>) -> Option<(Level
         (None, Some(max)) if want > max => (
             max,
             Some(format!(
-                "{}'s Auto level goes up to {} (Settings > Team), so {} was not used",
-                mate.name,
+                "{who}'s Auto level goes up to {} (Settings > Team), so {} was not used",
                 max.word(),
                 want.word()
             )),
         ),
         _ => (want, None),
-    })
+    }
+}
+
+/// Ticket 1055: Settings > Team > Worker models, the level rule of every role seat (Builder, Reviewer): `level` is
+/// "Workers open on" (absent: Lead picks), `level_max` the "Upper limit". The lead's own seat never reads it.
+pub const WORKERS_KEY: &str = "team.workers";
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Workers {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<Level>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level_max: Option<Level>,
+}
+/// The stored rule is checked before Settings writes it.
+pub(crate) fn check_workers(value: &serde_json::Value) -> Result<(), String> {
+    Workers::deserialize(value)
+        .map(drop)
+        .map_err(|e| format!("{WORKERS_KEY}: {e}"))
 }
 
 /// Ticket 990: one seat, one session. An open seat is returned as it is (with `task`, the task alone is sent to it);
@@ -926,6 +959,10 @@ pub(crate) fn open_seat(
     // Ticket 1005: the memory is masked on disk before the brief quotes it; the room and a card say what was found.
     let memory = team.check_memory(id);
     let (mate, project, prompt) = team.brief(id, task)?;
+    let prompt = match opener {
+        Opener::Fresh => format!("{prompt}\n\n{TAKEOVER}"),
+        _ => prompt,
+    };
     memory_found(&mut *lock()?, &mate, &project, &memory);
     // Look 11-17 v8 (Home S2-A): a scheduled run never replaces a lead's seat. Its level is not used: the task goes
     // into the lead's open seat as it is (no level asked never replaces), and with no open seat the seat opens by the
@@ -1017,7 +1054,7 @@ pub(crate) fn open_seat(
         // Ticket 1002 lane 1 (Fable review R5): a seat the owner left open in "Full access, shell included" takes no
         // work it did not open itself: a brief read with nobody present never runs where the shell asks nothing. The
         // schedule's row shows this line.
-        if !matches!(opener, Opener::Window)
+        if !matches!(opener, Opener::Window | Opener::Fresh)
             && session.home_mode.as_deref() == Some("full-access-shell")
         {
             return Err(format!(
@@ -1066,13 +1103,13 @@ pub(crate) fn open_seat(
         let resumes = match &opener {
             Opener::Window => task.is_none(),
             Opener::Schedule(_) => mate.lead,
-            Opener::Lead(_) => false,
+            Opener::Lead(_) | Opener::Fresh => false,
         };
         if resumes {
             start.resume = sessions.seat_to_resume(&mate.id, &start, level);
         }
         match &opener {
-            Opener::Window => sessions
+            Opener::Window | Opener::Fresh => sessions
                 .launch_as(None, start.clone(), false)?
                 .owner_start(),
             Opener::Schedule(_) => sessions.launch_as(None, start.clone(), false)?,
@@ -1149,6 +1186,157 @@ pub(crate) fn open_seat(
     })
 }
 
+/// Ticket 1096: how a fresh Lead conversation treats a running old seat.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Fresh {
+    /// The old seat gets one handover prompt and is closed once that turn ends (never mid-turn).
+    Handover,
+    /// The owner's own click after a handover ran out of time: the old seat is closed now, even mid-turn.
+    Close,
+}
+
+/// Ticket 1096: how long a running Lead has for its handover turn. The report is one file write and one room send
+/// (well under a minute); five minutes also covers a turn that was already running when the prompt came. Longer would
+/// leave the owner with no Lead and no answer.
+pub(crate) const HANDOVER_WAIT: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+pub(crate) const HANDOVER: &str = "The user is starting a fresh Lead conversation for this project; this conversation \
+     is closed when this turn ends. Start no new work. In this turn only: write what is unfinished (open tasks, workers \
+     still running, questions waiting for the user, decisions not yet recorded) into .scratch/build-loop/handoff.md, \
+     then send the same summary to the room for the new Lead: `nunchiro agent send --thread lead-handover \"<summary>\"`.";
+const TAKEOVER: &str = "## You take over\n\
+     You are a fresh Lead conversation that takes over from an earlier one. When .scratch/build-loop/handoff.md exists, \
+     read it first and take over from it. The earlier Lead's last report, if it sent one, is in the room: \
+     `nunchiro agent thread read lead-handover`.";
+/// The leads with a fresh open on its way: a second press while the first waits would send a second handover prompt.
+static HANDING: std::sync::Mutex<std::collections::BTreeSet<String>> =
+    std::sync::Mutex::new(std::collections::BTreeSet::new());
+/// Old seats that took a handover prompt the core could no longer withdraw when the time ran out (it was typed in): a
+/// later press sends none again, and closes the seat once that turn ends (review round 1 of ticket 1096).
+static HANDED_OVER: std::sync::Mutex<std::collections::BTreeSet<String>> =
+    std::sync::Mutex::new(std::collections::BTreeSet::new());
+/// The ends of the time-limit line; the window reads which one it got (web/src/lead/LeaderDialog.tsx `LATE`).
+pub(crate) const LATE_WITHDRAWN: &str = "the handover message was withdrawn";
+pub(crate) const LATE_HANDED: &str =
+    "it already has the handover message and stops after its current turn";
+/// Takes the lead off `HANDING` however its fresh open ends.
+struct Handing(String);
+impl Drop for Handing {
+    fn drop(&mut self) {
+        if let Ok(mut on) = HANDING.lock() {
+            on.remove(&self.0);
+        }
+    }
+}
+
+/// Ticket 1096: a new conversation as the lead's seat. A live old seat hands over first (`Fresh::Handover`): it
+/// gets one prompt, and is closed once that turn ends; the wait takes the registry lock only to look. Only then does
+/// the new seat open, so there is never a second live seat for the same teammate. Past `wait` the old seat stays
+/// open, nothing new starts, and the error says so (the window offers `Fresh::Close`).
+pub(crate) fn fresh_lead(
+    registry: &std::sync::Mutex<crate::sessions::Sessions>,
+    id: &str,
+    how: Fresh,
+    wait: std::time::Duration,
+) -> Result<Opened, String> {
+    if !HANDING
+        .lock()
+        .map_err(|_| "session registry unavailable".to_string())?
+        .insert(id.to_string())
+    {
+        return Err("a new Lead conversation is already being opened".into());
+    }
+    let _one = Handing(id.to_string());
+    let lock = || {
+        registry
+            .lock()
+            .map_err(|_| "session registry unavailable".to_string())
+    };
+    let home = lock()?.home().to_path_buf();
+    let mate = Team::open(&home)
+        .list()?
+        .into_iter()
+        .find(|t| t.id == id)
+        .ok_or_else(|| format!("no teammate {id}"))?;
+    if !mate.lead {
+        return Err(format!("{} does not lead a place", mate.name));
+    }
+    let handed = |seat: &str, on: bool| {
+        if let Ok(mut set) = HANDED_OVER.lock() {
+            let _ = if on {
+                set.insert(seat.to_string())
+            } else {
+                set.remove(seat)
+            };
+        }
+    };
+    let old = lock()?.seat_of(id);
+    if let Some(old) = old {
+        match how {
+            Fresh::Close => {
+                lock()?.close(&old, true, false)?;
+                handed(&old, false);
+            }
+            Fresh::Handover => {
+                // One handover prompt per old seat: one it already took is not sent again.
+                if !HANDED_OVER.lock().is_ok_and(|set| set.contains(&old)) {
+                    lock()?.prompt_as_user(&old, HANDOVER.into())?;
+                }
+                let until = std::time::Instant::now() + wait;
+                loop {
+                    {
+                        let mut sessions = lock()?;
+                        // Ended or closed meanwhile (its own exit, the owner's Close): nothing left to close.
+                        if sessions.seat_of(id).as_deref() != Some(old.as_str()) {
+                            handed(&old, false);
+                            break;
+                        }
+                        if sessions.seat_idle(&old) {
+                            sessions.close(&old, true, false)?;
+                            handed(&old, false);
+                            break;
+                        }
+                    }
+                    if std::time::Instant::now() >= until {
+                        // A prompt still waiting in the queue is taken back, so a Lead left open is not told it is
+                        // closed. One already typed in cannot be: it is remembered, and the line says what follows.
+                        let withdrawn = {
+                            let mut sessions = lock()?;
+                            let queued = sessions
+                                .session_of(&old)?
+                                .send_queue
+                                .iter()
+                                .find(|q| q.content == HANDOVER && q.status == "queued")
+                                .map(|q| q.id.clone());
+                            queued.is_some_and(|send| {
+                                sessions
+                                    .handle(crate::api::Request::CancelSend {
+                                        id: old.clone(),
+                                        send,
+                                    })
+                                    .is_ok()
+                            })
+                        };
+                        handed(&old, !withdrawn);
+                        return Err(format!(
+                            "{} did not finish its turn within {} minutes, so it is still open and no new conversation started; {}",
+                            mate.name,
+                            wait.as_secs().div_ceil(60),
+                            if withdrawn {
+                                LATE_WITHDRAWN
+                            } else {
+                                LATE_HANDED
+                            }
+                        ));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                }
+            }
+        }
+    }
+    open_seat(registry, id, None, None, Opener::Fresh)
+}
+
 /// Home view change 4: each goal the user sent reaches its lead: the seat is opened when it is not running (as the
 /// window's Open, off the registry lock) and takes the goal as its next prompt. A seat that cannot open keeps the goal
 /// in its room only, said in the core's log.
@@ -1182,7 +1370,12 @@ pub fn window(
         home: team.home(),
     };
     match op {
-        Op::TeamList => team.list().map(listed),
+        // Ticket 1130 C7: Quick setup on a Mac with no agent history starts the first session in this folder, before any
+        // teammate made it.
+        Op::TeamList => store::private_dir(&team.dir)
+            .and_then(|_| store::private_dir(&team.home()))
+            .and_then(|_| team.list())
+            .map(listed),
         Op::TeamSave {
             id,
             name,
@@ -1199,6 +1392,14 @@ pub fn window(
             let old = id
                 .as_ref()
                 .and_then(|id| team.list().ok()?.into_iter().find(|t| &t.id == id));
+            // Ticket 1055 rule 1: a new lead (a new teammate, or one made the lead now) with no pin and no custom
+            // model opens at the top level. A stored lead's choice is never changed here, and neither is an upper
+            // limit the user set on the new lead (a pin would win over it).
+            let level = level.or((lead
+                && model.is_none()
+                && level_max.is_none()
+                && !old.as_ref().is_some_and(|o| o.lead))
+            .then_some(Level::Deep));
             let all = team.save(
                 id,
                 Teammate {
@@ -1243,9 +1444,13 @@ pub fn window(
             Ok(listed(left))
         }
         Op::TeamLevel { id, level } => team.set_next_level(&id, level).map(listed),
-        Op::TeamOpen { id } => {
+        Op::TeamOpen { id, fresh: None } => {
             open_seat(registry, &id, None, None, Opener::Window).map(Opened::reply)
         }
+        Op::TeamOpen {
+            id,
+            fresh: Some(how),
+        } => fresh_lead(registry, &id, how, HANDOVER_WAIT).map(Opened::reply),
         Op::TeamBrief { id } => {
             team.brief(&id, None)
                 .map(|(teammate, project, prompt)| Reply::TeamBrief {
@@ -1266,6 +1471,21 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("nunchiro-team-{}", store::new_id().unwrap()));
         fs::create_dir_all(&dir).unwrap();
         fs::canonicalize(dir).unwrap()
+    }
+    #[test]
+    fn team_list_makes_the_home_folder() {
+        // Ticket 1130 C7: with no teammate yet, the listed Home folder exists, so a first session can start in it.
+        let home = home();
+        let reg = std::sync::Mutex::new(crate::sessions::Sessions::open(&home).unwrap());
+        let Reply::Team {
+            teammates,
+            home: folder,
+        } = window(&reg, &home, Op::TeamList).unwrap()
+        else {
+            panic!("not a team reply")
+        };
+        assert!(teammates.is_empty() && folder.is_dir());
+        assert_eq!(folder, fs::canonicalize(home.join("team/home")).unwrap());
     }
     fn mate(name: &str, project: Option<PathBuf>) -> Teammate {
         Teammate {
@@ -1792,6 +2012,88 @@ mod tests {
         assert_eq!(seat_level(&pinned, Some(Light)).unwrap().0, Deep);
     }
 
+    /// Ticket 1055 rule 1: a new lead with no pin and no custom model opens at the top level; a stored lead keeps its
+    /// choice, a lead with a custom model keeps it. Worker models (`WORKERS_KEY`) never reach the lead's own seat.
+    #[test]
+    fn a_new_lead_opens_at_the_top_level_and_ignores_worker_models() {
+        use crate::api::{LifetimePatch, Request};
+        use crate::sessions::Sessions;
+        let home = home();
+        let proj = self::home();
+        let fake = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/acp/fake_agent.py"
+        );
+        let log = home.join("agent.log").display().to_string();
+        fs::write(
+            home.join("agents.toml"),
+            format!("[[agent]]\nname = \"fake\"\ncommand = \"/usr/bin/python3\"\nargs = [{fake:?}, {log:?}]\nenv = []\n"),
+        )
+        .unwrap();
+        let hash = crate::approval::agent_status(&home, "fake").unwrap().hash;
+        crate::approval::grant_agent(&home, "fake", &hash).unwrap();
+        let reg = std::sync::Mutex::new(Sessions::open(&home).unwrap());
+        let workers = serde_json::json!({"level": "light", "level_max": "light"});
+        reg.lock()
+            .unwrap()
+            .handle(Request::QuitSettings {
+                patch: LifetimePatch {
+                    features: Some([(WORKERS_KEY.to_string(), workers)].into()),
+                    ..Default::default()
+                },
+            })
+            .unwrap();
+        let save_max = |id: Option<String>,
+                        name: &str,
+                        lead: bool,
+                        model: Option<&str>,
+                        level_max: Option<Level>| {
+            let op = Op::TeamSave {
+                id,
+                name: name.into(),
+                job: "Leads.".into(),
+                kind: AgentKind::Acp,
+                model: model.map(Into::into),
+                effort: None,
+                project: Some(proj.clone()),
+                lead,
+                level: None,
+                level_max,
+                agent: Some("fake".into()),
+            };
+            let Reply::Team { teammates, .. } = window(&reg, &home, op).unwrap() else {
+                panic!("no team reply")
+            };
+            teammates.into_iter().find(|t| t.name == name).unwrap()
+        };
+        let save = |id, name: &str, lead, model| save_max(id, name, lead, model, None);
+        let chief = save(None, "Chief", true, None);
+        assert_eq!(chief.level, Some(Level::Deep));
+        let opened = open_seat(&reg, &chief.id, None, Some(Level::Light), Opener::Window).unwrap();
+        assert_eq!(opened.session.level, Some(Level::Deep));
+        // A stored lead with no pin (made before this rule) is saved again unchanged.
+        let old = Teammate {
+            lead: true,
+            level: None,
+            ..chief.clone()
+        };
+        Team::open(&home).save(Some(chief.id.clone()), old).unwrap();
+        assert_eq!(
+            save(Some(chief.id.clone()), "Chief", true, None).level,
+            None
+        );
+        assert_eq!(save(None, "Helper", false, None).level, None);
+        assert_eq!(save(None, "Own", true, Some("smart")).level, None);
+        // A new lead with an upper limit keeps Auto under it: a pin at deep would run above the user's limit.
+        let capped = save_max(None, "Capped", true, None, Some(Level::Standard));
+        assert_eq!(
+            (capped.level, capped.level_max),
+            (None, Some(Level::Standard))
+        );
+        drop(reg);
+        fs::remove_dir_all(home).unwrap();
+    }
+
     /// Look 1117 v11 (C NC3): removing a teammate ends its open seat (its row goes, as Close session) and switches its
     /// schedules off; another teammate's schedule stays on.
     #[test]
@@ -1998,14 +2300,15 @@ mod tests {
                 })
                 .collect()
         };
-        // Ticks as the core's loop does, until the seat took its brief; gives the seat as it then is.
+        // Ticket 1114: delivery is logged before the ACP turn finishes. Wait for completion too, so the
+        // picker checks below exercise an idle agent rather than racing its prompt reply.
         let briefed = |id: &str| {
             let until = std::time::Instant::now() + std::time::Duration::from_secs(30);
             loop {
                 let mut core = reg.lock().unwrap();
                 core.tick().unwrap();
                 let seat = core.session_of(id).unwrap();
-                if seat.send_queue.is_empty() && !seat.send_log.is_empty() {
+                if !seat.send_log.is_empty() && core.seat_idle(id) {
                     return seat;
                 }
                 drop(core);
@@ -2269,6 +2572,330 @@ mod tests {
         fs::remove_dir_all(home).unwrap();
     }
 
+    /// Ticket 1096: a fake ACP agent as a project's lead (the agent's log is returned), and a core loop that ticks as
+    /// the real one does while `body` runs.
+    fn fake_lead(home: &Path, proj: &Path, modes: &str) -> (String, PathBuf) {
+        let fake = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/acp/fake_agent.py"
+        );
+        let log = home.join("agent.log");
+        let shown = log.display().to_string();
+        fs::write(
+            home.join("agents.toml"),
+            format!("[[agent]]\nname = \"fake\"\ncommand = \"/usr/bin/python3\"\nargs = [{fake:?}, {shown:?}{modes}]\nenv = []\n"),
+        )
+        .unwrap();
+        let hash = crate::approval::agent_status(home, "fake").unwrap().hash;
+        crate::approval::grant_agent(home, "fake", &hash).unwrap();
+        let lead = Teammate {
+            kind: AgentKind::Acp,
+            agent: Some("fake".into()),
+            lead: true,
+            ..mate("Lead", Some(proj.to_path_buf()))
+        };
+        let id = Team::open(home).save(None, lead).unwrap()[0].id.clone();
+        (id, log)
+    }
+    fn ticking<T>(
+        reg: &std::sync::Mutex<crate::sessions::Sessions>,
+        body: impl FnOnce() -> T,
+    ) -> T {
+        // Stops the loop also when `body` panics: the scope would otherwise wait for it forever.
+        struct Stop<'a>(&'a std::sync::atomic::AtomicBool);
+        impl Drop for Stop<'_> {
+            fn drop(&mut self) {
+                self.0.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+        let stop = std::sync::atomic::AtomicBool::new(false);
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    // A poisoned lock (a panicking body) still ticks nothing and ends with the flag.
+                    if let Ok(mut core) = reg.lock() {
+                        let _ = core.tick();
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+            });
+            let _stop = Stop(&stop);
+            body()
+        })
+    }
+    fn until(what: &str, done: impl Fn() -> bool) {
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !done() {
+            assert!(std::time::Instant::now() < end, "{what}");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+    const HANDED: &str = "starting a fresh Lead conversation for this project";
+
+    /// Ticket 1096: a running Lead gets exactly one handover prompt and is closed once that turn ended; the new seat is
+    /// a new conversation with the takeover line, and after a restart a fresh open still never resumes.
+    #[test]
+    fn a_fresh_lead_hands_over_once_and_never_resumes() {
+        use crate::api::SessionState;
+        use crate::sessions::Sessions;
+        let (home, proj) = (home(), self::home());
+        let (id, log) = fake_lead(&home, &proj, ", \"load\"");
+        let logged = || fs::read_to_string(&log).unwrap_or_default();
+        let reg = std::sync::Mutex::new(Sessions::open(&home).unwrap());
+        let seat = || reg.lock().unwrap().seat_of(&id);
+        let fresh = ticking(&reg, || {
+            let old = open_seat(&reg, &id, None, None, Opener::Window)
+                .unwrap()
+                .session
+                .id;
+            until("the old seat took its brief", || {
+                reg.lock().unwrap().seat_idle(&old)
+            });
+            let fresh = fresh_lead(
+                &reg,
+                &id,
+                Fresh::Handover,
+                std::time::Duration::from_secs(30),
+            )
+            .unwrap();
+            assert!(fresh.started && fresh.session.id != old);
+            assert_eq!(
+                seat(),
+                Some(fresh.session.id.clone()),
+                "the new session is the seat"
+            );
+            let state = reg.lock().unwrap().session_of(&old).unwrap().state;
+            assert_ne!(state, SessionState::Running, "the old seat is closed");
+            until("the new seat took its brief", || {
+                logged().contains("You take over")
+            });
+            assert_eq!(
+                logged().matches(HANDED).count(),
+                1,
+                "exactly one handover prompt"
+            );
+            fresh.session
+        });
+        assert!(fresh.resumed_from.is_empty());
+        // A restart leaves the new seat Resumable: a plain open would continue it, a fresh one starts anew.
+        reg.lock().unwrap().stop().unwrap();
+        drop(reg);
+        let reg = std::sync::Mutex::new(Sessions::open(&home).unwrap());
+        let state = reg.lock().unwrap().session_of(&fresh.id).unwrap().state;
+        assert_eq!(state, SessionState::Resumable);
+        let old_conversation = reg
+            .lock()
+            .unwrap()
+            .session_of(&fresh.id)
+            .unwrap()
+            .agent_session_id;
+        assert!(
+            old_conversation.is_some(),
+            "a conversation a plain open could resume"
+        );
+        let again = ticking(&reg, || {
+            let again = fresh_lead(
+                &reg,
+                &id,
+                Fresh::Handover,
+                std::time::Duration::from_secs(30),
+            )
+            .unwrap()
+            .session;
+            let conversation = || {
+                reg.lock()
+                    .unwrap()
+                    .session_of(&again.id)
+                    .unwrap()
+                    .agent_session_id
+            };
+            until("the new agent started", || conversation().is_some());
+            assert_ne!(conversation(), old_conversation, "a new conversation");
+            again
+        });
+        assert_ne!(again.id, fresh.id);
+        assert!(!logged().contains("session/load"), "never resumed");
+        assert_eq!(
+            logged().matches(HANDED).count(),
+            1,
+            "nothing live, nothing handed over"
+        );
+        let _ = reg.lock().unwrap().stop();
+        drop(reg);
+        let _ = fs::remove_dir_all(home);
+        let _ = fs::remove_dir_all(proj);
+    }
+
+    /// Ticket 1096: a Lead whose turn does not end in time is left open with a line that says so (never stopped
+    /// mid-turn); the wait holds no lock, a second press is refused, and only the owner's Close ends it.
+    #[test]
+    fn a_stuck_lead_is_left_open_until_the_owner_closes_it() {
+        use crate::api::{Request, SessionState};
+        use crate::sessions::Sessions;
+        let (home, proj) = (home(), self::home());
+        let (id, log) = fake_lead(&home, &proj, "");
+        let logged = || fs::read_to_string(&log).unwrap_or_default();
+        let reg = std::sync::Mutex::new(Sessions::open(&home).unwrap());
+        let seat = || reg.lock().unwrap().seat_of(&id);
+        ticking(&reg, || {
+            let old = open_seat(&reg, &id, None, None, Opener::Window)
+                .unwrap()
+                .session
+                .id;
+            until("the old seat took its brief", || {
+                reg.lock().unwrap().seat_idle(&old)
+            });
+            // A turn that holds (a permission it waits on).
+            reg.lock()
+                .unwrap()
+                .prompt_as_user(&old, "cancel-me".into())
+                .unwrap();
+            // The agent's own requests are not in its log (only what the core sends): the prompt went in, and its
+            // permission question follows at once.
+            until("the turn holds", || logged().contains("cancel-me"));
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            let waited = std::thread::scope(|s| {
+                let wait = s.spawn(|| {
+                    fresh_lead(
+                        &reg,
+                        &id,
+                        Fresh::Handover,
+                        std::time::Duration::from_secs(3),
+                    )
+                });
+                until("the handover prompt is asked", || {
+                    let now = reg.lock().unwrap().session_of(&old).unwrap();
+                    now.send_log
+                        .iter()
+                        .chain(&now.send_queue)
+                        .any(|q| q.content.contains(HANDED))
+                });
+                // Other ops run during the wait, and a second press is refused.
+                for _ in 0..5 {
+                    let at = std::time::Instant::now();
+                    reg.lock().unwrap().handle(Request::List).unwrap();
+                    assert!(
+                        at.elapsed() < std::time::Duration::from_millis(500),
+                        "the wait held the core"
+                    );
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                let second = fresh_lead(
+                    &reg,
+                    &id,
+                    Fresh::Handover,
+                    std::time::Duration::from_secs(3),
+                );
+                assert!(second.err().unwrap().contains("already being opened"));
+                wait.join().unwrap()
+            });
+            let line = waited.err().unwrap();
+            assert!(
+                line.contains("did not finish its turn within 1 minutes")
+                    && line.contains("still open")
+                    && line.ends_with(LATE_WITHDRAWN),
+                "{line}"
+            );
+            // Review round 1: the queued prompt is taken back, so the Lead left open is never told it is closed.
+            let rows = reg.lock().unwrap().session_of(&old).unwrap();
+            let row = rows
+                .send_queue
+                .iter()
+                .chain(&rows.send_log)
+                .find(|q| q.content == HANDOVER)
+                .unwrap();
+            assert_eq!(row.status, "canceled");
+            assert_eq!(seat(), Some(old.clone()), "left open");
+            assert_eq!(
+                reg.lock().unwrap().session_of(&old).unwrap().state,
+                SessionState::Running
+            );
+            assert_eq!(
+                logged().matches(HANDED).count(),
+                0,
+                "held behind the waiting turn, never typed into it"
+            );
+            // The owner's click: closed now, mid-turn, and the new seat opens.
+            let fresh =
+                fresh_lead(&reg, &id, Fresh::Close, std::time::Duration::from_secs(3)).unwrap();
+            assert!(fresh.started && fresh.session.id != old);
+            assert_eq!(seat(), Some(fresh.session.id.clone()));
+            assert_ne!(
+                reg.lock().unwrap().session_of(&old).unwrap().state,
+                SessionState::Running
+            );
+        });
+        // A teammate that leads nothing gets no fresh conversation.
+        let helper = Team::open(&home)
+            .save(None, mate("Helper", Some(proj.clone())))
+            .unwrap();
+        let helper = helper
+            .iter()
+            .find(|m| m.name == "Helper")
+            .unwrap()
+            .id
+            .clone();
+        assert!(
+            fresh_lead(
+                &reg,
+                &helper,
+                Fresh::Handover,
+                std::time::Duration::from_secs(1)
+            )
+            .err()
+            .unwrap()
+            .contains("does not lead")
+        );
+        let _ = reg.lock().unwrap().stop();
+        drop(reg);
+        let _ = fs::remove_dir_all(home);
+        let _ = fs::remove_dir_all(proj);
+    }
+
+    /// Review round 1 of ticket 1096: a seat that already took a handover prompt the core could not take back gets no
+    /// second one on the next press, and is closed once its turn is over.
+    #[test]
+    fn a_lead_that_took_the_handover_gets_no_second_one() {
+        use crate::sessions::Sessions;
+        let (home, proj) = (home(), self::home());
+        let (id, log) = fake_lead(&home, &proj, "");
+        let logged = || fs::read_to_string(&log).unwrap_or_default();
+        let reg = std::sync::Mutex::new(Sessions::open(&home).unwrap());
+        ticking(&reg, || {
+            let old = open_seat(&reg, &id, None, None, Opener::Window)
+                .unwrap()
+                .session
+                .id;
+            until("the old seat took its brief", || {
+                reg.lock().unwrap().seat_idle(&old)
+            });
+            // As the time limit leaves a prompt that was already typed in.
+            HANDED_OVER.lock().unwrap().insert(old.clone());
+            let fresh = fresh_lead(
+                &reg,
+                &id,
+                Fresh::Handover,
+                std::time::Duration::from_secs(10),
+            )
+            .unwrap();
+            assert!(fresh.started && fresh.session.id != old);
+            assert_eq!(reg.lock().unwrap().seat_of(&id), Some(fresh.session.id));
+            assert_eq!(
+                logged().matches(HANDED).count(),
+                0,
+                "no second handover prompt"
+            );
+            assert!(
+                !HANDED_OVER.lock().unwrap().contains(&old),
+                "forgotten once closed"
+            );
+        });
+        let _ = reg.lock().unwrap().stop();
+        drop(reg);
+        let _ = fs::remove_dir_all(home);
+        let _ = fs::remove_dir_all(proj);
+    }
+
     #[test]
     fn window_ops_parse_and_agents_cannot_send_them() {
         let op: Op =
@@ -2276,6 +2903,18 @@ mod tests {
                 .unwrap();
         assert!(matches!(op, Op::TeamSave { id: None, .. }));
         assert!(serde_json::from_str::<Op>(r#"{"op":"team_remove"}"#).is_err());
+        // Ticket 1096: `fresh` is optional; a plain open stays as it was.
+        let op: Op = serde_json::from_str(r#"{"op":"team_open","id":"a"}"#).unwrap();
+        assert!(matches!(op, Op::TeamOpen { fresh: None, .. }));
+        let op: Op =
+            serde_json::from_str(r#"{"op":"team_open","id":"a","fresh":"close"}"#).unwrap();
+        assert!(matches!(
+            op,
+            Op::TeamOpen {
+                fresh: Some(Fresh::Close),
+                ..
+            }
+        ));
         // Not an `api::Request`: the owner socket, the CLI and a session's token cannot express a team op.
         assert!(serde_json::from_str::<crate::api::Request>(r#"{"op":"team_list"}"#).is_err());
     }

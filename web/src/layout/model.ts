@@ -52,6 +52,8 @@ export const edgeSize = (widget: Item, dir: Dir) => (dir === 'left' || dir === '
 export const kindOf = (w: Item) => w.split('@')[0] as Kind;
 export const pinOf = (w: Item): string | undefined => (w.includes('@') ? w.slice(w.indexOf('@') + 1) : undefined);
 export const isLeaf = (n: Node): n is Leaf => 'widgets' in n;
+/** Ticket 1070: the Agents widget is gone; a stored arrangement or layout that still names it drops it on load. */
+export const RETIRED: string = 'agents';
 export const isKind = (k: string): k is Kind => (WIDGETS as readonly string[]).includes(k) || isUserKind(k); // v1b-19: || isUserKind
 
 /** LAYOUT D5b: main zones only. The tree and the other bar widgets live in the window shell (layout/bars.ts). No
@@ -275,6 +277,25 @@ export function dropCentreBoard(l: Layout): Layout | null {
   const was = z.widgets[z.active ?? 0];
   const active = kindOf(was ?? '') === 'board' ? Math.max(0, widgets.findIndex((w) => kindOf(w) === 'terminal')) : Math.max(0, widgets.indexOf(was));
   return { ...l, root: replace(l.root, z.id, { ...z, widgets, active }) };
+}
+
+/** Ticket 1070: the zones without the retired Agents widget: an emptied zone goes, a split left with one child becomes that child
+ *  (as `take` does), and null means nothing is left. A node without the widget comes back as it is. */
+export function withoutRetired(n: Node): Node | null {
+  if (isLeaf(n)) {
+    const widgets = n.widgets.filter((w) => kindOf(w) !== RETIRED);
+    if (widgets.length === n.widgets.length) return n;
+    if (!widgets.length) return null;
+    const active = Math.max(0, widgets.indexOf(n.widgets[n.active ?? 0]));
+    return { ...n, widgets, active: active || undefined };
+  }
+  const children = n.children.flatMap((c) => withoutRetired(c) ?? []);
+  if (children.length === n.children.length && children.every((c, i) => c === n.children[i])) return n;
+  if (children.length < 2) {
+    const { size: _old, ...only } = children[0] ?? {};
+    return children.length ? (n.size === undefined ? only : { ...only, size: n.size }) as Node : null;
+  }
+  return { ...n, children };
 }
 
 /** Applies one layout action; throws with a message the command line and the CLI show as is. */

@@ -16,6 +16,7 @@ import { Diff, Open } from './Rows';
 import './decision-card.css';
 import { ErrorLine } from '../errors';
 import { questionRest, readable, toolOf } from '../decisions/readable';
+import { keyText } from '../keys';
 
 interface Props {
   session: Session;
@@ -47,6 +48,16 @@ export function focusCard(root: Element | null | undefined) {
   const el = first?.classList.contains('risky') ? pick('[data-act="deny"]') : (pick('[data-act="allow"]') ?? pick('[data-act="choose"]') ?? pick('[data-act="terminal"]') ?? pick('[data-act="deny"]'));
   el?.focus();
   return !!el;
+}
+
+/** Ticket 1097: the button a digit typed into the empty composer presses on the docked card, by the focused card's key rule:
+ *  a question's option n (the prompt's own number), an ordinary permission's Allow once (1) or Deny (3). Never a risky
+ *  permission (focus then Enter) or a dialog (answered in the terminal); null leaves the digit as text. */
+export function digitButton(card: Element | null | undefined, digit: string) {
+  const item = card?.querySelector<HTMLElement>('.dc-item');
+  if (!item || !/^[1-9]$/.test(digit) || item.classList.contains('risky')) return null;
+  const sel = item.dataset.kind === 'question' ? `[data-act="choose"][data-n="${digit}"]` : item.dataset.kind === 'permission' ? { 1: '[data-act="allow"]', 3: '[data-act="deny"]' }[digit] : undefined;
+  return sel ? item.querySelector<HTMLButtonElement>(`${sel}:not(:disabled)`) : null;
 }
 
 export function DecisionCard({ session, from = null, onAnswer, onBack, hosted, focusAsk, onFocused, onAnswered, t = tEn, docked, note }: Props) {
@@ -117,7 +128,7 @@ export function DecisionCard({ session, from = null, onAnswer, onBack, hosted, f
     >
       {from && (
         <button type="button" className="dc-back" onClick={onBack}>
-          {t('decisions.back', { name: from.name })}
+          {t('decisions.back', { name: from.name, key: keyText('decision.back') })}
         </button>
       )}
       {docked ? null : hosted ? (
@@ -257,6 +268,7 @@ function CardItem({ d, session, onAnswer, onDone, t, notes, err, onErr, docked }
     <div
       className={`dc-item${risky ? ' risky' : ''}`}
       data-item={d.id}
+      data-kind={d.kind}
       onKeyDown={(e) => {
         const t = e.target as HTMLElement;
         if (e.nativeEvent.isComposing || e.metaKey || e.ctrlKey || e.altKey || t.closest('input')) return;
@@ -270,6 +282,8 @@ function CardItem({ d, session, onAnswer, onDone, t, notes, err, onErr, docked }
     >
       <p className="dc-what">
         {risky && <b className="warn">{t('decisions.caution')}</b>}
+        {/* Ticket 1130 S1: an outward call (mail, a calendar event, a post, a publish) says which, in every session. */}
+        {d.outward && <b className="dc-outward"> {t(`decisions.outward.${d.outward}` as const)}</b>}
         {/* Sixth look (B6-S3-3): a question is its own line ("What alpha or beta?" read as one sentence). */}
         {named ? (
           <>

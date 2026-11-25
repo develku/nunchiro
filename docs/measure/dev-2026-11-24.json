@@ -1,0 +1,62 @@
+{
+ "date": "2026-11-24 16:32",
+ "commit": "4023ddcf1",
+ "load": [
+  5.85,
+  18.99
+ ],
+ "figures": {
+  "build_cold_min": 0.61,
+  "build_warm_s": 4.0,
+  "web_build_s": 2.6,
+  "test_stage_min": 11.9,
+  "largest_file_lines": 14132,
+  "files_over_2000": 15,
+  "shared_files_open_lanes": 2
+ },
+ "test_stage": {
+  "exit": 100,
+  "summary": "Summary [ 630.676s] 2984 tests run: 2980 passed (4 slow), 4 failed, 10 skipped",
+  "run": "detached: launchd is its parent, no Nunchiro holder above it"
+ },
+ "largest_files": [
+  [
+   "crates/nunchiro-core/src/sessions.rs",
+   14132
+  ],
+  [
+   "crates/nunchiro-core/src/queue/mod.rs",
+   4316
+  ],
+  [
+   "web/src/styles.css",
+   3643
+  ],
+  [
+   "crates/nunchiro-core/src/http/mod.rs",
+   3184
+  ],
+  [
+   "app/src-tauri/src/main.rs",
+   3158
+  ]
+ ],
+ "open_lanes": {
+  "fable/revert-lead-boardtruth1090": 16,
+  "fable/revert-lead-workpackage1095": 10,
+  "lead/card-question-1105": 3,
+  "lead/cohesion-1099": 3,
+  "lead/turn-ends-1094b": 16
+ },
+ "shared": {
+  "crates/nunchiro-core/src/sessions.rs": [
+   "fable/revert-lead-boardtruth1090",
+   "lead/turn-ends-1094b"
+  ],
+  "crates/nunchiro-core/src/sessions/tests.rs": [
+   "fable/revert-lead-boardtruth1090",
+   "lead/turn-ends-1094b"
+  ]
+ },
+ "warm_touch": "crates/nunchiro-core/src/lib.rs"
+}

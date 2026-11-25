@@ -8,6 +8,15 @@ declare module '../index' {
     'chatColours.desc': true;
     'chatColours.accents': true;
     'chatColours.plain': true;
+    'chatAccent.title': true;
+    'chatAccent.desc': true;
+    'chatAccent.s0': true;
+    'chatAccent.s1': true;
+    'chatAccent.s2': true;
+    'chatAccent.s3': true;
+    'chatAccent.s4': true;
+    'chatAccent.s5': true;
+    'chatAccent.s6': true;
   }
 }
 
@@ -16,4 +25,13 @@ export const en = {
   'chatColours.desc': 'Headings, bold, code, file paths, links and tool names in a chat take theme colours. Plain turns this off.',
   'chatColours.accents': 'Theme accents',
   'chatColours.plain': 'Plain',
+  'chatAccent.title': 'Chat accent',
+  'chatAccent.desc': 'The theme colour for headings and bold in a chat. Code and links keep their own colours. Off while Chat colours is Plain.',
+  'chatAccent.s0': 'Theme colour',
+  'chatAccent.s1': 'Red',
+  'chatAccent.s2': 'Green',
+  'chatAccent.s3': 'Yellow',
+  'chatAccent.s4': 'Blue',
+  'chatAccent.s5': 'Magenta',
+  'chatAccent.s6': 'Cyan',
 };

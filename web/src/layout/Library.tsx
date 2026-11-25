@@ -19,7 +19,7 @@ import { kindWord, ScriptSwitch } from '../widgets/Gallery';
 type Chip = 'all' | 'builtin' | 'mine';
 const CHIPS: [Chip, Key][] = [['all', 'rest.layout.chip.all'], ['builtin', 'rest.layout.chip.builtin'], ['mine', 'rest.layout.chip.mine']];
 // The registry's notes are English data (Node specs load it); the card shows them through these keys.
-const NOTE: Record<string, Key> = { agents: 'rest.layout.note.agents', waiting: 'rest.layout.note.waiting', terminal: 'rest.layout.note.follows', diff: 'rest.layout.note.follows', preview: 'rest.layout.note.follows', composer: 'rest.layout.note.composer', files: 'rest.layout.note.focused', search: 'rest.layout.note.focused', board: 'rest.layout.note.board', artifacts: 'rest.layout.note.artifacts', decisions: 'rest.layout.note.decisions', room: 'lead.widgetNote' };
+const NOTE: Record<string, Key> = { waiting: 'rest.layout.note.waiting', terminal: 'rest.layout.note.follows', diff: 'rest.layout.note.follows', preview: 'rest.layout.note.follows', composer: 'rest.layout.note.composer', files: 'rest.layout.note.focused', search: 'rest.layout.note.focused', board: 'rest.layout.note.board', artifacts: 'rest.layout.note.artifacts', decisions: 'rest.layout.note.decisions', room: 'lead.widgetNote' };
 /** A built-in widget's title and note in the window's language: the library card and the split chooser (ticket 625). */
 export const widgetText = (t: T, e: (typeof ENTRIES)[number]) => ({ title: t(`shell.widget.${e.kind}`), note: e.kind === 'tree' ? t('shell.tree.card') : NOTE[e.kind] ? t(NOTE[e.kind]) : e.note });
 

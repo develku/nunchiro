@@ -874,9 +874,9 @@ mod tests {
             );
         }
     }
-    /// The `--jq` cuts against the real gh (network; run by hand: `cargo test -p nunchiro-core real_gh -- --ignored`).
+    /// The `--jq` cuts against the real gh (network; run by hand: `cargo test -p nunchiro-core --features live --lib real_gh`).
+    #[cfg(feature = "live")]
     #[test]
-    #[ignore]
     fn real_gh_output_parses() {
         let url = std::env::var("PR_URL").unwrap_or("https://github.com/cli/cli/pull/9000".into());
         let run = |a: Vec<String>| pr_live::run_gh(&a, VIEW_TIMEOUT).unwrap();

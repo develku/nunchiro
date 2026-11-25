@@ -205,6 +205,21 @@
   grid-column: 2;
   flex-wrap: nowrap;
 }
+/* Ticket 1105: a docked question is read before it is answered: its header and whole question on their own lines, the
+   options wrapping below them (five options beside the question left it one letter wide). */
+.deccard.docked .dc-item[data-kind='question'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.deccard.docked .dc-item[data-kind='question'] :is(.dc-what, .dc-why) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.deccard.docked .dc-item[data-kind='question'] .dc-btns {
+  grid-row: auto;
+  grid-column: 1;
+  flex-wrap: wrap;
+  margin-top: var(--sp-8);
+}
 /* N133: the key digit is plain text in the button's own colour, as the model menu's digits (picker.css .pk-key): no box. */
 .deccard .b .k {
   margin-left: 6px;
@@ -226,7 +241,7 @@
 .composer > .dock {
   position: absolute;
   bottom: 100%;
-  left: 20px;
+  left: calc(20px + var(--pane-room-left, 0px)); /* ticket 1093: a Preview left of the chat */
   right: calc(20px + var(--pane-over, 0px));
   display: flex;
   flex-direction: column;

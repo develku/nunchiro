@@ -33,6 +33,7 @@ export const readLayout = (core: Core) => (fs.existsSync(layoutFile(core)) ? fs.
 
 /** Presses on `from`, moves past the drag threshold, then to `to` (a point or a locator's centre), optionally releasing. */
 export async function drag(page: Page, from: Locator, to: Locator | { x: number; y: number }, opts: { release?: boolean; dy?: number } = {}) {
+  await from.scrollIntoViewIfNeeded(); // the last library cards (Room, Context) sit below the fold
   const b = (await from.boundingBox())!;
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
   await page.mouse.down();

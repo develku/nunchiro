@@ -101,7 +101,8 @@ export function BrowserView({ space, insert, to, annotate = false, restore = '',
 
   const rect = () => {
     const r = slot.current!.getBoundingClientRect();
-    return { x: r.left, y: r.top, w: r.width, h: r.height };
+    const z = Number(document.documentElement.dataset.uiZoom ?? 1); // ticket 1071: CSS pixels to window points under the window zoom
+    return { x: r.left * z, y: r.top * z, w: r.width * z, h: r.height * z };
   };
   const fail = (e: unknown) => setError(e);
   const show = (url: string) => call('browser_show', { space, url, profile: pick, ...at, ...rect() });

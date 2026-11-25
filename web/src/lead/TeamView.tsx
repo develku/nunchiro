@@ -2,7 +2,7 @@
 // one component. It lives in the right sidebar or as a centre tab, one place at a time (team.ts). Its layout follows its own
 // width: narrow, the two parts are tabs (Tasks first); wide, they sit side by side. Home view (11-17,
 // docs/design/leader-room/home-view-1117.html): the Home lead's has three parts, Projects | Assistants | Room (HomeParts.tsx).
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { CoreClient } from '../api';
 import type { T } from '../i18n';
 import type { WindowCtx } from '../layout/windows';
@@ -13,6 +13,8 @@ import type { Decision, Session } from '../types';
 import { leadOf, useTeam } from './lead';
 import { AssistantRows, BriefLine, ProjectRows } from './HomeParts';
 import { TaskRows, TeamTasks, type Other } from './LeadHead';
+import { SeatDrawer, waitsSeat, type Peek } from './TaskBoard';
+import { PlaceGear } from './place';
 import { askTitle, asks, hasCard, placeOfCard, teamWaiting, whatWhy, type Item } from '../tree/decisions';
 import { sessionName } from '../sessionNames';
 import { showTeamTab, useTeamAt } from './team';
@@ -29,7 +31,7 @@ const WIDE = 720;
 const THREE = 870;
 type Part = 'tasks' | 'projects' | 'assistants' | 'room';
 
-export function TeamView({ core, t, folder, sessions, open, wt, owner, decide, where }: { core: CoreClient; t: T; folder: string | null; sessions: Session[]; open: (id: string) => void; wt?: WindowCtx['wt']; owner: Decision[]; decide: (id: string) => void; where: 'side' | 'tab' }) {
+export function TeamView({ core, t, folder, sessions, open, wt, owner, decide, where, term }: { core: CoreClient; t: T; folder: string | null; sessions: Session[]; open: (id: string) => void; wt?: WindowCtx['wt']; owner: Decision[]; decide: (id: string) => void; where: 'side' | 'tab'; term?: (id: string) => ReactNode }) {
   const team = useTeam(core, true);
   const place = folder === null ? null : team.home && folder === team.home ? '' : folder;
   const lead = place === null ? null : leadOf(team, place);
@@ -39,6 +41,23 @@ export function TeamView({ core, t, folder, sessions, open, wt, owner, decide, w
   const tasks = useMemo(() => withMerges(ledger, owner), [ledger, owner]);
   const home = !!lead && !lead.project;
   const needs = teamWaiting(sessions, owner, live, home);
+  // Ticket 1081: what waits on the lead, as the core's heartbeat counts it.
+  const openTasks = tasks.filter((x) => !x.closed);
+  const waits = [
+    ((n) => n > 0 && t(n === 1 ? 'lead.waits.review.one' : 'lead.waits.review.other', { n }))(openTasks.filter((x) => x.waits === 'review').length),
+    ((n) => n > 0 && t('lead.waits.merge', { n }))(openTasks.filter((x) => x.waits === 'merge').length),
+    ((n) => n > 0 && t('lead.waits.stalled', { n }))(openTasks.reduce((n, x) => n + (x.advance?.stalled?.length ?? 0), 0)),
+    ((n) => n > 0 && t(n === 1 ? 'lead.waits.seat.one' : 'lead.waits.seat.other', { n }))(openTasks.filter((x) => x.advance?.review === 'waits').length),
+  ].filter(Boolean);
+  const today = new Date().setHours(0, 0, 0, 0);
+  const boardMeta = [
+    ((n) => n > 0 && t('tboard.meta.working', { n }))(openTasks.filter((x) => x.state === 'working').length),
+    needs > 0 && t(needs === 1 ? 'tboard.meta.asks.one' : 'tboard.meta.asks.other', { n: needs }),
+    ((n) => n > 0 && t(n === 1 ? 'tboard.meta.seat.one' : 'tboard.meta.seat.other', { n }))(tasks.filter(waitsSeat).length),
+    ((n) => n > 0 && t('tboard.meta.landed', { n }))(tasks.filter((x) => x.closed && x.closed.how === 'merged' && x.closed.at >= today).length),
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const parts: Part[] = home ? ['projects', 'assistants', 'room'] : ['tasks', 'room'];
   const [picked, setPart] = useState<Part>('tasks');
   const part = parts.includes(picked) ? picked : parts[0];
@@ -50,6 +69,16 @@ export function TeamView({ core, t, folder, sessions, open, wt, owner, decide, w
     if (el) (ro.current = new ResizeObserver(([e]) => (setWide(e.contentRect.width >= WIDE), setThree(e.contentRect.width >= THREE)))).observe(el);
   }, []);
   const room = useRoom(core, live, true, wide || part === 'room');
+  // Ticket 1115 step 2: the Team tab's board peeks at one seat at a time; the drawer takes the room's place while open.
+  const [peek, setPeek] = useState<Peek | null>(null);
+  const board = where === 'tab' && term ? { peek, setPeek } : undefined;
+  const drawer = board && peek && term ? peek : null;
+  // Esc anywhere in the view (captured before the peek's terminal) or the x: the drawer closes and the focus goes back to its card.
+  const closeDrawer = () => {
+    const task = peek?.task;
+    setPeek(null);
+    if (task) requestAnimationFrame(() => document.querySelector<HTMLElement>(`.tcard[data-task="${CSS.escape(task)}"] .tcard-go`)?.focus());
+  };
   // A team line says a worktree was made, removed or handed elsewhere (the lead's own CLI): the list is read again at once.
   const lastNote = room.messages.filter((m) => m.kind === 'team').at(-1)?.id;
   const refresh = wt?.refresh;
@@ -86,7 +115,7 @@ export function TeamView({ core, t, folder, sessions, open, wt, owner, decide, w
   const title = (p: Part) => (p === 'tasks' ? t('lead.task.band') : p === 'projects' ? t('home.part.projects') : p === 'assistants' ? t('home.part.assistants') : t('room.tab'));
   const panel = (p: Part) => (wide ? { role: 'region', 'aria-label': title(p) } : { role: 'tabpanel', id: id(p), 'aria-labelledby': `${id(p)}-tab`, hidden: part !== p });
   return (
-    <div className="teamv" ref={root} data-wide={wide || undefined} data-three={three || undefined} data-where={where} data-team-view={live}>
+    <div className="teamv" ref={root} data-wide={wide || undefined} data-three={three || undefined} data-where={where} data-team-view={live} data-drawer={drawer ? true : undefined} onKeyDownCapture={drawer ? (e) => e.key === 'Escape' && (e.preventDefault(), e.stopPropagation(), closeDrawer()) : undefined}>
       <div className="teamv-head">
         {wide ? (
           // The legend is about worktrees, and Home has none (look 1117 v3).
@@ -96,6 +125,13 @@ export function TeamView({ core, t, folder, sessions, open, wt, owner, decide, w
             {parts.map((p) => tab(p, title(p), p === 'room' ? room.unread : 0))}
           </div>
         )}
+        {!home && waits.length > 0 && (
+          <span className="room-meta lead-waits" data-waits>
+            {waits.join(' · ')}
+          </span>
+        )}
+        {/* Ticket 1099: the way of working is a setting (Settings > Team > How this place works); the gear opens it here. */}
+        {!home && <PlaceGear t={t} project={lead.project ?? live} />}
         <button className="teamv-move" data-move={where === 'side' ? 'tab' : 'side'} onClick={move}>
           <WidenMark /> <span className="teamv-move-l">{where === 'side' ? t('lead.team.toTab') : t('lead.team.toSide')}</span>
         </button>
@@ -117,14 +153,25 @@ export function TeamView({ core, t, folder, sessions, open, wt, owner, decide, w
           </>
         ) : (
           <div className="teamv-tasks" {...panel('tasks')}>
-            {wide && <div className="lead-gh">{t('lead.task.band')}</div>}
-            {wt ? <TeamTasks t={t} core={core} project={live} mate={lead} sessions={sessions} tasks={tasks} place={way} wt={wt} open={open} decide={decide} others={others} needs={needs} /> : (tasks.some((x) => !x.closed) || others.length > 0) && <TaskRows t={t} tasks={tasks} sessions={sessions} open={open} decide={decide} others={others} needs={needs} />}
+            {board ? (
+              // Ticket 1115 step 2 (mockup panel 2): the board's counts beside its title, from the same tasks.
+              <div className="tboard-head">
+                {wide && <span className="lead-gh">{t('lead.task.band')}</span>}
+                <span className="room-meta" data-board-meta>
+                  {boardMeta}
+                </span>
+              </div>
+            ) : (
+              wide && <div className="lead-gh">{t('lead.task.band')}</div>
+            )}
+            {wt ? <TeamTasks t={t} core={core} project={live} mate={lead} sessions={sessions} tasks={tasks} place={way} wt={wt} open={open} decide={decide} others={others} needs={needs} board={board} /> : (tasks.some((x) => !x.closed) || others.length > 0) && <TaskRows t={t} tasks={tasks} sessions={sessions} open={open} decide={decide} others={others} needs={needs} />}
           </div>
         )}
-        <div className="teamv-room" {...panel('room')}>
+        <div className="teamv-room" {...panel('room')} {...(drawer ? { hidden: true } : {})}>
           {wide && home && <div className="lead-gh">{title('room')}</div>}
-          <RoomView core={core} t={t} project={live} sessions={sessions} byId={byId} messages={room.messages} pins={room.pins} names={room.names} dropped={room.dropped} toggle={room.toggle} refresh={room.refresh} open={open} wt={wt} />
+          <RoomView core={core} t={t} project={live} sessions={sessions} byId={byId} messages={room.messages} pins={room.pins} names={room.names} delivery={room.delivery} dropped={room.dropped} toggle={room.toggle} refresh={room.refresh} open={open} wt={wt} />
         </div>
+        {drawer && term && <SeatDrawer t={t} peek={drawer} tasks={tasks} sessions={sessions} term={term} open={open} close={closeDrawer} />}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 // needs 170 (3) keymap additions and the Keyboard page basics of needs 171 / 172: pane-focus chords, F2, ⌘/, the tab strip's
 // arrow keys, the "No actions match" line, Enter on a row.
 import type { Page } from '@playwright/test';
-import { agentsZone, expect, openWindow, test } from './fixtures';
+import { legacyLayout, expect, openWindow, test } from './fixtures';
 
 const nav = (app: Page) => app.getByRole('navigation', { name: 'Settings pages' });
 async function keysPage(app: Page) {
@@ -29,19 +29,19 @@ const focusZoneById = (page: Page, id: string) =>
   }, id);
 
 test('pane_focus_chords: ⌥⌘→ moves the focus to the zone pane mode would pick, nothing at an edge, rebindable', async ({ app, core }) => {
-  agentsZone(core); // a left zone `agents` beside the centre column (D5b: the default window has one zone)
+  legacyLayout(core); // a left column with a `tree` zone beside the centre column (the default window has one zone)
   core.shell(core.project('demo'), 'one');
   await openWindow(app);
-  await focusZoneById(app, 'agents');
-  expect(await zoneOfFocus(app)).toBe('agents');
+  await focusZoneById(app, 'tree');
+  expect(await zoneOfFocus(app)).toBe('tree');
   // Pane mode's own pick: prefix r, l, Enter.
   await app.keyboard.press('Control+Period');
   await app.keyboard.press('KeyR');
   await app.keyboard.press('KeyL');
   await app.keyboard.press('Enter');
   const picked = await zoneOfFocus(app);
-  expect(picked).not.toBe('agents');
-  await focusZoneById(app, 'agents');
+  expect(picked).not.toBe('tree');
+  await focusZoneById(app, 'tree');
   expect(await press(app, { code: 'ArrowRight', metaKey: true, altKey: true })).toBe(true);
   expect(await zoneOfFocus(app)).toBe(picked);
   // At the right edge: handled, nothing moves.
@@ -49,22 +49,22 @@ test('pane_focus_chords: ⌥⌘→ moves the focus to the zone pane mode would p
   expect(await zoneOfFocus(app)).toBe(picked);
   // And back: ⌥⌘← from the centre.
   expect(await press(app, { code: 'ArrowLeft', metaKey: true, altKey: true })).toBe(true);
-  expect(await zoneOfFocus(app)).toBe('agents');
+  expect(await zoneOfFocus(app)).toBe('tree');
   // final.html: while they follow the arrows together the four ids are one row in Focus.
   await keysPage(app);
   await expect(app.locator('[data-area="focus"] tr[data-command="pane.focus"] td').nth(1)).toHaveText('⌥⌘←→↑↓');
 });
 
 test('pane_focus_chord_rebound: rebound to ⌥L the old chord does nothing and the new one moves', async ({ app, core }) => {
-  agentsZone(core);
+  legacyLayout(core);
   core.shell(core.project('demo'), 'one');
   await app.addInitScript(() => localStorage.getItem('nunchiro.settings.v1') === null && localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ bindings: { 'pane.focus.right': ['Alt+KeyL'] } })));
   await openWindow(app);
-  await focusZoneById(app, 'agents');
+  await focusZoneById(app, 'tree');
   expect(await press(app, { code: 'ArrowRight', metaKey: true, altKey: true })).toBe(false);
-  expect(await zoneOfFocus(app)).toBe('agents');
+  expect(await zoneOfFocus(app)).toBe('tree');
   expect(await press(app, { code: 'KeyL', altKey: true })).toBe(true);
-  expect(await zoneOfFocus(app)).not.toBe('agents');
+  expect(await zoneOfFocus(app)).not.toBe('tree');
 });
 
 test('f2_renames_tab_not_in_terminal: F2 starts the active tab’s rename; inside a terminal the agent gets the F2 bytes', async ({ app, core }) => {
@@ -92,7 +92,7 @@ test('f2_renames_tab_not_in_terminal: F2 starts the active tab’s rename; insid
   await expect(app.locator(`.tab[data-tab="${id}"] input`)).toHaveCount(0);
 });
 
-test('cmd_slash_shows_key_help: ⌘/ shows the prefix help with its rows; Esc closes; the prefix ? still does the same', async ({ app, core }) => {
+test('cmd_slash_shows_key_help: ⌘/ shows the whole key sheet with its rows; Esc closes; the prefix ? shows the shorter prefix list (ticket 1099)', async ({ app, core }) => {
   core.shell(core.project('demo'), 'alpha');
   await openWindow(app);
   const help = app.locator('.prefix-help');
@@ -106,7 +106,8 @@ test('cmd_slash_shows_key_help: ⌘/ shows the prefix help with its rows; Esc cl
   await app.keyboard.press('Control+Period');
   await app.keyboard.press('Shift+Slash');
   await expect(help).toBeVisible();
-  expect(await help.locator('.ph-row').count()).toBe(rows);
+  expect(await help.locator('.ph-row').count()).toBeLessThan(rows); // ticket 1099: ◆ ? lists only the keys after the prefix
+  await expect(help.locator('.ph-row[data-command="session.new"]')).toHaveCount(1); // its ◆ c
 });
 
 test('keys_tabs_arrow_keys: ArrowRight/Left/Home/End move the Shortcuts | Hints tabs and select as they go', async ({ app, core }) => {

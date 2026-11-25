@@ -24,6 +24,9 @@ declare module '../index' {
     'rest.st.splitLeft': true;
     'rest.st.splitUp': true;
     'rest.st.splitDown': true;
+    'rest.st.splitReplace': true;
+    'rest.st.splitNeedsTab': true;
+    'rest.st.splitNotThis': true;
     'rest.st.tempCaption': true;
     'rest.st.resize': true;
     'rest.st.newSplit': true;
@@ -71,6 +74,9 @@ export const en = {
   'rest.st.splitLeft': 'Split left',
   'rest.st.splitUp': 'Split above',
   'rest.st.splitDown': 'Split below',
+  'rest.st.splitReplace': 'Show here instead', // ticket 1069, English only until ticket 1035
+  'rest.st.splitNeedsTab': 'A split needs a second tab', // ticket 1093, English only until ticket 1035
+  'rest.st.splitNotThis': 'This tab cannot go to a split yet', // ticket 1093, English only until ticket 1035
   'rest.st.tempCaption': 'Split for this session · stays until you close it',
   'rest.st.resize': 'Resize split',
   'rest.st.newSplit': 'New split',

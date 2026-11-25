@@ -6,6 +6,7 @@ fn chat_codex_cannot_alias_another_rollout_through_a_symlink() {
         let root = PathBuf::from(root);
         let s = Session {
             side_chat: false,
+            stopped_sends: Vec::new(),
             side_parent: None,
             teammate: None,
             resumed_from: vec![],

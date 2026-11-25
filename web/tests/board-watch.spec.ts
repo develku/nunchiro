@@ -57,7 +57,9 @@ test('board_watch_columns_from_state: the bucket is derived from the card state,
   expect(bucketOf(session('review'), COLUMNS)).toBe('done');
   expect(bucketOf(session('done'), COLUMNS)).toBe('idle');
   expect(bucketOf(manual('todo'), COLUMNS)).toBe('next');
-  expect(bucketOf(manual('working'), COLUMNS)).toBe('working');
+  // Ticket 1090: a Working column alone is not work; only a seat in a turn makes a card Working.
+  expect(bucketOf(manual('working'), COLUMNS)).toBe('next');
+  expect(bucketOf(manual('working', { attachments: [{ session_id: 'w', role: 'build', label: 'w', state: 'working' }] }), COLUMNS)).toBe('working');
   expect(bucketOf(manual('needs-decision'), COLUMNS)).toBe('attention');
   expect(bucketOf(manual('review'), COLUMNS)).toBe('attention'); // a finished lane waiting for the receipt check waits on you
   // Look v9 B N-S3-4: a lead's task card follows the Team view: ready to merge (Review) waits on nobody; its open merge
@@ -70,7 +72,8 @@ test('board_watch_columns_from_state: the bucket is derived from the card state,
   expect(bucketOf(manual('working', { task: 't1', attachments: [{ session_id: 'w', role: 'build', label: 'w', state: 'working' }] }), COLUMNS)).toBe('working');
   const lead = { state: 'running', teammate: 'lead-1' } as Session;
   expect(bucketOf(session('review'), COLUMNS, lead)).toBe('idle');
-  expect(bucketOf(session('review'), COLUMNS, { ...lead, teammate: undefined })).toBe('done');
+  expect(bucketOf(session('review'), COLUMNS, { ...lead, teammate: undefined, completion_seq: 1 })).toBe('done');
+  expect(bucketOf(session('idle'), COLUMNS)).toBe('idle'); // ticket 1092: no turn yet is neutral
   expect(bucketOf(manual('done'), COLUMNS)).toBe('done');
   // A worker attached to a working card that asks puts the card under Needs you; a card in a column that is gone is Next.
   expect(bucketOf(manual('working', { attachments: [{ session_id: 'w', role: 'build', label: 'w', state: 'needs_decision' }] }), COLUMNS)).toBe('attention');
@@ -82,7 +85,8 @@ test('board_watch_columns_from_state: the bucket is derived from the card state,
     { id: 'c', title: 'Ask', states: [], needs_decision: true },
     { id: 'd', title: 'Shipped', states: ['done'], needs_decision: false },
   ];
-  expect(['a', 'b', 'c', 'd'].map((c) => bucketOf(manual(c), custom))).toEqual(['next', 'working', 'attention', 'done']);
+  // Ticket 1090: a column that claims working holds a card under Working only while one of its seats is in a turn.
+  expect(['a', 'b', 'c', 'd'].map((c) => bucketOf(manual(c), custom))).toEqual(['next', 'next', 'attention', 'done']);
   // Orca's order inside a column: the card that moved last is on top.
   expect(byRecent([manual('todo', { id: '1', last_moved_at: 5 }), manual('todo', { id: '2', last_moved_at: 9 }), manual('todo', { id: '3', updated_at: 7 })]).map((c) => c.id)).toEqual(['2', '3', '1']);
 
@@ -395,7 +399,7 @@ test('lane_count_plural: a lane header says "1 card" and "2 cards"; Korean as wr
   for (const [lang, table] of Object.entries(tables as unknown as Record<string, Record<string, string>>)) for (const k of ['board.watch.cards.one', 'board.watch.cards.other']) expect(table[k], `${lang} ${k}`).toContain('{n}');
   // In the window: one card in the alpha lane, two in beta; the header counts say it right, and so do the column counts.
   const a = core.shell(core.project('alpha'), 'one');
-  const b = core.shell(core.project('beta'), 'two');
+  const b = busyShell(core, core.project('beta'), 'two'); // ticket 1090: in a turn, so its card in Working says Working
   seed(core, [
     { id: 'p1', title: 'Alpha lane', column: 'todo', attachments: [{ session_id: a.id, role: 'build' }] },
     { id: 'p2', title: 'Beta lane', column: 'todo', moved: 30, attachments: [{ session_id: b.id, role: 'build' }] },

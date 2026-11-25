@@ -23,6 +23,7 @@ declare module '../index' {
     'err.extensionExists': true;
     'err.extensionUnread': true;
     'err.extensionUnread.todo': true;
+    'err.contextNotSent': true;
     'err.groupExists': true;
     'err.nameTaken.todo': true;
     'err.decisionWaiting': true;
@@ -92,6 +93,7 @@ export const en = {
   'err.extensionExists': 'An extension named {name} already exists.',
   'err.extensionUnread': '{name} was not turned on: it can run commands.',
   'err.extensionUnread.todo': 'Open it in Settings > Skills & hooks, read what it runs, then turn it on.',
+  'err.contextNotSent': 'The breakdown was not asked for: {why}.', // ticket 1059: English only until the ticket 1035 pass
   'err.groupExists': 'A group named {name} already exists.',
   'err.nameTaken.todo': 'Choose another name.',
   'err.decisionWaiting': 'A decision is waiting in this session.',

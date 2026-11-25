@@ -51,6 +51,24 @@ declare module '../index' {
     'machines.fixUpdate': true;
     'machines.fixInstall': true;
     'machines.fixCopy': true;
+    // Ticket 1050 (English only until ticket 1035)
+    'machines.share': true;
+    'machines.shareHost': true;
+    'machines.shareNote': true;
+    'machines.shareOff': true;
+    'machines.shareNone': true;
+    'machines.shareClose': true;
+    'machines.paste': true;
+    'machines.link': true;
+    'machines.linkBad': true;
+    'machines.linkKey': true;
+    'machines.linkTrusted': true;
+    'machines.linkMismatch': true;
+    'machines.copyId': true;
+    'machines.hostHelp': true;
+    'machines.loggedInAs': true;
+    'machines.useAlias': true;
+    'machines.useAliasUser': true;
   }
 }
 export const en = {
@@ -103,6 +121,24 @@ export const en = {
   'machines.fixUpdate': 'To update, run this on {alias}, in a Nunchiro source folder at the same version as this Mac:',
   'machines.fixInstall': 'Nunchiro is not installed on {alias}. Run this in a Nunchiro source folder on {alias}. Then add $HOME/.local/bin to PATH in its login shell:',
   'machines.fixCopy': 'Copy command',
+  'machines.share': "Share this Mac",
+  'machines.shareHost': "Name to share",
+  'machines.shareNote': "Paste this link in Add machine on the other Mac. It holds this Mac's name, your user name, the SSH port and the host key fingerprint, and no password or key: it gives no access by itself.",
+  'machines.shareOff': "Remote Login is off on this Mac, so there is no link to share. Turn it on in System Settings > General > Sharing > Remote Login, then open this again.",
+  'machines.shareNone': "This Mac has no host name to share. Set one in System Settings > General > Sharing > Local hostname.",
+  'machines.shareClose': "Close",
+  'machines.paste': "Paste link",
+  'machines.link': "Share link",
+  'machines.linkBad': "This is not a valid Nunchiro machine link. Copy it again from Share this Mac on the other Mac.",
+  'machines.linkKey': "Host key from the link:",
+  'machines.linkTrusted': "The host key matches the link, and you can sign in.",
+  'machines.linkMismatch': "Not trusted: the host key of {host} does not match the link. The link says {want}; the machine sent {live}. Do not add it unless you know why the key changed.",
+  'machines.copyId': "The host key matches, but the machine did not accept your SSH key. Run this once in Terminal to copy your public key to it:",
+  'machines.hostHelp': "A jump host, ProxyCommand or identity file: set it for this host in ~/.ssh/config. Nunchiro uses it.",
+  // Ticket 1068: English only until the ticket 1035 pass.
+  'machines.loggedInAs': "It logged in as {user}.",
+  'machines.useAlias': "Use alias {alias}",
+  'machines.useAliasUser': "Use alias {alias} (user {user})",
 };
 export const ko = {
   'machines.v25.summary.one': '머신 {n}대 · 연결됨 {up} · 연결 불가 {down}',

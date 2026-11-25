@@ -109,7 +109,7 @@ chatTest('scroll_restored_per_session: a chat scrolled up comes back to its plac
 
 test('shell_chrome_strings_in_i18n: the lane\'s strings have English and Korean in areas/shell-chrome.ts, no source keeps a literal, and the window shows Korean', async ({ app, core }) => {
   // The catalogue: the same keys in both languages, none empty.
-  expect(Object.keys(areaKo).sort()).toEqual(Object.keys(areaEn).sort());
+  expect(Object.keys(areaKo).filter((k) => !(k in areaEn))).toEqual([]); // every Korean key is an English one; English-only keys wait for ticket 1035
   for (const [k, v] of [...Object.entries(areaEn), ...Object.entries(areaKo)]) expect(v.length, k).toBeGreaterThan(2);
   // Every key the sources use exists; the old literals are gone from them.
   const src = (f: string) => fs.readFileSync(path.join(REPO, 'web/src', f), 'utf8');
@@ -120,7 +120,7 @@ test('shell_chrome_strings_in_i18n: the lane\'s strings have English and Korean 
   expect(src('layout/Sidebars.tsx')).not.toContain('Drag to resize both sidebars');
   expect(src('chrome/commands.ts')).not.toMatch(/title: 'Sidebars (wider|narrower)'|title: 'Restart session'/);
   expect(src('chrome/useTabs.ts')).not.toContain('Not restarted:');
-  // In the window: Korean names on the button and the palette commands (ticket 1041: the bar edge is gone).
+  // In the window: Korean names on the button, the bar edge (back in ticket 1052) and the palette commands.
   core.shell(core.project('demo'), 'one');
   await app.addInitScript(() => localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ language: 'ko' })));
   await app.goto('/'); // the status line speaks Korean too, so openWindow's "Connected" wait does not apply
@@ -128,7 +128,7 @@ test('shell_chrome_strings_in_i18n: the lane\'s strings have English and Korean 
   const koBar = (side: 'left' | 'right') => app.getByRole('navigation', { name: shellKo[side === 'left' ? 'shell.rail.left' : 'shell.rail.right'], exact: true });
   await expect(koBar('left').getByRole('button', { name: areaKo['shell.chrome.hideLeft'] })).toBeVisible();
   await expect(koBar('right').getByRole('button', { name: areaKo['shell.chrome.showRight'] })).toBeVisible();
-  await expect(koBar('left').getByRole('separator')).toHaveCount(0);
+  await expect(koBar('left').getByRole('separator', { name: areaKo['shell.chrome.barEdge'] })).toHaveCount(1);
   await app.keyboard.press('Meta+KeyK');
   const palette = app.getByRole('dialog', { name: /Command palette|명령/ });
   await expect(palette.locator('[data-command="sidebars.wider"]')).toContainText(areaKo['shell.chrome.sidebarsWider']);

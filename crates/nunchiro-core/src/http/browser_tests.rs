@@ -546,6 +546,7 @@ fn browser_role_allowlist_table() {
         "DiffList",
         "DiffFile",
         "UserCommands",
+        "AgentModels", // ticket 1100: the model list the window sees, read-only
         "ChatPage",
         "Answer",
         "SendText",
@@ -1109,6 +1110,18 @@ fn browser_cannot_send_mode_keys() {
     for text in [r"\u001b", r"\u0003", r"yes\r"] {
         assert_eq!(allowed(&frame(text)), Ok(Some("reply")), "{text}");
     }
+}
+
+// Ticket 1059: a paired device reads the context but cannot type /context through the widget's refresh.
+#[test]
+fn browser_cannot_refresh_context() {
+    assert_eq!(
+        allowed(r#"{"id":1,"request":{"op":"session_context","id":"s"}}"#),
+        Ok(None)
+    );
+    assert!(
+        allowed(r#"{"id":1,"request":{"op":"session_context","id":"s","refresh":true}}"#).is_err()
+    );
 }
 
 #[test]

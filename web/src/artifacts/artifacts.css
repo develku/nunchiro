@@ -142,6 +142,13 @@
 .pdock {
   min-height: 0;
 }
+.pv-top {
+  justify-content: flex-end;
+}
+.pv-top .pclose {
+  display: inline-flex;
+  color: var(--muted);
+}
 .pdock .pclose {
   color: var(--muted);
   font-size: var(--fs-14);

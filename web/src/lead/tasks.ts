@@ -31,10 +31,18 @@ export type TaskView = {
   asking?: string[];
   /** The window's own: the id of the open merge card the lead asked the person to answer (`withMerges`). */
   merge?: string;
+  /** Ticket 1081: each seat's last activity (ms), what waits on the lead, and the seats the core saw stalled. */
+  seen?: Record<string, number>;
+  waits?: 'review' | 'merge';
+  /** Part B: `review` is `waits` (its Reviewer waits for a free seat) or `started` (the core started it). */
+  advance?: { stalled?: { session: string; name: string; why: string }[]; review?: 'waits' | 'started' };
 };
 
 /** crates/nunchiro-core/src/ledger.rs `Place`: the place's way of working and what its writing seats may do unasked. */
-export type Place = { way: 'solo' | 'team' | 'strict'; seats: 'ask' | 'edits' };
+/** `auto` (ticket 1081): the core leaves it out while on. */
+/** `cap` (ticket 1081 part B): the seats at once the core may start up to; left out at 4. */
+// Ticket 1120: `account` is the label of the agent account the place's seats start on; absent: the lead's own.
+export type Place = { way: 'solo' | 'team' | 'strict'; seats: 'ask' | 'edits'; auto?: boolean; cap?: number; account?: string };
 export type Role = { name: string; job: string; kind: string; model?: string; effort?: string; writes: boolean };
 
 // A change made in this window (the way menu) reads every list again at once.
@@ -120,7 +128,7 @@ export function useRoles(core: CoreClient, on: boolean): Role[] {
 }
 
 /** The user sets the place's way or what its seats may do; every list is read again after. */
-export async function setPlace(core: CoreClient, project: string, operation: 'way' | 'grant', text: string) {
+export async function setPlace(core: CoreClient, project: string, operation: 'way' | 'grant' | 'auto' | 'cap' | 'account', text: string) {
   await core.request({ op: 'task', operation, project, text });
   tasksChanged();
 }

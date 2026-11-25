@@ -5,7 +5,7 @@
 // No component or CSS imports here: the pure layout specs load this file in Node.
 import type { ReactNode } from 'react';
 import { Icon } from '../icons/Icon';
-import { status, type Session } from '../types';
+import type { Session } from '../types';
 
 export interface PreviewProps {
   sessions: Session[];
@@ -34,23 +34,6 @@ export const ENTRIES = [
       </>
     ),
   },
-  {
-    kind: 'agents',
-    title: 'Agents',
-    min: { w: 160, h: 80 },
-    note: 'one dot per agent, showing its state',
-    preview: ({ sessions }) => {
-      const few = sessions.slice(0, 4);
-      return (
-        <>
-          {few.map((s) => (
-            <i key={s.id} className="dotl" data-s={status(s)} />
-          ))}
-          {!few.length && <i className="ln" />}
-        </>
-      );
-    },
-  },
   { kind: 'waiting', title: 'Answer strip', min: { w: 200, h: 40 }, note: 'answer here', preview: ({ waiting }) => <span className="txt">{waiting ? `${waiting} waiting` : 'appears when waiting'}</span> },
   { kind: 'terminal', title: 'Terminal', min: { w: 240, h: 120 }, note: 'follows or pinned', preview: ({ sessions }) => <span className="txt mono">$ {sessions[0]?.label || '_'}</span> },
   { kind: 'composer', title: 'Composer', min: { w: 240, h: 56 }, note: 'hideable', preview: () => <span className="box" /> },
@@ -63,6 +46,8 @@ export const ENTRIES = [
   { kind: 'decisions', title: 'Decisions', min: { w: 240, h: 120 }, note: 'pending answers · risky allow', preview: ({ waiting }) => <span className="txt">{waiting ? `${waiting} waiting` : 'Nothing waiting'}</span> }, // V2-8e
   // Ticket 990: the room of the focused session's place; never in the default layout or rail (a lead's place shows it in the Team view).
   { kind: 'room', title: 'Room', min: { w: 280, h: 160 }, note: 'leader and team', preview: () => <span className="txt">Room</span> },
+  // Ticket 1048: the context fill of the session in view (its window view is ContextWidget.tsx).
+  { kind: 'context', title: 'Context', min: { w: 200, h: 80 }, note: 'context window of the session', preview: () => <span className="txt">36% used</span> },
 ] as const satisfies readonly Entry[];
 
 export type Kind = (typeof ENTRIES)[number]['kind'];

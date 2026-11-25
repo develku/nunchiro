@@ -1,0 +1,14 @@
+{"type":"user","uuid":"b3570969-6384-40c9-a93a-a92a4bc48471","timestamp":"2026-11-23T08:24:05.929Z","message":{"role":"user","content":"x"}}
+{"type":"user","isVirtual":true,"uuid":"7f5cf443-6e6c-4ca6-90b2-7dec4db7d187","timestamp":"2026-11-23T08:25:17.805Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"repl_463f15d9-7369-4c9d-8440-7d434439418f"}]},"toolUseResult":{"agentId":"a8507480df41e02b4","isAsync":true}}
+{"type":"assistant","uuid":"12203aa1-d5c2-463f-be71-d28ce87e5740","timestamp":"2026-11-23T08:25:24.090Z","message":{"role":"assistant","model":"claude-fable-5-2","stop_reason":"end_turn","content":[{"type":"thinking"}]}}
+{"type":"assistant","uuid":"482bcf31-9564-4516-afc3-226fc30733c4","timestamp":"2026-11-23T08:25:24.093Z","message":{"role":"assistant","model":"claude-fable-5-2","stop_reason":"end_turn","content":[{"type":"text","text":"x"}]}}
+{"type":"system","subtype":"turn_duration","isMeta":false,"uuid":"5b7070d1-8310-478e-bfe2-2b82201e1495","timestamp":"2026-11-23T08:25:24.308Z"}
+{"type":"user","uuid":"b12ade28-5ac6-446e-b452-cd068e6587a0","timestamp":"2026-11-23T08:25:24.360Z","message":{"role":"user","content":"x"}}
+{"type":"attachment","uuid":"182e159f-5b8c-4fad-b336-0ac2702de767","timestamp":"2026-11-23T08:25:39.495Z","attachment":{"type":"queued_command","prompt":"<task-notification><task-id>a8507480df41e02b4</task-id><status>completed</status>"}}
+{"type":"attachment","uuid":"7ef1c56c-4617-4ccf-a0a0-0caf9247d149","timestamp":"2026-11-23T08:26:13.715Z","attachment":{"type":"queued_command","prompt":"x"}}
+{"type":"assistant","uuid":"1367efc8-4559-4d13-a303-25c85e15b1eb","timestamp":"2026-11-23T08:28:03.149Z","message":{"role":"assistant","model":"claude-fable-5-2","stop_reason":"end_turn","content":[{"type":"text","text":"x"}]}}
+{"type":"system","subtype":"turn_duration","isMeta":false,"uuid":"da287609-8673-4a02-8f0a-9e79592d7ed4","timestamp":"2026-11-23T08:28:03.370Z"}
+{"type":"user","isMeta":true,"uuid":"f06134d8-accc-4aa0-8680-11b974c2559a","timestamp":"2026-11-23T08:34:00.773Z","message":{"role":"user","content":"x"}}
+{"type":"attachment","uuid":"643325d9-f057-42d7-909d-4fe19613d41b","timestamp":"2026-11-23T08:35:08.601Z","attachment":{"type":"queued_command","prompt":"x"}}
+{"type":"assistant","uuid":"e17d6e22-f67f-4181-9566-fc3489875f86","timestamp":"2026-11-23T08:35:17.526Z","message":{"role":"assistant","model":"claude-fable-5-2","stop_reason":"end_turn","content":[{"type":"text","text":"x"}]}}
+{"type":"system","subtype":"turn_duration","isMeta":false,"uuid":"6afe8dd9-9b1d-49da-b963-b922386bd11d","timestamp":"2026-11-23T08:35:17.728Z"}

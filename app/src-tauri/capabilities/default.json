@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The window may close itself (detach), drag by its title bar and zoom (maximise) on a double click of it (the drag region's own two commands), open http(s) links in the user's browser open the folder picker (dialog open only) and open the two System Settings privacy panes Permission needed names and the Local Network pane Settings > Permissions names, and the Camera and Microphone panes Settings > In-app browser names; all data goes through the loopback API.",
+  "description": "The window may close itself (detach), drag by its title bar and zoom (maximise) on a double click of it (the drag region's own two commands), set its own page zoom (View > Zoom, ticket 1071), open http(s) links in the user's browser open the folder picker (dialog open only) and open the two System Settings privacy panes Permission needed names and the Local Network pane Settings > Permissions names, and the Camera and Microphone panes Settings > In-app browser names; all data goes through the loopback API.",
   "windows": [
     "main"
   ],
@@ -9,6 +9,7 @@
     "core:window:allow-close",
     "core:window:allow-start-dragging",
     "core:window:allow-internal-toggle-maximize",
+    "core:webview:allow-set-webview-zoom",
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "opener:allow-reveal-item-in-dir",

@@ -493,57 +493,6 @@ button:disabled {
   background: linear-gradient(45deg, transparent 40%, var(--text) 40% 60%, transparent 60%);
 }
 
-/* AGENTS */
-.agents {
-  flex: 1;
-  background: var(--panel);
-  border-top: 1px solid var(--line);
-  border-right: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-/* Rows below the fold, counted in the header: it covers no row. */
-.amore {
-  color: var(--text);
-  font-weight: 600;
-}
-.alist {
-  overflow-y: auto;
-  flex: 1;
-  padding: 2px 0;
-}
-.ar {
-  display: grid;
-  grid-template-columns: 12px minmax(8ch, 1fr) minmax(0, auto);
-  gap: 6px;
-  align-items: center;
-  padding: 0 10px;
-  font-size: var(--fs-12);
-  height: var(--arow);
-  width: 100%;
-  text-align: left;
-}
-.ar:hover {
-  background: var(--hover);
-}
-.ar .n {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ar .s {
-  font-size: var(--fs-11);
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ar[aria-current='true'] .n::after {
-  content: ' ◂';
-  color: var(--muted);
-}
-
 /* centre */
 .centre {
   flex: 1;
@@ -1741,8 +1690,11 @@ button:disabled {
   background: color-mix(in srgb, var(--ok) 6%, transparent); /* ticket 520: 6%, not 10%, so --ok reads 4.5:1 on it in light */
 }
 .tcard:has(.tinuse) .tname {
-  padding-right: 76px;
+  padding-right: 62px; /* the tag and the menu; 76px left a 168px card's name 57px, under "Catppuccin" (ticket 1136) */
   white-space: normal; /* ticket 991 C17: the name wraps beside the tag instead of being cut */
+}
+.tcard:has(.tinuse):has(.ticon) .tname {
+  padding-right: 76px; /* and the ↓ or ✓ icon */
 }
 .tfield {
   display: block;
@@ -2402,15 +2354,6 @@ button:disabled {
   margin-top: 4px;
   background: var(--line);
 }
-.pv .dotl {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--faint);
-}
-.pv .dotl[data-s='waiting'] {
-  background: var(--you);
-}
 .pv .txt {
   font-size: var(--fs-11);
   color: var(--muted);
@@ -2860,39 +2803,6 @@ button:disabled {
 .padd:hover {
   color: var(--text);
 }
-.arow {
-  display: flex;
-  align-items: center;
-}
-.arow .ar {
-  flex: 1;
-  min-width: 0;
-  /* Room for Stop on every row (they line up), given to Stop when it shows, so no text moves.
-     Resting minus hover padding = the 24px Stop target (needs 172, the 24px target rule). */
-  padding-right: 34px;
-}
-.arow:has(.astop):is(:hover, :focus-within) .ar {
-  padding-right: 10px;
-}
-.astop {
-  flex: none;
-  width: 24px;
-  height: var(--arow);
-  font-size: var(--fs-11);
-  color: var(--faint);
-  display: none;
-}
-.arow:is(:hover, :focus-within) .astop {
-  display: block;
-}
-.astop:hover {
-  color: var(--text);
-}
-.aclear {
-  margin-left: 6px;
-  color: var(--text);
-  text-decoration: underline;
-}
 /* Read only: the "reconnecting" line of a live terminal does not apply. */
 .roterm .offline {
   display: none;
@@ -2966,6 +2876,32 @@ button:disabled {
   grid-column: 1 / -1;
   color: var(--muted);
   font-size: var(--fs-11);
+}
+/* Ticket 1099 (mockup cohesion-1099 panel 5): the whole sheet (⌘/) flows its areas through columns, so the long ones
+   (Sessions and tabs, Views and docks) do not stretch a grid row; the foot spans them all. */
+.prefix-help[data-all] {
+  display: block;
+  width: min(1040px, calc(100% - 32px));
+  max-height: 80vh;
+  column-width: 210px;
+  column-gap: 14px;
+}
+.prefix-help[data-all] .ph-area {
+  break-inside: avoid;
+  margin-bottom: var(--sp-8);
+}
+.prefix-help[data-all] .ph-foot {
+  column-span: all;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4) var(--sp-16);
+}
+.prefix-help[data-all] .ph-row .kbd {
+  min-width: 34px;
+}
+/* A command that cannot run now (no closed tab to reopen): listed, quieter. */
+.prefix-help .ph-row[data-off] {
+  color: var(--muted);
 }
 .smatches {
   list-style: none;
@@ -3514,6 +3450,63 @@ button:disabled {
   display: flex;
 }
 
+/* Ticket 1130 C6: the offer row for a pasted `claude mcp add` line, and its added line (mockup first-use-b-1130 .offer). */
+.mcp-offer {
+  max-width: var(--chat-w, 700px);
+  margin: 0 auto var(--sp-6);
+  border: 1px solid var(--line);
+  border-radius: var(--r-10);
+  background: var(--tint-1);
+  padding: var(--sp-8) 10px;
+  display: grid;
+  gap: 5px;
+  font-size: var(--fs-13);
+  color: var(--text);
+}
+.mcp-offer .mo-t {
+  display: flex;
+  gap: var(--sp-8);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.mcp-offer .mo-t b {
+  margin-right: auto;
+  font-weight: 600;
+}
+.mcp-offer .mo-t b.ok-line {
+  color: var(--ok-text);
+}
+.mcp-offer .btn {
+  padding: 2px var(--sp-8);
+  cursor: pointer;
+}
+.mcp-offer .mo-x {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  padding: 0 var(--sp-4);
+  font-size: var(--fs-14);
+  line-height: 1;
+  cursor: pointer;
+}
+.mcp-offer .mono {
+  font-family: var(--font-code);
+  font-size: var(--fs-code);
+  white-space: pre-wrap; /* ticket 1130 round 2: the command shows its argv's spaces exactly */
+  overflow-wrap: anywhere;
+}
+.mcp-offer small {
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.mcp-offer .mo-seal {
+  font-size: var(--fs-10);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 0 7px;
+  color: var(--muted);
+  white-space: nowrap;
+}
 /* Ticket 371 item 15: the queued rows, a tray tucked on top of the box, 14px in from each side (mock 371 .qlist). */
 .qlist {
   width: calc(100% - 28px);
@@ -3627,6 +3620,7 @@ button:disabled {
   position: fixed;
   z-index: 60;
   min-width: 300px;
+  width: 400px; /* ticket 1126: two-line rows wrap inside it (mockup .pop) */
   max-width: min(460px, 90vw);
   padding: 8px;
   display: flex;
@@ -3688,6 +3682,106 @@ button:disabled {
   margin-top: 0;
   border-top: 0;
   padding-top: 3px;
+}
+/* Ticket 1126: two-line rows (the automatic switch, continue on a running session), the menu's groups, and the card at 98%
+   of the week (mockup docs/design/default-account-1126). */
+/* The status bar sets nowrap; these rows and the foot are sentences. */
+.acsw-pop button.acsw-two,
+.acsw-foot {
+  white-space: normal;
+}
+.acsw-pop button.acsw-two {
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: start;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.acsw-name.plain {
+  font-weight: 500;
+}
+.acsw-sub {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 400;
+  line-height: 1.35;
+}
+.acsw-box {
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  margin-top: 2px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--muted);
+  border-radius: var(--r-2);
+}
+.acsw-box.on {
+  border: 0;
+  background: var(--run);
+  color: var(--on-status);
+}
+/* Round 4: the card's level (owner 2026-11-25), a sentence and its select on one row. */
+.acsw-level {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: var(--fs-2);
+  white-space: normal;
+}
+.acsw-grp,
+.acsw-carry + .acsw-grp {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+.acsw-card {
+  position: fixed;
+  z-index: 59;
+  width: 420px;
+  max-width: 90vw;
+  box-sizing: border-box;
+  padding: 12px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text);
+  border-radius: var(--r-12);
+  font-size: var(--fs-2);
+  white-space: normal;
+}
+.acsw-card .top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.acsw-card .top > svg {
+  color: var(--warn);
+  flex: none;
+}
+.acsw-card.bad .top > svg {
+  color: var(--bad);
+}
+.acsw-card .x {
+  margin-left: auto;
+  display: flex;
+  color: var(--muted);
+  border-radius: var(--r-4);
+  padding: 2px;
+}
+.acsw-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-12);
+  line-height: 1.45;
+}
+.acsw-card .acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 /* Ticket 476: the raw error text, closed under its error's plain line (src/errors.tsx). */

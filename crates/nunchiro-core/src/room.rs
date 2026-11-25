@@ -28,6 +28,8 @@ pub const PIN_MAX: usize = 200;
 pub const PIN_ID_MAX: usize = 16;
 /// Look 1117 v13 Home S3-1: the names of gone seats a room keeps (`Log::name_seat`).
 const NAMES_MAX: usize = 256;
+/// Ticket 1089: read times kept per room (`Cursors::got`); the oldest go first. The window shows the newest 500 lines.
+const GOT_MAX: usize = 2000;
 pub const PERSON: &str = "person";
 /// An ask nobody answers times out after this long (ticket 571: every ask has a deadline). `ask --wait` keeps its own
 /// (`--timeout`, 600 s by default); this one is the plain ask's, and the backstop of a wait whose caller is gone.
@@ -103,6 +105,9 @@ pub struct Message {
     /// Ticket 990: what a `Kind::Team` line is about, for the window (the body says the same in words).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub team: Option<TeamNote>,
+    /// Ticket 1089: on a `Kind::Typed` line, the send row that carries it to `to` (its delivery time is on that row).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send: Option<String>,
 }
 /// What happened to a lead's team. `worktree` is the worktree's folder; `seat` the sub-bot's session.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,6 +151,11 @@ pub struct Draft {
 struct Cursors {
     ino: u64,
     seats: BTreeMap<String, usize>,
+    /// Ticket 1089: message id, or a typed line's send row id, -> when its seat got it (an inbox read, an ask's answer
+    /// handed to `ask --wait`, a send row turning delivered). Kept here and not on the send row: `Cursors` is read
+    /// loosely, so an older core still loads this file.
+    #[serde(default)]
+    got: BTreeMap<String, u64>,
 }
 
 /// Ticket 593: what `pins.json` holds: the person's pinned message ids, valid only for the log (`log`, the time of its
@@ -254,6 +264,11 @@ impl Log {
         fs::symlink_metadata(self.dir.join("log.jsonl")).map_or(0, |m| m.ino())
     }
     fn cursors(&self) -> BTreeMap<String, usize> {
+        self.stored().seats
+    }
+    /// `cursors.json` when it was taken on this log file, else empty (for this log).
+    fn stored(&self) -> Cursors {
+        let ino = self.log_ino();
         let stored: Cursors = fs::OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
@@ -261,11 +276,87 @@ impl Log {
             .ok()
             .and_then(|f| serde_json::from_reader(std::io::BufReader::new(f)).ok())
             .unwrap_or_default();
-        if stored.ino == self.log_ino() {
-            stored.seats
+        if stored.ino == ino {
+            stored
         } else {
-            BTreeMap::new()
+            Cursors {
+                ino,
+                ..Cursors::default()
+            }
         }
+    }
+    /// Ticket 1089: keeps when `ids` reached their seat (now) and tells the window.
+    fn save_got(&self, mut cursors: Cursors, ids: &[String]) -> Result<(), String> {
+        let now = crate::queue::now_ms();
+        for id in ids {
+            cursors.got.entry(id.clone()).or_insert(now);
+        }
+        while cursors.got.len() > GOT_MAX {
+            let oldest = cursors
+                .got
+                .iter()
+                .min_by_key(|(_, at)| **at)
+                .map(|(k, _)| k.clone());
+            cursors.got.remove(&oldest.unwrap_or_default());
+        }
+        self.replace(
+            "cursors.json",
+            &serde_json::to_vec(&cursors).map_err(|e| e.to_string())?,
+        )?;
+        if !ids.is_empty() {
+            crate::events::push(crate::events::Event {
+                kind: "room_delivery".into(),
+                project: self.project.clone(),
+                ..Default::default()
+            });
+        }
+        Ok(())
+    }
+    /// Ticket 1089: `ids` reached their seat outside an inbox read (an answer `ask --wait` returned, a send row).
+    pub fn reached(&self, ids: &[String]) -> Result<(), String> {
+        self.save_got(self.stored(), ids)
+    }
+    /// Ticket 1089: for each of the newest `max` lines sent to a seat (a line has one), when it reached the seat (`None`
+    /// while it waits there). A typed line reached its seat when its send row turned delivered, and waits while
+    /// `waits(seat, send)` (the row is in the seat's queue); a canceled or failed row is left out. An inbox line
+    /// reached its seat when the seat read it. A line the seat read before read times were kept is left out.
+    pub fn delivery(
+        &self,
+        max: usize,
+        waits: impl Fn(&str, &str) -> bool,
+    ) -> Result<BTreeMap<String, Option<u64>>, String> {
+        let cursors = self.stored();
+        self.with(|log, _| {
+            let start = log.len().saturating_sub(max);
+            log.iter()
+                .enumerate()
+                .skip(start)
+                .filter(|(_, m)| m.to != PERSON)
+                .filter_map(|(i, m)| {
+                    let at = match m.kind {
+                        Kind::Typed => {
+                            let send = m.send.as_deref()?;
+                            match cursors.got.get(send) {
+                                Some(at) => Some(*at),
+                                None if waits(&m.to, send) => None,
+                                None => return None,
+                            }
+                        }
+                        Kind::Message | Kind::Ask | Kind::Reply | Kind::Lost => {
+                            match cursors.got.get(&m.id) {
+                                Some(at) => Some(*at),
+                                None if cursors.seats.get(&m.to).is_some_and(|n| *n > i) => {
+                                    return None;
+                                }
+                                None => None,
+                            }
+                        }
+                        _ => return None,
+                    };
+                    Some((m.id.clone(), at))
+                })
+                .collect()
+        })
     }
     fn private_dir(&self) -> Result<(), String> {
         fs::DirBuilder::new()
@@ -294,32 +385,50 @@ impl Log {
                 peers: false,
             },
             Some(note),
+            None,
         )
     }
     /// Ticket 990: one `Kind::Typed` line (`from` typed `body` into `to`'s terminal), by the core for its own lines.
     /// It stops at the room's limits, as a team line does.
-    pub fn typed(&self, from: &str, to: &str, body: String, by: By) -> Result<Message, String> {
+    pub fn typed(
+        &self,
+        from: &str,
+        to: &str,
+        body: String,
+        by: By,
+        send: Option<String>,
+    ) -> Result<Message, String> {
         if self.with(|log, bytes| log.len() >= LOG_MAX_MESSAGES || bytes >= LOG_MAX_BYTES)? {
             return Err("room_full: no typed line is written to a full room".into());
         }
-        self.append(Draft {
-            kind: Kind::Typed,
-            from: from.into(),
-            to: to.into(),
-            thread: None,
-            reply_to: None,
-            body,
-            created_by: by,
-            peers: false,
-        })
+        self.append_noted(
+            Draft {
+                kind: Kind::Typed,
+                from: from.into(),
+                to: to.into(),
+                thread: None,
+                reply_to: None,
+                body,
+                created_by: by,
+                peers: false,
+            },
+            None,
+            send,
+        )
     }
     fn append(&self, draft: Draft) -> Result<Message, String> {
-        self.append_noted(draft, None)
+        self.append_noted(draft, None, None)
     }
-    fn append_noted(&self, draft: Draft, team: Option<TeamNote>) -> Result<Message, String> {
+    fn append_noted(
+        &self,
+        draft: Draft,
+        team: Option<TeamNote>,
+        send: Option<String>,
+    ) -> Result<Message, String> {
         let id = format!("m{}", self.with(|log, _| log.len())? + 1);
         let message = Message {
             team,
+            send,
             thread: draft.thread.unwrap_or_else(|| id.clone()),
             id,
             kind: draft.kind,
@@ -412,16 +521,11 @@ impl Log {
     }
     /// The seat's unread messages; the cursor moves past them.
     pub fn check(&self, seat: &str) -> Result<Vec<Message>, String> {
-        let mut cursors = Cursors {
-            ino: self.log_ino(),
-            seats: self.cursors(),
-        };
+        let mut cursors = self.stored();
         let (found, len) = self.with(|log, _| (unread(log, &cursors.seats, seat), log.len()))?;
         cursors.seats.insert(seat.into(), len);
-        self.replace(
-            "cursors.json",
-            &serde_json::to_vec(&cursors).map_err(|e| e.to_string())?,
-        )?;
+        let ids: Vec<String> = found.iter().map(|m| m.id.clone()).collect();
+        self.save_got(cursors, &ids)?;
         Ok(found)
     }
     /// Writes a small state file of the room folder whole: a private temp file, then a rename.
@@ -1215,6 +1319,7 @@ mod tests {
                 created_by: By::Agent,
                 ts: 0,
                 team: None,
+                send: None,
             })
             .unwrap();
             m.push('\n');

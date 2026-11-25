@@ -10,7 +10,7 @@ import { ko as koExit } from '../src/i18n/areas/exit-widgets';
 import { ko as koLayout } from '../src/i18n/areas/rest-layout';
 import { EN } from './i18n-tables';
 import { sidebar } from './d5b';
-import { agentsZone, expect, openWindow, test, type Core } from './fixtures';
+import { stripOnTop, expect, openWindow, test, type Core } from './fixtures';
 import { openQuiet } from './tree-seed';
 
 const gitRepo = (core: Core, name: string) => {
@@ -57,45 +57,22 @@ const staleFlag: Edit = (s) => Object.assign(s.attention, { working: false, wait
 const staleItem = (s: Parameters<Edit>[0]) => ({ id: `d-${s.label}`, session_id: s.id, scope: s.project, kind: 'stale', text: 'No output for 10 min', choices: [], observed_at: ago(600_000), actionable: false });
 
 const rowOf = (app: Page, id: string) => app.locator(`.row.wt2[data-menu-session="${id}"]`);
-const dot = (app: Page, id: string) => app.locator(`.ar[data-agent="${id}"] .st`);
 
-test('tree_and_agents_agree_on_state: a session that is not running reads done in the tree row and the Agents list; a running stale one reads stale in both', async ({ app, core }) => {
+test('tree_row_state: a session that is not running reads done in the tree row; a running stale one reads stale', async ({ app, core }) => {
   const p = gitRepo(core, 'repo');
   const ended = wtSession(core, p, 'ended');
   const silent = wtSession(core, p, 'silent');
   openQuiet(core);
-  agentsZone(core);
+  stripOnTop(core);
   const patch = await patchSnapshots(app);
   await openWindow(app);
   // The ended session still carries the stale flag, and its queue item, from before it stopped.
   patch.set('ended', (s) => (staleFlag(s), (s.state = 'exited'), (s.pending = [staleItem(s)])));
   patch.set('silent', staleFlag);
-  await expect(dot(app, ended.id)).toHaveAttribute('data-s', 'done');
-  await expect(dot(app, silent.id)).toHaveAttribute('data-s', 'stale');
-  await expect(rowOf(app, ended.id)).toHaveAttribute('data-kind', 'idle');
+  await expect(rowOf(app, ended.id)).toHaveClass(/\bjust\b/); // a finished session is a "just finished" row
   await expect(app.locator(`.q[data-line="${ended.id}"]`)).toHaveCount(0); // no stale line under a row that reads done
-  await expect(rowOf(app, ended.id).locator('.tip b')).toHaveText('done · Shell');
   await expect(rowOf(app, silent.id)).toHaveAttribute('data-kind', 'stale');
   await expect(rowOf(app, silent.id).locator('.tip b')).toContainText('stale · no output for');
-});
-
-const setLanguage = (app: Page, language: string) =>
-  app.evaluate((l) => localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ ...JSON.parse(localStorage.getItem('nunchiro.settings.v1') ?? '{}'), language: l })), language);
-
-test('agents_header_counts_running: the Agents header says how many of the listed sessions run, from a catalogue key, in English and Korean', async ({ app, core }) => {
-  const p = core.project('demo');
-  core.shell(p, 'a');
-  core.shell(p, 'b');
-  const gone = core.shell(p, 'c').id;
-  core.windowClose(gone); // ticket 1013 F6: the window's own Close keeps the done tab
-  agentsZone(core);
-  await openWindow(app);
-  const count = app.locator('section.agents .ph .r');
-  await expect(count).toContainText('2 of 3 running');
-  await expect(count).not.toContainText('running first');
-  await setLanguage(app, 'ko');
-  await app.reload();
-  await expect(count).toContainText('3개 중 2개 실행 중');
 });
 
 test('stale_only_row_does_not_open_decisions: a row whose only item is a stale flag opens its session; a row with a real ask still jumps to Decisions', async ({ app, core }) => {

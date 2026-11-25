@@ -1,9 +1,9 @@
 // ticket 93 (hints2 review SHOULDs, needs 118): the Settings preview string, the pane mark on the side pane, and the
 // 2-click way to Keys > Hints. The gear label is pinned in keys.spec.ts.
-import { agentsZone, expect, openWindow, test } from './fixtures';
+import { stripOnTop, expect, openWindow, test } from './fixtures';
 import { icon } from './d5b';
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 test('hints_settings_preview_string', async ({ app, core }) => {
   core.shell(core.project('demo'), 'alpha');

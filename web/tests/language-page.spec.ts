@@ -4,10 +4,10 @@ import AxeBuilder from '@axe-core/playwright';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { expect, openWindow, test, agentsZone } from './fixtures';
+import { expect, openWindow, test, stripOnTop } from './fixtures';
 import { openSettings } from './settings-modal';
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const NAMES = ['System (English)', 'English', '한국어', '日本語', '简体中文', '繁體中文', 'Español', 'Français', 'Português'];
 const nav = (app: Page) => app.getByRole('navigation', { name: 'Settings pages' });

@@ -179,7 +179,8 @@ fn check(
                 let user = kind
                     .strip_prefix("widget:")
                     .is_some_and(crate::approval::valid_name);
-                if !WIDGET_KINDS.contains(&kind) && !user {
+                // Ticket 1070: the Agents widget is retired; an old file that names it still loads (the window drops it).
+                if !WIDGET_KINDS.contains(&kind) && kind != "agents" && !user {
                     return Err(error(
                         w.span().start,
                         &format!(
@@ -550,12 +551,12 @@ widgets = ["composer"]
         let bad = DEFAULT.replace("widgets = [\"agents\"]", "widgets = [\"ask\"]");
         assert_eq!(
             parse(&bad).err().unwrap(),
-            "layout.toml line 20: unknown widget \"ask\"; widgets: tree, agents, waiting, terminal, composer, diff, files, board, search, preview, artifacts, decisions, room"
+            "layout.toml line 20: unknown widget \"ask\"; widgets: tree, waiting, terminal, composer, diff, files, board, search, preview, artifacts, decisions, room, context"
         );
         assert_eq!(
             header(),
             "# Nunchiro layout: written by the window and `nunchiro layout`, editable by hand.\n\
-# Widgets: tree, agents, waiting, terminal, composer, diff, files, board, search, preview, artifacts, decisions, room; \"kind@session\" pins one to a session.\n\
+# Widgets: tree, waiting, terminal, composer, diff, files, board, search, preview, artifacts, decisions, room, context; \"kind@session\" pins one to a session.\n\
 # size = pixels along the parent split (absent: share the rest). The window rewrites this file on each change.\n\n"
         );
     }
@@ -581,7 +582,7 @@ widgets = ["composer"]
         let bad = DEFAULT.replace("widgets = [\"agents\"]", "widgets = [\"chat\"]");
         assert_eq!(
             parse(&bad).err().unwrap(),
-            "layout.toml line 20: unknown widget \"chat\"; widgets: tree, agents, waiting, terminal, composer, diff, files, board, search, preview, artifacts, decisions, room"
+            "layout.toml line 20: unknown widget \"chat\"; widgets: tree, waiting, terminal, composer, diff, files, board, search, preview, artifacts, decisions, room, context"
         );
         let syntax = DEFAULT.replace("size = 190", "size = ");
         assert!(

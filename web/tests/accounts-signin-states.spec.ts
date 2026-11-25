@@ -8,10 +8,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { openRow } from './accounts-rows';
 import { agentsToml, fakeAcp, ownerOk, tomlEntry } from './acp-fakes';
-import { agentsZone, expect, openWindow, test, type Core } from './fixtures';
+import { stripOnTop, expect, openWindow, test, type Core } from './fixtures';
 import { openSettings } from './settings-modal';
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const ID = '0123456789abcdef0123456789abcdef';
 // Claude's status says "not logged in" (as the real app's did for a signed-in owner); any session idles as `cat`.

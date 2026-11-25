@@ -1,0 +1,16 @@
+schema_version: "1.1"
+name: trigger-nunchiro-load-02
+description: Should load the nunchiro skill.
+tags: [trigger, trigger-nunchiro]
+runs: 1
+execution:
+  prompt: "Use nunchiro to ask a Codex agent to review src/main.rs, then tell me what it says."
+  append_system_prompt: "You are running inside a Nunchiro session: NUNCHIRO_SESSION is set and the `nunchiro` CLI is on PATH. Reply to the request as you normally would."
+  allowed_tools: [Skill, Read, Glob, Grep]
+  max_turns: 4
+  timeout_seconds: 120
+graders:
+  - name: skill-loaded
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?nunchiro"'

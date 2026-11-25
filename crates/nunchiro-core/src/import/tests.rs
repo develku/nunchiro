@@ -222,6 +222,7 @@ fn the_browser_role_cannot_express_an_import_frame() {
     for op in [
         json!({"op":"import_list"}),
         json!({"op":"import_list","projects":["/work/app"]}),
+        json!({"op":"import_list","folders_only":true}),
         json!({"op":"import_add","ids":["claude:c1"]}),
         json!({"op":"import_search","query":"x"}),
         json!({"op":"import_read","id":"claude:c1"}),
@@ -554,10 +555,16 @@ fn a_project_list_writes_nothing() {
 #[test]
 fn the_list_frame_takes_an_optional_project() {
     let op: Op = serde_json::from_value(json!({"op":"import_list"})).unwrap();
-    assert!(matches!(op, Op::ImportList { projects: None }));
+    assert!(matches!(
+        op,
+        Op::ImportList {
+            projects: None,
+            folders_only: false
+        }
+    ));
     let op: Op =
         serde_json::from_value(json!({"op":"import_list","projects":["/work/app"]})).unwrap();
-    assert!(matches!(op, Op::ImportList { projects: Some(p) } if p == ["/work/app"]));
+    assert!(matches!(op, Op::ImportList { projects: Some(p), .. } if p == ["/work/app"]));
     assert!(serde_json::from_value::<Op>(json!({"op":"import_list","folder":"/"})).is_err());
 }
 
@@ -712,4 +719,148 @@ fn a_pasted_brief_is_titled_by_its_first_real_line() {
         &[user("<pasted_content id=\"p1\" lines=\"40\">\n\nYou lead this project.\nSecond line\n</pasted_content>")],
     );
     assert_eq!(title_of(&f, "claude:c1"), "You lead this project.");
+}
+
+// Ticket 1073 round 3: a listed conversation a Nunchiro session ran (ran.json) is marked, Claude's by its file stem and
+// Codex's by the id its file name ends with; the others are not. A second note of the same id writes nothing.
+#[test]
+fn ran_json_marks_listed_conversations() {
+    let f = Fixture::new();
+    let uuid = "0".repeat(8) + "-0000-4000-8000-00000000c0de";
+    f.claude(
+        "-p",
+        "c1",
+        &[json!({"type":"user","cwd":"/p","message":{"role":"user","content":"mine"}})],
+    );
+    f.claude(
+        "-p",
+        "c2",
+        &[json!({"type":"user","cwd":"/p","message":{"role":"user","content":"terminal"}})],
+    );
+    f.codex(&uuid, "/p", &[]);
+    let mut ran = Ran::load(&f.home);
+    ran.note(&f.home, ["c1", uuid.as_str()].into_iter())
+        .unwrap();
+    let written = fs::metadata(f.home.join(RAN)).unwrap().modified().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    ran.note(&f.home, ["c1"].into_iter()).unwrap();
+    assert_eq!(
+        fs::metadata(f.home.join(RAN)).unwrap().modified().unwrap(),
+        written,
+        "nothing new, nothing written"
+    );
+    let marks: BTreeMap<String, bool> = list(&f.roots, &f.home)
+        .unwrap()
+        .into_iter()
+        .map(|i| (i.id, i.ran))
+        .collect();
+    assert!(marks["claude:c1"]);
+    assert!(!marks["claude:c2"]);
+    assert!(marks[&format!("codex:rollout-2026-10-27T10-00-00-{uuid}")]);
+}
+
+// Ticket 1073 round 4: the seed reads the chat records' names (claude and codex, not shell, not the logs) and the ids it
+// is given, marks them in the listing, and runs once: a seeded file is not seeded again. A round-3 file (a bare list)
+// keeps its ids and is seeded once.
+#[test]
+fn ran_seed_reads_old_chat_records_once() {
+    let f = Fixture::new();
+    let uuid = "0".repeat(8) + "-0000-4000-8000-0000000000aa";
+    f.claude(
+        "-p",
+        "c1",
+        &[json!({"type":"user","cwd":"/p","message":{"role":"user","content":"old mine"}})],
+    );
+    f.claude(
+        "-p",
+        "c2",
+        &[json!({"type":"user","cwd":"/p","message":{"role":"user","content":"terminal"}})],
+    );
+    f.codex(&uuid, "/p", &[]);
+    let chat = f.home.join("chat");
+    fs::create_dir_all(&chat).unwrap();
+    for name in [
+        "claude-c1.json".to_string(),
+        format!("codex-{uuid}.json"),
+        "shell-c2.json".into(),
+        "c2.events".into(),
+    ] {
+        fs::write(chat.join(name), "{}").unwrap();
+    }
+    let mut ran = Ran::load(&f.home);
+    ran.seed(&f.home, ["k1"].into_iter()).unwrap();
+    let first = fs::read(f.home.join(RAN)).unwrap();
+    let file: serde_json::Value = serde_json::from_slice(&first).unwrap();
+    assert_eq!(file["seeded"], true);
+    let mut ids: Vec<String> = serde_json::from_value(file["conversations"].clone()).unwrap();
+    ids.sort();
+    let mut want = vec!["c1".to_string(), uuid.clone(), "k1".into()];
+    want.sort();
+    assert_eq!(ids, want);
+    let marks: BTreeMap<String, bool> = list(&f.roots, &f.home)
+        .unwrap()
+        .into_iter()
+        .map(|i| (i.id, i.ran))
+        .collect();
+    assert!(marks["claude:c1"]);
+    assert!(
+        !marks["claude:c2"],
+        "a true terminal conversation stays unmarked"
+    );
+    assert!(marks[&format!("codex:rollout-2026-10-27T10-00-00-{uuid}")]);
+    // Seeded: a later start seeds nothing, whatever appeared.
+    fs::write(chat.join("claude-c2.json"), "{}").unwrap();
+    Ran::load(&f.home)
+        .seed(&f.home, ["k2"].into_iter())
+        .unwrap();
+    assert_eq!(fs::read(f.home.join(RAN)).unwrap(), first);
+    // A round-3 file is a bare list: its ids stay and the seed runs once.
+    fs::write(f.home.join(RAN), br#"["r3"]"#).unwrap();
+    let mut old = Ran::load(&f.home);
+    old.seed(&f.home, std::iter::empty()).unwrap();
+    assert!(old.has("claude:r3") && old.has("claude:c2"));
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&fs::read(f.home.join(RAN)).unwrap()).unwrap()
+            ["seeded"],
+        true
+    );
+}
+
+#[test]
+fn folders_only_lists_each_folder_with_gone_and_no_words() {
+    let f = Fixture::new();
+    let here = f.base.join("here");
+    fs::create_dir_all(&here).unwrap();
+    let here = here.to_str().unwrap().to_string();
+    f.codex("x1", &here, &[json!({"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"API_KEY=x"}]}})]);
+    f.codex("x2", &here, &[]);
+    f.codex("x3", "/no/such/folder/1123", &[]);
+    f.claude("-work-app", "c1", &[user("API_KEY=x")]);
+    // The full listing does carry the first message as the title; the folders-only form must not.
+    assert!(
+        list(&f.roots, &f.home)
+            .unwrap()
+            .iter()
+            .any(|i| i.title.contains("API_KEY"))
+    );
+    let out = folders(list(&f.roots, &f.home).unwrap());
+    assert_eq!(out.iter().filter(|d| d.project == here).count(), 1);
+    assert!(!out.iter().find(|d| d.project == here).unwrap().gone);
+    assert!(
+        out.iter()
+            .find(|d| d.project == "/no/such/folder/1123")
+            .unwrap()
+            .gone
+    );
+    let reply = serde_json::to_string(&Reply::ImportFolders { folders: out }).unwrap();
+    assert!(
+        !reply.contains("API_KEY") && !reply.contains("title"),
+        "{reply}"
+    );
+    assert!(
+        serde_json::from_value::<Op>(
+            json!({"op":"import_list","folders_only":true,"projects":["/work/app"]})
+        )
+        .is_ok()
+    );
 }

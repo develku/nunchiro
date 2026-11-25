@@ -203,6 +203,7 @@ impl Sessions {
         self.queue.register(&id, start.kind, queue::now_ms())?;
         let meta = Session {
             side_chat: start.args.iter().any(|arg| arg == SIDE_CHAT_ARG),
+            stopped_sends: Vec::new(),
             side_parent: side_parent(start),
             side_split: side_split(start),
             machine: None,
@@ -360,6 +361,7 @@ impl Sessions {
         crate::logs::register(&token, "session"); // v2-13a
         let meta = Session {
             side_chat: start.args.iter().any(|arg| arg == SIDE_CHAT_ARG),
+            stopped_sends: Vec::new(),
             side_parent: side_parent(start),
             side_split: side_split(start),
             machine: None,

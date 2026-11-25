@@ -34,7 +34,7 @@ for (const strip of ['on', 'off'] as const)
     const before = await boxes(app);
     for (const t of ['go-a', 'go-b', 'go-c']) fs.writeFileSync(path.join(p, t), '');
     for (const id of agents) {
-      await expect(app.locator(`[data-agent="${id}"] .st`)).toHaveAttribute('data-s', 'waiting', { timeout: 5000 });
+      await expect(app.locator(`button.row.wt2[data-menu-session="${id}"]`)).toHaveClass(/\byou\b/, { timeout: 5000 });
       await expect(app.locator(`.tab[data-tab="${id}"] .tdot`)).toHaveAttribute('data-s', 'waiting');
     }
     await expect(app.locator('.grp[data-project="nunchiro"] .head .chip')).toHaveText('new 3');

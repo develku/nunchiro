@@ -65,6 +65,8 @@ let wanted: string | undefined;
 const asks = new Set<() => void>();
 const tabAsks = new Set<() => void>();
 export const openSchedules = (row?: string) => ((wanted = row), asks.forEach((f) => f()));
+/** Ticket 1099: the palette's New schedule… asks for the add form instead of a row (no schedule id has a colon). */
+export const NEW_SCHEDULE = 'new:';
 export const onOpenSchedules = (f: () => void) => (asks.add(f), () => void asks.delete(f));
 export const showSchedTab = () => tabAsks.forEach((f) => f());
 export const onShowSchedTab = (f: () => void) => (tabAsks.add(f), () => void tabAsks.delete(f));

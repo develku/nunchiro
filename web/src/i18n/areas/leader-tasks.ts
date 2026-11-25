@@ -36,7 +36,9 @@ declare module '../index' {
     'lead.tasks.one': true;
     'lead.tasks.other': true;
     'lead.tasks.needs': true;
-    'lead.way.chip': true;
+    'lead.wakes.one': true;
+    'lead.wakes.other': true;
+    'lead.wakes.view': true;
     'lead.way.solo': true;
     'lead.way.team': true;
     'lead.way.strict': true;
@@ -50,6 +52,41 @@ declare module '../index' {
     'lead.seats.ask': true;
     'lead.seats.edits': true;
     'lead.seats.note': true;
+    'lead.auto.group': true;
+    'lead.auto.on': true;
+    'lead.auto.off': true;
+    'lead.auto.note': true;
+    'lead.cap.group': true;
+    'lead.cap.note': true;
+    'lead.seats.askShort': true;
+    'lead.seats.editsShort': true;
+    'lead.place.title': true;
+    'lead.place.project': true;
+    'lead.place.quiet': true;
+    'lead.place.seatsAsk': true;
+    'lead.place.seatsEdits': true;
+    'lead.place.autoNote': true;
+    'lead.account.group': true;
+    'lead.account.note': true;
+    'lead.account.own': true;
+    'lead.day.solo': true;
+    'lead.day.team': true;
+    'lead.day.strict': true;
+    'lead.day.change': true;
+    'lead.task.reviewWaits': true;
+    'lead.task.reviewStarted': true;
+    'lead.waits.seat.one': true;
+    'lead.waits.seat.other': true;
+    'lead.task.stalled': true;
+    'lead.task.stalledWhy': true;
+    'lead.waits.review.one': true;
+    'lead.waits.review.other': true;
+    'lead.waits.merge': true;
+    'lead.waits.stalled': true;
+    'lead.note.advance': true;
+    'lead.note.auto': true;
+    'lead.seen.now': true;
+    'lead.seen.min': true;
     'lead.day.intro': true;
     'lead.day.roles': true;
     'lead.roleCard.title': true;
@@ -73,20 +110,61 @@ export const en = {
   'lead.tasks.one': '{n} task',
   'lead.tasks.other': '{n} tasks',
   'lead.tasks.needs': '{n} needs you',
-  'lead.way.chip': 'Mode: {way}',
-  'lead.way.solo': 'build only',
-  'lead.way.team': 'build + review',
-  'lead.way.strict': 'build + review + security',
+  'lead.wakes.one': '1 worker update',
+  'lead.wakes.other': '{n} worker updates',
+  'lead.wakes.view': 'View in Team',
+  'lead.way.solo': 'Build only',
+  'lead.way.team': 'Build + review',
+  'lead.way.strict': 'Strict',
   'lead.way.soloNote': 'A Builder builds each task; nothing reviews it before the merge.',
   'lead.way.teamNote': 'A Builder builds each task; a fresh Reviewer checks it before the merge.',
   'lead.way.strictNote': 'The same as build + review, with a security review of each change.',
   'lead.way.menu': 'Working mode of this project',
-  'lead.way.group': 'Working mode',
+  'lead.way.group': 'Way of working',
   'lead.way.failed': 'That did not change. Try again.',
-  'lead.seats.group': 'Roles in this project',
+  'lead.seats.group': 'What seats may do',
   'lead.seats.ask': 'Ask before each edit and command',
   'lead.seats.edits': 'Edit files without asking; commands still ask',
   'lead.seats.note': 'A role has no permissions of its own. The project gives them.',
+  // Ticket 1081: English only until ticket 1035's pass.
+  'lead.auto.group': 'Auto-advance',
+  'lead.auto.on': 'On',
+  'lead.auto.off': 'Off',
+  'lead.auto.note': 'The core nudges a stalled seat once, asks you when it stays stalled, and tells the lead what waits.',
+  'lead.cap.group': 'Live seats',
+  // Ticket 1099 (mockup docs/design/cohesion-1099): English only until ticket 1035's pass.
+  'lead.cap.note': 'At most {n} seats work at once here. Extra reviews wait for a free seat.',
+  'lead.seats.askShort': 'Ask first',
+  'lead.seats.editsShort': 'Edit files',
+  'lead.place.title': 'How this place works',
+  'lead.place.project': 'Project',
+  'lead.place.quiet': 'Only you change these. A lead can ask for a different seat count; its card comes to Decisions.',
+  // The approved mockup's sentences (cohesion-1099 panel 1).
+  'lead.place.seatsAsk': 'Seats ask you before each edit and command.',
+  'lead.place.seatsEdits': 'Seats edit files without asking. Commands still ask you.',
+  'lead.place.autoNote': 'A stalled seat gets one nudge; if it stays stalled, you get asked.',
+  // Ticket 1120: English only until ticket 1035's pass.
+  'lead.account.group': 'Seats run on',
+  'lead.account.note': "The account a Builder or Reviewer seat here starts on. A lead can use it as its own.",
+  'lead.account.own': "The lead's own account",
+  'lead.day.solo': 'Nothing reviews a task before the merge',
+  'lead.day.team': 'Reviewers check each task automatically',
+  'lead.day.strict': 'Reviewers and a security review check each task',
+  'lead.day.change': 'Change',
+  'lead.task.reviewWaits': 'review waits',
+  'lead.task.reviewStarted': 'auto review',
+  'lead.waits.seat.one': '{n} review waits for a free seat',
+  'lead.waits.seat.other': '{n} reviews wait for a free seat',
+  'lead.task.stalled': 'stalled',
+  'lead.task.stalledWhy': '{name}: {why}',
+  'lead.waits.review.one': '{n} report waiting',
+  'lead.waits.review.other': '{n} reports waiting',
+  'lead.waits.merge': '{n} approved to merge',
+  'lead.waits.stalled': '{n} stalled',
+  'lead.note.advance': '{name}',
+  'lead.note.auto': 'Auto-advance is now {name}',
+  'lead.seen.now': 'now',
+  'lead.seen.min': '{n} min ago',
   'lead.day.intro': 'Tell {name} what you want. It creates a task, assigns your roles to it and asks you before a merge.',
   'lead.day.roles': 'Your roles',
   'lead.roleCard.title': 'A new role is proposed',
@@ -140,7 +218,6 @@ export const ko = {
   'lead.tasks.one': '작업 {n}개',
   'lead.tasks.other': '작업 {n}개',
   'lead.tasks.needs': '내 답 대기 {n}',
-  'lead.way.chip': '방식: {way}',
   'lead.way.solo': '빌드만',
   'lead.way.team': '빌드 + 검토',
   'lead.way.strict': '빌드 + 검토 + 보안',
@@ -207,7 +284,6 @@ export const ja = {
   'lead.tasks.one': 'タスク {n} 件',
   'lead.tasks.other': 'タスク {n} 件',
   'lead.tasks.needs': '要対応 {n}',
-  'lead.way.chip': '進め方：{way}',
   'lead.way.solo': 'ビルドのみ',
   'lead.way.team': 'ビルド + レビュー',
   'lead.way.strict': 'ビルド + レビュー + セキュリティ',
@@ -274,7 +350,6 @@ export const zhHans = {
   'lead.tasks.one': '{n} 个任务',
   'lead.tasks.other': '{n} 个任务',
   'lead.tasks.needs': '{n} 项等你处理',
-  'lead.way.chip': '方式：{way}',
   'lead.way.solo': '仅构建',
   'lead.way.team': '构建 + 审查',
   'lead.way.strict': '构建 + 审查 + 安全',
@@ -341,7 +416,6 @@ export const zhHant = {
   'lead.tasks.one': '{n} 個任務',
   'lead.tasks.other': '{n} 個任務',
   'lead.tasks.needs': '{n} 項等你處理',
-  'lead.way.chip': '方式：{way}',
   'lead.way.solo': '僅建構',
   'lead.way.team': '建構 + 審查',
   'lead.way.strict': '建構 + 審查 + 安全',
@@ -408,7 +482,6 @@ export const es = {
   'lead.tasks.one': '{n} tarea',
   'lead.tasks.other': '{n} tareas',
   'lead.tasks.needs': 'Te necesitan: {n}',
-  'lead.way.chip': 'Modo: {way}',
   'lead.way.solo': 'solo construir',
   'lead.way.team': 'construir + revisar',
   'lead.way.strict': 'construir + revisar + seguridad',
@@ -475,7 +548,6 @@ export const fr = {
   'lead.tasks.one': '{n} tâche',
   'lead.tasks.other': '{n} tâches',
   'lead.tasks.needs': '{n} en attente de votre réponse',
-  'lead.way.chip': 'Méthode : {way}',
   'lead.way.solo': 'développement seul',
   'lead.way.team': 'développement + relecture',
   'lead.way.strict': 'développement + relecture + sécurité',
@@ -542,7 +614,6 @@ export const pt = {
   'lead.tasks.one': '{n} tarefa',
   'lead.tasks.other': '{n} tarefas',
   'lead.tasks.needs': 'Precisam de você: {n}',
-  'lead.way.chip': 'Modo: {way}',
   'lead.way.solo': 'só construir',
   'lead.way.team': 'construir + revisar',
   'lead.way.strict': 'construir + revisar + segurança',

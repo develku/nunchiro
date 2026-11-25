@@ -33,6 +33,9 @@ declare module '../index' {
     'room.pins': true;
     'room.pinsNone': true;
     'room.pin': true;
+    'room.yesterday': true;
+    'room.delivered': true;
+    'room.waiting': true;
     'room.unpin': true;
     'room.pinsNote': true;
     'room.notPinned': true;
@@ -80,6 +83,9 @@ export const en = {
   'room.pins': 'Pinned decisions',
   'room.pinsNone': 'None yet',
   'room.pin': 'Pin',
+  'room.yesterday': 'Yesterday {time}',
+  'room.delivered': 'delivered {time}',
+  'room.waiting': 'waiting',
   'room.unpin': 'Unpin',
   'room.pinsNote': 'Pins are kept with the room; every window shows them.',
   'room.notPinned': 'Not pinned: {error}',

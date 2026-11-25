@@ -699,7 +699,7 @@
 .turnsum .steps .tl {
   padding: 2px 0;
 }
-.chcard .h .btn {
+:is(.chcard .h, .chcard.one) > .btn {
   border-radius: var(--r-6);
   padding: 2px 9px;
   font-size: calc(var(--fs-12) + .5px);
@@ -735,9 +735,33 @@
 :root:has(.chat:not([data-off])) .composer:not([data-pinned]) {
   background: var(--panel);
 }
-/* Ticket 991 C12 (5): an open side pane keeps the composer card out of its column (SidePane sets --pane-room). */
+/* Ticket 991 C12 (5), 1093: a side pane or a Preview beside the chat keeps the composer card out of its column
+   (pane/composerRoom.ts sets --pane-room and, for one on the left, --pane-room-left). */
 .composer:not([data-pinned]) {
   padding-right: calc(20px + var(--pane-room, 0px));
+}
+:root[data-pane-room] .composer:not([data-pinned]) {
+  padding-left: calc(20px + var(--pane-room-left, 0px));
+}
+/* Ticket 1062: beside the pane the chat column can be narrower than the chips' floors; the row stays one line, so the
+   composer's height (and the terminal's rows above it) does not change when the pane opens. The chips shrink with their own ellipsis (min-width 0, no clip on the row: the menus open upward out of it). Look v20 Q5 (a chip
+   keeps its label whole, the row wraps first) gives way to ticket 991 B8 (the row never grows the composer) only here. */
+:root[data-pane-room] .composer:not([data-pinned]) .cbox .chips,
+:root[data-pane-room] .composer:not([data-pinned]) .pk {
+  flex-wrap: nowrap;
+}
+:root[data-pane-room] .composer:not([data-pinned]) .pk,
+:root[data-pane-room] .composer:not([data-pinned]) .pk-anchor,
+:root[data-pane-room] .composer:not([data-pinned]) .perm-wrap {
+  min-width: 0;
+}
+/* A picker with no room is 0 wide, not its padding wide (that edge overlapped the mode chip, overlap-check at 900 px); only in a
+   narrow card, so a normal window keeps the chips' padding. */
+@container cbox (max-width: 440px) {
+  :root[data-pane-room] .composer:not([data-pinned]) .pk-chip {
+    max-width: 100%;
+    padding-inline: 0;
+  }
 }
 /* Reviewer r1: the hint line ends where the box ends (it was 760px against the box's 700px) and keeps air under it;
    r2: the claude-feel-2 .hint size (11.5px), not 11. The input gets the mockup's .cmp textarea min-height (46px).
@@ -828,6 +852,68 @@
 .chcard .frow .p {
   color: var(--run);
 }
+/* Ticket 1057: a path outside the session folder stays on one line; only its folder part gives way. */
+.chcard .p.out {
+  display: flex;
+  overflow-wrap: normal;
+}
+.chcard .p.out .dir {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chcard .p.out .nm {
+  flex: none;
+}
+/* Ticket 1074: a one-file card is that file's row with the button at its end; the path shrinks, the button stays. */
+.chcard.one {
+  display: flex;
+  align-items: center;
+}
+.chcard.one .rows {
+  flex: 1;
+  min-width: 0;
+}
+.chcard.one .btn {
+  flex: none;
+  margin-right: 12px;
+}
+/* Ticket 1086: a changed document's row: path, Open (the document card's chip), numbers. */
+.chcard .rows li.art {
+  align-items: center;
+}
+.chcard li.art .frow {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+.chcard li.art .af-chip.open {
+  flex: none;
+  border: 0;
+  border-radius: var(--r-8);
+  padding: 0 8px;
+  font-size: var(--fs-11);
+  line-height: 16px;
+  color: var(--text);
+  background: var(--tint-2);
+}
+.chcard li.art .n {
+  flex: none;
+  padding-right: 12px;
+  white-space: nowrap;
+}
+.chcard .more {
+  display: block;
+  width: 100%;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: var(--fs-12);
+  color: var(--dim);
+  text-align: left;
+}
+.chcard .more:hover {
+  background: var(--tint-1);
+}
 .message-actions .btn [aria-live] {
   display: inline-block;
 }
@@ -848,13 +934,18 @@
   --muted: var(--text);
 }
 /* Agent math stays inside its formula: a box pushed out (\llap, \rlap) is clipped, and a wide display formula scrolls.
-   The clip sits on each .base (KaTeX's inline-block line pieces): overflow does nothing on the inline .katex. */
-.md .katex .base {
+   The clip sits on each .katex-base (KaTeX's inline-block line pieces): overflow does nothing on the inline .katex. */
+.md .katex .katex-base {
   max-width: 100%;
   overflow: clip;
 }
 .md .katex-display {
   overflow: auto hidden;
+}
+
+/* Ticket 1075: an agent's mid-turn update note reads as progress, not as the answer. */
+.unote {
+  color: var(--muted);
 }
 
 /* Ticket 990: a worker's wake line in a lead's chat: one quiet centred line, not a bubble. */
@@ -865,13 +956,23 @@
   text-align: center;
 }
 
+.msg.wake .wake-link {
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* Ticket 1039 (owner 2026-11-21; approved mockup docs/design/chat-theme-1121/index.html, "Theme accents"): the marks
    that carry meaning take the theme's colours, each already stepped to 4.5:1 (themes/derive.ts; tokens.css for the
    bundled pair): headings, bold and a running tool row's name (.toolname, the label's first word; look v35 b S3-2: a finished one keeps the row's muted text, blue is the working light) the accent; inline code and file paths magenta; links cyan; list markers
    the muted accent; success words green and error words red. Body text stays --text and a fenced block keeps its syntax
    colours. Settings > Appearance > Chat colours > Plain puts data-chat-colours="plain" on the root (themes/apply.ts):
    then none of these rules apply and the chat is as it was before the ticket. */
-:root:not([data-chat-colours='plain']) .cin :is(.md :is(h1, h2, h3, h4, h5, h6, strong), .tool[data-running] > .tl .toolname) {
+:root:not([data-chat-colours='plain']) .cin .md :is(h1, h2, h3, h4, h5, h6, strong) {
+  color: var(--chat-accent); /* ticket 1064: the slot Settings > Appearance > Chat accent picks (default 4 = --run) */
+}
+:root:not([data-chat-colours='plain']) .cin .tool[data-running] > .tl .toolname {
   color: var(--run);
 }
 :root:not([data-chat-colours='plain']) .cin :is(.md :not(pre) > code, .md .mdpath, .tpath, .dh button.path, .chcard .frow .p) {
@@ -888,4 +989,61 @@
 }
 :root:not([data-chat-colours='plain']) .cin :is(.tool.err :is(.tn, .toolname), .chcard .del) {
   color: var(--bad-text);
+}
+
+/* Ticket 1044: a leading "!" in a Claude box opens bash mode; the box says so at once (border and marker, not colour alone).
+   Ticket 1087 (owner: "as easy to notice as in Claude Code"): the whole box takes the shell look, a 2 px border in the
+   shell cue's colour, the "! Shell" chip and its folder hint in the bottom row; Codex's shell mode too. */
+.cbox[data-shell],
+.cbox[data-shell]:focus-within {
+  position: relative;
+  outline: 2px solid var(--warn);
+  outline-offset: -1px;
+}
+.cbox:not([data-shell]) .shellchip {
+  display: none;
+}
+.cbox .chips > .chip.shellchip {
+  color: var(--warn);
+  font-weight: 600;
+}
+.cbox .chips > .chip.shellchip .chip-t {
+  color: var(--muted);
+  font-weight: 400;
+}
+/* Ticket 1087: a queued message's images, named as their chips were. */
+.qlist .qimg {
+  flex: none;
+  padding: 0 6px;
+  border-radius: var(--r-4);
+  background: var(--control-quiet-bg);
+  color: var(--muted);
+}
+/* Ticket 1087: a "!" command the person ran, one quiet row: the mark, the command in the mono face, its result as given. */
+.shellrow {
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.shellrow .shc {
+  font-family: var(--font-code);
+  color: var(--text);
+}
+.shellrow .shm {
+  color: var(--warn);
+  font-weight: 700;
+  margin-right: 6px;
+}
+.shellrow pre {
+  margin: 4px 0 0;
+  font-family: var(--font-code);
+  white-space: pre-wrap;
+}
+.cbox[data-shell]::before {
+  content: '!';
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  color: var(--warn);
+  font-weight: 700;
+  pointer-events: none;
 }

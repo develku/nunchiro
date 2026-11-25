@@ -5,22 +5,23 @@ import { sideChatShown } from '../chat/SideChat';
 import { hasTranscript } from '../chat/ChatView';
 import { threadText } from '../chat/thread';
 import { startShell } from '../pane/SidePane';
-import { isOpen as paneOpen, maximise as paneMax, show as paneShow, tabOf as paneTab, toggle as paneToggle, usePane } from '../pane/store';
+import { isOpen as paneOpen, maximise as paneMax, shellsOf, show as paneShow, tabOf as paneTab, toggle as paneToggle, usePane } from '../pane/store';
 import { add as addSplit, splitsOf } from '../split/store';
 import { CARD_OPS, cardCan, runCard } from '../board/cardMenu';
 import { editScrollback } from '../terminal/editor';
 import { insertPaths } from '../images/nativeDrop'; // ticket 375
 import { sessionPath } from '../chat/pending';
 import type { Command } from '../keys';
+import { splitSessions } from '../split/store'; // ticket 1069
 import { DEFAULTS, FIELDS, settingsCommandTitle } from '../settings';
-import { PSEUDO, refuses, toggleBars, where } from '../layout/bars';
+import { HISTORY, PSEUDO, refuses, toggleBars, toggleBarsAuto, where } from '../layout/bars';
 import { useArrange } from '../layout/useArrange';
 import type { Dir } from '../layout/model';
 import { sessionName } from '../Sidebar';
 import { listedName } from '../tree';
 import { projectCommands } from '../tree/commands';
 import { leaderCommands } from '../lead/LeaderDialog'; // ticket 990
-import type { Team } from '../lead/lead';
+import { leadOf, type Team } from '../lead/lead';
 import { useWorktrees, worktreeCommands } from '../tree/worktrees';
 import { cycleView } from '../chat/view';
 import { useProjectTree } from '../tree/state';
@@ -30,13 +31,15 @@ import { closeTab as closeBrowserTab, hasStrip, newTab as newBrowserTab, stepTab
 import { findIn } from '../terminal/search';
 import { run as runUndo } from '../undo/store';
 import type { Decision, Session } from '../types';
+import type { useNotifications } from '../queue/notify';
 import { waitingOrder } from '../queue/Strip';
 import { useBoardItems } from '../queue/board';
 import { AGENTS, agentName, handOff } from '../chat/conversation';
 import { askNew, quickStart } from '../NewSession';
-import { isRoomTab } from '../room/room';
-import { closeSchedTab, SCHED_TAB } from '../schedule/schedules';
-import { closeHistTab, HIST_TAB } from '../history/history';
+import { isRoomTab, roomOfTab } from '../room/room';
+import { closeTeamTab } from '../lead/team';
+import { closeSchedTab, NEW_SCHEDULE, openSchedules, SCHED_TAB } from '../schedule/schedules';
+import { closeHistTab, HIST_TAB, openHistory } from '../history/history';
 import { BROWSER_TAB, closeBrowserTab as closeCentreBrowser, openBrowserTab } from '../pane/browser/view/centreTab'; // ticket 997 L1
 import { agentOff } from '../settings/agents/newDefaults';
 import { openDiff } from '../diff/Diff';
@@ -49,6 +52,9 @@ import { base } from './CentreView';
 import { paletteState, sameNameTell } from './paletteState';
 import { restartable } from './restart';
 import { closeable, closeEnded, stoppable } from './closeEnded';
+import { ended } from '../tree/finished'; // ticket 1063
+import { entriesOf } from '../tree/Tidy';
+import { status } from '../types';
 import type { Dispatch, SetStateAction, RefObject } from 'react';
 import type { useTabs } from './useTabs';
 import type { useDecisionJump } from '../decisions/useDecisionJump';
@@ -97,7 +103,7 @@ type Deps = Pick<ReturnType<typeof useTabs>, 'open' | 'resume' | 'cycle' | 'setR
     setHints: (h: false | 'open' | 'copy') => void;
     openStarted: (s: Session) => void; // App's: lists a session this window just started, then opens its tab
     setArmed: (on: boolean) => void;
-    setHelpNow: (on: boolean) => void;
+    setHelpNow: (on: false | 'prefix' | 'all') => void;
     setCopyId: (id: string | null) => void;
     active: string | null;
     editing: boolean;
@@ -126,15 +132,21 @@ type Deps = Pick<ReturnType<typeof useTabs>, 'open' | 'resume' | 'cycle' | 'setR
     wt: ReturnType<typeof useWorktrees>;
     projectList: { project: string }[];
     team: Team; // ticket 990
+    notify: Pick<ReturnType<typeof useNotifications>, 'setLevel'>; // ticket 1099: the header chip's level as commands
   };
 
 /** The palette's and the keys' command list (each command's id, title, enabled state and run). App memoises it. */
-export function buildCommands({ resume, ordered, board, ownerList, current, t, openSideChat, setPalette, setQuickOpen, setOverlay, overlay, open, openStarted, setActive, setSettings, setHints, toSink, setArmed, setHelpNow, setCopyId, active, editing, setZoom, focusedZone, paneApi, sessions, stop, cycle, setRenaming, closeTab, tabs, selectProject, selected, closeTabs, reopen, canReopen, shift, jump, back, lastTab, lastNext, onAction, setQuit, sideChats, setTermComposer, setComposerHidden, composer, steerNow, backgroundSend, openCmd, otherBar, removeIcon, stepSidebarW, bars, paneSession, paneState, foldKey, toggleBoard, setSearchFocus, setSessionsAsk, core, setPaneNote, fold, toggleSide, foldOf, arrange, update, finish, setMessage, splitRef, setSettingsFocus, pt, wt, projectList, team }: Deps): Command[] {
+export function buildCommands({ resume, ordered, board, ownerList, current, t, openSideChat, setPalette, setQuickOpen, setOverlay, overlay, open, openStarted, setActive, setSettings, setHints, toSink, setArmed, setHelpNow, setCopyId, active, editing, setZoom, focusedZone, paneApi, sessions, stop, cycle, setRenaming, closeTab, tabs, selectProject, selected, closeTabs, reopen, canReopen, shift, jump, back, lastTab, lastNext, onAction, setQuit, sideChats, setTermComposer, setComposerHidden, composer, steerNow, backgroundSend, openCmd, otherBar, removeIcon, stepSidebarW, bars, paneSession, paneState, foldKey, toggleBoard, setSearchFocus, setSessionsAsk, core, setPaneNote, fold, toggleSide, foldOf, arrange, update, finish, setMessage, splitRef, setSettingsFocus, pt, wt, projectList, team, notify }: Deps): Command[] {
   const waiting = () => waitingOrder(ordered, board, ownerList); // V1A-60b: board and owner items too, in the strip's order
   // Why Restart or Close is off for a session: said in the palette's row (for the current one) and under the item in a row's menu.
   // Look 1117 v13 (A NEW-S3-B): an agent with a conversation resumes it (the composer's button says Resume); a shell restarts.
   const restartTitle = (s?: Session | null) => t(s && s.kind !== 'shell' && s.agent_session_id && restartable(s) ? 'shell.chrome.resumeSession' : 'shell.chrome.restartSession');
   const restartWhy = (s?: Session | null) => (s?.state === 'running' && !s.side_chat ? t('exitWidgets.restartWhy') : s?.folder_gone ? t('walk5.composer.folderGone', { name: sessionName(s) }) : undefined);
+  // ⌘W on a Room tab: a place with a lead has its Team view there, which goes back to the side; a plain Room stays (the note says why).
+  const closeRoomTab = (folder: string) => {
+    const place = team.home && folder === team.home ? '' : folder;
+    return leadOf(team, place) ? closeTeamTab(place) : setPaneNote(t('walk7.roomStays'));
+  };
   const closeWhy = (s?: Session | null) => (!s ? t('palette.why.noSession') : s.state === 'closed' ? t('look8.closeWhy.done') : s.state === 'running' && !closeable(s) ? t('exitWidgets.closeWhy') : undefined);
   // Eighth look (A): with no browser tab strip on screen these did nothing and were listed as if they would ("Close
   // browser tab" first for "close"). Read when asked, not when built: the list is not redrawn when the strip mounts.
@@ -154,8 +166,15 @@ export function buildCommands({ resume, ordered, board, ownerList, current, t, o
     { id: 'font.bigger', title: 'Terminal font bigger', run: () => setSettings((s) => ({ ...s, termFontSize: Math.min(20, s.termFontSize + 1) })) },
     { id: 'font.smaller', title: 'Terminal font smaller', run: () => setSettings((s) => ({ ...s, termFontSize: Math.max(10, s.termFontSize - 1) })) },
     { id: 'font.reset', title: 'Terminal font default size', run: () => setSettings((s) => ({ ...s, termFontSize: DEFAULTS.termFontSize })) },
+    // Ticket 1071: the whole window's zoom, 0.5-2.0 in steps of 0.1 (rounded, so ten steps land on 2 exactly).
+    ...([['zoom.in', 0.1], ['zoom.out', -0.1], ['zoom.reset', 0]] as const).map(([id, d]): Command => ({
+      id,
+      title: t(`settings.kbd.cmd.${id}`),
+      run: () => setSettings((s) => ({ ...s, uiZoom: d ? Math.min(2, Math.max(0.5, Math.round((s.uiZoom + d) * 10) / 10)) : DEFAULTS.uiZoom })),
+    })),
     { id: 'hints.show', title: 'Show hints', run: () => setHints('open') },
-    { id: 'keys.help', title: 'Show the keys you can press next', run: () => (toSink(), setArmed(true), setHelpNow(true)) }, // v1a-57
+    { id: 'keys.help', title: 'Show the keys you can press next', run: () => (toSink(), setArmed(true), setHelpNow('prefix')) }, // v1a-57
+    { id: 'keys.sheet', title: t('coh.cmd.keysSheet'), run: () => (toSink(), setArmed(true), setHelpNow('all')) }, // ticket 1099: ⌘/ lists every key
     { id: 'hints.copy', title: 'Copy a URL, path or git hash from the terminal (hints)', run: () => setHints('copy') }, // v1a-37
     { id: 'terminal.copy', title: 'Copy mode (select terminal text with the keyboard)', run: () => current && terminals.has(current.id) && (toSink(), setCopyId(current.id)) }, // v1a-42
     { id: 'terminal.find', title: 'Find in the terminal', run: () => active && findIn(active) }, // v1a-35
@@ -205,7 +224,7 @@ export function buildCommands({ resume, ordered, board, ownerList, current, t, o
     { id: 'session.next', title: t('settings.keys.cmd.next'), run: () => cycle(1) },
     { id: 'session.prev', title: t('settings.keys.cmd.prev'), run: () => cycle(-1) },
     { id: 'tab.rename', title: t('settings.keys.cmd.rename'), enabled: !!current, run: () => current && setRenaming({ id: current.id, error: '' }) }, // v1a-41
-    { id: 'tab.close', title: t('settings.keys.cmd.close'), enabled: !!active || !!overlay, run: () => (overlay ? setOverlay(null) : isRoomTab(active) ? setPaneNote(t('walk7.roomStays')) : active === SCHED_TAB ? closeSchedTab() : active === HIST_TAB ? closeHistTab() : active === BROWSER_TAB ? closeCentreBrowser() : active && closeTab(active)) }, // v25f: with a modal open, ⌘W closes the modal, never the tab hidden behind it // needs 171: acts on the right-clicked tab (the menu makes it active first), else the active one
+    { id: 'tab.close', title: t('settings.keys.cmd.close'), enabled: !!active || !!overlay, run: () => (overlay ? setOverlay(null) : isRoomTab(active) ? closeRoomTab(roomOfTab(active)!) : active === SCHED_TAB ? closeSchedTab() : active === HIST_TAB ? closeHistTab() : active === BROWSER_TAB ? closeCentreBrowser() : active && closeTab(active)) }, // v25f: with a modal open, ⌘W closes the modal, never the tab hidden behind it // needs 171: acts on the right-clicked tab (the menu makes it active first), else the active one
     // Absent (not greyed) with one tab. One Undo restores them all.
     ...(tabs.length > 1 ? [{ id: 'tab.close.others', title: t('settings.keys.cmd.closeOthers'), run: () => active && closeTabs(tabs.filter((id) => id !== active)) }] : []),
     // v25-tab-menu-close (ticket 215 B20): the right-clicked tab is the active one when these run. Greyed (not absent) when nothing would close.
@@ -257,7 +276,7 @@ export function buildCommands({ resume, ordered, board, ownerList, current, t, o
     { id: 'window.detach', title: 'Detach window (agents keep running)', run: () => void detach() },
     { id: 'composer.toggle', title: 'Hide or show the composer (terminal-only view)', run: () => (current && !hasTranscript(current) ? setTermComposer((m) => ({ ...m, [current.id]: !m[current.id] })) : setComposerHidden((h) => !h)) },
     // v25-sendkeys: the composer's two Enters; from the palette they work on what is in the box now.
-    { id: 'composer.steerNow', title: 'Send the composer’s text now (stops the running turn)', enabled: !!current, run: () => composer.current && void steerNow(composer.current, current) },
+    { id: 'composer.steerNow', title: 'Send the composer’s text now (Claude takes it at its next step; other agents stop the running turn)', enabled: !!current, run: () => composer.current && void steerNow(composer.current, current) },
     { id: 'composer.backgroundSend', title: 'Send as new session, stay here', enabled: !!composer.current, run: () => composer.current && void backgroundSend(composer.current, current) },
     // v1b-09: focus.tree reaches the Files tree too; files.show toggles the ▤ dock
     {
@@ -280,7 +299,7 @@ export function buildCommands({ resume, ordered, board, ownerList, current, t, o
     // Settings, Layout and Browser are not widgets, so they cannot open as a split.
     { id: 'icon.hide', title: t('shell.menu.iconHide'), enabled: false, enabledFor: ({ arg }) => !!arg && !!where(bars, arg) && !refuses(arg, 'remove', t), run: (arg) => arg && removeIcon(arg) },
     { id: 'icon.move', title: t('shell.menu.iconMove'), enabled: false, enabledFor: ({ arg }) => !!arg && !!where(bars, arg), run: (arg) => arg && otherBar(arg) },
-    { id: 'icon.split', title: t('shell.menu.iconSplit'), enabled: false, enabledFor: ({ arg }) => !!arg && !!current && !PSEUDO.includes(arg), run: (arg) => current && arg && void addSplit(current.id, 'right', arg) },
+    { id: 'icon.split', title: t('shell.menu.iconSplit'), enabled: false, enabledFor: ({ arg }) => !!arg && !!current && !PSEUDO.includes(arg) && arg !== HISTORY, run: (arg) => current && arg && void addSplit(current.id, 'right', arg) },
     // v1a-48: the icons without a command get one, so each icon's hint key is its shortcut's key.
     { id: 'artifacts.toggle', title: 'Show or hide Artifacts', run: openCmd('artifacts', true) },
     { id: 'preview.toggle', title: 'Show or hide Preview (the side pane’s Preview tab)', enabled: !!paneSession, run: () => paneSession && (paneOpen(paneState, paneSession.id) && paneTab(paneState, paneSession.id) === 'preview' ? paneToggle(paneSession.id) : paneShow(paneSession.id, 'preview')) },
@@ -323,6 +342,7 @@ export function buildCommands({ resume, ordered, board, ownerList, current, t, o
     { id: 'sidebar.left.toggle', title: 'Show or hide the left sidebar', run: () => toggleSide('left') },
     { id: 'sidebar.right.toggle', title: t('shell.chrome.sidebarRightToggle'), run: () => toggleSide('right') },
     { id: 'bars.toggle', title: t('shell.chrome.barsToggle'), run: () => setSettings((s) => ({ ...s, bars: toggleBars(s.bars) })) }, // v25f F13
+    { id: 'bars.autohide', title: t('shell.chrome.autoHideBars'), run: () => setSettings((s) => ({ ...s, bars: toggleBarsAuto(s.bars) })) }, // ticket 1047
     // v1b-11: `diff.open <path>` for other widgets; from the palette or a key it opens the list.
     { id: 'diff.open', title: t('settings.kbd.cmd.diff.open'), run: (path?: string) => (foldOf('diff') && fold.unfold(foldOf('diff')!), openDiff(path)) },
     { id: 'pr.list', title: t('prChecks.openList'), run: () => openPrList(t) }, // ticket 373: no chip or session needed
@@ -348,8 +368,37 @@ export function buildCommands({ resume, ordered, board, ownerList, current, t, o
     { id: 'split.up', title: 'Split up', run: () => splitRef.current.split('up') },
     // Look 1117 v12 (A S3-B): with no split open it did nothing and was listed as if it would; off, with its reason. Read when
     // asked (as `strip`): opening a split does not rebuild the list.
+    // Ticket 1069: the tab drag's menu and palette way. From the tab menu (its data-menu-arg) the menu's tab moves into a split
+    // of the view shown before the menu made it active; from the palette the tab shown before this one moves beside this one.
+    ...(['right', 'down'] as const).map((side) => {
+      const pair = (arg?: string) => {
+        const before = lastTab.current.before;
+        const moved = arg ?? before;
+        const host = moved === active ? before : active;
+        const ok = (id: string | null): id is string => !!id && tabs.includes(id) && sessions.some((s) => s.id === id);
+        return ok(moved) && ok(host) && moved !== host && !splitSessions().includes(moved) ? { moved, host } : null;
+      };
+      return {
+        id: `tab.split.${side}`,
+        title: side === 'right' ? 'Move tab to split right' : 'Move tab to split below',
+        get enabled() {
+          return !!pair();
+        },
+        enabledFor: ({ arg }: { arg?: string }) => !!pair(arg),
+        run: (arg?: string) => {
+          const p = pair(arg);
+          if (p) addSplit(p.host, side, `session:${p.moved}`, true);
+        },
+      };
+    }),
     Object.defineProperty({ id: 'split.close', title: 'Close the focused split', why: t('look8.noSplit'), run: () => splitRef.current.close() }, 'enabled', { get: () => !!current && splitsOf(current.id).length > 0, enumerable: true }),
-    { id: 'pane.shell.new', title: 'New shell in the side pane (this session’s folder)', enabled: !!paneSession, run: () => paneSession && void startShell(core, paneSession).then((e) => e && setPaneNote(e)) },
+    { id: 'pane.shell.new', title: 'New shell in the side pane (this session’s folder)', enabled: !!paneSession, run: () => {
+      if (!paneSession) return;
+      // Ticket 1130 C4: a running shell of this pane is shown and focused; only with none is a new one started.
+      const have = shellsOf(paneSession.id).filter((id) => sessions.some((s) => s.id === id && s.kind === 'shell' && s.state === 'running')).at(-1);
+      if (have) return paneShow(paneSession.id, { shell: have }, true);
+      void startShell(core, paneSession, (shell) => paneShow(paneSession.id, { shell }, true)).then((e) => e && setPaneNote(e));
+    } },
     { id: 'about.copy', title: t('about.copyBuild'), run: () => void copyBuildInfo() }, // ticket 262: the About page's support line
     // G2: only in a build that updates itself. A newer build shows in the status bar; nothing newer or a failure (ticket 377) is a short note.
     ...(rcUpdates() ? [{ id: 'rc.update.check', title: t('rc.update.check'), run: () => {
@@ -367,6 +416,30 @@ export function buildCommands({ resume, ordered, board, ownerList, current, t, o
     ...leaderCommands(pt, current, team, t), // ticket 990: Add a leader to this project…
     // Ticket 473: translated; Palette's rank reads `name`, not the title's shape.
     ...ordered.map((s) => ({ id: `session.open.${s.id}`, title: t('palette.goTo', { name: sessionName(s), project: base(s.project) }) + tell(s), name: sessionName(s), state: paletteState(s), branch: wt.list.find((l) => l.path === s.cwd)?.branch || undefined, run: () => open(s.id) })),
+    // Ticket 1063: a project's finished work leaves in one go. Ended sessions close (each with its Undo; a failed one keeps its
+    // row), then the Tidy panel's merged, empty and gone worktrees go (branch kept, Undo). A worktree with uncommitted files
+    // or unpushed commits is never touched: the note names it. The head menu hands the project (TAKES_PROJECT); the palette takes the current one.
+    { id: 'tree.clear-finished', title: t('tree.cmd.clearFinished'), enabled: !!current, why: t('palette.why.noProject'), enabledFor: ({ arg }) => !!arg || !!current, run: (arg?: string) => {
+      const project = arg ?? current?.project;
+      if (!project) return;
+      const mine = sessions.filter((s) => s.project === project && !s.machine);
+      const closing = mine.filter((s) => ended(s) && closeable(s) && status(s) !== 'failed');
+      const entries = entriesOf(t, wt.list.filter((l) => l.project === project), wt.facts, mine.map((s) => (closing.includes(s) ? { ...s, state: 'closed' as const } : s)));
+      // Rule 4 (1063): unpushed commits are kept too, though Tidy's commits-only remove would keep the branch.
+      const held = entries.filter((e) => e.kind === 'dirty' || (e.l.facts?.unpushed ?? 0) > 0);
+      const kept = held.map((e) => listedName(e.l, sessions));
+      if (kept.length) setPaneNote(t('tree.clearKept', { names: kept.join(', ') }));
+      void Promise.all(closing.map((s) => closeEnded(core, s, t, setPaneNote))).then(() => wt.tidy(entries.filter((e) => !held.includes(e)).map((e) => e.l.path)));
+    } },
+    { id: 'history.open', title: t('history.open'), run: () => openHistory() }, // ticket 1073: History without its icon
+    // Ticket 1099 (feature cohesion): the places that had no palette row, each opened the way its icon or page opens it.
+    ...(['usage', 'team', 'assistants'] as const).map((page): Command => ({ id: `${page}.page`, title: t(`coh.cmd.${page}Page`), run: () => (setSettings((s) => ({ ...s, settingsPage: page })), setOverlay('settings')) })),
+    { id: 'decisions.open', title: t('coh.cmd.decisions'), run: openCmd('decisions') }, // the Outbox's cards are in Decisions
+    { id: 'schedules.open', title: t('coh.cmd.schedules'), run: () => openSchedules() },
+    { id: 'schedules.new', title: t('coh.cmd.scheduleNew'), run: () => openSchedules(NEW_SCHEDULE) },
+    { id: 'context.open', title: t('coh.cmd.context'), run: openCmd('context') }, // was only in the Layout library
+    // Ids and titles say "alerts", not "notifications" or "mute": those words find Settings > Notifications first (palette-names.spec).
+    ...([['all', 'all'], ['waiting', 'waiting'], ['off', 'muted']] as const).map(([word, level]): Command => ({ id: `notify.session.${word}`, title: t(`coh.cmd.alerts.${word}`), enabled: !!current, why: t('palette.why.noSession'), run: () => current && notify.setLevel(current.id, level) })),
   ];
   return list;
 }

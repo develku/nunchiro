@@ -13,7 +13,7 @@ import { windowTokens } from './window-tokens';
 import { parseGhostty } from '../src/themes/ghostty';
 import { DARK_PICK, LIGHT_PICK } from '../src/themes/nunchiro';
 import { REPO } from './fixtures';
-import { installHost } from './fixtures/artifacts/cards/host';
+import { installHost, showFrame } from './fixtures/artifacts/cards/host';
 import { append, chat, expect, openChat, rec, test as chatTest } from './fixtures/chat/harness';
 import { artifactServer } from './sandbox-server';
 
@@ -48,6 +48,7 @@ async function cardWithFrame(page: Page, chatCore: { chat: () => { id: string; c
   await openChat(page, s.id);
   const card = chat(page, s.id).locator('.acard[data-path="site/index.html"]');
   await expect(card).toHaveAttribute('data-state', 'ready');
+  await showFrame(card);
   await expect(card.frameLocator('iframe').locator('body')).toContainText('tall page');
   return card;
 }
@@ -106,6 +107,8 @@ test('artifact_frame_focus_ring', async ({ page, chatCore, art }) => {
   const card = await cardWithFrame(page, chatCore, art);
   const wrapper = card.locator('.artifact-frame');
   await wrapper.focus();
+  await tab(page);
+  await expect(card.getByRole('button', { name: 'Fold the preview' })).toBeFocused(); // ticket 1057's chevron
   await tab(page);
   await expect(card.getByRole('button', { name: 'Open' })).toBeFocused();
   await tab(page);
@@ -204,8 +207,8 @@ test('artifact_frame_ring_adds_no_tab_stop_and_moves_nothing', async ({ page, ch
   await tabIntoFrame(page, wrapper);
   expect(await ring(wrapper).then((r) => r.style)).toBe('solid');
   expect({ boxes: await boxes(), stops: await stops() }).toEqual(before);
-  // The wrapper (tabindex 0), Open, Network off and the iframe: no fifth stop for the ring.
-  expect(before.stops).toBe(4);
+  // The wrapper (tabindex 0), the fold chevron (ticket 1057), Open, Network off and the iframe: no sixth stop for the ring.
+  expect(before.stops).toBe(5);
   // All four sides of the outline (outline width + offset = 4px) lie inside every clipping ancestor and the window.
   const clipped = await wrapper.evaluate((w) => {
     const r = w.getBoundingClientRect();

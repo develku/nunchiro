@@ -221,7 +221,7 @@ chatTest('artifact_links_ignore_inapp_setting: Markdown artifact link in Preview
     rec.result('m1', `File created successfully at: ${full}`, { toolUseResult: { type: 'create', filePath: full, content: text, structuredPatch: [] } }),
   );
   await openChat(page, s.id);
-  await chat(page, s.id).locator('.acard[data-path="notes.md"]').getByRole('button', { name: 'Open' }).click();
+  await chat(page, s.id).locator('.chcard li.art').getByRole('button', { name: 'Open' }).click(); // ticket 1086: Open on the changed-files row
   await page.locator('.preview .pv-body').getByRole('link', { name: 'web' }).click();
   await expect.poll(() => got(page)).toEqual({ opened: ['https://example.com/page'], go: [] });
 });

@@ -121,7 +121,17 @@ again.
 
 ## Update
 
-Run `nunchiro serve stop --yes` and quit the app, pull `main`, then repeat Install. It is a manual reinstall; nothing updates itself.
+How you update depends on how the app was built.
+
+- **A build from the update folder** updates itself. Set the folder in Settings > About ("Update folder"): it holds a
+  built `Nunchiro.app` and its `nunchiro-build.json` stamp. When the folder has a newer build, the status bar shows
+  "New build <version> ready". "Install and restart" checks the new bundle, swaps it in, replaces the core and relaunches
+  the window. Sessions keep running. If any step fails, the old app and core come back. Only a build made with
+  `NUNCHIRO_UPDATE_REPO` set can install; any other build refuses.
+- **A build you made from source** (README "Install from source") is replaced by hand: run `nunchiro serve stop --yes`
+  and quit the app, pull `main`, then repeat Install.
+
+There is no public download and no update from the internet yet.
 
 ## Uninstall
 

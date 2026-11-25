@@ -170,5 +170,17 @@ export function useGlobalKeys({ editing, palette, finish, arrange, setMessage, d
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
+  // Ticket 1071: the native View menu (main.rs VIEW_COMMANDS and TAB_JUMPS) runs these page commands; its keys reach the window even
+  // while the in-app browser view holds the keyboard, which the page's own bindings never see.
+  const runRef = useRef(run);
+  useEffect(() => {
+    const on = (e: Event) => {
+      const id = (e as CustomEvent<unknown>).detail;
+      if (typeof id === 'string' && /^(zoom\.(in|out|reset)|session\.jump\.[1-9])$/.test(id)) runRef.current(id);
+    };
+    window.addEventListener('nunchiro:command', on);
+    return () => window.removeEventListener('nunchiro:command', on);
+  }, []);
+  runRef.current = run;
   dragRef.current = drag;
 }

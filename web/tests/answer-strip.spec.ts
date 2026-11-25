@@ -1,14 +1,14 @@
 // V1A-60b (needs 77): the answer strip takes 0 px while nothing waits and appears as one card line when an item arrives;
 // the terminal shrinks by its height, keeps its bottom row, and refits at most once a frame. needs 107 (ticket 180): no
 // bar above the composer (a strip placed there draws nothing), so these specs place it on top of the terminal
-// (fixtures.ts agentsZone): the expected place below is the top of the column; every other check is unchanged.
+// (fixtures.ts stripOnTop): the expected place below is the top of the column; every other check is unchanged.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { expect, openWindow, REPO, test, type Core, agentsZone, stripOnTop } from './fixtures';
+import { expect, openWindow, REPO, test, type Core, stripOnTop } from './fixtures';
 import { append, chat, openChat, rec, test as chatTest } from './fixtures/chat/harness';
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: these specs read the AGENTS rows, which the default window no longer shows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 /** Strip, terminal and composer boxes, the xterm rows drawn and the rows that fit the terminal's content box. */
 const geo = (app: Page) =>
@@ -60,7 +60,7 @@ const asTerminal = (app: Page, ids: string[]) =>
 const focusTerm = (app: Page, a: { id: string }) => app.locator(`.term[data-session="${a.id}"] .xterm-helper-textarea`).focus();
 /** Opens the session's tab and waits for its terminal. */
 async function show(app: Page, a: { id: string }) {
-  await app.locator(`[data-agent="${a.id}"]`).click();
+  await app.locator(`button.row.wt2[data-menu-session="${a.id}"]`).click();
   await expect(app.locator(`.term[data-session="${a.id}"] .xterm-screen`)).toBeVisible();
 }
 // The fixtures' fake Claude, except that an answer clears the dialog off its screen, so the item goes (as in queue.spec.ts).
@@ -197,7 +197,7 @@ for (const mode of ['off', 'signal'] as const)
     await show(app, a);
     const before = await geo(app);
     arrive(a);
-    await expect(app.locator(`[data-agent="${a.id}"] .st`)).toHaveAttribute('data-s', 'waiting', { timeout: 15_000 });
+    await expect(app.locator(`button.row.wt2[data-menu-session="${a.id}"]`)).toHaveClass(/\byou\b/, { timeout: 15_000 });
     // The arrival alone changes nothing.
     const arrived = await geo(app);
     expect(arrived.rows).toBe(before.rows);
@@ -256,15 +256,15 @@ test('answer-strip-oldest-again: when focus leaves an item brought into the line
   await expect(line).toHaveCount(1);
 });
 
-test('answer-strip-zoned: with the terminal zone split beside AGENTS, the strip sits over both and the terminal keeps its rows in view', async ({ app, core }) => {
+test('answer-strip-zoned: with the terminal zone split beside a Context zone, the strip sits over both and the terminal keeps its rows in view', async ({ app, core }) => {
   const a = { ...core.agent(core.project('demo'), 'asks', 'go'), go: 'go' };
   await asTerminal(app, [a.id]);
   await openWindow(app);
-  core.cli('layout', 'move', 'agents', 'split', 'right', '--zone', 'terminal');
-  await expect.poll(() => app.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-zone-id]')].map((e) => e.dataset.zoneId))).toEqual(['waiting', 'terminal', 'agents', 'composer']);
+  core.cli('layout', 'split', 'right', 'context', '--zone', 'terminal');
+  await expect.poll(() => app.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-zone-id]')].map((e) => e.dataset.zoneId))).toEqual(['waiting', 'terminal', 'context', 'composer']);
   await show(app, a);
   await focusTerm(app, a);
-  const agents = () => app.locator('[data-zone-id="agents"]').evaluate((e) => Math.round(e.getBoundingClientRect().top));
+  const beside = () => app.locator('[data-zone-id="context"]').evaluate((e) => Math.round(e.getBoundingClientRect().top));
   const before = await geo(app);
   arrive(a);
   await expect(app.locator('#waiting-strip .qcard')).toHaveCount(1, { timeout: 15_000 });
@@ -273,7 +273,7 @@ test('answer-strip-zoned: with the terminal zone split beside AGENTS, the strip 
   expect(g.composer).toEqual(before.composer);
   expect(g.strip.bottom).toBe(g.terminal.top);
   expect(g.terminal.bottom).toBe(g.composer.top);
-  expect(await agents()).toBe(g.strip.bottom);
+  expect(await beside()).toBe(g.strip.bottom);
   expect(g.rows).toBe(g.fits);
   expect(g.lastBottom!).toBeLessThanOrEqual(g.terminal.bottom);
   expect(g.cursorBottom, 'the cursor row is drawn').not.toBeNull();
@@ -315,7 +315,7 @@ test('answer-strip-own-zone: a strip placed in its own zone keeps the zone’s s
   await asTerminal(app, [a.id]);
   await openWindow(app);
   core.cli('layout', 'move', 'waiting', 'split', 'right', '--zone', 'terminal');
-  await expect.poll(() => app.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-zone-id]')].map((e) => e.dataset.zoneId))).toEqual(['agents', 'terminal', 'waiting', 'composer']);
+  await expect.poll(() => app.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-zone-id]')].map((e) => e.dataset.zoneId))).toEqual(['terminal', 'waiting', 'composer']);
   await show(app, a);
   const zone = () => app.locator('[data-zone-id="waiting"]').evaluate((e) => [e.getBoundingClientRect()].map((r) => [r.x, r.y, r.width, r.height].map(Math.round).join(','))[0]);
   const before = { zone: await zone(), geo: await geo(app) };

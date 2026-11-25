@@ -2,7 +2,9 @@
 // the marks in a chat that carry meaning take the theme's colours, and Settings > Appearance > "Chat colours" turns that
 // off (Plain = the look before this ticket). WANT holds the colours the mockup's own script computes for the two themes
 // it draws, written out, so this spec does not lean on themes/derive.ts. Each colour must read at 4.5:1 or more on what
-// is behind it: the chat surface, and for inline code and paths the code background too.
+// is behind it: the chat surface, and for inline code and paths the code background too. Ticket 1088: headings, bold and
+// list markers take the theme's own colour by default (`chat`, `chatMark`: Latte's cursor colour stepped to 4.5:1; Mocha's
+// most saturated of palette 3-6 is its blue), while a running tool's name stays on the working blue (`accent`).
 import type { Locator, Page } from '@playwright/test';
 import { THEMES } from '../src/themes/catalog/catalog.gen';
 import { parseGhostty } from '../src/themes/ghostty';
@@ -11,8 +13,8 @@ import { append, chat, type ChatCore, expect, openChat, rec, test } from './fixt
 import { openTheme, stored, token } from './theme-harness';
 
 const WANT = {
-  'Catppuccin Latte': { text: '#4c4f69', accent: '#1d61e9', code: '#984d84', link: '#12757a', mark: '#3e67b8', ok: '#307820', bad: '#d20f39' },
-  'Catppuccin Mocha': { text: '#cdd6f4', accent: '#89b4fa', code: '#f5c2e7', link: '#94e2d5', mark: '#6e8fc7', ok: '#a6e3a1', bad: '#f38ba8' },
+  'Catppuccin Latte': { chat: '#8f5a4e', chatMark: '#87625b', text: '#4c4f69', accent: '#1d61e9', code: '#984d84', link: '#12757a', mark: '#3e67b8', ok: '#307820', bad: '#d20f39' },
+  'Catppuccin Mocha': { chat: '#89b4fa', chatMark: '#6e8fc7', text: '#cdd6f4', accent: '#89b4fa', code: '#f5c2e7', link: '#94e2d5', mark: '#6e8fc7', ok: '#a6e3a1', bad: '#f38ba8' },
 } as const;
 type Name = keyof typeof WANT;
 const pick = (name: Name): ThemePick => ({ id: `catalog:${name}`, name, colors: parseGhostty(THEMES[name]) });
@@ -26,7 +28,7 @@ const ANSWER = [
   '- Updated `auth/token.ts` to return `{ value, expires }`\n- **All 42 tests pass**; no other caller used the old field\n- See the [migration note](https://example.com/migration) for the API change',
   "```ts\nexport function readToken(raw: string) {\n  return { value: raw, expires: '2026-12-01' } // new shape\n}\n```",
 ].join('\n\n');
-async function open(page: Page, core: ChatCore) {
+async function open(page: Page, core: ChatCore, more: unknown[] = []) {
   const s = core.chat('login');
   append(
     s.file,
@@ -37,6 +39,7 @@ async function open(page: Page, core: ChatCore) {
     rec.use('t1', 'Bash', { command: 'npm test' }),
     rec.result('t1', '42 passed'),
     rec.assistant(ANSWER),
+    ...more,
   );
   await openChat(page, s.id);
   const view = chat(page, s.id);
@@ -93,9 +96,9 @@ for (const name of Object.keys(WANT) as Name[]) {
     const m = marks(view);
     const w = WANT[name];
     const want: Record<string, string> = {
-      heading: w.accent, bold: w.accent,
+      heading: w.chat, bold: w.chat,
       'inline code': w.code, 'file path': w.code, 'tool row path': w.code,
-      link: w.link, 'list marker': w.mark,
+      link: w.link, 'list marker': w.chatMark,
       'tests passed': w.ok, 'lines added': w.ok, 'tool done': w.ok,
       'lines removed': w.bad, // the mockup draws no error; its rule names red (palette 1), by the same step
       body: w.text,
@@ -184,7 +187,7 @@ test('chat_colours_setting: Settings > Appearance has Chat colours, Theme accent
   await use(page, 'Catppuccin Latte');
   const view = await open(page, chatCore);
   const heading = async () => (await read([view.locator('.md h3')])).color;
-  expect(await heading()).toBe(WANT['Catppuccin Latte'].accent);
+  expect(await heading()).toBe(WANT['Catppuccin Latte'].chat);
   await openTheme(page, false);
   const group = page.getByRole('radiogroup', { name: 'Chat colours' });
   await expect(group.getByRole('radio', { name: 'Theme accents' })).toBeChecked();
@@ -193,5 +196,44 @@ test('chat_colours_setting: Settings > Appearance has Chat colours, Theme accent
   expect(JSON.parse((await stored(page))!).chatColours).toBe('plain');
   await page.getByRole('button', { name: 'Reset Chat colours to default' }).click();
   await expect(group.getByRole('radio', { name: 'Theme accents' })).toBeChecked();
-  await expect.poll(heading).toBe(WANT['Catppuccin Latte'].accent);
+  await expect.poll(heading).toBe(WANT['Catppuccin Latte'].chat);
+});
+
+// Ticket 1064: Settings > Appearance > Chat accent picks the palette slot (1-6) of headings and bold; the working light and a running tool's name stay on slot 4.
+// Ticket 1088: the default is Theme colour, not slot 4.
+test('chat_accent_slot_1064: default is Theme colour (1088); slot 5 recolours heading and bold only, survives reload and a theme change; Plain disables the row', async ({ page, chatCore }) => {
+  await use(page, 'Catppuccin Latte');
+  const view = await open(page, chatCore, [rec.use('t2', 'Bash', { command: 'sleep 9' })]); // still running: its name stays on slot 4
+  const colour = async (l: Locator) => (await read([l])).color;
+  const running = view.locator('.tool[data-running] .toolname', { hasText: 'Ran' });
+  const [heading, bold] = [view.locator('.md h3'), view.locator('.md p strong')];
+  expect([await colour(heading), await colour(bold)]).toEqual([WANT['Catppuccin Latte'].chat, WANT['Catppuccin Latte'].chat]);
+  const light = await token(page, '--light-run');
+  await openTheme(page, false);
+  const group = page.getByRole('radiogroup', { name: 'Chat accent' });
+  await expect(group.getByRole('radio', { name: 'Theme colour' })).toBeChecked();
+  await group.getByRole('radio', { name: 'Magenta' }).check();
+  await expect.poll(() => colour(heading)).toBe(WANT['Catppuccin Latte'].code);
+  expect(await colour(bold)).toBe(WANT['Catppuccin Latte'].code);
+  expect((await read([heading])).ratio).toBeGreaterThanOrEqual(4.5);
+  expect((await read([bold])).ratio).toBeGreaterThanOrEqual(4.5);
+  expect(await colour(running)).toBe(WANT['Catppuccin Latte'].accent);
+  expect(await token(page, '--light-run')).toBe(light); // the working light stays blue
+  expect(JSON.parse((await stored(page))!).chatAccent).toBe(5);
+  // A reload keeps the slot; a new theme gives its own colour of that slot.
+  // use() put the stored settings back on each load, so a later init script restores what the window saved.
+  const reload = async (more: Record<string, unknown> = {}) => {
+    const saved = { ...JSON.parse((await stored(page))!), ...more };
+    await page.addInitScript((s) => localStorage.setItem('nunchiro.settings.v1', JSON.stringify(s)), saved);
+    await page.reload();
+  };
+  await reload();
+  await expect.poll(() => colour(heading)).toBe(WANT['Catppuccin Latte'].code);
+  await reload({ themeFixed: pick('Catppuccin Mocha') });
+  await expect.poll(() => colour(heading)).toBe(WANT['Catppuccin Mocha'].code);
+  // Plain: the row is off and the chat is body text.
+  await reload({ chatColours: 'plain' });
+  await openTheme(page, false);
+  await expect(page.getByRole('radiogroup', { name: 'Chat accent' }).getByRole('radio', { name: 'Magenta' })).toBeDisabled();
+  expect(await colour(heading)).toBe(WANT['Catppuccin Mocha'].text);
 });

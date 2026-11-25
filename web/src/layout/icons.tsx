@@ -12,7 +12,6 @@ const OCTICON: Record<string, IconName> = {
   preview: 'browser',
   board: 'project',
   artifacts: 'package',
-  agents: 'person',
   terminal: 'terminal',
   composer: 'pencil',
   waiting: 'list-unordered',
@@ -44,6 +43,14 @@ export function Icon({ kind, size = 16 }: { kind: string; size?: number }) {
     );
   // Ledger w14-room-icon: the split chooser's Room entry drew the fallback glyph; it is the Room tab's bubble.
   if (kind === 'room') return <ChromeIcon name="comment-discussion" size={size} />;
+  // Ticket 1048: Octicons has no meter; a ring with a filled arc, as the composer's context ring.
+  if (kind === 'context')
+    return (
+      <svg className="oi" data-icon="context" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden focusable="false">
+        <circle cx="12" cy="12" r="9" opacity={0.35} />
+        <path d="M12 3a9 9 0 0 1 8.5 12" />
+      </svg>
+    );
   return <Octicon name={OCTICON[kind] ?? 'code'} size={size} />; // a user widget falls back to code
 }
 export const glyph = (w: string): ReactNode => <Icon kind={w.startsWith('widget:') ? '' : w} />;

@@ -1,0 +1,32 @@
+# gitleaks reads this file when it scans this folder (`gitleaks dir .`). It keeps the default rules and allows only
+# the exact values below: fake keys in tests and fixtures, and constants a default rule mistakes for a key (storage
+# names, a nonce, one SRI hash). Exact values, never paths, so a real key added to the same file is still reported.
+# A new hit: make sure it is fake, then add its exact value here with the file it is in.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "fake test values and non-secret constants"
+regexTarget = "secret"
+regexes = [
+  # crates/nunchiro/tests/diagnose.rs (aws-access-token)
+  '''^AKIAABCDEFGHIJKLMNOP$''',
+  # crates/nunchiro/tests/idle_cpu.rs (generic-api-key)
+  '''^dGhlIHNhbXBsZSBub25jZQ==$''',
+  # crates/nunchiro-core/src/logs.rs and crates/nunchiro-core/tests/handoff.rs (generic-api-key)
+  '''^sk-0123456789abcdefghij$''',
+  # crates/nunchiro-core/tests/fixtures/logs/token-patterns.txt (jwt)
+  '''^eyJhbGciOiJub25lIn0\.eyJzdWIiOiJmYWtlIn0\.ZmFrZXNpZ25hdHVyZQ$''',
+  # crates/nunchiro-core/tests/account_session.rs (generic-api-key)
+  '''^sk-457-anthropic$''',
+  # web/src/queue/notify.tsx (generic-api-key)
+  '''^nunchiro\.notify\.v1$''',
+  # crates/nunchiro-core/data/cdnjs-sri.json (generic-api-key)
+  '''^sha512-VgT3hUTNg7RCzIbTNJVE3Y8jQG5zxd2axumgweH45skKSYGxaAIeGPWsaIdFVJu85zy0VBZhEF7dKGHr6sbSUA==$''',
+  # web/src/split/store.ts (generic-api-key)
+  '''^nunchiro\.splits\.v1$''',
+  # web/tests/provider-add.spec.ts (generic-api-key)
+  '''^sk-or-v1-abcdef0123456789$''',
+  # web/tests/queue.spec.ts (curl-auth-header)
+  '''^sk-live-SECRET123$''',
+]

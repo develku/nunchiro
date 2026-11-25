@@ -19,6 +19,9 @@
 //! ### Settings
 //! - `stale_minutes`: u32, 1 to 1440 (default 10); the stale badge threshold.
 //! - `turn_end_nudge`: bool (default true); ticket 187's turn-end context line.
+//! - `done_days`: u32, 1, 7 or 30 (default 7); ticket 1066: a done card older than this (by `done_at`) is
+//!   archived: the window's Done column leaves it out and shows it in the Archive fold, `nunchiro board list`
+//!   marks it. Nothing is deleted.
 //!
 //! ### Column
 //! - `id`: string, a store id.
@@ -53,6 +56,9 @@
 //! - `waits_on`: [card id], at most 64; display only. Deleting a card removes it from every list.
 //! - `attachments`: [Attachment], at most 64, one per session. A session attached to a card has no
 //!   automatic card of its own; an unattached session keeps one.
+//! - `done_at`: u64 or null; when the card arrived in a done column (a column that takes the done state or
+//!   needs proof), null elsewhere. A manual card: `last_moved_at`. A session card: the time the board first saw
+//!   it there (stored, so later activity does not move it); a card that leaves Done and returns counts anew.
 //! - `last_moved_at`: u64; the last column change (creation counts), for the stale badge and nudge.
 //!   An edit that keeps the column does not change it.
 //! - `history`: [Change], oldest first, the last 50.
@@ -112,6 +118,8 @@ pub enum Source {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum State {
+    // A seat that has not had a turn: claimed by no column, so it sits in the first column that claims no state (To do).
+    Idle,
     Working,
     NeedsDecision,
     Review,
@@ -462,16 +470,19 @@ fn run(
             revision,
             stale_minutes,
             turn_end_nudge,
+            done_days,
         } => {
             let settings = Settings {
                 stale_minutes,
                 turn_end_nudge,
+                done_days: done_days.unwrap_or_else(|| disk.settings.unwrap_or_default().done_days),
             };
             write::put_settings(home, &mut disk, &revision, &settings)?;
         }
         _ => return Err("not a board request".into()),
     }
     release_drags(&mut disk, sessions);
+    stamp_done(&mut disk, sessions);
     if disk != old {
         disk.save(home)?;
     }
@@ -491,7 +502,7 @@ fn run(
         .collect();
     let mut cards: Vec<_> = sessions.iter().filter(|s| !attached.contains(s.id.as_str())).map(|s| {
         let state = session_state(s, disk.seen.get(&s.id).copied().unwrap_or(0));
-        let column = columns.iter().find(|c| c.states.contains(&state)).unwrap_or(&columns[0]);
+        let column = state_column(&columns, &state);
         let held = disk.held.get(&s.id);
         let updated_at = held.map_or(s.attention.last_activity, |h| h.updated_at.max(s.attention.last_activity));
         serde_json::json!({
@@ -510,6 +521,23 @@ fn run(
             .map(|c| manual_card(c, &columns, sessions, &disk.seen, &tasks)),
     );
     let source_states = sources::merge(home, &columns, &mut cards);
+    // Ticket 1066: when each card arrived in a done column (null elsewhere).
+    for card in &mut cards {
+        let done = columns.iter().any(|c| is_done(c) && card["column"] == c.id);
+        let at = match card["source"].as_str() {
+            Some("session") => card["id"]
+                .as_str()
+                .and_then(|id| disk.done_at.get(id).copied()),
+            _ => card["last_moved_at"]
+                .as_u64()
+                .or(card["updated_at"].as_u64()),
+        };
+        card["done_at"] = if done {
+            serde_json::json!(at)
+        } else {
+            serde_json::Value::Null
+        };
+    }
     // v1b-18: manual edits and board reads refresh the decision items at once.
     decisions::publish(home, decisions::raised(&columns, &cards), &disk.resolved);
     Ok(Reply::BoardSnapshot {
@@ -1011,6 +1039,48 @@ fn release_drags(disk: &mut persistence::Disk, sessions: &[Session]) {
     });
 }
 
+/// A column that takes the done state or needs proof (the web's `isDone`).
+fn is_done(column: &Column) -> bool {
+    column.states.contains(&State::Done) || column.proof
+}
+
+/// Ticket 1066: keeps `done_at` for the session cards now in a done column: the stored time stays, a new arrival gets
+/// the card's `updated_at` (the finish time when the board is read soon after). A card that leaves Done, or its
+/// session, drops out, so a later return counts from its newest arrival.
+fn stamp_done(disk: &mut persistence::Disk, sessions: &[Session]) {
+    let attached: std::collections::BTreeSet<&str> = disk
+        .manual
+        .iter()
+        .flat_map(|c| c.attachments.iter().map(|a| a.session_id.as_str()))
+        .collect();
+    let mut now_done = std::collections::BTreeMap::new();
+    for s in sessions
+        .iter()
+        .filter(|s| !attached.contains(s.id.as_str()))
+    {
+        let state = session_state(s, disk.seen.get(&s.id).copied().unwrap_or(0));
+        let held = disk.held.get(&s.id);
+        let column = held.map_or_else(
+            || state_column(&disk.columns, &state),
+            |h| {
+                disk.columns
+                    .iter()
+                    .find(|c| c.id == h.column)
+                    .unwrap_or(&disk.columns[0])
+            },
+        );
+        if is_done(column) {
+            let at = disk.done_at.get(&s.id).copied().unwrap_or_else(|| {
+                held.map_or(s.attention.last_activity, |h| {
+                    h.updated_at.max(s.attention.last_activity)
+                })
+            });
+            now_done.insert(s.id.clone(), at);
+        }
+    }
+    disk.done_at = now_done;
+}
+
 fn reconcile_sessions(disk: &mut persistence::Disk, sessions: &[Session]) -> bool {
     let mut reset = false;
     for session in sessions {
@@ -1068,13 +1138,16 @@ pub(crate) fn observe(home: &Path, sessions: impl FnOnce() -> Vec<Session>) -> R
         }
     };
     decisions::refresh(home, &mut disk, || &sessions);
-    if disk.held.is_empty() && disk.seen.is_empty() {
+    let done_before = disk.done_at.clone();
+    stamp_done(&mut disk, &sessions);
+    let stamped = disk.done_at != done_before;
+    if !stamped && disk.held.is_empty() && disk.seen.is_empty() {
         return Ok(());
     }
     let count = disk.held.len();
     let reset = reconcile_sessions(&mut disk, &sessions);
     release_drags(&mut disk, &sessions);
-    if reset || disk.held.len() != count {
+    if reset || stamped || disk.held.len() != count {
         disk.save(home)?;
     }
     if reset {
@@ -1101,6 +1174,16 @@ fn next_update(previous: u64) -> Result<u64, String> {
     Ok(crate::queue::now_ms().max(previous.checked_add(1).ok_or("board timestamp overflow")?))
 }
 
+/// The column a session card lands in: the first that claims its state; an idle seat (no state to claim) takes the first
+/// column that claims none (To do), and any card with no match the first column.
+fn state_column<'a>(columns: &'a [Column], state: &State) -> &'a Column {
+    let wanted = |c: &&Column| match state {
+        State::Idle => c.states.is_empty(),
+        _ => c.states.contains(state),
+    };
+    columns.iter().find(wanted).unwrap_or(&columns[0])
+}
+
 fn session_state(session: &Session, seen: u64) -> State {
     // Reuse 03's Synara attention projection and stale flag, never a second clock.
     // Ticket 286 item 1 r5: an agent that quit is done, though the shell it left still runs.
@@ -1116,13 +1199,15 @@ fn session_state(session: &Session, seen: u64) -> State {
         || session.attention.waiting
     {
         State::NeedsDecision
-    } else if session.attention.working
-        || session.attention.background > 0
-        || session.completion_seq == 0
-    {
+    } else if session.attention.working || session.attention.background > 0 {
+        // Ticket 1090: only a turn in progress is working. A session that never finished a turn (an agent at its
+        // first prompt, a shell) counted as working before, so the board said "working" far more often than agents ran.
         State::Working
     } else if session.completion_seq > seen {
         State::Review
+    } else if session.completion_seq == 0 && session.kind != crate::api::AgentKind::Shell {
+        // Tickets 1091, 1092: a seat with no turn yet is neither finished work nor work to review. A shell has no turns, so it keeps its old state.
+        State::Idle
     } else {
         State::Done
     }

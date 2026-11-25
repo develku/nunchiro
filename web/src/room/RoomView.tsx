@@ -12,7 +12,7 @@ import { askNew } from '../NewSession';
 import { status, withResumed, type Session } from '../types';
 import { basename, rowState, type ListedWorktree, type WorktreeFact } from '../tree';
 import type { T } from '../i18n';
-import { PERSON, endedSeats, num, seatNames, seatsOf, type RoomMessage } from './room';
+import { PERSON, endedSeats, num, reachedText, seatNames, seatsOf, stamp, type RoomMessage } from './room';
 import { useTasks } from '../lead/tasks';
 import { leadOf, useTeam } from '../lead/lead';
 import { isLevel, LevelMark, pairShort, seatText, type Pair } from '../lead/level';
@@ -20,7 +20,7 @@ import './room.css';
 
 /** Ticket 990: the worktrees and their facts, for each sender's colour bar (the tree row's own tone). */
 export type RoomWorktrees = { list: ListedWorktree[]; facts: ReadonlyMap<string, WorktreeFact> };
-type Props = { core: CoreClient; t: T; project: string; sessions: Session[]; byId: Map<string, Session>; messages: RoomMessage[]; pins: string[]; names?: Record<string, string>; dropped: number; toggle: (id: string) => Promise<void>; refresh: () => Promise<void>; open: (id: string) => void; wt?: RoomWorktrees };
+type Props = { core: CoreClient; t: T; project: string; sessions: Session[]; byId: Map<string, Session>; messages: RoomMessage[]; pins: string[]; names?: Record<string, string>; delivery?: Record<string, number | null>; dropped: number; toggle: (id: string) => Promise<void>; refresh: () => Promise<void>; open: (id: string) => void; wt?: RoomWorktrees };
 
 const NEW = '\0new';
 
@@ -29,7 +29,7 @@ const YOU = new Set(['you', '나', '自分', '我', 'tú', 'vous', 'você']);
 const ALL = '*all'; // the built-in filters hold a character a thread name cannot, so no thread can take their place
 const MINE = '*mine';
 
-export function RoomView({ core, t, project, sessions, byId: rows, messages, pins, names = {}, dropped, toggle, refresh, open, wt }: Props) {
+export function RoomView({ core, t, project, sessions, byId: rows, messages, pins, names = {}, delivery = {}, dropped, toggle, refresh, open, wt }: Props) {
   const team = useTeam(core, true);
   const byId = useMemo(() => withResumed(rows, sessions), [rows, sessions]); // a resumed seat answers to its old ids too
   const leadMate = leadOf(team, team.home && project === team.home ? '' : project)?.id; // ticket 990: the place's lead teammate
@@ -115,7 +115,17 @@ export function RoomView({ core, t, project, sessions, byId: rows, messages, pin
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const timeOf = (m: RoomMessage) => new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  // Ticket 1089: a line not written today shows its day in the narrow room too ("Yesterday 09:12").
+  const timeOf = (m: RoomMessage) => stamp(t, m.ts);
+  // The narrow room's second meta line: the role and agent words a name does not already say, and a typed line's addressee.
+  const rolesOf = (m: RoomMessage) => (byAgent(m) ? [originOf(m.from), agentOf(m.from)].filter((w) => w && w.toLowerCase() !== fromOf(m).toLowerCase()) : []);
+  const toOf = (m: RoomMessage) => (m.kind === 'typed' ? `→ ${nameOf(m.to)}` : '');
+  const hasTo = (m: RoomMessage) => rolesOf(m).length > 0 || !!toOf(m);
+  // Ticket 1089: beside the written time, when the line reached its seat ("delivered 14:07") or that it still waits there.
+  const reachedOf = (m: RoomMessage) => {
+    const r = reachedText(t, delivery[m.id], m.ts);
+    return r && <span className="room-meta room-reached" data-reached={r.waiting ? 'waiting' : 'delivered'}>{r.text}</span>;
+  };
   // Threads in the order of their first message; each with its messages.
   const threads = useMemo(() => {
     const by = new Map<string, RoomMessage[]>();
@@ -229,6 +239,8 @@ export function RoomView({ core, t, project, sessions, byId: rows, messages, pin
                     {byAgent(m) && agentOf(m.from) && <span className="room-meta"> ({agentOf(m.from)})</span>}
                   </span>
                   <span className="room-meta">→ {nameOf(m.to)}</span>
+                  <time className="room-meta" title={new Date(m.ts).toLocaleString(document.documentElement.lang || undefined)}>{stamp(t, m.ts)}</time>
+                  {reachedOf(m) ?? <span className="room-reached" /> /* keeps the pin in the last column */}
                   <button className="room-pin" aria-pressed={pins.includes(m.id)} aria-label={`${pins.includes(m.id) ? t('room.unpin') : t('room.pin')} ${m.id}`} onClick={() => void toggle(m.id).catch((e) => setNote(t('room.notPinned', { error: notePlain(t, e) })))}>
                     {pins.includes(m.id) ? t('room.unpin') : t('room.pin')}
                   </button>
@@ -260,17 +272,22 @@ export function RoomView({ core, t, project, sessions, byId: rows, messages, pin
                   <div className="room-line-head">
                     <b data-origin={m.created_by === 'core' ? 'core' : undefined}>{fromOf(m)}</b>
                     <time className="room-meta">{timeOf(m)}</time>
+                    {!hasTo(m) && reachedOf(m)}
                     {/* A thread the core named by an id (a worker's question: q-<uuid>) is no name to read. */}
                     {m.thread !== m.id && !/^q-[0-9a-f-]{20,}$/.test(m.thread) && <span className="room-ttag">{clean(m.thread)}</span>}
                   </div>
                   {/* Look 1117 v12/v13 B N12-S3-3: one head line cut every word at once ("Lead L. c.. -> Builder . ..."). The role
                       and agent words and the addressee (a line typed into another seat's terminal: a lead's prompt to one worker)
                       have a line of their own, cut only at its end; a role the name already says is not repeated ("Lead Lead"). */}
-                  {(() => {
-                    const words = byAgent(m) ? [originOf(m.from), agentOf(m.from)].filter((w) => w && w.toLowerCase() !== fromOf(m).toLowerCase()) : [];
-                    if (m.kind === 'typed') words.push(`→ ${nameOf(m.to)}`);
-                    return words.length > 0 && <div className="room-meta room-line-to">{words.join(' ')}</div>;
-                  })()}
+                  {/* Ticket 1089: the delivery word sits at the end of this line, kept whole while the role words give way, then the addressee (in the head
+                      it cut the time off: "delivered"). A line without this line has it in the head. */}
+                  {hasTo(m) && (
+                    <div className="room-meta room-line-to">
+                      {rolesOf(m).length > 0 && <span className="room-line-roles">{rolesOf(m).join(' ')}</span>}
+                      {toOf(m) && <span className="room-line-addr">{toOf(m)}</span>}
+                      {reachedOf(m)}
+                    </div>
+                  )}
                   {/* A long line (a lead's prompt with its paths) is cut to six lines here; the wide Room tab has it whole. */}
                   <blockquote title={m.body.length > 300 ? clean(m.body) : undefined}>{clean(m.body)}</blockquote>
                 </div>

@@ -4,10 +4,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
-import { agentsZone, expect, openWindow, test, type Core } from './fixtures';
+import { stripOnTop, expect, openWindow, test, type Core } from './fixtures';
 import { openQuiet, seed } from './tree-seed';
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 type Spy = { moves: { project: string; group: string | null }[]; refusing: boolean };
 /** Counts every project_move the window sends; `refusing` answers them with an error as a core that refuses would. */

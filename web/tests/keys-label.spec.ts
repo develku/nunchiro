@@ -43,9 +43,10 @@ test('either default prefix chord arms the prefix; prefix twice on ⌃. sends no
   expect(chordBytes('Control+Space')).toBe('\x00');
 });
 
-test('font zoom commands are bound to Cmd+= (and Cmd++), Cmd+-, Cmd+0', () => {
-  expect(b['font.bigger']).toEqual(['Meta+Equal', 'Shift+Meta+Equal']);
-  expect(b['font.smaller']).toEqual(['Meta+Minus']);
-  expect(b['font.reset']).toEqual(['Meta+Digit0']);
-  expect(resolve(b, 'Meta+Equal', false)).toEqual({ kind: 'command', id: 'font.bigger' });
+test('window zoom commands are bound to Cmd+= (and Cmd++), Cmd+-, Cmd+0; the terminal font ones have no key (ticket 1071)', () => {
+  expect(b['zoom.in']).toEqual(['Meta+Equal', 'Shift+Meta+Equal']);
+  expect(b['zoom.out']).toEqual(['Meta+Minus']);
+  expect(b['zoom.reset']).toEqual(['Meta+Digit0']);
+  expect(resolve(b, 'Meta+Equal', false)).toEqual({ kind: 'command', id: 'zoom.in' });
+  for (const id of ['font.bigger', 'font.smaller', 'font.reset']) expect(b[id]).toBeUndefined();
 });

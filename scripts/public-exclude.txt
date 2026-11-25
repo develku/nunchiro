@@ -76,6 +76,8 @@ tests/scenario/test_affected_specs.py     # tests scripts/affected-specs.py
 tests/scenario/test_web_smoke.py          # tests the merge-gate web smoke, the nightly and .agents/build-loop.toml
 tests/scenario/test_review_page_1105.py   # tests a review page under docs/design
 tests/scenario/test_docs_followups_1104.py # greps internal docs
+tests/scenario/test_supply_chain_weekly.py # reads scripts/launchd/ and the owner's supply-chain run log (ticket 1135)
+tests/scenario/test_trademark_search.py   # reads docs/adr/ (ticket 1135)
 tests/scenario/fixtures/tier_check_default_strict.txt  # fixture of test_build_loop_optin.py
 
 # Web specs that compare the window with a private mockup or write screenshots into docs/design.
@@ -100,6 +102,5 @@ web/tests/settings-ia-copy.spec.ts        # reads docs/design/v25-bug-sweep
 web/tests/settings-polish.spec.ts         # writes docs/design/v25-settings-polish
 web/tests/settings-shell.spec.ts          # reads docs/design/settings-1103
 web/tests/tree-bars-462.spec.ts           # reads docs/design/m3-1110
-web/tests/v2-6d-shots.spec.ts             # reads docs/needs.md
 scripts/sweep-contact-sheet.mjs           # writes docs/design/552-sweep
 scripts/app-click/page_test               # reads docs/design/v25-bug-sweep

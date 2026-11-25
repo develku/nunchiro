@@ -4,6 +4,8 @@ import { dropNeighborsForIndex } from './drop';
 import type { Key, T } from '../i18n';
 
 export type State = 'working' | 'needs_decision' | 'review' | 'done';
+/** A card's own state also has idle: a seat with no turn yet, claimed by no column (the core's State::Idle). */
+export type CardState = State | 'idle';
 export const STATES: State[] = ['working', 'needs_decision', 'review', 'done'];
 export const STATE_WORD: Record<State, string> = { working: 'working', needs_decision: 'needs decision', review: 'review', done: 'done' };
 
@@ -36,7 +38,7 @@ export interface Attachment {
   session_id: string;
   role: string;
   label: string | null;
-  state: State | null;
+  state: CardState | null;
 }
 export interface Change {
   at: number;
@@ -57,7 +59,7 @@ export interface Card {
   session_id: string | null;
   project: string | null;
   column: string;
-  state: State | null;
+  state: CardState | null;
   stale: boolean;
   updated_at: number;
   source_name?: string;
@@ -67,6 +69,8 @@ export interface Card {
   waits_on?: string[];
   attachments?: Attachment[];
   last_moved_at?: number;
+  /** Ticket 1066: when the card arrived in a done column; null elsewhere (an older core sends none). */
+  done_at?: number | null;
   history?: Change[];
   can_undo?: boolean;
   /** The lead's ledger task this card is for (a manual card whose attached seats are that task's), else absent or null. */
@@ -87,8 +91,11 @@ export interface Snapshot {
 export interface BoardSettings {
   stale_minutes: number;
   turn_end_nudge: boolean;
+  /** Ticket 1066: days a finished card stays in the Done column before it goes to the Archive: 1, 7 or 30. */
+  done_days: 1 | 7 | 30;
 }
-export const SETTINGS: BoardSettings = { stale_minutes: 10, turn_end_nudge: true };
+export const SETTINGS: BoardSettings = { stale_minutes: 10, turn_end_nudge: true, done_days: 7 };
+export const DONE_DAYS = [1, 7, 30] as const;
 
 /** A whole number of minutes from 1 to 1440 (board.toml's rule, board/config.rs), else null. */
 export function minutes(text: string): number | null {

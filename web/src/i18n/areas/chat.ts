@@ -13,6 +13,13 @@ declare module '../index' {
     'chat.held.cancel': true;
     'chat.held.cancelTip': true;
     'chat.held.second': true;
+    // Ticket 1056: the true reason a held message waits (English only until ticket 1035).
+    'chat.held.working': true;
+    'chat.held.behind': true;
+    // Ticket 1094: a message the agent did not take waits and goes again (English only until ticket 1035).
+    'chat.held.retry': true;
+    // Ticket 1121: a dropped message the core stopped pasting (English only until ticket 1035).
+    'chat.held.stopped': true;
     // needs 168: the plan strip above the composer.
     'chat.plan.region': true;
     'chat.plan.count': true;
@@ -31,6 +38,9 @@ declare module '../index' {
 }
 
 export const en = {
+  'chat.held.working': 'Waiting for the agent to finish its turn:', 'chat.held.behind': 'Waiting for earlier messages to go first ({n}):', // ticket 1056
+  'chat.held.retry': 'The agent did not take it yet. It goes again when the agent is ready:', // ticket 1094
+  'chat.held.stopped': 'The agent did not take it and it will not be pasted again. Cancel send puts it back in the box:', // ticket 1121
   'chat.held.second': 'One message is already waiting; yours stays in the box.',
   'chat.held.lead': 'Waiting for the agent to be ready:', 'chat.held.card': 'Held until you answer:', 'chat.held.cancel': 'Cancel send', 'chat.held.cancelTip': 'Cancel send: put the words back in the box (Esc)',
   'chat.v25.working': 'Working', 'chat.v25.workingFor': 'Working for {time}',

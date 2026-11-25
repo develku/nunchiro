@@ -6,13 +6,18 @@ import { sessionName } from '../Sidebar';
 import { Bdot } from './CardView';
 import { columnTitle, keyOf, type Card, type Column } from './model';
 import type { T } from './Board';
-import { broken, shortId, taskDot, yourTurn, type Lane } from './tasks';
+import { broken, isDone, shortId, taskDot, yourTurn, type Lane } from './tasks';
+import { Archive, DoneDays } from './Archive';
 
 /** Dot tokens (data, not words): your turn, and the To do column that claims no state. */
 const DOT = { you: 'you', todo: 'todo' } as const;
 
-/** `onKey`: the grid's card keys (Alt+arrows move, as `Board` does for a card); lanes fold as the grid's do (Columns.tsx). */
-export function ListView({ t, columns, lanes, sessions, onOpen, onKey }: { t: T; columns: Column[]; lanes: Lane[]; sessions: Session[]; onOpen: (card: Card) => void; onKey: (e: KeyboardEvent, card: Card, column: Column) => void }) {
+/**
+ * `onKey`: the grid's card keys (Alt+arrows move, as `Board` does for a card); lanes fold as the grid's do (Columns.tsx).
+ * Ticket 1090: a lane's done cards come last under their day heads, and `old` ones (past the Archive age) in the Archive
+ * fold at the foot, as in the columns view (1066).
+ */
+export function ListView({ t, columns, lanes, old, now, sessions, onOpen, onKey }: { t: T; columns: Column[]; lanes: Lane[]; old: Card[]; now: number; sessions: Session[]; onOpen: (card: Card) => void; onKey: (e: KeyboardEvent, card: Card, column: Column) => void }) {
   const order = new Map(columns.map((c, i) => [c.id, i]));
   // First match wins, as `find` did; one pass instead of a scan per card.
   const bySession = useMemo(() => sessions.reduce((m, s) => (m.has(s.id) ? m : m.set(s.id, s)), new Map<string, Session>()), [sessions]);
@@ -31,28 +36,44 @@ export function ListView({ t, columns, lanes, sessions, onOpen, onKey }: { t: T;
               </button>
             </li>
           )}
-          {!folded.has(lane.key) && [...lane.cards]
-            .sort((a, b) => (order.get(a.column) ?? 0) - (order.get(b.column) ?? 0))
-            .map((card) => {
-              const session = card.session_id == null ? undefined : bySession.get(card.session_id);
-              const column = byColumn.get(card.column);
-              const title = card.source === 'session' && session ? sessionName(session) : card.title;
-              const you = yourTurn(card, session);
-              const bad = broken(card, session);
-              const word = bad ? t('board.list.broken') : you ? t('board.task.yourTurn') : '';
+          {!folded.has(lane.key) &&
+            (() => {
+              const sorted = [...lane.cards].sort((a, b) => (order.get(a.column) ?? 0) - (order.get(b.column) ?? 0));
+              const done = (c: Card) => !!byColumn.get(c.column) && isDone(byColumn.get(c.column)!);
               return (
-                <li key={keyOf(card)}>
-                  <button type="button" className="bli" data-card={keyOf(card)} data-menu="board" data-menu-arg={keyOf(card)} data-you={you || undefined} data-bad={bad || undefined} aria-label={t('board.card.aria', { title, word: [column && columnTitle(t, column), word].filter(Boolean).join(', ') })} onClick={() => onOpen(card)} onKeyDown={(e) => onKey(e, card, column ?? columns[0])}>
-                    <Bdot s={card.source === 'manual' ? taskDot(card, session, column) : you ? DOT.you : (column?.states[0] ?? DOT.todo)} />
-                    {card.source === 'manual' && <span className="bid">#{shortId(card.id)}</span>}
-                    <span className="bltt">{title}</span>
-                    <span className="blcol">{column && columnTitle(t, column)}</span>
-                  </button>
-                </li>
+                <>
+                  {sorted.filter((c) => !done(c)).map(row)}
+                  <DoneDays t={t} cards={sorted.filter(done)} now={now} item={row} />
+                </>
               );
-            })}
+            })()}
         </Fragment>
       ))}
+      {old.length > 0 && (
+        <li>
+          <Archive t={t} cards={old} />
+        </li>
+      )}
     </ul>
   );
+  function row(card: Card) {
+    const session = card.session_id == null ? undefined : bySession.get(card.session_id);
+    const column = byColumn.get(card.column);
+    const title = card.source === 'session' && session ? sessionName(session) : card.title;
+    const you = yourTurn(card, session);
+    const bad = broken(card, session);
+    const word = bad ? t('board.list.broken') : you ? t('board.task.yourTurn') : '';
+    // Ticket 1090: a session card's dot is its own state (working only in a turn), not the column it was dragged to.
+    const dot = card.source === 'manual' ? taskDot(card, session, column) : you ? DOT.you : (card.state ?? DOT.todo);
+    return (
+      <li key={keyOf(card)}>
+        <button type="button" className="bli" data-card={keyOf(card)} data-menu="board" data-menu-arg={keyOf(card)} data-you={you || undefined} data-bad={bad || undefined} aria-label={t('board.card.aria', { title, word: [column && columnTitle(t, column), word].filter(Boolean).join(', ') })} onClick={() => onOpen(card)} onKeyDown={(e) => onKey(e, card, column ?? columns[0])}>
+          <Bdot s={dot} />
+          {card.source === 'manual' && <span className="bid">#{shortId(card.id)}</span>}
+          <span className="bltt">{title}</span>
+          <span className="blcol">{column && columnTitle(t, column)}</span>
+        </button>
+      </li>
+    );
+  }
 }

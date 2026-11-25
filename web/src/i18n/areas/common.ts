@@ -126,8 +126,8 @@ declare module '../index' {
 export const en = {
   "page.machines": "Machines",
   "field.machines": "Machines",
-  "page.browser": "Browser access",
-  "field.browserAccess": "Allow browser access",
+  "page.browser": "Phone and web access",
+  "field.browserAccess": "Allow phone and web access",
   "page.appearance": "Appearance",
   "page.layout": "Layout",
   "page.theme": "Theme",

@@ -19,6 +19,8 @@ export function useTeamAt(place: string | null): [TeamAt, (next: TeamAt) => void
 const tabAsks = new Set<(folder: string) => void>();
 export const showTeamTab = (folder: string) => tabAsks.forEach((f) => f(folder));
 export const onShowTeamTab = (f: (folder: string) => void) => (tabAsks.add(f), () => void tabAsks.delete(f));
+/** ⌘W or the x on the Team tab: the place's Team view goes back to the side, closed (as Schedules and History). */
+export const closeTeamTab = (place: string) => writeFeature(TEAM_AT, { ...currentFeature(TEAM_AT), [place]: {} });
 /** "Open as a tab" from outside a component (the palette, look 1117 v11-A-S3-1): moves the place's Team view to a tab and shows it. */
 export const teamToTab = (place: string, folder: string) => (writeFeature(TEAM_AT, { ...currentFeature(TEAM_AT), [place]: { tab: true } }), showTeamTab(folder));
 

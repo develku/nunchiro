@@ -29,6 +29,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+pub(crate) use wake::report_status; // ticket 1081: advance.rs and the task views read a seat's report
 
 /// v25-sendkeys: a PTY write that failed after Claude's input was marked uncertain may have landed partway, so the
 /// window must not type it again; any other write failure is a plain refusal.
@@ -76,6 +77,9 @@ pub(crate) fn forget_machine(registry: &std::sync::Mutex<Sessions>, alias: &str)
 #[derive(Clone, Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
+    /// Ticket 1083: the user's home (`$HOME`), read once when the core opens; the unset worktrees folder lies in it.
+    #[serde(skip)]
+    user_home: PathBuf,
     // v1a-06
     machines: BTreeMap<String, crate::machines::Config>,
     disable_hook_injection: bool,
@@ -121,8 +125,14 @@ impl Settings {
         }
     }
     /// v25f: where `project`'s new worktrees go (each under `<root>/<repo name>/`).
-    fn worktree_root_for(&self, home: &Path, project: &Path) -> Result<PathBuf, String> {
-        worktree_root_for(home, self.worktrees_dir.as_deref(), project)
+    fn worktree_root_for(&self, project: &Path) -> Result<PathBuf, String> {
+        worktree_root_for(self.worktrees_dir.as_deref(), project, &self.user_home)
+    }
+    /// Ticket 1083: the visible `<user home>/nunchiro` folder the unset default lies in; none when a setting names the folder.
+    fn default_base(&self) -> Option<PathBuf> {
+        self.worktrees_dir
+            .is_none()
+            .then(|| self.user_home.join("nunchiro"))
     }
     /// v1a-74: `None` writes no scrollback; else whether the saved copy is masked.
     fn history(&self) -> Option<bool> {
@@ -238,6 +248,8 @@ impl Entry {
 }
 /// Ticket 372: the only text a resume at reset types (T3 UsageLimitRecoveryWorker.ts:66).
 pub(crate) const CONTINUE_TEXT: &str = "Continue where you left off.";
+/// Ticket 1081: the sender of a line the core itself types (auto-advance); never a seat id or a token caller.
+pub(crate) const CORE: &str = "core";
 const STALE_RETRY: std::time::Duration = std::time::Duration::from_secs(5);
 /// Ticket 353: a holder still busy after this many tries (about 35 s, backing off) is not under load and will not admit
 /// this core: a holder from before the fix whose app was updated answers busy for as long as it lives.
@@ -281,6 +293,39 @@ pub struct Sessions {
     /// after that worker's agent ended: ticket 286 stops what an ended agent itself had queued, and a worker that
     /// exited while its lead could not take the line was never heard of.
     wake_rows: std::collections::BTreeSet<String>,
+    /// Ticket 1081: the lines auto-advance typed as the core (sender `CORE`), by send id (in memory; also in
+    /// `wake_rows`, so the user's rows go first). Only the core adds to it: a sender named "core" from anywhere else
+    /// is no seat and no token, and `send_refused` cancels its rows.
+    core_rows: std::collections::BTreeSet<String>,
+    /// Ticket 1056: the wake lines joined into a written wake row, by that row's send id (in memory). They stay
+    /// `attempting` until that row ends, and then end as it does (`mark_send`).
+    joined_rows: BTreeMap<String, Vec<String>>,
+    /// Ticket 1085: sessions whose input box still holds an automatic line the core pasted and whose Enter was dropped
+    /// (in memory). The next submit there clears it first (`clear_box_first`), so the owner's words never join it.
+    left_typed: std::collections::BTreeSet<String>,
+    /// Ticket 1085: automatic rows put back in the queue once after a dropped Enter, by send id; a second drop fails.
+    retried: std::collections::BTreeSet<String>,
+    /// Ticket 1094: when each `delivery_inflight` mark was set (in memory), so an idle agent releases it (`delivery_open`).
+    inflight_at: BTreeMap<String, std::time::Instant>,
+    /// Ticket 1094: a user message (by send id) whose Enter was dropped again waits until then before the next try.
+    retry_at: BTreeMap<String, std::time::Instant>,
+    /// Ticket 1094: dropped Enters of each queued user row, by send id (in memory).
+    drops: BTreeMap<String, u32>,
+    /// Ticket 1094 r5: by session, the user's row whose dropped paste the core left in the box. Gone once the core
+    /// clears the box (Ctrl+U), pastes into it again, or an Enter sends it: only while it is set can his own Enter
+    /// have sent that copy.
+    copy_left: BTreeMap<String, String>,
+    /// Ticket 1094 r6: by session, what the owner typed by hand since that drop (None once a key or text the core
+    /// cannot follow went in): the box proves the copy only as the paste with exactly these words around it.
+    hand_typed: BTreeMap<String, Option<String>>,
+    /// Ticket 1121: queued rows (by send id) the core will not paste again (`Session::stopped_sends`), in memory.
+    spent: std::collections::BTreeSet<String>,
+    /// Ticket 1121: by send id, when a guarded row first and last found no clean box (`CLEAN_WAIT`).
+    clean_wait: BTreeMap<String, (std::time::Instant, std::time::Instant)>,
+    /// Ticket 1094 r6: by session, the dropped row his own Enter sent with the box as proven (send id, completion_seq
+    /// and working at his Enter, its time in ms and as an Instant). It is delivered once a turn starts after that
+    /// Enter (`settle_hand_sent`); until then the core does not paste it, and with no turn it goes again.
+    hand_sent: BTreeMap<String, (String, u64, bool, u64, std::time::Instant)>,
     /// Home view change 4: the leads (teammate id, prompt) a goal the user sent must reach; `team::wake_goals` opens
     /// each seat off the registry lock and hands it the goal.
     pub(crate) goal_wakes: Vec<(String, String)>,
@@ -334,6 +379,8 @@ pub struct Sessions {
     closed_views: std::collections::VecDeque<String>,
     // V2-6d: the one stopped or done session closed less than CLOSE_UNDO_MS ago, out of `entries` and sessions.json.
     closing: Option<Closing>,
+    // Ticket 1073: every conversation id a saved row held (ran.json), which outlives the row's close.
+    ran: std::sync::Mutex<crate::import::Ran>,
     // Ticket 999: a pass changed rows that are not on disk yet (`save_unsaved`); any `save` writes them with the rest.
     unsaved: std::sync::atomic::AtomicBool,
     // V2-6d follow-up: how many times `save` ran (tests count the writes of a path).
@@ -426,6 +473,12 @@ struct Writes {
 /// after its own, and the Stop reply's drain returns only once an earlier tick's drain is done.
 static DRAINING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 impl Sessions {
+    /// Ticket 1083: a core that treats `user_home` as the user's home (tests give a temp folder; the default
+    /// worktrees folder is `<user home>/nunchiro/worktrees`).
+    pub fn with_user_home(mut self, user_home: &Path) -> Self {
+        self.settings.user_home = user_home.to_path_buf();
+        self
+    }
     pub fn open(home: &Path) -> Result<Self, String> {
         crate::sandbox::sweep(home); // v1b-21 r2: runs a dead core left
         let (mut rows, live, token_conversations, origins_lost) = store::load_all(home)?;
@@ -507,6 +560,13 @@ impl Sessions {
                 kept.insert(id.clone());
             }
         }
+        // Ticket 1130 C-C3: what this start kept of the last core's running sessions.
+        let (lost, exited) = live
+            .keys()
+            .filter(|id| !kept.contains(*id))
+            .filter_map(|id| entries.get(id))
+            .partition::<Vec<_>, _>(|e| resumable(&e.meta) == SessionState::Resumable);
+        crate::events::core_started(kept.len(), lost.len(), exited.len());
         // V1A-91: a `--version` probe ends with its core. A row the last core left running without a version probes
         // again when its agent came back, and otherwise reads `unknown` (and so `untested`, as any unknown version
         // does), so the field is never left empty. A row with no live record was not running then: kept as stored.
@@ -556,11 +616,14 @@ impl Sessions {
                 .get(id)
                 .is_some_and(|e| e.meta.state != SessionState::Closed)
         };
-        let settings: Settings = match store::read_settings(&home.join("settings.json")) {
+        let mut settings: Settings = match store::read_settings(&home.join("settings.json")) {
             Ok(b) => serde_json::from_slice(&b).map_err(|e| format!("invalid settings: {e}"))?,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Settings::default(),
             Err(e) => return Err(e.to_string()),
         };
+        settings.user_home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_default();
         // v1a-74: with history off no scrollback file stays, a set-aside sessions.json's included.
         if settings.history().is_none() {
             crate::scrollback::sweep(home, |_| false);
@@ -609,6 +672,7 @@ impl Sessions {
         recovery_warnings += bad;
         // v1b-02: recover unacknowledged Stop text after replaying its queue effect.
         let mut chat = crate::chat::Cache::new(home);
+        let replayed = !events.is_empty();
         for (path, event) in events {
             if let Err(error) = queue.replay(&event) {
                 recovery_warnings += 1;
@@ -639,6 +703,9 @@ impl Sessions {
                     eprintln!("hook journal acknowledgement cleanup failed: {error}");
                 }
             }
+        }
+        if replayed {
+            queue.flush()?; // ticket 1133: the replayed ids, which `replay` alone does not save
         }
         // V2-1b: a reattached session's items stay waiting, marked as restored until fresh evidence proves them;
         // r3 (S2): so do items the journal replay above raised again (a hook that fired while no core ran).
@@ -677,6 +744,18 @@ impl Sessions {
             deny_notes: std::collections::BTreeSet::new(), // V2-8e
             steers: std::collections::BTreeSet::new(),
             wake_rows: std::collections::BTreeSet::new(),
+            core_rows: std::collections::BTreeSet::new(),
+            joined_rows: BTreeMap::new(),
+            left_typed: std::collections::BTreeSet::new(),
+            retried: std::collections::BTreeSet::new(),
+            inflight_at: BTreeMap::new(),
+            retry_at: BTreeMap::new(),
+            drops: BTreeMap::new(),
+            copy_left: BTreeMap::new(),
+            hand_typed: BTreeMap::new(),
+            spent: std::collections::BTreeSet::new(),
+            clean_wait: BTreeMap::new(),
+            hand_sent: BTreeMap::new(),
             goal_wakes: vec![],
             loops_checked: 0,
             removing_worktrees: std::collections::BTreeSet::new(),
@@ -701,6 +780,7 @@ impl Sessions {
             outbox_sending: Default::default(),
             closed_views: Default::default(), // v1a-68
             closing: None,                    // V2-6d
+            ran: std::sync::Mutex::new(crate::import::Ran::load(home)), // ticket 1073
             unsaved: Default::default(),      // ticket 999
             #[cfg(test)]
             saves: Default::default(),
@@ -717,6 +797,24 @@ impl Sessions {
         };
         // Ticket 990: the stored parent links, so a lead still hears its workers after a core restart.
         sessions.restore_parents();
+        // Ticket 1073 round 4: once per home, the conversations of sessions closed before ran.json existed (before
+        // drop_closed below, which may drop old Closed rows).
+        let known: Vec<String> = sessions
+            .entries
+            .values()
+            .filter_map(|e| e.meta.agent_session_id.clone())
+            .chain(
+                sessions
+                    .token_conversations
+                    .iter()
+                    .map(|t| t.conversation.clone()),
+            )
+            .collect();
+        if let Ok(ran) = sessions.ran.get_mut()
+            && let Err(e) = ran.seed(home, known.iter().map(String::as_str))
+        {
+            eprintln!("{}: not seeded: {e}", crate::import::RAN);
+        }
         // A set-aside sessions.json leaves no session to name a project or own queue state: then nothing is pruned (v1b-40).
         if !aside {
             // Ticket 621: a store from before the limit shrinks here; sessions.json follows at the next save.
@@ -748,6 +846,30 @@ impl Sessions {
             cwd: meta.cwd.clone(),
             transcript: self.entries.get(id)?.observer.transcript.clone(),
         })
+    }
+    /// Ticket 1059: the Context widget's Show breakdown types /context through the send queue, as the user's own text
+    /// (sender `user`; delivery.rs refuses it to a session token, and `check_agent` refuses the op to one).
+    pub(crate) fn context_send(&mut self, id: &str) -> Result<(), String> {
+        self.refresh()?;
+        self.observe()?;
+        let entry = self.entry(id)?;
+        if !entry.agent_live() {
+            return Err("agent is not running".into());
+        }
+        let claude = entry.meta.kind == AgentKind::Claude
+            && entry.acp.is_none()
+            && entry.meta.machine.is_none();
+        let typed = entry.input.pending() || !entry.meta.send_queue.is_empty();
+        let meta = entry.meta.clone();
+        let shown = self.snapshot_session(&meta);
+        crate::session_context::may_refresh(
+            claude,
+            shown.attention.working,
+            crate::delivery::blocked(&shown.pending),
+            typed,
+        )?;
+        self.send("user", id, "/context".into(), vec![], true)
+            .map(drop)
     }
     // v1a-06
     pub(crate) fn remote_home(&self) -> PathBuf {
@@ -891,6 +1013,24 @@ impl Sessions {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
             Err(e) => return Err(e.to_string()),
         };
+        // A pinned key left behind would be trusted for the next machine saved under this alias. Removed before the
+        // saves, so a failure here changes nothing; a failed save below writes it back, as the machine stays saved.
+        let pin = crate::machines::share::known_hosts(&self.home, alias);
+        let pinned = match crate::store::read_regular(&pin) {
+            Ok(b) => Some(b),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e.to_string()),
+        };
+        if pinned.is_some() {
+            fs::remove_file(&pin).map_err(|e| e.to_string())?;
+        }
+        let restore = |e: String| match &pinned {
+            Some(b) => match store::write_capped(&pin, b, store::READ_MAX) {
+                Ok(()) => e,
+                Err(r) => format!("{e}; pinned host key restore failed: {r}"),
+            },
+            None => e,
+        };
         known.retain(|a| a != alias);
         // Remove remembered aliases first: a failed settings write rolls them back; memory changes only on success.
         store::write_capped(
@@ -898,17 +1038,18 @@ impl Sessions {
             &serde_json::to_vec(&serde_json::json!({"version":1,"machines":known}))
                 .map_err(|e| e.to_string())?,
             store::READ_MAX,
-        )?;
+        )
+        .map_err(&restore)?;
         if let Err(e) = store::write_capped(&path, &bytes, store::SETTINGS_READ_MAX) {
             if let Err(rollback) = match previous {
                 Some(b) => store::write_capped(&remembered, &b, store::READ_MAX),
                 None => fs::remove_file(&remembered).map_err(|e| e.to_string()),
             } {
-                return Err(format!(
+                return Err(restore(format!(
                     "settings.json write failed: {e}; machines.json rollback failed: {rollback}; stores diverged"
-                ));
+                )));
             }
-            return Err(e);
+            return Err(restore(e));
         }
         self.settings.machines = machines;
         if let Some(cancel) = self.remote.cancel.get(alias) {
@@ -1298,7 +1439,7 @@ impl Sessions {
         self.check_locked_input(caller, request)?; // look v20 S2
         match request {
             // Ticket 993: a place's lead reads its place's schedules, the Home lead all; any other session none.
-            Request::ScheduleList => self.schedule_reach(caller).map(drop),
+            Request::ScheduleList | Request::SessionTidy { .. } => self.schedule_reach(caller).map(drop),
             // Ticket 362: a session caller's child never has Skip permissions in reach, whatever it asks for.
             Request::Start { session, .. }
                 if session.kind == AgentKind::Claude && reaches_skip(&session.args) =>
@@ -1369,6 +1510,8 @@ impl Sessions {
             | Request::MachineDetails { .. }
             | Request::MachineAliases // v25f: reads the owner's ~/.ssh, runs ssh
             | Request::MachineProbe { .. }
+            | Request::MachineShare // ticket 1050: reads this Mac's host key; Test writes a known_hosts line
+            | Request::MachineTrust { .. }
             | Request::AccountUsage { .. } // v2-2c: transcript totals
             | Request::UsageDetail { .. } // v4 Usage page: transcript totals, as AccountUsage
             | Request::CodexResetRead { .. } // needs 225: the owner's Refresh and log; a session only asks to use one
@@ -1416,6 +1559,7 @@ impl Sessions {
             | Request::AgentCommandGrant { .. }
             | Request::AgentCommandReset { .. }
             | Request::CloseUndo { .. } // V2-6d: the window's Undo, as the owner's
+            | Request::CloseIdle { .. } // ticket 1130: the composer's restart for a new MCP server
             // V2.5-11: a schedule starts agent work later with the owner's authority, so only the owner makes one.
             | Request::ScheduleAdd { .. }
             | Request::ScheduleRemove { .. }
@@ -1425,6 +1569,7 @@ impl Sessions {
             // attach. `stop` stays a session's (v1a-23, OWNERC D'): it ends every holder with the core.
             | Request::Exit
             | Request::ExitIfIdle { .. }
+            | Request::ExitBlockers { .. } // ticket 1130 A-D3: the owner's update asks
             // Ticket 573: tokens are the owner's to make (the server refuses them first).
             | Request::TokenCreate { .. }
             | Request::TokenList
@@ -1515,6 +1660,7 @@ impl Sessions {
             "start",
             "team_open",
             "close",
+            "session_tidy",
             "agent_send",
             "agent_prompt",
             "steer_now",
@@ -1662,6 +1808,9 @@ impl Sessions {
             Request::PermissionAnswers { project, on: true } => fs::canonicalize(project)
                 .map(|project| queue::OwnerAsk::PermissionAnswers { project })
                 .map_err(|e| e.to_string()),
+            Request::QuitSettings { patch } if crate::account_near::asks_leads_any(patch) => {
+                Ok(queue::OwnerAsk::LeadAccounts)
+            }
             _ => return None,
         };
         // Ticket 573: an outside token never asks the owner for a setting.
@@ -1776,11 +1925,27 @@ impl Sessions {
             return Err("outside session grants".into());
         }
         // ACCOUNTPICK: the prepared launch (a resume included) runs on the caller's account; shells use none.
+        // Ticket 1120: or the account the user set for the caller's place. Ticket 1126: or the owner's default, read
+        // again here, so a launch prepared before the owner changed it is refused rather than started on the old one.
+        // An explicit "Your own" default admits no label (None) for a caller on another account.
+        let default = self.default_account(launch.start.kind, remote);
         if !matches!(launch.start.kind, AgentKind::Shell | AgentKind::Acp)
             && launch.account != self.caller_account(caller, remote)
+            && default.as_ref() != Some(&launch.account)
+            && (launch.account.is_none()
+                || (launch.account != self.place_account(caller, remote)
+                    && !self.lead_any(caller, remote)))
         {
             return Err("a session can start sessions only on its own account".into());
         }
+        // Owner 2026-11-25: a start that only "Leads may use any of my accounts" admits says so in the room.
+        let lead_line = (launch.account.is_some()
+            && !matches!(launch.start.kind, AgentKind::Shell | AgentKind::Acp)
+            && launch.account != self.caller_account(caller, remote)
+            && launch.account != self.place_account(caller, remote)
+            && default.as_ref() != Some(&launch.account))
+        .then(|| launch.account.clone())
+        .flatten();
         // Ticket 990 slice g: among the seats a lead's side starts, one writer per worktree. A resume continues a seat
         // (`start` moves it); a shell is no seat.
         let ledger = crate::ledger::Ledger::open(&self.home);
@@ -1796,6 +1961,11 @@ impl Sessions {
             && crate::roles::of(&self.home, &launch.start.label).1
         {
             ledger.writer_free(cwd, |s| self.entries.get(s).is_some_and(|e| e.agent_live()))?;
+        }
+        // Codex security look P2: the line is the audit of the start, so it is written first and a refused write
+        // (a full room) refuses the start.
+        if let Some(account) = &lead_line {
+            self.lead_any_line(caller, launch, account)?;
         }
         let mut child = self.start(launch)?;
         if let Some(cwd) = &seat_in {
@@ -2002,6 +2172,9 @@ impl Sessions {
             }
             // V2-1b: a session caller's close never ends an agent its holder no longer answers for.
             Request::Close { id } => return self.close(id, false, false),
+            Request::SessionTidy { id, why } => {
+                return self.tidy_session(caller, id, why, queue::now_ms());
+            }
             Request::Resize { id, cols, rows } => {
                 // v1a-75: a session agent's resize never arms the V1A-71 grace, or it could keep a gone prompt's card.
                 // Nor does it keep the screen for `restore_undrawn` (which holds the card and arms that grace): after
@@ -2148,6 +2321,20 @@ impl Sessions {
             live,
             self.token_conversations.clone(),
         )?;
+        // Ticket 1073: the conversations of the rows (and of the one in its close window) are Nunchiro's; logged, not
+        // fatal: a lost write only lets History call that conversation "started in a terminal" after its close.
+        if let Ok(mut ran) = self.ran.lock()
+            && let Err(e) = ran.note(
+                &self.home,
+                self.entries
+                    .values()
+                    .map(|e| &e.meta)
+                    .chain(self.closing.as_ref().map(|c| &c.entry.meta))
+                    .filter_map(|m| m.agent_session_id.as_deref()),
+            )
+        {
+            eprintln!("{}: {e}", crate::import::RAN);
+        }
         // Ticket 999: this save wrote every row, so whatever a pass left unsaved went with it. Only once written: a
         // failed save keeps the mark and the next tick (or `refresh`) tries again.
         self.unsaved
@@ -2195,6 +2382,7 @@ impl Sessions {
                     Some(&version),
                     crate::chat::TESTED_VERSIONS,
                 );
+                crate::agent_canary::version_seen(&self.home, entry.meta.kind, &version); // ticket 1100
                 entry.meta.agent_version = Some(version);
                 changed = true;
             }
@@ -2500,7 +2688,11 @@ impl Sessions {
         match request {
             Request::AddMachine { alias, host, user, port, replace } => self.add_machine(alias, host, user, port, replace),
             Request::ForgetMachine { .. } => Err("machine removal requires unlocked owner dispatch".into()),
-            Request::MachineDetails { .. } | Request::MachineAliases | Request::MachineProbe { .. } => {
+            Request::MachineDetails { .. }
+            | Request::MachineAliases
+            | Request::MachineProbe { .. }
+            | Request::MachineShare
+            | Request::MachineTrust { .. } => {
                 Err("machine discovery requires unlocked owner dispatch".into())
             }
             // v1a-06: transport requests are handled outside the registry lock.
@@ -2563,6 +2755,10 @@ impl Sessions {
             request @ (Request::AgentUpdateStart { .. }
             | Request::AgentUpdateCancel { .. }
             | Request::AgentUpdateState) => crate::agent_update::handle(&self.home, request),
+            // Ticket 1100: Codex's own model list (or the fixed one); read-only, no path in the reply.
+            Request::AgentModels => Ok(Reply::AgentModels {
+                codex: crate::agent_models::codex(),
+            }),
             Request::SessionContext { .. } => Err("context requires window dispatch".into()),
             Request::AccountUsage { .. } | Request::UsageDetail { .. } => {
                 Err("usage requires unlocked transport dispatch".into())
@@ -2738,6 +2934,14 @@ impl Sessions {
                 if self.walk_hold(&id) && text != "\x1b" {
                     return Err(MODE_BUSY.into());
                 }
+                // Ticket 1130 C-C3: the person's Enter in a lead's own seat is a prompt to the lead (no text kept).
+                if text.ends_with('\r') {
+                    let meta = &self.entry(&id)?.meta;
+                    let (seat, project) = (meta.teammate.clone(), meta.project.clone());
+                    if seat.is_some() && self.team_lead_of(&id) == seat {
+                        crate::events::owner_prompt(&project, &id);
+                    }
+                }
                 if composer {
                     self.composer_live(&id)?;
                     // Look 11-17 v5 item 1 (rule b): typed into a start question, the text's Enter answers it ("No,
@@ -2753,6 +2957,16 @@ impl Sessions {
                         return Ok(Reply::Ack);
                     }
                     self.key_gate(&id, &seen)?;
+                    // Ticket 1085: the core pasted a line here and its Enter waits (a turn runs, or the paste is not
+                    // drawn yet). Typed now, the owner's words joined that line and his Enter sent both as one message.
+                    // They wait in the queue as above and go alone after it.
+                    if self.pending_enter.contains_key(&id) {
+                        let text = text.replace("\x1b[200~", "").replace("\x1b[201~", "");
+                        crate::delivery::check_text(self.entry(&id)?.meta.kind, &text)?;
+                        self.begin_send("user", &id, text, vec![], true, "queued")?;
+                        self.held_enter.insert(id);
+                        return Ok(Reply::Ack);
+                    }
                     self.held_enter.remove(&id);
                     self.clear_box_first(&id)?;
                 }
@@ -2770,17 +2984,54 @@ impl Sessions {
                 // notice (`Input::submit`), and the lead heard nothing until the user wrote to it.
                 if !report {
                     self.submitted.remove(&id); // the box holds the user's own words from here
+                    self.left_typed.remove(&id); // ticket 1085: so nothing in it is cleared as the core's own
                 }
                 let uncertain = !report && self.entry(&id)?.meta.kind == AgentKind::Claude;
                 if uncertain {
                     self.entry(&id)?.input.mark_uncertain();
                 }
+                // Ticket 1094 r6: what he types into a box that may hold a dropped copy, as plain text; anything else
+                // (a control key, a line break inside) leaves the box unprovable.
+                if !report && let Some(typed) = self.hand_typed.get_mut(&id) {
+                    let plain = text.replace("\x1b[200~", "").replace("\x1b[201~", "");
+                    let body = plain.strip_suffix('\r').unwrap_or(&plain);
+                    let known = !body.chars().any(char::is_control);
+                    // Round 6 (security look): bounded by the largest send row (`delivery::SEND_LIMIT`): a box past it
+                    // proves no copy of a row, and the string never grows with chunks that bring no Enter.
+                    *typed = typed
+                        .take()
+                        .filter(|t| known && t.len() + body.len() <= crate::delivery::SEND_LIMIT)
+                        .map(|t| t + body);
+                }
+                // Ticket 1094 r4: read before his Enter goes, while the box still shows what it sends.
+                let taken = if text.ends_with('\r') {
+                    self.taken_by_hand(&id)
+                } else {
+                    vec![]
+                };
+                let before = self.queue.attention(&id);
                 // v25-sendkeys: these bytes may have landed partway; the window must not type the text again.
                 self.live(&id)?
                     .write(text.as_bytes())
                     .map_err(|error| typed_error(error, uncertain))?;
                 if text.ends_with('\r') && self.entry(&id)?.meta.kind == AgentKind::Claude {
                     self.entry(&id)?.input = Default::default();
+                }
+                if text.ends_with('\r') {
+                    self.copy_gone(&id); // r5: his Enter sent the box, the copy with it if it was there
+                }
+                // Ticket 1094 r6: not delivered yet: only a turn that starts after this Enter proves it went.
+                for send in taken {
+                    self.hand_sent.insert(
+                        id.clone(),
+                        (
+                            send,
+                            before.completion_seq,
+                            before.working,
+                            queue::now_ms(),
+                            std::time::Instant::now(),
+                        ),
+                    );
                 }
                 if !report {
                     self.touch_input(&id);
@@ -2863,6 +3114,19 @@ impl Sessions {
                 if uncertain {
                     self.entry(&id)?.input.mark_uncertain();
                 }
+                // Ticket 1094 r6: a key other than Enter (an arrow, a backspace) changes the box in ways not followed.
+                if data != b"\r"
+                    && let Some(typed) = self.hand_typed.get_mut(&id)
+                {
+                    *typed = None;
+                }
+                // Ticket 1094 r4: see SendText.
+                let taken = if data.ends_with(b"\r") {
+                    self.taken_by_hand(&id)
+                } else {
+                    vec![]
+                };
+                let before = self.queue.attention(&id);
                 // v25-sendkeys: see SendText.
                 self.live(&id)?.write(&data).map_err(|error| typed_error(error, uncertain))?;
                 if interrupt_key(&keys) {
@@ -2870,6 +3134,22 @@ impl Sessions {
                 }
                 if data.ends_with(b"\r") && self.entry(&id)?.meta.kind == AgentKind::Claude {
                     self.entry(&id)?.input = Default::default();
+                }
+                if data.ends_with(b"\r") {
+                    self.copy_gone(&id); // r5: his Enter sent the box, the copy with it if it was there
+                }
+                // Ticket 1094 r6: not delivered yet: only a turn that starts after this Enter proves it went.
+                for send in taken {
+                    self.hand_sent.insert(
+                        id.clone(),
+                        (
+                            send,
+                            before.completion_seq,
+                            before.working,
+                            queue::now_ms(),
+                            std::time::Instant::now(),
+                        ),
+                    );
                 }
                 // Ticket 990: the composer's Enter sends what it typed: a sub-bot's lead learns it in one line.
                 if composer && let Some(text) = self.composed.remove(&id) {
@@ -2907,8 +3187,15 @@ impl Sessions {
                 }
                 Ok(Reply::Ack)
             }
-            Request::Close { id } => self.close(&id, true, false),
+            Request::Close { id } | Request::SessionTidy { id, .. } => self.close(&id, true, false),
             Request::CloseUndo { id } => self.close_undo(&id, close_clock()),
+            Request::CloseIdle { id } => {
+                let a = self.queue.attention(&id);
+                if a.working || a.waiting || !self.entry(&id)?.meta.send_queue.is_empty() {
+                    return Err(format!("{id} is busy: not closed"));
+                }
+                self.close(&id, true, false)
+            }
             Request::LimitResume { id, on } => self.limit_resume(&id, on, queue::now_ms() as i64 / 1000), // ticket 372
             // Ticket 990: the server serves it before this point (the start runs off the registry lock).
             Request::TeamOpen { .. } => Err("team open is for a lead's session".into()),
@@ -2963,7 +3250,12 @@ impl Sessions {
                 if entry.meta.kind == AgentKind::Claude {
                     let now = queue::now_ms() as i64 / 1000;
                     let dir = entry.meta.config_dir.clone();
-                    crate::usage::observe_status(&self.home, dir.as_deref(), &payload["rate_limits"], now);
+                    // Ticket 1126: the moment a weekly share changes, so the card shows without waiting for a start.
+                    if crate::usage::observe_status(&self.home, dir.as_deref(), &payload["rate_limits"], now) {
+                        let (home, weekly) = (self.home.clone(), crate::account_near::claude_weekly(&self.home));
+                        crate::account_near::check(self, &home, crate::accounts::Agent::Claude, &weekly, now);
+                    }
+                    crate::session_context::observe(&id, &payload["context_window"]); // ticket 1048
                 }
                 Ok(Reply::Ack)
             }
@@ -3082,6 +3374,9 @@ impl Sessions {
                 self.leave()?;
                 Ok(Reply::Ack)
             }
+            Request::ExitBlockers { holder_floor } => Ok(Reply::ExitBlockers {
+                count: self.exit_blockers(holder_floor),
+            }),
             // v1b-17: new requests remain owner-only through check_agent's allow-list.
             Request::BoardSourceStatus { name } => Ok(Reply::ApprovalStatus {
                 view: crate::approval::source_status(&self.home, &name)?,
@@ -3275,6 +3570,9 @@ impl Sessions {
             // Ticket 992: a level's model and effort are what a session start would take.
             if k == crate::team::LEVELS_KEY && !v.is_null() {
                 crate::team::check_levels(v, |kind, m, e| self.check_stored_model(kind, m, e))?;
+            }
+            if k == crate::team::WORKERS_KEY && !v.is_null() {
+                crate::team::check_workers(v)?; // ticket 1055
             }
             if k == crate::home_lock::MODE_KEY {
                 crate::home_lock::check(v)?; // ticket 1002 lane 1
@@ -3610,6 +3908,7 @@ impl Sessions {
                 entry.observer.recheck = true;
             }
         }
+        self.settle_idle()?;
         // Ticket 999: one save for the whole pass, made before the tick goes on, also when the pass failed half way (its
         // first read was saved at once before). A send is still saved "attempting" before its bytes are written.
         let pass = self.delivery_pass();
@@ -3915,6 +4214,23 @@ impl Sessions {
                         entry.meta.ran_mode = Some(mode);
                         ran_changed = true;
                     }
+                }
+                // Ticket 1100: the canary watches the first session on a new agent version (flags only).
+                if let Some(version) = entry.meta.agent_version.as_deref()
+                    && crate::agent_canary::watching(&self.home, entry.meta.kind, Some(version))
+                    && crate::agent_canary::observed(
+                        &self.home,
+                        entry.meta.kind,
+                        version,
+                        id,
+                        crate::agent_canary::Pass {
+                            box_read: composer(&text, entry.meta.kind).is_some(),
+                            footer_read: entry.observer.footer_seen,
+                            dialog: asking,
+                        },
+                    )
+                {
+                    crate::agent_canary::fresh_start(&self.home, entry.meta.kind, version);
                 }
                 // V2-2c: the limit mark reads the same screen and writes only its in-memory mark.
                 crate::usage::observe_limit(
@@ -4272,6 +4588,98 @@ impl Sessions {
                 }
                 return Ok(Reply::Ack);
             }
+            // Ticket 1113: the owner uses the same close path as their own command. A failed close keeps the card.
+            if let Some(queue::OwnerAsk::SessionClose {
+                target,
+                label,
+                place,
+                ..
+            }) = &item.owner
+            {
+                let yes = match &answer {
+                    queue::Answer::AllowOnce => true,
+                    queue::Answer::Deny | queue::Answer::DenyWith { .. } => false,
+                    _ => return Err("a close-session card takes allow_once or deny".into()),
+                };
+                if yes {
+                    self.close(target, true, false)?;
+                }
+                self.queue.answer_owner(|i| i.id == id)?;
+                let who = self
+                    .task_caller(
+                        Some(&crate::grants::Caller {
+                            id: item.session_id.clone(),
+                            project: place.clone(),
+                        }),
+                        None,
+                    )
+                    .ok();
+                if let Some(who) = who
+                    && let (Some(lead), Some(room)) = (who.lead, who.place)
+                {
+                    self.team_note(
+                        &room,
+                        &lead,
+                        None,
+                        if yes {
+                            format!("The user closed {label} ({target}).")
+                        } else {
+                            format!("The user said not now to closing {label} ({target}).")
+                        },
+                        crate::room::TeamNote {
+                            what: if yes {
+                                "session_closed"
+                            } else {
+                                "session_close_no"
+                            }
+                            .into(),
+                            worktree: None,
+                            name: Some(label.clone()),
+                            branch: None,
+                            merged: None,
+                            seat: None,
+                        },
+                    );
+                }
+                return Ok(Reply::Ack);
+            }
+            // Ticket 1099 panel 4: the live-seat card. The yes writes the cap as Settings > Team does (`Ledger::set_cap`);
+            // a yes that cannot be written keeps the card, as the role card's. The lead hears the answer.
+            if let Some(queue::OwnerAsk::Cap { place, cap, .. }) = &item.owner {
+                let yes = match &answer {
+                    queue::Answer::AllowOnce => true,
+                    queue::Answer::Deny | queue::Answer::DenyWith { .. } => false,
+                    _ => return Err("a live-seat card takes allow_once or deny".into()),
+                };
+                if yes {
+                    crate::ledger::Ledger::open(&self.home).set_cap(place, *cap)?;
+                    crate::events::tasks(place);
+                }
+                self.queue.answer_owner(|i| i.id == id)?;
+                let team = crate::team::Team::open(&self.home);
+                if let Some(lead) = team.lead_of(team.place(place).as_deref()) {
+                    let body = if yes {
+                        format!("The user changed the live seats here to {cap}.")
+                    } else {
+                        format!("The user said not now to {cap} live seats.")
+                    };
+                    self.team_note(
+                        place,
+                        &lead.id,
+                        None,
+                        body,
+                        crate::room::TeamNote {
+                            what: if yes { "cap_yes" } else { "cap_no" }.into(),
+                            worktree: None,
+                            name: Some(cap.to_string()),
+                            branch: None,
+                            merged: None,
+                            seat: None,
+                        },
+                    );
+                }
+                return Ok(Reply::Ack);
+            }
             // Ticket 993: the schedule card. Only this yes adds or changes the entry; the lead that asked hears the
             // answer in one line. A yes that cannot be applied (the teammate is gone, the date has passed) is an
             // error and the card stays, as the role card's.
@@ -4602,6 +5010,15 @@ impl Sessions {
                     queue::Answer::AllowOnce,
                     Some(queue::OwnerAsk::PermissionAnswers { project }),
                 ) => self.permission_answers(&project, true),
+                (queue::Answer::AllowOnce, Some(queue::OwnerAsk::LeadAccounts)) => {
+                    let on = [(crate::accounts::LEADS_ANY.to_string(), true.into())];
+                    self.quit_settings(LifetimePatch {
+                        features: Some(on.into()),
+                        ..Default::default()
+                    })?;
+                    self.queue.answer_owner(|i| i.id == id)?;
+                    Ok(Reply::Ack)
+                }
                 // r2 (S2): a widget or integration source is approved only in the permission sheet, at the hash the
                 // sheet shows (its `approval_grant` / `board_source_grant` clears the item).
                 (
@@ -4973,10 +5390,23 @@ impl Sessions {
             // Ticket 76: the flush reads this, not the lasting set (a peer may later forward under the same id).
             remote: (sender != "user").then(|| self.grants.remote.contains(sender)),
         };
-        let entry = self.entry(id)?;
-        entry.meta.send_queue.push(send.clone());
+        // Ticket 1056: the user's words go ahead of every queued worker wake line, whatever its age.
+        let wake_rows = &self.wake_rows;
+        let ahead = (sender == "user")
+            .then(|| {
+                self.entries
+                    .get(id)?
+                    .meta
+                    .send_queue
+                    .iter()
+                    .position(|s| s.status == "queued" && wake_rows.contains(&s.id))
+            })
+            .flatten();
+        let queue = &mut self.entry(id)?.meta.send_queue;
+        let at = ahead.unwrap_or(queue.len());
+        queue.insert(at, send.clone());
         if let Err(e) = self.save() {
-            self.entry(id)?.meta.send_queue.pop();
+            self.entry(id)?.meta.send_queue.remove(at);
             return Err(e);
         }
         Ok(send)
@@ -5001,7 +5431,29 @@ impl Sessions {
             .ok_or("send not found")?;
         if !matches!(status, "queued" | "attempting") {
             let row = meta.send_queue.remove(index);
+            let agent = row.sender != "user";
             retire_send(meta, &mut self.widget_hashes, row, status);
+            // Ticket 1089: the room shows when a seat's line reached this seat. The time goes to the room's
+            // cursors.json, never onto the send row: an older core refuses a store with a key it does not know.
+            if agent
+                && status == "delivered"
+                && let Some(room) = self.room_project(id)
+                && let Err(e) =
+                    crate::room::Log::open(&self.home, &room).reached(&[send.to_string()])
+            {
+                eprintln!("delivery time not kept in the room: {e}");
+            }
+            // Ticket 1056: the wake lines joined into this row went, failed or were canceled with it.
+            for joined in self.joined_rows.remove(send).unwrap_or_default() {
+                if self.entries[id]
+                    .meta
+                    .send_queue
+                    .iter()
+                    .any(|s| s.id == joined)
+                {
+                    self.mark_send(id, &joined, status)?;
+                }
+            }
             return Ok(());
         }
         let row = &mut meta.send_queue[index];
@@ -5204,7 +5656,11 @@ impl Sessions {
         }
         let reply = self.send_inner(sender, id, text, keys, submit, false)?;
         if let Some(said) = said {
-            self.typed(sender, id, &said, crate::room::By::Agent);
+            let row = match &reply {
+                Reply::Delivery { send } => Some(send.id.clone()),
+                _ => None,
+            };
+            self.typed(sender, id, &said, crate::room::By::Agent, row);
         }
         Ok(reply)
     }
@@ -5212,7 +5668,14 @@ impl Sessions {
     /// worker's finish line to its lead (the core types that one for it). Only between two sessions of one room; the
     /// room's own notice (a seat is its own sender there) and the user's prompts are not such lines. Masked as the
     /// logs are, and cut: the terminal has the whole text.
-    fn typed(&mut self, sender: &str, id: &str, text: &str, by: crate::room::By) {
+    fn typed(
+        &mut self,
+        sender: &str,
+        id: &str,
+        text: &str,
+        by: crate::room::By,
+        send: Option<String>,
+    ) {
         if sender == id || !self.entries.contains_key(sender) {
             return;
         }
@@ -5229,7 +5692,8 @@ impl Sessions {
         } else {
             cut
         };
-        if let Err(e) = crate::room::Log::open(&self.home, &room).typed(sender, id, body, by) {
+        if let Err(e) = crate::room::Log::open(&self.home, &room).typed(sender, id, body, by, send)
+        {
             eprintln!("typed line not kept in the room: {e}");
         }
     }
@@ -5311,14 +5775,16 @@ impl Sessions {
             self.finish_send(id, &enter.send, "canceled")?;
         }
         let waiting = self.pending_enter.contains_key(id);
+        // Ticket 1121: nor a paste into a box the screen does not read while the core's dropped copy may be in it (the
+        // clear would write no Ctrl+U): it waits in the queue for a read box (the delivery walk's guard).
+        let unread = submit && !text.is_empty() && self.unread_copy(id);
         let ready = interrupt
-            || self.send_ready(&meta.id, &snapshot)? && self
-                .delivery_inflight
-                .get(id)
-                .is_none_or(|seq| snapshot.completion_seq > *seq)
+            || self.send_ready(&meta.id, &snapshot)?
+                && self.delivery_open(id, &snapshot)
                 && self.entry(&meta.id)?.switch.is_none() // v1a-10: no typing into the picker
                 && !held // CHAT-MODELIST r2: nor into a walk's passing modes
-                && !waiting;
+                && !waiting
+                && !unread;
         if mode_key && !ready {
             return Err("agent is not at its composer (busy); shift+tab not queued".into());
         }
@@ -5366,8 +5832,11 @@ impl Sessions {
     /// shortcut: text the user typed into the terminal between the Stop and this send is cleared too; tell it apart
     /// only if that bites.
     fn clear_box_first(&mut self, id: &str) -> Result<(), String> {
+        // Ticket 1085: an automatic line left typed after its dropped Enter is the core's own words; words typed by hand
+        // since then (`edited`) are the owner's, and nothing is cleared.
+        let left = self.left_typed.remove(id) && !self.entry(id)?.input.edited();
         let entry = self.entry(id)?;
-        if !std::mem::take(&mut entry.observer.clear_box) {
+        if !std::mem::take(&mut entry.observer.clear_box) && !left {
             return Ok(());
         }
         let rows = box_rows(&entry.observer.screen.text());
@@ -5375,12 +5844,13 @@ impl Sessions {
             return Ok(());
         }
         self.live(id)?.write(&b"\x15".repeat(2 * rows + 1))?;
+        self.copy_gone(id); // Ticket 1094 r5: a dropped copy left in the box is gone
         self.entry(id)?.input = Default::default();
         Ok(())
     }
-    /// v25-sendkeys: Ctrl+Enter. Claude Code's `chat:sendNow` delivers a message now by interrupting the running turn;
-    /// here the turn is interrupted with the Stop key (Esc, through Stop's gate) and the text is then submitted through
-    /// the ordinary `send`, so it is written once, after the turn unwinds. A kind with no turn to interrupt refuses with
+    /// v25-sendkeys: Ctrl+Enter. Ticket 1056: a working Claude takes the text into its running turn (no Esc). For
+    /// other kinds, and for an empty Ctrl+Enter, the turn is interrupted with the Stop key (Esc, through Stop's gate)
+    /// and the text is then submitted through the ordinary `send`, so it is written once, after the turn unwinds. A kind with no turn to interrupt refuses with
     /// `NO_INTERRUPT` and keeps the queue; a failed Esc returns before any text is written, so nothing is sent twice.
     fn steer_now(&mut self, sender: &str, id: &str, text: String, seen: &[String]) -> Response {
         self.refresh()?;
@@ -5407,6 +5877,18 @@ impl Sessions {
         }
         if crate::delivery::blocked(&snapshot.pending) {
             return Err("agent_blocked".into());
+        }
+        // Ticket 1056: Claude takes text typed while it works and adds it at its next step (the chat's
+        // `queued_command`); the turn goes on, as in Claude Code and Orca. No Esc: the tick writes the text once the
+        // input box shows (`steers`), never while a request waits. An interrupt alone still presses Esc below.
+        if meta.kind == AgentKind::Claude && !text.is_empty() {
+            let reply = self.send(sender, id, text, vec![], true)?;
+            if let Reply::Delivery { send } = &reply
+                && send.status == "queued"
+            {
+                self.steers.insert(send.id.clone());
+            }
+            return Ok(reply);
         }
         // Stop's gate: the Esc below answers whatever is focused, so the window must have drawn every request.
         self.key_gate(id, seen)?;
@@ -5471,6 +5953,7 @@ impl Sessions {
         self.submitted.remove(id); // N1: new words or keys (an interrupt) are on their way into the box
         if send.submit && !send.content.is_empty() {
             self.clear_box_first(id)?;
+            self.copy_gone(id); // Ticket 1094 r5: pasted over, an Enter now sends this paste as well
         }
         let mut bytes = send.content.as_bytes().to_vec();
         for key in &send.keys {
@@ -5536,6 +6019,8 @@ impl Sessions {
         {
             self.delivery_inflight
                 .insert(id.into(), self.queue.attention(id).completion_seq);
+            self.inflight_at
+                .insert(id.into(), std::time::Instant::now());
         }
         Ok(false)
     }
@@ -5641,7 +6126,14 @@ impl Sessions {
             // its output is never quiet. The input box showing the paste on an earlier pass and on this one stands in
             // for the quiet: a frame cut in two by a read is whole by the next pass.
             let steer = self.steers.contains(&enter.send);
-            let holding = (settled || steer && enter.held)
+            // Ticket 1121: the box showed the paste on an earlier pass and now shows exactly it, every row, past the
+            // settle time: the Enter goes though the output is never quiet (an animated footer row redraws while
+            // the agent is idle; the paste was dropped after PASTE_WAIT and sat typed in the box). Output not read yet
+            // still holds it back (review r2): a dialog or a draft drawn in it would take the Enter.
+            let proven = enter.held
+                && late
+                && box_text(&screen, meta.kind).is_some_and(|t| same_words(&t, paste));
+            let holding = (settled || steer && enter.held || proven)
                 && composer(&screen, meta.kind).is_some_and(|c| holds_paste(&c, paste));
             // The composer shows words that are not this paste. An empty composer, or none on the screen, is a paste
             // not drawn yet: on a loaded machine Claude drew it after the settle deadline, the Enter was dropped and
@@ -5728,8 +6220,45 @@ impl Sessions {
             }
             if let Some(reason) = dropped {
                 eprintln!("session {id} Enter dropped: {reason}");
-                row.settle = (reason != BEHIND).then(|| reason.into());
-                self.finish_send(&id, &enter.send, "failed")?;
+                // Ticket 1085: an automatic line (a wake line, the room's notice, the core's heartbeat) stays typed in the
+                // box. It is cleared before the next submit, and the row waits in the queue once more: the owner's next
+                // message was typed behind it and both went in as one.
+                let automatic = row.sender != "user";
+                // Ticket 1094 r3: only a mark every core loads is saved (an unknown one stopped the next start). BEHIND is
+                // logged only; the user's row then reads as a composer drop, which the composer shows the same way.
+                row.settle = crate::delivery::saved_mark(reason)
+                    .or_else(|| (!automatic).then(|| "enter_dropped_composer".into()));
+                self.left_typed.insert(id.clone());
+                let again = automatic && self.retried.insert(enter.send.clone());
+                // Ticket 1094: the user's own message is never left failed out of sight with its words typed in the
+                // box (his next send went in glued behind them, three copies at once), whatever the reason of the
+                // drop. It waits in the queue, which the composer shows (`settle` names the drop). The first drop
+                // tries again at the next ready pass; each later one waits RETRY_FIRST, doubling up to RETRY_MAX, so
+                // it is never pasted again and again into a box that keeps refusing it, and never waits for ever.
+                if !automatic {
+                    self.copy_left.insert(id.clone(), enter.send.clone());
+                    self.hand_typed.insert(id.clone(), Some(String::new()));
+                    let n = self.drops.entry(enter.send.clone()).or_insert(0);
+                    *n = n.saturating_add(1);
+                    if *n > 1 {
+                        let wait = RETRY_FIRST
+                            .saturating_mul(1 << (*n - 2).min(8))
+                            .min(RETRY_MAX);
+                        self.retry_at
+                            .insert(enter.send.clone(), std::time::Instant::now() + wait);
+                    }
+                }
+                let project = self.entry(&id)?.meta.project.clone();
+                crate::events::send_dropped(&project, &id, reason, again || !automatic); // ticket 1130 C-C3
+                self.finish_send(
+                    &id,
+                    &enter.send,
+                    if again || !automatic {
+                        "queued"
+                    } else {
+                        "failed"
+                    },
+                )?;
                 continue;
             }
             if let Err(error) = self.live(&id)?.write(b"\r") {
@@ -5751,15 +6280,142 @@ impl Sessions {
                 row.completion_seq = attention.completion_seq;
                 row.last_activity = attention.last_activity;
                 if !echoed {
-                    row.settle = Some("settle_timeout".into());
+                    row.settle = crate::delivery::saved_mark("settle_timeout");
                 }
             }
             self.delivery_inflight
                 .insert(id.clone(), attention.completion_seq);
+            self.inflight_at
+                .insert(id.clone(), std::time::Instant::now());
             self.submitted(&id, paste);
             self.finish_send(&id, &enter.send, "delivered")?;
         }
         Ok(delivered)
+    }
+    /// Ticket 1094: the core's own evidence over a lost signal. A Claude the queue reads as working whose screen shows
+    /// its input box with no "esc to interrupt" footer, that drew nothing and reported nothing for IDLE_SETTLE_MS, and
+    /// that asks nothing, has ended its turn: a hook the core refused, a prompt replayed from the journal after a
+    /// restart (its Stop never journaled), a turn end in a shape this build does not read. A working Claude draws its
+    /// spinner many times a second, so it never stays still that long.
+    fn settle_idle(&mut self) -> Result<(), String> {
+        let now = queue::now_ms();
+        let idle: Vec<String> = self
+            .entries
+            .iter()
+            .filter(|(id, e)| {
+                let a = self.queue.attention(id);
+                e.meta.kind == AgentKind::Claude
+                    && e.acp.is_none()
+                    && e.agent_live()
+                    && !e.observer.behind
+                    && a.working
+                    && now.saturating_sub(a.last_activity) >= IDLE_SETTLE_MS
+                    && !self.pending_enter.contains_key(*id)
+                    && !crate::delivery::blocked(&self.queue.items_of(id))
+                    && interrupted_at_prompt(&e.observer.screen.text())
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in idle {
+            self.queue
+                .observe(&id, "Interrupted", &serde_json::json!({}), "screen", now)?;
+        }
+        Ok(())
+    }
+    /// Ticket 1094 r4: the user's queued row whose dropped paste the core left in session `id`'s box (r5:
+    /// `copy_left`, not cleared or pasted over since) and that the box still shows, word for word. His own Enter in the
+    /// terminal sends it with his words; sent again by the core, the agent got his message twice. A screen that is
+    /// behind proves nothing, so then none: the row goes once more, never lost.
+    fn taken_by_hand(&self, id: &str) -> Vec<String> {
+        let Some(e) = self.entries.get(id) else {
+            return vec![];
+        };
+        let Some(left) = self.copy_left.get(id) else {
+            return vec![];
+        };
+        let Some(Some(typed)) = self.hand_typed.get(id) else {
+            return vec![];
+        };
+        if e.meta.kind != AgentKind::Claude || e.observer.behind {
+            return vec![];
+        }
+        let Some(c) = composer(&e.observer.screen.text(), e.meta.kind) else {
+            return vec![];
+        };
+        e.meta
+            .send_queue
+            .iter()
+            .filter(|s| {
+                &s.id == left
+                    && s.status == "queued"
+                    && s.sender == "user"
+                    && proven_copy(&c, &s.content, typed)
+            })
+            .map(|s| s.id.clone())
+            .collect()
+    }
+    /// Ticket 1121: the core's dropped copy may be in session `id`'s box (`left_typed`, `copy_left`) and the screen
+    /// reads no box, so a clear before a paste would write no Ctrl+U.
+    fn unread_copy(&self, id: &str) -> bool {
+        (self.left_typed.contains(id) || self.copy_left.contains_key(id))
+            && self
+                .entries
+                .get(id)
+                .is_some_and(|e| composer(&e.observer.screen.text(), e.meta.kind).is_none())
+    }
+    /// Ticket 1094 r5: the dropped copy can no longer be in session `id`'s box.
+    fn copy_gone(&mut self, id: &str) {
+        self.copy_left.remove(id);
+        self.hand_typed.remove(id);
+    }
+    /// Ticket 1094 r6: a dropped row his own Enter sent with a proven box is delivered once a turn starts after that
+    /// Enter (its start time, or more turn ends than the one running then). With no such turn by the time the agent is
+    /// idle HAND_PROOF after the Enter, the proof failed: the row stays queued and goes again (one extra copy at worst,
+    /// never a message shown delivered that the agent did not get).
+    fn settle_hand_sent(&mut self) -> Result<(), String> {
+        for id in self.hand_sent.keys().cloned().collect::<Vec<_>>() {
+            let (send, seq, working, at_ms, at) = self.hand_sent[&id].clone();
+            let queued = self.entries.get(&id).is_some_and(|e| {
+                e.meta
+                    .send_queue
+                    .iter()
+                    .any(|s| s.id == send && s.status == "queued")
+            });
+            let a = self.queue.attention(&id);
+            let started = a.working && a.working_since >= at_ms
+                || a.completion_seq > seq + u64::from(working);
+            if !queued || started || !a.working && at.elapsed() >= HAND_PROOF {
+                self.hand_sent.remove(&id);
+            }
+            if queued && started {
+                self.finish_send(&id, &send, "delivered")?;
+            }
+        }
+        Ok(())
+    }
+    /// Ticket 1094 r4: session `id`'s screen shows its input box, and the box is empty.
+    fn box_empty(&self, id: &str) -> bool {
+        self.entries.get(id).is_some_and(|e| {
+            composer(&e.observer.screen.text(), e.meta.kind).is_some_and(|c| c.trim().is_empty())
+        })
+    }
+    /// Ticket 1094: whether session `id` may take its next queued send. A delivery is in flight until a turn ends
+    /// after it, or until the agent, with no turn running, shows its input box INFLIGHT_IDLE after the write: an idle
+    /// agent that took no turn from it (a dropped or refused submit) never holds every later send for ever.
+    fn delivery_open(&self, id: &str, snapshot: &Session) -> bool {
+        let now = std::time::Instant::now();
+        self.delivery_inflight
+            .get(id)
+            .is_none_or(|seq| snapshot.completion_seq > *seq)
+            || !snapshot.attention.working
+                && self
+                    .inflight_at
+                    .get(id)
+                    .is_some_and(|t| now.duration_since(*t) >= INFLIGHT_IDLE)
+                && self
+                    .entries
+                    .get(id)
+                    .is_some_and(|e| composer(&e.observer.screen.text(), e.meta.kind).is_some())
     }
     /// N1: the core wrote `text` and its Enter into session `id`'s input box; `verify_submits` looks once more.
     fn submitted(&mut self, id: &str, text: &str) {
@@ -5848,8 +6504,7 @@ impl Sessions {
             }
         }
     }
-    /// One delivery pass on freshly read state, as a tick runs it (tests drive it directly).
-    #[cfg(test)]
+    /// One delivery pass on freshly read state, as a tick runs it (tests drive it directly; ticket 1081's resend).
     fn flush_delivery(&mut self) -> Result<(), String> {
         self.refresh()?;
         self.observe()?;
@@ -5886,6 +6541,20 @@ impl Sessions {
         };
         self.steers.retain(waits);
         self.wake_rows.retain(waits);
+        self.core_rows.retain(waits);
+        self.joined_rows.retain(|send, _| waits(send));
+        self.retried.retain(waits);
+        self.drops.retain(|send, _| waits(send));
+        self.retry_at.retain(|send, _| waits(send));
+        self.copy_left.retain(|_, send| waits(send));
+        self.spent.retain(waits);
+        self.clean_wait.retain(|send, _| waits(send));
+        // Round 6: in-flight times of sessions that are gone (one per session ever started otherwise).
+        let live = &self.entries;
+        self.inflight_at.retain(|id, _| live.contains_key(id));
+        let left = &self.copy_left;
+        self.hand_typed.retain(|id, _| left.contains_key(id));
+        self.settle_hand_sent()?;
         self.verify_submits();
         let mut delivered = self.flush_enters()?;
         let mut canceled = false;
@@ -5915,61 +6584,40 @@ impl Sessions {
                     at += 1;
                     continue;
                 }
-                let caller = self
-                    .entries
-                    .get(&send.sender)
-                    // Ticket 286: a sender whose agent quit sends nothing more (its finish line is the core's).
-                    .filter(|e| e.agent_live() || self.wake_rows.contains(&send.id))
-                    // Ticket 573 round 6 (review r5 NOTE 3): a token session's send, while its token is live.
-                    .filter(|e| {
-                        self.token_origin(&e.meta)
-                            .is_none_or(|t| crate::tokens::by_caller(&self.home, &t).is_some())
-                    })
-                    .map(|e| crate::grants::Caller {
-                        id: send.sender.clone(),
-                        project: e.meta.project.clone(),
-                    })
-                    // v1a-06: SSH callers have no PTY entry in this core. Ticket 76: a local stamp is never satisfied by
-                    // a peer that forwards under the same id after the local session is gone.
-                    // Ticket 573: an outside token's send, while the token is live.
-                    .or_else(|| self.token_sender(&send.sender))
-                    .or_else(|| {
-                        if send.remote == Some(false) {
-                            return None;
-                        }
-                        self.remote
-                            .callers
-                            .get(&send.sender)
-                            .map(|c| crate::grants::Caller {
-                                id: c.id.clone(),
-                                project: c.project.clone(),
-                            })
-                    });
-                // v1b-20
-                let widget = crate::delivery::widget_sender(&send.sender).then(|| {
-                    self.widget_hashes
-                        .get(&send.id)
-                        .is_some_and(|hash| self.widget_act_current(&send.sender, hash).is_ok())
-                });
-                let refused = widget == Some(false)
-                    || (widget.is_none()
-                        && send.sender != "user"
-                        // Ticket 76: the flag stamped at queue time decides; a row without one fails closed.
-                        && caller.as_ref().is_none_or(|c| {
-                            send.remote.is_none_or(|remote| {
-                                !self.grants.owns_as(remote, c, &self.entries[&id].meta)
-                            })
-                        }));
+                let refused = self.send_refused(&id, send);
                 // V2-8e: a deny instruction is never typed while any prompt shows (the denied one may not have redrawn
                 // yet, and an answered prompt is not filed again): typed there, its Enter would pick an option.
                 let note = self.deny_notes.contains(&send.id);
                 let steer = self.steers.contains(&send.id);
                 // Another session's line waits while the box holds words or keys typed by hand: written, it would be
                 // refused (`delivery::EDITED`) and lost. After a Stop the next submit clears the box itself.
-                let edited = send.sender != "user"
+                // Ticket 1094 r3: so does the user's own row once its Enter was dropped: pasted again behind his hand-typed
+                // words (the box is not cleared then), it went in glued to its own earlier copy.
+                // r4: an empty box holds none of his words (a raw key such as a dialog's digit also marks it edited).
+                let edited = (send.sender != "user"
+                    || self.drops.contains_key(&send.id) && !self.box_empty(&id))
                     && send.submit
                     && self.box_edited(&id)
                     && !self.entries[&id].observer.clear_box;
+                // Ticket 1094 r3: a user row dropped again waits out its own retry time; his newer messages go meanwhile.
+                let later = self
+                    .retry_at
+                    .get(&send.id)
+                    .is_some_and(|t| std::time::Instant::now() < *t)
+                    // r6: his own Enter may have sent it; it waits for the proof (`settle_hand_sent`).
+                    || self.hand_sent.get(&id).is_some_and(|h| h.0 == send.id);
+                // Ticket 1121: the drops so far of a row whose Enter was dropped, and its words (the guard below).
+                let again = (self.drops.get(&send.id).copied())
+                    .or_else(|| self.retried.contains(&send.id).then_some(1))
+                    .map(|n| (n, send.content.clone()));
+                // The guard also holds any later submit while the box may still hold the core's dropped copy: pasted
+                // into a box the screen does not read, the clear writes no Ctrl+U and the new words glue to that copy.
+                // A stopped row stays stopped though a later send cleared the copy tracking (review r2).
+                let guard = (again.is_some()
+                    || self.spent.contains(&send.id)
+                    || send.submit
+                        && (self.left_typed.contains(&id) || self.copy_left.contains_key(&id)))
+                .then(|| (send.id.clone(), send.sender != "user"));
                 if refused {
                     let send_id = send.id.clone();
                     self.mark_send(&id, &send_id, "canceled")?;
@@ -5978,6 +6626,7 @@ impl Sessions {
                 }
                 let entry = self.entry(&id)?;
                 if edited
+                    || later
                     || note
                         && entry.acp.is_none()
                         && entry.observer.screen.detect(entry.meta.kind).is_some()
@@ -5990,10 +6639,7 @@ impl Sessions {
                     ready = Some(
                         !self.entry(&id)?.observer.behind // v1a-19 r2
                             && self.send_ready(&id, &snapshot)?
-                            && self
-                                .delivery_inflight
-                                .get(&id)
-                                .is_none_or(|seq| snapshot.completion_seq > *seq),
+                            && self.delivery_open(&id, &snapshot),
                     );
                 }
                 // An answer to an async question needs only the input box: its turn runs while it waits for the answer.
@@ -6001,7 +6647,105 @@ impl Sessions {
                     at += 1;
                     continue;
                 }
-                let row = self.entries[&id].meta.send_queue[at].clone();
+                // Ticket 1121: a row whose Enter was dropped goes again only into a box the screen reads, free of its
+                // earlier copy. Pasted while the box was unread (the clear then wrote no Ctrl+U), the agent got it glued
+                // behind that copy, six times over. The copy is cleared and the paste waits for a pass that reads the
+                // box without it. A row past REPASTES drops, or with no clean box read for CLEAN_WAIT, is stopped:
+                // never pasted again; the user's row waits in the queue (the composer says so), an automatic one fails.
+                if let Some((send_id, automatic)) = guard {
+                    let (n, content) = again.unwrap_or_default();
+                    let shown = composer(
+                        &self.entries[&id].observer.screen.text(),
+                        self.entries[&id].meta.kind,
+                    );
+                    let copy = n > 0 && shown.as_ref().is_some_and(|c| holds_paste(c, &content));
+                    if copy {
+                        self.entry(&id)?.observer.clear_box = true;
+                        self.clear_box_first(&id)?;
+                    }
+                    let clean = shown.is_some() && !copy;
+                    if n > REPASTES {
+                        self.spent.insert(send_id.clone());
+                    } else if !clean {
+                        // The wait counts while the row keeps reaching this guard; a pause (a turn, a dialog) starts it again.
+                        let now = std::time::Instant::now();
+                        let wait = self.clean_wait.entry(send_id.clone()).or_insert((now, now));
+                        *wait = if now.duration_since(wait.1) > CLEAN_GAP {
+                            (now, now)
+                        } else {
+                            (wait.0, now)
+                        };
+                        if now.duration_since(wait.0) >= CLEAN_WAIT {
+                            self.spent.insert(send_id.clone());
+                        }
+                    }
+                    if self.spent.contains(&send_id) && automatic {
+                        self.mark_send(&id, &send_id, "failed")?;
+                        canceled = true;
+                        continue; // no `at += 1`: the row left the queue
+                    }
+                    if self.spent.contains(&send_id) || !clean {
+                        at += 1;
+                        continue;
+                    }
+                    self.clean_wait.remove(&send_id);
+                }
+                let mut row = self.entries[&id].meta.send_queue[at].clone();
+                // Ticket 1056: queued wake lines go out together as one message, one line per worker; a line whose
+                // worker was closed, or whose task is closed, is dropped.
+                let mut joined = Vec::new();
+                if self.wake_rows.contains(&row.id) {
+                    if self.row_gone(&id, &row) {
+                        self.mark_send(&id, &row.id, "canceled")?;
+                        canceled = true;
+                        continue;
+                    }
+                    let rest: Vec<_> = self.entries[&id]
+                        .meta
+                        .send_queue
+                        .iter()
+                        .filter(|s| {
+                            s.id != row.id
+                                && s.status == "queued"
+                                && self.wake_rows.contains(&s.id)
+                                && !self.send_refused(&id, s)
+                        })
+                        .cloned()
+                        .collect();
+                    for s in rest {
+                        let (send, content) = (s.id.clone(), s.content.clone());
+                        if self.row_gone(&id, &s) {
+                            self.mark_send(&id, &send, "canceled")?;
+                            canceled = true;
+                            continue;
+                        }
+                        // The batch stays inside the send limit; the lines after it go in the next one, in order.
+                        if row.content.len() + 1 + content.len() > crate::delivery::SEND_LIMIT {
+                            break;
+                        }
+                        row.content.push('\n');
+                        row.content.push_str(&content);
+                        joined.push(send);
+                    }
+                    // The queue row carries the whole text: the paste check of its Enter reads it there.
+                    if let Some(queued) = self
+                        .entry(&id)?
+                        .meta
+                        .send_queue
+                        .iter_mut()
+                        .find(|s| s.id == row.id)
+                    {
+                        queued.content = row.content.clone();
+                    }
+                    for send in &joined {
+                        self.mark_send(&id, send, "attempting")?;
+                    }
+                    // A row put back in the queue (an edited box) keeps the lines it already carries.
+                    self.joined_rows
+                        .entry(row.id.clone())
+                        .or_default()
+                        .extend(joined);
+                }
                 #[cfg(test)]
                 self.send_clones
                     .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -6027,6 +6771,58 @@ impl Sessions {
                 .store(true, std::sync::atomic::Ordering::SeqCst);
         }
         Ok(canceled || !delivered.is_empty())
+    }
+    /// A queued row the flush cancels: its sender no longer owns the target, or a widget act lost its grant.
+    fn send_refused(&self, id: &str, send: &crate::delivery::Send) -> bool {
+        // Ticket 1081: the core's own line has no sender to check; `core_may` checks its target right before the write.
+        if self.core_rows.contains(&send.id) {
+            return false;
+        }
+        let caller = self
+            .entries
+            .get(&send.sender)
+            // Ticket 286: a sender whose agent quit sends nothing more (its finish line is the core's).
+            .filter(|e| e.agent_live() || self.wake_rows.contains(&send.id))
+            // Ticket 573 round 6 (review r5 NOTE 3): a token session's send, while its token is live.
+            .filter(|e| {
+                self.token_origin(&e.meta)
+                    .is_none_or(|t| crate::tokens::by_caller(&self.home, &t).is_some())
+            })
+            .map(|e| crate::grants::Caller {
+                id: send.sender.clone(),
+                project: e.meta.project.clone(),
+            })
+            // v1a-06: SSH callers have no PTY entry in this core. Ticket 76: a local stamp is never satisfied by
+            // a peer that forwards under the same id after the local session is gone.
+            // Ticket 573: an outside token's send, while the token is live.
+            .or_else(|| self.token_sender(&send.sender))
+            .or_else(|| {
+                if send.remote == Some(false) {
+                    return None;
+                }
+                self.remote
+                    .callers
+                    .get(&send.sender)
+                    .map(|c| crate::grants::Caller {
+                        id: c.id.clone(),
+                        project: c.project.clone(),
+                    })
+            });
+        // v1b-20
+        let widget = crate::delivery::widget_sender(&send.sender).then(|| {
+            self.widget_hashes
+                .get(&send.id)
+                .is_some_and(|hash| self.widget_act_current(&send.sender, hash).is_ok())
+        });
+        widget == Some(false)
+            || (widget.is_none()
+                        && send.sender != "user"
+                        // Ticket 76: the flag stamped at queue time decides; a row without one fails closed.
+                        && caller.as_ref().is_none_or(|c| {
+                            send.remote.is_none_or(|remote| {
+                                !self.grants.owns_as(remote, c, &self.entries[id].meta)
+                            })
+                        }))
     }
     /// Ticket 300: an ended session's queued sends, canceled in queue order through `retire_send`, as `mark_send`
     /// retires one. This cancel walks this session's queue and no other. The caller saves once for the pass.
@@ -6112,6 +6908,108 @@ impl Sessions {
             Some(pty) => Some(pty.tail()),
             None => entry.saved.get()?.as_ref().map(|s| s.tail()), // v1a-40
         }
+    }
+    /// Ticket 1113: a current local lead reaches only its own place, including Home. Nothing a lead
+    /// says about a target counts as no-work evidence; only this registry's untouched startup state does.
+    fn tidy_session(
+        &mut self,
+        caller: &crate::grants::Caller,
+        id: &str,
+        why: &str,
+        now: u64,
+    ) -> Response {
+        let reach = self
+            .schedule_reach(caller)?
+            .unwrap_or_else(|| crate::team::Team::open(&self.home).home());
+        let target = self.entries.get(id).ok_or("session not found")?;
+        if target.meta.machine.is_some() || self.room_project(id).as_ref() != Some(&reach) {
+            return Err("a lead tidies only local sessions in its place".into());
+        }
+        let why = queue::deny_note(why);
+        if why.trim().is_empty() {
+            return Err("say why this session should close (--why)".into());
+        }
+        let (label, place) = (target.meta.label.clone(), target.meta.project.clone());
+        let who = self.task_caller(Some(caller), None)?;
+        let lead = who.lead.ok_or("no lead for this session")?;
+        let room = who.place.ok_or("no place for this session")?;
+        let from = who.name;
+        if self.empty_session(id, now) {
+            self.close(id, false, false)?;
+            let body = format!(
+                "Closed empty session {label} ({id}) · {}: {why}",
+                place.display()
+            );
+            self.team_note(
+                &room,
+                &lead,
+                Some(&caller.id),
+                body.clone(),
+                crate::room::TeamNote {
+                    what: "session_empty_closed".into(),
+                    worktree: None,
+                    // The room renders this field; keep the reason visible as well as in its stored body.
+                    name: Some(format!("{label}: {why}")),
+                    branch: None,
+                    merged: None,
+                    seat: None,
+                },
+            );
+            return Ok(Reply::Text { text: body });
+        }
+        let card = self.queue.ask_owner(
+            &caller.id,
+            queue::OwnerAsk::SessionClose {
+                from,
+                target: id.into(),
+                label: label.clone(),
+                place,
+                why,
+            },
+        )?;
+        Ok(Reply::Text {
+            text: format!(
+                "Asked the owner to close {label} ({id}), card {card}. It stays open until their Close."
+            ),
+        })
+    }
+    /// Positive evidence only: a first-run theme picker in a fresh Claude start with no input or conversation.
+    /// The lead approved ten minutes idle instead of adding a focused-pane feed (plan checkpoint m1576).
+    /// After a restart `before_box` is false, so missing in-memory evidence always takes the card path.
+    fn empty_session(&self, id: &str, now: u64) -> bool {
+        let Some(e) = self.entries.get(id) else {
+            return false;
+        };
+        let a = self.queue.attention(id);
+        let registered = self.queue.registered(id);
+        let screen = e.observer.screen.text();
+        e.meta.kind == AgentKind::Claude
+            && e.meta.machine.is_none()
+            && e.agent_live()
+            && e.pty.is_some()
+            && e.stale.is_none()
+            && e.observer.before_box
+            && !e.observer.behind
+            && e.observer.unredrawn.is_none()
+            && screen.contains("Choose the text style")
+            && screen.contains("/theme")
+            && screen.contains("Dark mode")
+            && screen.contains("Light mode")
+            && e.meta.agent_session_id.is_none()
+            && e.observer.transcript.is_none()
+            && a.completion_seq == 0
+            && !a.working
+            && a.background == 0
+            && a.observer_error.is_none()
+            && registered > 0
+            && now.saturating_sub(registered.max(a.last_activity)) >= 10 * 60_000
+            && !self.touched.contains_key(id)
+            && !self.composed.contains_key(id)
+            && !self.submitted.contains_key(id)
+            && !self.pending_enter.contains_key(id)
+            && !self.delivery_inflight.contains_key(id)
+            && e.meta.send_log.is_empty()
+            && e.meta.send_queue.is_empty()
     }
     /// Ends session `id`. V2-1b: the queue is closed only once the agent is stopped (a refused close leaves its
     /// waiting items as they are). For the owner, an agent whose holder no longer answers is ended by the core
@@ -6276,9 +7174,7 @@ impl Sessions {
         if let Some(mut acp) = entry.acp.take() {
             acp.stop();
         }
-        if let Err(error) = self.queue.close(id, false) {
-            eprintln!("queue close persistence: {error}");
-        }
+        close_queue(&mut self.queue, id, false);
         let home = self.home.clone();
         let entry = self.entry(id)?;
         if let Some(token) = &entry.token {
@@ -6650,6 +7546,21 @@ impl Sessions {
                 .get(id)
                 .is_some_and(|e| e.meta.send_queue.is_empty() && !e.input.pending())
     }
+    /// Ticket 1081 (security look 4): a seat the core started that nothing went into since: no text or key ever reached
+    /// its input box, nothing composed, queued or on its way, no turn and no question. Only such a seat is closed when
+    /// its first prompt was not typed.
+    pub(crate) fn seat_untouched(&self, id: &str) -> bool {
+        let a = self.queue.attention(id);
+        !a.working
+            && !a.waiting
+            && !self.touched.contains_key(id)
+            && !self.composed.contains_key(id)
+            && !self.delivery_inflight.contains_key(id)
+            && self
+                .entries
+                .get(id)
+                .is_some_and(|e| e.meta.send_queue.is_empty() && !e.input.pending())
+    }
     /// Ticket 990: the teammate a lead may open: the caller is the live seat of its place's lead, and `name` is another
     /// teammate of that place. Gives the teammate's id.
     pub(crate) fn lead_may_open(
@@ -6694,6 +7605,118 @@ impl Sessions {
             meta = &self.entries.get(meta.parent.as_ref()?)?.meta;
         }
         None
+    }
+    /// Ticket 1081: what advance.rs reads of a seat's session; a session the registry does not hold is not live.
+    pub(crate) fn seat_facts(&self, id: &str) -> crate::advance::Facts {
+        let Some(e) = self.entries.get(id) else {
+            return Default::default();
+        };
+        let s = self.snapshot_session(&e.meta);
+        crate::advance::Facts {
+            live: e.agent_live(),
+            working: s.attention.working,
+            waits: s.attention.asking || crate::delivery::blocked(&s.pending),
+            last: s.attention.last_activity,
+            since: s.attention.working_since,
+            queued: e
+                .meta
+                .send_queue
+                .iter()
+                .filter(|r| r.status == "queued")
+                .min_by_key(|r| r.at)
+                .map(|r| (r.id.clone(), r.at)),
+            cwd: e.meta.cwd.clone(),
+        }
+    }
+    /// Ticket 1081 (security look 2): the one check an auto-advance line passes, before it is written now and again
+    /// before its queued row is written. The line is the core's, sent under no seat's or token's identity, so it goes
+    /// only to a live session that is a seat (or the lead's seat) of an open task, in a place that still exists with
+    /// auto-advance on, and whose own token (or the token it was started under) is not revoked.
+    pub(crate) fn core_may(&self, id: &str) -> Result<(), String> {
+        let meta = &self
+            .entries
+            .get(id)
+            .filter(|e| e.agent_live())
+            .ok_or("skipped: the seat is not running")?
+            .meta;
+        if self
+            .token_origin(meta)
+            .is_some_and(|t| crate::tokens::by_caller(&self.home, &t).is_none())
+        {
+            return Err("skipped: the seat's token was revoked".into());
+        }
+        let ledger = crate::ledger::Ledger::open(&self.home);
+        ledger
+            .list()?
+            .iter()
+            .filter(|t| t.closed.is_none())
+            .filter(|t| {
+                t.seats.iter().any(|s| s.session == id)
+                    || t.lead.is_some() && t.lead == meta.teammate
+            })
+            .any(|t| t.place.is_dir() && ledger.place(&t.place).auto)
+            .then_some(())
+            .ok_or_else(|| {
+                "skipped: the seat is on no open task of a place with auto-advance on".into()
+            })
+    }
+    /// Ticket 1056 + 1081: a queued wake or core line no longer to be written: a wake line's worker was closed or its
+    /// task closed; a core line's target fails `core_may` now.
+    fn row_gone(&self, id: &str, row: &crate::delivery::Send) -> bool {
+        if self.core_rows.contains(&row.id) {
+            return self.core_may(id).is_err();
+        }
+        self.wake_gone(&row.sender)
+    }
+    /// Ticket 1081: a line the core itself types into `id` through the normal send path, as `CORE` (no seat's or
+    /// token's identity is borrowed). `core_may` decides before the write here and before a queued row is written
+    /// (`row_gone`). A queued one waits behind the user's own rows as a worker's wake line does (ticket 1056), and
+    /// replaces an older queued core line there.
+    pub(crate) fn core_line(&mut self, id: &str, text: String) -> Result<(), String> {
+        self.core_may(id)?;
+        let older: Vec<String> = self
+            .entries
+            .get(id)
+            .map(|e| {
+                e.meta
+                    .send_queue
+                    .iter()
+                    .filter(|s| s.status == "queued" && self.core_rows.contains(&s.id))
+                    .map(|s| s.id.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+        if let Reply::Delivery { send } = self.send_line(CORE, id, text)?
+            && send.status == "queued"
+        {
+            self.wake_rows.insert(send.id.clone());
+            self.core_rows.insert(send.id);
+            for old in older {
+                self.finish_send(id, &old, "canceled")?;
+            }
+        }
+        Ok(())
+    }
+    /// Ticket 1081: the stalled row `row` of `id` goes through the delivery tick's own pass once more (fresh reads,
+    /// then the tick's checks on the original row: its sender's liveness and token, ownership, its local or remote
+    /// stamp). Nothing new is typed for another sender (security look: a re-sent copy skipped those checks). False when
+    /// the checks canceled the row.
+    pub(crate) fn resend_queued(&mut self, id: &str, row: &str) -> Result<bool, String> {
+        let status = |s: &Self| {
+            s.entries.get(id).and_then(|e| {
+                e.meta
+                    .send_queue
+                    .iter()
+                    .chain(&e.meta.send_log)
+                    .find(|s| s.id == row)
+                    .map(|s| s.status.clone())
+            })
+        };
+        if status(self).as_deref() != Some("queued") {
+            return Ok(true);
+        }
+        self.flush_delivery()?;
+        Ok(status(self).as_deref() != Some("canceled"))
     }
     /// Ticket 990 slice g: what the registry knows about a session now, for a task's state word.
     pub(crate) fn seat_now(&self, id: &str) -> crate::ledger::SeatNow {
@@ -6884,6 +7907,25 @@ impl Sessions {
     ) -> Result<String, String> {
         self.queue
             .ask_owner(session, queue::OwnerAsk::Role { role, why, place })
+    }
+    /// Ticket 1099 panel 4: a lead's ask to change its place's live seats, as a card for the owner.
+    pub(crate) fn ask_cap(
+        &mut self,
+        session: &str,
+        place: PathBuf,
+        was: u32,
+        cap: u32,
+        why: String,
+    ) -> Result<String, String> {
+        self.queue.ask_owner(
+            session,
+            queue::OwnerAsk::Cap {
+                place,
+                was,
+                cap,
+                why,
+            },
+        )
     }
     /// Home view change 4: the Home lead's goal for a project's lead, as a card for the owner.
     pub(crate) fn ask_goal(
@@ -7312,7 +8354,9 @@ impl Sessions {
                     | queue::OwnerAsk::Goal { place, .. }
                     | queue::OwnerAsk::Schedule { place, .. } // ticket 993
                     | queue::OwnerAsk::Stall { place, .. } // ticket 1004
-                    | queue::OwnerAsk::Tidy { place, .. }, // ticket 1005
+                    | queue::OwnerAsk::Tidy { place, .. } // ticket 1005
+                    | queue::OwnerAsk::Cap { place, .. } // ticket 1099
+                    | queue::OwnerAsk::SessionClose { place, .. }, // ticket 1113
                 ) => place.clone(),
                 _ => continue,
             };
@@ -8212,10 +9256,12 @@ impl Sessions {
             base,
             label,
             creator: caller.map(|c| c.id.clone()), // v1a-16; v1a-23: shown, no longer a limit
+            token: caller.is_some_and(|c| self.token_of(c).is_some()),
             team: caller.and_then(|c| self.team_lead_of(&c.id)), // ticket 990
             from,
             confirm,
             dir: self.settings.worktrees_dir.clone(),
+            user_home: self.settings.user_home.clone(),
             prefix: self
                 .settings
                 .feature::<String>("git.branch_prefix")
@@ -8278,7 +9324,8 @@ impl Sessions {
         }
     }
     /// ACCOUNTPICK: a session caller (token or remote) starts sessions on its own session's account only: none given
-    /// means the caller's; another label is refused before anything is created. The owner (`None`) picks any.
+    /// means the caller's; another label is refused before anything is created. The owner (`None`) picks any; none
+    /// given means the owner's default (ticket 1126).
     /// `remote`: as in `start_granted`.
     pub(crate) fn launch_as(
         &self,
@@ -8289,7 +9336,13 @@ impl Sessions {
         if let Some(caller) = caller {
             let own = self.caller_account(caller, remote);
             match &start.account {
-                Some(label) if Some(label) != own.as_ref() => {
+                Some(label)
+                    if Some(label) != own.as_ref()
+                        && Some(label) != self.place_account(caller, remote).as_ref()
+                        && Some(label)
+                            != self.default_account(start.kind, remote).flatten().as_ref()
+                        && !self.lead_any(caller, remote) =>
+                {
                     return Err("a session can start sessions only on its own account".into());
                 }
                 // Ticket 451 (security look, reproduced): naming its own account on a resume would carry a conversation
@@ -8305,13 +9358,32 @@ impl Sessions {
                 }
                 // A resume keeps the account it ran on; `start_granted` checks that it is the caller's.
                 // V2-4a (needs 87): an ACP session has no account.
+                // Ticket 1126: a new one starts on its place's account (1120) where its agent has one by that label,
+                // else on the owner's default (an explicit "Your own" is no label), else on the caller's own.
                 None if !matches!(start.kind, AgentKind::Shell | AgentKind::Acp)
                     && start.resume.is_none() =>
                 {
-                    start.account = own;
+                    let agent = crate::accounts::agent_of(start.kind);
+                    start.account = self
+                        .place_account(caller, remote)
+                        .filter(|l| {
+                            agent.is_some_and(|a| {
+                                crate::accounts::folder_by_label(&self.home, a, l).is_ok()
+                            })
+                        })
+                        .map(Some)
+                        .or_else(|| self.default_account(start.kind, remote))
+                        .unwrap_or(own);
                 }
                 _ => {}
             }
+        } else if start.account.is_none()
+            && start.resume.is_none()
+            && !matches!(start.kind, AgentKind::Shell | AgentKind::Acp)
+        {
+            // Codex security look P2 (1126 round 3): the owner's start with no account named (`session start`, a
+            // schedule, a team start) takes the status bar's pick too. The window names its account itself.
+            start.account = self.default_account(start.kind, remote).flatten();
         }
         self.check_side_resume(&start)?;
         let mut launch = self.launch(start);
@@ -8321,6 +9393,85 @@ impl Sessions {
             .and_then(|c| self.entries.get(&c.id))
             .is_some_and(|e| e.meta.home_lock);
         Ok(launch)
+    }
+    /// Ticket 1120: the account the user set for the caller's place (`nunchiro task account`, `ledger::Place`). A
+    /// session of that place may start sessions on it as on its own (ACCOUNTPICK widened by the user, per place); a
+    /// remote caller never.
+    fn place_account(&self, caller: &crate::grants::Caller, remote: bool) -> Option<String> {
+        if remote {
+            return None;
+        }
+        let place = self.task_caller(Some(caller), None).ok()?.place?;
+        crate::ledger::Ledger::open(&self.home)
+            .place(&place)
+            .account
+    }
+    /// Owner 2026-11-25 ("적용하고"): with "Leads may use any of my accounts" on (`accounts::LEADS_ANY`), a team lead's own
+    /// seat may start sessions on any registered account and continue itself on one (ticket 451 carry). Never a session
+    /// under a lead (a worker or reviewer), a remote caller, an outside token or an ACP session.
+    fn lead_any(&self, caller: &crate::grants::Caller, remote: bool) -> bool {
+        !remote
+            && self.token_of(caller).is_none()
+            && self.settings.feature::<bool>(crate::accounts::LEADS_ANY) == Some(true)
+            && self.entries.get(&caller.id).is_some_and(|e| {
+                matches!(e.meta.kind, AgentKind::Claude | AgentKind::Codex)
+                    && e.meta.teammate.is_some()
+                    && self.team_lead_of(&caller.id) == e.meta.teammate
+            })
+    }
+    /// The room line of a start or move that only `lead_any` admitted, in the lead's place, to the lead. Written
+    /// before the start; an error refuses it.
+    fn lead_any_line(
+        &self,
+        caller: &crate::grants::Caller,
+        launch: &Launch,
+        account: &str,
+    ) -> Result<(), String> {
+        let refused = |why: &str| format!("a start on another account needs its room line ({why})");
+        let lead = self
+            .team_lead_of(&caller.id)
+            .ok_or_else(|| refused("no lead"))?;
+        let team = crate::team::Team::open(&self.home);
+        let mate = team
+            .list()
+            .ok()
+            .and_then(|l| l.into_iter().find(|t| t.id == lead))
+            .ok_or_else(|| refused("the lead is not in the team"))?;
+        let label = match launch.start.label.as_str() {
+            "" => "a session",
+            l => l,
+        };
+        let place = mate.project.clone().unwrap_or_else(|| team.home());
+        let moved = launch.start.resume.is_some()
+            && launch.start.resume
+                == self
+                    .entries
+                    .get(&caller.id)
+                    .and_then(|e| e.meta.agent_session_id.clone());
+        let line = if moved {
+            format!(
+                "{} continues itself on account {account} (Leads may use any of my accounts)",
+                mate.name
+            )
+        } else {
+            format!(
+                "{} starts {label} on account {account} (Leads may use any of my accounts)",
+                mate.name
+            )
+        };
+        let note = crate::advance::team_note(&line, None);
+        crate::room::Log::open(&self.home, &place)
+            .team(&lead, line, note)
+            .map(|_| ())
+            .map_err(|e| refused(&e))
+    }
+    /// Ticket 1126: the owner's default account for new sessions of `kind` (`accounts::default_label`); a session caller
+    /// may start on it as on its own. A remote caller never gets it, as it never gets a place account.
+    fn default_account(&self, kind: AgentKind, remote: bool) -> Option<Option<String>> {
+        if remote {
+            return None;
+        }
+        crate::accounts::default_pick(&self.home, crate::accounts::agent_of(kind)?)
     }
     /// The account label of the caller's own session. A remote caller chooses its id (it may be a local session's), so
     /// it never has one: it counts as "Your own".
@@ -8392,6 +9543,11 @@ impl Sessions {
         Ok(())
     }
     pub fn start(&mut self, launch: &Launch) -> Result<Session, String> {
+        // Ticket 1122 B: a start served after the Stop (the window's, in the stop's wake) spawned a holder the stopped
+        // core never stops; it outlived the core and wrote into the data folder.
+        if self.stopped() {
+            return Err("core is stopping; nothing starts".into());
+        }
         self.check_side_resume(&launch.start)?;
         let (command, account) = self.start_checks(launch)?; // claude_modes.rs, also a restart's before it stops
         self.refresh()?;
@@ -8871,6 +10027,30 @@ impl Sessions {
                 _ => return Err("the Home seat lock hook could not be written".into()),
             }
         }
+        // Ticket 1130 S1: outward actions ask in every Claude session, with or without Nunchiro's other hooks, decided in
+        // the hook process (`nunchiro_core::outward`); a failed run blocks the call, as the lock's does. Round 2 (Codex 3):
+        // no project, local or user layer may turn it off; `--settings` outranks them all but managed settings.
+        if start.kind == AgentKind::Claude {
+            let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+            let lock = if home_mode.is_some() {
+                " --home-lock"
+            } else {
+                ""
+            };
+            let command = format!("{} hook outward{lock}", shell_quote(&exe.to_string_lossy()));
+            let block = serde_json::json!({"matcher": "Bash|mcp__.*", "hooks": [{"type": "command", "command": command, "timeout": 10, "onFailure": "block"}]});
+            settings.insert("disableAllHooks".into(), false.into());
+            let hooks = settings
+                .entry("hooks")
+                .or_insert_with(|| serde_json::json!({}));
+            match hooks.as_object_mut().map(|h| {
+                h.entry("PreToolUse")
+                    .or_insert_with(|| serde_json::json!([]))
+            }) {
+                Some(serde_json::Value::Array(pre)) => pre.push(block),
+                _ => return Err("the outward hook could not be written".into()),
+            }
+        }
         // v1b-07
         if !settings.is_empty() {
             let path = self.home.join(format!("hooks-{id}.json"));
@@ -8967,8 +10147,12 @@ impl Sessions {
         } else {
             self.queue.register(id, start.kind, queue::now_ms())?;
         }
+        if let Some(v) = &version {
+            crate::agent_canary::version_seen(&self.home, start.kind, v); // ticket 1100
+        }
         let meta = Session {
             side_chat: start.args.iter().any(|arg| arg == SIDE_CHAT_ARG),
+            stopped_sends: Vec::new(),
             side_parent: side_parent(start),
             side_split: side_split(start),
             machine: None, // v1a-06
@@ -9275,7 +10459,9 @@ impl Sessions {
             keep_awake_held: crate::keep_awake::held(), // V2-CF5
             board_decisions: crate::board::decisions(&self.home), // v1b-18
             owner_decisions: self.queue.owner_items(),  // v1a-23
-            problem: crate::problems::set_aside(&self.home), // v2-5b
+            // v2-5b; ticket 1100: else the canary's card
+            problem: crate::problems::set_aside(&self.home)
+                .or_else(|| crate::agent_canary::problem(&self.home)),
         })
     }
     fn snapshot_session(&self, meta: &Session) -> Session {
@@ -9287,6 +10473,11 @@ impl Sessions {
         meta.send_log.sort_by_key(|s| s.at);
         cap_log(&mut meta.send_log);
         meta.attention = Box::new(self.queue.attention(&meta.id));
+        // Ticket 1121: shown only, so an older core never meets it in a store.
+        meta.stopped_sends = (meta.send_queue.iter())
+            .filter(|s| s.status == "queued" && self.spent.contains(&s.id))
+            .map(|s| s.id.clone())
+            .collect();
         if self.recovery_warnings > 0 {
             let warning = format!(
                 "hook journal: {} recovery events quarantined or unavailable",
@@ -9538,7 +10729,8 @@ fn escape_line(s: &str) -> String {
 pub(crate) fn probe_folder(path: &Path) -> std::io::Result<()> {
     fs::read_dir(path)?.next().transpose().map(|_| ())
 }
-// v1a-10: model and effort switch. The catalog matches web/src/picker/catalog.ts (a web test compares them).
+// v1a-10: model and effort switch. The Claude catalog matches web/src/picker/catalog.ts (a web test compares them);
+// ticket 1100: the Codex one is Codex's own (`agent_models`), served to the window by `agent_models`.
 // v1a-19: the most terminal output one observer pass feeds the waiting screen per session; the rest waits for the
 // next pass, so a session that floods its terminal never holds the registry lock for long.
 pub(crate) const OBSERVE_BYTES: usize = 64 * 1024;
@@ -9554,34 +10746,6 @@ const CLAUDE_MODELS: &[(&str, &str)] = &[
     ("haiku", "Haiku"),
 ];
 const CLAUDE_EFFORTS: &[&str] = &["low", "medium", "high", "xhigh", "max"];
-const CODEX_MODELS: &[(&str, &[&str])] = &[
-    (
-        "gpt-6.1-terra",
-        &["low", "medium", "high", "xhigh", "max", "ultra"],
-    ),
-    (
-        "gpt-6.1-sol",
-        &["low", "medium", "high", "xhigh", "max", "ultra"],
-    ),
-    (
-        "gpt-6-astra",
-        &["low", "medium", "high", "xhigh", "max", "ultra"],
-    ),
-    (
-        "gpt-6-sol",
-        &["low", "medium", "high", "xhigh", "max", "ultra"],
-    ),
-    ("gpt-6-luna", &["low", "medium", "high", "xhigh", "max"]),
-    (
-        "gpt-5.6-sol",
-        &["low", "medium", "high", "xhigh", "max", "ultra"],
-    ),
-    (
-        "gpt-5.6-terra",
-        &["low", "medium", "high", "xhigh", "max", "ultra"],
-    ),
-    ("gpt-5.6-luna", &["low", "medium", "high", "xhigh", "max"]),
-];
 const PICKER_OPEN: &[u8] = b"\x1bp"; // Claude's `meta+p` (chat:modelPicker); never `/model`
 // A step reads the screen only after the agent redrew it and then stayed quiet, never a stale frame. v1a-24 r3:
 // an echoed Enter waits for the same quiet.
@@ -9596,6 +10760,22 @@ const ENTER_CATCH_UP: std::time::Duration = std::time::Duration::from_secs(10);
 const PASTE_WAIT: u32 = 7;
 // Logged only: the persisted settle marks are a fixed list (`delivery::SETTLE_MARKS`), so the row has none.
 const BEHIND: &str = "enter_dropped_behind";
+/// Ticket 1094 r6: how long an idle agent may show no turn after his own Enter before the dropped row goes again.
+const HAND_PROOF: std::time::Duration = std::time::Duration::from_secs(15);
+/// Ticket 1094: an idle agent that shows its input box this long after a write took no turn from it.
+const INFLIGHT_IDLE: std::time::Duration = std::time::Duration::from_secs(15);
+/// Ticket 1094: the wait before a user message whose Enter was dropped twice is tried again, doubled each time.
+const RETRY_FIRST: std::time::Duration = std::time::Duration::from_secs(15);
+const RETRY_MAX: std::time::Duration = std::time::Duration::from_secs(300);
+/// Ticket 1121: how many times a row whose Enter was dropped is pasted again; after that it waits in the queue.
+const REPASTES: u32 = 2;
+/// Ticket 1121: how long a guarded row waits for a box the screen reads clean before it is stopped, and the pause
+/// between two passes that starts that wait again.
+const CLEAN_WAIT: std::time::Duration = std::time::Duration::from_secs(60);
+const CLEAN_GAP: std::time::Duration = std::time::Duration::from_secs(5);
+/// Ticket 1094: a Claude the queue reads as working that shows its idle input box and drew nothing this long has
+/// ended its turn (ms), whatever signal was lost.
+pub(crate) const IDLE_SETTLE_MS: u64 = 30_000;
 /// Look 11-17 v8 N1: how long after an Enter the core looks at the input box again, and how many more Enters it
 /// writes for one message.
 const SUBMIT_CHECK: std::time::Duration = std::time::Duration::from_secs(2);
@@ -9705,13 +10885,24 @@ pub(crate) fn check_model(
             CLAUDE_EFFORTS
         }
         AgentKind::Codex => match model {
-            None => &["low", "medium", "high", "xhigh", "max"],
+            None => crate::agent_models::CODEX_DEFAULT_EFFORTS,
             Some(m) => {
-                CODEX_MODELS
+                // A model Codex dropped from its list since a schedule, role or team row saved it still passes when
+                // the fixed list has it (the cache can change at any Codex fetch, not only at a Nunchiro update).
+                let listed = crate::agent_models::codex();
+                let fixed = crate::agent_models::fallback();
+                let efforts = &listed
                     .iter()
-                    .find(|(slug, _)| *slug == m)
+                    .chain(&fixed)
+                    .find(|row| row.value == m)
                     .ok_or("unknown model")?
-                    .1
+                    .efforts;
+                return match effort {
+                    Some(e) if !efforts.iter().any(|x| x == e) => {
+                        Err("unknown effort for this model".into())
+                    }
+                    _ => Ok(()),
+                };
             }
         },
     };
@@ -9731,7 +10922,7 @@ pub(crate) fn model_name(kind: AgentKind, model: &str) -> String {
 }
 
 /// Ticket 358: the web's `MODEL_NAME` (newDefaults.ts): one argv word that cannot read as a flag.
-fn model_word(m: &str) -> bool {
+pub(crate) fn model_word(m: &str) -> bool {
     m.len() <= 128
         && m.starts_with(|c: char| c.is_ascii_alphanumeric())
         && m.chars()
@@ -10108,6 +11299,28 @@ fn composer(screen: &str, kind: AgentKind) -> Option<String> {
     let numbered = |r: &&str| waiting::screen::choice_row(r).is_some();
     let choice =
         |rows: &[&str]| rows.iter().any(|r| cursor(r) || numbered(r)) || decision(rows).is_some();
+    // Ticket 1121: under the box, a usage ring row (`○ 6%`, `● 100%`: the mark, then a number with `%`) is no
+    // choice; read as one, no box showed, every Enter was dropped and the next paste glued behind the last copy. Any
+    // other marked row (`● Continue`) is a choice, as before.
+    let ring = |r: &&str| {
+        r.trim_start()
+            .strip_prefix(['○', '●'])
+            .map(str::trim_start)
+            .is_some_and(|t| t.starts_with(|c: char| c.is_ascii_digit()) && t.contains('%'))
+    };
+    let footer_choice = |rows: &[&str]| {
+        rows.iter().any(|r| cursor(r) && !ring(r) || numbered(r)) || decision(rows).is_some()
+    };
+    // The footer's own words, as Claude draws them in every permission mode.
+    let footer_words = |r: &&str| {
+        [
+            "(shift+tab to cycle)",
+            "? for shortcuts",
+            "esc to interrupt",
+        ]
+        .iter()
+        .any(|w| r.contains(w))
+    };
     let rule = |r: &&str| !r.is_empty() && r.chars().all(|c| c == '─');
     // Look 11-17 v11 N11-S2-2: Claude 2.1.327 writes a named session's name (a resumed one has one) into the rule over
     // the box (`──── add-plan-txt-file ─`); the rule under it stays plain. Read as no box, a Stop never ended the turn.
@@ -10124,12 +11337,25 @@ fn composer(screen: &str, kind: AgentKind) -> Option<String> {
             && footer[0].contains(" · ")
             && !choice(footer)
     } else {
+        // Ticket 1121: a real 2.1.331 seat's screen as the core read it kept the top rule and the `❯` row but lost the
+        // bottom rule (blank rows, then footer pieces: `◔ 30%  2  8`, `(shift+tab to cycle) · ← 2 agents`). With
+        // the rule right above, an unnumbered row, nothing under it but indented or blank rows that hold no option, and
+        // Claude's footer words among them, it is the box: read as none, every Enter there was dropped.
+        let lost = at > 0
+            && below.get(inner).is_none()
+            && (rule(&rows[at - 1])
+                || rows[at - 1].starts_with("──") && rows[at - 1].ends_with(" ─"))
+            && !numbered(&rows[at])
+            && below.iter().any(footer_words)
+            && !footer_choice(below);
         at > 0
-            && below
+            && (below
                 .get(inner)
                 .is_some_and(|r| rule(r) && top(rows[at - 1], r))
-            && !below[..inner].iter().any(cursor)
-            && !choice(&below[inner + 1..])
+                || lost)
+            // With the rule lost the rows under the `❯` row are the footer: a ring there (`○ 6%`) is no cursor.
+            && !below[..inner].iter().any(|r| cursor(r) && !(lost && ring(r)))
+            && !footer_choice(below.get(inner + 1..).unwrap_or_default())
     };
     if !boxed {
         return None;
@@ -10170,7 +11396,9 @@ fn box_text(screen: &str, kind: AgentKind) -> Option<String> {
 fn same_words(shown: &str, sent: &str) -> bool {
     let words = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
     let shown = words(shown);
-    shown == words(sent) || shown.starts_with("[Pasted ") && holds_paste(&shown, sent)
+    shown == words(sent)
+        || (shown.starts_with("[Pasted ") || shown.starts_with("[Image #"))
+            && holds_paste(&shown, sent)
 }
 
 /// The rows of text in Claude's input box (0 when it shows none or only its placeholder): from its `❯` row down to the
@@ -10296,6 +11524,25 @@ fn decision(lines: &[&str]) -> Option<waiting::screen::Detection> {
 /// newline counts as collapsible, since a short terminal collapses even one.
 /// v1a-24: Codex 0.161.0 collapses a paste over 1000 chars into `[Pasted Content C chars]` (C = its chars,
 /// newlines included); that exact row holds it.
+/// Ticket 1094 r6: the box `row` is the dropped `paste` with exactly the words he typed since (`typed`) after or
+/// before it, or alone. The paste shows as its own words or as Claude's placeholder for it ("[Pasted text #n +k
+/// lines]", "[Pasted Content n chars]", "[Image #n]"). Words are whole: "hi" is not in "this", and a word he typed
+/// glued to the paste ("hix") proves nothing.
+fn proven_copy(row: &str, paste: &str, typed: &str) -> bool {
+    let box_words: Vec<&str> = row.split_whitespace().collect();
+    let typed: Vec<&str> = typed.split_whitespace().collect();
+    let paste_words = paste.split_whitespace().collect::<Vec<_>>().join(" ");
+    let n = typed.len();
+    let rest = |r: &[&str]| {
+        let r = r.join(" ");
+        !r.is_empty()
+            && (r == paste_words
+                || r.starts_with('[') && r.ends_with(']') && holds_paste(&r, paste))
+    };
+    box_words.len() > n
+        && (box_words.ends_with(&typed) && rest(&box_words[..box_words.len() - n])
+            || box_words.starts_with(&typed) && rest(&box_words[n..]))
+}
 fn holds_paste(row: &str, paste: &str) -> bool {
     let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
     if let Some(chars) = row
@@ -10319,6 +11566,16 @@ fn holds_paste(row: &str, paste: &str) -> bool {
                         .is_some_and(|c| digits(c) && c.parse() == Ok(lines))
             }
         };
+    }
+    // Ticket 1087: a paste that is one image path and nothing else (the composer's image-only message) is drawn as
+    // "[Image #N]" by Claude 2.1.330 and Codex 0.161; text with a path, or two paths, stays as typed. Unknown here, the
+    // Enter was dropped and the message sat in the agent's box.
+    if let Some(n) = row
+        .strip_prefix("[Image #")
+        .and_then(|r| r.strip_suffix(']'))
+    {
+        let path = paste.trim();
+        return digits(n) && path.starts_with('/') && !path.contains('\n');
     }
     let words = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
     let (row, paste) = (words(row.trim_matches('…')), words(paste));
@@ -11022,10 +12279,24 @@ impl Sessions {
         let mut roots = self.project_roots();
         let worktrees: Vec<String> = roots
             .iter()
-            .filter_map(|p| {
+            .flat_map(|p| {
                 let p = Path::new(p);
-                let root = self.settings.worktree_root_for(&self.home, p).ok()?;
-                Some(root.join(p.file_name()?))
+                // Ticket 1061: worktrees made before the default moved still lie under the old root.
+                let roots = [
+                    self.settings.worktree_root_for(p).ok(),
+                    worktree_root_for(
+                        Some(Path::new(PREVIOUS_DEFAULT_DIR)),
+                        p,
+                        &self.settings.user_home,
+                    )
+                    .ok(),
+                    Some(self.settings.legacy_worktree_root(&self.home)),
+                ];
+                roots
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|root| Some(root.join(p.file_name()?)))
+                    .collect::<Vec<_>>()
             })
             // Codex look 11-20: a link there would make its target a root; only a real folder counts.
             .filter(|r| std::fs::symlink_metadata(r).is_ok_and(|m| m.is_dir()))
@@ -11299,8 +12570,22 @@ fn sweep_rowless(home: &Path, row: impl Fn(&str) -> bool) {
 /// The session's own files in the core home: its hooks settings and its agent-ended marker (ticket 286).
 /// Q9 psn-J4-2: a queue save that fails in `refresh` is logged, as Close's: the pass still saves the scrollback, the
 /// rows and the ended card.
+/// Ticket 1090: a seat that ends or closes also takes away the owner cards that are its alone: a stall card raised on
+/// its check-in and a Codex reset it asked for. Its questions and permissions already leave Decisions (a session that
+/// is not live sends no `pending`). Task cards (merge) and cards about other things stay. Not called for the core's own
+/// stop or start, where a seat is resumed and its cards still hold.
 fn close_queue(queue: &mut Queue, id: &str, failed: bool) {
-    if let Err(error) = queue.close(id, failed) {
+    let seat_only = |i: &queue::Decision| {
+        i.session_id == id
+            && matches!(
+                i.owner,
+                Some(queue::OwnerAsk::Stall { .. } | queue::OwnerAsk::CodexReset { .. })
+            )
+    };
+    if let Err(error) = queue
+        .close(id, failed)
+        .and_then(|()| queue.answer_owner(seat_only))
+    {
         eprintln!("queue close persistence: {error}");
     }
 }
@@ -11767,9 +13052,13 @@ impl Launch {
             self.cwd = cwd;
         } else if self.start.worktree {
             let repo = self.project.file_name().ok_or("invalid repository name")?;
-            let root = self.settings.worktree_root_for(&self.home, &self.project)?;
-            self.cwd = start_worktree::folder(&root.join(repo), &self.id);
-            fs::create_dir_all(self.cwd.parent().unwrap()).map_err(|e| e.to_string())?;
+            let root = self.settings.worktree_root_for(&self.project)?;
+            let parent = worktree_parent(&root, repo, self.settings.default_base().as_deref())?;
+            // Security (ticket 1061): the resolved folder, so a link swapped in after check_token_reach is still caught.
+            if self.origin.is_some() {
+                tokens::outside_home(&self.home, &parent)?;
+            }
+            self.cwd = start_worktree::folder(&parent, &self.id);
             self.worktree_created = true;
             // Ticket 403 item 4: the same checkout helper as a create.
             let cwd = self.cwd.to_string_lossy();
@@ -12371,16 +13660,94 @@ fn check_worktrees_dir(d: &Path) -> Result<(), String> {
         ))
     }
 }
-/// v25f: the root `project`'s worktrees go under: `<home>/worktrees` by default, else the setting, a relative one
-/// joined to the project (lexically: the check above allows only one leading `..`).
+/// Ticket 1061 (security): `<root>/<repo>`, the folder a project's new worktrees go in, made (0700) and canonical. The
+/// root may be a link (the owner's own choice; resolved here, and a token checks the result), but `<repo>` must be a
+/// real folder: whoever can write the repository's parent could plant `.worktrees/<repo>` as a link to any folder,
+/// the Nunchiro folder included.
+fn worktree_parent(
+    root: &Path,
+    repo: &std::ffi::OsStr,
+    base: Option<&Path>,
+) -> Result<PathBuf, String> {
+    let root = make_root(root, base)?;
+    let parent = root.join(repo);
+    let refused = || {
+        format!(
+            "worktree folder {} is a link or not a folder; Nunchiro does not follow links there{WORKTREES_DIR_HINT}",
+            parent.display()
+        )
+    };
+    if fs::symlink_metadata(&parent).is_ok_and(|m| !m.is_dir()) {
+        return Err(refused());
+    }
+    store::private_dir(&parent).map_err(|e| {
+        format!(
+            "worktree folder {}: {e}{WORKTREES_DIR_HINT}",
+            parent.display()
+        )
+    })?;
+    if fs::canonicalize(&parent).ok().as_ref() != Some(&parent) {
+        return Err(refused());
+    }
+    Ok(parent)
+}
+/// Ticket 1083: makes the worktrees root (0700) and returns it canonical. `base` is `<user home>/nunchiro` when the root is
+/// the unset default: made 0755 (it may hold other things later) and refused when it is a link or not a folder, as
+/// the 1061 checks refuse a planted `<repo>` link.
+fn make_root(root: &Path, base: Option<&Path>) -> Result<PathBuf, String> {
+    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+    let fail = |e: String| {
+        format!(
+            "worktree folder {}: {e}{WORKTREES_DIR_HINT}",
+            root.display()
+        )
+    };
+    if let Some(base) = base {
+        match fs::symlink_metadata(base) {
+            Ok(m) if !m.is_dir() => {
+                return Err(fail(format!(
+                    "{} is a link or not a folder; Nunchiro does not follow links there",
+                    base.display()
+                )));
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                fs::DirBuilder::new()
+                    .recursive(true)
+                    .mode(0o755)
+                    .create(base)
+                    .and_then(|()| fs::set_permissions(base, fs::Permissions::from_mode(0o755)))
+                    .map_err(|e| fail(e.to_string()))?;
+            }
+            Err(e) => return Err(fail(e.to_string())),
+        }
+    }
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(root)
+        .and_then(|()| fs::canonicalize(root))
+        .map_err(|e| fail(e.to_string()))
+}
+/// Ticket 1083: what the unset default was called from ticket 1061 until 1083 (beside the repository); its records keep working.
+const PREVIOUS_DEFAULT_DIR: &str = "../.worktrees";
+/// Ticket 1061: appended to a worktree folder error, so the line names the setting that moves the folder.
+const WORKTREES_DIR_HINT: &str = "; set Settings > Git & Worktrees > Folder for new worktrees (worktrees_dir) to a folder you can write";
+/// v25f: the root `project`'s worktrees go under: the setting, a relative one joined to the project (lexically: the
+/// check above allows only one leading `..`). Ticket 1083: unset is `<user home>/nunchiro/worktrees`: visible, not a `.nunchiro*` name (peer.rs owner_home()
+/// reads those as the data folder), and never inside the data folder (a debug core there refuses the window).
 pub(crate) fn worktree_root_for(
-    home: &Path,
     dir: Option<&Path>,
     project: &Path,
+    user_home: &Path,
 ) -> Result<PathBuf, String> {
-    let Some(d) = dir else {
-        return Ok(home.join("worktrees"));
-    };
+    let default = user_home.join("nunchiro/worktrees");
+    if dir.is_none() && !user_home.is_absolute() {
+        return Err(format!(
+            "the user's home folder is not known{WORKTREES_DIR_HINT}"
+        ));
+    }
+    let d = dir.unwrap_or(&default);
     check_worktrees_dir(d)?;
     if d.is_absolute() {
         return Ok(d.to_path_buf());
@@ -12391,7 +13758,8 @@ pub(crate) fn worktree_root_for(
             parts.next();
             project
                 .parent()
-                .ok_or("the repository has no parent folder")?
+                .ok_or("the repository has no parent folder")
+                .map_err(|e| format!("{e}{WORKTREES_DIR_HINT}"))?
         }
         Some(std::path::Component::CurDir) => {
             parts.next();
@@ -12845,11 +14213,13 @@ pub(crate) struct WorktreePlan {
     base: String,
     label: String,
     creator: Option<String>,       // v1a-16
-    team: Option<String>,          // ticket 990: the lead whose team a created worktree joins
-    from: Option<String>,          // V2-8a
+    token: bool, // ticket 1061: a token's create stays outside the Nunchiro folder
+    team: Option<String>, // ticket 990: the lead whose team a created worktree joins
+    from: Option<String>, // V2-8a
     confirm: Option<WorktreeLoss>, // V2-8a
     // v25f: the `worktrees_dir` setting (where a create puts a new folder) and the branch prefix the one-field create uses.
     dir: Option<PathBuf>,
+    user_home: PathBuf, // ticket 1083: where an unset `dir` lies
     prefix: String,
     /// Ticket 991 (Q7 point 1): `Sessions::take_branch_titles`, applied under worktrees.lock before the operation.
     titles: Vec<(PathBuf, String)>,
@@ -12870,10 +14240,12 @@ impl WorktreePlan {
             base: "HEAD".into(),
             label: String::new(),
             creator: None,
+            token: false,
             team: None,
             from: None,
             confirm: None,
             dir: None,
+            user_home: PathBuf::new(),
             prefix: String::new(),
             titles: vec![],
         }
@@ -13009,9 +14381,20 @@ impl WorktreePlan {
                                 Some(fs::canonicalize(p.parent()?).ok()?.join(p.file_name()?))
                             })
                         });
+                        // Ticket 1061: a create's `--path` may use the old default root only while a record of
+                        // this project lies under it (load() stamps older records with it, so test the root).
+                        let legacy = fs::canonicalize(self.home.join("worktrees")).ok();
+                        let legacy_used = disk.worktrees.iter().any(|w| {
+                            w.project == *project
+                                && legacy.is_some()
+                                && w.root.as_ref().and_then(|r| fs::canonicalize(r).ok()) == legacy
+                        });
                         root = self
                             .known_roots(project, &disk.worktrees)?
                             .into_iter()
+                            .filter(|r| {
+                                restore || legacy_used || *r == root || legacy.as_ref() != Some(r)
+                            })
                             .find(|r| parent.as_deref() == Some(r.join(folder).as_path()))
                             .filter(|r| {
                                 let path = r.join(folder).join(name);
@@ -13039,7 +14422,11 @@ impl WorktreePlan {
                         parent.join(worktree_folder_name(&label, &branch, free)?)
                     }
                 };
-                store::private_dir(&root.join(folder))?;
+                // Ticket 1061 (security): `path` is right under this real, canonical folder.
+                let parent = worktree_parent(&root, folder, self.default_base().as_deref())?;
+                if self.token {
+                    tokens::outside_home(&self.home, &parent)?;
+                }
                 let mut add: Vec<String> = vec!["worktree".into(), "add".into()];
                 let mut stale_base = None;
                 if !exists {
@@ -13508,17 +14895,15 @@ impl WorktreePlan {
     }
     /// v25f: the setting's root for `project`, made (0700) and canonical, as create, restore and adopt record it.
     fn root_for(&self, project: &Path) -> Result<PathBuf, String> {
-        use std::os::unix::fs::DirBuilderExt;
-        let root = worktree_root_for(&self.home, self.dir.as_deref(), project)?;
-        fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(&root)
-            .map_err(|e| format!("worktree folder {}: {e}", root.display()))?;
-        fs::canonicalize(&root).map_err(|e| e.to_string())
+        let root = worktree_root_for(self.dir.as_deref(), project, &self.user_home)?;
+        make_root(&root, self.default_base().as_deref())
+    }
+    fn default_base(&self) -> Option<PathBuf> {
+        self.dir.is_none().then(|| self.user_home.join("nunchiro"))
     }
     /// v25f: where a worktree of `project` may already be, since the setting can move after a removal or a CLI-made
-    /// worktree: the setting's root, the root of any stored record of the project, the old default. Canonical, setting first.
+    /// worktree: the setting's root, the root of any stored record of the project, the unset default, the old
+    /// default. Canonical, setting first.
     // shortcut: a custom root whose only record was removed is forgotten, so Undo there is refused; store past roots if
     // that shows up.
     fn known_roots(&self, project: &Path, stored: &[Worktree]) -> Result<Vec<PathBuf>, String> {
@@ -13529,6 +14914,15 @@ impl WorktreePlan {
                 .filter(|w| w.project == project)
                 .filter_map(|w| w.root.clone()),
         );
+        // Ticket 1061: the unset default (beside the repository) stays known after the setting moves; ticket 1083: so does the
+        // folder it was called until then.
+        for d in [None, Some(Path::new(PREVIOUS_DEFAULT_DIR))] {
+            roots.extend(
+                worktree_root_for(d, project, &self.user_home)
+                    .and_then(|r| fs::canonicalize(r).map_err(|e| e.to_string()))
+                    .ok(),
+            );
+        }
         roots.extend(fs::canonicalize(self.home.join("worktrees")).ok());
         Ok(roots)
     }

@@ -381,10 +381,10 @@ test('tree_in_zone_rows_unchanged', async ({ app, core }) => {
   // A library card dropped on a project row in the zone nests under it.
   await startEdit(app);
   const head = z.locator('.row.head[data-project-path]').filter({ hasText: 'other' });
-  await card(app, 'agents').scrollIntoViewIfNeeded();
-  await drag(app, card(app, 'agents'), head, { release: false });
+  await card(app, 'context').scrollIntoViewIfNeeded();
+  await drag(app, card(app, 'context'), head, { release: false });
   await expect(head).toHaveAttribute('data-hot', '');
   await app.mouse.up();
-  await expect(z.locator('.grp[data-project="other"] .view[data-view="agents"]')).toBeVisible();
+  await expect(z.locator('.grp[data-project="other"] .view[data-view="context"]')).toBeVisible();
   expect(errors).toEqual([]);
 });

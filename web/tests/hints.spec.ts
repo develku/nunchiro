@@ -1,9 +1,9 @@
 // Hint labels by kind (V1A-48; needs 25, 30, 61; ticket 389): s1 prefixes, Shift+kind filter, icon letters, a Korean source,
 // and Settings > Keys > Hints.
 import type { Page } from '@playwright/test';
-import { agentsZone, expect, openWindow, test } from './fixtures';
+import { stripOnTop, expect, openWindow, test } from './fixtures';
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: the a1, a2 hints sit on AGENTS rows, which the default window no longer shows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 /** A keydown as a Korean input source delivers it: the physical code, a Hangul key and keyCode 229. */
 const korean = (page: Page, code: string) =>

@@ -28,6 +28,8 @@ const noLevelWords = async (where: Locator) => expect(await where.evaluateAll((a
 // once it has; an effort in the agent's own word; a model the catalogue does not know by the name it came with.
 test('levels994_pair_words', async () => {
   const { pairText } = await import('../src/lead/level');
+  // Ticket 1100: the window has Codex's list from the core; without one here, a row as the core serves it.
+  (await import('../src/picker/catalog')).setCodexModels([{ value: 'gpt-6.1-sol', label: 'GPT-6.1 Sol', efforts: ['low', 'xhigh'] }]);
   const t = ((key: string) => (key === 'providers.default' ? 'Default' : key)) as never;
   expect(pairText(t, 'claude', { model: 'haiku' })).toBe('Haiku');
   expect(pairText(t, 'claude', { model: 'opus', effort: 'high' })).toBe('Opus · high');
@@ -73,6 +75,8 @@ test('levels994_seats: a seat shows the model it runs on the tree row, the heade
   const row = (id: string) => app.locator(`.row.wt2[data-hint-session="${id}"]`);
   const resting = app.getByRole('button', { name: /resting$/ });
   if (await resting.count()) await resting.first().click();
+  // Ticket 1115 (owner 11-24, workers as work): a lead's worker folds under the lead row; "▸ 1 more" shows its row.
+  await app.locator('.crew').getByRole('button', { name: /^▸ 1 more/ }).click();
   // (A tree row is a narrow place: Codex's "Default · low" is drawn as the effort alone there; levels994_narrow.)
   for (const [seat, level, text, drawn] of [
     [inbox, 'light', 'Haiku', 'Haiku'],
@@ -355,6 +359,7 @@ test('levels994_narrow: narrow places draw the effort alone for an unset model, 
   asSeat(core, token, 'team', 'open', 'Inbox', '--level', 'light');
   const resting = app.getByRole('button', { name: /resting$/ });
   if (await resting.count()) await resting.first().click();
+  await app.locator('.crew').getByRole('button', { name: /^▸ 1 more/ }).click(); // ticket 1115: the worker folds under Main
   const row = app.locator(`.row.wt2[data-hint-session="${code}"]`);
   await expect(row.locator('.lvl-mark')).toHaveText('low');
   await expect(row).toHaveAttribute('aria-label', /Runs on Default · low/);

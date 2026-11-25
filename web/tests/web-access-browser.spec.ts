@@ -12,7 +12,7 @@ test('settings-browser-access-reachable', async ({ app }) => {
   await openWindow(app);
   // Two clicks from the visible Settings control; the toggle starts off and, with nothing paired, an empty state (v25-fix-settings).
   await openBrowserAccess(app);
-  await expect(app.getByRole('switch', { name: 'Allow browser access', exact: true })).not.toBeChecked();
+  await expect(app.getByRole('switch', { name: 'Allow phone and web access', exact: true })).not.toBeChecked();
   // needs 192 (ticket 250 r3): final.html draws the Paired browsers card with its empty state.
   await expect(app.getByRole('heading', { name: 'Paired browsers' })).toHaveCount(1);
   await expect(app.getByText('None yet. Turn on access to get a pairing code.')).toBeVisible();

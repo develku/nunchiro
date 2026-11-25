@@ -12,7 +12,10 @@ const GATE_MS = 15_000;
 /** A window that died during a send-now must not hold its row for good. */
 const BUSY_MS = 30_000;
 
-export type Row = { id: string; text: string };
+/** Ticket 1056: a row sent into Claude's running turn stays, marked, until the transcript shows it (`send` is the core's row). */
+/** `base`: how many user messages with this text the transcript held before the send (an older "yes" is not this one). */
+export type Sent = { send: string; seq: number; at: number; base?: number };
+export type Row = { id: string; text: string; sent?: Sent };
 /** A row just went in, so the next waits for that turn to finish: `seq` is the session's completion count at the send. */
 type Gate = { seq: number; at: number };
 export type Queue = { rows: Row[]; paused?: boolean; gate?: Gate; busy?: { row: string; at: number } };
@@ -23,7 +26,7 @@ function parse(raw: string | null): Store {
   try {
     const all = JSON.parse(raw ?? '{}') as Record<string, Queue>;
     for (const [id, q] of Object.entries(all)) {
-      const rows = Array.isArray(q?.rows) ? q.rows.filter((r) => typeof r?.id === 'string' && typeof r?.text === 'string' && r.text) : [];
+      const rows = Array.isArray(q?.rows) ? q.rows.filter((r) => typeof r?.id === 'string' && typeof r?.text === 'string' && r.text && (r.sent === undefined || typeof r.sent?.send === 'string')) : [];
       if (rows.length) out[id] = { ...q, rows };
     }
   } catch {
@@ -35,8 +38,9 @@ function parse(raw: string | null): Store {
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 const subscribe = (l: () => void) => (listeners.add(l), () => void listeners.delete(l));
-// A spec that imports the app's modules in Node has no window: nothing to listen to there.
-if (typeof window !== 'undefined')
+// A spec that imports the app's modules in Node has no window, or a stub one another spec of its worker left
+// (flow-ack.spec.ts sets window = globalThis): nothing to listen to there.
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function')
   window.addEventListener('storage', (e) => {
     if (e.key === KEY || e.key === null) emit();
   });
@@ -146,7 +150,7 @@ export const setPaused = (id: string, paused: boolean) => {
 export function claimSteer(id: string, rowId: string): Row | undefined {
   const q = read()[id];
   const row = q?.rows.find((r) => r.id === rowId);
-  if (!row || busyRow(q, rowId)) return undefined;
+  if (!row || row.sent || busyRow(q, rowId)) return undefined;
   return change(id, (cur) => ({ ...cur, busy: { row: rowId, at: Date.now() } })) ? row : undefined;
 }
 export const unclaimSteer = (id: string) => void (read()[id] && change(id, ({ busy: _, ...q }) => q));
@@ -154,6 +158,12 @@ export const unclaimSteer = (id: string) => void (read()[id] && change(id, ({ bu
 export const finishSteer = (id: string, rowId: string, s: Session) =>
   void change(id, ({ busy: _, ...q }) => ({ ...q, rows: without(q, rowId), gate: { seq: seqOf(s), at: Date.now() } }));
 
+/** Ticket 1056: Claude took the send-now into its running turn: the row stays, marked as sent, until the transcript shows it. */
+export const markSent = (id: string, rowId: string, sent: Sent) =>
+  void change(id, ({ busy: _, ...q }) => ({ ...q, rows: q.rows.map((r) => (r.id === rowId ? { ...r, sent } : r)) }));
+/** The send did not reach the agent (canceled, stopped, never shown): the row is an ordinary row again, once, and the list waits. */
+export const unsend = (id: string, rowId: string) =>
+  void change(id, (q) => ({ ...q, paused: true, rows: q.rows.map((r) => (r.id === rowId ? { id: r.id, text: r.text } : r)) }));
 /** A row may be typed now: never into a question, where the text would be taken as the answer. */
 const ready = (s: Session) => agentState(s) === 'running' && !s.attention.working && !asks(s);
 
@@ -172,8 +182,8 @@ export function nextRow(s: Session): { row?: Row; retryIn?: number } {
   }
   if (q.paused || !ready(s)) return {};
   if (q.busy && busyRow(q, q.busy.row)) return { retryIn: q.busy.at + BUSY_MS - Date.now() };
-  const top = q.rows[0];
-  return { row: takeRow(s.id, top.id, s) };
+  const top = q.rows.find((r) => !r.sent); // a sent row is the agent's already
+  return top ? { row: takeRow(s.id, top.id, s) } : {};
 }
 
 // Q7 point 16: texts that went in as a steer, so their bubble says so. Per session, the newest few, in this window's storage.

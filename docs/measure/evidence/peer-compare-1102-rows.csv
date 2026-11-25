@@ -1,0 +1,5 @@
+# Rows of the timed GUI run of 2026-11-02 (main checkout .scratch/peer-compare-1102/measure.csv, lines 1, 46, 62, 71) cited by tasks.json
+run_sha,date,area,task,app,app_version,result,clicks,keys,typed_strings,seconds,reachable,first_path,best_path,shots,notes
+ce637975,2026-11-02,chat,chat-5,orca,1.4.245,done,1,0,"",2,visible,"right panel Changes > hello.ts","",chat-5-orca.png,"Diff opens as editor tab 'hello.ts (diff)' with per-hunk revert and prev/next change; Changes panel has commit message + Stage All. Scope: working tree."
+ce637975,2026-11-02,chat,chat-5,herdr,0.1.11,done,1,0,"",2,visible,"Changes (top right)","",chat-5-herdr.png,"Newer than plan expectation (N): Changes panel with 'A src/hello.ts +1', inline diff, Commit message + Commit. Scope: working tree."
+584d3466,2026-11-02,system,system-2,orca,1.4.245,done,2,0,,,visible,tab + > New Terminal,Cmd+T,system-2-orca.png,"Menu also lists agents (Claude, Codex...) with keys."

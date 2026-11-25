@@ -1,0 +1,46 @@
+# Measure: the Nunchiro scorecard (ticket 1098)
+
+The scorecard scores 29 parts of Nunchiro 0 to 100, each on its own (parts 26 to 29 added by the owner on 2026-11-24; part 28, product direction, is a judgment part). Open [scorecard.html](scorecard.html).
+
+## Files
+
+- [rubric.md](rubric.md): the method of every part, the number anchors and the rubric checks. Fixed between runs.
+- [tasks.md](tasks.md): the 12 peer tasks and how a cell is counted.
+- tasks.json: the peer task table (steps, result, evidence and shots per app).
+- parts.json: per part its method, the rubric verdicts with file:line evidence, and the peer-row scores.
+- results-<date>.json: the figures of one measure run (median, range and every value).
+- shots/: Nunchiro pictures from the run, and peer pictures from the 2026-11-02 timed run.
+
+## Run it again (after each phase)
+
+1. `MEASURE_TARGET=<a cargo target folder on a roomy disk> python3 -B scripts/measure/scorecard.py run` builds the
+   isolated RC and measures (about 15 minutes; add `--no-build` to reuse the last build in .scratch/startup). It writes
+   results-<today>.json here. Run it with the `NUNCHIRO_*` variables unset (`env -u NUNCHIRO_HOME -u NUNCHIRO_TOKEN
+   -u NUNCHIRO_SESSION`): the script drops them anyway, but a session's CLI should not see them either.
+2. Re-apply the rubric checks to origin/main (a fresh agent with rubric.md) and update the verdicts in parts.json.
+   Re-count the peer tasks when a peer or Nunchiro changed a task's path, in tasks.json.
+3. `python3 -B scripts/measure/scorecard.py dev --target <a throwaway cargo target folder>` measures part 26 (cold and warm
+   build, web build, the gate's Rust test stage, the largest files, files shared by today's open lanes; about 15-25
+   minutes, heavy on the CPU) and writes dev-<today>.json.
+4. `python3 -B scripts/measure/scorecard.py ops --clones <a throwaway folder>` reads the mainwatch and landloop logs (read
+   only) for deploy stability and checks the supply chain: lockfiles, audit tools (nothing is fetched), an SBOM, and two
+   clean clones of origin/main built and compared (about 6 minutes). Writes ops-<today>.json.
+5. `python3 -B scripts/measure/scorecard.py page results-<date>.json` renders scorecard.html (with the newest dev and ops files).
+
+The run opens the app window (an own copy under its own bundle id). Every process it starts gets a fresh HOME and
+NUNCHIRO_HOME in the system temp folder (from run 4 of 2026-11-24; runs 1-3 gave the window phase's core and window the
+real HOME, so they could read ~/.claude). Code that reads the passwd home instead of HOME is not redirected. The memory and CPU window is a normal launch, so it takes the front once per repeat; the launch timings run
+in the gate mode, which stays behind. The run lists, with lsof, the open files of the window, its WebKit helpers, the core and everything under it,
+once per launch and once per window phase, and fails if one is under ~/.nunchiro, ~/.claude or ~/.codex (runs 1-3
+checked only ~/.nunchiro and only the core and window processes). lsof sees open files at that moment only. The run
+also fails if the owner's core is not the same process before and after.
+
+`dev --target` and `ops --clones` empty a folder only when they made it: a new path gets a `.scorecard-owned` marker,
+and an existing folder without it is refused, as are /, a home or a folder above one, this checkout, any git checkout
+and the owner's Nunchiro home. The `dev` test stage runs detached (launchd as its parent), because 29 holder tests
+fail under a Nunchiro session (crates/nunchiro-core/src/peer.rs under_holder); it is bounded at one hour and cannot be
+stopped from the session that started it.
+
+A run overwrites docs/measure/shots/nunchiro-launch.jpg and nunchiro-20-sessions.jpg on its first repeat, also with
+--out. An "install" is a copy of the bundle (ditto) into a fresh folder, a --version call and a first launch; it is not
+the self-update path or a Finder drag.

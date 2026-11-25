@@ -31,18 +31,19 @@ test('A20 onboarding_no_blank_band: Quick setup starts right under the page intr
   expect(gap).toBeLessThan(40); // was 58: the section rule's 30 px room for an outside title, over the body's own 28 px
 });
 
-test('A8 A19 quick_setup_words_match: names the agent it starts, says what the keys do, and the button starts it in the added project', async ({ app, core }) => {
+test('A8 A19 quick_setup_words_match: names the agent it starts, says what the keys do, and Start starts it in the chosen folder (ticket 1123)', async ({ app, core }) => {
   await folderPanel(app, core.project('picked'));
   await app.goto('/');
-  await expect(quick(app)).toContainText('One button adds your first project and starts Claude in it.', { timeout: 15_000 });
+  await expect(quick(app)).toContainText('Pick a folder and tell Claude what to do.', { timeout: 15_000 });
   await expect(quick(app)).toContainText('to put a letter on every button');
   await expect(quick(app)).not.toContainText('hint keys');
   // The agent line names a button, and that button is on this card.
   await expect(quick(app)).toContainText(/[Pp]ress (Sign in|Check)\.|Checking its sign-in/); // look 1117 v6r: "…, press Sign in." when the check gave no answer
   await expect(quick(app).getByRole('button', { name: /^(Sign in|Check)/ })).toBeVisible({ timeout: 20_000 });
-  await quick(app).getByRole('button', { name: 'Use recommended settings and add a project' }).click();
-  await app.getByRole('dialog', { name: 'Add project', exact: true }).getByRole('button', { name: /^Browse folder/ }).press('Enter');
-  // No pick in New tab: the agent starts in the folder just added.
+  // Ticket 1123 T1: no agent history here, so the Folder row is Choose folder; Start then starts the agent in it.
+  await quick(app).getByRole('button', { name: 'Choose folder…' }).click();
+  await quick(app).getByRole('button', { name: 'Start Claude' }).click();
+  // No pick in New tab: the agent starts in the folder just chosen.
   await expect.poll(() => running(core), { timeout: 15_000 }).toContainEqual(['picked', 'claude']);
   await expect(app.getByRole('dialog', { name: 'New tab' })).toHaveCount(0);
 });

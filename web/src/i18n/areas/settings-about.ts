@@ -72,7 +72,7 @@ export const en = {
   'about.updates.desc': 'Check for a new build.',
   'about.updates.check': 'Check now',
   // English only until the pre-release pass (owner 11-21).
-  'about.updates.off': 'This build does not update itself: only the official signed app and the RC check for new builds, and only when their update source is found.',
+  'about.updates.off': 'This build does not update itself: only the installed Nunchiro.app does. A test build keeps its own home and never updates.',
   'about.licences.row': 'Open source licences',
   'about.licences.desc': '{n} notices for code and data adapted into Nunchiro.',
   'about.licences.view': 'View licences',

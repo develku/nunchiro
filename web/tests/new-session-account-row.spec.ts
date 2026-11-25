@@ -8,10 +8,10 @@ import path from 'node:path';
 import { restartStart } from '../src/PermissionNeeded';
 import type { Session } from '../src/types';
 import { openRow } from './accounts-rows';
-import { expect, openWindow, test, type Core, agentsZone } from './fixtures';
+import { expect, openWindow, test, type Core, stripOnTop } from './fixtures';
 import { closeSettings, openSettings } from './settings-modal';
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: these specs read the AGENTS rows, which the default window no longer shows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const LABEL = '회사 계정';
 const ID = '0123456789abcdef0123456789abcdef';
@@ -55,7 +55,7 @@ test('new-session-account-row: hidden while the agent has one account', async ({
   await expect(dlg.locator('.nt-name', { hasText: /^Claude/ })).toHaveText(['Claude']); // one plain row (its key chip is a sibling of the name)
 });
 
-test('new-session-account-row: shown with two, signed-out marked, prefilled with the project last account, label on tab and AGENTS', async ({ app, core }) => {
+test('new-session-account-row: shown with two, signed-out marked, prefilled with the project last account, label on tab and in the tree row tip', async ({ app, core }) => {
   setup(core, true);
   const alpha = core.project('alpha');
   const beta = core.project('beta');
@@ -74,7 +74,7 @@ test('new-session-account-row: shown with two, signed-out marked, prefilled with
   const [started] = snap(core);
   expect(started.config_dir).toBe(path.join(fs.realpathSync(core.home), 'accounts/claude', ID));
   await expect(app.locator(`.tab[data-tab="${started.id}"] .tacct`)).toHaveText(LABEL);
-  await expect(app.locator(`.ar[data-agent="${started.id}"] .s`)).toContainText(`alpha · ${LABEL} · `);
+  await expect(app.locator(`button.row.wt2[data-menu-session="${started.id}"] .tip`)).toContainText(LABEL);
   await app.screenshot({ path: `../.scratch/shots/account-tab-agents-${test.info().project.name}.png` });
 
   // The same project lists that account first; another project lists "Your own" first.
@@ -89,7 +89,7 @@ test('new-session-account-row: shown with two, signed-out marked, prefilled with
   await expect.poll(() => snap(core).find((s) => s.project === beta)?.account ?? 'own').toBe('own');
   const own = snap(core).find((s) => s.project === beta)!;
   await expect(app.locator(`.tab[data-tab="${own.id}"] .tacct`)).toHaveCount(0);
-  await expect(app.locator(`.ar[data-agent="${own.id}"] .s`)).not.toContainText(LABEL);
+  await expect(app.locator(`button.row.wt2[data-menu-session="${own.id}"] .tip`)).not.toContainText(LABEL);
 });
 
 test('new-session-account-row: a restart of a fresh account session stays on its account', () => {

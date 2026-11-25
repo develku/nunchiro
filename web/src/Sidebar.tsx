@@ -6,30 +6,29 @@
 import { ErrorDetails, tipError } from './errors';
 import { createPortal } from 'react-dom';
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKey, type ReactNode } from 'react';
-import { basename, buildTree, withNames, withoutClosedHeads, byUrgency, cleanable, EXPAND_ALL, failedIn, foldGroup, expandedList, groupFolded, leaves, place, rowState, sameKeys, urgencyOf, withListed, listedName, type Group, type Machine, type ProjectGroup, type RowState, type Worktree, type WorktreeFact } from './tree';
-import { asks, decisionLines, type Item, type Line } from './tree/decisions'; // V2-8e
+import { buildTree, isReviewer, leadWorkers, withNames, withoutSeatAsks, withoutClosedHeads, byUrgency, cleanable, EXPAND_ALL, failedIn, foldGroup, expandedList, groupFolded, leaves, place, rowState, sameKeys, urgencyOf, withListed, listedName, type Group, type Machine, type ProjectGroup, type RowState, type Worktree, type WorktreeFact } from './tree';
+import { asks, decisionLines, placeOfCard, teamWaiting, waitingItems, type Item, type Line } from './tree/decisions'; // V2-8e
 import { DecisionRow, type OnAnswer } from './tree/DecisionLine'; // V2-8e
-import { CleanupLine, HeadName, WtRow } from './tree/RowIcon';
+import { CleanupLine, HeadName, NeedYou, needTip, teamOpen, WtRow } from './tree/RowIcon';
 import { Gather, placeOf, Strip, stripSessions, urgentQueue, useHidden, type Tone } from './tree/strip'; // ticket 388
 import { DoneBars, DonePopover, JustRow } from './tree/DoneBars'; // ticket 1022 (replaces ticket 294's "N done" fold)
 import { ended, finishedAt, isJust, isToday, JUST_MS, nextMidnight, noteEnds } from './tree/finished';
-import { makeT, type Lang } from './i18n';
 import { enT, plural, type ProjectTree, type T } from './tree/state';
 import { RenameField, type Worktrees } from './tree/worktrees'; // V2-8a
 import './tree/tree.css';
 import { SubViews, type SubViewsCtx } from './tree/SubViews';
-import { PastChats } from './tree/PastChats'; // ticket 392
 import { KidCount, Kids, useKids, type Nest } from './tree/kids'; // V2-CF4
-import { CacheTimer } from './tree/CacheTimer'; // ticket 257
 import { KidPeek, type Peek } from './tree/KidPeek'; // needs 169
 import { Icon } from './icons/Icon';
 import { useHeadHold } from './tree/headHold'; // TREEHEAD-FREEZE
 import { foldOf, navKey as keyKind, navMove, ROW, rove, treeRows } from './tree/keynav'; // V2.5-61
 import { agentState, noCheckout, shownStatus, status, withResumed, type Decision, type Session, type TreeState } from './types';
 import type { CoreClient } from './api';
-import { askAddProject, askNew, askStop } from './NewSession'; // v1a-59
+import { askAddProject, askNew } from './NewSession'; // v1a-59
+import { useFeatureSetting } from './settings/useFeatureSetting';
+import { DEFAULT_AGENT } from './settings/onboarding/state';
+import { leadAgent } from './settings/agents/newDefaults';
 import { ProjectIcon, ProjectTools } from './tree/ProjectTools'; // V2.5-15
-import { push as pushUndo } from './undo/store';
 import { useProjectDrag } from './tree/dragProject'; // needs 171
 
 /** needs 49: with no pointer move or key inside the sidebar for this long, pending changes apply (a parked pointer must not freeze waiting items forever). */
@@ -39,12 +38,12 @@ const IDLE_MS = 5000;
 const overlay = (n: EventTarget | null) => n instanceof Element && !!n.closest('.cmenu, .palette');
 
 import { leadOf, leadSeatMate, useTeam } from './lead/lead'; // ticket 990
+import { focusTeam, useTeamAt } from './lead/team'; // ticket 1067
 import { useAcpNames } from './lead/level';
 import { askLeader } from './lead/LeaderDialog';
 import { HomeGroup, homeMates } from './lead/HomeGroup';
 export { sessionName } from './sessionNames'; // ticket 491: the naming rule moved there, shared with the card and strip
 import { sessionName } from './sessionNames';
-const base = (p: string) => p.replace(/\/+$/, '').split('/').pop() || p;
 const withoutNotes = (session: Session): Session => ({ ...session, pending: asks(session.pending) });
 
 
@@ -68,6 +67,8 @@ interface Props {
   signal?: boolean;
   /** v1b-18: board decision items (kind `board`), placed by project. */
   board?: Decision[];
+  /** Ticket 1067: what the lead's pill counts, as the Team view does (`teamWaiting`): Decisions' sessions and the owner cards. */
+  needYou?: { sessions: Session[]; owner: Decision[] };
   /** V2-9a: groups, pins and fold state from tree.toml. */
   projects: ProjectTree;
   /** TREEROWS: what V2-8a and V2-8b know about each worktree, by path (PR state, folder gone, new). Empty today. */
@@ -86,183 +87,15 @@ interface Props {
   t?: T;
   /** V2-CF4: the core client, for the session's sub-agent rows. Absent, none are shown. */
   core?: CoreClient;
+  /** Ticket 1130 C1: the project row's "+" starts this agent in that folder at once. Absent, "+" opens New tab. */
+  onStartIn?: (project: string, kind: 'claude' | 'codex') => void;
 }
 
-
-/** V1A-59: rows Clear done hid, kept in this window's storage; a broken store hides nothing. */
-// Mirrors the core's CLOSE_UNDO_MS (sessions.rs); the core does not expose it. undo-pause.spec.ts fails when they differ.
-const CLOSE_UNDO_MS = 10_000;
-const CLEARED = 'nunchiro.agentsCleared.v1';
-const loadCleared = (): string[] => {
-  try {
-    const v = JSON.parse(localStorage.getItem(CLEARED) ?? '[]');
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
-  } catch {
-    return [];
-  }
-};
-const done = (s: Session) => s.state === 'closed' || agentState(s) === 'exited'; // ticket 286: an ended agent is done
-
-/** V1A-59: running sessions first, then the rest, each in spawn order. */
-export const agentsOrder = (sessions: Session[], order: string[]) => {
-  const o = orderSessions(sessions, order);
-  return [...o.filter((s) => s.state === 'running'), ...o.filter((s) => s.state !== 'running')];
-};
-
-/** The catalogue for <html lang>, which App sets from the language setting (useAppSettings); redone when it changes. */
-function useHtmlLangT(): T {
-  const [lang, setLang] = useState(() => document.documentElement.lang);
-  useEffect(() => {
-    const ob = new MutationObserver(() => setLang(document.documentElement.lang));
-    ob.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
-    return () => ob.disconnect();
-  }, []);
-  return useMemo(() => makeT((lang || 'en') as Lang, navigator.language), [lang]);
-}
-
-export function Agents(p: Pick<Props, 'sessions' | 'order' | 'current' | 'onOpen'> & { core?: CoreClient }) {
-  const list = useRef<HTMLDivElement>(null);
-  const content = useRef<HTMLDivElement>(null);
-  const [below, setBelow] = useState(0);
-  const [cleared, setCleared] = useState(loadCleared);
-  // needs 49: while the pointer or focus is in the list, rows keep the order they had on entry; new ones append.
-  const [held, setHeld] = useState<string[] | null>(null);
-  const inside = useRef({ pointer: false, focus: false });
-  const t = useHtmlLangT(); // the Agents zone gets no catalogue from the window (windows.tsx); <html lang> is the window's language
-  const live = agentsOrder(p.sessions, p.order).filter((s) => !cleared.includes(s.id));
-  const byId = new Map(live.map((s) => [s.id, s]));
-  const ordered = held ? [...held.filter((id) => byId.has(id)).map((id) => byId.get(id)!), ...live.filter((s) => !held.includes(s.id))] : live;
-  const hold = () => setHeld((h) => h ?? ordered.map((s) => s.id));
-  const section = useRef<HTMLElement>(null);
-  const release = () => {
-    // A focused row or button removed under the focus (Stop, Clear done) sends no blur: ask where focus is now.
-    inside.current.focus = !!section.current?.contains(document.activeElement);
-    if (!inside.current.pointer && !inside.current.focus) setHeld(null);
-  };
-  const target = p.current ?? ordered.at(-1)?.id;
-  const keep = (next: string[]) => {
-    setCleared(next);
-    try {
-      localStorage.setItem(CLEARED, JSON.stringify(next));
-    } catch {
-      // Storage blocked: cleared for this window only.
-    }
-  };
-  const clear = () => {
-    // Only rows still present: ids of sessions the core forgot drop out of the store.
-    const hidden = p.sessions.filter(done).map((s) => s.id).filter((id) => !cleared.includes(id));
-    if (!hidden.length) return;
-    keep([...cleared.filter((id) => p.sessions.some((s) => s.id === id)), ...p.sessions.filter(done).map((s) => s.id)]);
-    pushUndo({ label: `Cleared ${hidden.length} done session${hidden.length === 1 ? '' : 's'}`, undo: () => keep(cleared) }); // V2-6a
-  };
-  // V2-6d: a stopped or done row closes at once; the core keeps it 10 s for the status line's Undo.
-  const close = (s: Session, core: CoreClient) => {
-    const deadline = Date.now() + CLOSE_UNDO_MS; // taken before the request, so never later than the core's own window
-    return core.request({ op: 'close', id: s.id }).then(
-      () => pushUndo({ label: `Closed ${sessionName(s)}`, undo: () => core.request({ op: 'close_undo', id: s.id }), deadline }),
-      () => {}, // shortcut: a refused close only keeps its row (no message line here); show the reason if users miss it
-    );
-  };
-  // V1A-58: rows cut off at the list's bottom edge show as "+N", so a short zone never hides them silently. Counted
-  // once a frame, however many scroll or resize events arrive.
-  const frame = useRef(0);
-  const count = () => {
-    if (frame.current) return;
-    frame.current = requestAnimationFrame(() => {
-      frame.current = 0;
-      const l = list.current;
-      if (!l) return;
-      const bottom = l.getBoundingClientRect().bottom;
-      setBelow([...l.querySelectorAll('.ar')].filter((e) => e.getBoundingClientRect().bottom > bottom + 0.5).length);
-    });
-  };
-  const reveal = useRef(() => {});
-  reveal.current = () => {
-    if (target) list.current?.querySelector(`[data-agent="${CSS.escape(target)}"]`)?.scrollIntoView({ block: 'nearest' });
-    count();
-  };
-  useEffect(() => reveal.current(), [target, ordered.length]);
-  // A resize only recounts: it must not snap back a list the user scrolled away. The content box changes with any
-  // row's height, the list box with the zone's.
-  useEffect(() => {
-    const ro = new ResizeObserver(count);
-    if (list.current) ro.observe(list.current);
-    if (content.current) ro.observe(content.current);
-    const away = () => ((inside.current = { pointer: false, focus: false }), setHeld(null));
-    // WebKit sends no pointerleave once the hovered node (Clear done, Stop) is removed: entering anything outside ends it.
-    const over = (e: PointerEvent) => inside.current.pointer && !section.current?.contains(e.target as Node) && ((inside.current.pointer = false), release());
-    window.addEventListener('blur', away);
-    document.addEventListener('pointerover', over);
-    return () => (ro.disconnect(), cancelAnimationFrame(frame.current), window.removeEventListener('blur', away), document.removeEventListener('pointerover', over));
-  }, []);
-  const anyDone = live.some(done);
-  const core = p.core;
-  return (
-    <section
-      ref={section}
-      className="agents"
-      aria-label={t('mw.agents.title')}
-      onPointerEnter={() => ((inside.current.pointer = true), hold())}
-      onPointerLeave={() => ((inside.current.pointer = false), release())}
-      onFocus={() => ((inside.current.focus = true), hold())}
-      onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && ((inside.current.focus = false), release())}
-    >
-      <div className="ph">
-        <span className="grip" aria-hidden>
-          ⋮⋮
-        </span>
-        {t('mw.agents.title')}
-        <span className="r">
-          {t('tree.agentsCount', { running: live.filter((s) => agentState(s) === 'running').length, total: live.length })}
-          {below > 0 && (
-            <>
-              {' · '}
-              <span className="amore" title={t('mw.agents.more', { n: below })}>
-                +{below}
-              </span>
-            </>
-          )}
-          {anyDone && (
-            <button className="aclear" title={t('mw.agents.clearTip')} onClick={clear}>
-              {t('mw.agents.clear')}
-            </button>
-          )}
-        </span>
-      </div>
-      <div className="alist" ref={list} onScroll={count}>
-        <div ref={content}>
-          {ordered.map((s) => (
-            <div key={s.id} className="arow">
-              <button className="ar" aria-current={s.id === p.current} onClick={() => p.onOpen(s.id)} data-agent={s.id} data-menu="agents" data-menu-session={s.id} data-hint-kind="agent" data-hint-session={s.id} data-tip={`${sessionName(s)} · ${basename(s.project)}`} data-tip-clip="">
-                <i className="st" data-s={shownStatus(s)} data-problem={s.problem?.case /* V2-5b */} />
-                <span className="n">{sessionName(s)}</span>
-                <span className="s">
-                  {base(s.project)} · {s.account && `${s.account} · ` /* V2-2b */}
-                  {t(`mw.status.${shownStatus(s)}`)}
-                  <CacheTimer ids={[s.id]} t={t} /> {/* ticket 257 */}
-                </span>
-              </button>
-              {s.state === 'running' ? (
-                <button className="astop" aria-label={t('mw.agents.stop', { name: sessionName(s) })} title={t('mw.agents.stopTip')} onClick={() => askStop(s.id)}>
-                  <Icon name="square-fill" size={12} />
-                </button>
-              ) : (
-                core && (
-                  <button className="astop" aria-label={t('mw.agents.close', { name: sessionName(s) })} title={t('mw.agents.closeTip')} onClick={() => void close(s, core)}>
-                    <Icon name="x" size={12} />
-                  </button>
-                )
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 export function Tree(p: Props) {
   const t = p.t ?? enT;
+  const [defaultAgent] = useFeatureSetting(DEFAULT_AGENT);
+  const quickKind = leadAgent(defaultAgent, p.sessions) as 'claude' | 'codex' | undefined;
   const [toolError, setToolError] = useState('');
   // V2-CF4: one read per running session, window only; a shell or a silent ACP agent contributes none. `now` is that
   // read's own clock, so a child's "working 1m" moves with it and not on a timer of its own.
@@ -286,10 +119,10 @@ export function Tree(p: Props) {
   const peekKid = peek && (flat(kids.get(peek.session) ?? []).find((k) => k.id === peek.kid.id) ?? peek.kid); // its state word follows the row
   /** The row's own session children, while open, right under it (option A: nothing extra while folded). */
   const kidsUnder = (sessions: Session[]) =>
-    sessions.map((s) => <Kids key={`kids-${s.id}`} id={s.id} kids={kids.get(s.id) ?? []} open={kidsOpen.has(s.id)} now={kidsNow} onOpen={(k) => openKid(s.id, k)} t={t} />);
+    sessions.map((s) => <Kids key={`kids-${s.id}`} id={s.id} kids={kidsOf(s.id)} open={kidsOpen.has(s.id)} now={kidsNow} onOpen={(k) => openKid(s.id, k)} t={t} />);
   /** The row's `↳ N`, at its right end; the words are in the label and the tooltip only. */
   const kidsCount = (sessions: Session[], name: string, over = false) => {
-    const list = sessions.flatMap((s) => kids.get(s.id) ?? []);
+    const list = sessions.flatMap((s) => kidsOf(s.id));
     const ids = sessions.map((s) => s.id);
     return list.length ? <KidCount ids={ids} name={name} kids={list} open={ids.every((id) => kidsOpen.has(id))} onToggle={() => toggleKids(ids)} over={over} t={t} /> : null;
   };
@@ -299,13 +132,31 @@ export function Tree(p: Props) {
   useAcpNames(p.core, p.sessions.some((s) => s.kind === 'acp' && !!s.level)); // ticket 994
   // A store that throws (private window, blocked site data) must not take the window down: the suggestion shows, off for this run only.
   const [leadOff, setLeadOff] = useState(() => { try { return localStorage.getItem(LEAD_OFF) === '1'; } catch { return false; } });
-  // Ticket 1032: the group itself shows with no Home teammate too (its "Set up" row); the folder stays a project head until one exists.
+  // Ticket 1032: the group itself shows with no Home teammate too (its "Set up" row); 1130 C7: its sessions sit there too.
   const homeOn = !!team.home && homeMates(team).length > 0;
-  const treeSessions = useMemo(() => (homeOn ? p.sessions.filter((s) => s.project !== team.home) : p.sessions), [homeOn, team.home, p.sessions]);
+  // Ticket 1067: a seat (parent or teammate set, not the lead) of a project with a lead shows no owner-waiting mark; its asks are the lead row's pill.
+  // Ticket 1115 step 1: a running lead's workers fold under its row (renderProject). `rawOf` is a worker as the core sent
+  // it, with any asks withoutSeatAsks moved to the lead's pill, so one that needs the owner comes up on its own row.
+  const workers = useMemo(() => leadWorkers(p.sessions, team, listed ?? []), [p.sessions, team, listed]);
+  // Review r2 (mockup panel 2): in an open project and group a worker's ask stays on the worker's own row (no pill, the
+  // lead keeps its own state); folded, the 1067 pill on the lead's row carries it, as there is no worker row to see.
+  const pt = p.projects.tree;
+  const kept = useMemo(() => {
+    const open = (project: string) => !p.collapsed.includes(project) && !(homeOn && project === team.home) && !pt.groups.some((gr) => gr.projects.includes(project) && groupFolded(pt, gr.name));
+    return new Set(p.sessions.filter((s) => workers.has(s.id) && open(s.project)).map((s) => s.id));
+  }, [p.sessions, workers, p.collapsed, pt, homeOn, team.home]);
+  const { sessions: quietSeats, hushed } = useMemo(() => withoutSeatAsks(p.sessions, team, kept), [p.sessions, team, kept]);
+  // The pill counts what the lead's row carries: not a kept worker's ask, which its own row shows.
+  const needShown = useMemo(() => p.needYou && { ...p.needYou, sessions: p.needYou.sessions.filter((s) => !kept.has(s.id)) }, [p.needYou, kept]);
+  const rawOf = (s: Session) => p.sessions.find((x) => x.id === s.id) ?? s;
+  // A worker that folds under its lead is no `↳` child of the lead's row as well.
+  const kidsOf = (id: string) => (kids.get(id) ?? []).filter((k) => !(k.session && workers.has(k.id)));
+  // Ticket 1130 C7: with no Home teammate too, the group lists the folder's sessions (under its set-up row).
+  const treeSessions = useMemo(() => (team.home ? quietSeats.filter((s) => s.project !== team.home) : quietSeats), [team.home, quietSeats]);
   // Look 1117 v11 C NC6: with no Home teammate the Home folder is a project head; it reads "Home", never its folder's "home".
   const homeWord = t('assistants.title');
   const named = useMemo(() => (team.home ? { ...p.projects.tree, names: { [team.home]: homeWord, ...p.projects.tree.names } } : p.projects.tree), [team.home, p.projects.tree, homeWord]);
-  const live = useMemo(() => withNames(withListed(withoutClosedHeads(buildTree(treeSessions, p.order, p.board, p.projects.tree.added), p.projects.tree), listed ?? []), named), [treeSessions, p.order, p.board, p.projects.tree, listed, named]); // v1b-18: board; V2-8a: listed worktrees
+  const live = useMemo(() => withNames(withListed(withoutClosedHeads(buildTree(treeSessions, p.order, p.board, p.projects.tree.added, hushed), p.projects.tree), listed ?? []), named), [treeSessions, p.order, p.board, p.projects.tree, listed, named, hushed]); // v1b-18: board; V2-8a: listed worktrees
   const facts = p.wt?.facts ?? p.facts;
   const [held, setHeld] = useState<{ tree: Machine[]; items: Map<string, Decision[]>; pt: TreeState } | null>(null);
   // V2-8a: a worktree created, renamed or removed is the user's own act: the held rows take it at once.
@@ -410,13 +261,15 @@ export function Tree(p: Props) {
     ob.observe(document.body, { childList: true, subtree: true });
     return () => (ob.disconnect(), window.clearTimeout(wait));
   }, [!held]); // eslint-disable-line react-hooks/exhaustive-deps
-  const byId = withResumed(new Map(p.sessions.map((s) => [s.id, s])), p.sessions); // a resumed lead's merge card names its old id (look v13 B N13-S3-3)
+  const byId = withResumed(new Map(quietSeats.map((s) => [s.id, s])), quietSeats); // a resumed lead's merge card names its old id (look v13 B N13-S3-3)
   // Ticket 286 item 2: closing the session whose row holds focus ends the hold: the row goes (focus moves to its neighbour) and a
   // session that ended meanwhile shows. Without it the closed row stayed, with the tree frozen, until the idle bound.
   useEffect(() => {
     if (!held) return;
     const id = document.activeElement?.closest<HTMLElement>('.row.wt2')?.dataset.menuSession;
-    if (id && !byId.has(id)) drop.current(true, true);
+    // Ticket 1115 step 1: the core keeps a closed row listed (for Undo), so "closed" counts as gone here too; without it a
+    // row closed from its own menu stayed in the tree while focus was in it.
+    if (id && (byId.get(id)?.state ?? 'closed') === 'closed') drop.current(true, true);
   }, [p.sessions, held]); // eslint-disable-line react-hooks/exhaustive-deps
   const liveGroup = new Map(live.flatMap((m) => m.groups.map((g) => [g.project, g] as const)));
   const shown = held?.tree ?? live;
@@ -515,10 +368,17 @@ export function Tree(p: Props) {
   // Ticket 1022: a project's finished main-folder sessions (failed ones keep their row): those in their 10 minutes, and
   // those of today after them (the head's hollow bars). A row the owner moved to done has no 10 minutes.
   const settled = (s: Session) => !!p.wt?.settled.has(s.id);
-  const finishedOf = (main: Session[], now: number) => {
-    const quiet = main.map((s) => byId.get(s.id) ?? s).filter((s) => (ended(s) || settled(s)) && status(s) !== 'failed');
-    const justs = quiet.filter((s) => !settled(s) && isJust(s, now));
-    return { justs, today: quiet.filter((s) => !justs.includes(s) && isToday(s, now)) };
+  const finishedOf = (g: Pick<Group, 'main' | 'worktrees'>, now: number) => {
+    const liveOf = (s: Session) => byId.get(s.id) ?? s;
+    const done = (s: Session) => (ended(s) || settled(s)) && status(s) !== 'failed';
+    const quiet = g.main.map(liveOf).filter(done);
+    // Ticket 1063: a worktree row whose sessions all finished (none failed) leaves as well: at once when every one is closed
+    // or its worktree record is gone (a closed session's folder must not bring the row back), else after the 10 minutes.
+    const rows = g.worktrees.filter((w) => w.sessions.length && w.sessions.every((s) => done(liveOf(s))));
+    const fading = rows.filter((w) => managed(w.path) && !w.sessions.every((s) => liveOf(s).state === 'closed')).flatMap((w) => w.sessions.map(liveOf));
+    // Ticket 1115 step 1: a session closed by hand, and a lead's worker, leave at once: no "just finished" row (History keeps them).
+    const justs = [...quiet, ...fading].filter((s) => !settled(s) && s.state !== 'closed' && !workers.has(s.id) && isJust(s, now));
+    return { justs, today: [...quiet, ...rows.flatMap((w) => w.sessions.map(liveOf))].filter((s) => !justs.includes(s) && isToday(s, now)), rows: new Set(rows.map((w) => w.path)) };
   };
   // Ticket 1022: the project whose hollow bars' popover is open, and the bars it hangs from.
   const [donePop, setDonePop] = useState<{ project: string; anchor: HTMLButtonElement } | null>(null);
@@ -591,7 +451,7 @@ export function Tree(p: Props) {
   // browser sees the mouse, so it would count as keyboard focus (:focus-visible: the ring and ⋯ over the row's time).
   const focusRow = (e: { target: EventTarget; pointerType: string }) => e.pointerType !== 'touch' && (e.target as Element).closest<HTMLElement>('.row.wt2')?.focus({ focusVisible: false });
   // `pre`: under a folded group the row is the only one for its project, so it names the project too (mockup ③ "lumen · rehfix").
-  const wtRow = (w: Worktree, state: ReturnType<typeof rowState>, sessions: Session[], sid: string | undefined, lines: Line[] = [], folded = false, pre?: string) => {
+  const wtRow = (w: Worktree, state: ReturnType<typeof rowState>, sessions: Session[], sid: string | undefined, lines: Line[] = [], folded = false, pre?: string, tag?: string) => {
     const l = managed(w.path);
     const wt = p.wt;
     // V2.5-55 (needs 178 B1): a working or waiting main-folder session's own row (path `main:<id>`): its menu is `treerow`, F2 renames it.
@@ -606,10 +466,14 @@ export function Tree(p: Props) {
     const selected = sessions.some((s) => s.id === p.current) || (!sessions.length && !!l && wt?.selected === l.path); // a row with a session shows the active session, not a focus selection
     const count = asks(lines[0]?.items ?? []).length; // N12-S2-4: a background note is no ask to count
     const pr = facts?.get(w.path)?.pr?.number;
-    const make = (onOpen: () => void) => <WtRow name={name} pre={pre} state={pr ? { ...state, pr } : state} sessionId={sid} jumpKey={sid ? p.tabKeyOf?.(sid) : undefined} selected={selected} count={count > 1 ? count : undefined} since={state.at || undefined} onOpen={onOpen} seat={sessions.length === 1 ? sessions[0] : undefined} cacheIds={sessions.map((s) => s.id)} menu={l && wt ? 'worktree' : main ? 'treerow' : undefined} menuTitle={l && wt ? t('tree.rowMenuTitle', { name }) : main ? t('tree.sessionMenuTitle', { name }) : undefined} t={t} />;
+    const make = (onOpen: () => void) => <WtRow name={name} pre={pre} state={pr ? { ...state, pr } : state} sessionId={sid} jumpKey={sid ? p.tabKeyOf?.(sid) : undefined} selected={selected} count={count > 1 ? count : undefined} since={state.at || undefined} onOpen={onOpen} seat={sessions.length === 1 ? sessions[0] : undefined} cacheIds={sessions.map((s) => s.id)} menu={l && wt ? 'worktree' : main ? 'treerow' : undefined} menuTitle={l && wt ? t('tree.rowMenuTitle', { name }) : main ? t('tree.sessionMenuTitle', { name }) : undefined} tag={tag} t={t} />;
     const openIt = () => (sid ? p.onOpen(sid) : l && !l.missing && void wt?.open(l.path));
     // V2-CF4: the count rides on the row's right end. The row is a button, so the count is its sibling in the wrap.
     const kidsOn = kidsCount(sessions, w.name, true);
+    // Ticket 1067: a project lead's row carries its team's "N need you" (the Home lead's is in the Home group).
+    const seat = sessions.find((s) => !!leadSeatMate(s, team)?.project);
+    const place = seat && leadSeatMate(seat, team)?.project;
+    const pill = seat && place && needShown && <LeadPill t={t} place={place} need={needShown} onOpen={() => p.onOpen(seat.id)} />;
     // V2-CF3: the row's menu from a visible, labelled control (a right-click is not the only way in); Q6 A14: every row with a menu.
     const more = (
       <button
@@ -630,6 +494,7 @@ export function Tree(p: Props) {
         // A row that is no managed worktree clears the selection: the menu and palette then act on its own project.
         <span className="wtwrap" onFocusCapture={() => wt?.select(null)} onContextMenu={() => wt?.select(null)} onPointerDown={focusRow}>
           {row}
+          {pill}
           {kidsOn}
           {main && more}
         </span>
@@ -648,7 +513,7 @@ export function Tree(p: Props) {
             else if ((e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.altKey && !e.ctrlKey) (e.preventDefault(), wt.remove(l.path));
           }}
           onClickCapture={(e) => {
-            if ((e.target as Element).closest('.wtmore')) return;
+            if ((e.target as Element).closest('.wtmore, .needyou')) return;
             if (e.detail === 0) {
               // Enter or Space on the row
               if (!sid) (e.stopPropagation(), openIt());
@@ -665,6 +530,7 @@ export function Tree(p: Props) {
           onDoubleClick={() => (window.clearTimeout(nameTimer.current), openIt())}
         >
           {row}
+          {pill}
           {kidsOn}
           {more}
         </span>
@@ -768,14 +634,14 @@ export function Tree(p: Props) {
               const all = [...mainLive, ...structure.worktrees.flatMap((w) => w.sessions.map((s) => byId.get(s.id) ?? s))];
               const failed = failedIn([g]);
               // From the live group, not the frozen structure: the strip updates while the rows hold still (needs 49), and holds with the head's counts.
-              const stripOf = stripSessions({ main: g.main.filter((s) => !p.wt?.settled.has(s.id)).map((s) => byId.get(s.id) ?? s) /* item 13: a row moved to done is no idle bar */, worktrees: g.worktrees.map((w) => ({ ...w, sessions: w.sessions.map((s) => byId.get(s.id) ?? s) })) }, facts);
+              const stripOf = stripSessions({ main: g.main.filter((s) => !p.wt?.settled.has(s.id)).map((s) => byId.get(s.id) ?? s) /* item 13: a row moved to done is no idle bar */, worktrees: g.worktrees.map((w) => ({ ...w, sessions: w.sessions.filter((s) => !p.wt?.settled.has(s.id)).map((s) => byId.get(s.id) ?? s) })) }, facts);
               // Ticket 419 (after 372): a limited session counts with waiting here too, as its group head's label counts it.
               const limited = stripOf.filter((s) => status(s) === 'limited').length;
               const counts = t('tree.counts', { running: all.filter((s) => agentState(s) === 'running').length, working: g.counts.working, waiting: g.counts.waiting + limited, attention: g.counts.attention });
               const shown = headHold.shown(g.project, { waiting: g.counts.waiting, failed, fresh, strip: stripOf }); // TREEHEAD-FREEZE: what the head drew when the hover or focus began
               // TREEROWS: one row per worktree. The order is the one at freeze (frozen sessions); the state shown is live.
               const now = Date.now();
-              const { justs, today } = finishedOf(structure.main, now);
+              const { justs, today, rows: finishedRows } = finishedOf(structure, now);
               const mainRows = structure.main
                 .filter((s) => workIds.has(s.id))
                 .map((s) => ({ path: `main:${s.id}`, name: sessionName(s), sessions: [s] }));
@@ -794,12 +660,42 @@ export function Tree(p: Props) {
               const ordered = byUrgency(wtRows.map((r) => ({ ...r, state: r.order })));
               // Owner 11-17: the lead's row is the project's first row, whatever the urgency order says; the rest keep that order.
               const leads = (r: (typeof wtRows)[number]) => (r.sessions.some((s) => leadSeatMate(s, team)) ? 0 : 1);
-              const shownWt = ordered.filter((r) => !leaves(r.state)).map((r) => wtRows.find((x) => x.w === r.w)!).sort((a, b) => leads(a) - leads(b));
+              const listedWt = ordered.filter((r) => !leaves(r.state) && !finishedRows.has(r.w.path)).map((r) => wtRows.find((x) => x.w === r.w)!).sort((a, b) => leads(a) - leads(b));
+              // Ticket 1115 step 1 (mockup docs/design/workers-1115, panel 2): under a drawn lead row its workers fold. One that
+              // needs the owner (asks, failed, blocked, waits for an answer) comes up under the lead; the others that run wait
+              // behind "▸ N more working". An ended one and a Reviewer (a stage of its task) have no row; the lead row says how many work.
+              const leadDrawn = listedWt.some((r) => leads(r) === 0);
+              const isCrew = (r: (typeof wtRows)[number]) => leadDrawn && r.sessions.length > 0 && r.sessions.every((s) => workers.has(s.id));
+              const shownWt = listedWt.filter((r) => !isCrew(r));
+              const needsYou = (s: Session) => ['waiting', 'failed'].includes(status(rawOf(s))) || shownStatus(rawOf(s)) === 'asked';
+              // Review r1: a Reviewer that needs the owner comes up like any worker; one that runs or idles has no row.
+              const crew = listedWt.filter(isCrew);
+              const crewUp = crew.filter((r) => r.sessions.some(needsYou));
+              const crewRest = crew.filter((r) => !crewUp.includes(r) && !r.sessions.every(isReviewer) && r.sessions.some((s) => agentState(s) === 'running'));
+              // Review r1: "N working" counts the seats whose turn runs now, not every open seat; an idle one folds as "▸ N more".
+              const busyOf = (r: (typeof wtRows)[number]) => r.sessions.some((s) => shownStatus(rawOf(s)) === 'working');
+              const busy = crew.filter((r) => !r.sessions.every(isReviewer) && busyOf(r)).length;
+              // Review r1 (default 250 px tree): beside the "N need you" pill the lead row has room for the lead's name only, so
+              // the count goes to the line under the lead, which has the tree's whole width.
+              const pillOn = !!needShown && teamWaiting(needShown.sessions, needShown.owner, g.project, false) > 0;
+              const crewSum = pillOn && busy ? t('tree.workers.badge', { n: busy }) : '';
+              const moreWord = t(crewRest.every(busyOf) ? 'tree.workers.more' : 'tree.workers.moreIdle', { n: crewRest.length });
+              const crewKey = `crew:${g.project}`;
+              const crewLine = (r: (typeof wtRows)[number]) => {
+                const raw = r.sessions.map(rawOf);
+                return wtRow(r.w, rowState(r.w, raw, facts?.get(r.w.path), now, unreadLine(raw), t), raw, open(raw), linesOf(r.w));
+              };
+              const badge = (r: (typeof wtRows)[number]) => (leads(r) === 0 && busy && !pillOn ? t('tree.workers.badge', { n: busy }) : undefined);
               const gone = ordered.filter((r) => leaves(r.state)).map((r) => wtRows.find((x) => x.w === r.w)!);
               // A waiting main-folder row sits with the header's lines, so the needs 49 cap (two, then "+N") still holds for it.
-              const atHead = (r: (typeof shownWt)[number]) => linesOf(r.w).length > 0 && (folded || mainRows.includes(r.w));
+              // Ticket 1067: folded, the lead's row stays while its pill holds seat asks (they have no line of their own).
+              const pillN = (r: (typeof shownWt)[number]) => (leads(r) === 0 ? (hushed.get(g.project) ?? 0) : 0);
+              const atHead = (r: (typeof shownWt)[number]) => (linesOf(r.w).length > 0 && (folded || mainRows.includes(r.w))) || (folded && pillN(r) > 0);
               const units: ({ line: Line } | { r: (typeof shownWt)[number] })[] = [...headLines.map((line) => ({ line })), ...shownWt.filter(atHead).map((r) => ({ r }))];
-              const more = units.slice(2).reduce((n, u) => n + ('line' in u ? u.line.items.length : linesOf(u.r.w).reduce((m, l) => m + l.items.length, 0)), 0);
+              const more = units.slice(2).reduce((n, u) => n + ('line' in u ? u.line.items.length : linesOf(u.r.w).reduce((m, l) => m + l.items.length, pillN(u.r))), 0);
+              const remote = all.find((x) => x.machine)?.machine;
+              const plusKind = !remote && p.onStartIn ? quickKind : undefined;
+              const plusName = plusKind ? t('firstUse.rowPlus', { agent: plusKind === 'codex' ? 'Codex' : 'Claude', name: g.name }) : t('tree.newSession', { name: g.name });
               const open = (sessions: Session[]) => (sessions.find((s) => status(s) === 'waiting') ?? sessions.find((s) => status(s) === 'failed') ?? sessions.find((s) => status(s) === 'working') ?? sessions.find((s) => agentState(s) === 'running') ?? sessions[0])?.id;
               return (
                 <div key={g.project} className="grp" data-urgency={g.urgency} data-project={g.name} role="group" aria-label={t('tree.projectLabel', { name: g.name, urgency: t(`mw.status.${g.urgency}`) })}>
@@ -838,8 +734,9 @@ export function Tree(p: Props) {
                     {!all.length && tree.added?.includes(g.project) && (
                       <button className="ptool pdrop" aria-label={t('tree.removeAdded', { name: g.name })} title={t('tree.removeAdded', { name: g.name })} onClick={() => void p.projects.edit({ op: 'add', project: g.project, added: false })} />
                     )}
-                    {/* v1a-59: start a session in this project */}
-                    <button className="padd" aria-label={t('tree.newSession', { name: g.name })} title={t('tree.newSession', { name: g.name })} onClick={() => askNew(g.project, undefined, all.find((x) => x.machine)?.machine)} />
+                    {/* v1a-59: start a session in this project. Ticket 1130 C1: here, with an agent on, "+" starts the default agent at once;
+                        a remote project (that machine's own accounts) and no agent on keep New tab. */}
+                    <button className="padd" aria-label={plusName} title={plusName} onClick={() => (plusKind ? p.onStartIn?.(g.project, plusKind) : askNew(g.project, undefined, remote))} />
                     {/* UXFIX (a): the same New worktree flow as the project menu */}
                     {p.wt && (
                       <button className="padd wtadd" aria-label={t('tree.newWorktree', { name: g.name })} title={t('tree.newWorktree', { name: g.name })} onClick={(e) => { e.currentTarget.focus(); const r = e.currentTarget.getBoundingClientRect(); p.wt?.setAsk({ kind: 'create', project: g.project, anchor: { top: r.top, bottom: r.bottom, left: r.left, right: r.right } }); }}>
@@ -851,7 +748,7 @@ export function Tree(p: Props) {
                   {/* V2-8e: a waiting main-folder session's row with its line, or a project-level decision, sits right under the header. Folding hides only quiet
                       rows: your-turn rows and their lines stay (HIDEROWS). Under the header, and folded, at most two show
                       and the rest count as "+N" (the V2-9 waiting-row rule). */}
-                  {!p.signal && units.slice(0, moreOpen.has(`project:${g.project}`) ? units.length : 2).map((u) => 'line' in u ? lineRow(u.line, true, undefined, folded) : wtRow(u.r.w, u.r.state, u.r.sessions, open(u.r.sessions), linesOf(u.r.w), folded))}
+                  {!p.signal && units.slice(0, moreOpen.has(`project:${g.project}`) ? units.length : 2).map((u) => 'line' in u ? lineRow(u.line, true, undefined, folded) : wtRow(u.r.w, u.r.state, u.r.sessions, open(u.r.sessions), linesOf(u.r.w), folded, undefined, badge(u.r)))}
                   {!p.signal && more > 0 && moreBtn(`project:${g.project}`, more, t(folded ? 'tree.moreWaiting' : 'tree.more', { n: more }))}
                   {!folded && (
                     <>
@@ -859,7 +756,19 @@ export function Tree(p: Props) {
                       {kidsUnder(mainQuiet)}
                       {/* Ticket 1022 (owner, mockup 5; lead first, owner 11-17): the lead's row, then main-folder rows (a
                           just-finished one last among them), then worktree rows, then the clean-up fold; each part in urgency order. */}
-                      {shownWt.filter((r) => !atHead(r) && leads(r) === 0).map((r) => wtRow(r.w, r.state, r.sessions, open(r.sessions), linesOf(r.w)))}
+                      {shownWt.filter((r) => !atHead(r) && leads(r) === 0).map((r) => wtRow(r.w, r.state, r.sessions, open(r.sessions), linesOf(r.w), false, undefined, badge(r)))}
+                      {crewUp.length + crewRest.length > 0 && (
+                        <div className="crew" data-crew={g.project}>
+                          {crewUp.map(crewLine)}
+                          {(crewSum || crewRest.length > 0) && (
+                            <div className="crewsum">
+                              {crewSum && <span className="crewn">{crewSum}</span>}
+                              {crewRest.length > 0 && moreBtn(crewKey, crewRest.length, moreWord)}
+                            </div>
+                          )}
+                          {moreOpen.has(crewKey) && crewRest.map(crewLine)}
+                        </div>
+                      )}
                       {shownWt.filter((r) => !atHead(r) && leads(r) === 1 && mainRows.includes(r.w)).map((r) => wtRow(r.w, r.state, r.sessions, open(r.sessions), linesOf(r.w)))}
                       {!p.signal && justs.map((s) => <JustRow key={`just:${s.id}`} s={s} now={now} t={t} onOpen={() => p.onOpen(s.id)} />)}
                       {shownWt.filter((r) => !atHead(r) && leads(r) === 1 && !mainRows.includes(r.w)).map((r) => wtRow(r.w, r.state, r.sessions, open(r.sessions), linesOf(r.w)))}
@@ -890,8 +799,6 @@ export function Tree(p: Props) {
                         </div>
                       )}
                       <SubViews project={g.project} name={g.name} ctx={p.subviews} t={t} />
-                      {/* 392: this folder's past Claude and Codex conversations, read-only; this Mac's projects only */}
-                      {p.core && !all.some((s) => s.machine) && <PastChats core={p.core} project={g.project} live={live} t={t} />}
                     </>
                   )}
                   {donePop?.project === g.project && p.core && (
@@ -955,7 +862,8 @@ export function Tree(p: Props) {
     // The header's bar and counts follow the live projects while the rows hold still (needs 49).
     const sessions = mine.flatMap((g) => [...g.main, ...g.worktrees.flatMap((w) => w.sessions)]).map(withoutNotes);
     const states = sessions.map(status);
-    const waiting = asks(liveItems).length + sessions.filter((s) => s.attention.waiting && !s.pending.length).length;
+    // Ticket 1067: a lead marked your-turn for its seats' asks counts them (its pill's), not one.
+    const waiting = asks(liveItems).length + sessions.filter((s) => s.attention.waiting && !s.pending.length && !(hushed.has(s.project) && leadSeatMate(s, team))).length + mine.reduce((n, g) => n + (hushed.get(g.project) ?? 0), 0);
     const urgency = urgencyOf(waiting ? [...states, 'waiting'] : states);
     const counts = t('tree.countsGroup', { working: sessions.filter((s) => shownStatus(s) === 'working').length, waiting: waiting + states.filter((s) => s === 'limited').length, attention: states.filter((s) => s === 'failed' || s === 'stale').length });
     // FIDELITY BAR (needs 130, mockup ③; open too, needs 196): a group head carries its project rows' strips merged, in the same
@@ -983,7 +891,7 @@ export function Tree(p: Props) {
           {/* Mockup ③ ".d": how many projects the folded group holds, where a project head shows "main". */}
           {folded && <span className="d">{plural(t, 'tree.projects', members.size)}</span>}
           {/* Ticket 1022: a group head sums its projects' finished sessions of today. */}
-          {!p.signal && ((n) => n > 0 && <DoneBars n={n} t={t} />)(mine.reduce((n, g) => n + finishedOf(g.main, Date.now()).today.length, 0))}
+          {!p.signal && ((n) => n > 0 && <DoneBars n={n} t={t} />)(mine.reduce((n, g) => n + finishedOf(g, Date.now()).today.length, 0))}
           <Strip sessions={mine.flatMap((g) => stripSessions(g, facts))} dim={!folded} next={nextUp} onPick={pick(`g:${name}`)} t={t} />
           {pdrag.drag?.over === name && <span className="droplabel" role="status">{t('tree.drag.over', { group: name })}</span>}
         </div>
@@ -1122,6 +1030,13 @@ function successorOfFocus(aside: HTMLElement | null) {
 
 /** The "a leader can run these" line was closed once (this window's storage): it stays away. */
 const LEAD_OFF = 'nunchiro.leadSuggestOff';
+
+/** Ticket 1067: the lead row's pill opens the lead's seat, then its place's Team view where it lives (CentreView `openTeam`). */
+function LeadPill({ t, place, need, onOpen }: { t: T; place: string; need: { sessions: Session[]; owner: Decision[] }; onOpen: () => void }) {
+  const [at, put] = useTeamAt(place);
+  const items = waitingItems(need.sessions.filter((s) => s.project === place), need.owner.filter((d) => placeOfCard(d) === place));
+  return <NeedYou t={t} n={teamWaiting(need.sessions, need.owner, place, false)} tip={needTip(t, items)} onOpen={() => (onOpen(), teamOpen(at, put, place) && focusTeam())} />;
+}
 
 export function orderSessions(sessions: Session[], order: string[]) {
   const rank = new Map(order.map((id, i) => [id, i]));

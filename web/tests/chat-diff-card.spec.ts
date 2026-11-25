@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { append, chat, ChatCore, expect, openChat, rec, test } from './fixtures/chat/harness';
-import { agentsZone, REPO, stripBeside, stripOnTop } from './fixtures';
+import { openSessionFromPalette, stripOnTop, REPO, stripBeside } from './fixtures';
 import { icon, sidebar } from './d5b';
 
 const BIN = path.join(REPO, 'target/debug/nunchiro');
@@ -361,7 +361,6 @@ test2('chat diff card: answering from the strip removes the card buttons within 
 
 test2('chat diff card: a restored item or a session not running shows no buttons and says "answer in the terminal"', async ({ page, cc }) => {
   const s = cc.card();
-  agentsZone(cc); // The AGENTS widget exposes ended sessions after the core restarts.
   append(s.file, rec.use('e1', 'Edit', EDIT(s.dir)));
   cc.ask(s.id, 'Edit', EDIT(s.dir));
   await expect.poll(() => cc.pending().length).toBe(1);
@@ -375,8 +374,8 @@ test2('chat diff card: a restored item or a session not running shows no buttons
     window.__NUNCHIRO__ = boot;
   }, cc.boot());
   await page.goto('/');
-  // An ended session opens from its AGENTS row (no tab is restored for it), read-only.
-  await page.locator(`.ar[data-agent="${s.id}"]`).click();
+  // An ended session opens from the command palette (no tab is restored for it), read-only.
+  await openSessionFromPalette(page, s.id);
   const card = chat(page, s.id).locator('.dcard');
   // The restored item comes back reconciled but not actionable, which `plan()` (queue/answer.ts) words as "checking · restored
   // after a restart" until fresh evidence proves it again (V2-1b); "answer in the terminal" is the Strip's terminal list now

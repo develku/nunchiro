@@ -1,6 +1,6 @@
 ---
 name: nunchiro
-description: "Control other coding agents through the `nunchiro` CLI: start workers, prompt them, wait, read their results and answer their startup dialogs. Use when the user mentions Nunchiro or asks you to run work in other Nunchiro agents. Requires NUNCHIRO_SESSION to be set."
+description: "Control other coding agents through the `nunchiro` CLI: start workers, prompt them, wait, read their results and answer their startup dialogs. Use when the user mentions Nunchiro or asks you to run work in other Nunchiro agents. Requires NUNCHIRO_SESSION to be set. Not for splitting one task into parallel lanes (use orchestration) or for your own built-in subagents."
 ---
 
 # Nunchiro

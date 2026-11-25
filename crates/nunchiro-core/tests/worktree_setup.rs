@@ -434,6 +434,11 @@ fn setup_and_cleanup_never_run_for_outside_token() {
     core.scripts(
         json!({"setup": "echo owner > made.txt", "cleanup": "echo x > \"$HOME/cleaned.txt\""}),
     );
+    // Ticket 1061: the default root is now ../.worktrees beside the repo, which this fixture keeps inside the
+    // Nunchiro folder, where a token may never create; a root outside it lets the create through to the scripts.
+    let root = home::short("wtso");
+    core.json(json!({"op":"quit_settings","patch":{"worktrees_dir":root}}))
+        .unwrap();
     let made = core
         .json(json!({"op":"token_create","scope":"full"}))
         .unwrap();

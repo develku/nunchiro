@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { build } from 'vite';
 import { agentsToml, fakeAcp, ownerOk, owner, tomlEntry } from './acp-fakes';
-import { agentsZone, expect, openWindow, REPO, test, type Core } from './fixtures';
+import { stripOnTop, expect, openWindow, REPO, test, type Core } from './fixtures';
 import { buildQuiet } from './vite-build';
 
 const BUSY = 'too many requests in flight; try again';
@@ -39,7 +39,7 @@ function approve(core: Core, name: string) {
 }
 
 test.describe('acp_list_survives_busy_core', () => {
-  test.beforeEach(({ core }) => agentsZone(core));
+  test.beforeEach(({ core }) => stripOnTop(core));
 
   test('the Install page button of a not-installed agent', async ({ app, core }) => {
     fs.writeFileSync(agentsToml(core), tomlEntry('gemini', '/nonexistent/gemini', ['--experimental-acp']));
@@ -48,7 +48,7 @@ test.describe('acp_list_survives_busy_core', () => {
     const busy = await busyOnce(app);
     await openWindow(app);
     busy.armed = true;
-    await app.locator('.ar[data-agent]').first().click();
+    await app.locator('button.row.wt2[data-menu-session]').first().click();
     const band = app.locator('.problem-band');
     await expect(band).toHaveAttribute('data-problem', 'not_installed');
     await expect(band.getByRole('button', { name: 'Install page ↗' })).toBeVisible();

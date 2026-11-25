@@ -173,6 +173,41 @@ pub fn home_lock(home: &Path, args: &[String]) -> ! {
     std::process::exit(0);
 }
 
+/// Ticket 1130 S1: every Claude session's own PreToolUse hook (`nunchiro_core::outward`): an outward call asks, in
+/// every permission mode, decided here without the core (a core that is down never opens it). `--home-lock`: a locked
+/// Home seat, whose lock hook gates its connector calls by the Outbox card; only shell publish commands ask here. A
+/// payload it cannot read asks too.
+pub fn outward(args: &[String]) -> ! {
+    use nunchiro_core::{home_lock::hook_output, outward::kind};
+    let locked = args.iter().any(|a| a == "--home-lock");
+    let mut payload = vec![];
+    let call = std::io::stdin()
+        .take(PAYLOAD_MAX + 1)
+        .read_to_end(&mut payload)
+        .ok()
+        .filter(|n| *n as u64 <= PAYLOAD_MAX)
+        .and_then(|_| serde_json::from_slice::<serde_json::Value>(&payload).ok());
+    let out = match call
+        .as_ref()
+        .and_then(|v| Some((v.get("tool_name")?.as_str()?, v)))
+    {
+        None => Some(hook_output(
+            "ask",
+            "Nunchiro could not read this tool call, so it asks",
+        )),
+        Some((tool, v)) => kind(
+            tool,
+            v.get("tool_input").unwrap_or(&serde_json::Value::Null),
+        )
+        .filter(|k| !(locked && k.mcp()))
+        .map(|k| hook_output("ask", k.reason())),
+    };
+    if let Some(out) = out {
+        println!("{out}");
+    }
+    std::process::exit(0);
+}
+
 /// Ticket 1036: Claude Code's status line command in a Nunchiro session. Claude pipes it JSON with `rate_limits`
 /// (`five_hour`, `seven_day`: `used_percentage`, `resets_at`); only `rate_limits` goes to the core, as a `StatusLine`
 /// hook of this session (its token), for the usage bar. The user's own status line command (project local, project,
@@ -188,15 +223,11 @@ pub fn statusline(home: &Path) {
     {
         return;
     }
-    let limits = serde_json::from_slice::<serde_json::Value>(&input)
-        .ok()
-        .map(|v| v["rate_limits"].clone())
-        .filter(|l| l.is_object());
     let (tx, rx) = mpsc::channel();
-    if let Some(limits) = limits {
+    if let Some(payload) = forwarded(&input) {
         let home = home.to_path_buf();
         thread::spawn(move || {
-            let _ = tx.send(tell(&home, limits));
+            let _ = tx.send(tell(&home, payload));
         });
     }
     if let Some(command) = own_status_line() {
@@ -213,7 +244,18 @@ pub fn statusline(home: &Path) {
     }
     let _ = rx.recv_timeout(STATUS_WAIT);
 }
-fn tell(home: &Path, limits: serde_json::Value) -> Result<(), String> {
+/// What of the status line JSON goes to the core: `rate_limits` (ticket 1036) and `context_window` (ticket 1048, the
+/// session's real window for the Context widget), each only when it is an object; None when neither is.
+fn forwarded(input: &[u8]) -> Option<serde_json::Value> {
+    let v = serde_json::from_slice::<serde_json::Value>(input).ok()?;
+    let out: serde_json::Map<_, _> = ["rate_limits", "context_window"]
+        .into_iter()
+        .filter(|k| v[*k].is_object())
+        .map(|k| (k.to_string(), v[k].clone()))
+        .collect();
+    (!out.is_empty()).then_some(out.into())
+}
+fn tell(home: &Path, payload: serde_json::Value) -> Result<(), String> {
     let id = env::var("NUNCHIRO_SESSION").map_err(|e| e.to_string())?;
     let token = env::var("NUNCHIRO_TOKEN").map_err(|e| e.to_string())?;
     let mut stream = UnixStream::connect(home.join("core.sock")).map_err(|e| e.to_string())?;
@@ -228,7 +270,7 @@ fn tell(home: &Path, limits: serde_json::Value) -> Result<(), String> {
         request: Request::Hook {
             id,
             event: "StatusLine".into(),
-            payload: serde_json::json!({ "rate_limits": limits }),
+            payload,
         },
     };
     let mut bytes = serde_json::to_vec(&envelope).map_err(|e| e.to_string())?;
@@ -258,4 +300,34 @@ fn own_status_line() -> Option<String> {
         // A line that names this command again would run itself.
         (!command.is_empty() && !command.contains("hook statusline")).then_some(command)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::forwarded;
+    use serde_json::json;
+    /// Ticket 1048: the status line's `context_window` goes to the core beside `rate_limits`; without it, the payload is
+    /// what ticket 1036 sent.
+    #[test]
+    fn t1048_statusline_forwards_context_window() {
+        let limits = json!({"five_hour": {"used_percentage": 12.0, "resets_at": 1}});
+        let window = json!({"context_window_size": 1_000_000, "used_percentage": 36});
+        let both = json!({"model": {"id": "x"}, "rate_limits": limits, "context_window": window});
+        assert_eq!(
+            forwarded(both.to_string().as_bytes()),
+            Some(json!({"rate_limits": limits, "context_window": window}))
+        );
+        let old = json!({"model": {"id": "x"}, "rate_limits": limits});
+        assert_eq!(
+            forwarded(old.to_string().as_bytes()),
+            Some(json!({"rate_limits": limits}))
+        );
+        let only = json!({"context_window": window, "rate_limits": null});
+        assert_eq!(
+            forwarded(only.to_string().as_bytes()),
+            Some(json!({"context_window": window}))
+        );
+        assert_eq!(forwarded(br#"{"model":{"id":"x"}}"#), None);
+        assert_eq!(forwarded(b"not json"), None);
+    }
 }

@@ -55,8 +55,12 @@ export interface Settings {
   themesHidden: string[];
   /** Ticket 1039: chat marks (headings, bold, code, paths, links, tool names) in the theme's accent colours, or Plain: the chat as it was before. */
   chatColours: 'theme' | 'plain';
+  /** Ticket 1064, 1088: what colours headings and bold in the chat: 0 (the default) the theme's own colour, 1-6 a palette slot. */
+  chatAccent: number;
   termFont: string;
   termFontSize: number;
+  /** Ticket 1071: the whole window's zoom (⌘= ⌘- ⌘0), 0.5-2.0 in steps of 0.1. */
+  uiZoom: number;
   /** Last Settings page shown in this window. */
   settingsPage: SettingsPage;
   bindings: Bindings;
@@ -98,7 +102,7 @@ export interface Settings {
 }
 
 /** needs 150: 2 = copy on select on (ticket 162); 3 = the A+B+C sizes (ticket 1041, owner 15.1 item 7). A store without `version` is 1. */
-export const STORE_VERSION = 3;
+export const STORE_VERSION = 4;
 
 export const DEFAULTS: Settings = {
   version: STORE_VERSION,
@@ -116,8 +120,10 @@ export const DEFAULTS: Settings = {
   themeBrowse: true,
   themesHidden: [],
   chatColours: 'theme',
+  chatAccent: 0, // ticket 1088: the theme's own colour (themes/derive.ts themeColour); 1-6 pick a palette slot
   termFont: '"SF Mono", "Symbols Nerd Font Mono", Menlo, "D2Coding", monospace', // needs 152: the bundled symbols face on by default
   termFontSize: 12,
+  uiZoom: 1,
   settingsPage: 'general',
   bindings: {},
   prefixHelpDelay: 300,
@@ -337,9 +343,11 @@ export function parse(raw: string | null, lastGood?: string | null): { settings:
     themeBrowse: pick(typeof v.themeBrowse === 'boolean', v.themeBrowse, DEFAULTS.themeBrowse),
     themesHidden: pick(hidden(v.themesHidden), v.themesHidden, []),
     chatColours: pick(['theme', 'plain'].includes(v.chatColours as string), v.chatColours, DEFAULTS.chatColours),
+    chatAccent: pick(Number.isInteger(v.chatAccent) && (v.chatAccent as number) >= 0 && (v.chatAccent as number) <= 6, v.chatAccent, DEFAULTS.chatAccent),
     // needs 150/152: the old default list (no symbols face) reads as the new default, so a stored default never holds it back.
     termFont: pick(typeof v.termFont === 'string' && FONT.test(v.termFont) && v.termFont !== OLD_TERM_FONT, v.termFont, DEFAULTS.termFont),
     termFontSize: pick(typeof v.termFontSize === 'number' && v.termFontSize >= 10 && v.termFontSize <= 20, v.termFontSize, DEFAULTS.termFontSize),
+    uiZoom: pick(typeof v.uiZoom === 'number' && v.uiZoom >= 0.5 && v.uiZoom <= 2, v.uiZoom, DEFAULTS.uiZoom),
     // An old page id (folded into another page) opens its new home; ticket 250 made the others pages again.
     settingsPage: Object.hasOwn(MOVED_PAGES, v.settingsPage as string) ? MOVED_PAGES[v.settingsPage as string]! : pick(PAGES.includes(v.settingsPage as SettingsPage), v.settingsPage, DEFAULTS.settingsPage),
     bindings: pick(bindingsOk, bindings, DEFAULTS.bindings),
@@ -406,6 +414,9 @@ export function parse(raw: string | null, lastGood?: string | null): { settings:
     if (settings.densityPicked && settings.density === 'comfortable' && settings.rowHeight === null) settings.rowHeight = 30;
     if (settings.tabFont === 11.5) settings.tabFont = DEFAULTS.tabFont;
   }
+  // Ticket 1088: slot 4 was the default before Theme colour, and the window saves every field at start, so a stored 4 is
+  // that old default (a Blue picked by hand cannot be told apart and moves too); any other picked swatch is kept.
+  if (from < 4 && settings.chatAccent === 4) settings.chatAccent = DEFAULTS.chatAccent;
   // A keymap that is missing or fails the check (also a store that did not parse at all) keeps the last good one.
   if (!bindingsOk) settings.bindings = goodBindings();
   return { settings, clean, undo: Object.keys(undo).length ? undo : null };

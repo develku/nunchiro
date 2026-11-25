@@ -35,7 +35,6 @@ const ctx = (): WindowCtx => ({
   boot: {} as never,
   core: { request: async () => ({ board: { cards: [], columns: [], revision: 'r' } }) } as never,
   sessions: [],
-  order: [],
   current: null,
   pinned: () => null,
   owner: [],

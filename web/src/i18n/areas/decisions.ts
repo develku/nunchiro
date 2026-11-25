@@ -6,6 +6,10 @@ declare module '../index' {
     "decisions.answeredWho": true;
     "decisions.lineLabel": true;
     "decisions.caution": true;
+    "decisions.outward.mail": true;
+    "decisions.outward.calendar": true;
+    "decisions.outward.post": true;
+    "decisions.outward.publish": true;
     "decisions.someSession": true;
     "decisions.changed": true;
     "decisions.answered": true;
@@ -75,7 +79,7 @@ export const en = {
   "decisions.openInPanel": "Open in panel",
   "decisions.cardOne": "{name}: decision",
   "decisions.cardMany": "{name}: {count} decisions",
-  "decisions.back": "← Back to {name} (⌘[)",
+  "decisions.back": "← Back to {name} ({key})",
   "decisions.kindQuestion": "question",
   "decisions.kindRisky": "risky permission",
   "decisions.kindPermission": "permission",
@@ -102,6 +106,11 @@ export const en = {
   "decisions.alsoInChat": "Also shown in its chat.",
   "decisions.allowOnce": "Allow once",
   "decisions.focusEnter": "focus ⏎",
+  // Ticket 1130 S1: the kind of an outward call, which asks in every session (English first).
+  "decisions.outward.mail": "Send mail",
+  "decisions.outward.calendar": "Create a calendar event",
+  "decisions.outward.post": "Send or post",
+  "decisions.outward.publish": "Publish",
 };
 
 export const ko = {
@@ -127,7 +136,7 @@ export const ko = {
   "decisions.openInPanel": "패널에서 열기",
   "decisions.cardOne": "{name}: 결정",
   "decisions.cardMany": "{name}: 결정 {count}개",
-  "decisions.back": "← {name}(으)로 돌아가기 (⌘[)",
+  "decisions.back": "← {name}(으)로 돌아가기 ({key})",
   "decisions.kindQuestion": "질문",
   "decisions.kindRisky": "위험한 권한 요청",
   "decisions.kindPermission": "권한 요청",
@@ -174,7 +183,7 @@ export const ja = {
   "decisions.openInPanel": "パネルで開く",
   "decisions.cardOne": "{name}：判断",
   "decisions.cardMany": "{name}：判断 {count} 件",
-  "decisions.back": "← {name}（⌘[）に戻る",
+  "decisions.back": "← {name}（{key}）に戻る",
   "decisions.kindQuestion": "質問",
   "decisions.kindRisky": "危険な許可",
   "decisions.kindPermission": "許可",
@@ -221,7 +230,7 @@ export const zhHans = {
   "decisions.openInPanel": "在面板中打开",
   "decisions.cardOne": "{name}：1 项决策",
   "decisions.cardMany": "{name}：{count} 项决策",
-  "decisions.back": "← 返回 {name} (⌘[)",
+  "decisions.back": "← 返回 {name} ({key})",
   "decisions.kindQuestion": "问题",
   "decisions.kindRisky": "高风险权限请求",
   "decisions.kindPermission": "权限请求",
@@ -268,7 +277,7 @@ export const zhHant = {
   "decisions.openInPanel": "在面板中開啟",
   "decisions.cardOne": "{name}：決策",
   "decisions.cardMany": "{name}：{count} 項決策",
-  "decisions.back": "← 返回 {name}（⌘[）",
+  "decisions.back": "← 返回 {name}（{key}）",
   "decisions.kindQuestion": "問題",
   "decisions.kindRisky": "高風險權限請求",
   "decisions.kindPermission": "權限請求",
@@ -315,7 +324,7 @@ export const es = {
   "decisions.openInPanel": "Abrir en panel",
   "decisions.cardOne": "{name}: decisión",
   "decisions.cardMany": "{name}: {count} decisiones",
-  "decisions.back": "← Volver a {name} (⌘[)",
+  "decisions.back": "← Volver a {name} ({key})",
   "decisions.kindQuestion": "pregunta",
   "decisions.kindRisky": "permiso arriesgado",
   "decisions.kindPermission": "permiso",
@@ -362,7 +371,7 @@ export const fr = {
   "decisions.openInPanel": "Ouvrir dans le volet",
   "decisions.cardOne": "{name} : décision",
   "decisions.cardMany": "{name} : {count} décisions",
-  "decisions.back": "← Retour à {name} (⌘[)",
+  "decisions.back": "← Retour à {name} ({key})",
   "decisions.kindQuestion": "question",
   "decisions.kindRisky": "autorisation risquée",
   "decisions.kindPermission": "autorisation",
@@ -409,7 +418,7 @@ export const pt = {
   "decisions.openInPanel": "Abrir no painel",
   "decisions.cardOne": "{name}: decisão",
   "decisions.cardMany": "{name}: {count} decisões",
-  "decisions.back": "← Voltar para {name} (⌘[)",
+  "decisions.back": "← Voltar para {name} ({key})",
   "decisions.kindQuestion": "pergunta",
   "decisions.kindRisky": "permissão arriscada",
   "decisions.kindPermission": "permissão",

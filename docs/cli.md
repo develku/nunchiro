@@ -1,6 +1,6 @@
 # Nunchiro CLI reference
 
-`nunchiro` talks to the local Nunchiro core over a unix socket in `NUNCHIRO_HOME` (default `~/.nunchiro`;
+`nunchiro` talks to the local Nunchiro core over a unix socket in `NUNCHIRO_HOME` (default `~/.nunchiro`; a debug build: `nunchiro-home` beside its binary;
 must be absolute). The first command starts the core if it is not running. Replies are one line of JSON unless noted;
 errors go to stderr with exit code 1.
 
@@ -40,9 +40,10 @@ Agents survive a core that exits any other way (a crash, `kill`, `serve restart`
 
 ### `nunchiro serve update`
 Run by the app at each page load (F24). Prints `current`, `replaced` (a core older than this RC-stamped binary was
-swapped through the `exit` path) or `kept` (the old core stays because the swap would lose work). A binary with no
-build stamp never replaces a core, and a stamped one replaces only an earlier build of itself: the core's recorded
-executable must be this same file, so an RC CLI run by hand never touches the owner's core. An RC-stamped binary also
+swapped through the `exit` path) or `kept` (the old core stays because the swap would lose work). A binary replaces
+only an earlier build of itself: the core's recorded executable must be this same file, so an RC CLI run by hand never
+touches the owner's core. An earlier build has a lower build stamp, or (ticket 1082) another git commit than this
+binary (`core.start.json` `commit`); two stamps that make this binary the lower one are a downgrade and replace nothing. An RC-stamped binary also
 refuses `serve update` and `serve restart` when its home is the owner's `.nunchiro`. Run them from a Nunchiro terminal,
 where a session gets the core's own home.
 
@@ -73,12 +74,37 @@ record itself is missing or unreadable, the asking binary and environment are us
 agent on an account restarts the core, 'Your own' sessions start without the owner's API keys (`ANTHROPIC_API_KEY` etc.)
 until the core is started again from a terminal or the window. `DYLD_*` variables never reach a core.
 
+### `nunchiro update status`
+Ticket 1082: the installed `Nunchiro.app` updates itself from an update folder, keeping every session. The owner sets the
+folder in Settings > About; the app writes it to `$NUNCHIRO_HOME/update-source` (one line; no file or an empty one is off).
+The folder holds a built `Nunchiro.app` and `nunchiro-build.json` beside it:
+`{"commit": "<git sha>", "built": "<RFC 3339 time>", "sha256": {"nunchiro": "<hex>", "nunchiro-app": "<hex>"}}`, where
+`sha256` names every file in `Nunchiro.app/Contents/MacOS`. Prints
+`{"state": "off" | "none" | "ready" | "refused", "source", "commit", "built", "reason"}`: `ready` is a stamp of another
+commit than this build whose hashes match the bundle. Refused, with the reason: a folder or bundle that is a symlink, not
+owned by you, or writable by group or others; a bundle id other than `dev.nunchiro.app`; a hash that does not match; a
+build that is not an installed `Nunchiro.app` (the isolated test build keeps its own home and never updates). Changes
+nothing. Like `update install`, it refuses to run with a session token (`NUNCHIRO_TOKEN`): it is for the owner.
+
+### `nunchiro update install [--archive <file>]`
+Copies the ready bundle beside the installed one (`.nunchiro-update/new`), checks the copy again (hashes, bundle id,
+`codesign -v`), moves the installed bundle to `.nunchiro-update/backup` and the copy into its place, then runs the new
+bundle's `serve update`: the core is replaced and every session stays in its holder. It then checks that the running core
+is the new commit and that every session that ran before still runs. When any step fails, the backup goes back, the
+previous build's core takes over again, and the reason is printed. A core kept because the swap would lose work (see
+`serve update`) is such a failure. Prints `replaced` or `current`. The app's Install and restart is this command, then a
+relaunch; run by hand, the window keeps the old app until it is reopened. Ticket 1107: `--archive <file>` (an absolute
+path) takes the build from the official release's signed feed instead of the folder: the app has verified the archive's
+signature and version and passes it here. It must hold only `Nunchiro.app` and `nunchiro-build.json`; it is unpacked
+into `.nunchiro-update/feed` (removed afterwards) and then checked and installed exactly as a folder build.
+
 ### `nunchiro session start --kind claude|codex|shell --project <dir> [--worktree] [--label <text>] [--model <m>] [--effort <level>] [--resume <id>] [--account <label>] [--env <KEY=VALUE>]... [-- <args>...]`
 ### `nunchiro session start --agent acp:<name> --project <dir> [--worktree] [--label <text>] [--resume <id>]`
 Starts a session in `<dir>` (default: the current directory) and prints it. `--worktree` runs it in a new git worktree.
-`--account` runs a Claude or Codex session on the account with that name (see `account list`; default "Your own"),
+`--account` runs a Claude or Codex session on the account with that name (see `account list`; default: the account
+checked in the status bar, else "Your own"; `--account ""` names "Your own"),
 fixed for the session's life; an unknown name is refused with `unknown account "<label>" for <agent>; see nunchiro
-account list` and no session starts. A resumed conversation keeps the account it ran on. Run from inside a session, the new session takes the caller's account and `--account` may only name it; the owner picks any.
+account list` and no session starts. A resumed conversation keeps the account it ran on. Run from inside a session, the new session takes its place's account, else your default account (the status bar's pick, ticket 1126), else the caller's; `--account` may name the caller's own, the place's or your default (a team lead any registered account when `account leads-any` is on); the owner picks any.
 Everything after `--` goes to the agent unchanged. For `shell`, the first word after `--` is the program.
 `--env KEY=VALUE` (repeatable, split at the first `=`) sets a variable in the new agent's environment for this start
 only; a restart or switch does not carry it, and it is never stored. The CLI refuses a name given twice. The core
@@ -196,6 +222,14 @@ fresh idempotency key and prints `codex reset: <outcome>` (`reset`, `nothing_to_
 the rule and the outcome; never a count, an expiry or anything codex printed), shown on the Usage page. Never across
 `--machine`, never from a widget or a browser.
 
+### `nunchiro account leads-any on|off`
+
+"Leads may use any of my accounts" (owner 2026-11-25; off by default). On, a team lead's own seat may start sessions on any
+registered account and continue itself on one; each such start or move writes one line to the lead's room. Workers,
+reviewers, remote (`--machine`) callers and ACP sessions stay on their own account, their place's account or your
+default. Run outside a session it is your own switch; run from inside a session, `on` puts a card in the Decisions
+widget and waits for your yes, and `off` is refused.
+
 ## Agents
 
 An `<agent>` is a session id or label. A label that matches two sessions is refused as ambiguous; use the id.
@@ -254,7 +288,9 @@ done, blocked (a question or a permission prompt), failed or exited, the core se
 same "send when ready" queue, `worker <label> <state>; report says: "<STATUS line>"` (the session id when the label is
 empty), where the STATUS part is the first line of
 `REPORT.md` in the worker's folder when it starts with `STATUS:` (one line, control bytes removed, at most 200
-characters; a symlinked REPORT.md is ignored). One line per state per turn; nested workers wake only their own
+characters; a symlinked REPORT.md is ignored). A turn end names the report only when the worker wrote it during that
+turn; a turn end with no such report is `worker <label> ended a turn (no report yet)`, so a standing seat that writes
+no report still wakes its lead. A subagent's end is no turn end and wakes nobody. One line per state per turn; nested workers wake only their own
 parent; a parent that is closed or gone gets nothing and no other session does; sessions without a parent wake nobody.
 Only agent parents (Claude, Codex, ACP) get the line; a shell parent gets nothing, because a shell would run it.
 
@@ -317,6 +353,23 @@ from an earlier core, the first line is `{"type":"gap",...}`: events were missed
 `--project`'s. A session whose id another machine's calls flagged as remote sees only the sessions it started. An
 event's `data` is cut to 4 KB of JSON (`{"truncated":true,"head":...}`).
 
+### `nunchiro events --history <days> [--project <dir>]`
+Ticket 1130. Prints the event journal of the last `<days>` UTC days (1 to 14, today included) as NDJSON, oldest first,
+and ends. The core appends every event it streams to a day file under `$NUNCHIRO_HOME/logs/events/` (folder 0700,
+files 0600, append only, redacted as the logs are), so events outlive a core restart; this command reads those files
+and needs no running core. A room event's `data` (the message body, the pin list) is never kept. A day file stops at
+4 MiB (its last line is `{"type":"journal_full",...}`) and day files older than 14 days are removed. The journal also
+holds:
+
+- `core_started`: a core started; `data` is `{kept, lost, exited}`, the sessions the last core left running that came
+  back live, that can be resumed, and that cannot;
+- `send_dropped`: an Enter the core held back for a typed message (`session`; `data` `{mark, requeued}`, `mark` one of
+  the `enter_dropped_*` reasons, `requeued` when the message waits to be sent again);
+- `owner_prompt`: the person pressed Enter in a lead's own seat (`session`; no text).
+
+These three also appear on the live stream. The journal holds every project's events, so `--history` is the owner's: a
+session's token is refused. `--project` keeps one project's events.
+
 ## Room
 
 Ticket 571: agents in one project talk through a message log the core keeps (`$NUNCHIRO_HOME/room/`, one append-only
@@ -355,6 +408,11 @@ Codex worker should run `nunchiro agent ask` instead.
 Ticket 692: every Codex start gets `-c check_for_update_on_startup=false`, so no seat shows Codex's update screen,
 whose preselected "Update now" runs `brew upgrade --cask codex` on one Enter. Update Codex outside Nunchiro. A start
 whose Codex arguments name `check_for_update_on_startup` is refused, since a later `-c` would win.
+Ticket 1130: every Claude session Nunchiro starts asks before an outward action (a mail, a calendar event, a post, a
+publish; `nunchiro hook outward`), whatever its permission mode, and so always runs hooks: its `--settings` layer sets
+`disableAllHooks: false`, which overrides a `true` in the user's, the project's or the local settings, because a
+project must not be able to turn the outward ask off. Your other hooks run too. Managed (enterprise) settings still
+win over `--settings`; a managed `disableAllHooks: true` turns the outward ask off as well.
 
 When a seat ends (exited or failed; a closed tab says nothing) with an ask open, one it sent or one sent to it, the core
 adds one `lost` event to that ask's thread: from the ended seat to the ask's other party, `reply_to` the ask, body
@@ -408,13 +466,19 @@ Prints every message of one thread in the room, read or not; the cursor does not
 
 ## Worktrees
 
-### `nunchiro worktree create --project <dir> --branch <b> [--path <dir>] [--base <ref>] [--label <l>] [--no-focus]`
-Creates a git worktree on a new branch from `--base` (default `HEAD`). Trust for the new folder is never written to user config.
+### `nunchiro worktree create --project <dir> --branch <b> [--path <dir>] [--base <ref>] [--label <l>] [--no-focus] [--json]`
+Creates a git worktree on a new branch from `--base`. Without `--base` the base is the remote default branch's tip as
+last fetched (`origin/HEAD`, for example `origin/main`; run `git fetch` first for the newest), or `HEAD` when the
+project has no such remote branch; the CLI prints the base it used on stderr (`base for a new branch: origin/main`).
+The reply is JSON; `--json` is accepted and changes nothing. Trust for the new folder is never written to user config.
 Without `--path` the folder is `<worktrees folder>/<project folder>/<random id>`. `--path` names the folder instead,
 as Orca's `--name` does: it must be one new plain name (not starting with `.`) right under
 `<worktrees folder>/<project folder>/`, where the worktrees folder is the `worktrees_dir` setting, a folder this
-project's worktrees already use, or `$NUNCHIRO_HOME/worktrees`. A path anywhere else, one that already exists, or
-one a worktree record already names is refused and nothing is created.
+project's worktrees already use (`$NUNCHIRO_HOME/worktrees` only while a record of this project lies there), or the
+unset default. Unset, the worktrees folder is `~/nunchiro/worktrees` (in the user's home; made on first use, and refused when `~/nunchiro` is a link or not a folder). Set a folder to use another disk. A record made under `../.worktrees` (ticket 1061) keeps working. A path
+anywhere else, one that already exists, or one a worktree record already names is refused and nothing is created. When
+the user's home is not known or cannot be written, the command fails and names the `worktrees_dir`
+setting to change.
 Inside a session the record names the session as its creator (shown only; any caller may open or remove it).
 
 ### `nunchiro worktree open --path <dir> [--label <l>]`
@@ -450,8 +514,8 @@ No token runs a command line as the user, since that could read `core.token` and
 scope: a token starts only Claude (`--kind claude`; no shell, no `worktree open`, and no Codex or ACP agent, since
 neither can be kept out of the Nunchiro folder), with no launch arguments after `--` (no print mode, settings file or
 permission flag; `--env` takes the same checks as for any caller). Its project, folder, worktree folder and
-`worktree create --path` are outside `$NUNCHIRO_HOME` and do not hold it; a `--worktree` start needs a worktree folder setting outside it, since the
-default worktree folder is inside it. A token types, prompts and cancels only into the sessions it started, into no
+`worktree create --path` are outside `$NUNCHIRO_HOME` and do not hold it; a `--worktree` start is refused when the
+worktree folder (the default `~/nunchiro/worktrees`, or the setting) is inside it. A token types, prompts and cancels only into the sessions it started, into no
 shell session and into no session whose agent has ended (the shell left on its screen), and sends no text that
 starts with `!` or `/` (the agent would run it as a shell or slash command).
 
@@ -622,20 +686,32 @@ user's yes. From the user's own shell it closes at once.
 seats in it. `nunchiro task assign <id> <session>` seats a session on a task that uses no worktree. Lead and owner.
 
 ### `nunchiro task staff`
-`nunchiro task staff <id> <role> [--path <worktree>] [--prompt "<first words>"] [--level light|standard|deep]` starts a seat of one of the user's
+`nunchiro task staff <id> <role> [--path <worktree>] [--prompt "<first words>"] [--level light|standard|deep] [--effort <effort>] [--account <label>]` starts a seat of one of the user's
 roles on the task: a session named "<Role> · <task>" in the task's worktree (or the project, for a task with none),
 with the role's agent and model. One live writer per worktree: a second one is refused. A role that does not write
 starts without the edit tools; where the project lets seats edit without asking, a writer starts in accept-edits.
 The seat's first prompt from the lead opens with the role, the task, its conditions and the notes it reads.
 The seat opens at a level as a teammate's seat does (ticket 993): `standard` when no `--level` is given, and the
 level picks the model and effort from Settings > Levels (`deep` for a hard task, `light` for routine work). A role
-with a model of its own keeps it, whatever the level. The line it prints names the model and effort the seat started
+with a model of its own keeps it, whatever the level. `--effort` sets the seat's effort instead of the level's (also on a
+role with its own model); one that is not in that agent's and model's effort list (Claude: low, medium, high, xhigh,
+max) is refused and nothing starts. The line it prints names the model and effort the seat started
 on ("started Builder · fix (…) on task …, on Sonnet").
+Settings > Team > Worker models can fix every Builder and Reviewer seat to one level or set an upper
+limit; a `--level` beyond the limit opens at the limit and the command prints one more line saying so. A seat that does
+not write (a Reviewer) never opens below the level the task's Builder opened at; a Reviewer role with its own model keeps
+it, and `nunchiro task show` prints a note line that the floor could not apply.
+`--account <label>` (ticket 1120) starts the seat on that agent account (its config folder, as `session start --account`).
+Without it the seat starts on the place's account (`task account`), else on the lead's own. A label that is no account of
+the role's agent is refused with the list of its labels. A lead may name only its own account or the place's account the
+user set; any other is refused (ACCOUNTPICK). The printed line and the seat line of `task show` and `task list` name the
+account ("on Opus · high · official", "seat: … (…, running, on official)").
 
 ### `nunchiro task pass`
 `nunchiro task pass ["<note>"] [--task <id>]` and `nunchiro task changes "<what must change>" [--task <id>]` record
 a review of the files as they are now. Only a seat of the task that does not write, or the owner, reviews; the
-builder cannot. The review holds for that revision only: after any edit the task reads `review` again.
+builder cannot. The review holds for that revision only: after any edit the task reads `review` again. A note keeps its
+lines, up to 4,000 characters: `task list` shows its first line, `task show <id>` and `--json` the whole note.
 
 ### `nunchiro task learn "<a lesson in one line>"`
 `nunchiro task learn "<a lesson in one line>" [--cites <file>] [--task <id>]`. A seat of the task or its lead
@@ -649,6 +725,53 @@ are now and they are committed. The answer arrives as a room message; a yes name
 `nunchiro task done <id>` closes a task whose outcome the user accepted; `nunchiro task drop <id>` gives it up (its
 proposed lessons go with it). `nunchiro task way solo|team|strict --project DIR` and
 `nunchiro task grant ask|edits --project DIR` are the owner's choices for a place.
+
+### `nunchiro task package`
+`nunchiro task package <id> quote "<words, exactly>" --who "<who said it>" --when "<when>" [--image <attached image>]... |
+unquote <n> | background "<your text>" | see "<what the user will see>" | shown <n> | approve <n> |
+link <path or URL> --kind mockup|doc|code|url [--approved] | unlink <n>` (ticket 1095) fills the task's work package:
+the quoted lines of the conversation, the lead's background, the lines the user will see, and the linked mockups,
+documents, code and URLs. Only the place's lead seat and the user fill a package; a closed task's package is kept as it is.
+A quote is never edited: a wrong line is removed with `unquote` and the right one added. Only the user marks a
+you-will-see line (`approve`) or a mockup link (`--approved`) as approved; a lead is refused and asks the user.
+The package reaches a seat's first prompt through `task staff --prompt` (and the core's own Reviewer).
+
+### `nunchiro task auto on|off`
+`nunchiro task auto on|off --project DIR` (ticket 1081, on by default) is one more owner's choice for a place. On, the core nudges a seat of an open task once
+when it stalls (a queued message older than 5 minutes, or 20 minutes quiet with no done report), asks the user on a
+card when it is still stalled 5 minutes later, and tells the lead every 10 minutes what waits; `task list` and `task show`
+print each stalled seat, what waits, and a running seat's last activity.
+
+On, in a place whose way is team or strict, the core also starts the Reviewer (ticket 1081 part B): when a task's
+Builder ended its turn with `STATUS: done` in REPORT.md (written after its last prompt), its files are committed (no
+changed tracked file), no review exists for that revision and no Reviewer of the task is at work, it starts one fresh
+Reviewer seat through the same path as `task staff` (the level floor of its Builder; the prompt is review.md filled in,
+both blocks at strict), once per revision. It starts it as the lead's own `task staff` would: on the lead's account,
+under the same start check, with the lead's seat as its parent; it checks again, right before the start, that the task
+is open, auto-advance on, the way team or strict, the lead running and the cap free, and starts nothing otherwise. It
+closes that Reviewer once its verdict is recorded and its turn ended; a failed start is tried again, at most 3 times
+per revision, then the user is asked on a card. A review that asks for changes is forwarded to the Builder as one line
+(the Reviewer sends the full findings with `agent send`), at most 3 rounds; a fourth "changes" asks the user on a card.
+Each action is one line in the room.
+
+### `nunchiro task account <label>|own`
+`nunchiro task account <label>|own --project DIR` (ticket 1120) is the owner's choice of the agent account a place's seats
+start on: the lead's `task staff` without `--account` and the core's own Reviewer alike, each on its agent's account of
+that label (a seat of an agent with no account by that label runs on the lead's own). `own` goes back to the lead's own
+account. An unknown label is refused with the list. A lead is refused and asks the user; the lead hears the change in
+its room. With it set, a session of that place may start sessions on that account as on its own.
+
+### `nunchiro task cap 2|4|6|8`
+`nunchiro task cap 2|4|6|8 --project DIR` (ticket 1081 part B, 4 by default) is the owner's choice of how many live seats
+the place may have before the core stops starting Reviewers. Every live seat of the place counts: each task's seats
+(closed tasks too), the leads', and an idle Reviewer until it is closed. At the cap the review waits ("1 review waits
+for a free seat" in the Team view) and starts when a seat closes. The lead's own `task staff` is counted, never held back.
+
+### `nunchiro task ask-cap 2|4|6|8`
+`nunchiro task ask-cap 2|4|6|8 --why "<what you saw>"` (ticket 1099) is how a place's lead asks for another cap: the
+user gets a "Change live seats" card in Decisions, and only their yes sets the cap, as `task cap` does. A new ask
+replaces the place's card not yet answered; an ask for the cap the place already has is refused. A lead's own
+`task cap` stays refused. The answer arrives as a room message.
 
 ### `nunchiro note list`
 The notes this session reads: about the user, its role's, and its project's (the owner's shell: every note). Notes
@@ -713,8 +836,11 @@ herdr ledger import. Errors (unknown card or column, malformed receipt, a refuse
 write nothing.
 
 ### `nunchiro board list [--json]`
-One tab-separated line per task card: id, column, title, group, ref, attached sessions (`label:role`), receipt.
-`--json` prints the whole board snapshot the window reads.
+One tab-separated line per task card: id, column, title, group, ref, attached sessions (`label:role`), receipt,
+and a last field that is `archived` for a card in Done for longer than `done_days` (board.toml `[settings]`: 1, 7 or 30,
+default 7), else empty. An archived card is only hidden in the window's Done column (it shows in the Archive fold);
+nothing is deleted, and the card still counts in lane progress. `--json` prints the whole board snapshot the window
+reads, with `"archived": true|false` and `done_at` (when the card arrived in Done, else null) added to each card.
 
 ### `nunchiro board create <title> [--column <column>] [--why <line>] [--group <id>] [--ref <path|url>] [--waits-on <card>]... [--attach <session> [--role <role>]]... [--json]`
 Places a card, with its task fields in the same write: all or nothing (an unknown `--column`, `--waits-on` card or
@@ -862,11 +988,11 @@ nunchiro layout resize <zone> <px>
 nunchiro layout reset | undo
 ```
 
-- Widgets (v1a): `tree`, `agents`, `waiting` (the answer strip), `terminal`, `composer`; v1b adds `diff` and `files` (the
+- Widgets (v1a): `tree`, `waiting` (the answer strip), `terminal`, `composer`; v1b adds `diff` and `files` (the
   focused session's folder, read only). A widget may appear more
   than once; an unpinned one follows the focused session, `--pin SESSION` (an id or the session's shown name)
   keeps it on one session.
-- Zones are named in the file (`id`); the default layout has `tree`, `agents`, `terminal`, `waiting` and
+- Zones are named in the file (`id`); the default layout has `tree`, `terminal`, `waiting` and
   `composer` zones, and new zones are named after their widget (`terminal-2`). Without `--zone` a command acts on
   the first terminal zone.
 - `split` halves the zone (both halves share the space) and is refused when either half would go below its

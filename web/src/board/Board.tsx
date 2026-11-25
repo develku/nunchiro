@@ -17,7 +17,7 @@ import { ViewOptions } from './ViewOptions';
 import { cardCount, WatchCard, WatchGrid } from './WatchGrid';
 import { WatchDetail } from './WatchDetail';
 import { BUCKETS, bucketOf, byRecent, watchLaneKey, type Bucket } from './watch';
-import { coordinator, lanes as laneList, matchesQuery, passes } from './tasks';
+import { aged, archivedIn, coordinator, lanes as laneList, matchesQuery, passes } from './tasks';
 import { CENTRE, loadView, MODES, saveView, type View } from './views';
 import { EditPanel, Pencil } from './EditPanel';
 import { ListView } from './ListView';
@@ -172,11 +172,17 @@ export function Board({ core, sessions, onOpen, t = ENGLISH, zone = CENTRE }: { 
   const watching = view.mode === 'watch' && view.density !== 'list';
   const watchBuckets: Bucket[] = view.showIdle ? [...BUCKETS, 'idle'] : BUCKETS;
   const bucketFor = useCallback((c: Card) => bucketOf(c, shown?.columns ?? [], judgedOf(c)), [shown, judgedOf]);
+  const watchAll = useMemo(() => byRecent([...lists.values()].flat()).filter((c) => watchBuckets.includes(bucketFor(c))), [lists, view.showIdle, bucketFor]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Ticket 1090: Done cards past the Archive age leave the Done bucket (cells and count) for its Archive fold, as in the columns view.
+  const watchOld = useMemo(() => {
+    const old = aged(settings.done_days, now);
+    return new Set(watchAll.filter((c) => bucketFor(c) === 'done' && old(c)));
+  }, [watchAll, bucketFor, settings.done_days, now]);
   const watchLanes = useMemo(() => {
-    const cards = byRecent([...lists.values()].flat()).filter((c) => watchBuckets.includes(bucketFor(c)));
+    const cards = watchAll.filter((c) => !watchOld.has(c));
     const projects = new Set(cards.map((c) => c.project).filter(Boolean)).size;
     return laneList(cards, watchLaneKey(view.watchLanes, projects));
-  }, [lists, view.watchLanes, view.showIdle, bucketFor]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [watchAll, watchOld, view.watchLanes]);
   const watchCounts = useMemo(() => {
     const n = new Map<Bucket, number>();
     for (const lane of watchLanes) for (const c of lane.cards) n.set(bucketFor(c), (n.get(bucketFor(c)) ?? 0) + 1);
@@ -354,9 +360,11 @@ export function Board({ core, sessions, onOpen, t = ENGLISH, zone = CENTRE }: { 
     threshold,
     onToggle: (card) => setExpanded((s) => (s.has(keyOf(card)) ? new Set([...s].filter((k) => k !== keyOf(card))) : new Set([...s, keyOf(card)]))),
   };
-  const counts = new Map([...lists].map(([id, cards]) => [id, cards.length]));
+  // Ticket 1066: older done cards leave the Done column (counts and cells) but stay in the lanes' "n/m done".
+  const archived = archivedIn(shown?.columns ?? [], settings.done_days, now);
+  const counts = new Map([...lists].map(([id, cards]) => [id, cards.filter((c) => !archived(c)).length]));
   // Ticket 407: the header counts the cards the columns draw (the watch view leaves Idle out unless asked), from the same list.
-  const drawn = watching ? watchLanes.reduce((n, l) => n + l.cards.length, 0) : [...lists.values()].reduce((n, cards) => n + cards.length, 0);
+  const drawn = watching ? watchLanes.reduce((n, l) => n + l.cards.length, 0) : [...lists.values()].reduce((n, cards) => n + cards.filter((c) => !archived(c)).length, 0);
   // V2.5-38: the pencil opens the edit panel (draft B); the panel sits beside the board, or over a narrow list.
   const pencil = (
     <button type="button" className="bpen" aria-label={t('board.edit.open')} title={t('board.edit.open')} aria-pressed={editing} disabled={!shown} onClick={() => setEditing(!editing)}>
@@ -405,7 +413,7 @@ export function Board({ core, sessions, onOpen, t = ENGLISH, zone = CENTRE }: { 
           </span>
           {pencil}
         </div>
-        {panel || (shown && <ListView t={t} columns={shown.columns} lanes={lanes} sessions={sessions} onOpen={open} onKey={onKey} />)}
+        {panel || (shown && <ListView t={t} columns={shown.columns} lanes={lanes.map((l) => ({ ...l, cards: l.cards.filter((c) => !archived(c)) }))} old={lanes.flatMap((l) => l.cards).filter(archived)} now={now} sessions={sessions} onOpen={open} onKey={onKey} />)}
         <div className="bepfoot">{t('board.view.saved', { view: [...on, t('board.density.list'), view.lane === 'none' ? t('board.view.noLanes') : t('board.view.lanes', { key: t(`board.lane.by.${view.lane}`) })].join(' · ') })}</div>
         {editor && shown && <CardEditor t={t} card={editor.card} columns={shown.columns} column={editor.column} sessions={sessions} onSave={save(editor.card)} onDelete={() => remove(editor.card!)} onClose={() => setEditor(null)} />}
       </section>
@@ -454,6 +462,8 @@ export function Board({ core, sessions, onOpen, t = ENGLISH, zone = CENTRE }: { 
           lanes={watchLanes}
           counts={watchCounts}
           bucketOf={bucketFor}
+          old={[...watchOld]}
+          now={now}
           cell={(card, bucket) => {
             const session = sessions.find((s) => s.id === card.session_id);
             return (
@@ -497,6 +507,8 @@ export function Board({ core, sessions, onOpen, t = ENGLISH, zone = CENTRE }: { 
           columns={shown.columns}
           lanes={lanes}
           counts={counts}
+          archived={archived}
+          now={now}
           onAdd={(column) => setEditor({ card: null, column })}
           cell={(card, col, lane) => {
             return <CardView t={t} core={core} card={card} column={col} projectLane={lane?.kind === 'project' || lane?.kind === 'fallback'} ctx={ctx} session={sessions.find((s) => s.id === card.session_id)} done={col.states.includes('done')} dragging={drag.key === keyOf(card)} onClick={() => !drag.consumeClick() && open(card)} onKeyDown={(e) => onKey(e, card, col)} onPointerDown={(e) => movable(card) && drag.start(e, card)} />;

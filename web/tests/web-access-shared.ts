@@ -14,12 +14,12 @@ export async function freePort(): Promise<number> {
   });
 }
 
-/** Settings > Browser access, from the visible Settings control: two clicks. */
+/** Settings > Phone and web access, from the visible Settings control: two clicks. */
 export async function openBrowserAccess(app: Page) {
   await app.getByRole('button', { name: 'Settings', exact: true }).click();
-  // needs 192 (ticket 250): Browser access is its own page again; its section heading is the h2 under the page title.
-  await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name: 'Browser access', exact: true }).click();
-  await expect(app.getByRole('heading', { name: 'Browser access', level: 2 })).toBeVisible();
+  // needs 192 (ticket 250): Phone and web access is its own page again; its section heading is the h2 under the page title.
+  await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name: 'Phone and web access', exact: true }).click();
+  await expect(app.getByRole('heading', { name: 'Phone and web access', level: 2 })).toBeVisible();
 }
 
 /** Opens the Mac window and turns browser access on at `port`. */
@@ -29,8 +29,8 @@ export async function enable(app: Page, port: number) {
   await app.getByRole('textbox', { name: 'Port' }).fill(String(port));
   await app.getByRole('textbox', { name: 'Port' }).blur(); // saved on blur
   // Controlled by the core's reply: checked once the core bound the port.
-  await app.getByRole('switch', { name: 'Allow browser access', exact: true }).click();
-  await expect(app.getByRole('switch', { name: 'Allow browser access', exact: true })).toBeChecked();
+  await app.getByRole('switch', { name: 'Allow phone and web access', exact: true }).click();
+  await expect(app.getByRole('switch', { name: 'Allow phone and web access', exact: true })).toBeChecked();
   await expect(app.locator('.browser-page')).toContainText(`http://127.0.0.1:${port}`);
 }
 

@@ -6,7 +6,7 @@ import type { Problem, ProblemCase, Session } from '../src/types';
 import { causeText } from '../src/chat/problemCause';
 import { agentsToml, fakeAcp, ownerOk, owner, tomlEntry } from './acp-fakes';
 import { makeT } from './i18n-tables';
-import { agentsZone, expect, test, type Core } from './fixtures';
+import { stripOnTop, expect, test, type Core } from './fixtures';
 
 // What the core writes (crates/nunchiro-core/src/problems.rs) and who the session names, one row per sentence.
 type Row = { p: Problem; who: Parameters<typeof causeText>[2]; en: string };
@@ -62,7 +62,7 @@ test('causes_fall_back: no name for a session keeps the core sentence', () => {
 // Part 2: the real window in Korean.
 test.describe('ko-KR window', () => {
   test.use({ locale: 'ko-KR' });
-  test.beforeEach(({ core }) => agentsZone(core));
+  test.beforeEach(({ core }) => stripOnTop(core));
 
   const snapshot = (core: Core) => core.cli('snapshot', '--json').sessions as Session[];
   function fake(core: Core, name: 'claude' | 'codex', text: string, code: number) {
@@ -77,7 +77,7 @@ test.describe('ko-KR window', () => {
   };
   /** The cause line holds no English once the product names, ids and the agent's own words are taken out. */
   async function koreanCard(app: import('@playwright/test').Page, id: string, kase: string, detail: string) {
-    await app.locator(`.ar[data-agent="${id}"]`).click();
+    await app.locator(`button.row.wt2[data-menu-session="${id}"]`).click();
     await expect(band(app)).toHaveAttribute('data-problem', kase);
     const cause = (await band(app).locator('.cause').innerText()).trim();
     expect(cause, kase).toMatch(/[가-힣]/);
@@ -122,7 +122,7 @@ test.describe('ko-KR window', () => {
     await koreanCard(app, idOf('signout'), 'logged_out', 'signout is not signed in.');
     await koreanCard(app, idOf('mute'), 'acp_no_answer', 'mute did not answer ACP: check its command.');
     // A refused entry has no Details of its own: the English sentence is the only one, so it moves there.
-    await app.locator(`.ar[data-agent="${idOf('cl')}"]`).click();
+    await app.locator(`button.row.wt2[data-menu-session="${idOf('cl')}"]`).click();
     await expect(band(app)).toHaveAttribute('data-problem', 'acp_refused');
     expect(english((await band(app).locator('.cause').innerText()).trim())).toEqual([]);
     await band(app).getByText('자세히').click();

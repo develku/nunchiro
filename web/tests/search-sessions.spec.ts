@@ -248,6 +248,26 @@ test('search_sessions: the palette opens Search in the Sessions scope with its f
   await expect(group(page, s.id).getByRole('option')).toHaveCount(1);
 });
 
+// Ticket 1130 C3 (p04 T5, 6 steps to 3): the chord focuses Search sessions, the typed word finds the chat, Enter opens its first hit.
+test('chord_word_enter_opens_first_hit', async ({ page, chatCore: core }) => {
+  const s = core.chat('alpha');
+  append(s.file, rec.user('filler'), rec.assistant('the chord needle lives here'));
+  await page.goto('/');
+  await expect(page.getByRole('status').filter({ hasText: /^Connected$/ })).toBeVisible();
+  // The key binding is live a moment after the window connects (WebKit loses a first press): press until the field is there.
+  await expect(async () => {
+    if (!(await field(page).isVisible())) await page.keyboard.press('Alt+Meta+KeyF');
+    await expect(field(page)).toBeFocused({ timeout: 1000 });
+  }).toPass({ timeout: 10_000 });
+  await expect(panel(page).getByRole('radio', { name: 'Sessions' })).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.type('chord needle');
+  await expect(group(page, s.id).getByRole('option')).toHaveCount(1);
+  await expect(panel(page).locator('.shint')).toHaveText('Enter opens the first result');
+  await page.keyboard.press('Enter');
+  await expect(page.locator(`.tab[data-tab="${s.id}"]`)).toHaveAttribute('aria-selected', 'true');
+  await expect(chat(page, s.id).locator('.crow[data-hit]')).toContainText('the chord needle lives here');
+});
+
 test('query_without_plain_character_is_refused: quotes, backslashes and control characters alone are not sent', async ({ page, chatCore: core }) => {
   const s = core.chat('alpha');
   append(s.file, rec.user('say a"b here'));

@@ -56,7 +56,9 @@ def verdict(r):
 
 
 def build():
-    env = dict(os.environ, CARGO_TARGET_DIR=str(BUILD / "target"), CARGO_BUILD_JOBS=os.environ.get("CARGO_BUILD_JOBS", "2"))
+    # MEASURE_TARGET: a cargo target on a roomier disk (ticket 1098); the bundle still lands in BUILD.
+    target = Path(os.environ.get("MEASURE_TARGET") or BUILD / "target")
+    env = dict(os.environ, CARGO_TARGET_DIR=str(target), CARGO_BUILD_JOBS=os.environ.get("CARGO_BUILD_JOBS", "2"))
     subprocess.run(["pnpm", "--filter", "nunchiro-web", "build"], cwd=ROOT, env=env, check=True)
     subprocess.run(["pnpm", "exec", "tauri", "build", "--bundles", "app", "--config", "src-tauri/tauri.rc.conf.json"],
                    cwd=ROOT / "app", env=env, check=True)
@@ -64,8 +66,8 @@ def build():
     subprocess.run(["cargo", "build", "--release", "--locked", "-p", "nunchiro"], cwd=ROOT, env=dict(env, NUNCHIRO_BUILD="1"), check=True)
     app = BUILD / NAME
     own_dirs(app)  # refuses a linked .scratch/startup, as rmtree follows a linked parent
-    shutil.copytree(BUILD / "target/release/bundle/macos" / NAME, app, symlinks=True, dirs_exist_ok=True)
-    shutil.copy2(BUILD / "target/release/nunchiro", app / "Contents/MacOS/nunchiro")  # the window prefers the CLI next to it
+    shutil.copytree(target / "release/bundle/macos" / NAME, app, symlinks=True, dirs_exist_ok=True)
+    shutil.copy2(target / "release/nunchiro", app / "Contents/MacOS/nunchiro")  # the window prefers the CLI next to it
     return app
 
 

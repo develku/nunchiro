@@ -6,7 +6,7 @@ import type { T } from '../i18n';
 import { checking, type Decision, type OpenLoop, type Session } from '../types';
 
 /** The snapshot fields V2-8e adds to an item (crates/nunchiro-core/src/queue/mod.rs `Decision`). */
-export type Item = Decision & { risky?: boolean; deny_note?: boolean; allow_always?: string; allow_scope?: string; tool?: string };
+export type Item = Decision & { risky?: boolean; deny_note?: boolean; allow_always?: string; allow_scope?: string; tool?: string; outward?: 'mail' | 'calendar' | 'post' | 'publish' };
 
 /** A permission is risky unless the core said `risky: false` (fail-closed: an absent field is risky). */
 export const isRisky = (d: Item) => d.kind === 'permission' && d.risky !== false;
@@ -52,7 +52,7 @@ const keyOf = (d: Decision) => (d.owner?.type === 'merge' ? `item:${d.id}` : d.s
 /** An owner item answered on its own card in Decisions (a lead's merge, role, goal or schedule, the Home lead's Outbox
  *  card, a stalled task, a memory past its brief's limit): the widget's icon gets a dot. Tickets 1002 ('outward'), 1004 ('stall')
  *  and 1005 ('tidy'); ticket 1003: an open loop's card ('loop'). */
-export const hasCard = (d: Decision) => ['merge', 'role', 'goal', 'schedule', 'outward', 'stall', 'tidy', 'loop'].includes(d.owner?.type ?? '');
+export const hasCard = (d: Decision) => ['merge', 'role', 'goal', 'schedule', 'outward', 'stall', 'tidy', 'loop', 'cap', 'session_close'].includes(d.owner?.type ?? '');
 /** N25 (look 1117 v3, v4f): a board card whose task waits on a merge names that merge, as its card does; a merge with no
  *  board card still gets a line in its project's rows (answered on its card only: its plan has no row buttons). The line
  *  keeps the card's asker, not the board card's empty one, so it sits under the lead's row and names it (look v15 B). */

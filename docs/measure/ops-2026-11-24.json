@@ -1,0 +1,82 @@
+{
+ "date": "2026-11-24 16:08",
+ "commit": "d497ae997",
+ "deploy": {
+  "tested": 117,
+  "episodes": [
+   {
+    "sha": "85e89f6b6",
+    "red_at": "2026-11-22 10:59",
+    "green_at": "2026-11-22 11:48",
+    "minutes": 49
+   },
+   {
+    "sha": "e47ed2a83",
+    "red_at": "2026-11-23 14:43",
+    "green_at": "2026-11-23 18:52",
+    "minutes": 250
+   },
+   {
+    "sha": "76f33cf50",
+    "red_at": "2026-11-24 02:28",
+    "green_at": "2026-11-24 04:58",
+    "minutes": 150
+   },
+   {
+    "sha": "5c1482c8e",
+    "red_at": "2026-11-24 13:44",
+    "green_at": "2026-11-24 15:44",
+    "minutes": 120
+   }
+  ],
+  "still_red": false,
+  "culprits": [
+   "5c1482c8e",
+   "76f33cf50",
+   "91a8c4094",
+   "e55a887ff",
+   "fc9be5fd2"
+  ],
+  "failures": 5,
+  "change_failure_pct": 4.3,
+  "restore_median_min": 135.0,
+  "restore_max_min": 250,
+  "reverts_landed": [
+   "fable-revert-fable-w79loops",
+   "fable-revert-lead-turnends1094"
+  ],
+  "revert_holds": 5,
+  "reverts_queued": 1
+ },
+ "supply": {
+  "tools": {
+   "cargo audit": false,
+   "cargo outdated": false,
+   "cargo deny": false
+  },
+  "not_run": "pnpm audit and pnpm outdated send the package list to the npm registry; cargo audit needs the RustSec database from the network: not run (offline-safe rule)",
+  "lockfiles": [
+   "Cargo.lock",
+   "app/src-tauri/Cargo.lock",
+   "pnpm-lock.yaml"
+  ],
+  "sbom_files": [],
+  "dependabot": false,
+  "rust_packages": 80,
+  "rust_duplicate_names": 4,
+  "npm_packages": 247,
+  "clean_clone": {
+   "a": {
+    "commit": "d497ae997",
+    "build_min": 2.54,
+    "sha256": "5bf5bc159f48476dc1263d3135c407a0fa09a8accc13f17cbf2f5d2bcd49e26d"
+   },
+   "b": {
+    "commit": "d497ae997",
+    "build_min": 2.53,
+    "sha256": "5bf5bc159f48476dc1263d3135c407a0fa09a8accc13f17cbf2f5d2bcd49e26d"
+   },
+   "same_binary": true
+  }
+ }
+}

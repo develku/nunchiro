@@ -30,6 +30,11 @@ impl Harness {
         if !command.get_envs().any(|(key, _)| key == "CODEX_HOME") {
             command.env("CODEX_HOME", home.join("codex-home"));
         }
+        if !command.get_envs().any(|(key, _)| key == "HOME") {
+            // Ticket 1083: the default worktrees folder lies in the user's home; never the real one.
+            std::fs::create_dir_all(home.join("user")).unwrap();
+            command.env("HOME", home.join("user"));
+        }
         let core = command
             .env("NUNCHIRO_HOME", &home)
             .env("SHELL", "/bin/sh") // ticket 286: the shell an ended agent leaves
@@ -250,7 +255,7 @@ fn sessions_start_in_project_or_isolated_worktree() {
             _ => panic!(),
         };
         let expected = if worktree {
-            h.home.join("worktrees/repo").join(&s.id[..8]) // dogfood F4: an 8-character folder
+            h.home.join("user/nunchiro/worktrees/repo").join(&s.id[..8]) // dogfood F4: an 8-character folder
         } else {
             project.clone()
         };
@@ -2494,6 +2499,50 @@ fn git_repo(dir: &std::path::Path) {
     }
 }
 
+// Ticket 1054: with no --base, a new branch starts at origin's default tip, not at a detached HEAD behind it; a repo
+// with no remote starts it at HEAD.
+#[test]
+fn worktree_create_defaults_to_origins_default_branch() {
+    let h = Harness::new();
+    let git = |dir: &std::path::Path, args: &[&str]| -> String {
+        let out = home::git_env::scrubbed("git")
+            .current_dir(dir)
+            .args(["-c", "user.name=F", "-c", "user.email=f@example.invalid"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{args:?}: {out:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    let up = h.home.join("up");
+    git_repo(&up);
+    git(&up, &["commit", "--allow-empty", "-qm", "ahead"]);
+    let tip = git(&up, &["rev-parse", "HEAD"]);
+    git(&h.home, &["clone", "-q", up.to_str().unwrap(), "repo"]);
+    let project = h.home.join("repo");
+    git(&project, &["checkout", "-q", "--detach", "HEAD~1"]);
+    let plain = h.home.join("plain");
+    git_repo(&plain);
+    git(&plain, &["commit", "--allow-empty", "-qm", "second"]);
+    let head = git(&plain, &["rev-parse", "HEAD"]);
+    for (repo, want) in [(&project, &tip), (&plain, &head)] {
+        let out = cli(
+            &h,
+            &[
+                "worktree",
+                "create",
+                "--json",
+                "--project",
+                repo.to_str().unwrap(),
+                "--branch",
+                "b-def",
+            ],
+        );
+        assert!(out.status.success(), "{out:?}");
+        assert_eq!(&git(repo, &["rev-parse", "b-def"]), want, "{out:?}");
+    }
+}
+
 // Ticket 573 slice 1: `worktree create --path` makes the worktree there (CLI -> socket -> core); a path outside the
 // project's worktree folder, nested, hidden, or already there is refused and nothing is made.
 #[test]
@@ -2502,7 +2551,7 @@ fn worktree_create_honours_path_and_refuses_others() {
     let project = h.home.join("repo");
     git_repo(&project);
     let project_arg = project.to_str().unwrap();
-    let under = h.home.join("worktrees/repo");
+    let under = h.home.join("user/nunchiro/worktrees/repo");
     let create = |branch: &str, path: &std::path::Path| {
         cli(
             &h,
@@ -2536,16 +2585,19 @@ fn worktree_create_honours_path_and_refuses_others() {
 
     std::fs::create_dir(h.home.join("elsewhere")).unwrap();
     std::fs::create_dir(under.join("plain-dir")).unwrap();
+    // Ticket 1061: the old default root is there but no record of this project uses it.
+    std::fs::create_dir_all(h.home.join("worktrees/repo")).unwrap();
     std::os::unix::fs::symlink(h.home.join("elsewhere"), under.join("link")).unwrap();
     for (n, path) in [
         under.join("link/x"),       // a symlinked parent that leads outside the root
         h.home.join("elsewhere/x"), // outside every worktree root
-        h.home.join("worktrees/x"), // the root itself, not the project's folder
-        under.join("deep/x"),       // nested
-        under.join(".hidden"),      // hidden name
-        under.join("plain-dir"),    // a folder that is there
-        under.join("named-one"),    // a recorded worktree
-        under.join("x/.."),         // not a plain name
+        h.home.join("user/nunchiro/worktrees/x"), // the root itself, not the project's folder
+        h.home.join("worktrees/repo/x"), // the old default root, which no record of this project uses
+        under.join("deep/x"),            // nested
+        under.join(".hidden"),           // hidden name
+        under.join("plain-dir"),         // a folder that is there
+        under.join("named-one"),         // a recorded worktree
+        under.join("x/.."),              // not a plain name
     ]
     .iter()
     .enumerate()
@@ -2596,6 +2648,43 @@ fn worktree_create_honours_path_and_refuses_others() {
         panic!("wrong reply");
     };
     assert_eq!(worktrees.len(), 2);
+
+    // Round 2: a record under the old root (made while an absolute setting pointed there) keeps that root allowed
+    // after the setting is unset, as for every worktree made before ticket 1061.
+    let dir = |d: String| {
+        h.request(Request::QuitSettings {
+            patch: LifetimePatch {
+                worktrees_dir: Some(d),
+                ..Default::default()
+            },
+        })
+    };
+    dir(h.home.join("worktrees").to_str().unwrap().into());
+    let out = cli(
+        &h,
+        &[
+            "worktree",
+            "create",
+            "--project",
+            project_arg,
+            "--branch",
+            "b-old",
+        ],
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    dir(String::new());
+    let old = h.home.join("worktrees/repo/again");
+    let out = create("b-again", &old);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(old.join(".git").exists());
 }
 
 // Ticket 573 slice 1: `agent start --env` reaches the agent process (a shell fake agent prints it); a refused name

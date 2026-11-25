@@ -25,7 +25,7 @@ export function Bdot({ s }: { s: string }) {
   );
 }
 
-const DOT = { working: 'working', needs_decision: 'waiting', review: 'idle', done: 'done' } as const;
+const DOT = { working: 'working', needs_decision: 'waiting', review: 'idle', done: 'done', idle: 'idle' } as const;
 const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
 export interface CardCtx {
@@ -78,7 +78,7 @@ export function CardView({ t, core, card, session, column, projectLane = false, 
   // own placement. Only a closed session falls back to the core's state word.
   const live = card.source === 'session' && session ? status(session) : null;
   const dot = live ?? (card.stale ? 'stale' : card.state && DOT[card.state]);
-  const word = live ?? (card.state ? (card.stale ? t('board.word.stale') : t(`board.state.${card.state}`)) : card.source === 'integration' ? card.source_name : t('board.word.manual'));
+  const word = live ?? (card.state ? (card.stale ? t('board.word.stale') : card.state === 'idle' ? '' : t(`board.state.${card.state}`)) : card.source === 'integration' ? card.source_name : t('board.word.manual'));
   const title = card.source === 'session' && session ? sessionName(session) : card.title;
   const label = `${t('board.card.aria', { title, word: String(word) })}${card.project ? t('board.card.ariaProject', { project: base(card.project) }) : ''}${card.source === 'session' ? t('board.card.ariaOpens') : card.source === 'manual' ? t('board.card.ariaEdit') : ''}`;
   const task = card.source === 'manual';
@@ -103,6 +103,7 @@ export function CardView({ t, core, card, session, column, projectLane = false, 
         // Draft B: a session card says it is automatic, with its state as a chip (shape and word, never colour alone).
         <span className="bmt bmeta">
           <span className="bauto">{t('board.task.auto')}</span>
+          {session?.account && <span className="bauto" data-account>{session.account}</span> /* ticket 1070: the account the Agents widget showed */}
           <span className="bra">
             <b>—</b>
             <span data-tone={live === 'working' ? 'w' : live === 'waiting' ? 'y' : 'o'}>

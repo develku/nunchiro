@@ -22,8 +22,8 @@ id = "board"
 widgets = ["board"]
 
 [[root.children.children]]
-id = "agents"
-widgets = ["agents"]
+id = "context"
+widgets = ["context"]
 
 [[root.children]]
 id = "centre"

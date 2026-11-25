@@ -8,10 +8,10 @@ import path from 'node:path';
 import type { Session } from '../src/types';
 import { openRow } from './accounts-rows';
 import { agentsToml, fakeAcp, ownerOk, tomlEntry } from './acp-fakes';
-import { agentsZone, expect, openWindow, REPO, test, type Core } from './fixtures';
+import { stripOnTop, expect, openWindow, REPO, test, type Core } from './fixtures';
 import { closeSettings, openSettings } from './settings-modal';
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const FIXTURES = path.join(REPO, 'crates/nunchiro-core/tests/fixtures/accounts');
 const ID = '0123456789abcdef0123456789abcdef';

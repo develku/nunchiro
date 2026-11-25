@@ -55,7 +55,7 @@ test('scales_used_where_equal: no scale-equal font size or radius literal in the
 
 const KINDS: Record<string, string> = {
   tree: 'git-branch', files: 'file-directory', search: 'search', diff: 'diff', preview: 'browser', board: 'project', artifacts: 'package',
-  agents: 'person', terminal: 'terminal', composer: 'pencil', waiting: 'list-unordered', layout: 'apps', settings: 'gear', '': 'code', 'no-such-user-widget': 'code',
+  terminal: 'terminal', composer: 'pencil', waiting: 'list-unordered', layout: 'apps', settings: 'gear', '': 'code', 'no-such-user-widget': 'code',
 };
 test('layout_icons_from_module: every kind renders its mapped Octicon and an unknown widget renders code', () => {
   for (const [kind, name] of Object.entries(KINDS)) {

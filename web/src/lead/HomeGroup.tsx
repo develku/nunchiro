@@ -3,7 +3,8 @@
 // not; a press opens the seat. The Home folder's other sessions sit under the seat that started them, never as a project
 // named "home" with a "main" row (survey C13).
 // Ticket 1032 (owner 11-21, mockup docs/design/bot-statusbar-1121/index.html 3-5): with no Home teammate the group still
-// shows, with one quiet row that opens the set-up ("Name your assistant"); folding the group hides it.
+// shows, with one quiet row that opens the set-up ("Name your assistant"); folding the group hides it. Ticket 1130 C7:
+// the folder's sessions sit under that row.
 // Home view change 3 (11-17): with a Home lead, the lead's row always shows (first); an assistant's row only while it runs,
 // waits for the user or failed (or has sessions under it, or is the one in front); the others fold into one "N resting"
 // line a press unfolds.
@@ -102,6 +103,14 @@ export function HomeGroup({ t, core, team, sessions, current, onOpen }: { t: T; 
           </button>
         </span>
       )}
+      {/* Ticket 1130 C7 (mockup first-use-b-1130): with no teammate yet, the folder's sessions (Quick setup's first one) sit under the set-up row. */}
+      {!folded &&
+        !mates.length &&
+        here.map((s) => (
+          <span className="wtwrap home-kid" key={s.id}>
+            <WtRow name={sessionName(s)} state={stateOf([s])} sessionId={s.id} selected={s.id === current} onOpen={() => onOpen(s.id)} seat={s} cacheIds={[s.id]} t={t} />
+          </span>
+        ))}
       {!folded && resting > 0 && !rest && (
         <span className="wtwrap home-rest">
           {/* Not a session row: no branch icon and no "not running" in its name (look 1117 v3), only what a press does. */}

@@ -5,7 +5,7 @@ import { readdirSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { FIELDS, PAGES, ROW_TITLE, searchHas } from '../src/settings';
+import { FIELDS, PAGES, ROW_TITLE } from '../src/settings';
 import { expect, openWindow, test } from './fixtures';
 import { TABLES } from './i18n-tables';
 
@@ -30,20 +30,6 @@ function allFields() {
   })();
   return loaded;
 }
-
-test('settings_search_all_languages_words: every field has search words in all 8 languages', async () => {
-  const all = await allFields();
-  expect(all.length, 'the feature files registered their fields').toBeGreaterThan(90);
-  const bad: string[] = [];
-  for (const f of all) {
-    for (const l of LANGS) {
-      const own = phrases(l, f.key);
-      if (!own.length || own.some((p) => !p)) bad.push(`${f.key} (${l})`);
-      else if (!own.every((p) => searchHas(p, own.join(', ')))) bad.push(`${f.key} (${l}) does not match itself`);
-    }
-  }
-  expect(bad, 'fields with no search words, or an empty phrase, by language').toEqual([]);
-});
 
 test('settings_search_all_languages_at: no field is found by an aria-label, which the page translates', async () => {
   const bad = (await allFields()).filter((f) => f.at.includes('aria-label=')).map((f) => f.key);

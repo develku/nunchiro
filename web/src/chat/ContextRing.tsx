@@ -23,6 +23,11 @@ export function useReported(id: string | undefined, part: 'model' | 'effort'): s
   return useSyncExternalStore(hear, get, get);
 }
 
+/** Ticket 1059: drops this session's cached read, so the next view of it reads the core again (after a /context). */
+export function forgetContext(core: CoreClient, id: string) {
+  caches.get(core)?.delete(id);
+}
+
 /** The context read for the visible active conversation; B15 (ticket 991): the composer's model chip reads its `model` too. */
 export function useSessionContext(core: CoreClient, session: Session | null, active: boolean, connected: boolean): SessionContext | null {
   const [visible, setVisible] = useState(document.visibilityState === 'visible');

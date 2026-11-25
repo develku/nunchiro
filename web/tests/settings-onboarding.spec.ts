@@ -53,7 +53,7 @@ test.describe('first run', () => {
     await perm.selectOption('full-access');
     await expect.poll(() => ownerOk(core, { op: 'agent_permission_get' })).toMatchObject({ claude: 'full-access', codex: 'full-access' });
     await quick.screenshot({ path: '../.scratch/shots/quick-setup-en.png' });
-    await quick.getByRole('button', { name: 'Use recommended settings and add a project' }).click();
+    await quick.getByRole('button', { name: 'Add a project without starting' }).click(); // ticket 1123: Start is the main button now
     await expect(app.getByRole('dialog', { name: 'Add project', exact: true })).toBeVisible();
     expect(await app.evaluate(() => (window as unknown as { Notification: { permission: string } }).Notification.permission)).toBe('granted');
     const features = (await stored(app)).features ?? {};

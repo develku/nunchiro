@@ -93,6 +93,9 @@ export function plan(d: Decision, session: Session | undefined, t: T): Plan {
     if (d.owner?.type === 'role') return { acts: [{ ...dismiss, label: t('lead.roleCard.notNow') }], terminal: [], note: t('lead.roleCard.onCard') };
     // Ticket 993: the yes changes the schedules, so it is given only on the card, with the whole task to read first.
     if (d.owner?.type === 'schedule') return { acts: [d.owner.change === 'failed' ? dismiss : { ...dismiss, label: t('lead.roleCard.notNow') }], terminal: [], note: t('schedule.card.onCard') };
+    // Ticket 1099 panel 4: the yes changes the live seats, so it is given only on the card, with the reason to read first.
+    if (d.owner?.type === 'session_close') return { acts: [{ ...dismiss, label: t('lead.roleCard.notNow') }], terminal: [], note: t('sessionClose.onCard') };
+    if (d.owner?.type === 'cap') return { acts: [{ ...dismiss, label: t('lead.roleCard.notNow') }], terminal: [], note: t('coh.cap.onCard') };
     // Ticket 1003: an open loop's yes keeps or closes a row, so it is given only on the card, with the row to read first.
     if (d.owner?.type === 'loop') return { acts: [{ ...dismiss, label: t(d.owner.change === 'overdue' ? 'loops.act.open' : 'lead.roleCard.notNow') }], terminal: [], note: t('loops.onCard') };
     // Ticket 1005: a yes asks the teammate to tidy its memory file; Not now dismisses the card.

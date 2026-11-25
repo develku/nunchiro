@@ -173,7 +173,7 @@ impl Sessions {
                 if session.worktree {
                     let project = fs::canonicalize(&session.project).map_err(|e| e.to_string())?;
                     self.check_outside_home(
-                        &self.settings.worktree_root_for(&self.home, &project)?,
+                        &self.settings.worktree_root_for(&project)?,
                     )
                     .map_err(|_| {
                         "operation not granted: a token's worktree goes under the worktree folder, which is inside the Nunchiro folder; set a worktree folder outside it".to_string()
@@ -313,14 +313,7 @@ impl Sessions {
             }
     }
     fn check_outside_home(&self, folder: &Path) -> Result<(), String> {
-        let (folder, home) = (plain(folder), plain(&self.home));
-        if folder.starts_with(&home) || home.starts_with(&folder) {
-            return Err(
-                "operation not granted: a token's session works outside the Nunchiro folder, and not in a folder that holds it"
-                    .into(),
-            );
-        }
-        Ok(())
+        outside_home(&self.home, folder)
     }
     /// Whether a token caller sees `target` in a list: every session, or its project's only.
     pub(crate) fn token_reaches(&self, caller: &crate::grants::Caller, target: &Session) -> bool {
@@ -383,6 +376,17 @@ pub(super) fn keep_out(
 }
 /// macOS reaches every folder of the data volume also as `/System/Volumes/Data<path>`, and `realpath` does not fold it.
 const DATA_VOLUME: &str = "/System/Volumes/Data";
+/// A token's folder is neither inside the Nunchiro folder `home` nor one that holds it.
+pub(super) fn outside_home(home: &Path, folder: &Path) -> Result<(), String> {
+    let (folder, home) = (plain(folder), plain(home));
+    if folder.starts_with(&home) || home.starts_with(&folder) {
+        return Err(
+            "operation not granted: a token's session works outside the Nunchiro folder, and not in a folder that holds it"
+                .into(),
+        );
+    }
+    Ok(())
+}
 /// `path` canonical when it exists, without the data volume prefix, so two spellings of one folder compare equal.
 fn plain(path: &Path) -> PathBuf {
     let path = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());

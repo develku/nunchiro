@@ -60,7 +60,9 @@ export type AccountAgent = 'claude' | 'codex';
 /** CHAT-USAGE: the last reply's context tokens and model window; Unknown carries no numeric value. */
 /** B15 (ticket 991): `model` is what the transcript last named; `session_model` has the model but no trusted window.
  *  Ticket 994: `effort` is what that model's last request ran at, when the agent wrote one. */
-export type SessionContext = { type: 'session_context'; used: number; window: number; model?: string; effort?: string } | { type: 'session_model'; model: string; effort?: string } | { type: 'unknown' };
+/** Ticket 1059: Claude's /context "Estimated usage by category" table; no rows: the record was there but did not read. */
+export type ContextBreakdown = { at: number; rows: { label: string; tokens: number; pct: number }[] };
+export type SessionContext = { type: 'session_context'; used: number; window: number; model?: string; effort?: string; breakdown?: ContextBreakdown } | { type: 'session_model'; model: string; effort?: string } | { type: 'unknown' };
 
 /** V2-2c: tokens (input + output + cache read + cache write) for the local day and the last 7 local days. */
 export interface AccountUsage {
@@ -435,7 +437,7 @@ export class CoreClient {
     ws.onopen = () => {
       this.everOpen = true;
       this.opened++; // 392
-      this.last = { s: [], b: [], o: [] }; // each link's first snapshot is new arrays, so it draws even when unchanged: 392's wait (PastChats) reads `snapped` on that render
+      this.last = { s: [], b: [], o: [] }; // each link's first snapshot is new arrays, so it draws even when unchanged: 392's wait (history/pastChats.ts) reads `snapped` on that render
       for (const w of this.waiting.splice(0)) w.go();
       this.onStatus(true);
       // Re-watch after a reconnect from each session's last byte, so nothing is replayed twice.
@@ -656,8 +658,9 @@ export class CoreClient {
   }
   private listing: Promise<{ accounts: Account[] }> | null = null;
   /** CHAT-USAGE: this conversation's last context count and model window (window only). */
-  sessionContext(id: string) {
-    return this.request({ op: 'session_context', id }) as Promise<SessionContext>;
+  /** Ticket 1059: `refresh` first types /context into the session (an idle local Claude only; the core refuses otherwise). */
+  sessionContext(id: string, refresh = false) {
+    return this.request({ op: 'session_context', id, ...(refresh ? { refresh } : {}) }) as Promise<SessionContext>;
   }
   /** V2-2c: tokens per account counted from the agents' local transcripts (window only). */
   /** Ticket 1031: `limits` reads only the records that carry limits (Codex), not days of Claude transcripts: the status

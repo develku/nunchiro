@@ -17,7 +17,7 @@ async function machines(app: Page, rows: unknown[] = []) {
       const msg = JSON.parse(String(raw)) as { id: number; request?: Req };
       const r = msg.request;
       if (r) sent.push(r);
-      if (r?.op === 'machine_aliases') ok(msg.id, { type: 'machine_aliases', aliases: ALIASES });
+      if (r?.op === 'machine_aliases') ok(msg.id, { type: 'machine_aliases', aliases: ALIASES.map((name) => ({ name })) });
       else if (r?.op === 'machine_probe') ok(msg.id, { type: 'machine_probe', error: r.host === 'studio' ? 'ssh: connect to host studio port 22: Connection refused' : null });
       else if (r?.op === 'add_machine') { added.push(r.alias!); ok(msg.id, { type: 'ack' }); }
       else if (r?.op === 'machine_details') ok(msg.id, { type: 'machine_details', machines: r.alias ? [row(r.alias, 'up')] : rows });

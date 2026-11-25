@@ -407,7 +407,9 @@ test('steer_once: the row stays until the core accepts, and the button cannot be
   expect(w.ops('steer_now')).toHaveLength(1);
   w.holdReply.clear();
   w.release.splice(0).forEach((go) => go());
-  await expect(rows(app)).toHaveCount(0);
+  // Ticket 1056: Claude takes it at its next step, so the row stays, marked as sent, until the transcript shows it.
+  await expect(rows(app).first().getByRole('status')).toHaveText('Sent. Waiting for the agent to take it.');
+  expect(w.ops('steer_now')).toHaveLength(1);
 });
 
 test('ctrl_enter_empty_box_steers_the_top_row', async ({ app, core }) => {

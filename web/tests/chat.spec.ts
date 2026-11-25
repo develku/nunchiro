@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { conflicts, DEFAULT_BINDINGS } from '../src/keys';
-import { agentsZone, stripOnTop } from './fixtures';
+import { openSessionFromPalette, stripOnTop } from './fixtures';
 import { append, chat, expect, openChat, rec, test } from './fixtures/chat/harness';
 
 /** Boxes of everything visible that must not move: chat rows in view, the switch, strip and composer. */
@@ -192,6 +192,29 @@ test('rows: user image slots reserve height, thinking is one collapsed row, tool
   expect((await out.innerText()).split('\n')).toHaveLength(200);
   await ran.locator('xpath=..').getByRole('button', { name: 'Show all 450 lines' }).click();
   expect((await out.innerText()).split('\n')).toHaveLength(450);
+});
+
+test('rows: an update note between tools is plain muted text, outside the Thinking disclosure', async ({ page, chatCore }) => {
+  const s = chatCore.chat();
+  append(s.file, rec.user('go'), rec.thinking('secret plan'), rec.use('r1', 'Read', { file_path: '/p/a.rs' }), rec.result('r1', 'x'), rec.note('Reading done, now the tests.'), rec.use('g1', 'Grep', { pattern: 'reap' }), rec.result('g1', 'a.rs'), rec.assistant('All done.'));
+  await openChat(page, s.id);
+  const view = chat(page, s.id);
+  const note = view.locator('.unote', { hasText: 'Reading done, now the tests.' });
+  // The fixture opens in Verbose; Ctrl+O cycles Normal, Thinking, Verbose.
+  const mode = page.getByRole('button', { name: /^Transcript view:/ });
+  await page.keyboard.press('Control+KeyO');
+  await expect(mode).toHaveAccessibleName('Transcript view: Normal');
+  // Normal view: the tools fold into one summary row, the note stays.
+  await expect(note).toBeVisible();
+  await expect(view.getByRole('button', { name: 'Read 1 file, searched 1 pattern' })).toHaveCount(1);
+  await expect(view.getByRole('button', { name: /^(Read a\.rs|Grep reap)/ })).toHaveCount(0);
+  await expect(view.getByRole('button', { name: 'Thinking', exact: true })).toHaveCount(0);
+  // Thinking view (Ctrl+O): the real thinking row is a disclosure, the note is not inside one.
+  await page.keyboard.press('Control+KeyO');
+  await expect(mode).toHaveAccessibleName('Transcript view: Thinking');
+  await expect(view.getByRole('button', { name: 'Thinking', exact: true })).toHaveCount(1);
+  await expect(note).toBeVisible();
+  await expect(view.locator('.tool', { has: note })).toHaveCount(0);
 });
 
 test('rows: a Task row expands to the sub-agent final result only', async ({ page, chatCore }) => {
@@ -519,10 +542,9 @@ test('ended session: an exited agent keeps its chat, read-only, with no switch a
   await expect(page.locator('.composer textarea')).toBeVisible();
   await expect(page.locator('.composer textarea')).toBeDisabled();
   await expect(page.getByText('Its terminal is not live')).toHaveCount(0);
-  // Reopened later, the history is still there (D5b: from the AGENTS rows of a layout that has them).
-  agentsZone(chatCore);
+  // Reopened later, the history is still there (from the command palette: the tree lists no ended session).
   await page.reload();
-  await page.locator(`.ar`, { hasText: 'chat' }).first().click();
+  await openSessionFromPalette(page, s.id);
   await expect(view.getByText('끝나기 전 답')).toBeVisible();
   await expect(page.locator('.composer textarea')).toBeVisible();
   await expect(page.locator('.composer textarea')).toBeDisabled();

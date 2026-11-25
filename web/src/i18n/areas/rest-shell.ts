@@ -25,6 +25,8 @@ declare module '../index' {
     'rest.shell.perm.step3': true;
     'rest.shell.perm.closeStart': true;
     'rest.shell.prefixHelp.escCloses': true;
+    'rest.shell.prefixHelp.prefixIs': true;
+    'rest.shell.prefixHelp.change': true;
     'rest.shell.menu.actions': true;
     'rest.shell.menu.stopThis': true;
     'rest.shell.picker.aria': true;
@@ -71,6 +73,9 @@ export const en = {
   'rest.shell.perm.step3': "Then restart this session in the same folder.",
   'rest.shell.perm.closeStart': "Close this session and start it again in {folder} after the grant.",
   'rest.shell.prefixHelp.escCloses': "Esc closes",
+  // Ticket 1099: English only until ticket 1035's pass.
+  'rest.shell.prefixHelp.prefixIs': "◆ = the prefix ({keys}), then the key",
+  'rest.shell.prefixHelp.change': "Change keys in Settings > Keyboard",
   'rest.shell.menu.actions': "Actions",
   'rest.shell.menu.stopThis': 'Stop this session',
   'rest.shell.picker.aria': "{label}: {text}",

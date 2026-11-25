@@ -4,6 +4,7 @@ import { agentState, blockedInput, shownStatus, status, type AgentKind, type Dec
 import { askTitle, asks } from './tree/decisions';
 import { askedOn, promptPart } from './decisions/readable';
 import { summary as askSummary } from './queue/answer';
+import { leadOf, leadSeatMate, seatOf, workingFor, type Team } from './lead/lead';
 
 export interface Worktree {
   path: string;
@@ -58,8 +59,45 @@ export const TREE_SET = 'nunchiro:tree.set';
 /** Groups sessions by machine, then project, in first-seen order (never re-sorted); then the added projects with none. */
 /** N10: a side chat that is no longer running (closed or ended): the tree and the Board leave it out. */
 export const sideChatGone = (s: Session) => !!s.side_chat && s.state !== 'running';
+/** Ticket 1067 (mockup 1): under a live lead a seat's asks are the lead row's one "N need you" pill, so the seat's row,
+ *  its decision line and the project head leave them out. Stale flags and background notes stay (row states, not asks);
+ *  with the asks gone, a failed seat reaches status()'s failed check and shows red. */
+/** A seat is a session with parent or teammate set, not the lead itself, in a project whose lead's seat runs in `sessions`
+ *  (review 1067 round 1: with no lead row drawn there, the seat keeps its own marks). `hushed`: the asks left out, by
+ *  project; the head counts them. The lead's row reads as your turn while they wait, so a folded project or group, the
+ *  strip and the "]" walk still reach them. */
+/** `keep` (ticket 1115 step 1, review r2): workers whose own row shows under the drawn lead row (an open project and
+ *  group). The approved 1115 mockup draws such a worker's ask on its own row, so it keeps its asks: no pill, no hush. */
+export function withoutSeatAsks(sessions: Session[], team: Team, keep: ReadonlySet<string> = new Set()) {
+  const leadRuns = (s: Session) => !!s.teammate && s.teammate === leadOf(team, s.project)?.id && agentState(s) === 'running'; // no lead: both ids undefined
+  const drawn = new Set(sessions.filter(leadRuns).map((s) => s.project));
+  const hushed = new Map<string, number>();
+  const quiet = sessions.map((s) => {
+    if (!(s.parent || s.teammate) || leadSeatMate(s, team) || !drawn.has(s.project) || keep.has(s.id)) return s;
+    const n = asks(s.pending).length;
+    if (n) hushed.set(s.project, (hushed.get(s.project) ?? 0) + n);
+    return { ...s, pending: s.pending.filter((d) => !asks([d]).length), attention: { ...s.attention, waiting: false } };
+  });
+  return { sessions: quiet.map((s) => (hushed.has(s.project) && leadRuns(s) ? { ...s, attention: { ...s.attention, waiting: true } } : s)), hushed };
+}
 
-export function buildTree(sessions: Session[], order: string[], board: Decision[] = [], added: string[] = []): Machine[] {
+/** Ticket 1115 step 1 (docs/design/workers-1115/mockup.html, panel 2): the seats a running lead staffed (a parent chain to
+ *  its seat, another teammate of its place, or a session in its team's worktree that a seat started), by id. They fold
+ *  under the lead's row. A session the owner started (no parent, no teammate) is none, wherever it runs. */
+export function leadWorkers(sessions: Session[], team: Team, list: ListedWorktree[] = []): Set<string> {
+  const out = new Set<string>();
+  for (const s of sessions) {
+    if (!(s.parent || s.teammate) || leadSeatMate(s, team)) continue;
+    const lead = workingFor(s, team, sessions, list);
+    if (lead && seatOf(sessions, lead.id)?.project === s.project) out.add(s.id);
+  }
+  return out;
+}
+/** A Reviewer seat is a stage of its task, with no row of its own under the lead. The core's own fallback (roles.rs `of`).
+ *  shortcut: a custom role that does not write still gets a row; read the ledger's seats when the tree needs them. */
+export const isReviewer = (s: Session) => s.label.trim().toLowerCase().startsWith('review');
+
+export function buildTree(sessions: Session[], order: string[], board: Decision[] = [], added: string[] = [], hushed: ReadonlyMap<string, number> = new Map()): Machine[] {
   const rank = new Map(order.map((id, i) => [id, i]));
   // N10 (look 1117): a side chat that has ended is no row and no "done" count; it lives in its session's chat.
   const sorted = sessions.filter((s) => !isAccountTab(s) && !sideChatGone(s)).sort((a, b) => (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9));
@@ -95,7 +133,7 @@ export function buildTree(sessions: Session[], order: string[], board: Decision[
     g.urgency = urgencyOf([...g.main, ...g.worktrees.flatMap((w) => w.sessions)].map(status));
     g.items.sort((a, b) => a.observed_at - b.observed_at);
     // The head's waiting count is what the rows show (plus overflow), not the number of waiting sessions.
-    g.counts.waiting = asks(g.items).length; // N12-S2-4: a background note rides on a line but is not waiting
+    g.counts.waiting = asks(g.items).length + (hushed.get(g.project) ?? 0); // N12-S2-4: a background note rides on a line but is not waiting; 1067: seat asks on the lead's pill
   }
   // This Mac is first, also when it has no project (`withListed` puts this Mac's worktrees in the first entry).
   return groups.size || remote.size ? [{ name: 'this Mac', groups: [...groups.values()] }, ...[...remote].map(([name, m]) => ({ name, groups: [...m.values()] }))] : [];
@@ -288,7 +326,7 @@ function baseRowState(w: Worktree, sessions: Session[], fact: WorktreeFact | und
   void w;
   const span = (ms: number) => age(t, ms);
   const by = (st: Status) => sessions.find((s) => status(s) === st);
-  const who = (s: Session) => WHO[s.kind](t);
+  const who = (s: Session) => (s.account ? `${WHO[s.kind](t)} · ${s.account}` : WHO[s.kind](t)); // ticket 1070: the account the Agents widget showed
   // q67 look (new 6, 9): a state's word is the status bar's own (`mw.status.*`), in its form and case: the row said
   // "Idle · Shell" beside "idle · Shell", and in Spanish "Inactivo" beside "inactiva".
   const said = (st: 'working' | 'asked' | 'stale' | 'idle' | 'resumable' | 'done', rest: string) => `${t(`mw.status.${st}`)} · ${rest}`;

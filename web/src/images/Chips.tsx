@@ -22,7 +22,7 @@ import { useHtmlLangT } from '../i18n/lib/useHtmlLangT';
 import './images.css';
 
 /** needs 172: the chip's picture and name open the same viewer the message thumbnails use (Thumbnail owns the click, the keys and the focus return). */
-function Preview({ chip }: { chip: Chip }) {
+function Preview({ chip, label }: { chip: Chip; label: string }) {
   const [source, setSource] = useState<Source | null>(null);
   const root = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -38,7 +38,7 @@ function Preview({ chip }: { chip: Chip }) {
         {source ? <Thumbnail source={source} /> : <img src={chip.thumb} alt="" />}
       </span>
       <span className="iname" onClick={() => root.current?.querySelector<HTMLElement>('[data-slot="thumbnail"]')?.click()}>
-        {chip.name}
+        {label}
       </span>
     </>
   );
@@ -49,15 +49,18 @@ export function ImageChips({ chips, error, onRemove }: { chips: Chip[]; error: s
   if (!chips.length && !error) return null;
   return (
     <div className="ichips">
-      {chips.map((c) => (
-        <span key={c.id} className="chip ichip" data-saving={c.saving ? '' : undefined} title={c.name}>
-          <Preview chip={c} />
+      {chips.map((c, i) => {
+        const label = /^image\.\w+$/.test(c.name) ? t('composer.imageN', { n: i + 1 }) : c.name; // ticket 1044: clipboard images are all "image.png"
+        return (
+        <span key={c.id} className="chip ichip" data-saving={c.saving ? '' : undefined} title={label}>
+          <Preview chip={c} label={label} />
           {c.saving && <span className="sr">{t('rest.widgets.chips.saving')}</span>}
-          <button type="button" className="ix" aria-label={t('rest.widgets.chips.remove', { name: c.name })} onClick={() => onRemove(c.id)}>
+          <button type="button" className="ix" aria-label={t('rest.widgets.chips.remove', { name: label })} onClick={() => onRemove(c.id)}>
             ✕
           </button>
         </span>
-      ))}
+        );
+      })}
       {error && (
         <span className="ierr" role="alert">
           {error}

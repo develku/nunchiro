@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { boxes, expect, openWindow, REPO, test, unmoved, type Core, agentsZone, showComposer, stripBeside, stripOnTop } from './fixtures';
+import { boxes, expect, openWindow, REPO, test, unmoved, type Core, stripOnTop, showComposer, stripBeside } from './fixtures';
 import { openQuiet } from './tree-seed';
 
 // needs 107 (ticket 180): no strip above the composer. Specs that answer through the strip place it at the column's top;
@@ -13,7 +13,7 @@ test.beforeEach(({ core }, info) => {
   if (/answering from the strip/.test(info.title)) stripOnTop(core);
   else if (/options that persist/.test(info.title)) stripOnTop(core, { below: true });
   else if (/move nothing but the strip/.test(info.title)) stripBeside(core);
-  else agentsZone(core);
+  else stripOnTop(core);
 }); // D5b: most of these read the AGENTS dots, which the default window no longer shows
 
 
@@ -451,7 +451,7 @@ test('items restored after a core restart show as checking until proved again', 
   // The window opened the session (its terminal is fitted): a resize makes the agent redraw, which proves the request
   // again under a new id.
   fs.rmSync(path.join(p, 'go-a.hold'));
-  await app.getByRole('button', { name: /^agent-a ◂/ }).click();
+  await app.locator('.tab', { hasText: 'agent-a' }).first().click(); // shows the session, so its terminal is fitted
   await app.setViewportSize({ width: 1400, height: 880 });
   await expect.poll(() => pending(core)[0], { timeout: 10_000 }).not.toBe(before);
   await expect(card(app, 'agent-a')).not.toHaveAttribute('data-checking', 'true');
@@ -545,10 +545,9 @@ test('signal only: the tree shows the group bar and counts, no item text', async
   fakes(core);
   await app.addInitScript(() => localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ strip: 'signal' })));
   const p = core.project('nunchiro');
-  const a = core.agent(p, 'agent-a', 'go-a');
+  core.agent(p, 'agent-a', 'go-a');
   await openWindow(app);
   show(p, 'go-a', PERMISSION('touch out-a'));
-  await expect(app.locator(`[data-agent="${a.id}"] .st`)).toHaveAttribute('data-s', 'waiting', { timeout: 5000 });
   await expect(app.locator('.grp[data-project="nunchiro"]')).toHaveAttribute('data-urgency', 'waiting');
   await expect(app.locator('.tree .q')).toHaveCount(0);
   await expect(app.locator('#waiting-strip .qcard')).toHaveCount(0);
@@ -628,7 +627,7 @@ test('a notification never carries command text, arguments or question text', as
   expect((await notes(app)).map((n) => n.body).sort()).toEqual(['permission · agent-h · nunchiro', 'question · agent-q · nunchiro']);
 });
 
-test('stale: a quiet session is flagged in the tree row, AGENTS dot and strip; "waiting only" does not notify it', async ({ app, core }) => {
+test('stale: a quiet session is flagged in the tree row and strip; "waiting only" does not notify it', async ({ app, core }) => {
   fs.writeFileSync(path.join(core.home, 'settings.json'), JSON.stringify({ worktrees_dir: path.join(core.home, 'wt'), stale_after_ms: 1500 }));
   await restart(core, app);
   await recordNotifications(app);
@@ -640,8 +639,8 @@ test('stale: a quiet session is flagged in the tree row, AGENTS dot and strip; "
   await openWindow(app);
   await app.locator(`.tab[data-tab="${quiet.id}"]`).click();
   await setLevel(app, 'quiet', 'waiting');
-  await expect(app.locator(`[data-agent="${quiet.id}"] .st`)).toHaveAttribute('data-s', 'stale', { timeout: 8000 });
-  await expect(app.locator(`[data-agent="${loud.id}"] .st`)).toHaveAttribute('data-s', 'stale', { timeout: 8000 });
+  await expect(app.locator(`button.row.wt2[data-menu-session="${quiet.id}"]`)).toHaveAttribute('data-kind', 'stale', { timeout: 8000 });
+  await expect(app.locator(`button.row.wt2[data-menu-session="${loud.id}"]`)).toHaveAttribute('data-kind', 'stale', { timeout: 8000 });
   await expect(app.locator('.tree .q').first()).toContainText('stale');
   await expect(card(app, 'quiet')).toContainText('stale');
   // Stale is a flag, not a question: the card opens the session and has no answer buttons.

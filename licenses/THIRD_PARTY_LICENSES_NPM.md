@@ -51,7 +51,7 @@ Packages: `pnpm licenses list --prod` in `web/` (164 package names, 165 name and
 - character-entities-legacy 3.0.0 (MIT) <https://github.com/wooorm/character-entities-legacy#readme>
 - character-reference-invalid 2.0.1 (MIT) <https://github.com/wooorm/character-reference-invalid#readme>
 - comma-separated-tokens 2.0.3 (MIT) <https://github.com/wooorm/comma-separated-tokens#readme>
-- commander 8.3.0 (MIT) <https://github.com/tj/commander.js#readme>
+- commander 15.1.0 (MIT) <https://github.com/tj/commander.js#readme>
 - crelt 1.0.7 (MIT) <https://code.haverbeke.berlin/marijn/crelt>
 - csstype 3.2.3 (MIT) <https://github.com/frenic/csstype#readme>
 - debug 4.4.3 (MIT) <https://github.com/debug-js/debug#readme>
@@ -83,7 +83,7 @@ Packages: `pnpm licenses list --prod` in `web/` (164 package names, 165 name and
 - is-decimal 2.0.1 (MIT) <https://github.com/wooorm/is-decimal#readme>
 - is-hexadecimal 2.0.1 (MIT) <https://github.com/wooorm/is-hexadecimal#readme>
 - is-plain-obj 4.1.0 (MIT) <https://github.com/sindresorhus/is-plain-obj#readme>
-- katex 0.16.47 (MIT) <https://katex.org>
+- katex 0.19.1 (MIT) <https://katex.org>
 - longest-streak 3.1.0 (MIT) <https://github.com/wooorm/longest-streak#readme>
 - lru-cache 6.0.0 (ISC) <https://github.com/isaacs/node-lru-cache#readme>
 - markdown-table 3.0.4 (MIT) <https://github.com/wooorm/markdown-table#readme>
@@ -837,7 +837,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### Text 19: LICENSE
 
-Used by: commander 8.3.0
+Used by: commander 15.1.0
 
 ```text
 (The MIT License)
@@ -1274,7 +1274,7 @@ THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### Text 36: LICENSE
 
-Used by: katex 0.16.47
+Used by: katex 0.19.1
 
 ```text
 The MIT License (MIT)

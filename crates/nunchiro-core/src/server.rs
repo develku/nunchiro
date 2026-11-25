@@ -16,7 +16,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 const FRAME_BYTES: u64 = 512 * 1024;
 /// A stopping core's reply to a request it never ran, while it winds down for an `exit` (`serve restart`) or a signal:
@@ -29,6 +29,11 @@ pub const EXIT_BUSY: &str = "core is busy; not exiting";
 /// The core.log line for each request a winding-down core refused unread (ticket 305).
 pub const NOT_SERVED_LOG: &str = "request not served: core is winding down";
 pub fn call(home: &Path, request: Request) -> Response {
+    call_by(home, request, None)
+}
+/// `call` whose whole reply must be in by `until` (ticket 1130 A-D3 round 2): a peer that drips bytes without a newline
+/// renews each 15 s read, so only this bounds the time.
+pub fn call_by(home: &Path, request: Request, until: Option<Instant>) -> Response {
     // Ticket 1023: reading `core.token` here makes no caller the owner. The core judges the connecting process itself
     // (`inside_token`), so a session's child that drops NUNCHIRO_TOKEN is still that session's caller.
     let token = std::env::var("NUNCHIRO_TOKEN")
@@ -43,9 +48,17 @@ pub fn call(home: &Path, request: Request) -> Response {
     } else {
         request
     };
-    call_with_token(home, &token, request)
+    call_with_token_by(home, &token, request, until)
 }
 pub(crate) fn call_with_token(home: &Path, token: &str, request: Request) -> Response {
+    call_with_token_by(home, token, request, None)
+}
+fn call_with_token_by(
+    home: &Path,
+    token: &str,
+    request: Request,
+    until: Option<Instant>,
+) -> Response {
     let mut stream = UnixStream::connect(home.join("core.sock")).map_err(|e| e.to_string())?;
     stream
         .set_read_timeout(Some(Duration::from_secs(15)))
@@ -69,7 +82,7 @@ pub(crate) fn call_with_token(home: &Path, token: &str, request: Request) -> Res
     bytes.push(b'\n');
     stream.write_all(&bytes).map_err(|e| e.to_string())?;
     let mut line = String::new();
-    BufReader::new(stream.take(8 * 1024 * 1024))
+    BufReader::new(Until { stream, until }.take(8 * 1024 * 1024))
         .read_line(&mut line)
         .map_err(|e| {
             if stopping
@@ -86,6 +99,25 @@ pub(crate) fn call_with_token(home: &Path, token: &str, request: Request) -> Res
     serde_json::from_str(&line).map_err(|e| e.to_string())?
 }
 
+/// A reply stream whose every read waits at most until `until`, so the deadline is the whole reply's, not each read's.
+struct Until {
+    stream: UnixStream,
+    until: Option<Instant>,
+}
+impl Read for Until {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if let Some(until) = self.until {
+            let left = until.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Err(std::io::ErrorKind::TimedOut.into());
+            }
+            self.stream
+                .set_read_timeout(Some(left.min(Duration::from_secs(15))))?;
+        }
+        self.stream.read(buf)
+    }
+}
+
 /// v1a-66: macOS `sun_path` holds 103 bytes plus the NUL; Linux's 108 is not used, so a home that works on one
 /// platform works on both.
 pub const SOCKET_PATH_MAX: usize = 103;
@@ -93,6 +125,9 @@ pub const SOCKET_PATH_MAX: usize = 103;
 /// F24: this binary's build stamp (an RC's or an official release's), set once by `nunchiro serve`; `core.start.json`
 /// keeps it for `serve update`.
 pub static BUILD: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+/// Ticket 1082: this binary's git commit (short), set once by `nunchiro serve`; `core.start.json` keeps it, so an update
+/// can tell that the running core is the new build.
+pub static COMMIT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 /// F24: left by a full stop or a signal until the next core starts, so the app can tell those from a crash.
 const STOPPED: &str = "core.stopped";
 
@@ -166,10 +201,15 @@ fn serve_with(home: &Path, record: bool) -> Result<(), String> {
     // v2-13a: from here, under the lock (one writer per log), stderr (every `eprintln!`) and panics go through the
     // redacting writer under logs/.
     let logs = crate::logs::start(home)?;
+    // Ticket 1130 C-C3: from here each event is also kept on disk; a core without its journal still serves.
+    let journal = crate::events::journal(home)
+        .map_err(|e| eprintln!("event journal: {e}"))
+        .ok();
     let result = serve_locked(home);
     if let Err(e) = &result {
         eprintln!("core stopped: {e}");
     }
+    drop(journal);
     drop(logs);
     result
 }
@@ -266,6 +306,9 @@ fn serve_locked(home: &Path) -> Result<(), String> {
         crate::auto_pull::spawn(sessions.clone(), stopping.clone()).map_err(|e| e.to_string())?;
     // V2-CF5: the keep-awake task; it holds nothing while its setting is off.
     let keep_awake = crate::keep_awake::spawn_ticker(sessions.clone(), stopping.clone())
+        .map_err(|e| e.to_string())?;
+    // Ticket 1081: team auto-advance, a pass about every 30 s on its own thread (git and files read off the lock).
+    let _advance = crate::advance::spawn(sessions.clone(), home.to_path_buf(), stopping.clone())
         .map_err(|e| e.to_string())?;
     // V2.5-11: scheduled runs; it sees `stopping` before each start.
     let _schedule =
@@ -827,6 +870,8 @@ pub(crate) fn remote_from_owner(
             | Request::MachineDetails { .. }
             | Request::MachineAliases // v25f: reads this Mac's ~/.ssh
             | Request::MachineProbe { .. }
+            | Request::MachineShare // ticket 1050
+            | Request::MachineTrust { .. }
             | Request::SessionContext { .. } // CHAT-USAGE: window-local transcript data
             | Request::Subagents { .. } // V2-CF4: window-local transcript data, as SessionContext
             | Request::AccountUsage { .. } // v2-2c
@@ -847,6 +892,7 @@ pub(crate) fn remote_from_owner(
             | Request::Note { .. } // ticket 990 slice h
             | Request::Role { .. } // ticket 990 slice i
             | Request::CloseUndo { .. } // V2-6d
+            | Request::CloseIdle { .. } // ticket 1130: the window's restart for a new MCP server
             | Request::ScheduleList // V2.5-11: a timer that starts agent work stays local
             | Request::ScheduleAdd { .. }
             | Request::ScheduleRemove { .. }
@@ -1197,6 +1243,14 @@ fn connection(
             drop(sessions);
             return crate::machines::aliases::probe(&host, user.as_deref(), port);
         }
+        if let Request::MachineShare = env.request {
+            drop(sessions);
+            return crate::machines::share::reply();
+        }
+        if let Request::MachineTrust { alias, link } = env.request {
+            drop(sessions);
+            return crate::machines::share::trust(registry, home, &alias, &link);
+        }
         // v1b-19: owner only (v1a-23: `check_agent` above refuses these to session callers).
         if matches!(
             env.request,
@@ -1250,7 +1304,14 @@ fn connection(
         // v2-2c: reads transcripts, so off the registry lock.
         if let Request::AccountUsage { limits } = env.request {
             drop(sessions);
-            return crate::usage::reply(home, limits);
+            let reply = crate::usage::reply(home, limits);
+            crate::account_near::after_usage(
+                registry,
+                home,
+                &reply,
+                crate::queue::now_ms() as i64 / 1000,
+            );
+            return reply;
         }
         if let Request::UsageDetail {
             days,
@@ -1889,7 +1950,7 @@ fn record_start(home: &Path) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let build = BUILD.get();
     let bytes = serde_json::to_vec(
-        &serde_json::json!({"exe": exe, "env": env, "secrets": names, "build": build, "secrets_gen": generation}),
+        &serde_json::json!({"exe": exe, "env": env, "secrets": names, "build": build, "commit": COMMIT.get(), "secrets_gen": generation}),
     )
     .map_err(|e| e.to_string())?;
     store::atomic_write(&home.join("core.start.json"), &bytes)?;

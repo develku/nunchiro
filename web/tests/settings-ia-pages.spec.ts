@@ -11,14 +11,15 @@ import { en as closeAsk } from '../src/i18n/areas/close-ask';
 import { en as boardWords } from '../src/i18n/areas/board-words'; // ticket 872's field
 import { en as settingsBase } from '../src/i18n/areas/settings-base'; // ticket 991 C14: the rows' own titles
 import { en as settingsRows } from '../src/i18n/areas/settings-rows';
+import { en as shellChrome } from '../src/i18n/areas/shell-chrome'; // ticket 1047's field
 
 // The node runner loads no area files by glob: the field labels come from the areas that hold them (autoPull: settings-git,
 // confirmCloseRunning: close-ask).
-const LABELS: Record<string, string> = { ...settingsBase, ...settingsRows, ...common, ...settingsArea, ...gitArea, ...closeAsk, ...boardWords };
-import { expect, openWindow, test, agentsZone } from './fixtures';
+const LABELS: Record<string, string> = { ...settingsBase, ...settingsRows, ...common, ...settingsArea, ...gitArea, ...closeAsk, ...boardWords, ...shellChrome };
+import { expect, openWindow, test, stripOnTop } from './fixtures';
 import { BUILTIN_BUTTONS, BUILTIN_TITLES, groupsOf } from './settings-nav';
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 // needs 192 (ticket 250): the final draft's pages replace the nine; the built-in list lives in tests/settings-nav.ts.
 const nav = (app: Page) => app.getByRole('navigation', { name: 'Settings pages' });
@@ -53,7 +54,7 @@ test('settings_nine_pages: the nav lists the 9 pages in order and the search fin
     ['Start at login', 'General', '[data-setting="startAtLogin"]'],
     ['Language', 'General', '[data-setting="language"]'],
     ['Browse themes online', 'Appearance', '[data-setting="themeBrowse"]'],
-    ['Allow browser access', 'Browser access', '[data-setting="browserAccess"]'],
+    ['Allow phone and web access', 'Phone and web access', '[data-setting="browserAccess"]'],
     ['Auto-clean merged worktrees', 'Git & worktrees', '[data-setting="autoCleanWorktrees"]'],
     ['Keep terminal history', 'Terminal history', '[data-setting="history"]'],
   ] as const) {
@@ -177,13 +178,13 @@ test('General: Language is one collapsed picker, System by default; hooks read a
   await expect(app.getByText('Do not add Nunchiro hooks')).toHaveCount(0);
 });
 
-test('Advanced > Browser access: the toggle comes first with its status chip, the port is its own row, an empty state that names no address', async ({ app, core }) => {
+test('Advanced > Phone and web access: the toggle comes first with its status chip, the port is its own row, an empty state that names no address', async ({ app, core }) => {
   core.shell(core.project('demo'), 'alpha');
   await openWindow(app);
   await openSettings(app);
-  await nav(app).getByRole('button', { name: 'Browser access', exact: true }).click(); // needs 192 (ticket 250): its own page again
+  await nav(app).getByRole('button', { name: 'Phone and web access', exact: true }).click(); // needs 192 (ticket 250): its own page again
   const section = app.locator('section[aria-labelledby="h-browser"]');
-  await expect(section.getByRole('switch', { name: 'Allow browser access' })).not.toBeChecked();
+  await expect(section.getByRole('switch', { name: 'Allow phone and web access' })).not.toBeChecked();
   await expect(section.locator('.snm .chip')).toHaveText('Off');
   await expect(section.getByRole('textbox', { name: /Port/ })).toBeVisible();
   await expect(section.getByRole('heading', { name: 'Paired browsers' })).toHaveCount(0);

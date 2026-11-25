@@ -52,7 +52,7 @@ const BEFORE: Record<string, string> = {
   worktreeRoot: "Folder for new worktrees",
   language: "Language",
   machines: "Machines", // pins brought up to FIELDS as of main 20c098fe
-  browserAccess: "Allow browser access",
+  browserAccess: "Allow phone and web access",
   browserEngine: "Search engine", // the In-app browser page (ticket 255)
   browserHome: "Home page",
   browserZoom: "Default zoom",
@@ -102,6 +102,8 @@ const FEATURE_FIELDS: { file: string; keys: string[]; tail: (k: string) => strin
   { file: 'features/user-env.tsx', keys: ['envInheritShell', 'envNames', 'envStripSecrets', 'envKeepSecrets'], tail: (k) => `field.${k}` }, // ticket 260 (4210e1239); ticket 1008 (bf1143e1b)
   { file: 'features/assistants.tsx', keys: ['homeChief'], tail: (k) => k }, // ticket 1002 (38ba57d59)
   { file: 'features/wt-files.tsx', keys: ['sharedFiles', 'sparsePreset'], tail: (k) => `field.${k}` }, // ticket 253 (5527d53b6)
+  { file: 'features/builtin.ts', keys: ['barsAutohide'], tail: (k) => k }, // ticket 1047: the Layout page's auto-hide row
+  { file: 'lead/place.tsx', keys: ['place'], tail: (k) => k }, // ticket 1099 A: PLACE_FIELD, registered by features/team.tsx
 ];
 const featureKeys = FEATURE_FIELDS.flatMap((f) => f.keys);
 

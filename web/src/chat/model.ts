@@ -4,6 +4,7 @@ import { basename as base } from '../tree';
 import type { T } from '../i18n';
 import type { ChatEvent, Data } from './feed';
 import { pendingEdit, tighten } from './pending'; // v1b-12
+import { wakeSplit } from './conversation';
 import type { View } from './view';
 
 type Of<K extends Data['kind']> = Extract<Data, { kind: K }>;
@@ -18,7 +19,8 @@ export interface Tool {
 
 export type Row =
   | { kind: 'user'; key: number; text: string; images: Image[] }
-  | { kind: 'assistant'; key: number; text: string }
+  | { kind: 'wakes'; key: number; n: number; team: number } // ticket 1072: a run of automatic lines, drawn as one quiet line; 1085: `team` of them the core's own
+  | { kind: 'assistant'; key: number; text: string; note?: true }
   | { kind: 'final'; key: number; text: string }
   | { kind: 'thinking'; key: number; text: string }
   | { kind: 'tool'; key: number; tool: Tool }
@@ -29,11 +31,13 @@ export type Row =
   | { kind: 'image'; key: number; role: string; images: Image[] }
   | { kind: 'orphan'; key: number; output: unknown; is_error: boolean }
   | { kind: 'interrupted'; key: number }
+  | { kind: 'shell'; key: number; command: string; output?: string } // ticket 1087
   | { kind: 'turnfiles'; key: number; files: string[] } // ticket 222: a finished turn's written files (core turn_files.rs)
-  | { kind: 'artifact'; key: number; data: Of<'artifact'> } // v1b-06
+  | { kind: 'artifact'; key: number; data: Of<'artifact'>; older?: true } // v1b-06; ticket 1057: an earlier card of a file written again
   // CHROME: the Normal and Thinking views fold a turn's tool calls into `summary` and its finished edits into `changes`.
   | { kind: 'summary'; key: number; rows: Row[]; parts: SummaryPart[]; tests: string | null; seconds: number | null }
-  | { kind: 'changes'; key: number; files: { path: string; added: number; removed: number }[]; added: number; removed: number; turn?: string[] };
+  // Ticket 1086: `artifact` is the Markdown or image card of that file's write, drawn as Open on the row instead of its own card.
+  | { kind: 'changes'; key: number; files: { path: string; added: number; removed: number; artifact?: Of<'artifact'> }[]; added: number; removed: number; turn?: string[] };
 
 const READS = new Set(['Read', 'Grep', 'Glob', 'LS', 'NotebookRead']);
 const SEARCHES = new Set(['Grep', 'Glob']);
@@ -112,9 +116,18 @@ export function buildRows(events: ChatEvent[]): Row[] {
     const key = e.cursor;
     switch (d.kind) {
       case 'message':
+      {
         if (!d.text.trim()) break;
-        rows.push(d.role === 'user' ? { kind: 'user', key, text: d.text, images: [] } : { kind: 'assistant', key, text: d.text });
+        const wake = d.role === 'user' ? wakeSplit(d.text) : null;
+        if (wake) {
+          const prev = last();
+          if (prev?.kind === 'wakes') (prev.n += wake.n), (prev.team += wake.team);
+          else rows.push({ kind: 'wakes', key: wake.rest ? key - 0.5 : key, n: wake.n, team: wake.team });
+          if (!wake.rest) break;
+        }
+        rows.push(d.role === 'user' ? { kind: 'user', key, text: wake ? wake.rest : d.text, images: [] } : { kind: 'assistant', key, text: d.text, ...(d.note ? { note: true as const } : {}) });
         break;
+      }
       case 'final_text':
         rows.push({ kind: 'final', key, text: d.text });
         break;
@@ -179,8 +192,24 @@ export function buildRows(events: ChatEvent[]): Row[] {
       case 'artifact': // v1b-06
         rows.push({ kind: 'artifact', key, data: d });
         break;
+      case 'shell': {
+        // Ticket 1087: Claude writes a "!" command's output as the record after it; it joins that command's row.
+        const prev = last();
+        if (d.command === undefined && prev?.kind === 'shell' && prev.output === undefined) prev.output = d.output;
+        else rows.push({ kind: 'shell', key, command: d.command ?? '', output: d.output });
+        break;
+      }
       // task_result joins its Task row; skipped and version_banner are shown outside the list.
     }
+  }
+  // Ticket 1057: only a file's newest card draws the frame; the earlier ones are one line.
+  const seen = new Set<string>();
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i];
+    if (r.kind !== 'artifact') continue;
+    const k = `${r.data.root}:${r.data.path}`;
+    if (seen.has(k)) r.older = true;
+    seen.add(k);
   }
   return rows;
 }
@@ -423,7 +452,7 @@ function foldTurn(turn: Row[], view: View, asking = 0): Row[] {
       if (view === 'thinking') out.push(r);
     } else if (done(r)) {
       if (i === lastDone) {
-        const byPath = new Map<string, { path: string; added: number; removed: number }>();
+        const byPath = new Map<string, { path: string; added: number; removed: number; artifact?: Of<'artifact'> }>();
         for (const f of finished) {
           const e = byPath.get(f.edit.path) ?? { path: f.edit.path, added: 0, removed: 0 };
           e.added += f.edit.added ?? 0;
@@ -436,10 +465,23 @@ function foldTurn(turn: Row[], view: View, asking = 0): Row[] {
     } else out.push(r);
   });
   if (!changes) return out;
+  // Ticket 1086: a Markdown or image card of a write that is also in this card becomes Open on that file's row. Matched by
+  // the tool call and the path's end: the card's path is relative to the session, the edit's absolute, and one patch call
+  // can write several files. The newest card of a file wins.
+  const paired = new Set<Row>();
+  for (const r of out) {
+    if (r.kind !== 'artifact' || (r.data.type !== 'markdown' && r.data.type !== 'image')) continue;
+    const { tool_id, path } = r.data;
+    const hit = finished.find((d) => d.edit.tool_id === tool_id && (d.edit.path === path || d.edit.path.endsWith(`/${path}`)));
+    const f = hit && changes.files.find((x) => x.path === hit.edit.path);
+    if (!f) continue;
+    f.artifact = r.data;
+    paired.add(r);
+  }
   // B19 (ticket 991): one changed-files card per turn, as T3's finished turn: the card with per-file +/- takes the turn's
   // "N changed files" row and opens Diff on the same turn files.
   const files = out.find((r): r is Extract<Row, { kind: 'turnfiles' }> => r.kind === 'turnfiles');
-  return [...out.filter((r) => r !== files), files ? { ...changes, turn: files.files } : changes];
+  return [...out.filter((r) => r !== files && !paired.has(r)), files ? { ...changes, turn: files.files } : changes];
 }
 
 /** The rows a view shows. Verbose is every row as built; the others fold each turn (rows from one user message to the next).
@@ -450,7 +492,7 @@ export function viewRows(rows: Row[], view: View, asking = 0): Row[] {
   let i = 0;
   while (i < rows.length) {
     let j = i + 1;
-    while (j < rows.length && rows[j].kind !== 'user') j++;
+    while (j < rows.length && rows[j].kind !== 'user' && rows[j].kind !== 'wakes') j++; // a wake starts the lead's next turn
     out.push(...foldTurn(rows.slice(i, j), view, j === rows.length ? asking : 0));
     i = j;
   }

@@ -123,3 +123,4 @@
 - **Dev web-load** (needs 151, ticket 172): a debug-only mode in which the app window loads the web UI from a checkout
   folder or a loopback dev server named by `NUNCHIRO_WEB` instead of its embedded copy; Develop > Reload UI shows a web
   build without an app rebuild (`app/src-tauri/src/dev_load.rs`). Release builds refuse the variable.
+- **Phone and web access** (ticket 1049): the Settings page (id `browser`) that lets a paired phone or another browser reach this Mac (on/off, port, addresses, paired devices). Not the In-app browser; the old name "Browser access" stays a search word.

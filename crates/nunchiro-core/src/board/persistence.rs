@@ -31,6 +31,10 @@ pub(super) struct Disk {
     // Q9 ko-J12-1: the last deleted manual cards, whole, for `board_undo`; oldest dropped first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deleted: Vec<Deleted>,
+    // Ticket 1066: session id -> the time its card first showed in a done column; a session card has no
+    // move history, and its `updated_at` follows later activity.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub done_at: BTreeMap<String, u64>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, serde_json::Value>,
 }
@@ -107,6 +111,7 @@ impl Default for Disk {
             resolved: BTreeMap::new(), // v1b-18
             settings: None,            // V2.5-38
             deleted: vec![],
+            done_at: BTreeMap::new(),
             extra: BTreeMap::new(),
         }
     }

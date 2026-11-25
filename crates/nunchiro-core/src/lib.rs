@@ -1,14 +1,19 @@
 //! Headless session ownership, independent of clients.
 mod account_carry; // ticket 451 step 2
+mod account_near; // ticket 1126: the card at 98% of the week, the optional automatic switch
 mod account_signin; // ticket 178 finding 20
 pub mod accounts; // v2-2a
 pub mod acp; // V2-4a
+mod advance; // ticket 1081: team auto-advance
+mod agent_canary; // ticket 1100: new agent versions checked against the screen readers
+pub mod agent_models; // ticket 1100: Codex's own model list
 mod agent_permission; // ticket 362
 mod agent_update; // ticket 358
 pub mod api;
 pub mod codex_reset; // needs 225
 mod dirfd; // ticket 452
 pub mod home_lock; // ticket 1002 lane 1: the Home seat lock
+pub mod outward; // ticket 1130 S1: outward actions ask in every session
 pub(crate) mod session_context;
 pub mod usage; // v2-2c
 pub mod user_commands; // ticket-98

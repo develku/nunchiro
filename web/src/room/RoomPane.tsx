@@ -20,7 +20,7 @@ export function RoomPane({ core, t, session, sessions, open, wt }: { core: CoreC
       </div>
       <div className="roompane-body">
         {project ? (
-          <RoomView core={core} t={t} project={project} sessions={sessions} byId={byId} messages={room.messages} pins={room.pins} names={room.names} dropped={room.dropped} toggle={room.toggle} refresh={room.refresh} open={open} wt={wt} />
+          <RoomView core={core} t={t} project={project} sessions={sessions} byId={byId} messages={room.messages} pins={room.pins} names={room.names} delivery={room.delivery} dropped={room.dropped} toggle={room.toggle} refresh={room.refresh} open={open} wt={wt} />
         ) : (
           <p className="room-empty">{t('lead.paneNone')}</p>
         )}

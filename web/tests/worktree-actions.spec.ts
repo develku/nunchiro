@@ -315,18 +315,12 @@ test('finished_row_keeps_worktree_actions: a worktree whose shell was stopped st
   const w = create(core, p, 'feat-x');
   const old = core.shell(w.path, 'feat-x');
   await start(app, core, p);
+  await expect(row(app, 'feat-x')).toBeVisible();
   core.cli('session', 'close', old.id);
-  // Verify look (ticket 991): the finished row is the worktree's; its menu removes it as a live row's does.
-  await expect(row(app, 'feat-x')).toHaveAttribute('aria-label', /done · Shell/);
-  await row(app, 'feat-x').click({ button: 'right' });
+  // Ticket 1063 (replaces the verify look's finished row, ticket 991): a worktree row whose sessions are all closed leaves
+  // the tree; the worktree stays in Tidy and History.
+  await expect(row(app, 'feat-x')).toHaveCount(0);
   const remove = app.getByRole('menu', { name: 'Actions' }).locator('[data-command="worktree.remove"]');
-  await expect(remove).toBeVisible();
-  await expect(remove).not.toHaveAttribute('aria-disabled', 'true');
-  await app.keyboard.press('Escape');
-  await app.keyboard.press('Meta+KeyK');
-  await app.keyboard.type('worktree.remove');
-  await expect(app.locator('.palette [data-command="worktree.remove"]')).not.toHaveAttribute('aria-disabled', 'true');
-  await app.keyboard.press('Escape');
   // A shell started again in it is live: the row says so, not "Finished" (verify look v14, A7).
   core.shell(w.path, 'feat-x again');
   await expect(row(app, 'feat-x')).toHaveAttribute('aria-label', /idle · Shell/);

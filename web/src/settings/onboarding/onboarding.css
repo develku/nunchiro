@@ -240,3 +240,74 @@
 .ob-keys-line {
   margin-bottom: var(--sp-12);
 }
+/* Ticket 1123 T1 (mockup first-use-1123): Quick setup's Folder row and first prompt, label left, field across the card. */
+.ob-quick .ob-start {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+  margin: var(--sp-8) 0;
+}
+.ob-quick .ob-fld {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  gap: var(--sp-8);
+  align-items: baseline;
+  font-size: var(--fs-12);
+}
+.ob-quick .ob-fld > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.ob-quick .ob-fld small {
+  color: var(--muted);
+}
+.ob-quick .ob-fld .sinp {
+  width: 100%;
+}
+.ob-quick .ob-fld > div.ob-acts {
+  flex-direction: row;
+}
+/* The Folder box (mockup .sel): one box as wide as the prompt field; the native select covers it, transparent. */
+.ob-quick .ob-sel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-8);
+  min-height: 28px;
+  padding: 0 var(--sp-8) 0 var(--sp-12);
+}
+/* The ring the global :focus-visible would draw on the select, which is transparent here. */
+.ob-quick .ob-sel:has(select:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.ob-quick .ob-sel small {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+  color: var(--muted);
+}
+.ob-quick .ob-sel select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+/* Ticket 1130 C7 (mockup first-use-b-1130 .hint): the line under the Folder row; its "Choose folder…" reads as a link. */
+.ob-quick .ob-fld small.ob-home-line {
+  font-size: var(--fs-11);
+}
+.ob-quick .ob-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}

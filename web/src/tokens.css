@@ -38,6 +38,7 @@
   --chat-code: #75507b; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 5 as written (6.6:1 on --panel, 6.1:1 on --page): inline code and file paths */
   --chat-link: #058183; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 6 #06989a stepped 15% toward black (4.7:1 on --panel): links */
   --chat-mark: #3972b6; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 4 mixed 25% toward --panel, stepped 10% toward black (4.9:1): list markers */
+  --chat-accent: var(--run); /* derived: ticket 1064, 1088: the chat's headings and bold; the bundled themes' own colour is --run, another theme's is themeColour() and a Settings > Appearance > Chat accent slot overrides it (themes/apply.ts) */
   --shadow-card: 0 1px 3px #0000001f; /* derived: one quiet card level under the picker level; a catalog theme tints its own (themes/derive.ts) */
   --tree-bad: #cf222e; /* derived: approved mockup docs/design/m3-1110/388.html .tree.light --r: the tree's failed bar, rail and icon (ticket 462, owner 11-12: the mockup's palette by theme kind) */
   --tree-you: #bc4c00; /* derived: approved mockup docs/design/m3-1110/388.html .tree.light --o: the tree's your-turn bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */
@@ -103,6 +104,7 @@
     --chat-code: #987c9c; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 5 #75507b stepped 25% toward white (4.7:1 on --panel): inline code and file paths */
     --chat-link: #06989a; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 6 as written (4.9:1 on --panel): links */
     --chat-mark: #568acc; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 4 mixed 25% toward --panel, stepped 5% toward white (4.9:1): list markers */
+    --chat-accent: var(--run); /* derived: ticket 1064, 1088: the chat's headings and bold; the bundled themes' own colour is --run, another theme's is themeColour() and a Settings > Appearance > Chat accent slot overrides it (themes/apply.ts) */
     --shadow-card: 0 1px 3px #0000005c; /* derived: the card level, deeper on dark; a catalog theme tints its own (themes/derive.ts) */
     --tree-bad: #f85149; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --r: the tree's failed bar, rail and icon (ticket 462, owner 11-12: the mockup's palette by theme kind) */
     --tree-you: #f0883e; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --o: the tree's your-turn bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */
@@ -168,6 +170,7 @@
   --chat-code: #987c9c; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 5 #75507b stepped 25% toward white (4.7:1 on --panel): inline code and file paths */
   --chat-link: #06989a; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 6 as written (4.9:1 on --panel): links */
   --chat-mark: #568acc; /* derived: ticket 1039 (owner 11-21, mockup docs/design/chat-theme-1121): the chat mark rule of themes/derive.ts on this theme's own palette and surfaces: palette 4 mixed 25% toward --panel, stepped 5% toward white (4.9:1): list markers */
+  --chat-accent: var(--run); /* derived: ticket 1064, 1088: the chat's headings and bold; the bundled themes' own colour is --run, another theme's is themeColour() and a Settings > Appearance > Chat accent slot overrides it (themes/apply.ts) */
   --shadow-card: 0 1px 3px #0000005c; /* derived: the card level, deeper on dark; a catalog theme tints its own (themes/derive.ts) */
   --tree-bad: #f85149; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --r: the tree's failed bar, rail and icon (ticket 462, owner 11-12: the mockup's palette by theme kind) */
   --tree-you: #f0883e; /* derived: approved mockup docs/design/m3-1110/388.html .tree.dark --o: the tree's your-turn bar (ticket 462, owner 11-12: the mockup's palette by theme kind) */

@@ -15,8 +15,8 @@ test('registry_keeps_builtin_order: the nine built-in pages and their fields sur
   // Ticket 391: Agents and Accounts became Providers; Orchestration and Advanced moved into Skills & hooks (registered).
   // Ticket 993: Schedules left Settings for its own widget.
   expect(PAGES.slice(0, 13)).toEqual(['general', 'appearance', 'terminal', 'layout', 'alerts', 'keys', 'providers', 'usage', 'git', 'machines', 'browser', 'libraries', 'history']);
-  // Since 38: the two Codex reset rows, autoPull, confirmCloseRunning and notifyFocused. Needs 192 (7): the Symbols Nerd Font toggle's field is gone; F5: orchLevel, orchMaxWorkers, orchMaxDepth, orchMerge, orchAutoClose are gone; F7: branchPrefix, worktreeRoot; ticket 608: notifyDefault; ticket 872: scriptWidgets
-  expect(FIELDS.length).toBe(45);
+  // Since 38: the two Codex reset rows, autoPull, confirmCloseRunning and notifyFocused. Needs 192 (7): the Symbols Nerd Font toggle's field is gone; F5: orchLevel, orchMaxWorkers, orchMaxDepth, orchMerge, orchAutoClose are gone; F7: branchPrefix, worktreeRoot; ticket 608: notifyDefault; ticket 872: scriptWidgets; ticket 1047: barsAutohide
+  expect(FIELDS.length).toBe(46);
   expect(FIELDS[0]).toEqual({ page: 'providers', key: 'usage.codex_resets', at: '[data-setting="usage.codex_resets"]' }); // needs 225
 });
 

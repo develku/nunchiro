@@ -1,5 +1,5 @@
 // Ticket 492: main-window words that stayed English in every language: Search (Files and Sessions), Diff, the tab-closed
-// toast and Undo, the status bar's state word, the composer's model and effort chips, the Agents zone, the title bar,
+// toast and Undo, the status bar's state word, the composer's model and effort chips, the title bar,
 // the terminal's clipboard ask, and the Settings nav title of the In-app browser page.
 declare module '../index' {
   interface AreaKeys {
@@ -56,6 +56,7 @@ declare module '../index' {
     'mw.ss.session.one': true;
     'mw.ss.session.other': true;
     'mw.ss.hitsIn': true;
+    'mw.ss.enterOpens': true;
     'mw.ss.scanned': true;
     'mw.ss.noHits': true;
     'mw.ss.notSearched': true;
@@ -130,14 +131,7 @@ declare module '../index' {
     'mw.picker.modelGroup': true;
     'mw.picker.handoff': true;
     'mw.picker.switching': true;
-    'mw.agents.title': true;
-    'mw.agents.more': true;
-    'mw.agents.clearTip': true;
-    'mw.agents.clear': true;
-    'mw.agents.stop': true;
-    'mw.agents.stopTip': true;
     'mw.agents.close': true;
-    'mw.agents.closeTip': true;
     'mw.title.palette': true;
     'mw.title.hidden': true;
     'mw.title.show': true;
@@ -213,6 +207,7 @@ export const en = {
   'mw.ss.session.one': '{n} session',
   'mw.ss.session.other': '{n} sessions',
   'mw.ss.hitsIn': '{hits} in {sessions}',
+  'mw.ss.enterOpens': 'Enter opens the first result',
   'mw.ss.scanned': '{what} · scanned {n} of {total}',
   'mw.ss.noHits': 'No matches for “{query}”',
   'mw.ss.notSearched': 'not searched: {error}',
@@ -287,14 +282,7 @@ export const en = {
   'mw.picker.modelGroup': '{who} · this conversation only',
   'mw.picker.handoff': 'Hand off to another agent · starts on Enter',
   'mw.picker.switching': 'switching…',
-  'mw.agents.title': 'Agents',
-  'mw.agents.more': '{n} more below',
-  'mw.agents.clearTip': 'Hide closed and exited rows (the palette still opens them)',
-  'mw.agents.clear': 'Clear done',
-  'mw.agents.stop': 'Stop {name}',
-  'mw.agents.stopTip': 'Stop',
   'mw.agents.close': 'Close {name}',
-  'mw.agents.closeTip': 'Close (Undo for 10 s)',
   'mw.title.palette': 'Open command palette',
   'mw.title.hidden': 'Title bar hidden',
   'mw.title.show': 'Show title bar',
@@ -443,14 +431,7 @@ export const ko = {
   'mw.picker.modelGroup': '{who} · 이 대화에만 적용',
   'mw.picker.handoff': '다른 에이전트에게 넘기기 · Enter로 시작',
   'mw.picker.switching': '바꾸는 중…',
-  'mw.agents.title': '에이전트',
-  'mw.agents.more': '아래에 {n}개 더',
-  'mw.agents.clearTip': '닫히거나 종료된 행 숨기기 (팔레트에서는 계속 열 수 있음)',
-  'mw.agents.clear': '완료 항목 지우기',
-  'mw.agents.stop': '{name} 중지',
-  'mw.agents.stopTip': '중지',
   'mw.agents.close': '{name} 닫기',
-  'mw.agents.closeTip': '닫기 (10초 동안 실행 취소 가능)',
   'mw.title.palette': '명령 팔레트 열기',
   'mw.title.hidden': '제목 표시줄 숨김',
   'mw.title.show': '제목 표시줄 보이기',
@@ -599,14 +580,7 @@ export const ja = {
   'mw.picker.modelGroup': '{who} · この会話のみ',
   'mw.picker.handoff': '別のエージェントにハンドオフ · Enter で開始',
   'mw.picker.switching': '切り替え中…',
-  'mw.agents.title': 'エージェント',
-  'mw.agents.more': '下にあと {n} 件',
-  'mw.agents.clearTip': '閉じた行と終了した行を隠す（パレットからは開けます）',
-  'mw.agents.clear': '完了を消去',
-  'mw.agents.stop': '{name} を停止',
-  'mw.agents.stopTip': '停止',
   'mw.agents.close': '{name}を閉じる',
-  'mw.agents.closeTip': '閉じる（10 秒間は元に戻せます）',
   'mw.title.palette': 'コマンドパレットを開く',
   'mw.title.hidden': 'タイトルバー非表示',
   'mw.title.show': 'タイトルバーを表示',
@@ -755,14 +729,7 @@ export const zhHans = {
   'mw.picker.modelGroup': '{who} · 仅限此对话',
   'mw.picker.handoff': '交给另一个代理 · 按 Enter 开始',
   'mw.picker.switching': '正在切换…',
-  'mw.agents.title': '代理',
-  'mw.agents.more': '下方还有 {n} 个',
-  'mw.agents.clearTip': '隐藏已关闭和已退出的行（命令面板仍可打开它们）',
-  'mw.agents.clear': '清除已完成',
-  'mw.agents.stop': '停止 {name}',
-  'mw.agents.stopTip': '停止',
   'mw.agents.close': '关闭 {name}',
-  'mw.agents.closeTip': '关闭（10 秒内可撤销）',
   'mw.title.palette': '打开命令面板',
   'mw.title.hidden': '标题栏已隐藏',
   'mw.title.show': '显示标题栏',
@@ -911,14 +878,7 @@ export const zhHant = {
   'mw.picker.modelGroup': '{who} · 僅限此對話',
   'mw.picker.handoff': '交給另一個代理 · 按 Enter 開始',
   'mw.picker.switching': '正在切換…',
-  'mw.agents.title': '代理',
-  'mw.agents.more': '下方還有 {n} 個',
-  'mw.agents.clearTip': '隱藏已關閉和已結束的列（指令面板仍可開啟它們）',
-  'mw.agents.clear': '清除已完成',
-  'mw.agents.stop': '停止 {name}',
-  'mw.agents.stopTip': '停止',
   'mw.agents.close': '關閉 {name}',
-  'mw.agents.closeTip': '關閉（10 秒內可復原）',
   'mw.title.palette': '開啟指令面板',
   'mw.title.hidden': '標題列已隱藏',
   'mw.title.show': '顯示標題列',
@@ -1067,14 +1027,7 @@ export const es = {
   'mw.picker.modelGroup': '{who} · solo esta conversación',
   'mw.picker.handoff': 'Pasar a otro agente · empieza con Enter',
   'mw.picker.switching': 'cambiando…',
-  'mw.agents.title': 'Agentes',
-  'mw.agents.more': '{n} más abajo',
-  'mw.agents.clearTip': 'Ocultar las filas cerradas y terminadas (la paleta aún las abre)',
-  'mw.agents.clear': 'Limpiar terminadas',
-  'mw.agents.stop': 'Detener {name}',
-  'mw.agents.stopTip': 'Detener',
   'mw.agents.close': 'Cerrar {name}',
-  'mw.agents.closeTip': 'Cerrar (se puede deshacer durante 10 s)',
   'mw.title.palette': 'Abrir la paleta de comandos',
   'mw.title.hidden': 'Barra de título oculta',
   'mw.title.show': 'Mostrar la barra de título',
@@ -1223,14 +1176,7 @@ export const fr = {
   'mw.picker.modelGroup': '{who} · cette conversation uniquement',
   'mw.picker.handoff': 'Passer à un autre agent · démarre avec Entrée',
   'mw.picker.switching': "changement en cours…",
-  'mw.agents.title': 'Agents',
-  'mw.agents.more': "{n} autres plus bas",
-  'mw.agents.clearTip': 'Masquer les lignes fermées et terminées (la palette les ouvre toujours)',
-  'mw.agents.clear': 'Effacer les terminées',
-  'mw.agents.stop': 'Arrêter {name}',
-  'mw.agents.stopTip': 'Arrêter',
   'mw.agents.close': 'Fermer {name}',
-  'mw.agents.closeTip': 'Fermer (annulable pendant 10 s)',
   'mw.title.palette': 'Ouvrir la palette de commandes',
   'mw.title.hidden': 'Barre de titre masquée',
   'mw.title.show': 'Afficher la barre de titre',
@@ -1379,14 +1325,7 @@ export const pt = {
   'mw.picker.modelGroup': '{who} · só esta conversa',
   'mw.picker.handoff': "Transferir para outro agente · começa com Enter",
   'mw.picker.switching': 'trocando…',
-  'mw.agents.title': 'Agentes',
-  'mw.agents.more': 'mais {n} abaixo',
-  'mw.agents.clearTip': 'Ocultar as linhas fechadas e encerradas (a paleta ainda as abre)',
-  'mw.agents.clear': 'Limpar concluídas',
-  'mw.agents.stop': 'Parar {name}',
-  'mw.agents.stopTip': 'Parar',
   'mw.agents.close': 'Fechar {name}',
-  'mw.agents.closeTip': 'Fechar (dá para desfazer por 10 s)',
   'mw.title.palette': 'Abrir a paleta de comandos',
   'mw.title.hidden': 'Barra de título oculta',
   'mw.title.show': 'Mostrar a barra de título',

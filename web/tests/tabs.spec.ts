@@ -1,9 +1,9 @@
 // V1A-41: rename and reorder session tabs from the window; the V1A-37 live-region carry-over.
 import type { Locator, Page } from '@playwright/test';
 import { clashes, DEFAULT_BINDINGS } from '../src/keys';
-import { expect, grantClipboard, openWindow, test, type Core, agentsZone } from './fixtures';
+import { expect, grantClipboard, openWindow, test, type Core, stripOnTop } from './fixtures';
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: these specs read the AGENTS rows, which the default window no longer shows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const labelOf = (core: Core, id: string) => (core.cli('snapshot', '--json').sessions as { id: string; label: string }[]).find((s) => s.id === id)!.label;
 const tabIds = (page: Page) => page.locator('.tab').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab));

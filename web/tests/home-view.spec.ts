@@ -377,7 +377,8 @@ test('home_core_lines (look 1117 v3 item 6): a line the core writes in the Home 
   for (const event of ['UserPromptSubmit', 'Stop', 'UserPromptSubmit', 'Stop'] as const) core.hook(inbox, event);
   const view = await openTeam(app);
   await view.getByRole('tab', { name: /Room/ }).click();
-  const line = view.locator('.room-chat .room-line', { hasText: 'worker Inbox done' });
+  // Ticket 1054: a turn end with no new REPORT.md is "ended a turn (no report yet)", never the bare "done".
+  const line = view.locator('.room-chat .room-line', { hasText: 'worker Inbox ended a turn (no report yet)' });
   await expect(line.locator('.room-line-head b')).toHaveText('Nunchiro app');
   await expect(line.locator('.room-line-head [data-origin]')).toHaveCount(1); // the name only, no "Assistant" role
 });

@@ -3,14 +3,14 @@ import AxeBuilder from '@axe-core/playwright';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { expect, openWindow, test, agentsZone } from './fixtures';
+import { expect, openWindow, test, stripOnTop } from './fixtures';
 
 const src = path.resolve(import.meta.dirname, '../src');
 const nav = (app: Page) => app.getByRole('navigation', { name: 'Settings pages' });
 const palette = (app: Page) => app.getByRole('dialog', { name: 'Command palette' });
 
 test.describe('window', () => {
-  test.beforeEach(({ core }) => agentsZone(core));
+  test.beforeEach(({ core }) => stripOnTop(core));
 
   test('palette_settings_titles_follow_language (page): "Settings: Title bar" opens Appearance on the field', async ({ app, core }) => {
     core.shell(core.project('demo'), 'alpha');

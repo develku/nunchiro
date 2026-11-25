@@ -253,7 +253,11 @@ fn forget_machine_removes_settings_and_remembered() {
         json!({"machines":{"macbook":{"projects":{}}},"stale_after_ms":123}),
         json!({"version":1,"machines":["macbook"]}),
     );
+    let pinned = c.root.join("known_hosts.d/macbook");
+    fs::create_dir_all(pinned.parent().unwrap()).unwrap();
+    fs::write(&pinned, "macbook.local ssh-ed25519 AAAA\n").unwrap();
     assert!(c.call(json!({"op":"forget_machine","alias":"macbook"}))["Ok"].is_object());
+    assert!(!pinned.exists(), "Forget leaves the pinned host key");
     assert_eq!(c.list(), json!([]));
     let file: Value =
         serde_json::from_slice(&fs::read(c.root.join("settings.json")).unwrap()).unwrap();
@@ -302,6 +306,9 @@ fn forget_rollback_failure_reports_divergence() {
                 " ".repeat(512 * 1024)
             );
             fs::write(path, padded).unwrap();
+            let pin = root.join("known_hosts.d/macbook");
+            fs::create_dir_all(pin.parent().unwrap()).unwrap();
+            fs::write(pin, "macbook.local ssh-ed25519 AAAA\n").unwrap();
             unsafe {
                 libc::signal(libc::SIGXFSZ, libc::SIG_IGN);
                 let limit = libc::rlimit {
@@ -325,6 +332,11 @@ fn forget_rollback_failure_reports_divergence() {
     let on_disk: Value =
         serde_json::from_slice(&fs::read(c.root.join("machines.json")).unwrap()).unwrap();
     assert_eq!(on_disk, json!({"version":1,"machines":[]}));
+    // Codex round 4: settings.json still holds macbook, so its pinned host key is written back, not lost.
+    assert_eq!(
+        fs::read_to_string(c.root.join("known_hosts.d/macbook")).unwrap(),
+        "macbook.local ssh-ed25519 AAAA\n"
+    );
 }
 #[test]
 fn core_drop_survives_late_writer() {
@@ -591,7 +603,7 @@ fn machine_ops_refused_for_peer_and_agent() {
 h=os.environ['NUNCHIRO_HOME']
 out=[]
 for token in [os.environ['NUNCHIRO_TOKEN'],open(h+'/core.token').read().strip()]:
- for r in [{'op':'add_machine','alias':'escape','host':'escape'},{'op':'forget_machine','alias':'macbook'},{'op':'machine_details'}]:
+ for r in [{'op':'add_machine','alias':'escape','host':'escape'},{'op':'forget_machine','alias':'macbook'},{'op':'machine_details'},{'op':'machine_share'},{'op':'machine_trust','alias':'escape','link':'nunchiro-machine:v1?host=escape&user=me&port=22&hostkey=SHA256:abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ'}]:
   s=socket.socket(socket.AF_UNIX);s.connect(h+'/core.sock');s.sendall((json.dumps({'token':token,'request':r})+'\n').encode());out.append(json.loads(s.makefile().readline()));s.close()
 open(h+'/probe.token','w').write(os.environ['NUNCHIRO_TOKEN'])
 open(h+'/refused.tmp','w').write(json.dumps(out));os.replace(h+'/refused.tmp',h+'/refused.json')
@@ -601,7 +613,7 @@ open(h+'/refused.tmp','w').write(json.dumps(out));os.replace(h+'/refused.tmp',h+
     wait(|| c.root.join("refused.json").exists());
     let replies: Vec<Value> =
         serde_json::from_slice(&fs::read(c.root.join("refused.json")).unwrap()).unwrap();
-    assert_eq!(replies.len(), 6);
+    assert_eq!(replies.len(), 10);
     for r in replies {
         assert!(
             r["Err"]
@@ -1004,7 +1016,8 @@ fn aliases_and_probe_on_socket_and_window() {
         aliases["Ok"]["aliases"]
             .as_array()
             .unwrap()
-            .contains(&json!("macbook")),
+            .iter()
+            .any(|a| a["name"] == "macbook"),
         "{aliases}"
     );
     let mut ws = window(&c);
@@ -1041,7 +1054,8 @@ fn aliases_and_probe_on_socket_and_window() {
         !after["Ok"]["aliases"]
             .as_array()
             .unwrap()
-            .contains(&json!("macbook")),
+            .iter()
+            .any(|a| a["name"] == "macbook"),
         "{after}"
     );
 }

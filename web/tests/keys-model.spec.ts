@@ -18,7 +18,7 @@ test('keys-shifted-glyphs: shifted punctuation reads as the typed character', ()
   const b = DEFAULT_BINDINGS;
   expect(label(b['tab.move.left'][0], b)).toBe('◆ <');
   expect(label(b['tab.move.right'][0], b)).toBe('◆ >');
-  expect(b['font.bigger'].map((k) => label(k, b))).toEqual(['⌘=', '⌘+']);
+  expect(b['zoom.in'].map((k) => label(k, b))).toEqual(['⌘=', '⌘+']);
   // A shifted letter has no other glyph, so it keeps ⇧.
   expect(label('prefix Shift+KeyH', b)).toBe('◆ ⇧h');
 });
@@ -26,7 +26,8 @@ test('keys-shifted-glyphs: shifted punctuation reads as the typed character', ()
 test('keys-override-wins: a key the user bound keeps working when a new default (prefix ?) holds it too', () => {
   const b = merge({ 'layout.reset': ['prefix Shift+Slash'] });
   expect(resolve(b, 'Shift+Slash', true)).toEqual({ kind: 'command', id: 'layout.reset' });
-  expect(b['keys.help']).toEqual(['Meta+Slash']); // the prefix key is the user's now; the ⌘/ default (needs 170 (3)) is nobody else's
+  expect(b['keys.help'] ?? []).toEqual([]); // the prefix key is the user's now
+  expect(b['keys.sheet']).toEqual(['Meta+Slash']); // ticket 1099: ⌘/ is the whole sheet's own command, untouched
   // With no override the default holds it.
   expect(resolve(merge({}), 'Shift+Slash', true)).toEqual({ kind: 'command', id: 'keys.help' });
 });

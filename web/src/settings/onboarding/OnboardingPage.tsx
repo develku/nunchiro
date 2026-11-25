@@ -15,7 +15,10 @@ import { LANGUAGES, type Key } from '../../i18n';
 import { Icon } from '../../icons/Icon';
 import { askPermission, readPermission, type Level, type Permission } from '../../queue/notify';
 import { leadOf, openSeat, useTeam } from '../../lead/lead';
-import { askAddProject, askNew } from '../../NewSession';
+import { askAddProject, askNew, quickStart } from '../../NewSession';
+import { holdText } from '../../chat/held';
+import { elapsed } from '../../board/watch';
+import { pickFolder } from '../../pickFolder';
 import { PLAIN } from '../../plainText';
 import { openExternal } from '../../sandbox/link';
 import { Chip, Mark } from '../accounts/providers';
@@ -23,17 +26,17 @@ import { ProviderHead } from '../accounts/head';
 import { shownSigned, UseSwitch } from '../accounts/sections';
 import { checkOnOpen, checkOwn, ownLogin, useOwnChecks, withOwnChecks } from '../accounts/ownCheck';
 import type { Session } from '../../types';
-import { basename, openSession } from '../../tree';
+import { basename, openSession, TREE_SET } from '../../tree';
 import { openAgents } from '../agents/open';
 import { DEFAULT_HINT_KEYS } from '../../hintLabels';
 import { DEFAULT_BINDINGS, label, merge } from '../../keys';
 import { DEFAULTS, heights } from '../../settings';
-import { Reset, Row, Select } from '../shell/Row';
+import { Reset, Row, Select, tilde } from '../shell/Row';
 import { PageSummary } from '../shell/PageActions';
 import { WorktreeRoot } from '../git/GitPage';
 import { useCoreFeature, useFeatureSetting } from '../useFeatureSetting';
 import { KeysStep } from './KeysStep';
-import { startedSession, DEFAULT_AGENT, INSTALL, ONBOARDING_MARKS, type Mark as Done } from './state';
+import { folderRows, startedSession, DEFAULT_AGENT, INSTALL, ONBOARDING_MARKS, type FolderRow, type Mark as Done } from './state';
 import '../accounts/accounts.css';
 import './onboarding.css';
 
@@ -138,7 +141,8 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
   const skipped = !hasProject && marks.includes('project_skipped');
   // Ticket 1034 (mockup docs/design/bot-statusbar-1121/index.html part 3): the main assistant is Home's lead. Naming it
   // saves the teammate and starts nothing; its seat is a Claude seat in v1, so with no Claude the step only offers Skip.
-  const assistant = leadOf(useTeam(core, true), '');
+  const team = useTeam(core, true);
+  const assistant = leadOf(team, '');
   const noClaude = found.some((f) => f.agent === 'claude' && !f.found);
   // A seat starts with the account new Claude sessions use.
   const claudeAccount = accounts.find((a) => a.agent === 'claude' && a.session_default) ?? accounts.find((a) => a.agent === 'claude' && a.default);
@@ -209,7 +213,7 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
   // notifications once, and goes on to the one thing only the user can give: a project folder.
   const [defaultAgent, setDefaultAgent] = useFeatureSetting(DEFAULT_AGENT);
   const [, setAutoPull] = useCoreFeature<boolean>('git.auto_pull', false);
-  const quick = async () => {
+  const accept = async () => {
     setMarks([...new Set<Done>([...marks, 'appearance', 'keys', 'skills'])]);
     const agent = (signedAgent ?? firstFound)?.agent;
     if (!defaultAgent && agent) setDefaultAgent(agent);
@@ -217,8 +221,61 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
     void setAutoPull(true);
     void core.request({ op: 'quit_settings', patch: { auto_clean_worktrees: true } }).catch(() => {});
     if (notify === 'default') await askPermission().then(readPermission).then(setNotify, () => {});
-    addProject(true);
   };
+  const quick = async () => (await accept(), addProject(lead === undefined));
+  // Ticket 1123 T1 (mockup docs/design/first-use-1123, owner 11-25 Q1): the folders Claude and Codex worked in on this
+  // Mac (the import listing, read-only), newest first; "Choose folder…" is the last entry. A typed prompt is the first message.
+  // Ticket 1130 C7: `null` until the listing answers; with no history the row starts on Assistants (folderRows).
+  const [recent, setRecent] = useState<FolderRow[] | null>(null);
+  const [chosenFolder, setFolder] = useState('');
+  const rows = folderRows(recent, team.home);
+  const folder = chosenFolder || (rows[0]?.path ?? '');
+  const inHome = !!team.home && folder === team.home;
+  const folderName = (path: string) => (team.home && path === team.home ? t('assistants.title') : basename(path));
+  const [prompt, setPrompt] = useState('');
+  const [going, setGoing] = useState(false);
+  const [goError, setGoError] = useState<unknown>('');
+  const [opened, setOpened] = useState<{ id: string; text: string } | null>(null);
+  // Only while Quick setup shows (no project yet): the listing reads the head of every conversation file.
+  useEffect(() => {
+    if (hasProject) return;
+    // Folders only: the full listing carries each conversation's first words as its title, which this row never shows.
+    void (core.request({ op: 'import_list', folders_only: true }) as Promise<{ folders: { project: string; agent: string; modified_ms: number; gone: boolean }[] }>).then((r) => {
+      setRecent(r.folders.filter((d) => !d.gone).slice(0, 8).map((d) => ({ path: d.project, agent: d.agent, at: d.modified_ms })));
+    }, () => setRecent([]));
+  }, [core, hasProject]);
+  const choose = () =>
+    void pickFolder().then(
+      (p) => p && (setRecent((r) => [{ path: p, agent: '', at: 0 }, ...(r ?? []).filter((x) => x.path !== p)]), setFolder(p)),
+      setGoError,
+    );
+  const go = async () => {
+    if (!folder) return choose();
+    if (going || !lead) return;
+    setGoing(true);
+    setGoError('');
+    try {
+      await accept();
+      // Assistants' folder is no project: it stays out of the tree's project list (its group shows the session).
+      if (!inHome) window.dispatchEvent(new CustomEvent(TREE_SET, { detail: await core.treeEdit({ op: 'add', project: folder, added: true }) }));
+      const s = await quickStart(core, sessions, null, lead, folder);
+      if (s) setOpened({ id: s.id, text: prompt.trim() });
+      else setGoing(false);
+    } catch (e) {
+      setGoError(e);
+      setGoing(false);
+    }
+  };
+  // held.ts gives a held message back to the box while its session is not in the window's list yet, so the prompt is
+  // held, and Settings closed, only once the window lists the new session.
+  useEffect(() => {
+    if (!opened || !sessions.some((s) => s.id === opened.id)) return;
+    if (opened.text) holdText(opened.id, opened.text);
+    flushSync(closeSettings);
+    openSession(opened.id);
+  }, [opened, sessions]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chosen = rows.find((r) => r.path === folder);
+  const since = chosen && elapsed(Date.now() - chosen.at);
   // The one choice on the card (owner 11-16): what a new Claude or Codex session may do without asking. The value shown is
   // Claude's; a pick sets both. Any other stored value (auto, accept edits) shows as it is in Providers, not here.
   const [mode, setMode] = useState('');
@@ -364,7 +421,67 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
       {!hasProject && !steps[steps.length - 1].done && (
         <section className="ob-quick" aria-labelledby="ob-quick-title">
           <h3 id="ob-quick-title">{t('onboarding.quick.title')}</h3>
-          <p>{firstFound ? t('onboarding.quick.body', { name: NAMES[firstFound.agent] }) : t('onboarding.quick.bodyNoAgent')}</p>
+          <p>{lead ? t('firstUse.quick.body', { name: NAMES[lead] }) : t('onboarding.quick.bodyNoAgent')}</p>
+          {lead && (
+            <form className="ob-start" onSubmit={(e) => (e.preventDefault(), void go())}>
+              <div className="ob-fld">
+                <span>{t('firstUse.folder')}</span>
+                <div>
+                  {rows.length ? (
+                    // The mockup's box: the name in bold, the path muted, when it was last used on the right. The native
+                    // select lies over it, transparent, so the list, the keys and the name a screen reader reads stay its own.
+                    <span className="ob-sel field-box">
+                      <span aria-hidden>
+                        <b>{folderName(folder)}</b> <small>{tilde(folder)}</small>
+                      </span>
+                      <small aria-hidden>
+                        {chosen?.agent && since ? t('firstUse.lastUsed', { agent: NAMES[chosen.agent as AccountAgent] ?? chosen.agent, when: t(`firstUse.ago.${since.unit}${since.unit === 'now' ? '' : since.n === 1 ? '.one' : '.other'}` as Key, { n: since.n }) }) : null}
+                        <Icon name="chevron-down" size={12} />
+                      </small>
+                      <select aria-label={t('firstUse.folder')} value={folder} onChange={(e) => (e.target.value ? setFolder(e.target.value) : choose())}>
+                        {rows.map((r) => (
+                          <option key={r.path} value={r.path}>
+                            {`${folderName(r.path)} (${tilde(r.path)})`}
+                          </option>
+                        ))}
+                        <option value="">{t('firstUse.choose')}</option>
+                      </select>
+                    </span>
+                  ) : (
+                    <button type="button" className="btn" data-go="choose" onClick={choose}>
+                      {t('firstUse.choose')}
+                    </button>
+                  )}
+                  {/* Ticket 1130 C7: says where a folderless first session runs; "Choose folder…" stays one click. */}
+                  {inHome && (
+                    <small className="ob-home-line" data-field="home-line">
+                      {t('firstUse1130.homeLine')}{' '}
+                      <button type="button" className="ob-link" data-go="choose" onClick={choose}>
+                        {t('firstUse.choose')}
+                      </button>{' '}
+                      {t('firstUse1130.homeLineEnd')}
+                    </small>
+                  )}
+                </div>
+              </div>
+              <label className="ob-fld">
+                <span>{t('firstUse.prompt')}</span>
+                <input {...PLAIN} className="sinp" aria-label={t('firstUse.prompt')} placeholder={t('firstUse.promptHint', { name: NAMES[lead] })} autoFocus value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+              </label>
+              <ErrorLine t={t} error={goError ? rawError(goError) : ''} />
+              <div className="ob-fld">
+                <span />
+                <div className="ob-acts">
+                <button type="submit" className="btn p" data-go="start" disabled={going} aria-busy={going || undefined}>
+                  {t('firstUse.start', { name: NAMES[lead] })} <span aria-hidden>⏎</span>
+                </button>
+                <button type="button" className="btn" data-go="quick" onClick={() => void quick()}>
+                  {t('firstUse.addOnly')}
+                </button>
+                </div>
+              </div>
+            </form>
+          )}
           <dl>
             {quickRows().map(([k, v]) => (
               <div key={k}>
@@ -386,11 +503,13 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
               </dd>
             </div>
           </dl>
-          <div className="ob-acts">
-            <button type="button" className="btn p" data-go="quick" onClick={() => void quick()}>
-              {t('onboarding.quick.go')}
-            </button>
-          </div>
+          {!lead && (
+            <div className="ob-acts">
+              <button type="button" className="btn p" data-go="quick" onClick={() => void quick()}>
+                {t('onboarding.quick.go')}
+              </button>
+            </div>
+          )}
         </section>
       )}
       <div className="ob" data-setting="onboarding">

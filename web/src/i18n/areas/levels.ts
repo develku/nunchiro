@@ -38,6 +38,12 @@ declare module '../index' {
     'level.runs': true;
     'level.same': true;
     'level.leadKeeps': true;
+    'level.workers': true;
+    'level.workersNote': true;
+    'level.workersOn': true;
+    'level.leadPicks': true;
+    'level.workersMax': true;
+    'level.none': true;
   }
 }
 
@@ -78,6 +84,13 @@ export const en = {
   'level.runs': "Runs on {pair}",
   'level.same': "Same model at every level",
   'level.leadKeeps': "A lead keeps this for every task.",
+  // Ticket 1055, English only until ticket 1035.
+  'level.workers': "Worker models",
+  'level.workersNote': "The level every Builder and Reviewer seat opens at. A Reviewer never opens below its Builder. The lead's own seat does not change.",
+  'level.workersOn': "Workers open on",
+  'level.leadPicks': "Lead picks",
+  'level.workersMax': "Upper limit",
+  'level.none': "None",
 };
 export const ko = {
   'field.levels': "레벨",

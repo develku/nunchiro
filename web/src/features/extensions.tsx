@@ -25,6 +25,13 @@ import { useWidgetList } from '../widgets/api';
 import type { ApprovalState } from '../approval/types';
 import { HookLines, ItemFiles, NewSkill, type HookLine } from './extension-files';
 import { AlertSheet } from '../tree/Dialogs';
+import { flushSync } from 'react-dom';
+import { askNew } from '../NewSession';
+import { restartStart } from '../PermissionNeeded';
+import { restartKeeping } from './restart-keeping';
+import { sessionName } from '../sessionNames';
+import { pastedServer } from './pasted-server';
+import { status, type Session } from '../types';
 import './extensions.css';
 
 /** Mirrors core `extensions::Item`. */
@@ -69,6 +76,7 @@ const DEFAULT_ON = ['nunchiro'];
 type Base = { disable_hook_injection: boolean; orchestration: { enabled: boolean }; orchestration_override: string };
 type BasePatch = { disable_hook_injection?: boolean; orchestration?: { enabled?: boolean; create_override?: boolean } };
 const message = (e: unknown) => rawError(e);
+
 
 /** The `open` value while Nunchiro's own hooks are shown (no item has this id: a custom id starts with `custom:`). */
 const HOOKS = 'nunchiro-hooks';
@@ -300,14 +308,16 @@ function TurnOnSheet({ t, item, error, onCancel, onConfirm }: { t: T; item: ExtI
   );
 }
 
-function ExtensionsPage({ core, t, commands, closeSettings }: PageContext) {
+function ExtensionsPage({ core, t, commands, closeSettings, current, focus }: PageContext) {
   const [list, setList] = useState<ExtList | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [enabled, setEnabled, featureError, , enabledRead] = useCoreFeature<string[]>(ENABLED, DEFAULT_ON);
   const [name, setName] = useState('');
-  const nameField = useRef<HTMLInputElement>(null); // ticket 550: the empty MCP line's button puts the cursor here
+  const [named, setNamed] = useState(false); // a name typed by hand is kept when the command changes
+  const commandField = useRef<HTMLInputElement>(null); // ticket 550: the empty MCP line's button puts the cursor here
   const [command, setCommand] = useState('');
+  const [added, setAdded] = useState(''); // ticket 1123 T10: the server just added, for the restart line
   const { list: widgets } = useWidgetList(core);
   // Ticket 452: the item whose files are shown (one at a time), and whether the New skill form is open.
   const [open, setOpen] = useState<string | null>(null);
@@ -415,13 +425,60 @@ function ExtensionsPage({ core, t, commands, closeSettings }: PageContext) {
   };
   const openLibrary = commands.find((c) => c.id === 'layout.edit');
   // The sheet's own reading of a command line: quotes group words, and the core gets an argument list, never a shell line.
-  const argv = splitWords(command);
-  const commandProblem = argv === null ? t('agents.sheet.unclosed') : argv.some(hasControl) ? t('agents.sheet.control') : '';
+  const words = splitWords(command);
+  const pasted = words?.length ? pastedServer(words) : null;
+  const argv = pasted ? pasted.command : words;
+  const typeCommand = (v: string) => {
+    setCommand(v);
+    const w = splitWords(v);
+    if (!named) setName(w?.length ? pastedServer(w).name : '');
+  };
+  // Ticket 1123 T10: with no server of your own yet, the page opens on the one field.
+  // Not when the page opened on a target (a Settings search hit, a palette field, a reveal): that focus is the user's.
+  const target = useRef(!!focus);
+  const noOwn = list?.own.length === 0;
+  useEffect(() => void (noOwn && !target.current && !focus && commandField.current?.focus()), [noOwn]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Owner 11-25 Q3: the open agent session restarts with the server; Restart session resumes its conversation.
+  const live = current && current.kind !== 'shell' && current.state === 'running' && !current.side_chat ? current : null;
+  // Restart waits until the session is idle: not working, not waiting on a question, not stale. Only a conversation id
+  // says it resumes.
+  const notIdle = !!live && status(live) !== 'idle';
+  const resumes = !!live && !!restartStart(live).resume;
+  const restartWith = async (s: Session) => {
+    setError('');
+    try {
+      await restartKeeping(core, s, () => flushSync(closeSettings));
+    } catch (e) {
+      setError(message(e));
+    }
+  };
+  const commandProblem = argv === null ? t('agents.sheet.unclosed') : argv.some(hasControl) ? t('agents.sheet.control') : pasted?.refused ? t(pasted.refused === 'agent' ? 'firstUse.mcp.agentLine' : 'firstUse.mcp.remote') : '';
   // Ticket 378: Add stays pressable; pressed with an empty box, that box turns red and one line says what is missing.
   const [tried, setTried] = useState(false);
   const noName = tried && !name.trim();
   const noCommand = tried && !argv?.length;
   const mcpProblem = commandProblem || (noName || noCommand ? t('settings.extensions.mcpNeed') : '');
+
+  // Owner 11-25 Q3: under the server just added, before the empty field (mockup T10).
+  const addedLine = (
+    <div className="srow ext-added">
+      <p className="ok-line" role="status">
+        {t('firstUse.mcp.added', { name: added })}
+      </p>
+      <div className="ob-acts">
+        {live && (
+          <button type="button" className="btn p" data-go="restart" disabled={notIdle} aria-describedby={notIdle ? 'why-restart' : undefined} onClick={() => void restartWith(live)}>
+            {t('firstUse.mcp.restart', { name: sessionName(live) })}
+          </button>
+        )}
+        {live && notIdle && <Why id="why-restart" reason={t('firstUse.mcp.working', { name: sessionName(live) })} />}
+        {live && !notIdle && resumes && <span className="ext-keeps">{t('firstUse.mcp.keeps')}</span>}
+        <button type="button" className={live ? 'btn' : 'btn p'} data-go="new" onClick={() => (flushSync(closeSettings), askNew(live?.project))}>
+          {t('firstUse.mcp.new')}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="ssec-group">
@@ -519,7 +576,7 @@ function ExtensionsPage({ core, t, commands, closeSettings }: PageContext) {
           {!list?.mcp.length && !list?.mcp_too_large?.length && (
             <p className="empty">
               {t('settings.extensions.mcpNone')}{' '}
-              <button type="button" className="btn" onClick={() => nameField.current?.focus()}>
+              <button type="button" className="btn" onClick={() => commandField.current?.focus()}>
                 {t('empty.addMcp')}
               </button>
             </p>
@@ -527,25 +584,42 @@ function ExtensionsPage({ core, t, commands, closeSettings }: PageContext) {
         </div>
         <h3>{t('settings.extensions.mcpOwn')}</h3>
         <div className="scard" data-mcp="own">
-          {(list?.own ?? []).map((s) => server(s, true))}
+          {(list?.own ?? []).map((s) => (
+            <Fragment key={s.name}>
+              {server(s, true)}
+              {s.name === added && addedLine}
+            </Fragment>
+          ))}
           <form
             className="srow ext-add"
             onSubmit={(e) => {
               e.preventDefault();
               if (!name.trim() || !argv?.length || commandProblem) return setTried(true);
-              void act({ op: 'extensions_mcp_add', name: name.trim(), command: argv }).then((ok) => ok && (setName(''), setCommand(''), setTried(false)));
+              const added = name.trim();
+              void act({ op: 'extensions_mcp_add', name: added, command: argv }).then((ok) => ok && (setName(''), setNamed(false), setCommand(''), setTried(false), setAdded(added)));
             }}
           >
-            <input {...PLAIN} ref={nameField} aria-label={t('settings.extensions.mcpName')} placeholder={t('settings.extensions.mcpName')} aria-invalid={noName} value={name} onChange={(e) => setName(e.target.value)} />
-            <input {...PLAIN} aria-label={t('settings.extensions.mcpCommand')} placeholder={t('settings.extensions.mcpCommand')} className="mono" aria-invalid={!!commandProblem || noCommand} value={command} onChange={(e) => setCommand(e.target.value)} />
-            <button className="btn" type="submit" aria-label={t('settings.extensions.mcpAdd')} disabled={busy || !!commandProblem} aria-busy={busy || undefined} aria-describedby={mcpProblem ? 'why-mcp' : undefined}>
-              <Icon name="plus" size={14} />
-              {t('settings.row.add')}
-            </button>
+            <div className="ext-paste">
+              <input {...PLAIN} ref={commandField} aria-label={t('settings.extensions.mcpCommand')} placeholder={t('firstUse.mcp.paste')} className="mono" aria-invalid={!!commandProblem || noCommand} value={command} onChange={(e) => typeCommand(e.target.value)} />
+              <button className="btn" type="submit" aria-label={t('settings.extensions.mcpAdd')} disabled={busy || !!commandProblem} aria-busy={busy || undefined} aria-describedby={mcpProblem ? 'why-mcp' : undefined}>
+                <Icon name="plus" size={14} />
+                {t('settings.row.add')}
+              </button>
+            </div>
+            <label className="ext-name">
+              {t('firstUse.mcp.name')}
+              <input {...PLAIN} className="mono" aria-label={t('settings.extensions.mcpName')} aria-invalid={noName} value={name} onChange={(e) => (setName(e.target.value), setNamed(true))} />
+              <span>{t('firstUse.mcp.hint')}</span>
+            </label>
           </form>
           {mcpProblem && (
             <p className="empty" role="alert" data-field="mcp-problem">
               <Why id="why-mcp" reason={mcpProblem} />
+            </p>
+          )}
+          {!mcpProblem && !!pasted?.dropped.length && (
+            <p className="empty" role="status" data-field="mcp-env">
+              {t('firstUse.mcp.envDropped', { names: pasted.dropped.join(', ') })}
             </p>
           )}
         </div>

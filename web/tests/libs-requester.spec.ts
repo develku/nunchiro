@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { installHost } from './fixtures/artifacts/cards/host';
+import { installHost, showFrame } from './fixtures/artifacts/cards/host';
 import { append, chat, expect, openChat, rec, test as chatTest } from './fixtures/chat/harness';
 import { openFile, setup, view } from './fixtures/files/harness';
 import { artifactServer } from './sandbox-server';
@@ -62,6 +62,7 @@ test('libs_requester_chat_card_and_preview_name_the_session: never the page titl
   await openChat(page, s.id);
   const c = chat(page, s.id).locator('.acard[data-path="site/index.html"]');
   await expect(c).toHaveAttribute('data-state', 'ready');
+  await showFrame(c);
   await expect(asked(c)).toHaveText('Asked by sales-bot');
   await expect(c.locator('.af-libs')).not.toContainText(HOSTILE);
   await allow(c, page);

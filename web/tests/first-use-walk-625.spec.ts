@@ -43,7 +43,8 @@ test('split_chooser_in_korean: widget rows read in Korean, no English registry n
   const chooser = app.getByRole('listbox', { name: '새 분할 창 선택' }).or(app.locator('.chooser'));
   await expect(chooser.getByRole('option').first()).toBeFocused();
   const text = await chooser.innerText();
-  expect(text).toContain('에이전트마다 점 하나, 상태 표시');
+  // Ticket 1070 retired the Agents widget ("에이전트마다 점 하나, 상태 표시"); the tree's card stands for the waiting-slots note.
+  expect(text).toContain('항상 배치에 있고, 옮길 수 있음');
   expect(text).toContain('따라가기 또는 고정');
   expect(text).not.toMatch(/spawn order|follows or pinned|waiting slots/);
 });

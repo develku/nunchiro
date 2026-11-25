@@ -803,18 +803,18 @@
   color: var(--muted);
 }
 /* Select (final.html .sel): the native menu in the draft's box. */
-:is(.settings[role='region'], .mcard, .schedv) .ssel {
+:is(.settings[role='region'], .mcard, .schedv, .acsw-pop) .ssel {
   position: relative;
   display: inline-flex;
   align-items: center;
 }
-:is(.settings[role='region'], .mcard, .schedv) .ssel select {
+:is(.settings[role='region'], .mcard, .schedv, .acsw-pop) .ssel select {
   appearance: none;
   min-width: 140px;
   height: 28px;
   padding: 0 28px 0 var(--sp-12);
 }
-:is(.settings[role='region'], .mcard, .schedv) .ssel svg {
+:is(.settings[role='region'], .mcard, .schedv, .acsw-pop) .ssel svg {
   position: absolute;
   right: var(--sp-8);
   color: var(--muted);

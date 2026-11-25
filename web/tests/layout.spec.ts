@@ -17,10 +17,11 @@ const edit = (page: Page) => page.locator('nav[data-bar="right"] .lay').click();
 const done = (page: Page) => page.getByRole('toolbar', { name: 'Layout edit' }).getByRole('button', { name: 'Done' }).click();
 /** A library card dropped on an edge of the layout (a window's own edit, where the CLI would pick one window). */
 async function dropOnEdge(page: Page, kind: string, side: 'left' | 'right') {
-  // The drawer slides in after Edit: a box measured mid-slide lands the press on the neighbouring card (agents-2).
+  // The drawer slides in after Edit: a box measured mid-slide lands the press on the neighbouring card (context-2).
   // The cards also move down when the widget list arrives (as d5b.ts startEdit waits): the library is busy until then.
   await expect(page.locator('.lib')).not.toHaveAttribute('aria-busy', 'true');
   await page.locator('.lib').evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
+  await page.locator(`.lib .lcard[data-card="${kind}"]`).scrollIntoViewIfNeeded(); // Context is below the fold
   const c = (await page.locator(`.lib .lcard[data-card="${kind}"]`).boundingBox())!;
   const l = (await page.locator('.layout').boundingBox())!;
   await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
@@ -57,24 +58,24 @@ test('fresh checkout: no layout.toml means the default layout, and nothing is wr
 test('drag move: a zone grip dropped on the right of another zone moves the widget and echoes its command', async ({ app, core }) => {
   await openWindow(app);
   await edit(app);
-  await dragTo(app, zone(app, 'agents').locator('.zl'), await at(app, 'terminal', 0.92, 0.5));
+  await dragTo(app, zone(app, 'context').locator('.zl'), await at(app, 'terminal', 0.92, 0.5));
   await expect(app.locator('.emsg')).toHaveText(''); // needs 153: no ':' echo of the drag
   await done(app);
-  await expect.poll(() => read(core)).toContain('widgets = ["agents"]');
+  await expect.poll(() => read(core)).toContain('widgets = ["context"]');
   // AGENTS now sits to the right of the terminal, and the left column collapsed into the tree.
   const t = (await zone(app, 'terminal').boundingBox())!;
-  const a = (await zone(app, 'agents').boundingBox())!;
+  const a = (await zone(app, 'context').boundingBox())!;
   expect(a.x).toBeGreaterThan(t.x + t.width - 2);
-  expect(await zones(app)).toEqual(['tree', 'terminal', 'agents', 'waiting', 'composer']);
+  expect(await zones(app)).toEqual(['tree', 'terminal', 'context', 'waiting', 'composer']);
 });
 
 test('command move: the typed command does what the drag does', async ({ app, core }) => {
   await openWindow(app);
   await edit(app);
-  await layoutCli(app, core, 'move agents split right --zone terminal');
+  await layoutCli(app, core, 'move context split right --zone terminal');
   await done(app);
-  await expect.poll(() => read(core)).toContain('widgets = ["agents"]');
-  expect(await zones(app)).toEqual(['tree', 'terminal', 'agents', 'waiting', 'composer']);
+  await expect.poll(() => read(core)).toContain('widgets = ["context"]');
+  expect(await zones(app)).toEqual(['tree', 'terminal', 'context', 'waiting', 'composer']);
 });
 
 test('drop preview names the result, the sizes after Done, the session and the command', async ({ app }) => {
@@ -110,19 +111,19 @@ test('drop preview names the result, the sizes after Done, the session and the c
 test('split minimum: a zone too small for both halves refuses the split and names the sizes', async ({ app, core }) => {
   await openWindow(app);
   // needs 153: typed through `nunchiro layout`, which reports the refusal itself.
-  expect(() => core.cli('layout', 'split', 'down', 'terminal', '--zone', 'agents')).toThrow('too small: agents is 190 px high; split down needs 80 + 120 px');
-  expect(await zones(app)).toEqual(['tree', 'agents', 'terminal', 'waiting', 'composer']);
+  expect(() => core.cli('layout', 'split', 'down', 'terminal', '--zone', 'context')).toThrow('too small: context is 190 px high; split down needs 80 + 120 px');
+  expect(await zones(app)).toEqual(['tree', 'context', 'terminal', 'waiting', 'composer']);
   await edit(app);
   // The drop preview says the same before anything is dropped.
   await grab(app, card(app, 'terminal'));
-  const p = await at(app, 'agents', 0.5, 0.8);
+  const p = await at(app, 'context', 0.5, 0.8);
   await app.mouse.move(p.x, p.y, { steps: 6 });
   await expect(app.locator('.dropprev')).toHaveAttribute('data-error', 'true');
   await expect(app.locator('.dropprev')).toContainText('too small');
   await app.mouse.up();
-  expect(await zones(app)).toEqual(['tree', 'agents', 'terminal', 'waiting', 'composer']);
+  expect(await zones(app)).toEqual(['tree', 'context', 'terminal', 'waiting', 'composer']);
   await done(app);
-  expect(read(core)).not.toContain('agents-2');
+  expect(read(core)).not.toContain('context-2');
 });
 
 test('duplicate: a widget can be placed twice, and both copies are live', async ({ app, core }) => {
@@ -131,11 +132,9 @@ test('duplicate: a widget can be placed twice, and both copies are live', async 
   core.shell(p, 'beta');
   await openWindow(app);
   await edit(app);
-  await layoutCli(app, core, 'edge right agents');
+  await layoutCli(app, core, 'edge right context');
   await done(app);
-  await expect(app.getByRole('region', { name: 'Agents' })).toHaveCount(2);
-  for (const list of await app.getByRole('region', { name: 'Agents' }).all()) await expect(list.locator('.ar')).toHaveCount(2);
-  await expect.poll(() => read(core)).toContain('id = "agents-2"');
+  await expect.poll(() => read(core)).toContain('id = "context-2"');
 });
 
 test('pin: a pinned terminal keeps its session while the other follows focus; the chip names it (Hangul too)', async ({ app, core }) => {
@@ -209,21 +208,21 @@ test('waiting-removal notice: removing the answer strip first says only signals 
   await expect(app.locator('#waiting-strip')).toHaveCount(0);
   await expect(app.locator('.emsg')).toContainText("the Answer strip card in Layout's widget library brings it back");
   // A22: removing the last zone signal is accepted now (the Tree always shows waiting); was a refusal "waiting would show only in the menu bar".
-  await zone(app, 'agents').getByRole('button', { name: /^Remove .* from the Agents zone$/ }).click();
-  await expect(zone(app, 'agents')).toHaveCount(0);
+  await zone(app, 'context').getByRole('button', { name: /^Remove .* from the Context zone$/ }).click();
+  await expect(zone(app, 'context')).toHaveCount(0);
   const undo = app.getByRole('toolbar', { name: 'Layout edit' }).getByRole('button', { name: /^Undo/ });
   await undo.click(); // brings AGENTS back
   await undo.click(); // brings the strip back
   await done(app);
   await expect(app.locator('#waiting-strip')).toHaveCount(1);
-  expect(await zones(app)).toEqual(['tree', 'agents', 'waiting', 'terminal', 'composer']); // ticket 180: strip placed on top
+  expect(await zones(app)).toEqual(['tree', 'context', 'waiting', 'terminal', 'composer']); // ticket 180: strip placed on top
   await expect.poll(() => read(core)).toContain('widgets = ["waiting"]');
 });
 
 test('Reset restores the default layout', async ({ app, core }) => {
   await openWindow(app);
   core.cli('layout', 'edge', 'left', 'terminal'); // needs 153: typed changes come through `nunchiro layout`
-  core.cli('layout', 'remove', 'agents');
+  core.cli('layout', 'remove', 'context');
   await expect.poll(() => zones(app)).toContain('terminal-2');
   await edit(app);
   await app.getByRole('toolbar', { name: 'Layout edit' }).getByRole('button', { name: 'Default', exact: true }).click();
@@ -237,7 +236,7 @@ test('3-step Undo: four changes, three undos back to after the first; a fourth f
   await openWindow(app);
   await edit(app);
   // needs 153: the four changes are the window's own (library drops and ✕), not typed lines.
-  await dropOnEdge(app, 'agents', 'right');
+  await dropOnEdge(app, 'context', 'right');
   const first = await zones(app);
   await dropOnEdge(app, 'waiting', 'left');
   await zone(app, 'composer').getByRole('button', { name: /^Remove .* from the Composer zone$/ }).click();
@@ -266,7 +265,7 @@ test('Acceptance 14: split, stack, pin and remove give the same layout.toml from
   await app.mouse.move(t.x, t.y, { steps: 6 });
   await app.mouse.up();
   await layoutCli(app, core, 'pin beta --zone terminal-2');
-  await grab(app, card(app, 'agents'));
+  await grab(app, card(app, 'context'));
   const tr = await at(app, 'tree', 0.5, 0.5);
   await app.mouse.move(tr.x, tr.y, { steps: 6 });
   await app.mouse.up();
@@ -288,7 +287,7 @@ test('Acceptance 14: split, stack, pin and remove give the same layout.toml from
     for (const step of [
       ['split', 'right', 'terminal', '--zone', 'terminal'],
       ['pin', 'beta', '--zone', 'terminal-2'],
-      ['stack', 'agents', '--zone', 'tree'],
+      ['stack', 'context', '--zone', 'tree'],
       ['pin', 'alpha', '--zone', 'terminal'],
       ['remove', 'waiting'],
     ])
@@ -315,7 +314,7 @@ test('Acceptance 14: split, stack, pin and remove give the same layout.toml from
   core.cli('serve', 'stop', '--yes');
   await core.restart();
   const again = await secondWindow(app, core);
-  expect(await zones(again)).toEqual(['tree', 'agents', 'terminal', 'terminal-2', 'composer']);
+  expect(await zones(again)).toEqual(['tree', 'context', 'terminal', 'terminal-2', 'composer']);
   await expect(zone(again, 'terminal-2').locator('.shead .pin')).toHaveText('📌 beta');
   expect(read(core)).toBe(gui);
 });
@@ -335,14 +334,14 @@ test('invalid or newer layout.toml: kept untouched, the window keeps its last go
   await nudge(app); // the core writes the file once, so `good` is its own text
   await expect.poll(() => read(core)).toContain('size = 272');
   const good = read(core);
-  const bad = good.replace('widgets = ["agents"]', 'widgets = ["chat"]');
+  const bad = good.replace('widgets = ["context"]', 'widgets = ["chat"]');
   fs.writeFileSync(file(core), bad);
   const line = bad.split('\n').findIndex((l) => l.includes('"chat"')) + 1;
   const alert = app.locator('.status .lerr');
   await expect(alert).toContainText(`layout.toml has a problem on line ${line}.`);
-  await expect(alert).toHaveAttribute('title', `layout.toml line ${line}: unknown widget "chat"; widgets: tree, agents, waiting, terminal, composer, diff, files, board, search, preview, artifacts, decisions, room`);
+  await expect(alert).toHaveAttribute('title', `layout.toml line ${line}: unknown widget "chat"; widgets: tree, waiting, terminal, composer, diff, files, board, search, preview, artifacts, decisions, room, context`);
   await expect(alert).toContainText('using the last good layout');
-  expect(await zones(app)).toEqual(['tree', 'agents', 'terminal', 'waiting', 'composer']);
+  expect(await zones(app)).toEqual(['tree', 'context', 'terminal', 'waiting', 'composer']);
   // A change in the window is not saved over the broken file.
   await nudge(app);
   await app.waitForTimeout(300);
@@ -363,15 +362,15 @@ test('two windows editing at once: last Done wins, and the other window shows it
   const b = await secondWindow(app, core);
   await edit(app);
   await edit(b);
-  await dropOnEdge(app, 'agents', 'right');
+  await dropOnEdge(app, 'context', 'right');
   await dropOnEdge(b, 'waiting', 'left');
   await done(app);
-  await expect.poll(() => read(core)).toContain('agents-2');
+  await expect.poll(() => read(core)).toContain('context-2');
   await expect(b.locator('.emsg')).toContainText('layout.toml changed elsewhere. Done will overwrite it');
   await done(b);
   await expect.poll(() => read(core)).toContain('waiting-2');
-  expect(read(core)).not.toContain('agents-2');
-  await expect.poll(() => zones(app)).toEqual(['waiting-2', 'tree', 'agents', 'terminal', 'waiting', 'composer']);
+  expect(read(core)).not.toContain('context-2');
+  await expect.poll(() => zones(app)).toEqual(['waiting-2', 'tree', 'context', 'terminal', 'waiting', 'composer']);
 });
 
 test('prefix L with a Korean input source enters edit mode; a Hangul session name pins through the CLI', async ({ app, core }) => {
@@ -412,7 +411,7 @@ for (const how of ['composer', 'terminal'] as const)
       );
     const zonesBefore = await zoneBoxes();
     for (const t of ['go-a', 'go-b', 'go-c']) fs.writeFileSync(path.join(p, t), '');
-    for (const id of agents) await expect(app.locator(`[data-agent="${id}"] .st`)).toHaveAttribute('data-s', 'waiting', { timeout: 5000 });
+    await expect.poll(() => (core.cli('snapshot', '--json').sessions as { id: string; attention: { waiting: boolean } }[]).filter((s) => agents.includes(s.id) && s.attention.waiting).length, { timeout: 5000 }).toBe(3); // the tree is not drawn in edit mode
     // needs 107 (ticket 180): the strip fills its own zone beside the terminal, which keeps its size.
     await expect(app.locator('#waiting-strip .qcard')).toHaveCount(1);
     // Ticket 370 (f6568f12): the quiet project is drawn open from the start, so its head and first row stay; only the rows
@@ -452,9 +451,9 @@ test('nunchiro layout goes to one window: the newest, or the one last worked in;
   const b = await secondWindow(app, core);
   // The window last worked in takes the command (the core tests cover "else the newest").
   await b.locator('footer.status').click();
-  expect(core.cli('layout', 'edge', 'right', 'agents').text).toBe('edge right agents');
-  await expect.poll(() => zones(b)).toContain('agents');
-  await expect.poll(() => zones(app)).toContain('agents');
+  expect(core.cli('layout', 'edge', 'right', 'context').text).toBe('edge right context');
+  await expect.poll(() => zones(b)).toContain('context');
+  await expect.poll(() => zones(app)).toContain('context');
   // Working in a makes a the target; a is editing, so it refuses rather than another window guessing.
   await edit(app);
   expect(() => core.cli('layout', 'add', 'waiting')).toThrow(/editing the layout/);
@@ -465,7 +464,7 @@ test('nunchiro layout goes to one window: the newest, or the one last worked in;
   // Undo is the file's, not a window's: it works with a still editing and no window history involved.
   expect(core.cli('layout', 'undo').text).toBe('undo');
   await expect.poll(() => read(core)).not.toContain('widgets = ["waiting"]');
-  expect(read(core)).toContain('widgets = ["agents"]');
+  expect(read(core)).toContain('widgets = ["context"]');
   // The first change is undone back to no file: the default layout.
   expect(core.cli('layout', 'undo').text).toBe('undo');
   expect(fs.existsSync(file(core))).toBe(false);
@@ -473,7 +472,7 @@ test('nunchiro layout goes to one window: the newest, or the one last worked in;
   await app.getByRole('toolbar', { name: 'Layout edit' }).getByRole('button', { name: 'Cancel' }).click();
   // No waiting for the window to notice the undo: the command carries the file as it is now.
   core.cli('layout', 'reset');
-  expect(read(core)).not.toContain('widgets = ["agents"]');
+  expect(read(core)).not.toContain('widgets = ["context"]');
   expect(read(core)).toContain('id = "centre"');
 });
 
@@ -643,7 +642,7 @@ test('pane mode: Control+l grows the zone by one step, Control+h shrinks it, and
   await expect.poll(async () => Math.round((await zone(app, 'tree').boundingBox())!.width)).toBe(Math.round(w0) + 16);
   await expect.poll(() => read(core)).toContain('size = 272');
   for (let i = 0; i < 20; i++) await app.keyboard.press('Control+KeyH');
-  await expect.poll(async () => Math.round((await zone(app, 'tree').boundingBox())!.width)).toBe(160); // agents minimum width
+  await expect.poll(async () => Math.round((await zone(app, 'tree').boundingBox())!.width)).toBe(200); // context minimum width
   await app.waitForTimeout(300); // let the queued saves land before taking the baseline
   const bytes = read(core);
   await app.keyboard.press('Control+KeyH');

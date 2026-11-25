@@ -1,9 +1,9 @@
 // Hint labels from a user alphabet and user kind keys (needs 118, ticket 75, ticket 389): the window half. The pure half is hint-alphabet.spec.ts.
 import type { Page } from '@playwright/test';
-import { agentsZone, expect, openWindow, test } from './fixtures';
+import { type Core, stripOnTop, expect, openWindow, test } from './fixtures';
 import { openQuiet } from './tree-seed';
 
-test.beforeEach(({ core }) => agentsZone(core)); // the session rows sit in an AGENTS zone, which the default window no longer shows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 /** A keydown as the system delivers it: the physical code with a key value that is not the glyph (Hangul, Colemak, Dvorak). */
 const typeCode = (page: Page, code: string, key = 'ㅁ') =>
@@ -23,7 +23,7 @@ const openHintsSettings = async (page: Page) => {
   return page.getByRole('region', { name: 'Hints' });
 };
 
-const demo = (core: Parameters<typeof agentsZone>[0]) => {
+const demo = (core: Core) => {
   const p = core.project('demo');
   const ids = ['one', 'two', 'three'].map((l) => core.shell(p, l).id);
   openQuiet(core); // V2-9a: quiet projects start folded; the project row is a target either way
@@ -107,7 +107,7 @@ test('pane_labels_cover_every_pane', async ({ app, core }) => {
     document.body.append(d);
   });
   const panes = await app.locator('[data-hint-kind="pane"]:not([hidden])').evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().width > 2 && e.getBoundingClientRect().height > 2).length);
-  expect(panes).toBeGreaterThan(2);
+  expect(panes).toBeGreaterThan(1); // the fixture and the terminal
   await hints(app);
   // Ticket 389: panes are quiet, labelled only under Shift+W.
   await expect(app.locator('.hint[data-hint-kind="pane"]')).toHaveCount(0);

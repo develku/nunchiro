@@ -158,7 +158,7 @@ export function WorktreeRoot({ core, t }: { core: CoreClient; t: T }) {
       className="git-root"
       label={t('git.root')}
       desc={t('git.rootDesc')}
-      // Empty is the default: the core puts new worktrees under its own folder.
+      // Empty is the default: ~/nunchiro/worktrees (ticket 1083).
       reset={<Reset t={t} label={t('git.root')} show={!!dir} run={() => void save('')} />}
       extra={<Err t={t} error={error} retry={dir === null ? load : undefined} />}
       control={
@@ -170,7 +170,7 @@ export function WorktreeRoot({ core, t }: { core: CoreClient; t: T }) {
               aria-label={t('git.root')}
               aria-invalid={!!error}
               title={dir || undefined} // the field cuts a long path; this is all of it
-              placeholder="../.worktrees"
+              placeholder="~/nunchiro/worktrees"
               spellCheck={false}
               defaultValue={dir}
               key={dir}

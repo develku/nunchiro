@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CoreClient } from '../api';
 import type { Session } from '../types';
 import type { TaskView } from '../lead/tasks';
+import type { T } from '../i18n';
+import { clock, daysAgo, endText } from '../tree/finished';
 
 export type RoomMessage = {
   id: string;
@@ -24,6 +26,22 @@ const PREFIX = 'room:';
 export const roomTabId = (project: string) => `${PREFIX}${project}`;
 export const isRoomTab = (id: string | null) => !!id?.startsWith(PREFIX);
 export const roomOfTab = (id: string | null) => (isRoomTab(id) ? id!.slice(PREFIX.length) : null);
+
+/** Ticket 1072: when a room line was sent: "09:42" today, "Yesterday 09:42", then "Nov 19 09:42" (the core keeps only this time). */
+export function stamp(t: T, ms: number, now = Date.now()) {
+  const days = daysAgo(ms, now);
+  return days < 1 ? clock(ms) : days === 1 ? t('room.yesterday', { time: clock(ms) }) : `${endText(ms, now)} ${clock(ms)}`;
+}
+
+/** Ticket 1089: beside a room line's written time, when it reached its seat: "delivered 14:07" (the clock alone when that
+ *  was the day it was written, else with its day), or "waiting" while it sits in the seat's queue or inbox. Null for a
+ *  line to no seat, or one whose delivery the core no longer knows (`at` undefined). */
+export function reachedText(t: T, at: number | null | undefined, written: number, now = Date.now()) {
+  if (at === undefined) return null;
+  if (at === null) return { text: t('room.waiting'), waiting: true };
+  const sameDay = new Date(at).toDateString() === new Date(written).toDateString();
+  return { text: t('room.delivered', { time: sameDay ? clock(at) : stamp(t, at, now) }), waiting: false };
+}
 
 export const PERSON = 'person';
 /** The core numbers a room's messages m1, m2, ... in log order. */
@@ -81,9 +99,12 @@ const OLD_PINS = (key: string) => `nunchiro.room.pins:${key}`;
 const POLL_MS = 15_000;
 /** `names`: look 1117 v13 Home S3-1, the names of seats whose rows are gone (a removed teammate's), by session id. */
 type Names = Record<string, string>;
-type Page = { messages?: RoomMessage[]; reset?: boolean; log?: number; pins?: string[]; names?: Names };
-type Room = { messages: RoomMessage[]; log: number; pins: string[]; names: Names };
-const EMPTY: Room = { messages: [], log: 0, pins: [], names: {} };
+/** Ticket 1089: by message id, when each of the newest lines sent to a seat reached it (null: it waits); the whole map
+ *  comes with every read, so a line read earlier changes too. */
+type Delivery = Record<string, number | null>;
+type Page = { messages?: RoomMessage[]; reset?: boolean; log?: number; pins?: string[]; names?: Names; delivery?: Delivery };
+type Room = { messages: RoomMessage[]; log: number; pins: string[]; names: Names; delivery: Delivery };
+const EMPTY: Room = { messages: [], log: 0, pins: [], names: {}, delivery: {} };
 const last = (list: RoomMessage[]) => list[list.length - 1];
 const same = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 /** The shown project's room: the first read takes the newest messages, a later one only what came after the last message
@@ -105,13 +126,15 @@ export function useRoom(core: CoreClient, project: string | null, connected: boo
       const got = page.messages ?? [];
       const pins = page.pins ?? [];
       const names = page.names ?? {};
+      const delivery = page.delivery ?? {};
       // The same list stays the same array: a read that found nothing new must not draw the window again.
       setRoom((old) => {
         const keep = same(old.pins, pins) ? old.pins : pins;
         const named = JSON.stringify(old.names) === JSON.stringify(names) ? old.names : names;
-        if (page.reset) return old.log === page.log && old.messages.length === got.length && last(old.messages)?.id === last(got)?.id && last(old.messages)?.ts === last(got)?.ts && keep === old.pins && named === old.names ? old : { messages: got, log: page.log ?? 0, pins: keep, names: named };
+        const reached = JSON.stringify(old.delivery) === JSON.stringify(delivery) ? old.delivery : delivery;
+        if (page.reset) return old.log === page.log && old.messages.length === got.length && last(old.messages)?.id === last(got)?.id && last(old.messages)?.ts === last(got)?.ts && keep === old.pins && named === old.names && reached === old.delivery ? old : { messages: got, log: page.log ?? 0, pins: keep, names: named, delivery: reached };
         const fresh = got.filter((m) => num(m) > num(last(old.messages) ?? { id: 'm0' })); // two overlapping reads bring the same page twice
-        return fresh.length || keep !== old.pins || named !== old.names ? { messages: [...old.messages, ...fresh], log: page.log ?? old.log, pins: keep, names: named } : old;
+        return fresh.length || keep !== old.pins || named !== old.names || reached !== old.delivery ? { messages: [...old.messages, ...fresh], log: page.log ?? old.log, pins: keep, names: named, delivery: reached } : old;
       });
     } catch {
       // The next push or poll tries again.
@@ -166,5 +189,5 @@ export function useRoom(core: CoreClient, project: string | null, connected: boo
     setSeen({ key, n: newest });
   }, [open, project, key, newest, seenN]);
   const unread = open ? 0 : room.messages.filter((m) => m.to === PERSON && num(m) > seenN).length;
-  return { messages: room.messages, log: room.log, pins: room.pins, names: room.names, dropped, toggle, unread, refresh };
+  return { messages: room.messages, log: room.log, pins: room.pins, names: room.names, delivery: room.delivery, dropped, toggle, unread, refresh };
 }

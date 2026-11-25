@@ -94,6 +94,95 @@ fn home_seat_starts_locked_in_the_chosen_mode() {
     fs::remove_dir_all(home).unwrap();
 }
 
+// Ticket 1130 S1: a full-access project session (Claude's Skip permissions) carries the outward hook, with Nunchiro's own
+// hooks turned off too; its run blocks the call when it fails.
+#[test]
+fn t1130_full_access_project_session_has_the_outward_hook() {
+    let home = scratch("outward-hook");
+    let mut core = Sessions::open(&home).unwrap();
+    approve_fake_claude(&home, &[]);
+    core.settings.disable_hook_injection = true;
+    let project = home.join("project");
+    fs::create_dir_all(&project).unwrap();
+    let mut launch = core
+        .launch(StartSession {
+            project: project.clone(),
+            ..claude_start(&home, &[])
+        })
+        .owner_start()
+        .prepare()
+        .unwrap();
+    assert_eq!(launch.home_mode, None);
+    assert!(
+        launch
+            .permission
+            .iter()
+            .any(|a| a == crate::agent_permission::START_IN_SKIP),
+        "{:?}",
+        launch.permission
+    );
+    let id = core.start(&launch).unwrap().id;
+    launch.committed = true;
+    let file: serde_json::Value =
+        serde_json::from_slice(&fs::read(home.join(format!("hooks-{id}.json"))).unwrap()).unwrap();
+    let pre = file["hooks"]["PreToolUse"].as_array().unwrap();
+    assert_eq!(pre.len(), 1, "{pre:?}");
+    assert_eq!(pre[0]["matcher"], "Bash|mcp__.*");
+    assert!(
+        pre[0]["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .ends_with(" hook outward")
+    );
+    assert_eq!(pre[0]["hooks"][0]["onFailure"], "block");
+    fs::remove_dir_all(home).unwrap();
+}
+
+// Ticket 1130 round 2 (Codex 3): a project whose own settings turn every hook off still runs the outward hook. Claude
+// reads its layers user < project < local < `--settings` (managed above all, not ours), so the effective
+// `disableAllHooks` is the last layer's that sets it.
+#[test]
+fn t1130_project_cannot_disable_the_outward_hook() {
+    let home = scratch("outward-nohooks");
+    let mut core = Sessions::open(&home).unwrap();
+    approve_fake_claude(&home, &[]);
+    let project = home.join("project");
+    fs::create_dir_all(project.join(".claude")).unwrap();
+    let off = serde_json::json!({"disableAllHooks": true});
+    for name in ["settings.json", "settings.local.json"] {
+        fs::write(project.join(".claude").join(name), off.to_string()).unwrap();
+    }
+    let mut launch = core
+        .launch(StartSession {
+            project: project.clone(),
+            ..claude_start(&home, &[])
+        })
+        .owner_start()
+        .prepare()
+        .unwrap();
+    let id = core.start(&launch).unwrap().id;
+    launch.committed = true;
+    let flag: serde_json::Value =
+        serde_json::from_slice(&fs::read(home.join(format!("hooks-{id}.json"))).unwrap()).unwrap();
+    let layers = [off.clone(), off, flag.clone()];
+    let effective = layers
+        .iter()
+        .rev()
+        .find_map(|l| l["disableAllHooks"].as_bool());
+    assert_eq!(effective, Some(false), "{flag}");
+    assert!(
+        flag["hooks"]["PreToolUse"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|b| b["hooks"][0]["command"]
+                .as_str()
+                .is_some_and(|c| c.ends_with(" hook outward"))),
+        "{flag}"
+    );
+    fs::remove_dir_all(home).unwrap();
+}
+
 // Ticket 1002 lane 1 (check MUST 1): a session a locked Home seat starts, in any folder, carries the lock; its hook
 // file holds the lock's own hook, beside Nunchiro's.
 #[test]
@@ -130,9 +219,14 @@ fn a_home_seats_child_inherits_the_lock() {
         .filter_map(|b| b["hooks"][0]["command"].as_str())
         .collect();
     // Decision B: the owner's "Full access, shell included" start; its run blocks the call when it fails (M1).
-    assert_eq!(commands.len(), 1, "{commands:?}");
+    // Ticket 1130 S1: the outward hook follows, leaving the seat's connector calls to the Outbox card.
+    assert_eq!(commands.len(), 2, "{commands:?}");
     assert!(
         commands[0].ends_with(" hook home-lock --mode full-access-shell"),
+        "{commands:?}"
+    );
+    assert!(
+        commands[1].ends_with(" hook outward --home-lock"),
         "{commands:?}"
     );
     assert_eq!(

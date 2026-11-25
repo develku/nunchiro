@@ -11,11 +11,16 @@ nunchiro task loops [--json] (the Home lead and the user: the open loops kept by
 nunchiro task promise|waiting \"<what>\" --who \"<name>\" [--due YYYY-MM-DD] (the Home lead: asks the user on a card to keep it; the user's own shell keeps it at once)\n\
 nunchiro task loop-close <id> [\"<why>\"] (the Home lead: asks the user on a card to close it; the user's own shell closes it at once)\n\
 nunchiro task attach <id> --path <worktree> | assign <id> <session>\n\
-nunchiro task staff <id> <role> [--path <worktree>] [--prompt \"<first words>\"] [--level light|standard|deep] (starts a seat of that role)\n\
+nunchiro task staff <id> <role> [--path <worktree>] [--prompt \"<first words>\"] [--level light|standard|deep] [--effort <effort>] [--account <label>] (starts a seat of that role; --account: the lead's own account or the place's)\n\
 nunchiro task pass [\"<note>\"] [--task <id>] | changes \"<what to change>\" [--task <id>]\n\
 nunchiro task learn \"<a lesson in one line>\" [--cites <file>] [--task <id>]\n\
 nunchiro task ask-merge <id> (asks the user on a card; needs a passed review of the committed files)\n\
 nunchiro task done <id> | drop <id>\n\
+nunchiro task package <id> quote \"<words, exactly>\" --who \"<who said it>\" --when \"<when>\" [--image <attached image>]... | unquote <n> | background \"<your text>\" | see \"<what the user will see>\" | shown <n> | approve <n> | link <path or URL> --kind mockup|doc|code|url [--approved] | unlink <n> (the lead or the user: the task's work package; a quote is never edited, only removed and added)\n\
+nunchiro task auto on|off --project DIR (the user's choice for a place: the core nudges stalled seats, wakes the lead, starts Reviewers)\n\
+nunchiro task account <label>|own --project DIR (the user's choice for a place: the agent account its seats start on, staffed and auto-started alike; own is the lead's own)\n\
+nunchiro task cap 2|4|6|8 --project DIR (the user's choice: live seats of the place at which the core stops starting Reviewers; 4 by default)\n\
+nunchiro task ask-cap 2|4|6|8 --why \"<what you saw>\" (a lead: asks the user on a card to change its place's live seats)\n\
 nunchiro note list\n\
 nunchiro role list | propose \"<name>\" --job \"<what it does>\" --why \"<what you counted>\" [--kind claude|codex] [--model M] [--reviews]\n\
 (add --json for the record as JSON)";
@@ -23,15 +28,19 @@ nunchiro role list | propose \"<name>\" --job \"<what it does>\" --why \"<what y
 pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
     // `ask-merge` only files a card for the user. It is not called `merge`: a real Claude lead in auto mode had
     // `nunchiro task merge` refused by its permission classifier as a destructive action. The old word still works.
-    let operation = match args.first().ok_or(USAGE)?.as_str() {
+    let mut operation = match args.first().ok_or(USAGE)?.as_str() {
         "ask-merge" => "merge".to_string(),
         other => other.to_string(),
     };
     let (mut id, mut text, mut accept, mut project, mut path, mut session) =
         (None, String::new(), vec![], None, None, None);
     let mut cites = None;
-    let (mut prompt, mut level) = (None, None);
+    let (mut prompt, mut level, mut effort) = (None, None, None);
     let (mut who, mut due) = (None, None); // ticket 1003
+    let mut why = None; // ticket 1099 panel 4
+    let mut account = None; // ticket 1120
+    // Ticket 1095: `task package`.
+    let (mut when, mut images, mut kind, mut approved) = (None, vec![], None, false);
     let (mut all, mut json, mut places) = (false, false, false);
     let mut plain = vec![];
     let mut words = args[1..].iter();
@@ -47,6 +56,13 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
             "--prompt" => prompt = Some(value()?),
             "--who" => who = Some(value()?),
             "--due" => due = Some(value()?),
+            "--why" => why = Some(value()?),
+            "--account" => account = Some(value()?),
+            "--when" => when = Some(value()?),
+            "--kind" => kind = Some(value()?),
+            "--approved" => approved = true,
+            "--image" => images.push(std::path::absolute(value()?).map_err(|e| e.to_string())?),
+            "--effort" => effort = Some(value()?), // ticket 1054; the core checks it against the agent's list
             // Ticket 993 rule 9: the level a staffed seat opens at.
             "--level" => {
                 level = Some(
@@ -65,9 +81,8 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
     }
     let mut plain = plain.into_iter();
     match operation.as_str() {
-        "new" | "pass" | "changes" | "learn" | "way" | "grant" | "goal" | "promise" | "waiting" => {
-            text = plain.next().unwrap_or_default()
-        }
+        "new" | "pass" | "changes" | "learn" | "way" | "grant" | "auto" | "cap" | "account"
+        | "ask-cap" | "goal" | "promise" | "waiting" => text = plain.next().unwrap_or_default(),
         "loop-close" => {
             id = plain.next().or(id);
             text = plain.next().unwrap_or_default();
@@ -82,8 +97,26 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
             text = plain.next().unwrap_or_default();
         }
         "list" | "digest" | "loops" => {}
+        "package" => {
+            id = plain.next().or(id);
+            let part = plain.next().unwrap_or_default();
+            if !nunchiro_core::ledger::package::PARTS.contains(&part.as_str()) {
+                return Err(USAGE.into());
+            }
+            operation = format!("package-{part}");
+            text = plain.next().unwrap_or_default();
+        }
         _ => return Err(USAGE.into()),
     }
+    let package = operation
+        .starts_with("package-")
+        .then(|| nunchiro_core::ledger::package::Fill {
+            who: who.take(),
+            when,
+            images,
+            kind,
+            approved,
+        });
     let operation = if places && operation == "list" {
         "list-all".to_string()
     } else {
@@ -93,6 +126,7 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
         return Err(format!("too many words; quote the text\n{USAGE}"));
     }
     let goal = operation == "goal";
+    let show = operation == "show" || package.is_some();
     super::ensure_core(home)?;
     let reply = super::call(
         home,
@@ -109,69 +143,45 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
             level,
             who,
             due,
+            effort,
+            package,
+            why,
+            account,
         },
     )?;
     // Slice i: the core says what to start for the seat; the start, the seat on a task with no worktree and the first
     // prompt are this caller's own requests, so every start check holds.
     let reply = match reply {
-        Reply::Staff {
-            task,
-            folder,
-            session,
-            level,
-        } => {
-            let seated = folder.is_some();
-            let Reply::Started { session } = super::call(
-                home,
-                Request::Start {
-                    session,
-                    folder,
-                    env: Default::default(),
-                    receipt: None,
-                },
-            )?
-            else {
-                return Err("the seat did not start".into());
-            };
-            // A seat on a task with no worktree is seated here; either way the seat's level goes with it.
-            if !seated || level.is_some() {
-                super::call(
-                    home,
-                    Request::Task {
-                        operation: "assign".into(),
-                        id: Some(task.clone()),
-                        text: String::new(),
-                        accept: vec![],
-                        project: None,
-                        path: None,
-                        session: Some(session.id.clone()),
-                        cites: None,
-                        all: false,
-                        level,
-                        who: None,
-                        due: None,
-                    },
-                )?;
-            }
-            if let Some(text) = prompt {
-                super::call(
-                    home,
-                    Request::AgentPrompt {
-                        id: session.id.clone(),
-                        text,
-                    },
-                )?;
-            }
+        staff @ Reply::Staff { .. } => {
+            let (task, session, why) =
+                nunchiro_core::ledger::seat_up(staff, prompt, &mut |r| super::call(home, r))
+                    .map_err(|e| {
+                        // Ticket 1120: a lead that names another account before the user set it for the place.
+                        if e.contains("only on its own account") {
+                            format!("{e}; ask the user to set the place's account with `nunchiro task account <label> --project DIR`")
+                        } else {
+                            e
+                        }
+                    })?;
             // Ticket 994: the model and effort the seat's level resolved to, as the agent names them.
             let pair = nunchiro_core::team::pick_words(
                 session.kind,
                 session.model.as_deref(),
                 session.effort.as_deref(),
             );
+            // Ticket 1120: and the account, when it is not the default one.
+            let on = session
+                .account
+                .as_deref()
+                .map_or(String::new(), |a| format!(" · {a}"));
             println!(
-                "started {} ({}) on task {task}, on {pair}",
+                "started {} ({}) on task {task}, on {pair}{on}",
                 session.label, session.id
             );
+            // Ticket 1055: the level it opened at is not the asked one (Worker models, its builder's level).
+            if let Some(why) = why {
+                println!("{why}");
+            }
             return Ok(());
         }
         reply => reply,
@@ -263,9 +273,16 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
                     "edits" => "may edit files without asking; commands ask the user",
                     _ => "ask the user before each edit and command",
                 };
+                // Ticket 1081: whether the core nudges stalled seats and tells the lead what waits.
+                let auto = if place.auto { "on" } else { "off" };
+                // Ticket 1120: the account the place's seats start on, only when the user set one (the default line stays
+                // as it was before 1120).
+                let account = place.account.as_deref().map_or(String::new(), |a| {
+                    format!(" Seats start on the account {a}.")
+                });
                 println!(
-                    "Way of working here: {} (levels.md). Seats here {seats}.",
-                    place.way
+                    "Way of working here: {} (levels.md). Seats here {seats}. Auto-advance: {auto}, up to {} seats at once.{account}",
+                    place.way, place.cap
                 );
             }
             if tasks.is_empty() {
@@ -278,7 +295,7 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
                     at = Some(&task.task.place);
                     println!("{}:", task.task.place.display());
                 }
-                print!("{}", nunchiro_core::ledger::lines(task));
+                print!("{}", nunchiro_core::ledger::lines(task, show));
             }
         }
         reply => println!(

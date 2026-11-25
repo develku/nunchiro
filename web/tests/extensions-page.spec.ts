@@ -162,7 +162,7 @@ test('extensions_rows_reach_the_settings_search: a search result opens the page 
   await app.getByRole('searchbox').fill('MCP servers');
   await app.getByRole('button', { name: /MCP servers/ }).first().click();
   await expect(app.getByRole('heading', { level: 1, name: 'Skills & hooks', exact: true })).toBeVisible();
-  await expect(app.locator('[data-mcp="own"]').getByRole('textbox', { name: 'Server name' })).toBeFocused();
+  await expect(app.locator('[data-mcp="own"]').getByRole('textbox', { name: 'Command' })).toBeFocused(); // ticket 1123: the one field comes first
 });
 
 // Ticket 391: the shipped skill's switch moved into the Nunchiro defaults card, and the custom rows still write the same list.

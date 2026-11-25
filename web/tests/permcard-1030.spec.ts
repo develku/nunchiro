@@ -120,18 +120,20 @@ test('risky_answer_clears_both: the confirmed allow (focus then Enter) on the ca
   expect(px.sent.map((s) => [s.session, s.answer.type])).toEqual([[wt.a.id, 'allow_once']]);
 });
 
-test('keys_only_on_the_card: 1 and 3 type into the composer; Shift+Tab reaches the card, then 1 allows once', async ({ app, core }) => {
+// Ticket 1097 changed the first half: a digit in the EMPTY composer answers the card (sidechat-card-1097.spec.ts); after text it is text.
+test('keys_on_the_card: after text, 1 and 3 type into the composer; Shift+Tab reaches the card, then 1 allows once', async ({ app, core }) => {
   const { wt, px } = await setup(app, core);
   await openTab(app, wt.a);
   await ask(app, wt.a, 'a', PERMISSION('touch out-a'));
   await expect(docked(app)).toBeVisible();
   const box = app.locator('#composer');
   await box.focus();
+  await app.keyboard.type('x');
   await app.keyboard.press('Digit1');
   await app.keyboard.press('Digit3');
   await app.waitForTimeout(300);
   expect(px.sent).toHaveLength(0);
-  await expect(box).toHaveValue('13');
+  await expect(box).toHaveValue('x13');
   await expect(box).toHaveAttribute('placeholder', /Shift\+Tab/);
   await box.fill('');
   await settled(app, core);

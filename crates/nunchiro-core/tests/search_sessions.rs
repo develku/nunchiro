@@ -9,7 +9,7 @@ use std::{
     net::TcpStream,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
+    process::{Child, Stdio},
     thread,
     time::{Duration, Instant},
 };
@@ -672,8 +672,9 @@ fn search_sessions_waiting_unaffected() {
     );
 }
 
+#[cfg(feature = "measure")]
 fn rss_kib(pid: u32) -> u64 {
-    let out = Command::new("ps")
+    let out = std::process::Command::new("ps")
         .args(["-o", "rss=", "-p", &pid.to_string()])
         .output()
         .unwrap();
@@ -686,10 +687,10 @@ fn rss_kib(pid: u32) -> u64 {
 /// Spec V2-7 acceptance 1 and 3 over a generated 500 MB fixture of 100 transcripts (Claude and Codex, 80 closed):
 /// time to the first hit for 20 phrases (each in 3 sessions spread over the list), p95 under 1 s; core memory growth
 /// during the scans under 50 MB; a permission raised mid-scan queued within 1 s. Also reported, with no bar: opening
-/// the first hit of each phrase (`sessions_hit` on a never-opened session builds its chat cache). Opt in: `cargo test -p nunchiro-core --test search_sessions -- --ignored --nocapture`, with
+/// the first hit of each phrase (`sessions_hit` on a never-opened session builds its chat cache). Opt in: `cargo test -p nunchiro-core --features measure --test search_sessions search_sessions_perf_500mb -- --nocapture`, with
 /// NUNCHIRO_BIN pointing at a release build for the shipped figure. The fixture goes under `.scratch/` and is removed.
+#[cfg(feature = "measure")]
 #[test]
-#[ignore = "writes a 500 MB fixture; run on demand"]
 fn search_sessions_perf_500mb() {
     let agents = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../.scratch")

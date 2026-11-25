@@ -64,13 +64,14 @@ export function Tiles({ t, d }: { t: T; d: Detail }) {
 }
 
 /** One window's bar: used share, and a line at the share of the window already gone (T3 Code's pace, ticket 218). */
-export function Meter({ t, label, limit, span, now }: { t: T; label: string; limit?: Limit; span: number; now: number }) {
+export function Meter({ t, label, limit, span, now, seen }: { t: T; label: string; limit?: Limit; span: number; now: number; seen?: number }) {
   if (!limit)
     return (
       <div className="meter off">
         <div className="t">
           <span>{label}</span>
-          <span>{t('usage.v4.noLimit')}</span>
+          {/* Ticket 1045: a record that exists but has no window ahead says when it was last seen. */}
+          <span>{seen ? t('usageBar.asOf', { time: new Date(seen * 1000).toLocaleTimeString(document.documentElement.lang || undefined, { hour: 'numeric', minute: '2-digit' }) }) : t('usage.v4.noLimit')}</span>
         </div>
         <div className="track" />
       </div>

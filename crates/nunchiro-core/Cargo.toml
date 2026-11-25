@@ -4,6 +4,17 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+# Ticket 1130 A2: tests that leave the default run; scripts/extended-tests.sh runs them weekly. measure: slow
+# measurements and socket floods; live: the real claude, codex and gh (signed in, network).
+measure = []
+live = []
+
+[[test]]
+name = "chat_performance"
+path = "tests/chat_performance.rs"
+required-features = ["measure"]
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true

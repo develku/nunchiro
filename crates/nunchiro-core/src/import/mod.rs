@@ -27,6 +27,10 @@ pub enum Op {
     ImportList {
         #[serde(default)]
         projects: Option<Vec<String>>,
+        /// Ticket 1123: only the folders (onboarding's Folder row): each one's agent, newest time and whether it is gone,
+        /// never a title or any other words of a conversation. Takes no `projects`.
+        #[serde(default)]
+        folders_only: bool,
     },
     /// Imports these listed ids (an id the listing does not hold is refused).
     ImportAdd { ids: Vec<String> },
@@ -45,6 +49,151 @@ pub struct Item {
     pub title: String,
     pub modified_ms: u64,
     pub imported: bool,
+    /// Ticket 1073: a conversation a Nunchiro session ran (`ran.json`), so History never calls it started in a terminal.
+    #[serde(default)]
+    pub ran: bool,
+}
+
+/// Ticket 1123: one folder an agent worked in, for onboarding's Folder row. No title field: the type cannot carry the
+/// words of a conversation (a first message can hold a secret).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Folder {
+    pub project: String,
+    /// The agent of the newest conversation there.
+    pub agent: Agent,
+    pub modified_ms: u64,
+    /// Not a folder on this Mac now (moved or deleted).
+    pub gone: bool,
+}
+
+/// Ticket 1073: the conversation ids (`agent_session_id`) of every session row this core saved, oldest first, at most
+/// RAN_KEEP. A closed session's row leaves the store (V2-6d, ticket 621) and its conversation file stays on disk; this
+/// is what still tells that conversation was Nunchiro's own. Written by `Sessions::save`, read by the listing.
+/// Round 4: seeded once per home (`seed`, at the first core start that finds no `seeded` mark) from what the core kept
+/// about sessions closed before this record existed.
+pub(crate) const RAN: &str = "ran.json";
+const RAN_KEEP: usize = 16_384;
+const RAN_MAX: u64 = 2 << 20;
+/// The most `chat/` names one seed reads (a bounded walk at one core start, never at a listing).
+const SEED_CHAT_MAX: usize = 100_000;
+#[derive(Serialize, Deserialize)]
+struct RanFile {
+    /// The seed ran (round 4). A round-3 file (a bare list) has none, so it is seeded once too.
+    seeded: bool,
+    conversations: std::collections::VecDeque<String>,
+}
+#[derive(Default)]
+pub(crate) struct Ran {
+    order: std::collections::VecDeque<String>,
+    set: BTreeSet<String>,
+    seeded: bool,
+}
+impl Ran {
+    /// The ids `home` keeps; an unreadable or missing file is none (the conversations then read as before 1073).
+    pub(crate) fn load(home: &Path) -> Self {
+        let bytes = store::open_regular(&home.join(RAN))
+            .ok()
+            .and_then(|f| store::read_capped(f, RAN_MAX).ok())
+            .unwrap_or_default();
+        let (ids, seeded) = match serde_json::from_slice::<RanFile>(&bytes) {
+            Ok(f) => (f.conversations.into(), f.seeded),
+            Err(_) => (
+                serde_json::from_slice::<Vec<String>>(&bytes).unwrap_or_default(),
+                false,
+            ),
+        };
+        let mut ran = Self {
+            seeded,
+            ..Self::default()
+        };
+        ran.add(ids.iter().map(String::as_str));
+        ran
+    }
+    fn add<'a>(&mut self, ids: impl Iterator<Item = &'a str>) -> bool {
+        let mut grew = false;
+        for id in ids.filter(|id| !id.is_empty() && id.len() <= 200) {
+            if self.set.insert(id.to_string()) {
+                self.order.push_back(id.to_string());
+                grew = true;
+            }
+        }
+        while self.order.len() > RAN_KEEP {
+            let old = self.order.pop_front().unwrap();
+            self.set.remove(&old);
+        }
+        grew
+    }
+    fn write(&self, home: &Path) -> Result<(), String> {
+        let file = RanFile {
+            seeded: self.seeded,
+            conversations: self.order.clone(),
+        };
+        let bytes = serde_json::to_vec(&file).map_err(|e| e.to_string())?;
+        store::write_capped(&home.join(RAN), &bytes, RAN_MAX)
+    }
+    /// Adds `ids`; writes the file only when one is new. The oldest go past RAN_KEEP.
+    pub(crate) fn note<'a>(
+        &mut self,
+        home: &Path,
+        ids: impl Iterator<Item = &'a str>,
+    ) -> Result<(), String> {
+        if !self.add(ids) {
+            return Ok(());
+        }
+        self.write(home)
+    }
+    /// Round 4: once per home, the conversations of sessions closed before ran.json existed. Sources: `known` (the
+    /// stored rows and the dropped token rows' `token_conversations`) and the chat records `chat/<claude|codex>-<id>.json`
+    /// (`chat::session_key`: the agent's conversation id; never removed at a close), oldest first so the newest stay
+    /// under RAN_KEEP. A row with no conversation id keys its record by the session id, which names no transcript.
+    /// Once written with the mark it never runs again; a failed write runs it again at the next start.
+    pub(crate) fn seed<'a>(
+        &mut self,
+        home: &Path,
+        known: impl Iterator<Item = &'a str>,
+    ) -> Result<(), String> {
+        if self.seeded {
+            return Ok(());
+        }
+        let mut chat: Vec<(std::time::SystemTime, String)> = fs::read_dir(home.join("chat"))
+            .into_iter()
+            .flatten()
+            .take(SEED_CHAT_MAX)
+            .filter_map(|e| {
+                let e = e.ok()?;
+                let name = e.file_name().into_string().ok()?;
+                let key = name.strip_suffix(".json")?;
+                let id = key
+                    .strip_prefix("claude-")
+                    .or_else(|| key.strip_prefix("codex-"))?;
+                let at = e.metadata().ok()?.modified().ok()?;
+                store::valid_id(id).then(|| (at, id.to_string()))
+            })
+            .collect();
+        chat.sort();
+        let older: Vec<String> = chat.into_iter().map(|(_, id)| id).collect();
+        let known: Vec<&str> = known.collect();
+        // What the old store holds first (older), then what the current rows hold (newest).
+        let mut seeded = Self {
+            seeded: true,
+            ..Self::default()
+        };
+        seeded.add(older.iter().map(String::as_str));
+        seeded.add(known.into_iter());
+        seeded.add(self.order.iter().map(String::as_str));
+        seeded.write(home)?;
+        *self = seeded;
+        Ok(())
+    }
+    /// A listed id (`<agent>:<file stem>`) is one of these: Claude's stem is the conversation id; Codex's ends with it
+    /// (`rollout-<time>-<uuid>`).
+    fn has(&self, item: &str) -> bool {
+        let stem = item.split_once(':').map_or(item, |(_, s)| s);
+        self.set.contains(stem)
+            || stem
+                .get(stem.len().saturating_sub(36)..)
+                .is_some_and(|tail| tail.len() == 36 && self.set.contains(tail))
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -111,11 +260,25 @@ pub fn window(
 ) -> Result<Reply, String> {
     let roots = Roots::own();
     match op {
-        Op::ImportList { projects: None } => Ok(Reply::ImportList {
+        Op::ImportList {
+            projects: None,
+            folders_only: true,
+        } => Ok(Reply::ImportFolders {
+            folders: folders(list(&roots, home)?),
+        }),
+        Op::ImportList {
+            projects: Some(_),
+            folders_only: true,
+        } => Err("folders_only takes no projects".into()),
+        Op::ImportList {
+            projects: None,
+            folders_only: false,
+        } => Ok(Reply::ImportList {
             items: list(&roots, home)?,
         }),
         Op::ImportList {
             projects: Some(projects),
+            folders_only: false,
         } => Ok(Reply::ImportProjects {
             projects: listed(&roots, home, &projects, &tree()?)?,
         }),
@@ -306,10 +469,12 @@ fn scan(roots: &Roots) -> Vec<Stored> {
 
 pub fn list(roots: &Roots, home: &Path) -> Result<Vec<Item>, String> {
     let kept = stored(home)?;
+    let ran = Ran::load(home);
     Ok(scan(roots)
         .into_iter()
         .map(|s| Item {
             imported: kept.iter().any(|k| k.id == s.id),
+            ran: ran.has(&s.id),
             id: s.id,
             agent: s.agent,
             project: s.project,
@@ -317,6 +482,29 @@ pub fn list(roots: &Roots, home: &Path) -> Result<Vec<Item>, String> {
             modified_ms: s.modified_ms,
         })
         .collect())
+}
+
+/// Each recorded absolute folder once, newest first, with the agent of its newest conversation and whether it is gone:
+/// one look per folder, never a read of its contents. Titles are dropped here, before anything is serialized.
+fn folders(items: Vec<Item>) -> Vec<Folder> {
+    let mut newest: BTreeMap<String, (u64, Agent)> = BTreeMap::new();
+    for i in items.into_iter().filter(|i| i.project.starts_with('/')) {
+        let e = newest.entry(i.project).or_insert((i.modified_ms, i.agent));
+        if i.modified_ms > e.0 {
+            *e = (i.modified_ms, i.agent);
+        }
+    }
+    let mut out: Vec<Folder> = newest
+        .into_iter()
+        .map(|(project, (modified_ms, agent))| Folder {
+            gone: !Path::new(&project).is_dir(),
+            project,
+            agent,
+            modified_ms,
+        })
+        .collect();
+    out.sort_by_key(|f| std::cmp::Reverse(f.modified_ms));
+    out
 }
 
 /// 392: the projects the window's tree holds for this Mac: the session projects and the added ones. A machine's

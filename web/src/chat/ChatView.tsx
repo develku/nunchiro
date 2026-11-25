@@ -24,12 +24,13 @@ import { baseName } from '../files/open';
 import { elapsed, Open, RowView } from './Rows';
 import { PrChip, type PrChipData } from './PrChip'; // v2-8b
 import { useWarm } from '../warm';
-import { show as paneShow } from '../pane/store';
+import { blocked, show as paneShow } from '../pane/store';
 import { doneJump, useJump } from '../search/jump'; // v2-7
 import { agentName, chain, handOff, type Member } from './conversation'; // v2-3b
 import { RowIcon } from '../tree/RowIcon'; // v25-design-chat: the tree's working arc
 import './chat.css';
 import './handoff.css'; // v2-3b
+import { keyText } from '../keys';
 
 interface State {
   generation: number | null;
@@ -106,7 +107,8 @@ function useChat(feed: ChatFeed, session: string, catchUp: () => void) {
 }
 
 /** v25-design-chat (needs 140 motion): the working row. Mounted when the turn starts and dropped when it ends, so each
- * turn counts from 0. */
+ * turn counts from 0. Ticket 1094: keyed by the turn's start, so a turn that follows another between two snapshots
+ * counts from its own start too, never from the first turn the row saw. */
 // q67 look (new 7): counts from the core's turn start (`attention.working_since`), the moment the tree row's time counts
 // from, so a tab opened mid-turn does not start again at 0 beside a row that says "2 min". A start the window's clock has
 // not reached (an older core's 0, another machine's clock) counts from when this list saw the turn.
@@ -156,7 +158,7 @@ function ChatList({ boot, feed, session, shown, readOnly, head, main, t }: { t: 
   // N27: the user's own Stop before any output: Claude writes no record, so the message it stopped reads as interrupted.
   const stop = stoppedAt(session.id);
   const tail = shownRows[shownRows.length - 1];
-  const rows = stop !== undefined && tail?.kind === 'user' && tail.key <= stop && !session.attention.working ? [...shownRows, { kind: 'interrupted' as const, key: tail.key + 0.5 }] : shownRows;
+  const rows = stop !== undefined && (tail?.kind === 'user' || tail?.kind === 'wakes') && tail.key <= stop && !session.attention.working ? [...shownRows, { kind: 'interrupted' as const, key: tail.key + 0.5 }] : shownRows;
   const stopped = rows !== shownRows && tail?.kind === 'user' ? tail : null;
   useEffect(() => {
     const text = stopped && claimReturn(session.id, stopped.key) ? recallable(stopped.text) : '';
@@ -373,7 +375,7 @@ function ChatList({ boot, feed, session, shown, readOnly, head, main, t }: { t: 
         {!banner && state.skipped > 0 && <span className="skipped dim">{t('chat.skipped')}</span>}
         {/* Ticket 473: a session with no transcript has nothing to view in another way, so the view switch is not shown. */}
         {built.length > 0 && (
-          <button className="btn" aria-label={t('chat.view.aria', { view: t(VIEW_LABEL[view]) })} data-tip={t('chat.view.tip')} onClick={cycleView}>
+          <button className="btn" aria-label={t('chat.view.aria', { view: t(VIEW_LABEL[view]) })} data-tip={t('chat.view.tip', { key: keyText('chat.cycleView') })} onClick={cycleView}>
             {/* b2-S3-2 (look 1117 v4f): a list mark says this is how the transcript is shown, not a permission mode. */}
             <Icon name="list-unordered" size={12} />
             {t(VIEW_LABEL[view])}
@@ -405,7 +407,8 @@ function ChatList({ boot, feed, session, shown, readOnly, head, main, t }: { t: 
                   left "What should we build?" over a composer that could not send; a teammate's seat is asked what
                   it should do, not what to build in its folder. */}
               <h3>{stateOf(session) === 'waiting' ? t('chat.empty.waitTitle', { name: session.label || t('chat.theAgent') }) : session.teammate ? t('chat.empty.seatTitle', { name: session.label || t('chat.theAgent') }) : t('chat.empty.title', { project: baseName(session.project) })}</h3>
-              <p>{t(stateOf(session) === 'waiting' ? 'chat.empty.waitHint' : 'chat.empty.hint')}</p>
+              {/* Ticket 1097: the terminal at the side opens only for what the card above the composer cannot answer (pane/store.ts blocked). */}
+              <p>{t(stateOf(session) !== 'waiting' ? 'chat.empty.hint' : session.pending.some((d) => d.kind === 'question' || d.kind === 'permission') && !blocked(session) ? 'chat.empty.waitCard' : 'chat.empty.waitHint')}</p>
             </div>
           </div>
         )}
@@ -429,7 +432,7 @@ function ChatList({ boot, feed, session, shown, readOnly, head, main, t }: { t: 
         </Open.Provider>
       {/* Always present, so a screen reader hears the row that appears in it (a live region added with its text is often skipped). */}
       <div className="wlive" role="status">
-        {working && !emptyChat && <Working t={t} since={session.attention.working_since} />}
+        {working && !emptyChat && <Working key={session.attention.working_since ?? 0} t={t} since={session.attention.working_since} />}
       </div>
       {notranscript && (
         <div className="wline notrans" role="status">

@@ -3,6 +3,7 @@
 // here from the core's ledger (mockup J ②); a session working for a lead gets one quiet line back to it. Nothing here draws without a lead.
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ago } from '../board/WatchGrid';
+import { elapsed } from '../board/watch';
 import type { CoreClient } from '../api';
 import type { T } from '../i18n';
 import type { WindowCtx } from '../layout/windows';
@@ -12,7 +13,8 @@ import { agentState, shownStatus, status, type Session } from '../types';
 import { independent, openSeat, type Teammate } from './lead';
 import { useRoles, type Place, type Seat, type TaskView } from './tasks';
 import { homeCount, type Digest } from './HomeParts';
-import { WayMenu, wayWord } from './WayMenu';
+import { daySentence, openPlace } from './place';
+import { TaskBoard, type Peek } from './TaskBoard';
 import './lead.css';
 
 type Wt = NonNullable<WindowCtx['wt']>;
@@ -42,7 +44,7 @@ export function TeamChip({ t, mate, tasks, sessions, onOpen, digest, waiting = 0
 export const urgent = (list: Session[]) => list.find((s) => status(s) === 'waiting') ?? list.find((s) => status(s) === 'failed') ?? list.find((s) => status(s) === 'working') ?? list[0];
 
 type Face = 'you' | 'work' | 'asked' | 'idle' | 'ended';
-const roleWord = (t: T, role: string) => (role === 'reviewer' ? t('lead.role.reviewer') : role === 'builder' ? t('lead.role.builder') : role);
+export const roleWord = (t: T, role: string) => (role === 'reviewer' ? t('lead.role.reviewer') : role === 'builder' ? t('lead.role.builder') : role);
 /** "Builder · tax"; a seat `nunchiro task staff` started is already named "<Role> · <task>", so the role is not said twice. */
 const seatLabel = (t: T, s: Seat) => {
   const role = roleWord(t, s.role);
@@ -87,7 +89,7 @@ export const SeatFaces = ({ t, seats, byId, small }: { t: T; seats: Seat[]; byId
 /** Something that waits for the person in this place and is no task's own ask: a session's question (the lead's own), a
  *  card the lead filed (a role, a schedule). It has a row under "Needs you", so the heading's number has its rows. */
 export type Other = { key: string; title: string; say: string; answer: () => void };
-const GROUPS = [
+export const GROUPS = [
   ['needs', ['needs']],
   ['review', ['review', 'changes']],
   ['working', ['working']],
@@ -97,10 +99,10 @@ const GROUPS = [
   ['idle', ['idle']],
 ] as const;
 const CLOSED = ['done', 'merged', 'removed', 'dropped'] as const;
-const closedWord = (t: T, how: string) => t(how === 'merged' ? 'lead.state.merged' : how === 'removed' ? 'lead.state.removed' : how === 'dropped' ? 'lead.task.closed.dropped' : 'lead.task.closed.done');
-const stateWord = (t: T, task: TaskView) => (task.state === 'changes' ? t('lead.task.state.changes') : task.state === 'approved' ? t('lead.task.state.approved') : task.state === 'merge' ? t('lead.task.state.merge') : t(`lead.state.${task.state as 'review' | 'working' | 'idle' | 'needs' | 'asked'}`));
+export const closedWord = (t: T, how: string) => t(how === 'merged' ? 'lead.state.merged' : how === 'removed' ? 'lead.state.removed' : how === 'dropped' ? 'lead.task.closed.dropped' : 'lead.task.closed.done');
+export const stateWord = (t: T, task: TaskView) => (task.state === 'changes' ? t('lead.task.state.changes') : task.state === 'approved' ? t('lead.task.state.approved') : task.state === 'merge' ? t('lead.task.state.merge') : t(`lead.state.${task.state as 'review' | 'working' | 'idle' | 'needs' | 'asked'}`));
 /** The row's one line: what waits for the person, what the review said, or who sits on it. */
-function sayOf(t: T, task: TaskView, byId: Map<string, Session>, inWt: Session[]) {
+export function sayOf(t: T, task: TaskView, byId: Map<string, Session>, inWt: Session[]) {
   const seats = task.seats ?? [];
   // A session the core seats on no task (a shell a lead started there) still says who is in the task's worktree.
   // In the task's own row a seat named "<Role> · <this task>" is its role alone (seen in the real app: the row said the
@@ -124,6 +126,8 @@ function sayOf(t: T, task: TaskView, byId: Map<string, Session>, inWt: Session[]
   if (task.state === 'approved' && task.review) return t('lead.task.reviewedBy', { name: task.review.name });
   return who;
 }
+/** Ticket 1081: a running seat's last activity, "now" under a minute, then "N min ago" (hours and days as the board says them). */
+const seenAgo = (t: T, ms: number) => ((e) => (e.unit === 'now' ? t('lead.seen.now') : e.unit === 'm' ? t('lead.seen.min', { n: e.n }) : ago(t, ms)))(elapsed(ms));
 const startOfToday = () => new Date().setHours(0, 0, 0, 0);
 
 /** The task rows by state (mockup J ②): needs you first, then in review, working, ready to merge, idle; the tasks closed
@@ -147,6 +151,9 @@ export function TaskRows({ t, tasks, sessions, open, openWt, menu, decide, other
   const closed = tasks.filter((x) => x.closed && x.closed.at >= today).sort((a, b) => b.closed!.at - a.closed!.at);
   const row = (task: TaskView) => {
     const told = task.told?.at(-1);
+    // Ticket 1081: the time is the newest running seat's last activity (the core's), else the task's last change.
+    const seen = Math.max(0, ...(task.live ?? []).map((s) => task.seen?.[s] ?? 0));
+    const stalled = task.advance?.stalled ?? [];
     const waiting = task.state === 'needs' ? seatSessions(task).find((s) => status(s) === 'waiting') : undefined;
     const tone = task.state === 'needs' ? 'you' : task.state === 'working' ? 'work' : task.state === 'review' || task.state === 'changes' || task.state === 'asked' ? 'rev' : task.state === 'approved' || task.state === 'merge' ? 'ok' : 'idle';
     return (
@@ -158,7 +165,17 @@ export function TaskRows({ t, tasks, sessions, open, openWt, menu, decide, other
             <span>{task.title}</span>
           </b>
           <span className="lead-who">{sayOf(t, task, byId, inWt(task))}</span>
-          <span className="lead-tm">{ago(t, Date.now() - task.updated)}</span>
+          <span className="lead-tm" data-seen={seen > 0 || undefined}>{seen > 0 ? seenAgo(t, Date.now() - seen) : ago(t, Date.now() - task.updated)}</span>
+          {stalled.length > 0 && (
+            <span className="lead-stall" data-stalled title={stalled.map((s) => t('lead.task.stalledWhy', { name: s.name, why: s.why })).join('\n')}>
+              {t('lead.task.stalled')}
+            </span>
+          )}
+          {task.advance?.review && (
+            <span className="lead-auto" data-auto-review={task.advance.review}>
+              {t(task.advance.review === 'waits' ? 'lead.task.reviewWaits' : 'lead.task.reviewStarted')}
+            </span>
+          )}
           {!waiting && !task.merge && <span className="lead-st" data-tone={tone}>{stateWord(t, task)}</span>}
         </button>
         {/* Look v15 B: with the yes given (state "merge") nothing is left to answer: no Answer. */}
@@ -237,18 +254,21 @@ export function TaskRows({ t, tasks, sessions, open, openWt, menu, decide, other
 /** The first sentence of a role's job: the card's one line. Q9 zh-hans-J19-1: no lookbehind (a SyntaxError before Safari 16.4). */
 export const firstLine = (job: string) => job.match(/^[\s\S]*?[.。](?=\s)/)?.[0] ?? job;
 
-/** Day one (mockup J ①): a place with no task yet. What to do, the way of working (the chip's menu) and the user's roles;
+/** Day one (mockup J ①): a place with no task yet. What to do, the way of working in one sentence and the user's roles;
  *  no setup and no register screen. */
 function WayCard({ t, core, project, place, mate }: { t: T; core: CoreClient; project: string; place: Place | null; mate: Teammate }) {
   const roles = useRoles(core, true);
   return (
     <div className="way-card" data-way-card>
       <p>{t('lead.day.intro', { name: mate.name })}</p>
+      {/* Ticket 1099 (mockup panel 3): one sentence of what happens, and Change opens the place's Settings section. */}
       {place && (
-        <div className="way-line">
-          <span>{t('lead.way.group')}</span>
-          <WayMenu t={t} core={core} project={project} place={place} className="way-pill" label={wayWord(t, place.way)} />
-        </div>
+        <p className="way-line" data-way-line>
+          {daySentence(t, place.way)} ·{' '}
+          <button type="button" className="way-change" onClick={() => openPlace(project)}>
+            {t('lead.day.change')}
+          </button>
+        </p>
       )}
       {roles.length > 0 && (
         <ul className="way-roles" aria-label={t('lead.day.roles')}>
@@ -267,7 +287,7 @@ function WayCard({ t, core, project, place, mate }: { t: T; core: CoreClient; pr
 }
 
 /** The Team view's Tasks part for a project's lead (mockup J ②): the day-one card, the task rows and the independent worktrees. */
-export function TeamTasks({ t, core, project, mate, sessions, tasks, place, wt, open, decide, others, needs }: { t: T; core: CoreClient; project: string; mate: Teammate; sessions: Session[]; tasks: TaskView[]; place: Place | null; wt: Wt; open: (id: string) => void; decide?: (id: string) => void; others?: Other[]; needs?: number }) {
+export function TeamTasks({ t, core, project, mate, sessions, tasks, place, wt, open, decide, others, needs, board }: { t: T; core: CoreClient; project: string; mate: Teammate; sessions: Session[]; tasks: TaskView[]; place: Place | null; wt: Wt; open: (id: string) => void; decide?: (id: string) => void; others?: Other[]; needs?: number; board?: { peek: Peek | null; setPeek: (p: Peek | null) => void } }) {
   const [menu, setMenu] = useState<string | null>(null);
   const free = independent(wt.list, project);
   const live = tasks.filter((x) => !x.closed);
@@ -301,7 +321,8 @@ export function TeamTasks({ t, core, project, mate, sessions, tasks, place, wt, 
   return (
     <>
       {!tasks.length ? <WayCard t={t} core={core} project={mate.project ?? project} place={place} mate={mate} /> : !live.length && !others?.length && <p className="lead-empty">{t('lead.task.empty')}</p>}
-      <TaskRows t={t} tasks={tasks} sessions={sessions} open={open} openWt={openWt} menu={taskMenu} decide={decide} others={others} needs={needs} />
+      {/* Ticket 1115 step 2: in the Team tab the tasks are cards, and a press peeks in the drawer instead of opening a tab. */}
+      {board ? <TaskBoard t={t} core={core} tasks={tasks} sessions={sessions} open={open} decide={decide} others={others} menu={taskMenu} {...board} /> : <TaskRows t={t} tasks={tasks} sessions={sessions} open={open} openWt={openWt} menu={taskMenu} decide={decide} others={others} needs={needs} />}
       {free.length > 0 && (
         <div className="lead-free">
           <span>{t('lead.band.independent', { n: free.length })}</span>

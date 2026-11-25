@@ -199,8 +199,8 @@ test('menu_matches_mockup_05: header, the drawn items in order, rules between gr
   const texts = async () => (await menu.getByRole('menuitem').locator('.mt').allTextContents());
   await wtRows(app).filter({ hasText: 'order-wt' }).click({ button: 'right' });
   await expect(menu.locator('.mhd')).toHaveText('order-wt · worktree row');
-  // Ticket 375 part A (806ffce9b): Open in editor follows Reveal in Finder.
-  expect(await texts()).toEqual(['Open worktree (a shell in it)', 'Create a new session…', 'Rename label…', 'Copy path', 'Reveal in Finder', 'Open in editor', 'Remove worktree…']);
+  // Ticket 375 part A (806ffce9b): Open in editor follows Reveal in Finder. Ticket 1063 rule 5 (owner 11-23): Move to done on a worktree row.
+  expect(await texts()).toEqual(['Open worktree (a shell in it)', 'New session…', 'Rename label…', 'Copy path', 'Reveal in Finder', 'Open in editor', 'Move to done', 'Remove worktree…']);
   await expect(menu.getByRole('menuitem', { name: /^Rename label/ }).locator('.kbd')).toHaveText('F2');
   await expect(menu.getByRole('separator')).toHaveCount(1); // no session: no Stop, so no second rule
   await expect(menu.getByRole('menuitem', { name: /^Remove worktree/ })).toHaveCSS('color', 'rgb(207, 34, 46)');
@@ -209,7 +209,7 @@ test('menu_matches_mockup_05: header, the drawn items in order, rules between gr
   await expect(app.getByRole('button', { name: 'Actions for live one' })).toHaveCount(1); // adopted
   await wtRows(app).filter({ hasText: 'live one' }).click({ button: 'right' });
   // Q6 A14 (722f28361): a row with a session also restarts, closes and diffs it; the mockup's items keep their order.
-  expect(await texts()).toEqual(['Open worktree (a shell in it)', 'Create a new session…', 'Rename label…', 'Copy path', 'Reveal in Finder', 'Open in editor', 'Stop this session', 'Restart session', 'Close session', 'Open Diff (changes since the session started)', 'Remove worktree…']);
+  expect(await texts()).toEqual(['Open worktree (a shell in it)', 'New session…', 'Rename label…', 'Copy path', 'Reveal in Finder', 'Open in editor', 'Stop this session', 'Restart session', 'Close session', 'Move to done', 'Open Diff (changes since the session started)', 'Remove worktree…']);
   await expect(menu.getByRole('separator')).toHaveCount(2);
   void live;
 });

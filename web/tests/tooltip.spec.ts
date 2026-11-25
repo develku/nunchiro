@@ -4,10 +4,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { expect, openWindow, test, type Core, agentsZone } from './fixtures';
+import { expect, openWindow, test, type Core, stripOnTop } from './fixtures';
 import { row, setup } from './fixtures/files/harness';
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: these specs read the AGENTS rows, which the default window no longer shows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const tip = (app: Page) => app.getByRole('tooltip');
 const icon = (app: Page, id: string) => app.locator(`[data-hint-icon="${id}"]`);
@@ -80,9 +80,8 @@ test('tooltip-content: name and binding, the new binding after a rebind, the nam
   await expect(tip(app)).toHaveText('Search');
 });
 
-test('tooltip-truncated-only: Files rows, tabs and AGENTS rows show the full name only when truncated', async ({ app, core }) => {
+test('tooltip-truncated-only: Files rows and tabs show the full name only when truncated', async ({ app, core }) => {
   await setup(app, core, { extra: (d) => fs.writeFileSync(path.join(d, LONG), 'x\n') });
-  core.shell(core.project('demo'), 'a session label long enough that the agents row cannot show all of it');
   await row(app, 'hello.ts').hover();
   await app.waitForTimeout(600);
   await expect(tip(app)).toBeHidden();
@@ -101,18 +100,6 @@ test('tooltip-truncated-only: Files rows, tabs and AGENTS rows show the full nam
   await app.waitForTimeout(600);
   await expect(tip(app)).toBeHidden();
 
-  const agents = app.locator('.ar');
-  await agents.filter({ hasText: 'files' }).hover();
-  await app.waitForTimeout(600);
-  await expect(tip(app)).toBeHidden();
-  // needs 130 (fix-menus-tree-d, afbc7fce; fix-menus-tree.spec.ts nested_agents_show_whole_names_and_states): an AGENTS row
-  // wraps its whole name instead of cutting it, so even the long one is never truncated and shows no tooltip.
-  const long = agents.filter({ hasText: 'long enough' });
-  expect(await long.evaluate((el) => [el, ...el.querySelectorAll<HTMLElement>('*')].every((e) => e.scrollWidth <= e.clientWidth))).toBe(true);
-  await expect(long.locator('.n')).toHaveText('a session label long enough that the agents row cannot show all of it');
-  await long.hover();
-  await app.waitForTimeout(600);
-  await expect(tip(app)).toBeHidden();
 });
 
 test('tooltip-keyboard-focus: Tab to a rail icon shows it at once with aria-describedby; focus stays', async ({ app, core, browserName }) => {
@@ -169,7 +156,7 @@ test('tooltip-reduced-motion: the tooltip fades normally and has no transition u
   expect(await tip(app).evaluate((t) => getComputedStyle(t).transitionDuration)).toBe('0s');
 });
 
-test('tooltip-no-native-title: no native title on rail icons, Files and Search rows, tabs or AGENTS rows', async ({ app, core }) => {
+test('tooltip-no-native-title: no native title on rail icons, Files and Search rows or tabs', async ({ app, core }) => {
   await setup(app, core);
   await app.getByRole('navigation', { name: 'Left bar' }).getByRole('button', { name: 'Search', exact: true }).click();
   await app.getByRole('searchbox').or(app.locator('.sfield input')).first().fill('hello');
@@ -180,7 +167,7 @@ test('tooltip-no-native-title: no native title on rail icons, Files and Search r
       expect(await app.locator(`${sel}[title]`).count(), sel).toBe(0);
     }
   };
-  await none(['.ib .ai', '.hit', '.sfile', '.tab', '.tab > span', '.ar', '.ar *']);
+  await none(['.ib .ai', '.hit', '.sfile', '.tab', '.tab > span']);
   // One sidebar shows one widget now: the Files rows come after the Search hits.
   await app.getByRole('navigation', { name: 'Left bar' }).getByRole('button', { name: 'Files', exact: true }).click();
   await none(['.frow']);
@@ -267,12 +254,6 @@ test('tooltip-search: Search hit and file header rows show their full text', asy
   await expect(tip(app)).toBeHidden();
   await app.locator(`.sbar .sfile[data-path="${DEEP}"]`).hover();
   await expect(tip(app)).toHaveText(DEEP);
-});
-
-test('tooltip-agents-stop: the Agents list’s stop keeps its native title (owner 11-17: a tab has no Stop button)', async ({ app, core }) => {
-  await start(app, core);
-  // The Agents list's stop sits beside its row, not inside a tooltip target: its native title stays.
-  expect(await app.locator('.astop').first().evaluate((b) => !b.closest('[data-tip]') && b.getAttribute('title'))).toBe('Stop');
 });
 
 test('tooltip-read-once: a Search hit whose label already holds the line gets no aria-describedby with the same text', async ({ app, core }) => {

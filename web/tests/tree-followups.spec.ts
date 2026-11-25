@@ -4,10 +4,10 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { agentsZone, expect, openWindow, test, type Core } from './fixtures';
+import { stripOnTop, expect, openWindow, test, type Core } from './fixtures';
 import { openQuiet, seed } from './tree-seed';
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const grp = (app: Page, name: string) => app.locator(`.grp[data-project="${name}"]`);
 const group = (app: Page, name: string) => app.locator(`.pgrp[data-group="${name}"]`);

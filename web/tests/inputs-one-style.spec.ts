@@ -352,6 +352,7 @@ test('inputs_one_style_unopened_drift: each of the five components still draws i
 // of them than listed, or an unlisted file, fails.
 const WALKED: Record<string, { count: number; by: string }> = {
   'board/CardEditor.tsx': { count: 3, by: 'inputs_one_style: card editor' },
+  'board/EditPanel.tsx': { count: 1, by: 'the shared :where(select) rule; not walked (the Done days select of the board edit panel, ticket 1066; named by its label)' },
   'chat/ComposerWidget.tsx': { count: 1, by: 'exception: the chat composer (EXCEPTIONS)' },
   'chat/HandoffChip.tsx': { count: 1, by: 'inputs_one_style_chat' },
   'features/extension-files.tsx': { count: 1, by: 'inputs_one_style: settings extension file' },
@@ -367,6 +368,8 @@ const WALKED: Record<string, { count: number; by: string }> = {
   'schedule/ScheduleForm.tsx': { count: 1, by: 'inputs_one_style: schedules widget (the task box, ticket 981; the selects are the kit Select, ticket 991 C15)' },
   'search/Sessions.tsx': { count: 3, by: 'exception: filter chips (EXCEPTIONS); walked in inputs_one_style: search sessions' },
   'settings/accounts/providers.tsx': { count: 1, by: 'inputs_one_style: settings providers (Enter manually)' },
+  'settings/machines/MachinesPage.tsx': { count: 1, by: 'the shared :where(select) rule; not walked (Share this Mac picks a host only when the Mac has more than one, ticket 1050; aria-label machines.shareHost)' },
+  'settings/onboarding/OnboardingPage.tsx': { count: 1, by: 'exception: the Quick setup folder select is transparent inside its .ob-sel box, which draws the field and its focus ring (ticket 1123, onboarding.css); tests/first-use-1123.spec.ts walks it' },
   'settings/shell/Row.tsx': { count: 1, by: 'inputs_one_style: every Settings page' },
   'settings/theme/ImportTheme.tsx': { count: 1, by: 'inputs_one_style: settings appearance' },
   'tree/worktrees.tsx': { count: 1, by: 'inputs_one_style_dialogs: worktree' },

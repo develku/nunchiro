@@ -298,3 +298,18 @@ test('gallery_has_no_dev_note: the widget library shows no "v1b:" note and every
   }
   expect(low).toEqual([]);
 });
+
+// Ticket 1052: a widened icon bar draws labels again; each (the open icon's on its tint too) reads at 4.5:1, light and dark.
+test('rail_labels_contrast_1052: the labels of a widened bar read at 4.5:1 in both bundled themes', async ({ app, core }) => {
+  core.shell(core.project('demo'), 'a');
+  await openWindow(app, {}, core);
+  await app.locator('nav[data-bar="left"] [role="separator"]').focus();
+  for (let i = 0; i < 7; i++) await app.keyboard.press('ArrowRight'); // 48 to 76 px: the full labels
+  await expect(app.locator('nav[data-bar="left"]')).toHaveAttribute('data-compact', 'full');
+  const low: string[] = [];
+  for (const [mode, pick] of MODES) {
+    await themed(app, mode, windowTokens(pick.colors));
+    low.push(...(await below(app, '.ib .ai .al', 4.5, mode)));
+  }
+  expect(low).toEqual([]);
+});

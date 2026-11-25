@@ -26,8 +26,10 @@ pub struct Send {
     pub remote: Option<bool>,
 }
 
+/// The largest content of one send row; `validate` refuses a saved row above it, so the core would not load.
+pub(crate) const SEND_LIMIT: usize = 65536;
 pub fn check_text(_kind: AgentKind, text: &str) -> Result<(), String> {
-    if text.len() > 65536
+    if text.len() > SEND_LIMIT
         || text
             .chars()
             .any(|c| c.is_control() && c != '\n' && c != '\t')
@@ -68,7 +70,7 @@ pub const EDITED: &str =
     "cannot verify edited Claude composer; token-less owner must submit a replacement";
 pub(crate) const SEND_LOG_LIMIT: usize = 256;
 /// v1a-15: `settle_timeout` (Enter written at the deadline) or why a pending Enter was dropped (row `failed`).
-const SETTLE_MARKS: [&str; 6] = [
+pub(crate) const SETTLE_MARKS: [&str; 6] = [
     "settle_timeout",
     "enter_dropped_blocked",
     "enter_dropped_switch",
@@ -76,6 +78,12 @@ const SETTLE_MARKS: [&str; 6] = [
     "enter_dropped_working",
     "enter_dropped_composer",
 ];
+
+/// Ticket 1094 r3: `mark` when every core loads it (`SETTLE_MARKS`). A saved row with any other mark made the next
+/// start refuse the whole store, so every writer of `Send::settle` goes through here.
+pub(crate) fn saved_mark(mark: &str) -> Option<String> {
+    SETTLE_MARKS.contains(&mark).then(|| mark.into())
+}
 
 pub fn validate(log: &[Send]) -> Result<(), String> {
     if log.len() > SEND_LOG_LIMIT {
@@ -91,7 +99,7 @@ fn validate_rows(log: &[Send]) -> Result<(), String> {
             || (send.sender != "user"
                 && !crate::store::valid_id(&send.sender)
                 && !widget_sender(&send.sender))
-            || send.content.len() > 65536
+            || send.content.len() > SEND_LIMIT
             || send.keys.len() > 100
             || !matches!(
                 send.status.as_str(),
@@ -223,7 +231,7 @@ impl Input {
                 if normalized.starts_with('/')
                     && !matches!(
                         normalized.split_whitespace().next(),
-                        Some("/clear" | "/compact")
+                        Some("/clear" | "/new" | "/compact")
                     )
                 {
                     return Err("Claude slash command refused: only /clear and /compact may be submitted by a session token".into());

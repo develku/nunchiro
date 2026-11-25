@@ -28,6 +28,8 @@ import { agentKey, Bars, barsText, defaultPair, LEVELS, LEVELS_KEY, LevelMark, R
 import { basename, openSession } from '../tree';
 import { openSeat, setTeam, type Team, type Teammate } from '../lead/lead';
 import { useScheduleList } from '../schedule/schedules';
+import { PLACE_FIELD, PlaceSection } from '../lead/place';
+import type { Place } from '../lead/tasks';
 import { registerSettingsPage, type PageContext } from './registry';
 import '../lead/lead.css'; // the row menu (.lead-more, .lead-menu), as the Schedules tab's rows
 import './team.css';
@@ -80,6 +82,7 @@ const Field = ({ caption, info, children }: { caption: string; info?: ReactNode;
 
 function TeamPage({ core, t, projects, closeSettings, toast, sessions }: Pick<PageContext, 'core' | 't' | 'projects' | 'closeSettings' | 'toast' | 'sessions'>) {
   const schedules = useScheduleList();
+  const [placeSum, setPlaceSum] = useState<{ project: string; place: Place } | null>(null); // ticket 1099
   const [list, setList] = useState<Listed | null>(null);
   const [error, setError] = useState<unknown>('');
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -264,7 +267,9 @@ function TeamPage({ core, t, projects, closeSettings, toast, sessions }: Pick<Pa
   );
   return (
     <div className="ssec-group">
-      <PageSummary parts={[[t('summary.teammates'), list?.teammates.length]]} />
+      <PageSummary parts={[[t('summary.teammates'), list?.teammates.length], ...(placeSum ? ([[basename(placeSum.project), t(`lead.way.${placeSum.place.way}`)], [t('lead.cap.group'), placeSum.place.cap ?? 4]] as [string, string | number][]) : [])]} />
+      {/* Ticket 1099: how each project's lead works, first on the page (mockup panel 1). */}
+      <PlaceSection core={core} t={t} projects={projects} sessions={sessions ?? []} onSummary={setPlaceSum} />
       {!draft && <ErrorLine t={t} error={error ? rawError(error) : ''} />}
       <Sec
         id="h-team"
@@ -445,6 +450,7 @@ function LevelTable({ t, core, agents }: { t: PageContext['t']; core: PageContex
   const put = (key: string, l: Level, c: Pair) => write({ ...table, [key]: { ...table[key], [l]: { ...(c.model ? { model: c.model } : {}), ...(c.effort ? { effort: c.effort } : {}) } } });
   const lines = rows.filter((r) => r.key === 'claude' || changed(r.key));
   return (
+    <>
     <Sec id="h-levels" title={t('level.table')} action={open && <SecReset t={t} section={t('level.table')} show={rows.some((r) => changed(r.key))} run={() => write({})} undo={() => write(table)} />}>
       <ErrorLine t={t} error={error} />
       <Row
@@ -525,14 +531,56 @@ function LevelTable({ t, core, agents }: { t: PageContext['t']; core: PageContex
           />
         ))}
     </Sec>
+    <WorkerModels t={t} table={table} />
+    </>
   );
 }
 
-/** The agent, model and effort of a teammate: the Team form's fields, also the leader dialog's (ticket 990). Ticket 992:
- *  `part` draws only the agent or only the model and effort (the Team form's "Custom model", a Levels cell, whose `named`
- *  says which cell for a screen reader and hides the field captions). Ticket 993: `info` is the Agent caption's Info.
- *  Ticket 994: the agents are Claude, Codex and each approved ACP agent; an ACP agent's models and efforts are the ones
- *  it last reported (an agent with no efforts has no effort picker), plus the one stored, so an edit never drops it. */
+/** Ticket 1055: Settings > Team > Worker models, the level rule of every Builder and Reviewer seat (the teammate rule
+ *  reused: `level` fixes the seat, `level_max` clamps what the lead asks). The lead's own seat never reads it. Each
+ *  option is the slot's real model and effort (ticket 994) on Claude's row, the agent the default roles run.
+ *  shortcut: Claude's row only; draw the row of each role's agent when roles run another agent by default. */
+const WORKERS_KEY = 'team.workers'; // team.rs WORKERS_KEY
+function WorkerModels({ t, table }: { t: PageContext['t']; table: Table }) {
+  const [rule, set, error] = useCoreFeature<{ level?: Level; level_max?: Level }>(WORKERS_KEY, {});
+  const put = (k: 'level' | 'level_max', v: string) => {
+    const next = { ...rule, [k]: isLevel(v) ? v : undefined };
+    void set(next.level || next.level_max ? next : null);
+  };
+  const options = LEVELS.map((l) => (
+    <option key={l} value={l}>
+      {barsText(l)} {slotText(t, table, { kind: 'claude' }, l)}
+    </option>
+  ));
+  return (
+    <Sec id="h-workers" title={t('level.workers')}>
+      <ErrorLine t={t} error={error} />
+      <Row
+        setting="workers-level"
+        icon={<Info t={t} label={t('level.workers')} text={t('level.workersNote')} />}
+        label={t('level.workersOn')}
+        reset={<Reset t={t} label={t('level.workersOn')} show={!!rule.level} run={() => put('level', '')} />}
+        control={
+          <Select label={t('level.workersOn')} setting="workers-level" value={rule.level ?? ''} onChange={(v) => put('level', v)}>
+            <option value="">{t('level.leadPicks')}</option>
+            {options}
+          </Select>
+        }
+      />
+      <Row
+        setting="workers-max"
+        label={t('level.workersMax')}
+        reset={<Reset t={t} label={t('level.workersMax')} show={!!rule.level_max} run={() => put('level_max', '')} />}
+        control={
+          <Select label={t('level.workersMax')} setting="workers-max" value={rule.level_max ?? ''} onChange={(v) => put('level_max', v)}>
+            <option value="">{t('level.none')}</option>
+            {options}
+          </Select>
+        }
+      />
+    </Sec>
+  );
+}
 export function MatePicks<D extends Pick<Draft, 'kind' | 'agent' | 'model' | 'effort'>>({ t, core, draft, setDraft, part, only, named, info }: { t: PageContext['t']; core: PageContext['core']; draft: D; setDraft: (d: D) => void; part?: 'agent' | 'model'; only?: 'model' | 'effort'; named?: string; info?: ReactNode }) {
   const custom = useCustomModels(core);
   const [off] = useFeatureSetting(MODELS_OFF);
@@ -630,6 +678,7 @@ registerSettingsPage({
   group: 'agents',
   order: 5,
   fields: [
+    { key: PLACE_FIELD, at: '[data-setting="place"]' },
     { key: 'team', at: '[data-setting="team"]' },
     { key: 'levels', at: '[data-setting="levels"]' },
   ],

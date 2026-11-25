@@ -7,6 +7,8 @@
 //! somewhere else is not stored here: whether a seat lives (the registry), an open question (the room's log), and
 //! whether a review still holds (the worktree's revision now, compared at each read).
 use crate::store;
+pub mod package;
+use package::Packages;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -17,6 +19,8 @@ const CLOSED_KEPT: usize = 200;
 const TITLE_MAX: usize = 200;
 const ACCEPT_MAX: usize = 8;
 const LINE_MAX: usize = 300;
+/// Ticket 1054: a reviewer's note says what to change; it keeps its lines.
+const NOTE_MAX: usize = 4000;
 /// What the user told a task's seats directly: the newest are kept.
 const TOLD_KEPT: usize = 50;
 const SEATS_KEPT: usize = 40;
@@ -60,6 +64,9 @@ pub struct Task {
     /// Ticket 1004: what its seats' check-ins found; absent until the first one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stall: Option<Stall>,
+    /// Ticket 1081: what the core's auto-advance (advance.rs) did for its seats; empty until it first acts.
+    #[serde(default, skip_serializing_if = "Advance::is_empty")]
+    pub advance: Advance,
     pub created: u64,
     pub updated: u64,
 }
@@ -80,6 +87,43 @@ pub struct Stall {
     /// Its card was raised. One per stall: a card the user dismissed does not come back until the task moved.
     pub card: bool,
 }
+/// Ticket 1081: the core's auto-advance record of a task. Kept so a restart repeats no nudge and no card.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Advance {
+    /// What was done once, as `nudge:<session>:<n>` and `card:<session>:<n>` (`n`: the stall's start), newest last.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub done: Vec<String>,
+    /// The seats seen stalled and not moved since.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub stalled: Vec<Stalled>,
+    /// Part B: the review rounds whose findings the core forwarded to the Builder.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub round: u32,
+    /// Part B: `waits` (its Reviewer waits for a free seat) or `started` (the core started it), for the task's row.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub review: String,
+}
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+impl Advance {
+    pub fn is_empty(&self) -> bool {
+        self.done.is_empty() && self.stalled.is_empty() && self.round == 0 && self.review.is_empty()
+    }
+}
+/// One stalled seat: `why` is a plain line ("quiet for 20 min"), `at` the nudge's time, `n` the stall's start.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Stalled {
+    pub session: String,
+    pub name: String,
+    pub why: String,
+    pub n: u64,
+    pub at: u64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub card: bool,
+}
+
 /// A task stalls at this many quiet check-ins in a row, or at this many in a row with the same error.
 pub const STALL_QUIET: u32 = 2;
 pub const STALL_SAME: u32 = 3;
@@ -158,12 +202,43 @@ pub struct Place {
     /// What a seat that writes may do without asking: `ask` (every edit and command asks the user) or `edits` (it
     /// edits files in its worktree without asking; commands still ask).
     pub seats: String,
+    /// Ticket 1081: the core nudges stalled seats, raises their card and wakes the lead (advance.rs). Off: it does nothing.
+    /// Left out while on, so a place reads as before the setting (tests/ledger.rs).
+    #[serde(default = "on", skip_serializing_if = "is_on")]
+    pub auto: bool,
+    /// Ticket 1081 part B: the live seats of this place at which the core stops starting Reviewers (`task cap`). The
+    /// lead's own staffing is counted, never held back. Left out at the default.
+    #[serde(default = "cap_default", skip_serializing_if = "is_cap_default")]
+    pub cap: u32,
+    /// Ticket 1120: the agent account (a label of accounts.toml) the seats of this place start on (`task account`).
+    /// The user's choice only: ACCOUNTPICK lets a session of this place start seats on it as on its own account.
+    /// Absent: the lead's own account.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+}
+/// The choices of `Place.cap`, and its default.
+pub const CAPS: [u32; 4] = [2, 4, 6, 8];
+const CAP: u32 = 4;
+fn on() -> bool {
+    true
+}
+fn is_on(auto: &bool) -> bool {
+    *auto
+}
+fn cap_default() -> u32 {
+    CAP
+}
+fn is_cap_default(cap: &u32) -> bool {
+    *cap == CAP
 }
 impl Default for Place {
     fn default() -> Self {
         Self {
             way: "team".into(),
             seats: "ask".into(),
+            auto: true,
+            cap: CAP,
+            account: None,
         }
     }
 }
@@ -200,6 +275,23 @@ pub struct View {
     /// window reads the state from the seats again with it (look 1117 v11 B N11-S2-3).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub asking: Vec<String>,
+    /// Ticket 1055 rule 2: a seat that does not write runs its role's own model, so the floor of its Builder's level
+    /// could not apply. One plain line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub floor: Option<String>,
+    /// Ticket 1081: each seat's last activity (ms), for "N min ago".
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub seen: std::collections::BTreeMap<String, u64>,
+    /// Ticket 1081: what waits on the lead: `review` (a done report newer than the last review, no seat at work) or
+    /// `merge` (approved).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waits: Option<String>,
+    /// Ticket 1095: the task's work package, read for `show` and the package verbs only (its own file).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package: Option<package::Package>,
+    /// Ticket 1120: each seat's account label (session id to label); a seat on its lead's own default is not listed.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub accounts: std::collections::BTreeMap<String, String>,
 }
 
 /// A change reads, edits and writes the whole file: one at a time, in this process (one core per home).
@@ -214,6 +306,19 @@ fn line(text: &str, max: usize) -> String {
     // The ledger is read by every session of the place: a secret typed into a title or a review note is masked, as in notes.
     let flat = String::from_utf8_lossy(&crate::logs::mask(flat.as_bytes())).into_owned();
     flat.chars().take(max).collect()
+}
+
+/// A review note: masked as `line`, its lines kept (each trimmed at the end), at most `NOTE_MAX` chars.
+fn note(text: &str) -> String {
+    let mask = |s: &str| String::from_utf8_lossy(&crate::logs::mask(s.as_bytes())).into_owned();
+    let flat = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+    let lines: Vec<&str> = text.trim().lines().map(str::trim_end).collect();
+    let kept = mask(&lines.join("\n"));
+    // Trap: mask reads a value on its key's line only, so "password:\n<secret>" passes it with the break kept. The
+    // one-line copy is masked as before; when it masks more, it is stored and the breaks go.
+    let joined = mask(&flat(text));
+    let note = if flat(&kept) == joined { kept } else { joined };
+    note.chars().take(NOTE_MAX).collect()
 }
 
 impl Ledger {
@@ -323,6 +428,7 @@ impl Ledger {
         place: &Path,
         way: Option<&str>,
         seats: Option<&str>,
+        auto: Option<bool>,
     ) -> Result<Place, String> {
         if way.is_some_and(|w| !["solo", "team", "strict"].contains(&w)) {
             return Err("the way of working is solo, team or strict".into());
@@ -340,6 +446,30 @@ impl Ledger {
             if let Some(seats) = seats {
                 p.seats = seats.into();
             }
+            if let Some(auto) = auto {
+                p.auto = auto;
+            }
+            Ok((p.clone(), true))
+        })
+    }
+
+    /// Ticket 1081 part B: the user's seat cap for a place, one of `CAPS`.
+    pub fn set_cap(&self, place: &Path, cap: u32) -> Result<Place, String> {
+        if !CAPS.contains(&cap) {
+            return Err("seats at once is 2, 4, 6 or 8".into());
+        }
+        self.change(|s| {
+            let p = s.places.entry(place.to_path_buf()).or_default();
+            p.cap = cap;
+            Ok((p.clone(), true))
+        })
+    }
+
+    /// Ticket 1120: the account the seats of a place start on; `None` is the lead's own. The caller checks the label.
+    pub fn set_account(&self, place: &Path, account: Option<String>) -> Result<Place, String> {
+        self.change(|s| {
+            let p = s.places.entry(place.to_path_buf()).or_default();
+            p.account = account;
             Ok((p.clone(), true))
         })
     }
@@ -405,6 +535,7 @@ impl Ledger {
                 merge: None,
                 closed: None,
                 stall: None,
+                advance: Advance::default(),
                 created: now,
                 updated: now,
             };
@@ -728,7 +859,7 @@ impl Ledger {
             t.updated = review.at;
             t.merge = None; // the yes was for the earlier review's files
             t.review = Some(Review {
-                note: line(&review.note, LINE_MAX),
+                note: note(&review.note),
                 ..review
             });
             Ok((t.clone(), true))
@@ -760,6 +891,31 @@ impl Ledger {
                 t.learned.remove(0);
             }
             Ok((t.clone(), true))
+        })
+    }
+
+    /// Ticket 1095: keeps `text` as the brief of seat `session` of open task `id`. What the seat is sent: the package's
+    /// block (in full), then `text`; `text` alone when the package holds no quote, background, line or link.
+    pub fn brief(&self, id: &str, session: &str, text: &str, now: u64) -> Result<String, String> {
+        let task = self
+            .list()?
+            .into_iter()
+            .find(|t| t.id == id && t.closed.is_none())
+            .ok_or_else(|| format!("no open task {id}"))?;
+        let name = task
+            .seats
+            .iter()
+            .find(|s| s.session == session)
+            .map(|s| s.name.clone())
+            .ok_or_else(|| format!("{session} is no seat of task {id}"))?;
+        let home = self.file.parent().unwrap_or(Path::new(""));
+        let ((), p) = Packages::open(home)
+            .change(id, |p| package::keep_brief(p, session, &name, text, now))?;
+        let block = package::block(&p);
+        Ok(if block.is_empty() {
+            text.to_string()
+        } else {
+            format!("{block}\n{text}")
         })
     }
 
@@ -846,6 +1002,23 @@ impl Ledger {
         })
     }
 
+    /// Ticket 1081: advance.rs's record of open task `id`; `updated` is left alone (no progress of the task).
+    pub fn set_advance(&self, id: &str, advance: Advance) -> Result<(), String> {
+        self.change(|s| {
+            match s
+                .tasks
+                .iter_mut()
+                .find(|t| t.id == id && t.closed.is_none())
+            {
+                Some(t) if t.advance != advance => {
+                    t.advance = advance;
+                    Ok(((), true))
+                }
+                _ => Ok(((), false)),
+            }
+        })
+    }
+
     pub fn close(&self, id: &str, how: &str, now: u64) -> Result<Task, String> {
         self.change(|s| {
             let t = s
@@ -869,6 +1042,10 @@ impl Ledger {
                 && closed.seats.is_empty()
                 && closed.told.is_empty()
                 && closed.review.is_none()
+                // Ticket 1095: a package the lead filled keeps its task's row.
+                && self.file.parent().is_some_and(|home| {
+                    Packages::open(home).get(id).is_ok_and(|p| p.is_empty())
+                })
             {
                 s.tasks.retain(|t| t.id != id);
             }
@@ -1087,6 +1264,11 @@ pub fn view(
         live,
         asks: asks.into_iter().map(|(_, line)| line).collect(),
         asking: waiting,
+        floor: None,
+        seen: Default::default(),
+        waits: None,
+        package: None,
+        accounts: Default::default(),
     }
 }
 
@@ -1234,6 +1416,10 @@ pub(crate) struct Ask {
     pub level: Option<crate::team::Level>,
     pub who: Option<String>,
     pub due: Option<String>,
+    pub effort: Option<String>,
+    pub package: Option<package::Fill>,
+    pub why: Option<String>,
+    pub account: Option<String>,
 }
 
 /// The three requests of slices g to i, for the socket and the window alike.
@@ -1257,6 +1443,10 @@ pub(crate) fn dispatch(
             level,
             who,
             due,
+            effort,
+            package,
+            why,
+            account,
         } => serve(
             registry,
             caller,
@@ -1273,6 +1463,10 @@ pub(crate) fn dispatch(
                 level,
                 who,
                 due,
+                effort,
+                package,
+                why,
+                account,
             },
         ),
         Request::Note {
@@ -1485,6 +1679,37 @@ pub(crate) fn serve(
                 }
             };
         }
+        // Ticket 1099 panel 4: a place's lead asks the user to change its live seats. Only the user's yes on the card
+        // sets the cap (`Sessions::answer_inner`); the lead never sets it itself (`cap` above).
+        "ask-cap" => {
+            let (Some(session), true) = (&who.session, who.decides) else {
+                return Err(
+                    "only the lead of a place asks the user to change its live seats".into(),
+                );
+            };
+            let place = who.place.clone().ok_or("no place for this session")?;
+            let cap: u32 = ask
+                .text
+                .trim()
+                .parse()
+                .ok()
+                .filter(|c| CAPS.contains(c))
+                .ok_or("seats at once is 2, 4, 6 or 8")?;
+            let was = ledger.place(&place).cap;
+            if cap == was {
+                return Err(format!("this place already runs {cap} seats at once"));
+            }
+            let why = line(ask.why.as_deref().unwrap_or_default(), LINE_MAX);
+            if why.is_empty() {
+                return Err("say why in a line: what you saw (--why)".into());
+            }
+            lock()?.ask_cap(session, place, was, cap, why)?;
+            return Ok(crate::api::Reply::Text {
+                text: format!(
+                    "Asked the user to change the live seats here from {was} to {cap}. Nothing changes before their yes; the answer comes as a line in your room."
+                ),
+            });
+        }
         // Home view change 4: the Home lead asks to give a project's lead a goal. It becomes the user's card; nothing
         // reaches the project before the yes.
         "goal" => {
@@ -1557,14 +1782,66 @@ pub(crate) fn serve(
                 Some(t) => t,
                 None => named(&ask.id)?,
             };
+            let package = Packages::open(&home).get(&task.id)?;
+            let mut tasks = views(registry, &home, vec![task])?;
+            tasks[0].package = Some(package);
             return Ok(crate::api::Reply::Tasks {
-                tasks: views(registry, &home, vec![task])?,
+                tasks,
                 place: who.place.as_deref().map(|p| ledger.place(p)),
             });
         }
+        // Ticket 1095: the task's package, filled by the place's lead or the user only (threat 1: a worker seat never
+        // writes the owner's quotes). `text` is the part's words or a line's number; `package` the rest.
+        op if op
+            .strip_prefix("package-")
+            .is_some_and(|p| package::PARTS.contains(&p)) =>
+        {
+            decides("fill the package of")?;
+            let task = named(&ask.id)?;
+            if task.closed.is_some() {
+                return Err(format!(
+                    "task {} is closed: its package is kept as it is",
+                    task.id
+                ));
+            }
+            let fill = ask.package.clone().unwrap_or_default();
+            let part = &op["package-".len()..];
+            let (_, package) = Packages::open(&home).change(&task.id, |p| {
+                package::apply(
+                    p,
+                    &home,
+                    part,
+                    &ask.text,
+                    &fill,
+                    &who.name,
+                    who.session.is_none(),
+                    now,
+                )
+            })?;
+            crate::events::tasks(&task.place);
+            let mut tasks = views(registry, &home, vec![task])?;
+            tasks[0].package = Some(package);
+            return Ok(crate::api::Reply::Tasks { tasks, place: None });
+        }
+        // Ticket 1095 rule 3: the first prompt `task staff` sends (`seat_up`): the package's quoted lines and background
+        // go in front of it, in full, and the words are kept as the seat's brief. `session` is the seat.
+        "brief" => {
+            decides("brief a seat of")?;
+            let task = named(&ask.id)?;
+            let seat = ask.session.as_deref().ok_or("name the seat")?;
+            return ledger
+                .brief(&task.id, seat, &ask.text, now)
+                .map(|text| crate::api::Reply::Text { text });
+        }
         // Slice i: the user's choices for this place (`text`): `way` solo|team|strict, `grant` ask|edits. The
         // place's lead hears a new way in the room.
-        op @ ("way" | "grant") => {
+        op @ ("way" | "grant" | "auto" | "cap" | "account") => {
+            if who.session.is_some() && op == "account" {
+                return Err("only the user sets the account a place's seats start on (`nunchiro task account <label> --project DIR` in the user's shell, or Settings > Team)".into());
+            }
+            if who.session.is_some() && op == "cap" {
+                return Err("only the user sets the live seats of a place; ask them on a card with `nunchiro task ask-cap <n> --why \"<reason>\"`".into());
+            }
             if who.session.is_some() {
                 return Err(
                     "only the user sets a place's way of working and what its seats may do".into(),
@@ -1574,18 +1851,43 @@ pub(crate) fn serve(
                 .place
                 .as_deref()
                 .ok_or("name the project with --project")?;
-            let now_is = if op == "way" {
-                ledger.set_place(place, Some(ask.text.trim()), None)?
-            } else {
-                ledger.set_place(place, None, Some(ask.text.trim()))?
+            let now_is = match op {
+                "way" => ledger.set_place(place, Some(ask.text.trim()), None, None)?,
+                "grant" => ledger.set_place(place, None, Some(ask.text.trim()), None)?,
+                "account" => ledger.set_account(place, known_account(&home, ask.text.trim())?)?,
+                "cap" => ledger.set_cap(
+                    place,
+                    ask.text
+                        .trim()
+                        .parse()
+                        .map_err(|_| "seats at once is 2, 4, 6 or 8")?,
+                )?,
+                _ => {
+                    let on = match ask.text.trim() {
+                        "on" => true,
+                        "off" => false,
+                        _ => return Err("auto-advance is on or off".into()),
+                    };
+                    ledger.set_place(place, None, None, Some(on))?
+                }
             };
             crate::events::tasks(place);
-            if let Some(lead) = &who.lead {
+            // The cap only holds the core back: the lead is not told.
+            if let Some(lead) = who.lead.as_ref().filter(|_| op != "cap") {
                 let body = if op == "way" {
                     format!(
                         "The user set the way of working here to {} (`nunchiro skill get orchestration --file levels.md`).",
                         now_is.way
                     )
+                } else if op == "auto" {
+                    crate::advance::auto_line(now_is.auto)
+                } else if op == "account" {
+                    match &now_is.account {
+                        Some(label) => format!(
+                            "The user set seats here to start on the account {label} (`nunchiro task staff` uses it unless --account names another)."
+                        ),
+                        None => "The user set seats here to start on your own account.".to_string(),
+                    }
                 } else if now_is.seats == "edits" {
                     "The user lets seats here edit files in their worktree without asking; commands still ask.".to_string()
                 } else {
@@ -1599,7 +1901,8 @@ pub(crate) fn serve(
                     crate::room::TeamNote {
                         what: op.into(),
                         worktree: None,
-                        name: None,
+                        // Ticket 1081: the window says "Auto-advance is now on" from it.
+                        name: (op == "auto").then(|| if now_is.auto { "on" } else { "off" }.into()),
                         branch: None,
                         merged: None,
                         seat: None,
@@ -1808,87 +2111,16 @@ pub(crate) fn serve(
         "staff" => {
             decides("staff")?;
             let task = named(&ask.id)?;
-            if task.closed.is_some() {
-                return Err(format!("task {} is closed", task.id));
-            }
-            let role = crate::roles::Roles::open(&home)
-                .get(&ask.text)
-                .ok_or_else(|| {
-                    let have = crate::roles::Roles::open(&home)
-                        .list()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|r| r.name)
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    format!(
-                        "no role named {}; the roles are: {have} (propose a new one with `nunchiro role propose`)",
-                        ask.text.trim()
-                    )
-                })?;
-            let folder = match (&ask.path, task.worktrees.as_slice()) {
-                (Some(path), all) => {
-                    let path = std::fs::canonicalize(path).map_err(|e| e.to_string())?;
-                    if !all.contains(&path) {
-                        return Err("that folder is no worktree of this task".into());
-                    }
-                    Some(path)
-                }
-                (None, [one]) => Some(one.clone()),
-                (None, []) => None,
-                (None, _) => {
-                    return Err("this task uses several worktrees: name one with --path".into());
-                }
-            };
-            // Ticket 993 rule 9: a role's seat opens at a level as a teammate's does (`team::open_seat`): standard
-            // when none is asked, the level table gives model and effort. A role with its own model keeps it (it
-            // was the agent's own default before, the strongest and dearest model).
-            let level = role
-                .model
-                .is_none()
-                .then(|| ask.level.unwrap_or(crate::team::Level::Standard));
-            let (model, effort) = match (&role.model, level) {
-                (Some(model), _) => (Some(model.clone()), role.effort.clone()),
-                (None, level) => {
-                    let table = lock()?.feature::<serde_json::Value>(crate::team::LEVELS_KEY);
-                    let level = level.unwrap_or(crate::team::Level::Standard);
-                    let agent = crate::team::agent_key(role.kind, None);
-                    let pick = crate::team::level_pick(table.as_ref(), &agent, level);
-                    (pick.model, pick.effort.or(role.effort.clone()))
-                }
-            };
-            return Ok(crate::api::Reply::Staff {
-                task: task.id.clone(),
-                folder,
-                session: crate::api::StartSession {
-                    kind: role.kind,
-                    project: task.place.clone(),
-                    worktree: false,
-                    label: crate::roles::seat_name(&role.name, &task.title),
-                    // A role that does not write starts without the edit tools.
-                    // shortcut: Claude only, and its shell can still write; upgrade to a read-only sandbox profile
-                    // when non-writing seats must be held to it.
-                    args: match (role.kind, role.writes) {
-                        (crate::api::AgentKind::Claude, false) => vec![
-                            "--disallowedTools".into(),
-                            "Edit,Write,MultiEdit,NotebookEdit".into(),
-                        ],
-                        // The project's grant, not the role's: where the user said so, a seat that writes edits
-                        // files without asking (commands still ask). Never more than that from here.
-                        (crate::api::AgentKind::Claude, true)
-                            if ledger.place(&task.place).seats == "edits" =>
-                        {
-                            vec!["--permission-mode".into(), "acceptEdits".into()]
-                        }
-                        _ => vec![],
-                    },
-                    model,
-                    effort,
-                    resume: None,
-                    account: None,
-                },
-                level,
-            });
+            return staff_plan(
+                registry,
+                &home,
+                &task,
+                &ask.text,
+                ask.path.clone(),
+                ask.level,
+                ask.effort.clone(),
+                ask.account.clone(),
+            );
         }
         how @ ("done" | "drop") => {
             decides("close")?;
@@ -1912,6 +2144,299 @@ pub(crate) fn serve(
     })
 }
 
+/// Slice i: what to start for a seat of `role` on `task` (`Reply::Staff`); `seat_up` then starts it. The lead's
+/// `task staff` and the core's auto-advance (ticket 1081 part B) both ask here, so the level floor of ticket 1055
+/// holds for both.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn staff_plan(
+    registry: &std::sync::Mutex<crate::sessions::Sessions>,
+    home: &Path,
+    task: &Task,
+    role: &str,
+    path: Option<PathBuf>,
+    asked_level: Option<crate::team::Level>,
+    asked_effort: Option<String>,
+    asked_account: Option<String>,
+) -> crate::api::Response {
+    let lock = || {
+        registry
+            .lock()
+            .map_err(|_| "session registry unavailable".to_string())
+    };
+    let ledger = Ledger::open(home);
+    if task.closed.is_some() {
+        return Err(format!("task {} is closed", task.id));
+    }
+    let role = crate::roles::Roles::open(home)
+            .get(role)
+            .ok_or_else(|| {
+                let have = crate::roles::Roles::open(home)
+                    .list()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|r| r.name)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "no role named {}; the roles are: {have} (propose a new one with `nunchiro role propose`)",
+                    role.trim()
+                )
+            })?;
+    let folder = match (&path, task.worktrees.as_slice()) {
+        (Some(path), all) => {
+            let path = std::fs::canonicalize(path).map_err(|e| e.to_string())?;
+            if !all.contains(&path) {
+                return Err("that folder is no worktree of this task".into());
+            }
+            Some(path)
+        }
+        (None, [one]) => Some(one.clone()),
+        (None, []) => None,
+        (None, _) => {
+            return Err("this task uses several worktrees: name one with --path".into());
+        }
+    };
+    // Ticket 993 rule 9: a role's seat opens at a level as a teammate's does (`team::open_seat`): standard
+    // when none is asked, the level table gives model and effort. A role with its own model keeps it (it
+    // was the agent's own default before, the strongest and dearest model).
+    // Ticket 1055: the seat follows Settings > Team > Worker models (`team::Workers`), as a teammate follows
+    // its own rule. Rule 2: a seat that does not write (a Reviewer) never opens below the level the task's
+    // writing seats (its Builder) opened at; that floor goes over the upper limit too.
+    let workers = lock()?
+        .feature::<crate::team::Workers>(crate::team::WORKERS_KEY)
+        .unwrap_or_default();
+    let floor = if role.writes {
+        None
+    } else {
+        let mut sessions = lock()?;
+        task.seats
+            .iter()
+            .filter(|s| s.writes)
+            .filter_map(|s| sessions.session_of(&s.session).ok()?.level)
+            .max()
+    };
+    let (level, why) = match role.model {
+        Some(_) => (None, None),
+        None => {
+            let (level, why) =
+                crate::team::rule_level(&role.name, workers.level, workers.level_max, asked_level);
+            match floor {
+                Some(floor) if floor > level => (
+                    Some(floor),
+                    Some(format!(
+                        "{} opens at {}, the level its task's builder opened at",
+                        role.name,
+                        floor.word()
+                    )),
+                ),
+                _ => (Some(level), why),
+            }
+        }
+    };
+    let (model, effort) = match (&role.model, level) {
+        (Some(model), _) => (
+            Some(model.clone()),
+            asked_effort.clone().or(role.effort.clone()),
+        ),
+        (None, level) => {
+            let table = lock()?.feature::<serde_json::Value>(crate::team::LEVELS_KEY);
+            let level = level.unwrap_or(crate::team::Level::Standard);
+            let agent = crate::team::agent_key(role.kind, None);
+            let pick = crate::team::level_pick(table.as_ref(), &agent, level);
+            (
+                pick.model,
+                asked_effort.clone().or(pick.effort).or(role.effort.clone()),
+            )
+        }
+    };
+    // Ticket 1120: an asked account must exist for the role's agent; the place's account applies where that agent has
+    // one by that label (a Codex Reviewer in a place set to a Claude account runs on the lead's own). Whether the
+    // caller may use it is `Sessions::launch_as`'s check (ACCOUNTPICK), at the start.
+    let account = match (asked_account, crate::accounts::agent_of(role.kind)) {
+        (Some(_), None) => return Err("an account is only for claude or codex seats".into()),
+        (Some(label), Some(agent)) => {
+            crate::accounts::folder_by_label(home, agent, &label).map_err(|e| {
+                format!(
+                    "{e}; the {} accounts are: {}",
+                    crate::accounts::agent_name(agent),
+                    labels_of(home, Some(agent))
+                )
+            })?;
+            Some(label)
+        }
+        // Ticket 1126: else the owner's default for that agent, else (None) the lead's own.
+        (None, agent) => ledger
+            .place(&task.place)
+            .account
+            .filter(|label| {
+                agent.is_some_and(|a| crate::accounts::folder_by_label(home, a, label).is_ok())
+            })
+            .or_else(|| crate::accounts::default_label(home, agent?)),
+    };
+    // Ticket 1054: an asked effort is one of this agent's (and this model's) own.
+    if asked_effort.is_some() {
+        crate::sessions::check_model(role.kind, model.as_deref(), effort.as_deref())?;
+    }
+    Ok(crate::api::Reply::Staff {
+        task: task.id.clone(),
+        folder,
+        session: crate::api::StartSession {
+            kind: role.kind,
+            project: task.place.clone(),
+            worktree: false,
+            label: crate::roles::seat_name(&role.name, &task.title),
+            // A role that does not write starts without the edit tools.
+            // shortcut: Claude only, and its shell can still write; upgrade to a read-only sandbox profile
+            // when non-writing seats must be held to it.
+            args: match (role.kind, role.writes) {
+                (crate::api::AgentKind::Claude, false) => vec![
+                    "--disallowedTools".into(),
+                    "Edit,Write,MultiEdit,NotebookEdit".into(),
+                ],
+                // The project's grant, not the role's: where the user said so, a seat that writes edits
+                // files without asking (commands still ask). Never more than that from here.
+                (crate::api::AgentKind::Claude, true)
+                    if ledger.place(&task.place).seats == "edits" =>
+                {
+                    vec!["--permission-mode".into(), "acceptEdits".into()]
+                }
+                _ => vec![],
+            },
+            model,
+            effort,
+            resume: None,
+            account,
+        },
+        level,
+        why,
+    })
+}
+
+/// Ticket 1120: the registered account labels (of `agent`, or of both agents), for a refusal; "none" with no account.
+fn labels_of(home: &Path, agent: Option<crate::accounts::Agent>) -> String {
+    use crate::accounts::Agent;
+    let labels: Vec<String> = [Agent::Claude, Agent::Codex]
+        .into_iter()
+        .filter(|a| agent.is_none_or(|x| x == *a))
+        .flat_map(|a| crate::accounts::labels(home, a))
+        .collect();
+    if labels.is_empty() {
+        "none".into()
+    } else {
+        labels.join(", ")
+    }
+}
+
+/// Ticket 1120, `task account`: `own` (or nothing) is the lead's own account; a label must be a registered account's.
+fn known_account(home: &Path, label: &str) -> Result<Option<String>, String> {
+    use crate::accounts::Agent;
+    if label.is_empty() || label == "own" {
+        return Ok(None);
+    }
+    if [Agent::Claude, Agent::Codex]
+        .into_iter()
+        .any(|a| crate::accounts::labels(home, a).iter().any(|l| l == label))
+    {
+        return Ok(Some(label.to_string()));
+    }
+    Err(format!(
+        "unknown account {label:?}; the accounts are: {} (or own)",
+        labels_of(home, None)
+    ))
+}
+
+/// Ticket 1081 part B: the steps after `staff_plan`'s answer, in one place for the lead's `task staff` (the CLI's
+/// `call` sends each step as the caller's own request, so every start check holds) and the core's auto-advance
+/// (advance.rs runs them in the core, the prompt through its checked core line): start the seat, seat it on a task
+/// with no worktree and give it its level, then the first prompt. The task, the started session, and why its level is
+/// not the asked one.
+pub fn seat_up(
+    staff: crate::api::Reply,
+    prompt: Option<String>,
+    call: &mut dyn FnMut(crate::api::Request) -> crate::api::Response,
+) -> Result<(String, crate::api::Session, Option<String>), String> {
+    use crate::api::{Reply, Request};
+    let Reply::Staff {
+        task,
+        folder,
+        session,
+        level,
+        why,
+    } = staff
+    else {
+        return Err("no seat to start".into());
+    };
+    // Refused before the start, so no seat runs without its prompt.
+    if let Some(text) = prompt.as_deref().filter(|t| t.len() > package::BRIEF_MAX) {
+        return Err(package::too_long(text));
+    }
+    let seated = folder.is_some();
+    let Reply::Started { session } = call(Request::Start {
+        session,
+        folder,
+        env: Default::default(),
+        receipt: None,
+    })?
+    else {
+        return Err("the seat did not start".into());
+    };
+    // A seat on a task with no worktree is seated here; either way the seat's level goes with it.
+    if !seated || level.is_some() {
+        call(Request::Task {
+            operation: "assign".into(),
+            id: Some(task.clone()),
+            text: String::new(),
+            accept: vec![],
+            project: None,
+            path: None,
+            session: Some(session.id.clone()),
+            cites: None,
+            all: false,
+            level,
+            who: None,
+            due: None,
+            effort: None,
+            package: None,
+            why: None,
+            account: None,
+        })?;
+    }
+    if let Some(text) = prompt {
+        // Ticket 1095: the core keeps the words as the seat's brief and puts the package in front of them.
+        let text = match call(Request::Task {
+            operation: "brief".into(),
+            id: Some(task.clone()),
+            text: text.clone(),
+            accept: vec![],
+            project: None,
+            path: None,
+            session: Some(session.id.clone()),
+            cites: None,
+            all: false,
+            level: None,
+            who: None,
+            due: None,
+            effort: None,
+            package: None,
+            why: None,
+            account: None,
+        }) {
+            Ok(Reply::Text { text }) => text,
+            // The seat runs: it gets the words without the package rather than no prompt at all.
+            Ok(_) => text,
+            Err(e) => {
+                eprintln!("task {task}: the package did not go with the first prompt: {e}");
+                text
+            }
+        };
+        call(Request::AgentPrompt {
+            id: session.id.clone(),
+            text,
+        })?;
+    }
+    Ok((task, session, why))
+}
+
 fn cap(word: &str) -> String {
     let mut c = word.chars();
     c.next()
@@ -1925,6 +2450,18 @@ pub(crate) fn views(
     home: &Path,
     tasks: Vec<Task>,
 ) -> Result<Vec<View>, String> {
+    // Ticket 1081: an open task's done report, newer than its last review, read with no lock held.
+    let reported: Vec<bool> = tasks
+        .iter()
+        .map(|t| {
+            let since = t.review.as_ref().map_or(0, |r| r.at + 1);
+            t.closed.is_none()
+                && t.worktrees.iter().any(|w| {
+                    crate::sessions::report_status(w, since)
+                        .is_some_and(|s| s.starts_with("STATUS: done"))
+                })
+        })
+        .collect();
     // Git and the rooms' logs first, with no lock held; a closed task's files are not read. A revision that cannot
     // be read equals no stored one, so its review reads as not holding.
     let revisions: Vec<String> = tasks
@@ -1948,10 +2485,20 @@ pub(crate) fn views(
         }
     }
     // Under the lock: only what each seat does now, and names.
-    let (now, names) = {
-        let sessions = registry
+    let (now, names, levels, seen, accounts) = {
+        let mut sessions = registry
             .lock()
             .map_err(|_| "session registry unavailable".to_string())?;
+        let levels: std::collections::BTreeMap<String, crate::team::Level> = tasks
+            .iter()
+            .flat_map(|t| &t.seats)
+            .filter_map(|s| {
+                Some((
+                    s.session.clone(),
+                    sessions.session_of(&s.session).ok()?.level?,
+                ))
+            })
+            .collect();
         let now: std::collections::BTreeMap<String, SeatNow> = tasks
             .iter()
             .flat_map(|t| &t.seats)
@@ -1963,8 +2510,24 @@ pub(crate) fn views(
             .flat_map(|m| [m.from.clone(), m.to.clone()])
             .filter_map(|id| sessions.label_of(&id).map(|l| (id, l)))
             .collect();
-        (now, names)
+        let seen: std::collections::BTreeMap<String, u64> = tasks
+            .iter()
+            .flat_map(|t| &t.seats)
+            .map(|s| (s.session.clone(), sessions.seat_facts(&s.session).last))
+            .collect();
+        let accounts: std::collections::BTreeMap<String, String> = tasks
+            .iter()
+            .flat_map(|t| &t.seats)
+            .filter_map(|s| {
+                Some((
+                    s.session.clone(),
+                    sessions.session_of(&s.session).ok()?.account?,
+                ))
+            })
+            .collect();
+        (now, names, levels, seen, accounts)
     };
+    let roles = crate::roles::Roles::open(home).list().unwrap_or_default();
     let name = |id: &str| match names.get(id) {
         Some(label) if !label.is_empty() => label.clone(),
         _ if id == crate::room::PERSON => "the user".to_string(),
@@ -1973,7 +2536,8 @@ pub(crate) fn views(
     Ok(tasks
         .into_iter()
         .zip(revisions)
-        .map(|(task, revision)| {
+        .zip(reported)
+        .map(|((task, revision), reported)| {
             let asks = rooms
                 .get(&task.place)
                 .map(|all| {
@@ -1994,18 +2558,85 @@ pub(crate) fn views(
                         .collect()
                 })
                 .unwrap_or_default();
-            view(
+            // Ticket 1055 rule 2: the floor could not apply to a reviewing seat whose role names its own model.
+            let built = task
+                .seats
+                .iter()
+                .any(|s| s.writes && levels.contains_key(&s.session));
+            let floor = task
+                .seats
+                .iter()
+                .filter(|s| built && !s.writes && !levels.contains_key(&s.session))
+                .find(|s| {
+                    roles
+                        .iter()
+                        .any(|r| r.name.to_lowercase() == s.role && r.model.is_some())
+                })
+                .map(|s| {
+                    format!(
+                        "{} runs its role's own model, so it did not open at its builder's level",
+                        s.name
+                    )
+                });
+            let seen = task
+                .seats
+                .iter()
+                .filter_map(|s| {
+                    Some((
+                        s.session.clone(),
+                        *seen.get(&s.session).filter(|t| **t > 0)?,
+                    ))
+                })
+                .collect();
+            let v = view(
                 task,
                 &|s| now.get(s).cloned().unwrap_or_default(),
                 asks,
                 &revision,
-            )
+            );
+            let waits = match v.state.as_str() {
+                "approved" => Some("merge".to_string()),
+                "idle" | "asked" | "changes" | "review"
+                    if reported && (v.state != "review" || v.stale) && !working(&v, &now) =>
+                {
+                    Some("review".to_string())
+                }
+                _ => None,
+            };
+            let accounts = task_accounts(&v.task, &accounts);
+            View {
+                floor,
+                seen,
+                waits,
+                accounts,
+                ..v
+            }
         })
         .collect())
 }
 
-/// A task in a few plain lines, for a lead's brief and the CLI.
-pub fn lines(v: &View) -> String {
+/// Ticket 1120: the accounts of this task's seats only.
+fn task_accounts(
+    task: &Task,
+    all: &std::collections::BTreeMap<String, String>,
+) -> std::collections::BTreeMap<String, String> {
+    task.seats
+        .iter()
+        .filter_map(|s| Some((s.session.clone(), all.get(&s.session)?.clone())))
+        .collect()
+}
+
+/// Ticket 1081: a live seat of the task runs a turn (a Builder at work, or a Reviewer reading).
+fn working(v: &View, now: &std::collections::BTreeMap<String, SeatNow>) -> bool {
+    v.task.seats.iter().any(|s| {
+        now.get(&s.session)
+            .is_some_and(|n| n.live && n.state == "working")
+    })
+}
+
+/// A task in a few plain lines, for a lead's brief and the CLI; `whole` (`task show`) gives a review note all its
+/// lines, a list its first.
+pub fn lines(v: &View, whole: bool) -> String {
     let t = &v.task;
     let mut out = format!("{} [{}", t.id, v.state);
     if v.stale {
@@ -2024,7 +2655,25 @@ pub fn lines(v: &View) -> String {
         } else {
             "ended"
         };
-        out += &format!("  seat: {} · {} ({}, {live})\n", s.role, s.name, s.session);
+        // Ticket 1081: a running seat's last activity, as the Team view shows it.
+        let ago = match v.seen.get(&s.session) {
+            Some(at) if v.live.contains(&s.session) => {
+                match crate::queue::now_ms().saturating_sub(*at) / 60_000 {
+                    0 => ", active now".to_string(),
+                    m => format!(", active {m} min ago"),
+                }
+            }
+            _ => String::new(),
+        };
+        // Ticket 1120: the account the seat runs on, when it is not the default one.
+        let on = v
+            .accounts
+            .get(&s.session)
+            .map_or(String::new(), |a| format!(", on {a}"));
+        out += &format!(
+            "  seat: {} · {} ({}, {live}{ago}{on})\n",
+            s.role, s.name, s.session
+        );
     }
     for n in &t.told {
         out += &format!("  the user told {}: \"{}\"\n", n.name, n.text);
@@ -2032,12 +2681,31 @@ pub fn lines(v: &View) -> String {
     for a in &v.asks {
         out += &format!("  open question: {a}\n");
     }
+    if let Some(f) = &v.floor {
+        out += &format!("  note: {f}\n");
+    }
+    // Ticket 1081: what the core's auto-advance saw.
+    for s in &t.advance.stalled {
+        out += &format!("  stalled: {} ({})\n", s.name, s.why);
+    }
+    match v.waits.as_deref() {
+        Some("review") => out += "  waits: its report for a review\n",
+        Some("merge") => out += "  waits: the merge\n",
+        _ => {}
+    }
     if let Some(r) = &t.review {
         let verdict = if r.pass { "pass" } else { "changes asked" };
-        let note = if r.note.is_empty() {
-            String::new()
-        } else {
-            format!(": {}", r.note)
+        let mut parts = r.note.lines();
+        let note = match parts.next() {
+            None => String::new(),
+            Some(first) if whole => {
+                let rest: String = parts.map(|l| format!("\n    {l}")).collect();
+                format!(": {first}{rest}")
+            }
+            Some(first) if parts.next().is_some() => {
+                format!(": {first} (more: nunchiro task show {})", t.id)
+            }
+            Some(first) => format!(": {first}"),
         };
         out += &format!("  review by {}: {verdict}{note}\n", r.name);
     }
@@ -2047,12 +2715,32 @@ pub fn lines(v: &View) -> String {
     if v.state == "merge" {
         out += "  the user said yes to merging these files\n";
     }
+    if whole && let Some(p) = &v.package {
+        out += &package::lines(p, &t.id);
+    }
     out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Ticket 1054 round 2 (Codex security look): a key, a colon and the secret on the next line is still masked.
+    #[test]
+    fn a_review_note_masks_a_secret_on_the_next_line() {
+        let got = note("password:\ncorrect-horse-battery-staple");
+        assert!(!got.contains("correct-horse"), "{got}");
+        let got = note("token =\n  sk-ant-TEST0000000000abcdef\nmore");
+        assert!(!got.contains("sk-ant-TEST"), "{got}");
+    }
+    #[test]
+    fn a_review_note_keeps_its_lines() {
+        let text = "1. tax rounds down  \n2. no test for 0\n\nfix both";
+        assert_eq!(
+            note(text),
+            "1. tax rounds down\n2. no test for 0\n\nfix both"
+        );
+    }
 
     /// Look 11-17 v5 item 4: a project whose lead's seat failed says so in the digest ("failed"), until a session of
     /// that seat runs again.
@@ -2130,6 +2818,20 @@ mod tests {
         assert!(!working_now(false, &working, 0), "not running");
     }
 
+    #[test]
+    fn the_seat_cap_is_two_to_eight_and_left_out_at_four() {
+        let home = home("cap");
+        let l = Ledger::open(&home);
+        let p = Path::new("/p");
+        assert_eq!(l.place(p).cap, 4);
+        assert!(l.set_cap(p, 3).is_err());
+        assert_eq!(l.set_cap(p, 6).unwrap().cap, 6);
+        assert_eq!(Ledger::open(&home).place(p).cap, 6);
+        l.set_cap(p, 4).unwrap();
+        let file = std::fs::read_to_string(home.join("ledger.json")).unwrap();
+        assert!(!file.contains("cap"), "{file}");
+        let _ = std::fs::remove_dir_all(home);
+    }
     fn home(name: &str) -> PathBuf {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../.scratch")
@@ -2560,5 +3262,158 @@ mod tests {
         // An edit after the yes: the files are no longer the approved ones.
         std::fs::write(wt.join("b.txt"), "three\n").unwrap();
         assert!(!in_project(&t));
+    }
+
+    /// Ticket 1095: a task with no package prints what it printed before the package existed, in \`show\` and \`list\`.
+    #[test]
+    fn a_task_with_no_package_prints_as_before() {
+        let task = Task {
+            id: "t3".into(),
+            place: "/p".into(),
+            title: "Tax in cents".into(),
+            accept: vec!["tests pass".into()],
+            lead: None,
+            auto: false,
+            worktrees: vec!["/p/w".into()],
+            seats: vec![Seat {
+                session: "s1".into(),
+                name: "Builder · tax".into(),
+                role: "builder".into(),
+                writes: true,
+                briefed: true,
+                worktree: None,
+                at: 1,
+            }],
+            told: vec![],
+            review: Some(Review {
+                revision: "r".into(),
+                pass: true,
+                note: "fine\nsecond".into(),
+                by: "s2".into(),
+                name: "Reviewer · tax".into(),
+                at: 2,
+            }),
+            learned: vec![],
+            merge: None,
+            closed: None,
+            stall: None,
+            advance: Advance::default(),
+            created: 1,
+            updated: 2,
+        };
+        let v = view(task, &|_| SeatNow::default(), vec![], "r");
+        let before = "t3 [approved] Tax in cents\n  accept: tests pass\n  worktree: /p/w\n  seat: builder · Builder · tax (s1, ended)\n  review by Reviewer · tax: pass: fine\n    second\n";
+        assert_eq!(lines(&v, true), before);
+        let shown = View {
+            package: Some(package::Package::default()),
+            ..v.clone()
+        };
+        assert_eq!(lines(&shown, true), before);
+        assert!(!serde_json::to_string(&v).unwrap().contains("package"));
+        // A package shows in \`show\` only, never in the list's rows.
+        let mut p = package::Package::default();
+        package::keep_brief(&mut p, "s1", "Builder · tax", "Read BRIEF.md", 1).unwrap();
+        let filled = View {
+            package: Some(p),
+            ..v.clone()
+        };
+        assert_eq!(lines(&filled, false), lines(&v, false));
+        assert!(lines(&filled, true).ends_with(
+            "  package:\n    brief to Builder · tax (13 bytes): Read BRIEF.md (the whole text: nunchiro task show t3 --json)\n"
+        ));
+    }
+
+    /// Ticket 1095 threat 5: a ledger from before the package loads as it was, and a package never writes into it.
+    #[test]
+    fn an_old_ledger_loads_unchanged_and_packages_stay_out_of_it() {
+        let home = home("old-store");
+        let old = r#"{
+  "version": 1,
+  "next": 3,
+  "tasks": [
+    {"id": "t1", "place": "/p", "title": "Old one", "accept": ["works"], "seats": [{"session": "s1", "name": "Builder · old", "role": "builder", "writes": true, "at": 1}], "created": 1, "updated": 1},
+    {"id": "t2", "place": "/p", "title": "Old two", "closed": {"at": 3, "how": "done"}, "created": 2, "updated": 3}
+  ],
+  "places": {"/p": {"way": "strict", "seats": "ask"}}
+}"#;
+        std::fs::write(home.join("ledger.json"), old).unwrap();
+        let l = Ledger::open(&home);
+        let tasks = l.list().unwrap();
+        assert_eq!(
+            tasks.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+            ["t1", "t2"]
+        );
+        assert_eq!(tasks[0].seats[0].name, "Builder · old");
+        assert_eq!(l.place(Path::new("/p")).way, "strict");
+        let stored = |s: &str| serde_json::from_str::<serde_json::Value>(s).unwrap();
+        assert_eq!(
+            stored(&serde_json::to_string(&l.read().unwrap()).unwrap()),
+            stored(old),
+            "read and written back, nothing is added or lost"
+        );
+        // A package and a brief go to their own file; ledger.json stays byte for byte.
+        let packages = Packages::open(&home);
+        packages
+            .change("t1", |p| {
+                package::apply(
+                    p,
+                    &home,
+                    "background",
+                    "why",
+                    &Default::default(),
+                    "Lead · Main",
+                    true,
+                    4,
+                )
+            })
+            .unwrap();
+        let sent = l.brief("t1", "s1", "Read BRIEF.md", 5).unwrap();
+        assert!(sent.contains("Background, the lead's words") && sent.ends_with("\nRead BRIEF.md"));
+        assert!(
+            l.brief("t1", "nobody", "x", 5)
+                .unwrap_err()
+                .contains("no seat")
+        );
+        assert!(
+            l.brief("t2", "s1", "x", 5)
+                .unwrap_err()
+                .contains("no open task")
+        );
+        assert_eq!(
+            std::fs::read_to_string(home.join("ledger.json")).unwrap(),
+            old
+        );
+        // A ledger write after that holds no package either; the package is still there after done.
+        l.close("t1", "done", 6).unwrap();
+        assert!(
+            !std::fs::read_to_string(home.join("ledger.json"))
+                .unwrap()
+                .contains("package")
+        );
+        let p = packages.get("t1").unwrap();
+        assert_eq!(
+            (p.background.unwrap().text, p.briefs.len()),
+            ("why".to_string(), 1)
+        );
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    /// Ticket 1095: a task the core made and dropped unused leaves no row, unless its lead filled a package.
+    #[test]
+    fn a_dropped_auto_task_with_a_package_keeps_its_row() {
+        let home = home("auto-package");
+        let l = Ledger::open(&home);
+        let (a, _) = l.make(&home, None, "wt-a", &[], true, 1).unwrap();
+        let (b, _) = l.make(&home, None, "wt-b", &[], true, 1).unwrap();
+        Packages::open(&home)
+            .change(&b.id, |p| {
+                package::apply(p, &home, "see", "a line", &Default::default(), "L", true, 1)
+            })
+            .unwrap();
+        l.close(&a.id, "dropped", 2).unwrap();
+        l.close(&b.id, "dropped", 2).unwrap();
+        let ids: Vec<String> = l.list().unwrap().into_iter().map(|t| t.id).collect();
+        assert_eq!(ids, [b.id]);
+        let _ = std::fs::remove_dir_all(home);
     }
 }

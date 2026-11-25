@@ -1,6 +1,6 @@
 ---
 name: artifacts
-description: "Required before you write any file the user will look at (HTML page, chart, plot, diagram, dashboard, report, SVG or Markdown document) in a Nunchiro session (NUNCHIRO_ARTIFACTS is set; one of your additional working directories ends in /artifacts/<id>): it gives the only folder whose files the user sees inline in the Nunchiro chat, which replaces any scratchpad, temp or output folder. Load it together with any charting, design or writing skill."
+description: "Required before you write any file the user will look at (HTML page, chart, plot, diagram, dashboard, report, SVG or Markdown document) in a Nunchiro session (NUNCHIRO_ARTIFACTS is set; one of your additional working directories ends in /artifacts/<id>): it gives the only folder whose files the user sees inline in the Nunchiro chat, which replaces any scratchpad, temp or output folder. Load it together with any charting, design or writing skill. Not for code or data files."
 ---
 
 # Artifacts

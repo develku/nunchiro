@@ -29,22 +29,30 @@ read line
 /// keeps no keychain item without it. Made once per test process, next to the build.
 fn cli() -> PathBuf {
     static HARDENED: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    extern "C" fn remove_copy() {
+        if let Some(path) = HARDENED.get() {
+            let _ = fs::remove_file(path);
+        }
+    }
     HARDENED
         .get_or_init(|| {
             let built = cli::path();
-            let copy = built.with_file_name("nunchiro-hardened-test");
-            let tmp =
+            // Ticket 1114: nextest runs each test in its own process. A shared destination lets another test
+            // replace the executable between recording its path and restart, breaking the keychain identity.
+            let copy =
                 built.with_file_name(format!("nunchiro-hardened-test.{}", std::process::id()));
-            fs::copy(&built, &tmp).unwrap();
+            fs::copy(&built, &copy).unwrap();
             let signed = std::process::Command::new("/usr/bin/codesign")
                 .args(["--force", "--options", "runtime", "-s", "-"])
-                .arg(&tmp)
+                .arg(&copy)
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .status()
                 .unwrap();
             assert!(signed.success(), "codesign of the test CLI failed");
-            fs::rename(&tmp, &copy).unwrap();
+            // Static values are not dropped at exit. Keep the copy through every Core's cleanup, then remove it
+            // when the test process exits normally (including a caught test panic), so repeated runs do not fill disk.
+            assert_eq!(unsafe { libc::atexit(remove_copy) }, 0);
             copy
         })
         .clone()
@@ -1008,6 +1016,13 @@ fn restart_without_start_json_keeps_or_documents_api_keys() {
             .unwrap(),
     )
     .unwrap();
+    // Ticket 1114: Snapshot readiness does not cover the asynchronous keychain write. A crash before that
+    // write finishes loses the key by design; this test exercises restart with a successfully stored key.
+    let until = Instant::now() + Duration::from_secs(10);
+    while !keychain.has_item(&core.home) {
+        assert!(Instant::now() < until, "the owner key was never stored");
+        thread::sleep(Duration::from_millis(20));
+    }
     let work = core.add(Agent::Claude, "work");
     let parent = core.started(AgentKind::Claude, Some("work"));
     assert_eq!(core.env(&parent.id).get("ANTHROPIC_API_KEY"), None);

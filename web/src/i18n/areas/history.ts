@@ -34,6 +34,9 @@ declare module '../index' {
     'history.len.dh': true;
     'history.noneHint': true;
     'history.clear': true;
+    'history.outside': true;
+    'history.outsideOnly': true;
+    'history.open': true;
   }
 }
 
@@ -68,6 +71,10 @@ export const en = {
   'history.len.dh': '{d}d {h}h',
   'history.noneHint': 'Sessions land here when they end.',
   'history.clear': 'Clear filters',
+  // Ticket 1073: a conversation found on disk that no Nunchiro session ran, the filter for those, the palette command.
+  'history.outside': 'Started in a terminal',
+  'history.outsideOnly': 'Started outside Nunchiro',
+  'history.open': 'Open History',
 };
 
 export const ko = {

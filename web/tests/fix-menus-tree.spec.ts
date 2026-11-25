@@ -93,25 +93,3 @@ test('folded_head_at_256_keeps_the_strip_and_plus_whole', async ({ app, core }) 
   expect(own.dLines, '"3 projects" stays on one line').toBe(1);
 });
 
-// The Agents header and "Clear done" are an approved later addition (V1A-59, needs 122; ROADMAP row 74), so they stay;
-// what this lane fixes is the clipping they left in a 256px sidebar.
-test('nested_agents_show_whole_names_and_states', async ({ app, core }) => {
-  const { defaultBars } = await import('../src/layout/bars');
-  const p = core.project('nunchiro');
-  core.shell(p, 'backtest-runner');
-  core.cli('session', 'close', core.shell(p, 'docs-1028h').id);
-  openQuiet(core);
-  const bars = { ...defaultBars(), nest: { [p]: ['agents'] }, open: { [`${p}::agents`]: false } };
-  await app.addInitScript((b) => localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ bars: b })), bars);
-  await app.mouse.move(900, 600);
-  await app.goto('/');
-  await app.getByRole('button', { name: 'Agents view', exact: true }).click();
-  const agents = app.locator('.view[data-view="agents"] .agents');
-  await expect(agents.getByRole('button', { name: 'Clear done', exact: true })).toBeVisible();
-  // Both the name and the "project · account · state" line are whole: a word is never cut to "backt…" or "runni…".
-  const parts = await agents.locator('.ar .n, .ar .s').evaluateAll((els) => els.map((el) => ({ text: el.textContent, width: el.clientWidth, scroll: el.scrollWidth })));
-  expect(parts.length).toBe(4);
-  for (const part of parts) expect(part.scroll, part.text ?? '').toBeLessThanOrEqual(part.width);
-  // The metadata gets its own line rather than an ellipsis.
-  await expect(agents.locator('.ar .s').first()).toHaveCSS('grid-column-start', '2');
-});

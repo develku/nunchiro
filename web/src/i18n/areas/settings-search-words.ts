@@ -59,6 +59,7 @@ declare module '../index' {
     "searchWords.livePrStatus": true;
     "searchWords.team": true; // ticket 970
     "searchWords.levels": true; // ticket 992
+    "searchWords.place": true; // ticket 1099
     "searchWords.setupScript": true; // ticket 259
     "searchWords.cleanupScript": true; // ticket 259
     "searchWords.setupPolicy": true; // ticket 259
@@ -116,6 +117,7 @@ declare module '../index' {
     "searchWords.orchEnabled": true;
     "settings.kbd.cmd.settings.search": true;
     "searchWords.followupDefault": true;
+    "searchWords.barsAutohide": true;
   }
 }
 
@@ -148,7 +150,7 @@ export const en = {
   "searchWords.chatMath": "math, latex, equations, formulas, katex",
   "searchWords.confirmCloseRunning": "confirm close, warn before closing, accidental close",
   "searchWords.machines": "ssh, servers, remote hosts, remote machines",
-  "searchWords.browserAccess": "pairing, chrome extension, connect browser",
+  "searchWords.browserAccess": "browser access, phone, remote, web access, pairing, chrome extension, connect browser",
   "searchWords.density": "row height, compact, spacing, padding, dense",
   "searchWords.tabFont": "tab text size, tab title size, bigger tabs",
   "searchWords.termFontSize": "bigger text, larger text, zoom terminal, font size",
@@ -179,6 +181,7 @@ export const en = {
   "searchWords.livePrStatus": "pull request, github, checks, ci",
   "searchWords.team": "teammate, bot, standing agent, memory",
   "searchWords.levels": "level, model per level, effort per level, teammate model",
+  "searchWords.place": "way of working, review, strict, seats, auto-advance, live seats, seat cap",
   "searchWords.setupScript": "setup script, worktree setup, install on create, bootstrap",
   "searchWords.cleanupScript": "cleanup script, archive script, before remove, teardown",
   "searchWords.setupPolicy": "setup run policy, ask before running, repo script approval",
@@ -233,6 +236,8 @@ export const en = {
   "searchWords.termPadLeft": "margin, padding, space left, gutter",
   "searchWords.termPadTop": "margin, padding, space top",
   "searchWords.termGpu": "gpu, webgl, performance, hardware acceleration, slow, lag",
+  // Ticket 1122: ticket 1047's row had no words; English only until ticket 1035.
+  "searchWords.barsAutohide": "auto-hide bars, hide icon bars, hide toolbars, sidebar icons",
 };
 
 export const ko = {
@@ -295,6 +300,7 @@ export const ko = {
   "searchWords.livePrStatus": "풀 리퀘스트, 깃허브, 체크, 피알",
   "searchWords.team": "팀원, 봇, 상시 에이전트, 기억",
   "searchWords.levels": "레벨, 레벨별 모델, 레벨별 생각 수준, 팀원 모델",
+  "searchWords.place": "작업 방식, 검토, 엄격, 좌석, 자동 진행, 동시 좌석",
   "searchWords.setupScript": "준비 스크립트, 워크트리 준비, 만들 때 설치",
   "searchWords.cleanupScript": "정리 스크립트, 삭제 전 실행",
   "searchWords.setupPolicy": "준비 실행 정책, 실행 전에 묻기, 저장소 스크립트 승인",
@@ -411,6 +417,7 @@ export const ja = {
   "searchWords.livePrStatus": "プルリクエスト, ギットハブ",
   "searchWords.team": "チームメイト, ボット, 常駐エージェント, 記憶",
   "searchWords.levels": "レベル, レベルごとのモデル, レベルごとの思考レベル, チームメイトのモデル",
+  "searchWords.place": "進め方, レビュー, 厳格, 席, 自動で進める, 同時席数",
   "searchWords.setupScript": "セットアップスクリプト, ワークツリーの準備, 作成時にインストール",
   "searchWords.cleanupScript": "クリーンアップスクリプト, 削除前に実行",
   "searchWords.setupPolicy": "セットアップ実行ポリシー, 実行前に確認, リポジトリスクリプトの承認",
@@ -527,6 +534,7 @@ export const zhHans = {
   "searchWords.livePrStatus": "拉取请求, 合并请求",
   "searchWords.team": "队友, 机器人, 常驻代理, 记忆",
   "searchWords.levels": "级别, 每个级别的模型, 每个级别的思考程度, 队友模型",
+  "searchWords.place": "工作方式, 审查, 严格, 席位, 自动推进, 同时席位",
   "searchWords.setupScript": "初始化脚本, 工作树初始化, 创建时安装",
   "searchWords.cleanupScript": "清理脚本, 移除前运行",
   "searchWords.setupPolicy": "初始化运行策略, 运行前询问, 仓库脚本批准",
@@ -643,6 +651,7 @@ export const zhHant = {
   "searchWords.livePrStatus": "Pull Request, GitHub, 檢查, CI",
   "searchWords.team": "隊友, 機器人, 常駐代理, 記憶",
   "searchWords.levels": "級別, 每個級別的模型, 每個級別的思考程度, 隊友模型",
+  "searchWords.place": "工作方式, 審查, 嚴格, 席位, 自動推進, 同時席位",
   "searchWords.setupScript": "初始化指令碼, 工作樹初始化, 建立時安裝",
   "searchWords.cleanupScript": "清理指令碼, 移除前執行",
   "searchWords.setupPolicy": "初始化執行原則, 執行前詢問, 儲存庫指令碼核准",
@@ -759,6 +768,7 @@ export const es = {
   "searchWords.livePrStatus": "solicitud de cambios, comprobaciones",
   "searchWords.team": "compañero, bot, agente fijo, memoria",
   "searchWords.levels": "nivel, modelo por nivel, esfuerzo por nivel, modelo del compañero",
+  "searchWords.place": "forma de trabajo, revisión, estricto, asientos, avance automático, asientos a la vez",
   "searchWords.setupScript": "script de preparación, preparar árbol de trabajo, worktree, instalar al crear",
   "searchWords.cleanupScript": "script de limpieza, antes de eliminar",
   "searchWords.setupPolicy": "política de preparación, preguntar antes de ejecutar, aprobar script del repositorio",
@@ -875,6 +885,7 @@ export const fr = {
   "searchWords.livePrStatus": "demande de tirage, vérifications",
   "searchWords.team": "coéquipier, bot, agent permanent, mémoire",
   "searchWords.levels": "niveau, modèle par niveau, effort par niveau, modèle du coéquipier",
+  "searchWords.place": "façon de travailler, revue, strict, sièges, avance automatique, sièges en même temps",
   "searchWords.setupScript": "script de préparation, préparer l’arbre de travail, worktree, installer à la création",
   "searchWords.cleanupScript": "script de nettoyage, avant suppression",
   "searchWords.setupPolicy": "politique de préparation, demander avant d’exécuter, approuver le script du dépôt",
@@ -991,6 +1002,7 @@ export const pt = {
   "searchWords.livePrStatus": "solicitação de pull, verificações",
   "searchWords.team": "colega, bot, agente fixo, memória",
   "searchWords.levels": "nível, modelo por nível, esforço por nível, modelo do colega",
+  "searchWords.place": "forma de trabalho, revisão, estrito, assentos, avanço automático, assentos ao mesmo tempo",
   "searchWords.setupScript": "script de preparação, preparar árvore de trabalho, worktree, instalar ao criar",
   "searchWords.cleanupScript": "script de limpeza, antes de remover",
   "searchWords.setupPolicy": "política de preparação, perguntar antes de executar, aprovar script do repositório",

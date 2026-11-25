@@ -1,7 +1,7 @@
 // Icon bars (LAYOUT D5b, A01-A14): each icon is a widget on the left or right bar; a click opens it in that side's
 // sidebar, one at a time. The arrangement is window settings (settings.ts), not layout.toml, which keeps main zones only.
 // Pure: the pure specs load this file in Node. Drops go through `TARGETS`, the one drop-target list lane B extends.
-import { isUserKind, kindName, kindOf, type Dir, type Item } from './model';
+import { isUserKind, kindName, kindOf, RETIRED, type Dir, type Item } from './model';
 import { ENTRIES } from './registry';
 import type { Key } from '../i18n';
 
@@ -21,7 +21,8 @@ export interface Bars {
   nest: Record<string, string[]>;
   /** Whether each sub-view is open, keyed `<project path>::<kind>` (a missing key reads as closed). */
   open: Record<string, boolean>;
-  /** PLACED once the v25 placement (Settings bottom-left, Layout bottom-right, Browser) was applied; an older store has none. */
+  /** PLACED once the v25 placement (Settings bottom-left, Layout bottom-right, Browser) and History (ticket 1073) were
+   *  applied; an older store has a lower number or none. */
   placed?: number;
   /** v25-shell-chrome (ticket 283), v25f F12 (owner 11-08, amends needs 206): each side's own Sidebar width, px. Kept with the
    *  arrangement, so each layout (a saved preset too) has its own; a side absent = SIDEBAR_W. */
@@ -31,6 +32,10 @@ export interface Bars {
   widgetW?: Record<string, number>;
   /** v25f F13: both icon bars are hidden (the sidebars stay as they are); absent = shown. */
   barsHidden?: boolean;
+  /** Ticket 1047: the icon bars hide themselves and come back at the window edge (like the Dock); absent = off. barsHidden wins. */
+  barsAuto?: boolean;
+  /** Ticket 1052 (283's drag, back): both Icon bars' width, px; absent = BAR_W, the icons-only bar of ticket 1041. */
+  barW?: number;
 }
 
 /** Sidebar width: default, minimum (from t3code's thread sidebar, MIT: 13rem), and the widest a sidebar may be. */
@@ -39,8 +44,13 @@ export const SIDEBAR_MIN = 208;
 export const SIDEBAR_MAX = 4000;
 /** One keyboard / palette step of a Sidebar width. */
 export const SIDEBAR_STEP = 24;
-/** Ticket 1041 (owner 2026-11-22, supersedes ticket 283 item 5): the Icon bars are icons only, at one fixed width; no drag. */
-const BAR_W = 48;
+/** Ticket 1041: the Icon bars' default, icons only. Ticket 1052: it is also the narrowest; a wider bar brings ticket 283's
+ *  label steps back (first letter, cut label, full label). BAR_MAX and BAR_STEP are ticket 283's. */
+export const BAR_W = 48;
+export const BAR_MAX = 76;
+export const BAR_STEP = 4;
+export type Compact = 'full' | 'ellipsis' | 'letter' | 'icon';
+export const compactOf = (barW: number): Compact => (barW >= 68 ? 'full' : barW >= 60 ? 'ellipsis' : barW > BAR_W ? 'letter' : 'icon');
 /** What a sidebar leaves for the rest of the window: the chat minimum (pane/store.ts CHAT_MIN, 320) and both Icon bars. */
 const CENTRE_KEEP = 320 + 2 * BAR_W;
 /** The widest a sidebar may be in a window of `window` px while the other side's sidebar takes `other` px (0 when it is closed). */
@@ -66,40 +76,56 @@ export const FIXED = PSEUDO;
 export const MAIN_ONLY = ['composer', 'waiting', 'preview'];
 /** Icons whose click opens no sidebar: Settings and Layout and the Terminal (the side pane). V2.5-38: the Board opens in
  *  its bar's sidebar when placed there (a drop); its icon click stays a centre tab otherwise (App, needs 103). */
-const noSidebar = (w: string) => PSEUDO.includes(w) || kindOf(w) === 'terminal';
+const noSidebar = (w: string) => PSEUDO.includes(w) || kindOf(w) === 'terminal' || w === HISTORY;
+/** Ticket 1073: History is a placed icon like a widget's (it moves, it can be removed) whose click opens its own view over
+ *  the right sidebar (layout/useRails.tsx), so it is no registry widget: no sidebar of its own, no zone, no nest. */
+export const HISTORY = 'history';
 const pseudoName = (w: string) => (w === 'layout' ? 'Layout' : w === 'browser' ? 'Browser' : 'Settings');
 export const onlyMain = (w: string) => MAIN_ONLY.includes(kindOf(w));
 const pad = (l: Slot[]): Slot[] => [...l, ...Array<Slot>(SLOTS - l.length).fill(null)];
 /** The last slot is each bar's foot (rails.css pins it to the bottom). */
 const FOOT = SLOTS - 1;
 const withFoot = (l: Slot[], foot: string): Slot[] => [...pad(l).slice(0, FOOT), foot];
-/** The current placement version (the owner on docs/design/v25-placement, 2026-10-31). */
-export const PLACED = 2;
+/** The current placement version (the owner on docs/design/v25-placement, 2026-10-31); 3 adds History (ticket 1073). */
+export const PLACED = 3;
 export const DEFAULT_BARS: Bars = {
   // Settings bottom-left, Layout bottom-right; Browser under Terminal (placement items 1 and 4).
   left: withFoot(['tree', 'files', 'search'], 'settings'),
-  right: withFoot(['board', 'decisions', 'terminal', 'browser', 'diff', 'artifacts'], 'layout'),
+  right: withFoot(['board', 'decisions', 'terminal', 'browser', 'diff', 'artifacts', HISTORY], 'layout'),
   active: { left: 'tree', right: null },
   nest: {},
   open: {},
   placed: PLACED,
 };
-/** Once for an arrangement saved before PLACED (placement item 1, recommended option): Settings and Layout move to the
- *  feet only while they still sit in their old default slots (Layout right slot 1, Settings right slot 10) and the foot
- *  is free; Browser joins under Terminal when there is room. A user-placed icon stays. Pure: returns a new value. */
+/** Once for an arrangement saved before PLACED. Version 2 (placement item 1, recommended option): Settings and Layout move
+ *  to the feet only while they still sit in their old default slots (Layout right slot 1, Settings right slot 10) and the
+ *  foot is free; Browser joins under Terminal when there is room. Version 3 (ticket 1073): History joins the right bar's
+ *  first free slot above the foot, else the left bar's; with both full it gets none (a bar never holds more than SLOTS:
+ *  the palette's Open History and the tree's "View all in History" still open it). Once only: removed later, it stays
+ *  away. A user-placed icon stays. Pure: returns a new value. */
 export function place(b: Bars): Bars {
-  if ((b.placed ?? 0) >= PLACED) return b;
+  const was = b.placed ?? 0;
+  if (was >= PLACED) return b;
   const n: Bars = { ...b, left: [...b.left], right: [...b.right], placed: PLACED };
-  if (n.right[FOOT] === 'settings' && n.left[FOOT] === null) (n.left[FOOT] = 'settings'), (n.right[FOOT] = null);
-  if (n.right[0] === 'layout' && n.right[FOOT] === null) (n.right[FOOT] = 'layout'), (n.right[0] = null);
-  if (!slotOf(n, 'browser')) {
-    // Under Terminal: the icons below it move down one slot into the next free one; without Terminal, the first free slot.
-    const t = n.right.indexOf('terminal');
-    const free = n.right.findIndex((x, i) => x === null && i > t && i < FOOT);
-    const first = n.right.slice(0, FOOT).indexOf(null);
-    if (t >= 0 && free > t) n.right.splice(t + 1, free - t, 'browser', ...n.right.slice(t + 1, free));
-    else if (first >= 0) n.right[first] = 'browser';
-    else return b; // no room on the right bar: the old arrangement stays whole (Browser stays reachable from the side pane)
+  if (was < 2) {
+    if (n.right[FOOT] === 'settings' && n.left[FOOT] === null) (n.left[FOOT] = 'settings'), (n.right[FOOT] = null);
+    if (n.right[0] === 'layout' && n.right[FOOT] === null) (n.right[FOOT] = 'layout'), (n.right[0] = null);
+    if (!slotOf(n, 'browser')) {
+      // Under Terminal: the icons below it move down one slot into the next free one; without Terminal, the first free slot.
+      const t = n.right.indexOf('terminal');
+      const free = n.right.findIndex((x, i) => x === null && i > t && i < FOOT);
+      const first = n.right.slice(0, FOOT).indexOf(null);
+      if (t >= 0 && free > t) n.right.splice(t + 1, free - t, 'browser', ...n.right.slice(t + 1, free));
+      else if (first >= 0) n.right[first] = 'browser';
+      else return b; // no room on the right bar: the old arrangement stays whole (Browser stays reachable from the side pane)
+    }
+  }
+  if (!slotOf(n, HISTORY)) {
+    // After the right bar's last icon above the foot when there is room there, else its first free slot, else the left bar's.
+    const after = n.right.indexOf(null, n.right.slice(0, FOOT).findLastIndex((x) => x !== null) + 1);
+    const side = (['right', 'left'] as Side[]).find((s) => n[s].slice(0, FOOT).includes(null));
+    if (after >= 0 && after < FOOT) n.right[after] = HISTORY;
+    else if (side) n[side][n[side].indexOf(null)] = HISTORY;
   }
   return n;
 }
@@ -199,6 +225,10 @@ export function toggle(b: Bars, w: string): Bars {
 export function toggleBars({ barsHidden, ...rest }: Bars): Bars {
   return barsHidden ? rest : { ...rest, barsHidden: true };
 }
+/** Turns the bars' auto-hide on or off; off leaves no field, like toggleBars. */
+export function toggleBarsAuto({ barsAuto, ...rest }: Bars): Bars {
+  return barsAuto ? rest : { ...rest, barsAuto: true };
+}
 /** A command opens (never collapses) a widget on its bar. */
 export function open(b: Bars, w: string): Bars {
   const s = where(b, w);
@@ -217,6 +247,7 @@ export function refuses(w: string, to: 'bar' | 'remove' | 'nest', t: T): string 
     if (k === 'preview') return t('own.refuse.previewNest');
     if ((k as string) === 'decisions') return t('own.refuse.decisionsNest');
     if (isUserKind(k)) return t('own.refuse.userNest');
+    if (w === HISTORY) return t('own.refuse.pseudoNest', { name: name() });
     return null;
   }
   if (to === 'bar' && onlyMain(w)) return t('own.refuse.mainOnly', { name: name() });
@@ -226,7 +257,7 @@ export function refuses(w: string, to: 'bar' | 'remove' | 'nest', t: T): string 
 }
 const TITLES: Record<string, string> = Object.fromEntries(ENTRIES.map((e) => [e.kind, e.title]));
 
-const known = (w: unknown): w is string => typeof w === 'string' && (ENTRIES.some((e) => e.kind === w) || isUserKind(w) || PSEUDO.includes(w));
+const known = (w: unknown): w is string => typeof w === 'string' && (ENTRIES.some((e) => e.kind === w) || isUserKind(w) || PSEUDO.includes(w) || w === HISTORY);
 /** A stored arrangement rebuilt from checked fields, or null: at most SLOTS slots a side (a short list is padded), known
  *  icons once each, Settings and Layout on a bar, the open widget on its side, none in main only. Bars with no tree are
  *  kept as stored: the tree may be in a zone of layout.toml, which only the window sees (App.tsx puts it back on the
@@ -235,33 +266,35 @@ export function cleanBars(v: unknown): Bars | null {
   const r = v as Record<string, unknown> | null;
   if (!r || typeof r !== 'object') return null;
   const a = r.active as Record<string, unknown> | null;
-  const ok = (l: unknown) => Array.isArray(l) && l.length <= SLOTS && l.every((x) => x === null || known(x));
+  const ok = (l: unknown) => Array.isArray(l) && l.length <= SLOTS && l.every((x) => x === null || known(x) || x === RETIRED);
   if (!a || typeof a !== 'object' || !SIDES.every((s) => ok(r[s]))) return null;
-  // An arrangement saved while Preview had a bar slot (interim build) keeps the rest and drops that icon.
-  const dropPreview = (l: Slot[]) => l.map((x) => (x === 'preview' ? null : x));
+  // An arrangement saved while Preview had a bar slot (interim build) keeps the rest and drops that icon. The retired Agents widget (ticket 1070) goes the same way.
+  const dropPreview = (l: Slot[]) => l.map((x) => (x === 'preview' || x === RETIRED ? null : x));
   const left = pad(dropPreview(r.left as Slot[]));
   const right = pad(dropPreview(r.right as Slot[]));
   const all = [...left, ...right].filter((x): x is string => !!x);
   const placed = typeof r.placed === 'number' && r.placed >= 0 ? r.placed : 0;
   // A store from before Browser existed has no Browser icon; place() adds it once.
-  const needed = placed >= PLACED ? PSEUDO : PSEUDO.filter((f) => f !== 'browser');
+  const needed = placed >= 2 ? PSEUDO : PSEUDO.filter((f) => f !== 'browser');
   if (new Set(all).size !== all.length || !needed.every((f) => all.includes(f)) || all.some(onlyMain)) return null;
   const lists = { left, right };
-  const open = (v: unknown) => (v === 'preview' || v === 'terminal' ? null : (v as string | null));
+  const open = (v: unknown) => (v === 'preview' || v === 'terminal' || v === RETIRED ? null : (v as string | null));
   for (const s of SIDES) if (open(a[s]) !== null && !(lists[s] as Slot[]).includes(a[s] as string)) return null;
   // A width out of range is dropped, never partly trusted; the bars stay. v25f F12: an older store's one shared width is both sides'.
-  // Ticket 1041: an older store's Icon bar width (`barW`, ticket 283) is not read; the bars have one width now.
   const sw = (typeof r.sidebarW === 'number' ? { left: r.sidebarW, right: r.sidebarW } : (r.sidebarW ?? {})) as Record<string, unknown>;
   const sides = Object.fromEntries(SIDES.flatMap((s) => (inRange(sw[s], SIDEBAR_MIN, SIDEBAR_MAX) ? [[s, Math.round(sw[s])]] : [])));
   const ww = (r.widgetW && typeof r.widgetW === 'object' && !Array.isArray(r.widgetW) ? r.widgetW : {}) as Record<string, unknown>;
   const each = Object.fromEntries(Object.entries(ww).flatMap(([w, v]) => (w.length <= 200 && inRange(v, SIDEBAR_MIN, SIDEBAR_MAX) ? [[w, Math.round(v)]] : [])));
-  const widths = { ...(Object.keys(sides).length ? { sidebarW: sides } : {}), ...(Object.keys(each).length ? { widgetW: each } : {}) };
-  return place({ left, right, active: { left: open(a.left), right: open(a.right) }, ...cleanNest(r.nest, r.open), placed, ...widths, ...(r.barsHidden === true ? { barsHidden: true } : {}) });
+  const widths = { ...(Object.keys(sides).length ? { sidebarW: sides } : {}), ...(Object.keys(each).length ? { widgetW: each } : {}), ...(inRange(r.barW, BAR_W + 1, BAR_MAX) ? { barW: Math.round(r.barW) } : {}) };
+  return place({ left, right, active: { left: open(a.left), right: open(a.right) }, ...cleanNest(r.nest, r.open), placed, ...widths, ...(r.barsHidden === true ? { barsHidden: true } : {}), ...(r.barsAuto === true ? { barsAuto: true } : {}) });
 }
 /** The nest and open maps of a stored arrangement. Old stores have none; garbage in either gives `{}` and the bars stay. */
 // (`refuses` is used here only as a yes or no: the identity `t` keeps its answer a non-empty string.)
-function cleanNest(nest: unknown, open: unknown): Pick<Bars, 'nest' | 'open'> {
+function cleanNest(stored: unknown, storedOpen: unknown): Pick<Bars, 'nest' | 'open'> {
   const obj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  // Ticket 1070: the retired Agents widget leaves every nested list (a list it empties goes) and its open flags.
+  const nest = obj(stored) ? Object.fromEntries(Object.entries(stored).flatMap(([p, l]) => { const kept = Array.isArray(l) ? l.filter((k) => k !== RETIRED) : l; return Array.isArray(l) && l.length && !(kept as unknown[]).length ? [] : [[p, kept]]; })) : stored;
+  const open = obj(storedOpen) ? Object.fromEntries(Object.entries(storedOpen).filter(([k]) => !k.endsWith(`::${RETIRED}`))) : storedOpen;
   const goodNest =
     obj(nest) &&
     Object.entries(nest).every(([p, l]) => p.length > 0 && p.length <= 4096 && Array.isArray(l) && l.length > 0 && new Set(l).size === l.length && l.every((k) => typeof k === 'string' && ENTRIES.some((e) => e.kind === k) && !refuses(k, 'nest', (key) => key)));
@@ -272,7 +305,7 @@ function cleanNest(nest: unknown, open: unknown): Pick<Bars, 'nest' | 'open'> {
 
 /** Short English names for the library's search; the mockup's Korean names match too (A17). */
 export const KOREAN: Record<string, string> = {
-  tree: '트리', settings: '설정', layout: '배치', agents: '에이전트', waiting: '답변 띠', terminal: '터미널', composer: '입력창', diff: '변경', files: '파일', board: '보드', search: '검색', preview: '미리보기', artifacts: '산출물', decisions: '결정',
+  tree: '트리', settings: '설정', layout: '배치', waiting: '답변 띠', terminal: '터미널', composer: '입력창', diff: '변경', files: '파일', board: '보드', search: '검색', preview: '미리보기', artifacts: '산출물', decisions: '결정',
 };
 
 /** The widget's name in the UI language (A12); English, the registry's title, where none is set (the pure specs). */

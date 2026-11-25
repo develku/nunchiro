@@ -1,5 +1,5 @@
 // Window shell (spec Window (v1a), R8 final): left icon bar | left sidebar | centre | right icon bar.
-import { lineError, OwnWords, rawError, type Note } from './errors';
+import { errorNote, lineError, notePlain, OwnWords, rawError, type Note } from './errors';
 import { PermissionSheet } from './approval/PermissionSheet';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { CoreClient, type Boot } from './api';
@@ -14,7 +14,7 @@ import { useBoardSeen } from './board/seen'; // v1b-16
 import { Hints } from './Hints';
 import { CopyMode } from './terminal/copymode';
 import { plainText } from './terminal/save'; // v1a-68
-import { label, merge, type Command } from './keys';
+import { label, merge, setLiveBindings, type Command } from './keys';
 import { PrefixHelp } from './PrefixHelp'; // v1a-57
 import { Palette } from './Palette';
 import { QuickOpen } from './files/QuickOpen';
@@ -60,7 +60,7 @@ import { Strip, waitingOrder } from './queue/Strip';
 import { useWaitingFlag } from './queue/useWaitingFlag'; // ticket 197
 import { useBoardItems } from './queue/board'; // v1b-18
 import { everStarted, markStarted } from './firstrun/ever';
-import { NEW_EVENT, NewSession, StopAsk } from './NewSession'; // v1a-59
+import { NEW_EVENT, NewSession, quickStart, StopAsk } from './NewSession'; // v1a-59
 import { PairSheet } from './pairing/PairSheet'; // V2.5-15
 // v1b-11: Diff (±) widget
 import { DIFF_OPEN } from './diff/Diff';
@@ -194,7 +194,8 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
   const lastNext = useRef<string | null>(null); // V1A-60b: the item waiting.next last brought up
   const [armed, setArmed] = useState(false);
   const { sink, before, toSink, fromSink } = useKeySink(); // the prefix's focus sink
-  const [helpNow, setHelpNow] = useState(false); // v1a-57: `?` after the prefix shows the prefix help at once
+  // v1a-57: `?` after the prefix shows the prefix help at once; ticket 1099: ⌘/ (keys.sheet) shows the whole sheet.
+  const [helpNow, setHelpNow] = useState<false | 'prefix' | 'all'>(false);
   useEffect(() => void (armed || setHelpNow(false)), [armed]);
   const composer = useRef<HTMLTextAreaElement>(null);
   // v1b-11: open Diff (and the path it was opened at; `n` re-selects the same path on a second open).
@@ -358,12 +359,15 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
     };
   }, [current]);
   const bindings = merge(settings.bindings);
+  setLiveBindings(bindings); // ticket 1099: help lines read the live keys (keys.ts keyText)
 
   const { handoff, setHandoff, sideChats, setSideChats, openSideChat } = useSideChats({ core, sessions, t, setPaneNote }); // v2-3b
   const board = useBoardItems(boardList, sessions); // v1b-18
   const projectList = useMemo(() => withNames(withoutClosedHeads(buildTree(sessions, settings.order, board, pt.tree.added), pt.tree), pt.tree).flatMap((m) => m.groups), [sessions, settings.order, board, pt.tree]);
   const pathsKey = projectList.map((g) => g.project).join('\n');
   const projectPaths = useMemo(() => (pathsKey ? pathsKey.split('\n') : []), [pathsKey]);
+  const localKey = projectList.filter((g) => ![...g.main, ...g.worktrees.flatMap((w) => w.sessions)].some((s) => s.machine)).map((g) => g.project).join('\n');
+  const localPaths = useMemo(() => (localKey ? localKey.split('\n') : []), [localKey]); // ticket 1073: History's on-disk conversations
   // Ticket 570: the strip shows the selected project's tabs; `tabs` stays the flat list of every project's (all stay mounted).
   useFirstSessionMark(sessions, projectPaths); // ticket 582: the first-session step stays done once an agent session started
   const pj = useProjectTabs({ tabs, active, setActive, byId, projects: projectPaths, ready: firstSnapshot !== null, saved: restored.current });
@@ -458,7 +462,6 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
       boot,
       core,
       sessions,
-      order: settings.order,
       current,
       pinned,
       open,
@@ -470,6 +473,7 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
       t,
       wt: { list: wt.list, facts: wt.facts, team: wt.team, open: wt.open, refresh: wt.refresh, settled: wt.settled }, // ticket 990; 1022: History lists the settled ones
       owner: ownerList,
+      projects: localPaths, // ticket 1073
       decide: (id) => {
         showDecisions.current();
         // The card is drawn after the sidebar opens: then it comes into view and takes focus (not its yes).
@@ -492,6 +496,7 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
           onToggle={(p) => update({ collapsed: settings.collapsed.includes(p) ? settings.collapsed.filter((x) => x !== p) : [...settings.collapsed, p] })}
           onOpen={open}
           onSelect={selectProject} // ticket 570
+          onStartIn={(project, kind) => void quickStart(core, ordered, current, kind, project).then((s) => s && openStarted(s), (e) => setPaneNote(errorNote(t('err.note.notStarted', { error: notePlain(t, e) }), e)))} // ticket 1130 C1
           selected={pj.selected}
           keyOf={(project) => ((i) => (i >= 0 && i < 9 ? jumpChip(bindings, 'project.jump', i + 1) : ''))(projectPaths.indexOf(project))}
           tabKeyOf={(id) => ((i) => (i >= 0 && i < 9 ? jumpChip(bindings, 'session.jump', i + 1) : ''))(pj.visible.indexOf(id))} // ticket 377: only a session open in the visible project's first nine tabs
@@ -501,6 +506,7 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
           signal={strip === 'signal'} // v1a-08
           // N25 (look 1117 v3): a board card whose task waits on a merge card names that merge in the tree, as the card does.
           board={treeItems} // v1b-18
+          needYou={{ sessions: deciding, owner: ownerList }} // ticket 1067: the lead row's pill says the Team view's number
           projects={pt} // V2-9a
           wt={wt} // V2-8a
           subviews={nest.subviews /* layout-b */}
@@ -524,7 +530,7 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
   useHeldKeys(bindings);
   const registryVersion = useRegistry(); // ticket 170: a page registered later adds its palette entries
   const commands: Command[] = useMemo(
-    () => buildCommands({ ordered, board, ownerList, current, t, openSideChat, setPalette, setQuickOpen, setOverlay, overlay, open, openStarted, setActive, setSettings, setHints, toSink, setArmed, setHelpNow, setCopyId, active, editing, setZoom, focusedZone, paneApi, sessions, stop, cycle, setRenaming, closeTab, tabs: pj.visible, selectProject, selected: pj.selected, closeTabs, reopen, canReopen, shift, jump, back, lastTab, lastNext, onAction, setQuit, sideChats, setTermComposer, setComposerHidden, composer, steerNow, backgroundSend, openCmd, otherBar, removeIcon, stepSidebarW, resume, bars, paneSession, paneState, foldKey, toggleBoard, setSearchFocus, setSessionsAsk, core, setPaneNote, fold, toggleSide, foldOf, arrange, update, finish, setMessage,  splitRef, setSettingsFocus, pt, wt, projectList, team }),
+    () => buildCommands({ ordered, board, ownerList, current, t, openSideChat, setPalette, setQuickOpen, setOverlay, overlay, open, openStarted, setActive, setSettings, setHints, toSink, setArmed, setHelpNow, setCopyId, active, editing, setZoom, focusedZone, paneApi, sessions, stop, cycle, setRenaming, closeTab, tabs: pj.visible, selectProject, selected: pj.selected, closeTabs, reopen, canReopen, shift, jump, back, lastTab, lastNext, onAction, setQuit, sideChats, setTermComposer, setComposerHidden, composer, steerNow, backgroundSend, openCmd, otherBar, removeIcon, stepSidebarW, resume, bars, paneSession, paneState, foldKey, toggleBoard, setSearchFocus, setSessionsAsk, core, setPaneNote, fold, toggleSide, foldOf, arrange, update, finish, setMessage,  splitRef, setSettingsFocus, pt, wt, projectList, team, notify }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [ordered, board, ownerList, tabs, pj.visible, pj.selected, projectPaths, canReopen, active, open, onAction, editing, layout, finish, runOp, store, current /* v1b-03 */, bars /* v1a-48 */, fold.folded.join('\n') /* v1a-60 */, diff, pt.tree, pt.menuProject, pt.edit, pt.setAsk, pt.setPicking, wt.list, wt.selected, sideChats, t, registryVersion /* ticket 170 */, overlay /* v25f */, team /* ticket 990 */],
   );
@@ -557,7 +563,7 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
   const treeItems = withMerges(board, ownerList, t); // N25: a merge card's line in its project's rows
   const composerView = (first: boolean, pin?: string) => <ComposerWidget {...{ first, pin, composerHidden: composerHidden || isViewTab(active) /* ticket 571: the Room has its own composer; ticket 993: Schedules has none */, pinned, current, termComposer, connected, images, pressRow, t, core, setPaneNote, bindings, handoff, setHandoff, sideChats, send, uncertainSend, pendingEnter, composer, givenBack, setGivenBack, setDrafts, drafts, grow, steerNow, backgroundSend, stopAgent, closedText, run, placeText, sessions, follow, resume, resuming, front, onAnswer, owner: ownerList }} />;
 
-  const widget = (item: Item, ctx: WidgetCtx) => renderWidget(item, ctx.first, windowCtx(), ctx.zone.id); // V2.5-38: the board's view is per zone
+  const widget = (item: Item, ctx: WidgetCtx) => renderWidget(item, ctx.first, windowCtx(), ctx.zone.id, () => void runOp({ op: 'remove', zone: ctx.zone.id, tab: ctx.tab + 1 })); // V2.5-38: the board's view is per zone
   // end v1b-28
   const barsShown = !bars.barsHidden || editing; // v25f F13: Layout edit needs the bars, they are its drop targets
 
@@ -668,7 +674,7 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
           {label(bindings.prefix?.[0] ?? '', bindings)} …
         </div>
       )}
-      {armed && <PrefixHelp bindings={bindings} commands={commands} delay={settings.prefixHelpDelay} now={helpNow} />}
+      {armed && <PrefixHelp bindings={bindings} commands={commands} delay={settings.prefixHelpDelay} now={!!helpNow} all={helpNow === 'all'} />}
       {nest.picker /* layout-b */}
       {peek && <SplitOverlay widget={peek} onDrop={dropSplit} onBar={barHint} onEnd={endPeek} />}
       {drag && (
@@ -697,7 +703,7 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
       {overlay && (
         <Overlay kind={overlay} label={overlay === 'settings' ? t('settings.region') : t('board.region')} onClose={() => setOverlay(null)}>
           {overlay === 'settings' ? (
-            <SettingsView core={core} settings={settings} commands={commands.filter((c) => !c.id.startsWith('session.open.') && !fieldCommand(c.id))} update={update} focus={settingsFocus} agent={agentSheet} toast={arrange.notify} hasProject={projectList.length > 0} projects={projectList.map((g) => g.project)} sessions={sessions} project={projectList[0] ? { path: projectList[0].project, name: projectList[0].name } : null} onClose={() => setOverlay(null)} />
+            <SettingsView core={core} settings={settings} commands={commands.filter((c) => !c.id.startsWith('session.open.') && !fieldCommand(c.id))} update={update} focus={settingsFocus} agent={agentSheet} toast={arrange.notify} hasProject={projectList.length > 0} projects={projectList.map((g) => g.project)} sessions={sessions} current={current} project={projectList[0] ? { path: projectList[0].project, name: projectList[0].name } : null} onClose={() => setOverlay(null)} />
           ) : (
             // A card's session opens as its tab; `open` closes the modal for it.
             renderWidget('board', true, { ...windowCtx(), open }, CENTRE)

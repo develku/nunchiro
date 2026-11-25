@@ -1,0 +1,104 @@
+{
+  "lines": [
+    {
+      "kind": "wake",
+      "text": "worker w1 ended a turn (no report yet)"
+    },
+    {
+      "kind": "wake",
+      "text": "worker Builder · ticket 1070 done; report says: \"STATUS: done 'quoted'\""
+    },
+    {
+      "kind": "wake",
+      "text": "worker w1 blocked (question)"
+    },
+    {
+      "kind": "wake",
+      "text": "worker Builder · ticket 1070 blocked (question); report says: \"STATUS: done 'quoted'\""
+    },
+    {
+      "kind": "wake",
+      "text": "worker w1 blocked (permission)"
+    },
+    {
+      "kind": "wake",
+      "text": "worker Builder · ticket 1070 blocked (permission); report says: \"STATUS: done 'quoted'\""
+    },
+    {
+      "kind": "wake",
+      "text": "worker w1 waits for your answer to its question in the room"
+    },
+    {
+      "kind": "wake",
+      "text": "worker Builder · ticket 1070 waits for your answer to its question in the room; report says: \"STATUS: done 'quoted'\""
+    },
+    {
+      "kind": "wake",
+      "text": "worker w1 failed"
+    },
+    {
+      "kind": "wake",
+      "text": "worker Builder · ticket 1070 failed; report says: \"STATUS: done 'quoted'\""
+    },
+    {
+      "kind": "wake",
+      "text": "worker w1 exited"
+    },
+    {
+      "kind": "wake",
+      "text": "worker Builder · ticket 1070 exited; report says: \"STATUS: done 'quoted'\""
+    },
+    {
+      "kind": "notice",
+      "text": "1 new message: run nunchiro agent check"
+    },
+    {
+      "kind": "notice",
+      "text": "2 new messages: run nunchiro agent check"
+    },
+    {
+      "kind": "heartbeat",
+      "text": "Team: 1 report waits for review."
+    },
+    {
+      "kind": "heartbeat",
+      "text": "Team: 2 reports wait for review."
+    },
+    {
+      "kind": "heartbeat",
+      "text": "Team: 1 approved waits to merge."
+    },
+    {
+      "kind": "heartbeat",
+      "text": "Team: 2 approved wait to merge."
+    },
+    {
+      "kind": "heartbeat",
+      "text": "Team: 1 seat stalled."
+    },
+    {
+      "kind": "heartbeat",
+      "text": "Team: 2 seats stalled."
+    },
+    {
+      "kind": "heartbeat",
+      "text": "Team: 2 approved wait to merge, 1 seat stalled."
+    },
+    {
+      "kind": "heartbeat",
+      "text": "Team: 1 report waits for review, 1 approved waits to merge, 1 seat stalled."
+    },
+    {
+      "kind": "heartbeat",
+      "text": "Team: 2 reports wait for review, 2 approved wait to merge, 2 seats stalled."
+    },
+    {
+      "kind": "nudge",
+      "text": "Lead: you have been quiet for 15 minutes with the task open; finish it or say what blocks you."
+    },
+    {
+      "kind": "forward",
+      "text": "Review round 1 of 3 asked for changes at 012345678 fedcba987: two MUSTs. See sessions.rs. Reviewer · tax sends you the full findings as a room message (agent send): read them with `nunchiro agent check`, fix them, commit, and write REPORT.md again."
+    }
+  ]
+}

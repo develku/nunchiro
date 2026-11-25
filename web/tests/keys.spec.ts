@@ -177,46 +177,7 @@ test('the palette shows prefix + f for hints, and ⌃. arms the prefix; ⌃. twi
   expect(core.read(a)).not.toContain('^@');
 });
 
-test('font zoom keys change the one terminal font size for every terminal, clamped to 10-20 and saved', async ({ app, core }) => {
-  const p = core.project('demo');
-  const ids = ['one', 'two'].map((l) => core.shell(p, l).id);
-  await openWindow(app);
-  // Rendered row height of the visible terminal follows the font size; the same size must reach the other terminal.
-  const row = () => app.locator('.term:not([hidden]) .xterm-rows > div').first().evaluate((e) => e.getBoundingClientRect().height);
-  const h12 = await row();
-  await app.locator(`.tab[data-tab="${ids[0]}"]`).click();
-  await app.locator(`.term[data-session="${ids[0]}"]`).click();
-  const before = core.read(ids[0]) + core.read(ids[1]);
-  const size = () => app.evaluate(() => JSON.parse(localStorage.getItem('nunchiro.settings.v1') ?? '{}').termFontSize ?? 12);
-  await app.keyboard.press('Meta+Equal');
-  await app.keyboard.press('Meta+Equal');
-  await expect.poll(size).toBe(14);
-  await expect.poll(row).toBeGreaterThan(h12);
-  await app.locator(`.tab[data-tab="${ids[1]}"]`).click();
-  const h14 = await row();
-  expect(h14).toBeGreaterThan(h12);
-  await app.keyboard.press('Meta+Minus');
-  await expect.poll(size).toBe(13);
-  await app.keyboard.press('Meta+Digit0');
-  await expect.poll(size).toBe(12);
-  await expect.poll(row).toBe(h12);
-  await app.locator(`.tab[data-tab="${ids[0]}"]`).click();
-  expect(await row()).toBe(h12);
-  for (let i = 0; i < 10; i++) await app.keyboard.press('Meta+Equal');
-  await expect.poll(size).toBe(20);
-  await app.reload();
-  await expect(app.getByRole('status').filter({ hasText: /^Connected$/ })).toBeVisible();
-  expect(await size()).toBe(20);
-  for (let i = 0; i < 12; i++) await app.keyboard.press('Meta+Minus');
-  await expect.poll(size).toBe(10);
-  // No bytes reached either PTY for the zoom keys: a typed marker is the only new output. The holder's own size marks
-  // (CSI 8;rows;cols t, a376150ee) are output the resize wrote, not keys, so they are left out.
-  await app.locator(`.term[data-session="${ids[0]}"]`).click();
-  await app.keyboard.type('qz');
-  await expect.poll(() => core.read(ids[0])).toContain('qz');
-  const keys = (s: string) => s.replace(/\x1b\[8;\d+;\d+t/g, '').replace('qz', '').replace('qz', '');
-  expect(keys(core.read(ids[0]) + core.read(ids[1]))).toBe(keys(before));
-});
+// Ticket 1071: ⌘= ⌘- ⌘0 zoom the window now; zoom-1071.spec.ts checks they leave the terminal font and the PTY alone.
 
 test('with a Korean input source (keyCode 229, not composing) the prefix still works and nothing reaches the PTY', async ({ app, core }) => {
   const p = core.project('demo');

@@ -14,7 +14,7 @@ import { RowIcon } from '../tree/RowIcon';
 import type { Session } from '../types';
 import { ScheduleForm } from './ScheduleForm';
 import { WidenMark } from '../history/HistoryView';
-import { dayWords, levelOf, nameOf, nextExact, nextWords, onOpenSchedules, ranOnce, refreshSchedules, scheduleList, scheduleOp, showSchedTab, sorted, takeWanted, taskShown, useSchedAt, useScheduleList, whenWords, type Schedule } from './schedules';
+import { dayWords, levelOf, nameOf, NEW_SCHEDULE, nextExact, nextWords, onOpenSchedules, ranOnce, refreshSchedules, scheduleList, scheduleOp, showSchedTab, sorted, takeWanted, taskShown, useSchedAt, useScheduleList, whenWords, type Schedule } from './schedules';
 import '../lead/lead.css';
 import './schedule.css';
 
@@ -53,6 +53,7 @@ export function SchedulesView({ core, t, sessions, open, where }: { core: CoreCl
   const want = useCallback(() => {
     const row = takeWanted();
     if (!row) return;
+    if (row === NEW_SCHEDULE) return setForm((f) => ({ edit: null, n: (f?.n ?? 0) + 1 })); // ticket 1099: the palette's New schedule…
     setShown(row);
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`.schedv [data-schedule="${CSS.escape(row)}"] .sched-go`)?.focus());
   }, []);
@@ -252,6 +253,10 @@ export function SchedulesView({ core, t, sessions, open, where }: { core: CoreCl
             <Icon name="clock" size={24} />
             <p>{t('schedule.none')}</p>
             <p>{t('schedule.noneHint')}</p>
+            {/* Ticket 1099: the empty state's "Add one" is a button, not only words. */}
+            <button type="button" className="btn" data-sched-empty-add onClick={() => setForm((f) => ({ edit: null, n: (f?.n ?? 0) + 1 }))}>
+              {t('coh.schedule.add')}
+            </button>
           </div>
         )}
         {rows.length > 0 && (

@@ -126,9 +126,13 @@ interface Props {
   kind: AgentKind;
   copyOnSelect: boolean;
   osc52: Osc52;
+  /** Ticket 1115 step 2: a read-only look (the Team board's drawer). It never sizes the PTY, so a peek never redraws the
+   *  agent's screen: the grid takes the PTY's own sizes from the holder's marks and the box scrolls. No keys reach the
+   *  session, and the session's tab keeps its place in \`terminals\`. */
+  peek?: boolean;
 }
 
-export function TerminalView({ core, id, active, fontSize, fontFamily, theme, connected, name, kind, copyOnSelect, osc52 }: Props) {
+export function TerminalView({ core, id, active, fontSize, fontFamily, theme, connected, name, kind, copyOnSelect, osc52, peek = false }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const words = useHtmlLangT(); // ticket 492
   const fit = useRef<FitAddon | null>(null);
@@ -158,13 +162,13 @@ export function TerminalView({ core, id, active, fontSize, fontFamily, theme, co
     const cell = cells.get(cellKey);
     // Q4: the rows FitAddon would propose, from the box's height and the known cell (a hidden box has none: open now).
     const boxRows = cell ? Math.floor(parseFloat(getComputedStyle(el).height) / cell.height) : 0;
-    const late = boxRows > 1;
+    const late = !peek && boxRows > 1;
     const term = new XTerm({
       ...xtermOptions(tp),
       fontFamily,
       fontSize,
       lineHeight: 1.2,
-      disableStdin: !connected,
+      disableStdin: !connected || peek,
       allowProposedApi: true,
       theme: cursorTheme(theme, tp.cursorOpacity),
       linkHandler,
@@ -178,7 +182,7 @@ export function TerminalView({ core, id, active, fontSize, fontFamily, theme, co
     // Registered at once, as before Q4: commands and the copy mode find the session's xterm while its replay is parsed.
     fit.current = addon;
     own.current = term;
-    terminals.set(id, term);
+    if (!peek) terminals.set(id, term);
     // The replay of a late terminal is parsed at REPLAY_COLS (A11) and reflowed by the one fit when it opens.
     if (late) wide.add(term);
     // Look 1117 A S2-2: the PTY learns the box's size before the replay is parsed, not after it. A shell started for a split
@@ -328,10 +332,11 @@ export function TerminalView({ core, id, active, fontSize, fontFamily, theme, co
     writer.current = out;
     // Keystrokes, IME commits and pastes all arrive here once; the core writes them to this PTY only.
     const input = term.onData((d) => {
+      if (peek) return;
       out.key();
       void core.sendText(id, d).catch(() => {});
     });
-    const resize = term.onResize(({ cols, rows }) => !wide.has(term) && void core.resize(id, cols, rows).catch(() => {}));
+    const resize = term.onResize(({ cols, rows }) => !wide.has(term) && !peek && void core.resize(id, cols, rows).catch(() => {}));
     const decoder = new TextDecoder();
     // V1A-53: `parsed` acks the frame to the core once xterm parsed it; the core holds output this window has not.
     const unwatch = core.watch(id, (o, parsed) => {
@@ -347,7 +352,8 @@ export function TerminalView({ core, id, active, fontSize, fontFamily, theme, co
       }
       const text = decoder.decode(data, { stream: true });
       if (held && !o.replay) return void held.push({ text, parsed });
-      if (!o.replay && opened) return out.write(text, parsed);
+      // A peek follows the PTY's size changes (the holder's marks) instead of its box.
+      if (!o.replay && opened) return peek && SIZE_MARK.test(text) ? replaySized(term, text, (t, d) => out.write(t, d), parsed) : out.write(text, parsed);
       replaying = o.replay;
       // Q4: the first replay of a late terminal goes to xterm at once (nothing is queued before it) and opens it once parsed.
       if (!opened) {
@@ -379,7 +385,8 @@ export function TerminalView({ core, id, active, fontSize, fontFamily, theme, co
       held ??= [];
       replaySized(term, text, (t, d) => out.write(t, d), () => {
         replaying = false;
-        if (wide.delete(term)) {
+        // A peek keeps the replay's last marked size (the PTY's); with no mark it fits the grid alone (no resize is sent).
+        if (wide.delete(term) && !(peek && SIZE_MARK.test(text))) {
           try {
             addon.fit();
           } catch {
@@ -421,32 +428,35 @@ export function TerminalView({ core, id, active, fontSize, fontFamily, theme, co
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [core, id, warm]);
 
+  // A peek is not in `terminals` (the session's tab keeps that place): its effects act on its own xterm, never the tab's.
+  const mine = () => (peek ? own.current : terminals.get(id));
+
   useEffect(() => writer.current?.active(active), [active, warm]);
 
   useEffect(() => {
-    const term = terminals.get(id);
+    const term = mine();
     if (term) term.options.fontSize = fontSize;
   }, [id, fontSize, ready]);
 
   useEffect(() => {
-    const term = terminals.get(id);
+    const term = mine();
     if (term) term.options.fontFamily = fontFamily;
   }, [id, fontFamily, ready]);
 
   // A renamed session renames its terminal for screen readers too.
   useEffect(() => {
-    terminals.get(id)?.textarea?.setAttribute('aria-label', `Terminal: ${name} (${kind})`);
+    mine()?.textarea?.setAttribute('aria-label', `Terminal: ${name} (${kind})`);
   }, [id, name, kind, ready]);
 
   // A theme change recolours the live terminal: no recreate, no replay.
   useEffect(() => {
-    const term = terminals.get(id);
+    const term = mine();
     if (term) term.options.theme = cursorTheme(theme, tp.cursorOpacity);
   }, [id, theme, tp.cursorOpacity, ready]);
 
   // Ticket 251: an Input or Look change reaches the live terminal; only the options that changed are set.
   useEffect(() => {
-    const term = terminals.get(id);
+    const term = mine();
     if (!term) return;
     const opts = term.options as Record<string, unknown>;
     for (const [k, v] of Object.entries(xtermOptions(tp, side.current))) if (opts[k] !== v) opts[k] = v;
@@ -455,7 +465,7 @@ export function TerminalView({ core, id, active, fontSize, fontFamily, theme, co
   const want = addons(tp);
   // WebGL renderer, loaded on demand; a lost GPU context drops it and xterm draws with its DOM renderer again.
   useEffect(() => {
-    const term = terminals.get(id);
+    const term = mine();
     if (!term || !want.webgl || !ready) return; // an addon loads into an open xterm
     let gone = false;
     let gl: { dispose(): void } | null = null;
@@ -482,7 +492,7 @@ export function TerminalView({ core, id, active, fontSize, fontFamily, theme, co
 
   // Ligatures: the addon reads the font's own table where the browser can (Local Font Access), else its common set.
   useEffect(() => {
-    const term = terminals.get(id);
+    const term = mine();
     if (!term || !want.ligatures || !ready) return; // an addon loads into an open xterm
     let gone = false;
     let lig: { dispose(): void } | null = null;
@@ -503,30 +513,30 @@ export function TerminalView({ core, id, active, fontSize, fontFamily, theme, co
 
   // Without the core, keys would go nowhere: say so instead of dropping them.
   useEffect(() => {
-    const term = terminals.get(id);
-    if (term) term.options.disableStdin = !connected;
-  }, [id, connected, ready]);
+    const term = mine();
+    if (term && !peek) term.options.disableStdin = !connected;
+  }, [id, connected, ready, peek]);
 
   // V1A-67: a face the app serves loads after the terminal measured its fallback; setting fontFamily is what makes
   // xterm measure again (an equal value is ignored, hence the two steps), then the active terminal refits.
   useEffect(() => {
     const remeasure = () => {
-      const term = terminals.get(id);
+      const term = mine();
       if (!term) return;
       term.options.fontFamily = `${fontFamily} `;
       term.options.fontFamily = fontFamily;
       try {
-        if (active && own.current && fit.current) fitPrompt(own.current, fit.current, live.current);
+        if (active && !peek && own.current && fit.current) fitPrompt(own.current, fit.current, live.current);
       } catch {
         // Hidden or zero-sized: refit on the next resize.
       }
     };
     window.addEventListener(FONTS_EVENT, remeasure);
     return () => window.removeEventListener(FONTS_EVENT, remeasure);
-  }, [id, fontFamily, active, ready]);
+  }, [id, fontFamily, active, ready, peek]);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || peek) return;
     const refit = () => {
       try {
         if (own.current && fit.current) fitPrompt(own.current, fit.current, live.current);
@@ -545,21 +555,21 @@ export function TerminalView({ core, id, active, fontSize, fontFamily, theme, co
     });
     ro.observe(host.current!);
     return () => (cancelAnimationFrame(frame), ro.disconnect());
-  }, [active, fontSize, fontFamily, tp.fontWeight, tp.boldWeight, ready]);
+  }, [active, fontSize, fontFamily, tp.fontWeight, tp.boldWeight, ready, peek]);
 
   useEffect(() => {
     if (osc52 !== 'ask') setAsk(null);
   }, [osc52]);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || peek) return; // Find for this session opens in its tab, not in a peek too
     const on = (e: Event) => (e as CustomEvent<string>).detail === id && setFindNonce((n) => n + 1);
     window.addEventListener(FIND_EVENT, on);
     return () => window.removeEventListener(FIND_EVENT, on);
-  }, [id, active]);
+  }, [id, active, peek]);
 
   return (
-    <div className="term" ref={host} hidden={!active} data-session={id} data-renderer={renderer} style={{ paddingLeft: tp.padLeft, paddingTop: tp.padTop }}>
+    <div className="term" ref={host} hidden={!active} data-session={id} data-peek={peek || undefined} data-renderer={renderer} style={{ paddingLeft: tp.padLeft, paddingTop: tp.padTop }}>
       {search && findNonce > 0 && <FindBar term={search.term} search={search.addon} nonce={findNonce} onClose={() => setFindNonce(0)} />}
       {/* Never focused on arrival, so a key typed into the terminal cannot press Copy; the text is never shown. */}
       {ask && (

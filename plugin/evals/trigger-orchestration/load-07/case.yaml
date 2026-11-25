@@ -1,0 +1,16 @@
+schema_version: "1.1"
+name: trigger-orchestration-load-07
+description: Should load the orchestration skill.
+tags: [trigger, trigger-orchestration]
+runs: 1
+execution:
+  prompt: "Use an isolated git worktree for each of these four bug fixes and have Nunchiro workers do them in parallel."
+  append_system_prompt: "You are running inside a Nunchiro session: NUNCHIRO_SESSION is set and the `nunchiro` CLI is on PATH. Reply to the request as you normally would."
+  allowed_tools: [Skill, Read, Glob, Grep]
+  max_turns: 4
+  timeout_seconds: 120
+graders:
+  - name: skill-loaded
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?orchestration"'

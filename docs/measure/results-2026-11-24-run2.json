@@ -1,0 +1,216 @@
+{
+ "date": "2026-11-24 13:50",
+ "commit": "f5a578f6b",
+ "host": "Mac16,10",
+ "macos": "27.2.1 26B131",
+ "repeats": 5,
+ "sessions": 20,
+ "load": [
+  7.49,
+  29.09
+ ],
+ "figures": {
+  "launch_cold_s": {
+   "median": 2.643,
+   "min": 1.45,
+   "max": 3.985,
+   "n": 5,
+   "values": [
+    3.44,
+    1.45,
+    2.643,
+    3.985,
+    1.868
+   ]
+  },
+  "launch_warm_s": {
+   "median": 0.678,
+   "min": 0.52,
+   "max": 2.717,
+   "n": 5,
+   "values": [
+    0.822,
+    0.52,
+    0.678,
+    2.717,
+    0.667
+   ]
+  },
+  "core_start_s": {
+   "median": 0.108,
+   "min": 0.091,
+   "max": 0.179,
+   "n": 5,
+   "values": [
+    0.176,
+    0.1,
+    0.091,
+    0.179,
+    0.108
+   ]
+  },
+  "send_ms": {
+   "median": 5.5,
+   "min": 4.7,
+   "max": 27.3,
+   "n": 5,
+   "values": [
+    5.5,
+    27.3,
+    13.9,
+    5.5,
+    4.7
+   ]
+  },
+  "idle_cpu_pct": {
+   "median": 2.09,
+   "min": 1.8,
+   "max": 5.35,
+   "n": 5,
+   "values": [
+    2.09,
+    1.8,
+    2.35,
+    5.35,
+    2.03
+   ]
+  },
+  "idle_mib": {
+   "median": 377.0,
+   "min": 352.3,
+   "max": 381.3,
+   "n": 5,
+   "values": [
+    381.3,
+    380.6,
+    377.0,
+    352.3,
+    375.6
+   ]
+  },
+  "mib_per_session": {
+   "median": 2.46,
+   "min": -0.79,
+   "max": 3.24,
+   "n": 5,
+   "values": [
+    2.46,
+    2.46,
+    -0.79,
+    3.24,
+    1.55
+   ]
+  },
+  "sessions_json_kib_per_session": {
+   "median": 1.27,
+   "min": 1.26,
+   "max": 1.27,
+   "n": 5,
+   "values": [
+    1.27,
+    1.27,
+    1.27,
+    1.26,
+    1.27
+   ]
+  },
+  "snapshot_kib_per_session": {
+   "median": 0.68,
+   "min": 0.68,
+   "max": 0.68,
+   "n": 5,
+   "values": [
+    0.68,
+    0.68,
+    0.68,
+    0.68,
+    0.68
+   ]
+  },
+  "cpu_pct_sessions": {
+   "median": 2.79,
+   "min": 2.56,
+   "max": 3.26,
+   "n": 5,
+   "values": [
+    2.79,
+    3.06,
+    3.26,
+    2.76,
+    2.56
+   ]
+  },
+  "mib_sessions": {
+   "median": 417.2,
+   "min": 361.1,
+   "max": 430.5,
+   "n": 5,
+   "values": [
+    430.5,
+    429.8,
+    361.1,
+    417.2,
+    406.6
+   ]
+  }
+ },
+ "installs": {
+  "ok": 5,
+  "of": 5
+ },
+ "launches": {
+  "drawn": 10,
+  "of": 10
+ },
+ "sessions_alive_pct": {
+  "median": 100.0,
+  "min": 100.0,
+  "max": 100.0,
+  "n": 5,
+  "values": [
+   100.0,
+   100.0,
+   100.0,
+   100.0,
+   100.0
+  ]
+ },
+ "mainwatch": {
+  "runs": 30,
+  "green": 25,
+  "green_pct": 83.3,
+  "median_min": 9.8,
+  "min_min": 9.1,
+  "max_min": 107.7,
+  "installs": {
+   "n": 20,
+   "installed": 1,
+   "skipped": 17,
+   "failed": 2,
+   "landed_pct": 5.0
+  }
+ },
+ "locale": {
+  "english_keys": 5266,
+  "per_language_pct": {
+   "ko": 94.1,
+   "ja": 94.1,
+   "zh-Hans": 94.1,
+   "zh-Hant": 94.1,
+   "es": 94.1,
+   "fr": 94.1,
+   "pt": 94.1
+  },
+  "mean_pct": 94.1
+ },
+ "owner_check": {
+  "owner_core_before": [
+   "1230"
+  ],
+  "owner_core_after": [
+   "1230"
+  ],
+  "same": true,
+  "owner_files_open_by_our_processes": []
+ }
+}

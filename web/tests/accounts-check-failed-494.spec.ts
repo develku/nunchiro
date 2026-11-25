@@ -4,10 +4,10 @@
 import type { Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { agentsZone, expect, openWindow, REPO, test, type Core } from './fixtures';
+import { stripOnTop, expect, openWindow, REPO, test, type Core } from './fixtures';
 import { openSettings } from './settings-modal';
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 // The status run takes a second and exits 2 with nothing on stdout; any session idles as `cat`. It makes no config folder
 // (ticket 509: the core's login step makes it).

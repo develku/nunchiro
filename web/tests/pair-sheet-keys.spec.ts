@@ -29,8 +29,8 @@ function answers(app: Page) {
 async function ask(app: Page, browser: Parameters<typeof phone>[0]) {
   const port = await freePort();
   await enable(app, port);
-  await app.getByRole('switch', { name: 'Allow browser access', exact: true }).focus();
-  await app.getByRole('switch', { name: 'Allow browser access', exact: true }).evaluate((e) => e.setAttribute('data-before-dialog', ''));
+  await app.getByRole('switch', { name: 'Allow phone and web access', exact: true }).focus();
+  await app.getByRole('switch', { name: 'Allow phone and web access', exact: true }).evaluate((e) => e.setAttribute('data-before-dialog', ''));
   const { page } = await phone(browser, `http://127.0.0.1:${port}/`);
   await page.getByRole('button', { name: 'Pair' }).click();
   const sheet = app.getByRole('dialog', { name: 'Browser pairing request' });

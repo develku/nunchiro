@@ -4,3 +4,6 @@ packages:
 # Supply chain: only versions published at least 14 days ago; dependency install scripts stay blocked.
 minimumReleaseAge: 20160
 onlyBuiltDependencies: []
+# rehype-katex 7.0.1 and micromark-extension-math 3.1.0 ask for katex ^0.16; 0.16.x has GHSA-238p-pmpm-9mq7 (ticket 1128).
+overrides:
+  katex: 0.19.1

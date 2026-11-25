@@ -2,10 +2,10 @@
 // line holds one action, what belongs to a section sits on that section's heading, and a page of rows has one column, so
 // the title stays where it is from page to page. The agents are fakes in the test's bin, never a real login.
 import type { Page } from '@playwright/test';
-import { agentsZone, expect, openWindow, test } from './fixtures';
+import { stripOnTop, expect, openWindow, test } from './fixtures';
 import { openSettings } from './settings-modal';
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const nav = (app: Page) => app.getByRole('navigation', { name: 'Settings pages' });
 async function page(app: Page, name: string) {

@@ -10,7 +10,7 @@ import type { CoreClient } from '../../api';
 import type { Key } from '../../i18n';
 import { DEFAULTS, IMPORTS_CAP, type Settings } from '../../settings';
 import { previewTheme, useOsDark } from '../../themes/apply';
-import { luminance } from '../../themes/derive';
+import { luminance, themeColour } from '../../themes/derive';
 import { parseGhostty, type ThemeColors } from '../../themes/ghostty';
 import { DARK_PICK, LIGHT_PICK, type ThemePick } from '../../themes/nunchiro';
 import { push as pushUndo } from '../../undo/store';
@@ -419,6 +419,19 @@ export function ThemePage({ t, core, settings, update }: { t: T; core: CoreClien
         desc={t('chatColours.desc')}
         reset={<Reset t={t} label={t('chatColours.title')} show={settings.chatColours !== DEFAULTS.chatColours} run={() => update({ chatColours: DEFAULTS.chatColours })} />}
         control={<Seg name="chat-colours" label={t('chatColours.title')} value={settings.chatColours} onChange={(v) => update({ chatColours: v })} options={[['theme', t('chatColours.accents')], ['plain', t('chatColours.plain')]]} />}
+      />
+      <Row
+        label={t('chatAccent.title')}
+        desc={t('chatAccent.desc')}
+        reset={<Reset t={t} label={t('chatAccent.title')} show={settings.chatAccent !== DEFAULTS.chatAccent} run={() => update({ chatAccent: DEFAULTS.chatAccent })} />}
+        control={
+          // A fieldset turns every radio off at once. Each swatch is the theme's own palette colour, named in words too; the first
+          // (ticket 1088, the default) is the theme's own colour, which follows a theme change. With seven choices the six
+          // swatches show as dots (name read aloud and on hover) so the row keeps its control right of its label.
+          <fieldset disabled={settings.chatColours === 'plain'} style={{ border: 0, margin: 0, padding: 0, minWidth: 0, opacity: settings.chatColours === 'plain' ? 0.5 : 1 }}>
+            <Seg name="chat-accent" label={t('chatAccent.title')} value={String(settings.chatAccent)} onChange={(v) => update({ chatAccent: Number(v) })} options={([0, 1, 2, 3, 4, 5, 6] as const).map((n) => [String(n), <span data-tip={n ? t(`chatAccent.s${n}` as Key) : undefined}><i aria-hidden style={{ display: 'inline-block', width: '0.8em', height: '0.8em', marginRight: n ? 0 : '0.4em', borderRadius: 'var(--r-pill)', background: n ? current.colors.palette[n] : current.id === LIGHT_PICK.id || current.id === DARK_PICK.id ? current.colors.palette[4] : themeColour(current.colors) }} /><span className={n ? 'sr' : undefined}>{t(`chatAccent.s${n}` as Key)}</span></span>])} />
+          </fieldset>
+        }
       />
       <Row label={t('field.themeBrowse')} reset={<Reset t={t} label={t('field.themeBrowse')} show={settings.themeBrowse !== DEFAULTS.themeBrowse} run={() => update({ themeBrowse: DEFAULTS.themeBrowse })} />} desc={t('settings.theme.browseNote')} control={<Switch setting="themeBrowse" label={t('field.themeBrowse')} checked={settings.themeBrowse} onChange={(v) => update({ themeBrowse: v })} />} />
       <ImportTheme t={t} taken={settings.themesImported.map((p) => p.name)} onAdd={(p) => update({ themesImported: [...settings.themesImported, p] })} />

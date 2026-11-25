@@ -33,10 +33,10 @@ test('sidebar_edge_takes_no_tree_pixel: the tree keeps its full width and its 24
   const cy = chev.y + chev.height / 2;
   for (const x of [Math.round(chev.x), Math.round(chev.x + chev.width) - 1])
     expect(await app.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('.row.head > .chev'), [x, cy] as const), `chevron at x=${x}`).toBe(true);
-  // Ticket 1041: the icon bar has one width and no divider; nothing between the bar and the tree answers as a handle.
+  // Ticket 1052 (e0405857d) gave the bar its widen edge back: 6 px inside the bar, none of it over the tree.
   const bar = (await app.locator('nav[data-bar="left"]').boundingBox())!;
   const barEdge = Math.round(bar.x + bar.width);
-  expect(await hits(app, span(barEdge - 10, 14), cy)).not.toContain('bar');
+  expect(await hits(app, span(barEdge - 10, 14), cy)).toEqual([...Array(4).fill('other'), ...Array(6).fill('bar'), ...Array(4).fill('other')]);
   // The sidebar handle: at least 8 px, from the border outward into the main zone.
   const edgeX = Math.round(side.x + side.width);
   const xs = span(edgeX - 8, 24);

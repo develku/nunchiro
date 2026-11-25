@@ -131,7 +131,7 @@ const ROWS: [string, string, F, string?][] = [
   ['decisions.waiting', '{count} waiting', 'C', '${items.length} waiting'],
   ['decisions.cardOne', '{name}: decision', 'C', "'decision'"],
   ['decisions.cardMany', '{name}: {count} decisions', 'C', '`${items.length} decisions`'],
-  ['decisions.back', '← Back to {name} (⌘[)', 'C', '← Back to {from.name} (⌘[)'],
+  ['decisions.back', '← Back to {name} ({key})', 'C', '← Back to {from.name} (⌘[)'],
   ['decisions.kindQuestion', 'question', 'C', "? 'question' : isRisky"],
   ['decisions.kindRisky', 'risky permission', 'C', "'risky permission'"],
   ['decisions.kindPermission', 'permission', 'C', ": 'permission')"],

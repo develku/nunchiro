@@ -58,6 +58,8 @@ test('onboarding_every_done_step_says_what_it_did', async ({ app, core }) => {
   const lines: Record<string, string> = {};
   for (const id of steps) {
     await step(app, id).click();
+    // The panel follows the click a render later; without this wait an already-done step read the previous panel's line.
+    await expect(panel(app)).toHaveAttribute('data-panel', id);
     await expect(step(app, id), `${id} is done`).toHaveAttribute('data-done', 'true', { timeout: 15_000 });
     if (!named.includes(id)) continue;
     const line = panel(app).getByRole('status').filter({ hasText: /\S/, hasNotText: /^Reading/ }).first(); // the skills panel first says it is reading

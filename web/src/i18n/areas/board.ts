@@ -138,6 +138,17 @@ declare module '../index' {
     "board.edit.staleNudge": true;
     "board.edit.staleMin": true;
     "board.edit.nudge": true;
+    "board.edit.doneDays": true;
+    "board.edit.doneDays.1": true;
+    "board.edit.doneDays.7": true;
+    "board.edit.doneDays.30": true;
+    "board.done.today": true;
+    "board.done.yesterday": true;
+    "board.done.week": true;
+    "board.done.earlier": true;
+    "board.archive": true;
+    "board.archive.search": true;
+    "board.archive.none": true;
     "board.edit.errMin": true;
     "board.edit.foot": true;
     "board.view.saved": true;
@@ -290,6 +301,17 @@ export const en = {
   "board.edit.staleNudge": "Stale · nudge",
   "board.edit.staleMin": "stale badge threshold (min)",
   "board.edit.nudge": "turn-end agent nudge",
+  "board.edit.doneDays": "Keep finished cards on the board for:",
+  "board.edit.doneDays.1": "1 day",
+  "board.edit.doneDays.7": "7 days",
+  "board.edit.doneDays.30": "30 days",
+  "board.done.today": "Today",
+  "board.done.yesterday": "Yesterday",
+  "board.done.week": "This week",
+  "board.done.earlier": "Earlier",
+  "board.archive": "Archive ({n})",
+  "board.archive.search": "Search the archive",
+  "board.archive.none": "No archived card matches.",
   "board.edit.errMin": "1 to 1440 whole minutes",
   "board.edit.foot": "Saved: board.toml · this widget's view is saved with its zone (can sit in any zone)",
   "board.view.saved": "Saved view: {view}",

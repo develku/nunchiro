@@ -29,6 +29,15 @@ fn events_of(kind: AgentKind, v: &Value) -> Vec<(String, Value)> {
         AgentKind::Claude => {
             let message = &v["message"];
             let content = message["content"].as_array();
+            // Ticket 1094: a background task that ends while a turn runs is told to Claude as a queued command (an
+            // attachment record), not as a user record. Missed, the task stayed counted, the turn's Stop was held for
+            // it, and the session read as working for the rest of the night.
+            if v["type"] == "attachment" && v["attachment"]["type"] == "queued_command" {
+                if let Some(id) = task_done(v["attachment"]["prompt"].as_str().unwrap_or("")) {
+                    out.push(("TaskCompleted".into(), json!({"task_id":id})));
+                }
+                return out;
+            }
             if v["type"] == "user" {
                 let text = message["content"]
                     .as_str()
@@ -43,18 +52,12 @@ fn events_of(kind: AgentKind, v: &Value) -> Vec<(String, Value)> {
                             })
                             .unwrap_or_default()
                     });
+                // Ticket 1059: /context's table is a hidden note of a local command, not a prompt: no turn starts.
+                if crate::session_context::context_usage(v).is_some() {
+                    return out;
+                }
                 if text.trim_start().starts_with("<task-notification>") {
-                    fn tag<'a>(text: &'a str, name: &str) -> Option<&'a str> {
-                        let start = format!("<{name}>");
-                        let end = format!("</{name}>");
-                        text.split_once(&start)?.1.split_once(&end).map(|(v, _)| v)
-                    }
-                    if let Some(id) = tag(&text, "task-id")
-                        && matches!(
-                            tag(&text, "status"),
-                            Some("completed" | "failed" | "killed")
-                        )
-                    {
+                    if let Some(id) = task_done(&text) {
                         out.push(("TaskCompleted".into(), json!({"task_id":id})));
                     }
                     return out;
@@ -111,9 +114,13 @@ fn events_of(kind: AgentKind, v: &Value) -> Vec<(String, Value)> {
                     }
                 }
             }
-            if ["end_turn", "max_tokens", "stop_sequence", "refusal"]
-                .iter()
-                .any(|r| message["stop_reason"] == *r)
+            // Ticket 1056: Code Mode writes each shell call a script makes as a virtual record with stop_reason
+            // "stop_sequence" in the middle of the turn. Read as a Stop, it ended the turn early; the real Stop then
+            // counted nothing, and the send queue waited for a finished turn for ever.
+            if v["isVirtual"] != true
+                && ["end_turn", "max_tokens", "stop_sequence", "refusal"]
+                    .iter()
+                    .any(|r| message["stop_reason"] == *r)
             {
                 out.push(("Stop".into(), json!({})));
             }
@@ -167,6 +174,19 @@ fn events_of(kind: AgentKind, v: &Value) -> Vec<(String, Value)> {
         AgentKind::Shell | AgentKind::Acp => {} // V2-4a: an ACP chat comes from `session/update`
     }
     out
+}
+/// The task id of a `<task-notification>` that says its background task ended.
+fn task_done(text: &str) -> Option<&str> {
+    fn tag<'a>(text: &'a str, name: &str) -> Option<&'a str> {
+        let start = format!("<{name}>");
+        let end = format!("</{name}>");
+        text.split_once(&start)?.1.split_once(&end).map(|(v, _)| v)
+    }
+    if !text.trim_start().starts_with("<task-notification>") {
+        return None;
+    }
+    let id = tag(text, "task-id")?;
+    matches!(tag(text, "status"), Some("completed" | "failed" | "killed")).then_some(id)
 }
 pub fn locate(session: &Session) -> Option<PathBuf> {
     let id = session.agent_session_id.as_ref()?;
@@ -387,6 +407,31 @@ mod tests {
             "pid": null, "config_dir": config_dir,
         }))
         .unwrap()
+    }
+
+    // Ticket 1056: a Code Mode shell call's virtual record is no Stop; a real record with the same stop_reason is.
+    #[test]
+    fn a_virtual_record_ends_no_turn() {
+        let mut v = json!({"type":"assistant","isVirtual":true,"message":{"model":"<synthetic>","role":"assistant",
+            "stop_reason":"stop_sequence","content":[{"type":"tool_use","id":"repl_1","name":"Bash","input":{}}]}});
+        assert!(
+            events(AgentKind::Claude, &v)
+                .iter()
+                .all(|(e, _)| e != "Stop")
+        );
+        v["isVirtual"] = false.into();
+        assert!(
+            events(AgentKind::Claude, &v)
+                .iter()
+                .any(|(e, _)| e == "Stop")
+        );
+    }
+
+    // Ticket 1059: the /context table record starts no turn, so the session never reads as working after /context.
+    #[test]
+    fn t1059_context_record_is_no_prompt() {
+        let v = crate::session_context::context_record();
+        assert_eq!(events(AgentKind::Claude, &v), vec![]);
     }
 
     // Look 11-17 N0: Claude's interrupt record ends the turn; it never starts a new one.

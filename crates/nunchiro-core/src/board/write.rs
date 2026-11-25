@@ -75,6 +75,11 @@ pub(super) fn put_settings(
             "turn_end_nudge",
             Value::from(settings.turn_end_nudge),
         );
+        set(
+            table,
+            "done_days",
+            Value::from(i64::from(settings.done_days)),
+        );
         Ok(())
     })
 }
@@ -269,6 +274,7 @@ fn same(a: &Value, b: &Value) -> bool {
 
 fn state_name(state: &State) -> &'static str {
     match state {
+        State::Idle => "idle",
         State::Working => "working",
         State::NeedsDecision => "needs_decision",
         State::Review => "review",

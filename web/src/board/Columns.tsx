@@ -3,14 +3,17 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { columnTitle, keyOf, type Card, type Column } from './model';
 import type { T } from './Board';
+import { Archive, DoneDays } from './Archive';
 import { isDone, type Lane } from './tasks';
 import { cardCount } from './WatchGrid';
 import './columns.css';
 
-export function LaneGrid({ t, columns, lanes, counts, cell, onAdd }: { t: T; columns: Column[]; lanes: Lane[]; counts: Map<string, number>; cell: (card: Card, column: Column, lane: Lane | null) => ReactNode; onAdd: (column: string) => void }) {
+/** `archived`: the Archive's test (ticket 1066); those cards leave the Done cells but still count in a lane's "n/m done". */
+export function LaneGrid({ t, columns, lanes, counts, cell, onAdd, archived, now }: { t: T; columns: Column[]; lanes: Lane[]; counts: Map<string, number>; cell: (card: Card, column: Column, lane: Lane | null) => ReactNode; onAdd: (column: string) => void; archived: (card: Card) => boolean; now: number }) {
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const fold = (key: string) => setFolded((f) => (f.has(key) ? new Set([...f].filter((k) => k !== key)) : new Set([...f, key])));
   const done = new Set(columns.filter(isDone).map((c) => c.id));
+  const old = lanes.flatMap((l) => l.cards).filter(archived);
   // An empty board still shows one row of cells: the "+ Add" buttons and the drop targets live there.
   const rows: (Lane | null)[] = lanes.length ? lanes : [null];
   // 140 px: the five default columns fit the 812 px centre zone beside the Tree at 1440x900 (5 x 140 + 4 x 8 gap + 24
@@ -63,7 +66,11 @@ export function LaneGrid({ t, columns, lanes, counts, cell, onAdd }: { t: T; col
               columns.map((col) => (
                 <div key={col.id} className="bcell" data-column={col.id} data-lane={lane?.key ?? ''}>
                   <ul className="bcards">
-                    {lane?.cards.filter((c) => c.column === col.id).map((card) => <li key={keyOf(card)}>{cell(card, col, lane)}</li>)}
+                    {(() => {
+                      const cards = lane?.cards.filter((c) => c.column === col.id && !archived(c)) ?? [];
+                      const item = (card: Card) => <li key={keyOf(card)}>{cell(card, col, lane)}</li>;
+                      return done.has(col.id) ? <DoneDays t={t} cards={cards} now={now} item={item} /> : cards.map(item);
+                    })()}
                   </ul>
                   {li === 0 && <button className="badd" onClick={() => onAdd(col.id)}>{t('board.col.add')}</button>}
                 </div>
@@ -71,6 +78,12 @@ export function LaneGrid({ t, columns, lanes, counts, cell, onAdd }: { t: T; col
           </Fragment>
         );
       })}
+      {old.length > 0 &&
+        columns.map((col) => (
+          <div key={col.id} className="bcell" data-column={col.id} data-archive-cell>
+            {done.has(col.id) && old.some((c) => c.column === col.id) && <Archive t={t} cards={old.filter((c) => c.column === col.id)} />}
+          </div>
+        ))}
     </div>
   );
 }

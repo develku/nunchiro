@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ChatEvent, Data } from '../src/chat/feed';
 import { buildRows, viewRows } from '../src/chat/model';
-import { sideContext, userView } from '../src/chat/conversation';
+import { sideContext, userView, wakeSplit } from '../src/chat/conversation';
 import { cardHeldRows } from '../src/chat/held';
 import { canonical, cardPlan as planFor, matches, pendingEdit, sessionPath } from '../src/chat/pending';
 import { makeT } from './i18n-tables';
@@ -88,9 +88,10 @@ test('990: a seat\'s brief folds and a worker\'s wake line is a note, not the pe
   const brief = 'You are Lead, a teammate of this user in Nunchiro. This is a standing role: you keep it across conversations.\n\n## Your job\nLead.';
   expect(userView(brief)).toEqual({ text: '', brief });
   expect(userView(`\n\n<pasted_content id="97a3">\n${brief}\n</pasted_content id="97a3">`)).toEqual({ text: '', brief }); // as Claude records a long paste
-  for (const line of ['worker tax done; report says: "STATUS: done"', 'worker review-tax blocked (question)', 'worker a b failed', '1 new messages: run nunchiro agent check']) expect(userView(line)).toEqual({ text: '', wake: line });
-  // What a person types stays theirs: more than one line, or another sentence.
-  expect(userView('worker tax done\nand then?')).toEqual({ text: 'worker tax done\nand then?' });
+  // Ticket 1072: wake lines are drawn by buildRows (wakes row); the lines stay what the pattern knows.
+  for (const line of ['worker tax done; report says: "STATUS: done"', 'worker review-tax blocked (question)', 'worker a b failed', '1 new messages: run nunchiro agent check']) expect(wakeSplit(line)).toEqual({ n: 1, team: 0, rest: '' }); // 1085: team counts the core's team lines
+  // What a person types stays theirs: another sentence.
+  expect(wakeSplit('and then?\nworker tax done')).toBeNull();
   expect(userView('You are right, do it.')).toEqual({ text: 'You are right, do it.' });
 });
 

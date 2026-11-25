@@ -16,7 +16,8 @@ struct Document {
     settings: Option<Spanned<Settings>>,
 }
 
-/// `[settings]` in board.toml. `stale_minutes` is the stale badge threshold (1 to 1440, default 10);
+/// `[settings]` in board.toml. `done_days` (1, 7 or 30, default 7, ticket 1066) is how long a finished card stays in
+/// the Done column before it moves to the Archive. `stale_minutes` is the stale badge threshold (1 to 1440, default 10);
 /// `turn_end_nudge` turns ticket 187's turn-end context line on or off (default true). One struct for both keys:
 /// `deny_unknown_fields` refuses any other key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,11 +25,14 @@ struct Document {
 pub struct Settings {
     pub stale_minutes: u32,
     pub turn_end_nudge: bool,
+    pub done_days: u32,
 }
 impl Settings {
     /// The rule the parser and the writer share.
     pub(super) fn check(&self) -> Result<(), &'static str> {
-        if (1..=1440).contains(&self.stale_minutes) {
+        if !matches!(self.done_days, 1 | 7 | 30) {
+            Err("settings.done_days must be 1, 7 or 30")
+        } else if (1..=1440).contains(&self.stale_minutes) {
             Ok(())
         } else {
             Err("settings.stale_minutes must be 1 to 1440")
@@ -40,6 +44,7 @@ impl Default for Settings {
         Settings {
             stale_minutes: 10,
             turn_end_nudge: true,
+            done_days: 7,
         }
     }
 }
@@ -169,7 +174,8 @@ mod tests {
             settings(&text),
             Ok(Settings {
                 stale_minutes: 5,
-                turn_end_nudge: false
+                turn_end_nudge: false,
+                done_days: 7
             })
         );
         // One key alone keeps the other's default.

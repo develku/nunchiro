@@ -5,8 +5,10 @@ Start a fresh session (not the worker, not yourself) and send it this, filled in
 > Review the diff of branch `<lane-branch>` against `<base>` in `<worktree>` (`git diff <base>...HEAD`). The brief is
 > `<worktree>/BRIEF.md`. Check that the change meets every Acceptance item, stays inside Own, and keeps the project's
 > rules (`AGENTS.md`, `CLAUDE.md`). Read the code around the diff, not only the diff. Run the brief's checks yourself.
-> Report each finding as MUST (blocks the merge: wrong behavior, a failing or missing acceptance check, a file outside
-> Own, a security hole), SHOULD, or NIT, with file and line. Do not edit files. End with `VERDICT: pass` or
+> Then read the user's words, quoted at the top of this prompt and in the brief, and ask: "What did the owner ask or
+> show that I do not see in the result?" Each answer is a finding.
+> Report each finding as MUST (blocks the merge: wrong behavior, a fault the owner will see, a risk to saved data, a
+> failing or missing acceptance check, a file outside Own, a security hole), SHOULD, or NIT, with file and line. Do not edit files. End with `VERDICT: pass` or
 > `VERDICT: fix`, and record it for the files as they are now: `nunchiro task pass "<one line>"` or
 > `nunchiro task changes "<what must change>"`.
 

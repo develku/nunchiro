@@ -31,7 +31,7 @@ async function working(app: Page, core: Core, id: string, shown = false) {
   if (shown) await expect(app.locator('.composer .send')).toHaveAccessibleName('Stop');
 }
 
-test('steer_ctrl_enter_now: Ctrl+Enter breaks the running turn (one Esc) and the text goes in once, now', async ({ app, core }) => {
+test('steer_ctrl_enter_now: Ctrl+Enter puts the text into the running Claude turn, once, with no Esc', async ({ app, core }) => {
   fakeClaude(core);
   const s = core.agent(core.project('p'), 'alpha', 'x');
   await openWindow(app);
@@ -40,14 +40,14 @@ test('steer_ctrl_enter_now: Ctrl+Enter breaks the running turn (one Esc) and the
   await working(app, core, s.id, true);
   await ta.fill('do it differently');
   await ta.press('Control+Enter');
-  // The Stop byte first (Claude Code's send-now interrupts the turn); the text waits behind the broken turn and goes in
-  // once, when the agent is back at its prompt (look 11-17 N0, 607438fc2: Claude back at its box ends the turn).
-  await expect.poll(() => reads(core, s.id).length).toBeGreaterThan(0);
-  expect(reads(core, s.id)[0]).toBe('1b');
+  // Ticket 1056: Claude takes it at its next step (as Claude Code does); the turn is not broken. The core writes it once
+  // the input box shows, or when the turn ends, never twice.
   await expect(ta).toHaveValue('');
+  await app.waitForTimeout(1000);
+  hook(core, s.id, 'Stop');
   const text = Buffer.from('do it differently').toString('hex');
   await expect.poll(() => reads(core, s.id).filter((r) => r.includes(text)).length, { timeout: 15_000 }).toBe(1);
-  expect(reads(core, s.id).filter((r) => r === '1b')).toHaveLength(1);
+  expect(reads(core, s.id).filter((r) => r === '1b')).toHaveLength(0);
 });
 
 // Ticket 371 item 15: Enter now waits in the list; the row's button and Ctrl+Enter on an empty box replace the chip.
@@ -64,23 +64,24 @@ test('steer_default_queue: Enter while working waits in the list, and the row ca
   await expect(queued).toHaveCount(1);
   await app.waitForTimeout(400);
   expect(reads(core, s.id)).toEqual([]);
+  // Ticket 1056: the row goes into the running turn (no Esc) and stays, marked as sent, until the agent shows it.
   await queued.getByRole('button', { name: '1 Send now', exact: true }).click();
-  await expect.poll(() => reads(core, s.id).filter((r) => r === '1b').length).toBe(1);
-  await expect(queued).toHaveCount(0);
+  await expect(queued.first().getByRole('status')).toHaveText('Sent. Waiting for the agent to take it.');
   hook(core, s.id, 'Stop');
   const text = Buffer.from('next step please').toString('hex');
   await expect.poll(() => reads(core, s.id).filter((r) => r.includes(text)).length, { timeout: 15_000 }).toBe(1);
-  // Ctrl+Enter with an empty box does what the row's button does: the top row goes in once, now.
+  // Ctrl+Enter with an empty box does what the row's button does: the top row not yet sent goes in once.
   await working(app, core, s.id, true);
   await ta.fill('and then this');
   await ta.press('Enter');
-  await expect(queued).toContainText('and then this');
+  await expect(queued.last()).toContainText('and then this'); // the first row may still show as sent: the fake writes no transcript
   await expect(ta).toHaveValue('');
   await ta.press('Control+Enter');
-  await expect.poll(() => reads(core, s.id).filter((r) => r === '1b').length).toBe(2);
   hook(core, s.id, 'Stop');
   const then = Buffer.from('and then this').toString('hex');
   await expect.poll(() => reads(core, s.id).filter((r) => r.includes(then)).length, { timeout: 15_000 }).toBe(1);
+  expect(reads(core, s.id).filter((r) => r === '1b')).toHaveLength(0);
+  expect(reads(core, s.id).filter((r) => r.includes(text))).toHaveLength(1); // the first row never went twice
 });
 
 test('steer_refusal_keeps_the_text: a shell cannot be steered, so Ctrl+Enter says so and the text stays in the box', async ({ app, core }) => {
@@ -194,12 +195,12 @@ test('keys_listed: both keys on the Keys page under Chat composer, rebindable by
   const views = app.locator('[data-keys-list] section[data-area="chat-composer"]'); // needs 166: one list, an area section each
   const steer = views.locator('[data-command="composer.steerNow"]'); // the commands' titles are the window's own
   const background = views.locator('[data-command="composer.backgroundSend"]');
-  await expect(steer.locator('td').first().locator('.ktitle')).toHaveText('Send the composer’s text now (stops the running turn)'); // needs 192 (ticket 250 r3)
+  await expect(steer.locator('td').first().locator('.ktitle')).toHaveText('Send the composer’s text now (Claude takes it at its next step; other agents stop the running turn)'); // needs 192 (ticket 250 r3)
   await expect(background.locator('td').first()).toHaveText('Send as new session, stay here'); // retitled (needs 166): a different action from New session…
   await expect(steer.locator('td').nth(1)).toHaveText('⌃↵');
   await expect(background.locator('td').nth(1)).toHaveText('⌘↵');
   // Rebindable: Change, press another chord, Enter saves.
-  await steer.getByRole('button', { name: 'Change Send the composer’s text now (stops the running turn)' }).click();
+  await steer.getByRole('button', { name: 'Change Send the composer’s text now (Claude takes it at its next step; other agents stop the running turn)' }).click();
   await app.keyboard.press('Alt+Digit6');
   await app.keyboard.press('Enter');
   await expect(steer.locator('td').nth(1)).toHaveText('⌥6');

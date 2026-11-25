@@ -40,8 +40,10 @@ impl Harness {
             )
             .unwrap();
         }
+        fs::create_dir_all(home.join("user")).unwrap();
         let core = command
             .arg("serve")
+            .env("HOME", home.join("user")) // ticket 1083: the default worktrees folder lies in it
             .env("NUNCHIRO_HOME", &home)
             .env("CLAUDE_CONFIG_DIR", home.join("claude-data"))
             .env("CODEX_HOME", home.join("codex-data"))

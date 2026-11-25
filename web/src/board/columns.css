@@ -207,3 +207,42 @@
   outline: 2px solid var(--focus-ring);
   outline-offset: -1px;
 }
+
+/* Ticket 1066: the group heads of a Done cell and the Archive fold at the foot of the Done column. */
+.bdh {
+  padding: 2px 2px 0;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.barch {
+  min-width: 0;
+  font-size: calc(var(--fs-11) + 0.5px);
+  color: var(--muted);
+}
+.barch > summary {
+  cursor: pointer;
+}
+.barchq {
+  width: 100%;
+  margin: 6px 0;
+  font: inherit;
+}
+.barchl {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.barchl > li {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.barcht {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}

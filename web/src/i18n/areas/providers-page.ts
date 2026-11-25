@@ -19,7 +19,7 @@ declare module '../index' {
 
 export const en = {
   'providersPage.forAll': 'For every agent',
-  'providersPage.agentDesc': 'New session (⌘T) starts this agent. Agents turned off under Use are not shown.',
+  'providersPage.agentDesc': 'New session ({key}) starts this agent. Agents turned off under Use are not shown.',
   'providersPage.shell': 'Plain shell',
   'providersPage.login': 'Connection & sign-in',
   'providersPage.calm': 'No problem found. A later connection or sign-in problem shows here.',
@@ -34,7 +34,7 @@ export const en = {
 };
 export const ko = {
   'providersPage.forAll': '모든 에이전트 공통',
-  'providersPage.agentDesc': '새 세션(⌘T)이 고르는 에이전트입니다. 사용을 끈 에이전트는 목록에서 빠집니다.',
+  'providersPage.agentDesc': '새 세션({key})이 고르는 에이전트입니다. 사용을 끈 에이전트는 목록에서 빠집니다.',
   'providersPage.shell': '일반 셸',
   'providersPage.login': '연결·로그인',
   'providersPage.calm': '문제가 없습니다. 나중에 연결이나 로그인에 문제가 생기면 여기에 표시됩니다.',
@@ -49,7 +49,7 @@ export const ko = {
 };
 export const ja = {
   'providersPage.forAll': 'すべてのエージェント共通',
-  'providersPage.agentDesc': '新規セッション（⌘T）が選ぶエージェント。使用をオフにしたエージェントは一覧から外れます。',
+  'providersPage.agentDesc': '新規セッション（{key}）が選ぶエージェント。使用をオフにしたエージェントは一覧から外れます。',
   'providersPage.shell': '通常のシェル',
   'providersPage.login': '接続・ログイン',
   'providersPage.calm': '問題はありません。あとで接続やログインに問題があると、ここに表示されます。',
@@ -64,7 +64,7 @@ export const ja = {
 };
 export const zhHans = {
   'providersPage.forAll': '所有代理通用',
-  'providersPage.agentDesc': '新建会话 (⌘T) 时启动此代理。关闭“使用”的代理不在列表中。',
+  'providersPage.agentDesc': '新建会话 ({key}) 时启动此代理。关闭“使用”的代理不在列表中。',
   'providersPage.shell': '普通 Shell',
   'providersPage.login': '连接与登录',
   'providersPage.calm': '没有问题。以后连接或登录出现问题时会显示在这里。',
@@ -79,7 +79,7 @@ export const zhHans = {
 };
 export const zhHant = {
   'providersPage.forAll': '所有代理通用',
-  'providersPage.agentDesc': '「新增工作階段」（⌘T）選擇的代理。關閉「使用」的代理不在清單中。',
+  'providersPage.agentDesc': '「新增工作階段」（{key}）選擇的代理。關閉「使用」的代理不在清單中。',
   'providersPage.shell': '一般 shell',
   'providersPage.login': '連線與登入',
   'providersPage.calm': '沒有問題。之後連線或登入出現問題時會顯示在這裡。',
@@ -94,7 +94,7 @@ export const zhHant = {
 };
 export const es = {
   'providersPage.forAll': 'Para todos los agentes',
-  'providersPage.agentDesc': 'Nueva sesión (⌘T) inicia este agente. Los agentes con Usar desactivado no aparecen.',
+  'providersPage.agentDesc': 'Nueva sesión ({key}) inicia este agente. Los agentes con Usar desactivado no aparecen.',
   'providersPage.shell': 'Shell simple',
   'providersPage.login': 'Conexión e inicio de sesión',
   'providersPage.calm': 'Sin problemas. Aquí aparecerá cualquier problema posterior de conexión o de inicio de sesión.',
@@ -109,7 +109,7 @@ export const es = {
 };
 export const fr = {
   'providersPage.forAll': 'Pour tous les agents',
-  'providersPage.agentDesc': 'L’agent que choisit Nouvelle session (⌘T). Un agent dont Utiliser est désactivé n’y figure pas.',
+  'providersPage.agentDesc': 'L’agent que choisit Nouvelle session ({key}). Un agent dont Utiliser est désactivé n’y figure pas.',
   'providersPage.shell': 'Shell simple',
   'providersPage.login': 'Connexion et identification',
   'providersPage.calm': 'Aucun problème. Un problème de connexion ou d’identification s’affichera ici.',
@@ -124,7 +124,7 @@ export const fr = {
 };
 export const pt = {
   'providersPage.forAll': 'Para todos os agentes',
-  'providersPage.agentDesc': 'O agente que Nova sessão (⌘T) inicia. Um agente com Usar desativado fica de fora.',
+  'providersPage.agentDesc': 'O agente que Nova sessão ({key}) inicia. Um agente com Usar desativado fica de fora.',
   'providersPage.shell': 'Shell simples',
   'providersPage.login': 'Conexão e login',
   'providersPage.calm': 'Sem problemas. Um problema de conexão ou de login aparecerá aqui.',

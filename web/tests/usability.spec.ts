@@ -7,10 +7,10 @@ import path from 'node:path';
 import { contrast } from '../src/themes/derive';
 import { windowTokens } from './window-tokens';
 import { DARK_PICK, LIGHT_PICK } from '../src/themes/nunchiro';
-import { expect, openWindow, REPO, test, agentsZone } from './fixtures';
+import { expect, openWindow, REPO, test, stripOnTop } from './fixtures';
 import { openQuiet } from './tree-seed';
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: these specs read the AGENTS rows, which the default window no longer shows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const shot = (page: Page, name: string) => page.screenshot({ path: path.join(REPO, '.scratch/shots', `v1a58-${name}-${test.info().project.name}.png`) });
 const hex = (rgb: string) => `#${rgb.match(/\d+/g)!.slice(0, 3).map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`;
@@ -89,40 +89,6 @@ test('diff-line-text-visible: Diff line 1 text is visible and left-aligned (chat
   await shot(app, 'diff');
 });
 
-test('agents-list-overflow: more rows than fit scroll, show "+N", and keep the active row in view', async ({ app, core }) => {
-  const p = core.project('many');
-  const ids = Array.from({ length: 16 }, (_, i) => core.shell(p, `row-${String(i).padStart(2, '0')}`).id);
-  await openWindow(app);
-  // D5b: the AGENTS zone is as tall as the window now (no tree above it), so taller rows make the 16 overflow it.
-  await app.evaluate(() => document.documentElement.style.setProperty('--arow', '80px'));
-  const list = app.locator('.agents .alist');
-  const geo = () =>
-    list.evaluate((l) => {
-      const r = l.getBoundingClientRect();
-      const bar = document.querySelector('footer.status')?.getBoundingClientRect();
-      return { bottom: Math.min(r.bottom, bar?.top ?? innerHeight), top: r.top, scroll: l.scrollHeight > l.clientHeight };
-    });
-  const g = await geo();
-  expect(g.scroll, 'the list scrolls rather than running under the status bar').toBe(true);
-  // The window opens the first session: its row is in view and the rows cut off below show as "+N".
-  await expect(app.locator(`.ar[data-agent="${ids[0]}"]`)).toHaveAttribute('aria-current', 'true');
-  await expect(app.locator('.agents .amore')).toHaveText(/^\+\d+$/);
-  await shot(app, 'agents');
-  // Open a row scrolled out of sight (as the tree or palette would): it scrolls into the list's visible box.
-  await app.locator(`.ar[data-agent="${ids[14]}"]`).evaluate((e) => (e as HTMLElement).click());
-  await expect(app.locator('.tab[aria-selected="true"]')).toContainText('row-14');
-  await expect
-    .poll(async () => {
-      const r = (await app.locator(`.ar[data-agent="${ids[14]}"]`).boundingBox())!;
-      const now = await geo();
-      return r.y >= now.top - 1 && r.y + r.height <= now.bottom + 1;
-    })
-    .toBe(true);
-  // Scrolled to the end, nothing is left below: the cue goes.
-  await list.evaluate((l) => l.scrollTo(0, l.scrollHeight));
-  await expect(app.locator('.agents .amore')).toHaveCount(0);
-});
-
 // V1A-60b: the empty strip draws nothing (answer-strip.spec.ts), so its text is measured with one item waiting.
 test('answer-strip-contrast: strip text is 12 px at 4.5:1 in light and dark', async ({ app, core }) => {
   const asks = core.agent(core.project('demo'), 'asks', 'go');
@@ -135,16 +101,13 @@ test('answer-strip-contrast: strip text is 12 px at 4.5:1 in light and dark', as
   await shot(app, 'strip');
 });
 
-test('meta-text-contrast: AGENTS meta, strip card meta and palette meta reach 4.5:1 in light and dark', async ({ app, core }) => {
+test('meta-text-contrast: strip card meta and palette meta reach 4.5:1 in light and dark', async ({ app, core }) => {
   const p = core.project('demo');
   const asks = core.agent(p, 'asks', 'go');
   await openWindow(app);
   fs.writeFileSync(path.join(asks.cwd, 'go'), '');
   await expect(app.locator('#waiting-strip .qcard')).toHaveCount(1, { timeout: 15_000 });
-  const low = await lowContrast(app, ['.ar .s', '#waiting-strip .qcard .dim']);
-  // A hovered row sits on --g2, the darkest surface this meta text meets.
-  await app.locator('.ar').first().hover();
-  low.push(...(await lowContrast(app, ['.ar:hover .s'])));
+  const low = await lowContrast(app, ['#waiting-strip .qcard .dim']);
   await app.keyboard.press('Meta+k');
   // palette-groups: the first li is a group header (li.gh). Look 1117 v6r: a session row shows no id, so a command's row.
   const first = app.locator('.palette li[data-command]:not([data-command^="session.open."])').first();

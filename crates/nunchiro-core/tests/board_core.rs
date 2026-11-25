@@ -101,6 +101,16 @@ fn board_places_one_labelled_card_per_session_using_queue_attention() {
     queue
         .observe("review", "Stop", &serde_json::json!({}), "hook", 300)
         .unwrap();
+    // Ticket 1090: a session is working only in a turn (its prompt went out, no Stop came yet).
+    queue
+        .observe(
+            "working",
+            "UserPromptSubmit",
+            &serde_json::json!({}),
+            "hook",
+            200,
+        )
+        .unwrap();
     queue.close("failed", true).unwrap();
     // B14 (ticket 991): only a turn in progress goes stale.
     queue
@@ -371,6 +381,7 @@ fn board_card_edit_keeps_a_link_whose_session_is_gone() {
 fn board_drag_holds_across_activity_and_restart_but_releases_on_state_change() {
     let home = Home::new();
     let mut s = session("dragged");
+    s.attention.working = true; // ticket 1090: in a turn, so its own column is Working
     let moved = home.request(
         std::slice::from_ref(&s),
         Request::BoardMove {
@@ -614,6 +625,8 @@ fn board_future_seen_store_stamp_is_reset_without_hiding_unread_turn() {
     let board = home.snapshot(std::slice::from_ref(&s));
     assert_eq!(board.cards[0]["column"], "review");
     disk["seen"].as_object_mut().unwrap().remove("s");
+    // Ticket 1066: the card left Done for Review, so its done_at stamp goes with it.
+    disk.as_object_mut().unwrap().remove("done_at");
     let repaired: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     assert_eq!(repaired, disk, "only the stale seen marker should change");
     let stable = fs::read(&path).unwrap();
@@ -652,7 +665,8 @@ fn board_moving_a_held_session_preserves_future_record_fields() {
 #[test]
 fn board_future_held_completion_releases_the_card_without_other_changes() {
     let home = Home::new();
-    let s = session("s");
+    let mut s = session("s");
+    s.attention.working = true; // ticket 1090: in a turn, so its own column is Working
     home.request(
         std::slice::from_ref(&s),
         Request::BoardMove {

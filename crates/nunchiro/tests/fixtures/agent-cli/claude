@@ -35,8 +35,20 @@ def box(text=''):
     status='--fixture-status-line' in sys.argv
     if CODEX: return '\u203a '+text+'\n\n  fixture-model default \u00b7 ~/fixture'+('\n  45.2% context left' if status else '')
     rule='\u2500'*os.get_terminal_size(1).columns
+    # Ticket 1121: a real idle 2.1.331 Builder in auto mode as the core read its screen (11-25): the bottom rule lost,
+    # the footer in pieces.
+    if '--fixture-auto-footer' in sys.argv:
+        return rule+'\n\u276f '+text+'\n\n\n         \u25d4 30%             2      8\n                  (shift+tab to cycle) \u00b7 \u2190 2 agents'
     return rule+'\n\u276f '+text+'\n'+rule+('\n  45.2% ctx \u00b7 2.1.310 \u00b7 3.5k tokens\n  \u23f5\u23f5 auto mode on' if status else '')
 if PASTE: print('\x1b[?2004h', end='', flush=True)  # bracketed paste on, like Claude Code and Codex
+if '--fixture-ticking-footer' in sys.argv:
+    # Ticket 1121: an idle agent whose output is never quiet (an animated footer row): a cursor save and restore every
+    # 50 ms changes no cell.
+    import threading, time
+    def tick():
+        while True:
+            time.sleep(0.05); sys.stdout.write('\x1b7\x1b8'); sys.stdout.flush()
+    threading.Thread(target=tick, daemon=True).start()
 print('FIXTURE_READY', flush=True)
 mode='dialog' if '--fixture-dialog' in sys.argv else 'permission' if '--fixture-permission' in sys.argv else 'question' if '--fixture-question' in sys.argv else 'ready'
 if mode == 'dialog':

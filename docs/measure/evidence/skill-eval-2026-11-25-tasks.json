@@ -1,0 +1,35 @@
+{
+ "mode": "tasks",
+ "model": "sonnet",
+ "claudeVersion": "2.1.332",
+ "startedAt": "2026-11-25T08:39:29.949Z",
+ "evals": 2,
+ "durationSeconds": 16,
+ "costUsd": 0.115771,
+ "partial": false,
+ "partialReason": null,
+ "aggregates": {
+  "casesTotal": 1,
+  "casesPassed": 0,
+  "overallScore": 0.2
+ },
+ "cases": [
+  {
+   "name": "task-worker",
+   "with_skill": 0.2,
+   "baseline": 0.0,
+   "delta": 0.2,
+   "graders": [
+    {
+     "started": true,
+     "prompted": false,
+     "waited": false,
+     "read": false,
+     "answer": false,
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  }
+ ]
+}

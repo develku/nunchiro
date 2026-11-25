@@ -63,7 +63,7 @@ export const en = {
   'bprefs.uaDesc': "The name this browser gives to websites. Change it when a site shows the wrong version of a page. Pages opened after the change use the new name.",
   'bprefs.uaDefault': "Default",
   'bprefs.sites': "Site permissions",
-  'bprefs.sitesDesc': "Your own browser only. Add a site, then turn its camera or microphone on or off. When off, the site is refused without a question. When on, Nunchiro still asks you each time. The setting applies to the site in the address bar, not to that site inside another page. In an agent space, a camera or microphone request pauses the agent and asks you.",
+  'bprefs.sitesDesc': "Your own browser only. Add a site, then turn its camera or microphone on or off. When off, the site is refused without a question. When on, Nunchiro does not refuse, but macOS (WebKit) still asks you once per page, so On does not mean \"never ask\". The setting applies to the site in the address bar, not to that site inside another page. In an agent space, a camera or microphone request pauses the agent and asks you.",
   'bprefs.site': "Site",
   'bprefs.camera': "Camera",
   'bprefs.microphone': "Microphone",

@@ -371,7 +371,7 @@ const BEFORE: [string, Record<string, string | number> | undefined, string][] = 
   ["settings.appearance.symbolsOnly", { font: "FONT" }, "FONT is the only font in the list, so it stays; pick another font first."],
   ["settings.appearance.symbolsTooLong", { font: "FONT" }, "Adding FONT would go over the 200-character limit of the font list; shorten it in Custom… first."],
   ["settings.appearance.tab", undefined, "tab"],
-  ["settings.appearance.termDefault", undefined, "Default 12 px · ⌘= and ⌘− also change it."],
+  ["settings.appearance.termDefault", undefined, "Default 12 px"],
   ["settings.appearance.sampleAsk", undefined, "Fix the failing test in api/"], // Q5-7 (ticket 991)
   ["settings.appearance.sampleDone", undefined, "Done: 3 files changed, tests pass."],
   ["settings.appearance.titleNote", undefined, "When the title bar is hidden, Edit layout and Show title bar are still in the command palette."],

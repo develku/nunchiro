@@ -12,8 +12,12 @@ mod outbox; // ticket 1002 lane 2
 mod skill; // V2.5-31
 mod token; // ticket 573
 // v1b-14
+#[path = "../../../app/src-tauri/src/passwd.rs"]
+mod passwd; // ticket 1082 round 2: the account's home, which HOME cannot move
 mod schedule; // ticket 993
 mod task; // ticket 990 slice g
+mod update; // ticket 1082
+mod update_claims; // ticket 1082 round 3: shared with the app
 mod widget;
 mod worktree;
 use nunchiro_core::{
@@ -38,6 +42,9 @@ const BUILD: Option<&str> = option_env!("NUNCHIRO_BUILD");
 /// `scripts/build-release.sh` stamps each official release. It orders cores for `serve update` as `BUILD` does, but it
 /// is not the mark of an RC: nothing is refused on the owner's home, where the official app's core lives.
 const RELEASE: Option<&str> = option_env!("NUNCHIRO_RELEASE");
+/// Ticket 1082: this binary's git commit (build.rs). A core of another commit from this same install is replaced by
+/// `serve update`, so a build swapped in place takes over the core without a stamp.
+const COMMIT: Option<&str> = option_env!("NUNCHIRO_GIT_SHA");
 
 fn main() {
     if let Err(e) = run() {
@@ -51,15 +58,34 @@ fn main() {
     }
 }
 fn home() -> Result<PathBuf, String> {
-    let path = env::var_os("NUNCHIRO_HOME")
-        .map(PathBuf::from)
-        .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join(".nunchiro")))
-        .ok_or("HOME is not set")?;
+    let path = match env::var_os("NUNCHIRO_HOME") {
+        Some(set) => PathBuf::from(set),
+        None => default_home(
+            cfg!(debug_assertions),
+            &env::current_exe().map_err(|e| e.to_string())?,
+            env::var_os("HOME"),
+        )?,
+    };
     if path.is_absolute() {
         Ok(path)
     } else {
         Err("NUNCHIRO_HOME must be absolute".into())
     }
+}
+/// The home when NUNCHIRO_HOME is unset: `~/.nunchiro` for a release build. Ticket 1130 (11-20 incident: a debug build
+/// from a worktree ran on the owner's `~/.nunchiro` and tried to replace the owner's core): a debug build uses
+/// `nunchiro-home` in the folder of its executable (`target/debug`) instead.
+fn default_home(
+    debug: bool,
+    exe: &Path,
+    user_home: Option<std::ffi::OsString>,
+) -> Result<PathBuf, String> {
+    if debug {
+        return Ok(exe.parent().unwrap_or(exe).join("nunchiro-home"));
+    }
+    user_home
+        .map(|h| PathBuf::from(h).join(".nunchiro"))
+        .ok_or_else(|| "HOME is not set".into())
 }
 fn run() -> Result<(), String> {
     let mut args: Vec<String> = env::args().skip(1).collect();
@@ -98,14 +124,17 @@ fn run() -> Result<(), String> {
         if let Some(build) = BUILD.or(RELEASE).and_then(|b| b.parse().ok()) {
             let _ = server::BUILD.set(build);
         }
+        if let Some(commit) = COMMIT {
+            let _ = server::COMMIT.set(commit.into());
+        }
         return server::serve(&home);
     }
     if args == ["--help"] || args.is_empty() {
         println!(
-            "nunchiro serve [stop [--yes]]\nnunchiro serve status\nnunchiro session start --kind claude|codex|shell --project DIR [--worktree] [--label TEXT] [--model MODEL] [--effort LEVEL] [--resume ID] [--account LABEL] [--env KEY=VALUE]... [-- ARGS...]\nnunchiro session start --agent acp:NAME --project DIR [--worktree] [--label TEXT] [--resume ID]\nnunchiro session list|read|send-text|send-keys|close|label|resize\nnunchiro snapshot --json\nnunchiro widget new NAME\nnunchiro widget allow NAME --read|--act\nnunchiro permission-answers on|off [--project DIR]\nNUNCHIRO_HOME defaults to ~/.nunchiro; settings.json supports disable_hook_injection and worktrees_dir.\nread emits JSON byte replay; send-text writes exact text, send-keys enter submits.\nWaiting detection, queue and HTTP are reserved for later tickets."
+            "nunchiro serve [stop [--yes]]\nnunchiro serve status\nnunchiro session start --kind claude|codex|shell --project DIR [--worktree] [--label TEXT] [--model MODEL] [--effort LEVEL] [--resume ID] [--account LABEL] [--env KEY=VALUE]... [-- ARGS...]\nnunchiro session start --agent acp:NAME --project DIR [--worktree] [--label TEXT] [--resume ID]\nnunchiro session list|read|send-text|send-keys|close|label|resize\nnunchiro snapshot --json\nnunchiro widget new NAME\nnunchiro widget allow NAME --read|--act\nnunchiro permission-answers on|off [--project DIR]\nNUNCHIRO_HOME defaults to ~/.nunchiro (a debug build: nunchiro-home beside its binary); settings.json supports disable_hook_injection and worktrees_dir.\nread emits JSON byte replay; send-text writes exact text, send-keys enter submits.\nWaiting detection, queue and HTTP are reserved for later tickets."
         );
         println!(
-            "nunchiro agent start|prompt|send|wait|read|get|list|send-keys|cancel|ask|reply|check\nnunchiro events [--project DIR] [--since ID]\nnunchiro agent thread read THREAD\nnunchiro worktree create|open|list|remove\nnunchiro layout <command> (see nunchiro layout --help)\nnunchiro session open --project DIR -- COMMAND\nnunchiro serve restart\nnunchiro serve update\nnunchiro diagnose\nnunchiro account list [--json]\nnunchiro account codex-reset [--reason TEXT] [--account ID] [--yes]\nnunchiro browser open|goto|snapshot|click|fill|select|press|scroll|tabs|tab|handoff ARGS (inside a session)"
+            "nunchiro agent start|prompt|send|wait|read|get|list|send-keys|cancel|ask|reply|check\nnunchiro events [--project DIR] [--since ID]\nnunchiro agent thread read THREAD\nnunchiro worktree create|open|list|remove\nnunchiro layout <command> (see nunchiro layout --help)\nnunchiro session open --project DIR -- COMMAND\nnunchiro serve restart\nnunchiro serve update\nnunchiro diagnose\nnunchiro account list [--json]\nnunchiro account codex-reset [--reason TEXT] [--account ID] [--yes]\nnunchiro account leads-any on|off\nnunchiro browser open|goto|snapshot|click|fill|select|press|scroll|tabs|tab|handoff ARGS (inside a session)"
         );
         println!(
             "nunchiro --machine <m> ...\nnunchiro machine status [<label>]\nnunchiro --version\nnunchiro hold <session-id> (internal: a session's PTY holder, started by the core)"
@@ -124,6 +153,7 @@ fn run() -> Result<(), String> {
         println!("{}", task::USAGE); // ticket 990 slice g
         println!("{}", schedule::USAGE); // ticket 993
         println!("{}", outbox::USAGE); // ticket 1002 lane 2
+        println!("{}", update::USAGE); // ticket 1082
         return Ok(());
     }
     // V2.5-31: reads only the binary and the user's override folder; no core needed.
@@ -139,6 +169,12 @@ fn run() -> Result<(), String> {
         && args.get(1).map(String::as_str) == Some("home-lock")
     {
         hook::home_lock(&home, &args[2..]);
+    }
+    // Ticket 1130 S1: every Claude session's outward hook, decided here without the core.
+    if args.first().map(String::as_str) == Some("hook")
+        && args.get(1).map(String::as_str) == Some("outward")
+    {
+        hook::outward(&args[2..]);
     }
     // Ticket 1036: Claude's status line command (the per-session settings name it); never fails the line.
     if args.first().map(String::as_str) == Some("hook")
@@ -406,6 +442,9 @@ fn run() -> Result<(), String> {
     if args == ["serve", "status"] {
         return serve_status(&home);
     }
+    if args.first().map(String::as_str) == Some("update") {
+        return update::run(&home, &args[1..]);
+    }
     let request = parse(&args)?;
     let stop = matches!(request, Request::Stop);
     if !stop {
@@ -570,7 +609,7 @@ fn update_core(home: &Path, build: Option<&str>, me: &Path) -> Result<&'static s
         }
         None => serde_json::Value::Null,
     };
-    Ok(if !core_is_older(build, &started, me) {
+    Ok(if !core_is_older(build, COMMIT, &started, me) {
         "current"
     } else {
         let holder_floor = nunchiro_core::holder::frame::MIN_COMPATIBLE;
@@ -581,6 +620,12 @@ fn update_core(home: &Path, build: Option<&str>, me: &Path) -> Result<&'static s
                 "replaced"
             }
             Err(e) if e == server::EXIT_BUSY => "kept",
+            // Ticket 1110: a core already winding down (another `serve update`'s exit; the app runs one at each page
+            // load) ran nothing. Wait for it to go and for the next core, as after an exit of our own.
+            Err(e) if e == server::NOT_SERVED => {
+                start_after_exit(home, None, old.as_deref())?;
+                "replaced"
+            }
             // shortcut: a core from before `exit_if_idle` can only be judged from what it left on disk, with a moment
             // between the read and the exit. It goes away with the first update past this build.
             Err(e) if e.contains("unknown variant") => {
@@ -612,16 +657,25 @@ fn read_json(path: &Path) -> Result<serde_json::Value, String> {
         Err(e) => Err(format!("{}: {e}", path.display())),
     }
 }
-/// Whether the running core (its `core.start.json`) is an older build of this same install: a binary stamped `mine`,
-/// at path `me`. An update keeps the path; any other core (the owner's, a cargo build) is never this binary's to replace.
-fn core_is_older(mine: Option<&str>, started: &serde_json::Value, me: &Path) -> bool {
-    let Some(mine) = mine.and_then(|m| m.parse::<u64>().ok()) else {
-        return false;
-    };
+/// Whether the running core (its `core.start.json`) is an older build of this same install: a binary at path `me`
+/// stamped `mine` (a higher stamp), or of another git commit `commit` (ticket 1082: a build swapped in place, stamped or
+/// not). Two stamps that say this binary is the lower one are a downgrade and replace nothing. An update keeps the path;
+/// any other core (the owner's, a cargo build) is never this binary's to replace.
+fn core_is_older(
+    mine: Option<&str>,
+    commit: Option<&str>,
+    started: &serde_json::Value,
+    me: &Path,
+) -> bool {
     let same_install = started["exe"]
         .as_str()
         .is_some_and(|exe| same_file(Path::new(exe), me));
-    same_install && started["build"].as_u64().unwrap_or(0) < mine
+    let core = started["build"].as_u64();
+    match mine.and_then(|m| m.parse::<u64>().ok()) {
+        Some(mine) if core.is_some_and(|c| c > mine) => false,
+        Some(mine) if core.unwrap_or(0) < mine => same_install,
+        _ => same_install && commit.is_some_and(|c| started["commit"].as_str() != Some(c)),
+    }
 }
 /// Links resolved; a path that cannot be resolved is the same as nothing.
 fn same_file(a: &Path, b: &Path) -> bool {
@@ -987,6 +1041,9 @@ fn account(home: &Path, args: &[String]) -> Result<(), String> {
     if args.first().map(String::as_str) == Some("codex-reset") {
         return codex_reset(home, &args[1..]);
     }
+    if args.first().map(String::as_str) == Some("leads-any") {
+        return leads_any(home, &args[1..]);
+    }
     let json = match args {
         [list] if list == "list" => false,
         [list, flag] if list == "list" && flag == "--json" => true,
@@ -1009,6 +1066,34 @@ fn account(home: &Path, args: &[String]) -> Result<(), String> {
         };
         let (agent, folder) = (agent_name(a.agent), a.folder.display());
         println!("{agent}\t{}\t{}\t{folder}\t{signed_in}", a.id, a.label);
+    }
+    Ok(())
+}
+/// Owner 2026-11-25: `nunchiro account leads-any on|off`, "Leads may use any of my accounts". The owner's write; from
+/// inside a session `on` waits for the owner's card and `off` is refused (the core's owner-only settings write).
+fn leads_any(home: &Path, args: &[String]) -> Result<(), String> {
+    let on = match args {
+        [w] if w == "on" => true,
+        [w] if w == "off" => false,
+        _ => return Err("usage: nunchiro account leads-any on|off".into()),
+    };
+    ensure_core(home)?;
+    let value = if on {
+        serde_json::Value::Bool(true)
+    } else {
+        serde_json::Value::Null
+    };
+    let patch = LifetimePatch {
+        features: Some([(nunchiro_core::accounts::LEADS_ANY.to_string(), value)].into()),
+        ..Default::default()
+    };
+    match call(home, Request::QuitSettings { patch })? {
+        Reply::Waiting { .. } => println!("{WAITING}"),
+        Reply::QuitSettings { .. } => println!(
+            "leads may use any of your accounts: {}",
+            if on { "on" } else { "off" }
+        ),
+        _ => return Err("unexpected reply".into()),
     }
     Ok(())
 }
@@ -1067,6 +1152,10 @@ fn parse(args: &[String]) -> Result<Request, String> {
             keys: keys.iter().map(|s| (*s).into()).collect(),
             seen: vec![],
             composer: false,
+        }),
+        ["session", "close", id, "--why", why] => Ok(Request::SessionTidy {
+            id: (*id).into(),
+            why: (*why).into(),
         }),
         ["session", "close", id] => Ok(Request::Close { id: (*id).into() }),
         ["session", "label", id, label] => Ok(Request::Label {
@@ -1172,6 +1261,21 @@ fn parse(args: &[String]) -> Result<Request, String> {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn the_default_home_is_the_user_one_for_release_and_beside_the_binary_for_debug() {
+        let exe = Path::new("/w/target/debug/nunchiro");
+        let user = Some(std::ffi::OsString::from("/Users/u"));
+        assert_eq!(
+            default_home(false, exe, user.clone()).unwrap(),
+            Path::new("/Users/u/.nunchiro")
+        );
+        assert_eq!(
+            default_home(true, exe, user).unwrap(),
+            Path::new("/w/target/debug/nunchiro-home")
+        );
+        assert!(default_home(false, exe, None).is_err());
+    }
+
+    #[test]
     fn recorded_link_to_this_binary_starts_this_binary() {
         let home = std::env::temp_dir().join(format!("nunchiro-w36-link-{}", std::process::id()));
         std::fs::create_dir_all(&home).unwrap();
@@ -1259,7 +1363,8 @@ mod tests {
     #[test]
     fn core_is_older_compares_build_stamps() {
         let me = std::env::current_exe().unwrap();
-        let older = |mine, started: &serde_json::Value| super::core_is_older(mine, started, &me);
+        let older =
+            |mine, started: &serde_json::Value| super::core_is_older(mine, None, started, &me);
         let core = |build: serde_json::Value| serde_json::json!({"exe": me, "build": build});
         assert!(older(Some("20"), &serde_json::json!({"exe": me})));
         assert!(older(Some("20"), &core(19.into())));
@@ -1269,13 +1374,44 @@ mod tests {
         assert!(!older(Some("20"), &serde_json::Value::Null));
     }
 
+    // Ticket 1082: a build swapped in place replaces a core of another commit of this same install, stamped or not; two
+    // stamps that make this binary the lower one are a downgrade and replace nothing.
+    #[test]
+    fn core_is_older_replaces_another_commit_of_this_install() {
+        let me = std::env::current_exe().unwrap();
+        let older = |mine, started: serde_json::Value| {
+            super::core_is_older(mine, Some("bbb"), &started, &me)
+        };
+        assert!(older(None, serde_json::json!({"exe": me, "commit": "aaa"})));
+        assert!(older(None, serde_json::json!({"exe": me})));
+        assert!(!older(
+            None,
+            serde_json::json!({"exe": me, "commit": "bbb"})
+        ));
+        assert!(older(
+            Some("20"),
+            serde_json::json!({"exe": me, "build": 20, "commit": "aaa"})
+        ));
+        assert!(!older(
+            Some("20"),
+            serde_json::json!({"exe": me, "build": 21, "commit": "aaa"})
+        ));
+    }
+
     // F24 r2: an RC CLI run by hand reaches the owner's home; that unstamped core is not an older build of this install.
     #[test]
     fn core_is_older_leaves_another_install_alone() {
         let me = std::env::current_exe().unwrap();
         for exe in ["/bin/sh", "/no/such/nunchiro"] {
             let other = serde_json::json!({"exe": exe});
-            assert!(!super::core_is_older(Some("20"), &other, &me), "{exe}");
+            assert!(
+                !super::core_is_older(Some("20"), None, &other, &me),
+                "{exe}"
+            );
+            assert!(
+                !super::core_is_older(None, Some("abc"), &other, &me),
+                "{exe}"
+            );
         }
     }
 
@@ -1330,6 +1466,50 @@ mod tests {
         older_core.join().unwrap();
         assert_eq!(word, Ok("replaced"));
         drop(listener);
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    // Ticket 1110: two `serve update`s overlap (the app runs one at each page load). The second meets the old core
+    // winding down for the first's exit; it waits for the next core instead of failing the install.
+    #[test]
+    fn update_waits_out_a_core_already_winding_down() {
+        use std::io::{BufRead, BufReader, Write};
+        let home = std::env::temp_dir().join(format!("nunchiro-1110-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
+        let me = std::env::current_exe().unwrap();
+        let write = |name: &str, text: String| std::fs::write(home.join(name), text).unwrap();
+        write("core.lock", String::new());
+        write("core.token", "old".into());
+        write(
+            "core.start.json",
+            serde_json::json!({"exe": me, "build": 19}).to_string(),
+        );
+        let sock = home.join("core.sock");
+        let old_core = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        let (dir, sock2) = (home.clone(), sock.clone());
+        let cores = std::thread::spawn(move || {
+            let mut line = String::new();
+            while line.is_empty() {
+                let (mut peer, _) = old_core.accept().unwrap();
+                BufReader::new(&peer).read_line(&mut line).unwrap();
+                if !line.is_empty() {
+                    writeln!(peer, r#"{{"Err":"{}"}}"#, server::NOT_SERVED).unwrap();
+                }
+            }
+            std::thread::sleep(Duration::from_millis(200));
+            drop(old_core);
+            std::fs::remove_file(&sock2).unwrap();
+            // The first update's next core comes up.
+            std::fs::write(dir.join("core.token"), "new").unwrap();
+            std::os::unix::net::UnixListener::bind(&sock2).unwrap()
+        });
+
+        let word = super::update_core(&home, Some("20"), &me);
+
+        let next_core = cores.join().unwrap();
+        assert_eq!(word, Ok("replaced"));
+        drop(next_core);
         std::fs::remove_dir_all(&home).unwrap();
     }
 

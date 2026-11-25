@@ -1,21 +1,20 @@
-// V1A-59 GUI session lifecycle: start from the palette, a project's "+" and the empty state; stop from the tab, the
-// AGENTS row and the palette through the core's `close`; AGENTS order and Clear done; a closed session read-only.
+// V1A-59 GUI session lifecycle: start from the palette, a project's "+" and the empty state; stop from the tab and the
+// palette through the core's `close`; a closed session read-only.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { ownerOk } from './acp-fakes';
-import { expect, openWindow, REPO, test, type Core, agentsZone, showComposer } from './fixtures';
+import { expect, openWindow, REPO, test, type Core, stripOnTop, showComposer } from './fixtures';
 import { openQuiet } from './tree-seed';
 import { append, chat, rec, test as chatTest } from './fixtures/chat/harness';
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: these specs read the AGENTS rows, which the default window no longer shows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 type Snap = { id: string; kind: string; project: string; state: string; label: string };
 const snap = (core: Core) => core.cli('snapshot', '--json').sessions as Snap[];
 const stateOf = (core: Core, id: string) => snap(core).find((s) => s.id === id)?.state;
 const shot = (page: Page, name: string) => page.screenshot({ path: path.join(REPO, '.scratch/shots', `v1a59-${name}-${test.info().project.name}.png`) });
-const agentIds = (page: Page) => page.locator('.ar').evaluateAll((els) => els.map((e) => e.getAttribute('data-agent')));
 
 async function palette(page: Page, id: string) {
   await page.keyboard.press('Meta+KeyK');
@@ -113,13 +112,13 @@ test('session-start-project-plus: "+" on a project row starts a session in that 
   openQuiet(core); // V2-9a: quiet projects start folded
   await openWindow(app);
   // Shown with its row: hovered, or by Tab from the row. Showing it moves nothing (needs 26).
-  const still = () => app.$$eval('.grp[data-project="beta"] .head .r, .tab, .ar .s', (els) => els.map((e) => JSON.stringify(e.getBoundingClientRect())));
+  const still = () => app.$$eval('.grp[data-project="beta"] .head .r, .tab', (els) => els.map((e) => JSON.stringify(e.getBoundingClientRect())));
   const before = await still();
   await app.locator('.grp[data-project="beta"] .head .n').hover();
   expect(await still()).toEqual(before);
   await app.locator('.tab').first().hover();
   expect(await still()).toEqual(before);
-  await app.locator('.ar').first().hover();
+  await app.locator('button.row.wt2[data-menu-session]').first().hover();
   expect(await still()).toEqual(before);
   await app.locator('.grp[data-project="beta"] .head .n').hover();
   await app.locator('.grp[data-project="beta"]').getByRole('button', { name: 'New session in beta' }).click();
@@ -152,9 +151,9 @@ test('empty-state-button: the empty state button opens the start flow by click a
   await expect(dlg.getByRole('button', { name: /^Browse folder/ })).toBeFocused();
 });
 
-test('session-stop-tab-agents-palette: each of the three entry points stops a session through close', async ({ app, core }) => {
+test('session-stop-tab-palette: each of the two entry points stops a session through close', async ({ app, core }) => {
   const p = core.project('demo');
-  const [one, two, three] = ['one', 'two', 'three'].map((l) => core.shell(p, l).id);
+  const [one, three] = ['one', 'three'].map((l) => core.shell(p, l).id);
   const agent = core.agent(p, 'agent', 'never').id;
   await openWindow(app);
   // Tab: its menu (owner 11-17: a tab has no Stop button). An idle shell has no turn to stop: Close session ends it at once (4bf0a62d4).
@@ -162,14 +161,6 @@ test('session-stop-tab-agents-palette: each of the three entry points stops a se
   await expect(app.getByRole('menu', { name: 'Actions' }).getByRole('menuitem', { name: 'Stop this session' })).toHaveCount(0);
   await app.getByRole('menu', { name: 'Actions' }).getByRole('menuitem', { name: 'Close session' }).click();
   await expect.poll(() => stateOf(core, one)).toBe('closed');
-  // AGENTS row.
-  // By keyboard: Tab from the row reaches its Stop.
-  await app.locator(`[data-agent="${two}"]`).focus();
-  // WebKit, like Safari, moves to buttons on Option+Tab.
-  await app.keyboard.press(test.info().project.name === 'webkit' ? 'Alt+Tab' : 'Tab');
-  await expect(app.getByRole('button', { name: 'Stop two' })).toBeFocused();
-  await app.keyboard.press('Enter');
-  await expect.poll(() => stateOf(core, two)).toBe('closed');
   // Palette: the current session.
   await app.locator(`.tab[data-tab="${three}"]`).click();
   await palette(app, 'session.close');
@@ -187,67 +178,6 @@ test('session-stop-tab-agents-palette: each of the three entry points stops a se
   await ask.getByRole('button', { name: 'Stop' }).click();
   await expect(ask).toHaveCount(0);
   await expect.poll(() => stateOf(core, agent)).toBe('closed');
-});
-
-test('agents-order-clear-done: running first; Clear done hides closed rows; no reorder while hovered', async ({ app, core }) => {
-  const p = core.project('demo');
-  const a = core.shell(p, 'a').id;
-  const b = core.shell(p, 'b', '/bin/sh', '-c', 'read x; exit 0').id;
-  const c = core.shell(p, 'c').id;
-  const d = core.shell(p, 'd').id;
-  core.cli('session', 'close', a);
-  await openWindow(app);
-  await expect.poll(() => agentIds(app)).toEqual([b, c, d, a]);
-  // Hovered, a session that ends keeps its place.
-  await app.locator(`[data-agent="${c}"]`).hover();
-  core.cli('session', 'send-text', b, 'x\r');
-  await expect(app.locator(`[data-agent="${b}"] .st`)).toHaveAttribute('data-s', 'done');
-  await app.waitForTimeout(300);
-  expect(await agentIds(app)).toEqual([b, c, d, a]);
-  // Left, running sessions come first.
-  await app.mouse.move(900, 400);
-  await expect.poll(() => agentIds(app)).toEqual([c, d, b, a]);
-  // A row with no Stop (ended) moves nothing when hovered.
-  const texts = () => app.$$eval('.ar .s', (els) => els.map((e) => JSON.stringify(e.getBoundingClientRect())));
-  const rest = await texts();
-  await app.locator(`[data-agent="${b}"]`).hover();
-  expect(await texts()).toEqual(rest);
-  await app.mouse.move(900, 400);
-  // Clear done hides the closed and exited rows; they stay in the palette.
-  await app.locator(`[data-agent="${c}"]`).hover();
-  await shot(app, 'agents');
-  await app.getByRole('button', { name: 'Clear done' }).click();
-  await expect.poll(() => agentIds(app)).toEqual([c, d]);
-  // The focused Clear done went with the rows: the hold ends once the pointer leaves, focus is not left stuck.
-  await app.mouse.move(900, 400);
-  core.cli('session', 'close', c);
-  await expect.poll(() => agentIds(app)).toEqual([d, c]);
-  await app.keyboard.press('Meta+KeyK');
-  await expect(app.getByRole('dialog', { name: 'Command palette' }).locator(`[data-command="session.open.${a}"]`)).toBeVisible();
-  await app.keyboard.press('Escape');
-  // Kept after a reload.
-  await app.reload();
-  await expect(app.getByRole('status').filter({ hasText: /^Connected$/ })).toBeVisible();
-  await expect.poll(() => agentIds(app)).toEqual([d, c]);
-});
-
-test('agents-more-count: "+K" equals the rows cut off and follows a row height change', async ({ app, core }) => {
-  const p = core.project('many');
-  Array.from({ length: 16 }, (_, i) => core.shell(p, `row-${String(i).padStart(2, '0')}`));
-  await openWindow(app);
-  // D5b: a zone of its own is as tall as the window now, so taller rows make the 16 overflow it.
-  await app.evaluate(() => document.documentElement.style.setProperty('--arow', '80px'));
-  const cut = () =>
-    app.locator('.agents .alist').evaluate((l) => {
-      const bottom = l.getBoundingClientRect().bottom;
-      return [...l.querySelectorAll('.ar')].filter((e) => e.getBoundingClientRect().bottom > bottom + 0.5).length;
-    });
-  await expect.poll(async () => (await app.locator('.agents .amore').textContent()) === `+${await cut()}`).toBe(true);
-  const before = await cut();
-  // Taller rows cut off more: the count follows without a scroll or a box resize.
-  await app.evaluate(() => document.documentElement.style.setProperty('--arow', '120px'));
-  await expect.poll(cut).toBeGreaterThan(before);
-  await expect.poll(async () => (await app.locator('.agents .amore').textContent()) === `+${await cut()}`).toBe(true);
 });
 
 test('closed-session-readonly: an exited shell shows its last scrollback read-only with disabled composer', async ({ app, core }) => {

@@ -4,6 +4,7 @@ import { Icon } from '../icons/Icon';
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { isRequired, REQUIRED } from './bars';
 import { glyph } from './icons';
+import { resizing } from './resizing';
 import type { T } from '../i18n';
 import { words } from './store';
 import { defaultZone, edgeSize, find, isLeaf, kindOf, leaves, minOf, pinOf, TITLE, zoomHidden, type Item, type Kind, type Layout, type Leaf, type Node, type Split } from './model';
@@ -181,7 +182,6 @@ function Gutter({ parent, i, live, commit }: { parent: Split; i: number; live: (
     return r ? (row ? r.width : r.height) : (target.size ?? 0);
   };
   const min = minOf(target)[row ? 'w' : 'h'];
-  const drag = useRef<{ start: number; from: number; size: number } | null>(null);
   const clamp = (v: number) => Math.max(min, Math.round(v));
   return (
     <div
@@ -195,25 +195,24 @@ function Gutter({ parent, i, live, commit }: { parent: Split; i: number; live: (
       aria-valuemin={min}
       onPointerDown={(e) => {
         e.preventDefault();
-        e.currentTarget.setPointerCapture(e.pointerId);
         const size = measure();
-        drag.current = { start: row ? e.clientX : e.clientY, from: size, size };
-      }}
-      onPointerMove={(e) => {
-        const d = drag.current;
-        if (!d) return;
-        d.size = clamp(d.from + sign * ((row ? e.clientX : e.clientY) - d.start));
-        live({ id: target.id, size: d.size });
+        const d = { start: row ? e.clientX : e.clientY, from: size, size };
+        resizing(
+          e.currentTarget,
+          e.pointerId,
+          (ev) => {
+            d.size = clamp(d.from + sign * ((row ? ev.clientX : ev.clientY) - d.start));
+            live({ id: target.id, size: d.size });
+          },
+          () => {
+            live(null);
+            if (d.size !== d.from) commit(target.id, d.size);
+          },
+        );
       }}
       // As the sidebar divider (Sidebars.tsx): a double-click returns the zone to the size it is added with. ponytail: the 'resize' op
       // cannot unset a size, so a dragged content-height zone (answer strip, composer) goes to the band size; add an op in layout/model.ts if that matters.
       onDoubleClick={() => commit(target.id, clamp(edgeSize(leaves(target)[0].widgets[0], row ? 'left' : 'up')))}
-      onPointerUp={() => {
-        const d = drag.current;
-        drag.current = null;
-        live(null);
-        if (d && d.size !== d.from) commit(target.id, d.size);
-      }}
       onKeyDown={(e) => {
         const step = { ArrowLeft: -16, ArrowUp: -16, ArrowRight: 16, ArrowDown: 16 }[e.key];
         if (step === undefined || (row ? /Up|Down/ : /Left|Right/).test(e.key)) return;

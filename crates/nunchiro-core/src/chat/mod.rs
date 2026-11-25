@@ -24,15 +24,55 @@
 use crate::api::AgentKind;
 use serde_json::{Value, json};
 
+/// Ticket 1065: Claude's meta record for a pasted image is only "[Image: source: <path>]" lines; the image block shows it.
+fn image_source_only(text: &str) -> bool {
+    let mut lines = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .peekable();
+    lines.peek().is_some() && lines.all(|l| l.starts_with("[Image: source: ") && l.ends_with(']'))
+}
+
+/// Ticket 1087: a "!" command the person ran in the agent's box (Claude's bash mode, Codex's shell mode), and its result
+/// as the transcript gives it: Claude writes the command and its output as two user records, Codex as one.
+fn shell_command(text: &str) -> Option<Value> {
+    let t = text.trim();
+    let inner = |s: &str, tag: &str| {
+        let (_, rest) = s.split_once(&format!("<{tag}>"))?;
+        let (body, _) = rest.split_once(&format!("</{tag}>"))?;
+        Some(body.trim_matches('\n').to_string())
+    };
+    if t.starts_with("<bash-input>") {
+        return Some(json!({"kind":"shell","command":inner(t, "bash-input")?}));
+    }
+    if t.starts_with("<bash-stdout>") {
+        let out = [inner(t, "bash-stdout"), inner(t, "bash-stderr")]
+            .into_iter()
+            .flatten()
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+        return Some(json!({"kind":"shell","output":out}));
+    }
+    let body = t.strip_prefix("<user_shell_command>")?;
+    Some(
+        json!({"kind":"shell","command":inner(body, "command")?,"output":inner(body, "result").unwrap_or_default()}),
+    )
+}
+
 fn hidden(text: &str) -> bool {
-    [
-        "<system-reminder>",
-        "<bash-input>",
-        "<local-command-",
-        "<task-notification>",
-    ]
-    .iter()
-    .any(|marker| text.trim_start().starts_with(marker))
+    image_source_only(text)
+        || [
+            "<system-reminder>",
+            "<bash-input>",
+            "<bash-stdout>",
+            "<user_shell_command>",
+            "<local-command-",
+            "<task-notification>",
+        ]
+        .iter()
+        .any(|marker| text.trim_start().starts_with(marker))
 }
 
 /// Blocks Codex wraps whole in one tag (the lists T3 Code's and Orca's rollout readers drop; own code).
@@ -157,6 +197,10 @@ fn project_record(kind: AgentKind, record: &Value) -> Vec<Value> {
     {
         return vec![json!({"kind":"turn","turn_id":record["uuid"],"state":"completed"})];
     }
+    // Ticket 1059: /context's table goes to the model as hidden user text; the chat keeps only the command's own row.
+    if kind == AgentKind::Claude && crate::session_context::context_usage(record).is_some() {
+        return out;
+    }
     if kind == AgentKind::Claude && record["type"] == "user" {
         let content = &record["message"]["content"];
         let text = content
@@ -215,9 +259,14 @@ fn project_record(kind: AgentKind, record: &Value) -> Vec<Value> {
     if kind == AgentKind::Claude
         && matches!(record["type"].as_str(), Some("user" | "assistant"))
         && let Some(text) = record["message"]["content"].as_str()
-        && !hidden(text)
     {
-        out.push(json!({"kind":"message", "role":record["type"], "text":text}));
+        if record["type"] == "user"
+            && let Some(shell) = shell_command(text)
+        {
+            out.push(shell);
+        } else if !hidden(text) {
+            out.push(json!({"kind":"message", "role":record["type"], "text":text}));
+        }
     }
     if kind == AgentKind::Claude
         && let Some(blocks) = record["message"]["content"].as_array()
@@ -238,7 +287,12 @@ fn project_record(kind: AgentKind, record: &Value) -> Vec<Value> {
             if block["type"] == "thinking"
                 && let Some(text) = block["thinking"].as_str()
             {
-                out.push(json!({"kind":"thinking","text":text}));
+                // Ticket 1075: with thinkingDisplay "updates" Claude writes its mid-turn notes as thinking blocks with text.
+                if record["thinkingDisplay"] == "updates" && !text.trim().is_empty() {
+                    out.push(json!({"kind":"message","role":"assistant","text":text,"note":true}));
+                } else {
+                    out.push(json!({"kind":"thinking","text":text}));
+                }
             }
             if block["type"] == "tool_use" {
                 out.push(json!({"kind":"tool_use","tool_id":block["id"],"name":block["name"],"input":block["input"]}));
@@ -290,6 +344,7 @@ fn project_record(kind: AgentKind, record: &Value) -> Vec<Value> {
         if let Some(blocks) = p["content"].as_array() {
             for (index, block) in blocks.iter().enumerate() {
                 match block["type"].as_str() {
+                    Some("input_text") if p["role"] == "user" && block["text"].as_str().and_then(shell_command).is_some() => out.extend(block["text"].as_str().and_then(shell_command)),
                     Some("input_text" | "output_text") => if let Some(text) = block["text"].as_str() && !hidden(text) && !(p["role"] == "user" && codex_injected(p, index, text)) { out.push(json!({"kind":"message","role":p["role"],"text":text})); },
                     Some("local_image") => out.push(json!({"kind":"image","role":p["role"],"source":{"type":"path","path":block["path"]}})),
                     Some("input_image") => out.push(json!({"kind":"image","role":p["role"],"source":{"type":"url","url":block["image_url"]}})),
@@ -421,6 +476,10 @@ pub(crate) fn command_result(record: &Value) -> Option<Value> {
         (Some("item_completed"), Some("CommandExecution")) => (&p["item"]["id"], &p["item"]),
         _ => return None,
     };
+    // Ticket 1087: a "!" command the person ran has no call; its user record is the chat's shell row.
+    if body["source"] == "user_shell" {
+        return None;
+    }
     let code = body["exit_code"].as_i64()?;
     let wall = match (
         body["duration"]["secs"].as_u64(),
@@ -501,7 +560,8 @@ fn valid_data(data: &Value) -> bool {
             matches!(data["agent"].as_str(), Some("claude" | "codex" | "shell")) && text("version")
         }
         Some("final_text") => text("turn_id") && text("text"),
-        Some("artifact") => artifacts::valid(data), // v1b-06
+        Some("shell") => text("command") || text("output"), // ticket 1087
+        Some("artifact") => artifacts::valid(data),         // v1b-06
         _ => false,
     }
 }
@@ -624,6 +684,28 @@ fn minor_key(v: &str) -> String {
 #[cfg(test)]
 mod tested_tests {
     use super::*;
+
+    /// Ticket 1087: Codex's CommandExecution of a "!" command has no call: its user record is the shell row, no orphan result.
+    #[test]
+    fn t1087_user_shell_result_is_no_orphan() {
+        let mut record = json!({"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"x","exit_code":0,"aggregated_output":"hi\n"}}});
+        assert!(command_result(&record).is_some());
+        record["payload"]["item"]["source"] = "user_shell".into();
+        assert_eq!(command_result(&record), None);
+    }
+
+    /// Ticket 1059: the /context table record draws no chat row; an ordinary user line still does.
+    #[test]
+    fn t1059_context_table_draws_no_row() {
+        let record = crate::session_context::context_record();
+        assert_eq!(
+            project_record(AgentKind::Claude, &record),
+            Vec::<Value>::new()
+        );
+        let mut plain = record.clone();
+        plain["isMeta"] = false.into();
+        assert_eq!(project_record(AgentKind::Claude, &plain).len(), 1);
+    }
 
     #[test]
     fn patch_update_stays_tested() {

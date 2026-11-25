@@ -35,6 +35,6 @@ test('settings_kit_one_look: the icon button, the segmented control and the numb
   const stepper = await look(app.locator('.settings .sstep input').first(), FONT);
   await page(app, 'Notifications');
   expect(await look(app.locator('.settings .range .valb'), FONT)).toEqual(stepper);
-  await page(app, 'Browser access');
+  await page(app, 'Phone and web access');
   expect(await look(app.getByRole('textbox', { name: 'Port' }), FONT)).toEqual(stepper);
 });

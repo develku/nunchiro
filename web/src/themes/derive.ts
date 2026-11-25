@@ -23,7 +23,8 @@
 // each made readable on the panel and diff tints (deriveTokens below). Chat marks (ticket 1039, owner 2026-11-21, approved
 // mockup docs/design/chat-theme-1121; chat/chat.css, off with Settings > Appearance > Chat colours > Plain): 5 magenta ->
 // --chat-code (inline code and file paths), 6 cyan -> --chat-link, 4 mixed 25% toward the background -> --chat-mark
-// (list markers); headings, bold and tool names read --run, success and error words --ok-text and --bad-text. Each
+// (list markers); headings and bold read --chat-accent (ticket 1064, 1088: the theme's own colour by default, themeColour() below, or palette slot 1-6 by Settings > Appearance > Chat accent;
+// chatAccent() below, set by themes/apply.ts, which also redoes --chat-mark for the slot); tool names read --run, success and error words --ok-text and --bad-text. Each
 // steps toward black or white only until it reads at 4.5:1 on what it is drawn on: the chat surface (the background),
 // and for --chat-code the inline code background (--page) too. The body text stays --text.
 import type { ITheme } from '@xterm/xterm';
@@ -74,6 +75,27 @@ function readable(start: string, toward: string[], min: number, surfaces: string
   }
   if (!best) return from;
   return [...tried, ...toward, WHITE, BLACK].reduce((a, b) => (worst(b) > worst(a) ? b : a));
+}
+
+const chroma = (h: string) => (Math.max(...channels(h)) - Math.min(...channels(h))) / 255;
+/** Ticket 1088 (owner: the chat accent follows the theme): a theme file names no main colour, so it is the cursor's colour
+ *  when the theme gave the cursor a colour of its own (Catppuccin Latte's rosewater), else the most saturated of palette 3-6
+ *  (the first on a tie). Most cursors are the foreground grey, and palette 4 alone is blue in nearly every theme; red and
+ *  green are left out because the chat uses them for errors and success. */
+export function themeColour(c: ThemeColors): string {
+  if (chroma(c.cursor) >= 0.25) return c.cursor;
+  return [3, 4, 5, 6].map((i) => c.palette[i]).reduce((a, b) => (chroma(b) > chroma(a) ? b : a));
+}
+
+/** Ticket 1064, 1088: the chat's accent (headings, bold) and its list-marker mix from palette slot `slot` (1-6), or the theme's
+ *  own colour for 0 (the default). Kept out of deriveTokens: the working light and --run stay on slot 4. */
+export function chatAccent(c: ThemeColors, slot: number): Record<string, string> {
+  const ink = isDark(c) ? WHITE : BLACK;
+  const p = slot ? c.palette[slot] : themeColour(c);
+  return {
+    '--chat-accent': readable(p, [ink], 4.5, [c.background]),
+    '--chat-mark': readable(mix(p, c.background, 0.25), [ink], 4.5, [c.background]),
+  };
 }
 
 export function deriveTokens(c: ThemeColors): Record<string, string> {

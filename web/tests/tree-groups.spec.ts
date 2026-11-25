@@ -7,14 +7,14 @@ import path from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { MENU_ONLY, SURFACES } from '../src/menu/surfaces';
-import { boxes, expect, HANGUL, openWindow, showComposer, test, unmoved, type Core, agentsZone, stripBeside } from './fixtures';
+import { boxes, expect, HANGUL, openWindow, showComposer, test, unmoved, type Core, stripOnTop, stripBeside, openSessionFromPalette } from './fixtures';
 import { seed } from './tree-seed';
 
 // tree/commands registers the project and group surfaces; it reaches NewSession's CSS import, which Node cannot load.
 registerHooks({ load: (url, context, next) => (url.endsWith('.css') ? { format: 'module', source: '', shortCircuit: true } : next(url, context)) });
 await import('../src/tree/commands');
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: these specs read the AGENTS rows, which the default window no longer shows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const arrive = (dir: string, trigger: string) => fs.writeFileSync(path.join(dir, trigger), '');
 const clearing = (core: Core) => {
@@ -139,15 +139,15 @@ test('notification_click_does_not_unfold: going to a session leaves its group fo
   await openWindow(app);
   await app.mouse.move(900, 400);
   const web = group(app, 'Web');
-  await app.locator(`.ar[data-agent="${other.id}"]`).click();
+  await app.locator(`button.row.wt2[data-menu-session="${other.id}"]`).click();
   await expect(web.locator('.row.sess')).toHaveCount(0);
-  // The path a notification click or an AGENTS row takes: the palette's go-to opens the same session.
-  await app.locator(`.ar[data-agent="${s.id}"]`).click();
+  // The path a notification click takes: the palette's go-to opens the same session.
+  await openSessionFromPalette(app, s.id);
   await expect(app.locator(`.tab[data-tab="${s.id}"]`)).toHaveAttribute('aria-selected', 'true');
   await expect(web.locator('.row.sess, .row.wt2')).toHaveCount(0);
   await expect(web.locator('.grp')).toHaveCount(0);
   await expect(web.locator('.ghead button.chev')).toHaveAttribute('aria-expanded', 'false');
-  await app.locator(`.ar[data-agent="${other.id}"]`).click();
+  await app.locator(`button.row.wt2[data-menu-session="${other.id}"]`).click();
   await expect(web.locator('.row.sess, .row.wt2')).toHaveCount(0);
   await expect(web.locator('.ghead button.chev')).toHaveAttribute('aria-expanded', 'false');
 });
@@ -341,7 +341,7 @@ test('tree_axe_clean: the tree with a group, the open menu and the picker have n
   expect(await axeBad(app, '.palette')).toEqual([]);
 });
 
-const TREE_BOXES = '.tree .row, .tree .q, .tree .more, .ar, .cbox, #waiting-strip'; // the default set without `.tab`
+const TREE_BOXES = '.tree .row, .tree .q, .tree .more, .cbox, #waiting-strip'; // the default set without `.tab`
 test('current_row_under_folded_group_waits_for_the_pointer: going to a session while the pointer rests in the tree adds no row', async ({ app, core }) => {
   const a = core.project('alpha');
   const b = core.project('beta');
@@ -349,10 +349,10 @@ test('current_row_under_folded_group_waits_for_the_pointer: going to a session w
   const other = core.shell(b, 'b1');
   seed(core, { op: 'group_create', name: 'Web', project: a }, { op: 'fold', key: 'group:Web', folded: true });
   await openWindow(app);
-  await app.locator(`.ar[data-agent="${other.id}"]`).click();
+  await app.locator(`button.row.wt2[data-menu-session="${other.id}"]`).click();
   await grpOf(app, 'beta').locator('.head .n').hover();
   const before = await boxes(app, TREE_BOXES); // the tabs change with the project, so they are left out
-  await app.locator(`.ar[data-agent="${s.id}"]`).evaluate((el) => (el as HTMLElement).click()); // ticket 570: its tab is in another project's strip
+  await openSessionFromPalette(app, s.id); // ticket 570: its tab is in another project's strip
   await app.waitForTimeout(300);
   expect(unmoved(before, await boxes(app, TREE_BOXES))).toEqual([]);
   await expect(group(app, 'Web').locator('.row.sess')).toHaveCount(0);
@@ -383,7 +383,7 @@ test('menu_labels_follow_clicked_row: Pin/Unpin and Remove from group describe t
   core.shell(b, 's2');
   seed(core, { op: 'pin', project: a, pinned: true }, { op: 'group_create', name: 'Web', project: a });
   await openWindow(app, {});
-  await app.locator(`.ar[data-agent="${sa.id}"]`).click(); // alpha (pinned, grouped) is the active project
+  await app.locator(`button.row.wt2[data-menu-session="${sa.id}"]`).click(); // alpha (pinned, grouped) is the active project
   await app.mouse.move(900, 400);
   await grpOf(app, 'beta').locator('.head .n').click({ button: 'right' });
   await expect(menu(app)).toBeVisible();

@@ -1,3 +1,47 @@
+// Ticket 1061: with no setting, a new worktree goes beside the repository, while a record made before records kept
+// their own root still resolves under the Nunchiro folder (no migration).
+#[test]
+fn unset_worktree_folder_splits_new_default_from_legacy_root() {
+    let settings = super::Settings {
+        user_home: "/u".into(),
+        ..Default::default()
+    };
+    let (home, repo) = (Path::new("/h"), Path::new("/r/repo"));
+    assert_eq!(
+        settings.worktree_root_for(repo).unwrap(),
+        Path::new("/u/nunchiro/worktrees")
+    );
+    assert_eq!(
+        settings.legacy_worktree_root(home),
+        Path::new("/h/worktrees")
+    );
+}
+
+// Ticket 1083: Open in editor accepts the project's folder under each of the three roots (the new default, the 1061
+// default `../.worktrees`, and `<home>/worktrees`) once it is a real folder.
+#[test]
+fn open_in_editor_accepts_a_folder_under_each_worktree_root() {
+    let home = std::env::temp_dir().join(format!("wt-editor-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    let repo = home.join("repo");
+    let user = home.join("user");
+    let mut core = Sessions::open(&home).unwrap().with_user_home(&user);
+    core.tree
+        .as_mut()
+        .unwrap()
+        .added
+        .push(repo.to_str().unwrap().into());
+    for under in ["user/nunchiro/worktrees", ".worktrees", "worktrees"] {
+        std::fs::create_dir_all(home.join(under).join("repo")).unwrap();
+    }
+    let roots = core.editor_roots();
+    for under in ["user/nunchiro/worktrees", ".worktrees", "worktrees"] {
+        let at = home.join(under).join("repo");
+        assert!(roots.contains(at.to_str().unwrap()), "{under}: {roots:?}");
+    }
+    std::fs::remove_dir_all(&home).unwrap();
+}
+
 #[test]
 fn worktree_folder_is_named_after_the_worktree_a13() {
     use super::worktree_folder_name as name;
@@ -1013,6 +1057,22 @@ fn holding_is_true_only_for_the_pasted_text() {
             "{row:?} should not hold the paste"
         );
     }
+    // Ticket 1087: an image-only message (one saved image path) is drawn as "[Image #N]".
+    let image = "/data/images/s1/a.png";
+    assert!(holds_paste("[Image #1]", image));
+    assert!(holds_paste("[Image #12]", image));
+    assert!(same_words("[Image #1]", image));
+    for (row, paste) in [
+        ("[Image #1]", "fix the bug"),
+        ("[Image #1]", "look\n/data/images/s1/a.png"),
+        ("[Image #]", image),
+        ("[Image #1] more", image),
+    ] {
+        assert!(
+            !holds_paste(row, paste),
+            "{row:?} should not hold {paste:?}"
+        );
+    }
     // Placeholder rows reach holds_paste as "" through composer().
     let placeholder = composer(
         "› Ask Codex to do anything\n\n  gpt-6.1-sol default · ~/p",
@@ -1375,6 +1435,33 @@ fn stop_drops_act_hashes_of_canceled_sends() {
     core.widget_hashes.insert("gone".into(), "hash".into());
     core.stop().unwrap();
     assert!(core.widget_hashes.is_empty());
+    let _ = fs::remove_dir_all(home);
+}
+// Ticket 1122 B: after the owner's Stop no start goes through (its holder would outlive the core).
+#[test]
+fn no_start_after_stop() {
+    let home = scratch("start-after-stop");
+    let mut core = Sessions::open(&home).unwrap();
+    core.stop().unwrap();
+    let launch = core
+        .launch(StartSession {
+            account: None,
+            kind: AgentKind::Shell,
+            project: home.clone(),
+            worktree: false,
+            label: String::new(),
+            args: vec!["/bin/cat".into()],
+            model: None,
+            effort: None,
+            resume: None,
+        })
+        .prepare()
+        .unwrap();
+    assert_eq!(
+        core.start(&launch).unwrap_err(),
+        "core is stopping; nothing starts"
+    );
+    assert!(core.entries.is_empty());
     let _ = fs::remove_dir_all(home);
 }
 /// Look v16 Home: the real order of a quit during a scheduled run. The run's session is seen, the app stops the
@@ -1965,6 +2052,15 @@ fn exit_if_idle_waits_for_a_queued_send() {
     core.entry(&session.id).unwrap().meta.send_queue.clear();
     assert_eq!(core.exit_blockers(floor), 0);
     assert_eq!(core.exit_blockers(u16::MAX), 1, "a holder below the floor");
+    // Ticket 1130 A-D3: the same count as a request, which leaves the core running
+    let asked = core.handle(Request::ExitBlockers {
+        holder_floor: u16::MAX,
+    });
+    assert!(
+        matches!(asked, Ok(Reply::ExitBlockers { count: 1 })),
+        "{asked:?}"
+    );
+    assert!(!core.left);
     core.launching = Some(("mid-launch".into(), "hash".into()));
     assert_eq!(core.exit_blockers(floor), 1, "a launch in progress");
     core.launching = None;
@@ -2707,7 +2803,8 @@ fn an_echoed_enter_waits_for_a_quiet_screen() {
     f.core.pending_enter.get_mut(&f.id).unwrap().written -= SETTLE;
     f.core.flush_delivery().unwrap();
     let row = send_row(&f, &send.id);
-    assert_eq!(row.status, "failed", "{row:?}");
+    // Ticket 1094: the user's own message waits in the queue again, never left failed with its words in the box.
+    assert_eq!(row.status, "queued", "{row:?}");
     assert_eq!(row.settle.as_deref(), Some("enter_dropped_composer"));
     std::thread::sleep(std::time::Duration::from_millis(300));
     assert!(
@@ -2758,7 +2855,8 @@ fn the_enter_waits_for_output_that_arrived_after_the_read() {
     f.core.pending_enter.get_mut(&f.id).unwrap().written -= SETTLE;
     f.core.flush_enters().unwrap();
     let row = send_row(&f, &send.id);
-    assert_eq!(row.status, "failed", "{row:?}");
+    // Ticket 1094: the user's own message waits in the queue again, never left failed with its words in the box.
+    assert_eq!(row.status, "queued", "{row:?}");
     assert_eq!(row.settle.as_deref(), Some("enter_dropped_composer"));
     std::thread::sleep(std::time::Duration::from_millis(300));
     assert!(
@@ -2782,7 +2880,8 @@ fn a_pending_enter_waits_while_the_observer_is_behind_then_honors_the_dialog() {
     }
     assert!(!behind(&f));
     let row = send_row(&f, &send);
-    assert_eq!(row.status, "failed", "{row:?}");
+    // Ticket 1094: the user's own message waits again for every drop reason; the composer says why.
+    assert_eq!(row.status, "queued", "{row:?}");
     assert_eq!(row.settle.as_deref(), Some("enter_dropped_blocked"));
     assert!(
         pending_text(&mut f)
@@ -2805,7 +2904,10 @@ fn a_pending_enter_that_cannot_catch_up_in_time_is_dropped() {
     f.core.flush_delivery().unwrap();
     assert!(!f.core.pending_enter.contains_key(&f.id));
     let row = send_row(&f, &send);
-    assert_eq!(row.status, "failed", "{row:?}");
+    // Ticket 1094: the user's own message waits again (here the screen was behind); the composer says why. The saved
+    // mark is one every core loads (r3: "enter_dropped_behind" stopped the next start).
+    assert_eq!(row.status, "queued", "{row:?}");
+    assert_eq!(row.settle.as_deref(), Some("enter_dropped_composer"));
     assert!(
         !fs::read(f.home.join("got"))
             .unwrap_or_default()
@@ -4118,24 +4220,28 @@ fn limit_resume_line_leaving_before_the_reset_disarms() {
 fn steer_ctrl_enter_now() {
     // A prompt whose box does not grab a paste (the prompt, then paste mode off), so the agent receives each
     // send's bytes exactly as written.
-    let prompt = "\x1b[?2004l\x1b[2J\x1b[H\u{276f} \r\n";
+    // Ticket 1056: Claude's whole input box (rules and footer), which the steer path looks for while a turn runs.
+    let prompt = format!(
+        "\x1b[?2004l\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n  \u{23f5}\u{23f5} auto mode on (shift+tab to cycle)\r\n"
+    );
     let mut f = unobserved("steer-now", prompt.as_bytes());
     // Nothing is running: the text goes in at once, exactly as the composer's own Enter would.
     steer(&mut f, "first", &[]).unwrap();
     assert_eq!(got(&f), b"first\r");
-    // A running turn: Ctrl+Enter breaks it first (the Stop byte, through Stop's gate) and the text waits behind
-    // that turn, then goes in once the agent is at its prompt again.
+    // Ticket 1056: a running Claude turn takes the text at its next step: no Esc, written by the tick while the
+    // turn runs, once the input box shows.
     hook(&mut f, "UserPromptSubmit");
     let reply = steer(&mut f, "now", &[]).unwrap();
     let Reply::Delivery { send } = reply else {
         panic!("a delivery reply")
     };
     assert_eq!(send.content, "now");
-    assert_eq!(send.status, "queued", "written after the turn unwinds");
-    assert_eq!(got(&f), b"first\r\x1b", "the Esc only; no text yet");
+    assert_eq!(send.status, "queued", "written by the tick");
+    f.core.tick().unwrap();
+    assert!(f.core.queue.attention(&f.id).working, "the turn still runs");
+    assert_eq!(got(&f), b"first\rnow\r", "the text entered once, no Esc");
     hook(&mut f, "Stop");
     f.core.tick().unwrap();
-    assert_eq!(got(&f), b"first\r\x1bnow\r", "the queued text entered once");
     assert_eq!(
         rows(&f)
             .iter()
@@ -4152,17 +4258,13 @@ fn steer_ctrl_enter_now() {
             text: "queued".into(),
         })
         .unwrap();
-    assert_eq!(got(&f), b"first\r\x1bnow\r", "Enter while working queues");
+    assert_eq!(got(&f), b"first\rnow\r", "Enter while working queues");
     steer(&mut f, "", &[]).unwrap();
-    assert_eq!(got(&f), b"first\r\x1bnow\r\x1b", "the Esc only");
+    assert_eq!(got(&f), b"first\rnow\r\x1b", "the Esc only");
     hook(&mut f, "Stop");
     f.core.tick().unwrap();
     f.core.tick().unwrap();
-    assert_eq!(
-        got(&f),
-        b"first\r\x1bnow\r\x1bqueued\r",
-        "the queued text once"
-    );
+    assert_eq!(got(&f), b"first\rnow\r\x1bqueued\r", "the queued text once");
     // Idle with nothing to break: an empty Ctrl+Enter writes nothing.
     assert_eq!(steer(&mut f, "", &[]).unwrap_err(), "nothing to send now");
 }
@@ -5292,17 +5394,734 @@ fn no_double_delivery() {
     let refused = steer(&mut f, "now", &[]).unwrap_err();
     assert!(refused.contains("screen not current"), "{refused}");
     assert!(rows(&f).is_empty() && got(&f).is_empty());
-    // Once the screen is current the steer runs once, and no later tick writes the text again.
+    // Once the screen is current the steer runs once, and no later tick writes the text again. Ticket 1056: no Esc
+    // for Claude; this screen shows no input box, so the text waits for the turn's end.
     catch_up(&mut f);
     steer(&mut f, "now", &[]).unwrap();
-    assert_eq!(got(&f), b"\x1b");
+    assert_eq!(got(&f), b"");
     hook(&mut f, "Stop");
     f.core.tick().unwrap();
-    assert_eq!(got(&f), b"\x1bnow\r", "one Esc, then one copy of the text");
+    assert_eq!(got(&f), b"now\r", "one copy of the text");
     f.core.tick().unwrap();
     f.core.tick().unwrap();
-    assert_eq!(got(&f), b"\x1bnow\r", "nothing is resent");
+    assert_eq!(got(&f), b"now\r", "nothing is resent");
     assert_eq!(rows(&f).iter().filter(|s| s.content == "now").count(), 1);
+}
+/// Ticket 1094: a turn whose Stop was held for a background agent whose end never came settles, and the message
+/// queued behind it then goes in once. Was: the session read as working for good and the message stayed queued.
+#[test]
+fn t1094_a_settled_turn_takes_the_queued_message_once() {
+    let mut f = unobserved("t1094-settle", &b"line of output\r\n".repeat(8));
+    hook(&mut f, "UserPromptSubmit");
+    // Claude's Stop hook names the background agent still running; its end is never heard.
+    f.core
+        .handle(Request::Hook {
+            id: f.id.clone(),
+            event: "Stop".into(),
+            payload: serde_json::json!({"background_tasks":[{"id":"a1","status":"running"}]}),
+        })
+        .unwrap();
+    assert!(
+        f.core.queue.attention(&f.id).working,
+        "held for the background agent"
+    );
+    let id = f.id.clone();
+    f.core.prompt_as_user(&id, "next".into()).unwrap();
+    f.core.tick().unwrap();
+    assert_eq!(
+        got(&f),
+        b"",
+        "held while the core reads the turn as running"
+    );
+    f.core.queue.age_held_stop(&id, queue::HELD_STOP_MS);
+    w14_tick_until(&mut f, 20, "the queued message never went in", |f| {
+        rows(f)
+            .iter()
+            .any(|s| s.content == "next" && s.status == "delivered")
+    });
+    assert!(!f.core.queue.attention(&id).working || got(&f).starts_with(b"next"));
+    for _ in 0..3 {
+        f.core.tick().unwrap();
+    }
+    assert_eq!(got(&f), b"next\r", "one copy");
+}
+/// Ticket 1094 (review r1 point 4): the model picker drew over the box between the paste and its Enter. The user's
+/// message is not left failed: it waits in the queue, named by its drop.
+#[test]
+fn t1094_a_users_message_dropped_by_the_picker_waits_again() {
+    let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi\r\n{RULE}\r\n");
+    let picker = "\x1b[2J\x1b[H Select model\r\n \u{276f} 1. Default\r\n";
+    let mut f = flood_script(
+        "t1094-picker",
+        boxed.as_bytes(),
+        &format!(
+            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
+            PROMPT.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            picker.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
+        ),
+    );
+    wait_end(&f, PROMPT.len());
+    f.core.observe().unwrap();
+    let Ok(Reply::Delivery { send }) = f.core.handle(Request::AgentPrompt {
+        id: f.id.clone(),
+        text: "hi".into(),
+    }) else {
+        panic!("the prompt was not taken")
+    };
+    wait_end(&f, PROMPT.len() + boxed.len());
+    catch_up(&mut f);
+    fs::write(f.home.join("more"), "").unwrap();
+    wait_end(&f, PROMPT.len() + boxed.len() + picker.len());
+    catch_up(&mut f);
+    f.core.pending_enter.get_mut(&f.id).unwrap().written -= SETTLE;
+    f.core.flush_enters().unwrap();
+    let row = send_row(&f, &send.id);
+    assert_eq!(row.status, "queued", "{row:?}");
+    assert_eq!(row.settle.as_deref(), Some("enter_dropped_picker"));
+}
+/// Ticket 1094 (review r1 point 1): a delivery the agent took no turn from (its Enter dropped, a submit refused) is
+/// in flight only until the idle agent shows its input box INFLIGHT_IDLE later: an idle agent never holds every
+/// later send for ever.
+#[test]
+fn t1094_an_idle_agent_never_holds_a_delivery_for_ever() {
+    let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
+    let mut f = unobserved("t1094-inflight", boxed.as_bytes());
+    catch_up(&mut f);
+    let id = f.id.clone();
+    // As after a second dropped Enter on main: in flight at completion_seq 0, idle, no turn will ever end.
+    f.core.delivery_inflight.insert(id.clone(), 0);
+    f.core
+        .inflight_at
+        .insert(id.clone(), std::time::Instant::now());
+    f.core.prompt_as_user(&id, "next".into()).unwrap();
+    f.core.tick().unwrap();
+    assert_eq!(got(&f), b"", "held while the in-flight write is fresh");
+    let past = std::time::Instant::now() - INFLIGHT_IDLE;
+    f.core.inflight_at.insert(id.clone(), past);
+    w14_tick_until(&mut f, 20, "the idle agent never took the message", |f| {
+        rows(f)
+            .iter()
+            .any(|s| s.content == "next" && s.status == "delivered")
+    });
+    assert!(!f.core.queue.attention(&id).working);
+}
+/// Ticket 1094 r3 (review r2 MUST 1): a store holding every settle mark the core can save opens again after a
+/// restart. The drop behind the screen ("enter_dropped_behind", logged only) once saved a mark the next start refused.
+#[test]
+fn t1094_every_saved_mark_opens_after_a_restart() {
+    let (mut f, send) = pasted_then_flooded(
+        "t1094-marks",
+        ENTER_CATCH_UP + std::time::Duration::from_secs(1),
+    );
+    f.core.flush_delivery().unwrap();
+    assert_eq!(send_row(&f, &send).status, "queued");
+    assert_eq!(crate::delivery::saved_mark(BEHIND), None);
+    // Every mark the core may save, on delivered and failed rows of the log.
+    let base = send_row(&f, &send);
+    for (n, mark) in crate::delivery::SETTLE_MARKS.iter().enumerate() {
+        let mut row = base.clone();
+        row.id = crate::store::new_id().unwrap();
+        row.status = if n % 2 == 0 { "delivered" } else { "failed" }.into();
+        row.settle = crate::delivery::saved_mark(mark);
+        assert!(row.settle.is_some(), "{mark}");
+        f.core
+            .entries
+            .get_mut(&f.id)
+            .unwrap()
+            .meta
+            .send_log
+            .push(row);
+    }
+    f.core.save().unwrap();
+    let again = Sessions::open(&f.home).err();
+    assert_eq!(again, None, "the saved store must open again");
+}
+/// Ticket 1094 r3 (review r2 SHOULD 1): the owner's message whose Enter was dropped is not pasted again while his own
+/// hand-typed words sit in the box (the box is not cleared then, and the copies went in glued). It goes once his
+/// words are gone (his own Enter).
+#[test]
+fn t1094_a_dropped_message_is_not_pasted_again_behind_hand_typed_words() {
+    let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi\r\n{RULE}\r\n");
+    let own = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} my own words\r\n{RULE}\r\n");
+    let mut f = flood_script(
+        "t1094-hand",
+        boxed.as_bytes(),
+        &format!(
+            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
+            PROMPT.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            own.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
+        ),
+    );
+    wait_end(&f, PROMPT.len());
+    f.core.observe().unwrap();
+    let Ok(Reply::Delivery { send }) = f.core.handle(Request::AgentPrompt {
+        id: f.id.clone(),
+        text: "hi".into(),
+    }) else {
+        panic!("the prompt was not taken")
+    };
+    wait_end(&f, PROMPT.len() + boxed.len());
+    catch_up(&mut f);
+    fs::write(f.home.join("more"), "").unwrap();
+    wait_end(&f, PROMPT.len() + boxed.len() + own.len());
+    catch_up(&mut f);
+    f.core.flush_enters().unwrap(); // the pass that sees the last frame starts its quiet time
+    let enter = f.core.pending_enter.get_mut(&f.id).unwrap();
+    enter.written -= SETTLE;
+    enter.quiet -= SWITCH_SETTLE;
+    f.core.flush_enters().unwrap();
+    let row = send_row(&f, &send.id);
+    assert_eq!(row.status, "queued", "{row:?}");
+    assert_eq!(row.settle.as_deref(), Some("enter_dropped_composer"));
+    // The owner typed in the agent's box by hand (`SendText` marks it so).
+    f.core
+        .entries
+        .get_mut(&f.id)
+        .unwrap()
+        .input
+        .mark_uncertain();
+    // The script's first read may swallow the first paste; count the copies written after the drop.
+    let copies = |f: &Flood| got(f).windows(2).filter(|w| w == b"hi").count();
+    let first = copies(&f);
+    for _ in 0..4 {
+        f.core.flush_delivery().unwrap();
+    }
+    assert_eq!(
+        copies(&f),
+        first,
+        "not pasted again while his words sit in the box"
+    );
+    assert_eq!(send_row(&f, &send.id).status, "queued");
+    // His own Enter sent his words; the message goes now.
+    f.core.entries.get_mut(&f.id).unwrap().input = Default::default();
+    f.core.flush_delivery().unwrap();
+    assert_eq!(
+        copies(&f),
+        first + 1,
+        "the message goes once his words are gone"
+    );
+}
+/// Ticket 1094 r4 (review r3 MUST 1), r6 (lead): the copy of a dropped message is still in Claude's box with only the
+/// word he typed after it. His own Enter in the terminal sends the box; the row is delivered once his turn starts (the
+/// proof), and the core never pastes it again.
+#[test]
+fn t1094_his_own_enter_sends_the_dropped_copy_once() {
+    let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi\r\n{RULE}\r\n");
+    let dialog = " Pick one\r\n \u{276f} 1. Yes\r\n   2. No\r\n";
+    let typed_box = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi x\r\n{RULE}\r\n");
+    let mut f = flood_script(
+        "t1094-own-enter",
+        boxed.as_bytes(),
+        &format!(
+            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f again ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
+            PROMPT.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            dialog.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            typed_box.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
+        ),
+    );
+    wait_end(&f, PROMPT.len());
+    f.core.observe().unwrap();
+    let Ok(Reply::Delivery { send }) = f.core.handle(Request::AgentPrompt {
+        id: f.id.clone(),
+        text: "hi".into(),
+    }) else {
+        panic!("the prompt was not taken")
+    };
+    wait_end(&f, PROMPT.len() + boxed.len());
+    catch_up(&mut f);
+    fs::write(f.home.join("more"), "").unwrap();
+    wait_end(&f, PROMPT.len() + boxed.len() + dialog.len());
+    catch_up(&mut f);
+    f.core.flush_enters().unwrap(); // the pass that sees the last frame starts its quiet time
+    let enter = f.core.pending_enter.get_mut(&f.id).unwrap();
+    enter.written -= SETTLE;
+    enter.quiet -= SWITCH_SETTLE;
+    f.core.flush_enters().unwrap();
+    let row = send_row(&f, &send.id);
+    assert_eq!(row.status, "queued", "{row:?}");
+    assert_eq!(row.settle.as_deref(), Some("enter_dropped_composer"));
+    let copies = |f: &Flood| got(f).windows(2).filter(|w| w == b"hi").count();
+    let first = copies(&f);
+    let raw = |f: &mut Flood, text: &str| {
+        f.core
+            .handle(Request::SendText {
+                id: f.id.clone(),
+                text: text.into(),
+                seen: vec![],
+                composer: false,
+            })
+            .unwrap();
+    };
+    // He types in the terminal; the dialog closes and the box shows the copy and his word.
+    raw(&mut f, "x");
+    fs::write(f.home.join("again"), "").unwrap();
+    wait_end(
+        &f,
+        PROMPT.len() + boxed.len() + dialog.len() + typed_box.len(),
+    );
+    catch_up(&mut f);
+    f.core.flush_delivery().unwrap();
+    assert_eq!(copies(&f), first, "not pasted again behind his words");
+    raw(&mut f, "\r");
+    f.core.flush_delivery().unwrap();
+    assert_eq!(
+        send_row(&f, &send.id).status,
+        "queued",
+        "no turn yet: not delivered, and not pasted"
+    );
+    assert_eq!(copies(&f), first);
+    hook(&mut f, "UserPromptSubmit");
+    f.core.flush_delivery().unwrap();
+    assert_eq!(send_row(&f, &send.id).status, "delivered");
+    hook(&mut f, "Stop");
+    for _ in 0..3 {
+        f.core.tick().unwrap();
+    }
+    assert_eq!(copies(&f), first, "one copy: the one his Enter sent");
+}
+/// Ticket 1094 r6 (lead): the box proves the copy, but no turn starts after his Enter (Claude did not take it). The row
+/// is never shown delivered: once the idle agent showed no turn for HAND_PROOF, it goes again.
+#[test]
+fn t1094_a_proven_box_without_a_turn_goes_again() {
+    let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi\r\n{RULE}\r\n");
+    let dialog = " Pick one\r\n \u{276f} 1. Yes\r\n   2. No\r\n";
+    let typed_box = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi x\r\n{RULE}\r\n");
+    let mut f = flood_script(
+        "t1094-own-enter-no-turn",
+        boxed.as_bytes(),
+        &format!(
+            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f again ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
+            PROMPT.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            dialog.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            typed_box.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
+        ),
+    );
+    wait_end(&f, PROMPT.len());
+    f.core.observe().unwrap();
+    let Ok(Reply::Delivery { send }) = f.core.handle(Request::AgentPrompt {
+        id: f.id.clone(),
+        text: "hi".into(),
+    }) else {
+        panic!("the prompt was not taken")
+    };
+    wait_end(&f, PROMPT.len() + boxed.len());
+    catch_up(&mut f);
+    fs::write(f.home.join("more"), "").unwrap();
+    wait_end(&f, PROMPT.len() + boxed.len() + dialog.len());
+    catch_up(&mut f);
+    f.core.flush_enters().unwrap(); // the pass that sees the last frame starts its quiet time
+    let enter = f.core.pending_enter.get_mut(&f.id).unwrap();
+    enter.written -= SETTLE;
+    enter.quiet -= SWITCH_SETTLE;
+    f.core.flush_enters().unwrap();
+    let row = send_row(&f, &send.id);
+    assert_eq!(row.status, "queued", "{row:?}");
+    assert_eq!(row.settle.as_deref(), Some("enter_dropped_composer"));
+    let copies = |f: &Flood| got(f).windows(2).filter(|w| w == b"hi").count();
+    let first = copies(&f);
+    let raw = |f: &mut Flood, text: &str| {
+        f.core
+            .handle(Request::SendText {
+                id: f.id.clone(),
+                text: text.into(),
+                seen: vec![],
+                composer: false,
+            })
+            .unwrap();
+    };
+    // He types in the terminal; the dialog closes and the box shows the copy and his word.
+    raw(&mut f, "x");
+    fs::write(f.home.join("again"), "").unwrap();
+    wait_end(
+        &f,
+        PROMPT.len() + boxed.len() + dialog.len() + typed_box.len(),
+    );
+    catch_up(&mut f);
+    f.core.flush_delivery().unwrap();
+    assert_eq!(copies(&f), first, "not pasted again behind his words");
+    raw(&mut f, "\r");
+    f.core.flush_delivery().unwrap();
+    assert_eq!(
+        send_row(&f, &send.id).status,
+        "queued",
+        "no turn yet: not delivered, and not pasted"
+    );
+    assert_eq!(copies(&f), first);
+    f.core.hand_sent.get_mut(&f.id).unwrap().4 -= HAND_PROOF;
+    f.core.flush_delivery().unwrap();
+    assert!(!f.core.hand_sent.contains_key(&f.id), "the proof failed");
+    assert_ne!(send_row(&f, &send.id).status, "delivered");
+    assert_eq!(copies(&f), first + 1, "it goes again");
+}
+/// Ticket 1094 r5 (review r4 MUST 1), r6: his box only looks like it holds the dropped message ("hi" inside "this
+/// works"). His own Enter sends his words, not the message: the row stays queued, is never shown delivered, and goes
+/// again after his turn.
+#[test]
+fn t1094_his_enter_on_words_that_only_look_like_the_message() {
+    let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi\r\n{RULE}\r\n");
+    let dialog = " Pick one\r\n \u{276f} 1. Yes\r\n   2. No\r\n";
+    let own = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} this works\r\n{RULE}\r\n");
+    let mut f = flood_script(
+        "t1094-look-alike",
+        boxed.as_bytes(),
+        &format!(
+            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f again ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
+            PROMPT.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            dialog.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            own.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
+        ),
+    );
+    wait_end(&f, PROMPT.len());
+    f.core.observe().unwrap();
+    let Ok(Reply::Delivery { send }) = f.core.handle(Request::AgentPrompt {
+        id: f.id.clone(),
+        text: "hi".into(),
+    }) else {
+        panic!("the prompt was not taken")
+    };
+    wait_end(&f, PROMPT.len() + boxed.len());
+    catch_up(&mut f);
+    fs::write(f.home.join("more"), "").unwrap();
+    wait_end(&f, PROMPT.len() + boxed.len() + dialog.len());
+    catch_up(&mut f);
+    f.core.flush_enters().unwrap(); // the pass that sees the last frame starts its quiet time
+    let enter = f.core.pending_enter.get_mut(&f.id).unwrap();
+    enter.written -= SETTLE;
+    enter.quiet -= SWITCH_SETTLE;
+    f.core.flush_enters().unwrap();
+    let row = send_row(&f, &send.id);
+    assert_eq!(row.status, "queued", "{row:?}");
+    assert_eq!(row.settle.as_deref(), Some("enter_dropped_composer"));
+    let copies = |f: &Flood| got(f).windows(2).filter(|w| w == b"hi").count();
+    let first = copies(&f);
+    let raw = |f: &mut Flood, text: &str| {
+        f.core
+            .handle(Request::SendText {
+                id: f.id.clone(),
+                text: text.into(),
+                seen: vec![],
+                composer: false,
+            })
+            .unwrap();
+    };
+    raw(&mut f, "x");
+    fs::write(f.home.join("again"), "").unwrap();
+    wait_end(&f, PROMPT.len() + boxed.len() + dialog.len() + own.len());
+    catch_up(&mut f);
+    raw(&mut f, "\r");
+    assert!(
+        !f.core.hand_sent.contains_key(&f.id),
+        "no proof from a look-alike box"
+    );
+    hook(&mut f, "UserPromptSubmit");
+    f.core.flush_delivery().unwrap();
+    assert_eq!(send_row(&f, &send.id).status, "queued");
+    hook(&mut f, "Stop");
+    for _ in 0..3 {
+        f.core.tick().unwrap();
+    }
+    assert_ne!(send_row(&f, &send.id).status, "queued");
+    assert_eq!(copies(&f), first + 1, "it goes again after his turn");
+}
+/// Round 6 (security look): what he types after a drop is kept only up to the largest send row; past it the box is
+/// unprovable (None), so the dropped row goes again (one extra copy at worst, never a loss) and the string stops growing.
+#[test]
+fn t1094_typed_words_past_the_send_limit_prove_nothing() {
+    let mut f = unobserved("t1094-typed-cap", b"");
+    let id = f.id.clone();
+    f.core.copy_left.insert(id.clone(), "row".into());
+    f.core.hand_typed.insert(id.clone(), Some(String::new()));
+    let chunk = "a".repeat(crate::delivery::SEND_LIMIT / 2);
+    let raw = |f: &mut Flood, text: &str| {
+        f.core
+            .handle(Request::SendText {
+                id: f.id.clone(),
+                text: text.into(),
+                seen: vec![],
+                composer: false,
+            })
+            .unwrap();
+    };
+    raw(&mut f, &chunk);
+    raw(&mut f, &chunk);
+    assert_eq!(
+        f.core.hand_typed[&id].as_ref().map(String::len),
+        Some(crate::delivery::SEND_LIMIT),
+        "kept up to the limit"
+    );
+    raw(&mut f, "b");
+    assert_eq!(f.core.hand_typed[&id], None, "past the limit: unprovable");
+    raw(&mut f, &chunk);
+    assert_eq!(f.core.hand_typed[&id], None, "and it stays so");
+}
+/// Round 6: the in-flight time of a session that is gone does not stay for ever.
+#[test]
+fn t1094_inflight_times_of_gone_sessions_are_dropped() {
+    let mut f = unobserved("t1094-inflight-gone", b"");
+    f.core
+        .inflight_at
+        .insert("gone".into(), std::time::Instant::now());
+    f.core
+        .inflight_at
+        .insert(f.id.clone(), std::time::Instant::now());
+    f.core.flush_delivery().unwrap();
+    assert!(!f.core.inflight_at.contains_key("gone"));
+    assert!(f.core.inflight_at.contains_key(&f.id));
+}
+/// Ticket 1094 r6 (lead): what proves a dropped copy in the box, and what does not.
+#[test]
+fn t1094_what_proves_the_copy_in_the_box() {
+    // Proven: the paste alone, with his words after or before it, or as Claude's placeholder for it.
+    assert!(proven_copy("hi", "hi", ""));
+    assert!(proven_copy("hi there now", "hi there", "now"));
+    assert!(proven_copy("now hi there", "hi there", "now"));
+    assert!(proven_copy("[Pasted text #1 +2 lines] ok", "a\nb\nc", "ok"));
+    assert!(proven_copy("[Image #1]", "/tmp/a.png", ""));
+    // Not proven: a look-alike, other words, a glued word, a placeholder of another shape, nothing typed known.
+    assert!(!proven_copy("this works", "hi", "x"));
+    assert!(!proven_copy("hi y", "hi", "x"));
+    assert!(!proven_copy("hix", "hi", "x"));
+    assert!(!proven_copy("hi", "hi", "x"));
+    assert!(!proven_copy("[Pasted text #1 +1 lines]", "a\nb\nc", ""));
+    assert!(!proven_copy("x", "hi", "x"));
+    assert!(!proven_copy("", "hi", ""));
+}
+/// Ticket 1094 r5 (review r4 MUST 1): the window composer's own send clears the box first (Ctrl+U), so the dropped
+/// copy is gone before its Enter. That Enter sends only his new message, even one with the old words in it; the
+/// dropped row stays queued and the core sends it after his turn.
+#[test]
+fn t1094_the_window_enter_after_a_cleared_copy_takes_nothing() {
+    let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi\r\n{RULE}\r\n");
+    let dialog = " Pick one\r\n \u{276f} 1. Yes\r\n   2. No\r\n";
+    let mut f = flood_script(
+        "t1094-window-enter",
+        boxed.as_bytes(),
+        &format!(
+            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f again ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
+            PROMPT.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            dialog.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            boxed.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
+        ),
+    );
+    wait_end(&f, PROMPT.len());
+    f.core.observe().unwrap();
+    let Ok(Reply::Delivery { send }) = f.core.handle(Request::AgentPrompt {
+        id: f.id.clone(),
+        text: "hi".into(),
+    }) else {
+        panic!("the prompt was not taken")
+    };
+    wait_end(&f, PROMPT.len() + boxed.len());
+    catch_up(&mut f);
+    fs::write(f.home.join("more"), "").unwrap();
+    wait_end(&f, PROMPT.len() + boxed.len() + dialog.len());
+    catch_up(&mut f);
+    f.core.flush_enters().unwrap(); // the pass that sees the last frame starts its quiet time
+    let enter = f.core.pending_enter.get_mut(&f.id).unwrap();
+    enter.written -= SETTLE;
+    enter.quiet -= SWITCH_SETTLE;
+    f.core.flush_enters().unwrap();
+    let row = send_row(&f, &send.id);
+    assert_eq!(row.status, "queued", "{row:?}");
+    assert_eq!(row.settle.as_deref(), Some("enter_dropped_composer"));
+    fs::write(f.home.join("again"), "").unwrap();
+    wait_end(&f, PROMPT.len() + 2 * boxed.len() + dialog.len());
+    catch_up(&mut f);
+    let copies = |f: &Flood| got(f).windows(2).filter(|w| w == b"hi").count();
+    let first = copies(&f);
+    // As useComposerSend: the text, then its Enter, both with the composer flag.
+    let seen = pending_ids(&f);
+    f.core
+        .handle(Request::SendText {
+            id: f.id.clone(),
+            text: "say hi now".into(),
+            seen: seen.clone(),
+            composer: true,
+        })
+        .unwrap();
+    f.core
+        .handle(Request::SendKeys {
+            id: f.id.clone(),
+            keys: vec!["enter".into()],
+            seen,
+            composer: true,
+        })
+        .unwrap();
+    assert_eq!(
+        send_row(&f, &send.id).status,
+        "queued",
+        "not taken by his new message"
+    );
+    assert_eq!(copies(&f), first + 1, "his new message only");
+    hook(&mut f, "UserPromptSubmit");
+    hook(&mut f, "Stop");
+    // Ticket 1121: after his turn the agent draws its box empty; the dropped row goes only into a box read so.
+    let empty = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
+    f.core
+        .entries
+        .get_mut(&f.id)
+        .unwrap()
+        .observer
+        .screen
+        .feed(empty.as_bytes());
+    for _ in 0..3 {
+        f.core.tick().unwrap();
+    }
+    assert_eq!(
+        copies(&f),
+        first + 2,
+        "the dropped message goes after his turn"
+    );
+}
+/// Ticket 1094 r4 (review r3 SHOULD 1): a raw key that types nothing into the box (a dialog's digit, an arrow) marks it
+/// edited until an Enter. A dropped message waits only while the box holds words: on an empty box it goes.
+#[test]
+fn t1094_an_empty_box_releases_the_dropped_message() {
+    let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi\r\n{RULE}\r\n");
+    let own = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} my own words\r\n{RULE}\r\n");
+    let empty = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
+    let mut f = flood_script(
+        "t1094-empty-box",
+        boxed.as_bytes(),
+        &format!(
+            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f again ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
+            PROMPT.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            own.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            empty.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
+        ),
+    );
+    wait_end(&f, PROMPT.len());
+    f.core.observe().unwrap();
+    let Ok(Reply::Delivery { send }) = f.core.handle(Request::AgentPrompt {
+        id: f.id.clone(),
+        text: "hi".into(),
+    }) else {
+        panic!("the prompt was not taken")
+    };
+    wait_end(&f, PROMPT.len() + boxed.len());
+    catch_up(&mut f);
+    fs::write(f.home.join("more"), "").unwrap();
+    wait_end(&f, PROMPT.len() + boxed.len() + own.len());
+    catch_up(&mut f);
+    f.core.flush_enters().unwrap(); // the pass that sees the last frame starts its quiet time
+    let enter = f.core.pending_enter.get_mut(&f.id).unwrap();
+    enter.written -= SETTLE;
+    enter.quiet -= SWITCH_SETTLE;
+    f.core.flush_enters().unwrap();
+    let row = send_row(&f, &send.id);
+    assert_eq!(row.status, "queued", "{row:?}");
+    assert_eq!(row.settle.as_deref(), Some("enter_dropped_composer"));
+    f.core
+        .entries
+        .get_mut(&f.id)
+        .unwrap()
+        .input
+        .mark_uncertain();
+    let copies = |f: &Flood| got(f).windows(2).filter(|w| w == b"hi").count();
+    let first = copies(&f);
+    f.core.flush_delivery().unwrap();
+    assert_eq!(copies(&f), first, "held while the box holds words");
+    fs::write(f.home.join("again"), "").unwrap();
+    wait_end(&f, PROMPT.len() + boxed.len() + own.len() + empty.len());
+    catch_up(&mut f);
+    f.core.flush_delivery().unwrap();
+    assert_eq!(copies(&f), first + 1, "the empty box takes it");
+}
+/// Ticket 1094 r3 (review r2 NIT 1): the retry time of a message dropped again holds that message only; the owner's
+/// newer message goes at once.
+#[test]
+fn t1094_a_retried_message_does_not_hold_a_new_one() {
+    let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
+    let mut f = unobserved("t1094-retry-row", boxed.as_bytes());
+    catch_up(&mut f);
+    let id = f.id.clone();
+    hook(&mut f, "UserPromptSubmit");
+    f.core.prompt_as_user(&id, "old".into()).unwrap();
+    let old = rows(&f).into_iter().find(|s| s.content == "old").unwrap();
+    assert_eq!(old.status, "queued");
+    f.core.drops.insert(old.id.clone(), 2);
+    f.core.retry_at.insert(
+        old.id.clone(),
+        std::time::Instant::now() + std::time::Duration::from_secs(60),
+    );
+    hook(&mut f, "Stop");
+    f.core.prompt_as_user(&id, "new".into()).unwrap();
+    w14_tick_until(&mut f, 20, "the new message was held", |f| {
+        rows(f)
+            .iter()
+            .any(|s| s.content == "new" && s.status == "delivered")
+    });
+    // The new message's turn runs and ends: the old one still waits out its own retry time, then goes.
+    hook(&mut f, "UserPromptSubmit");
+    hook(&mut f, "Stop");
+    for _ in 0..3 {
+        f.core.tick().unwrap();
+    }
+    assert_eq!(send_row(&f, &old.id).status, "queued");
+    assert!(
+        !got(&f).windows(3).any(|w| w == b"old"),
+        "the old message waits out its retry time"
+    );
+    f.core
+        .retry_at
+        .insert(old.id.clone(), std::time::Instant::now());
+    w14_tick_until(&mut f, 20, "the old message never went", |f| {
+        rows(f)
+            .iter()
+            .any(|s| s.content == "old" && s.status == "delivered")
+    });
+}
+/// Ticket 1094 (review r1 point 2): a Claude the queue reads as working (a prompt replayed after a restart, a Stop
+/// hook refused) whose screen shows its idle box and that drew nothing for IDLE_SETTLE_MS ends its turn.
+#[test]
+fn t1094_an_idle_screen_settles_a_lost_turn() {
+    let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
+    let mut f = unobserved("t1094-idle-screen", boxed.as_bytes());
+    catch_up(&mut f);
+    hook(&mut f, "UserPromptSubmit");
+    let id = f.id.clone();
+    f.core.tick().unwrap();
+    assert!(
+        f.core.queue.attention(&id).working,
+        "not before IDLE_SETTLE_MS"
+    );
+    f.core.queue.age_activity(&id, IDLE_SETTLE_MS);
+    f.core.tick().unwrap();
+    let a = f.core.queue.attention(&id);
+    assert_eq!((a.working, a.completion_seq), (false, 1));
+}
+/// Ticket 1056: Send now on a working Claude is refused while a Question waits; nothing is written or queued.
+#[test]
+fn steer_refused_while_a_question_waits() {
+    let rule = "\u{2500}".repeat(60);
+    let question = format!(
+        "\x1b[2J\x1b[H{rule}\r\n \u{2610} Fruit\r\nWhich fruit do you want?\r\n\u{276f} 1. Apple\r\n  2. Pear\r\n  3. Type something.\r\n{rule}\r\n  4. Chat about this\r\nEnter to select \u{b7} \u{2191}/\u{2193} to navigate \u{b7} Esc to cancel\r\n"
+    );
+    let mut f = unobserved("steer-question", question.as_bytes());
+    hook(&mut f, "UserPromptSubmit");
+    w14_tick_until(&mut f, 10, "no question card", |f| {
+        f.core
+            .queue
+            .items_of(&f.id)
+            .iter()
+            .any(|i| i.kind == queue::Kind::Question)
+    });
+    assert!(f.core.queue.attention(&f.id).working);
+    let seen = pending_ids(&f);
+    assert_eq!(steer(&mut f, "now", &seen).unwrap_err(), "agent_blocked");
+    assert!(rows(&f).is_empty() && got(&f).is_empty());
+}
+/// Ticket 1056: every other agent kind keeps the Esc path: the turn is broken first, the text goes after it.
+#[test]
+fn steer_on_a_working_codex_presses_esc_first() {
+    let mut f = unobserved(
+        "steer-codex",
+        "\x1b[?2004l\x1b[2J\x1b[H\u{203a} \r\n".as_bytes(),
+    );
+    f.core.entries.get_mut(&f.id).unwrap().meta.kind = AgentKind::Codex;
+    hook(&mut f, "UserPromptSubmit");
+    steer(&mut f, "now", &[]).unwrap();
+    assert_eq!(got(&f), b"\x1b", "the Esc first; no text yet");
 }
 /// A seat's brief (or a schedule's task) sent while the agent shows a question waits in the queue; it is not
 /// refused, and it is not typed into the question.
@@ -5736,7 +6555,7 @@ fn version_probe_kills_a_hung_binary_at_the_ceiling() {
     assert_eq!(unsafe { libc::mkfifo(path.as_ptr(), 0o600) }, 0);
     let program = home.join("agent");
     let body = format!(
-        "#!/bin/sh\necho $$ > '{}/pid'\nread x < '{}'\n",
+        "#!/bin/sh\necho $$ > '{0}/pid.tmp' && mv '{0}/pid.tmp' '{0}/pid'\nread x < '{1}'\n",
         home.display(),
         fifo.display()
     );
@@ -6146,6 +6965,84 @@ fn closed_logout_entry_pruned() {
         core.logouts.keys().collect::<Vec<_>>(),
         vec![Path::new("/live")]
     );
+    finish(core, home);
+}
+/// Ticket 1090: closing a seat takes away the owner cards that are its alone (a stall card on its check-in, a Codex
+/// reset it asked for) and its questions leave Decisions; the task's merge card stays. Replacing the seat (close, then
+/// another seat on the task) leaves no card of the old one, and the other seat's card stays until that seat ends.
+#[test]
+fn seat_close_withdraws_its_own_cards() {
+    let (mut core, home, old, other) = two_shells("seat-cards-1090");
+    let stall = |task: &str, seat: &str| queue::OwnerAsk::Stall {
+        task: task.into(),
+        title: "fig".into(),
+        place: home.clone(),
+        seat: seat.into(),
+        error: None,
+    };
+    let reset = queue::OwnerAsk::CodexReset {
+        folder: None,
+        account: "Your own".into(),
+        reason: "limit".into(),
+    };
+    let merge = queue::OwnerAsk::Merge {
+        task: "t1".into(),
+        title: "fig".into(),
+        place: home.clone(),
+        revision: "b688c42".into(),
+        learned: vec![],
+    };
+    core.queue.ask_owner(&old, stall("t1", "Builder")).unwrap();
+    core.queue.ask_owner(&old, reset).unwrap();
+    core.queue.ask_owner("lead", merge).unwrap();
+    core.queue
+        .ask_owner(&other, stall("t2", "Reviewer"))
+        .unwrap();
+    core.queue
+        .observe(
+            &old,
+            "PermissionRequest",
+            &serde_json::json!({}),
+            "hook",
+            200,
+        )
+        .unwrap();
+    let kinds = |core: &Sessions| {
+        let mut k: Vec<_> = core
+            .queue
+            .owner_items()
+            .into_iter()
+            .map(|i| match i.owner {
+                Some(queue::OwnerAsk::Stall { task, .. }) => format!("stall {task}"),
+                Some(queue::OwnerAsk::CodexReset { .. }) => "reset".into(),
+                Some(queue::OwnerAsk::Merge { task, .. }) => format!("merge {task}"),
+                other => panic!("unexpected card {other:?}"),
+            })
+            .collect();
+        k.sort();
+        k
+    };
+    assert_eq!(kinds(&core), ["merge t1", "reset", "stall t1", "stall t2"]);
+    assert!(
+        !core.queue.items_of(&old).is_empty(),
+        "the permission is asked"
+    );
+    core.handle(Request::Close { id: old.clone() }).unwrap();
+    assert_eq!(kinds(&core), ["merge t1", "stall t2"], "closed seat");
+    assert!(
+        core.queue.items_of(&old).iter().all(|i| !i.actionable),
+        "its permission leaves Decisions"
+    );
+    // The other seat ends (its process is gone): its stall card goes too; the task's merge card stays.
+    let pid = core.entries[&other].meta.pid.unwrap();
+    unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while core.entries[&other].meta.state == SessionState::Running {
+        assert!(std::time::Instant::now() < until, "seat did not end");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        core.refresh().unwrap();
+    }
+    assert_eq!(kinds(&core), ["merge t1"], "ended seat");
     finish(core, home);
 }
 #[test]
@@ -7448,6 +8345,55 @@ fn finish_close_failure_saves_once_and_keeps_row() {
         assert!(core.closing.is_none());
     }
     end_writes(registry, home);
+}
+
+// Ticket 1073 round 3: a closed row leaves the store, but its conversation id stays in ran.json, so History never calls
+// that conversation "started in a terminal".
+#[test]
+fn closed_row_conversation_stays_in_ran_json() {
+    let (registry, home, id) = ended_core("ran-1073");
+    let conversation = "1".repeat(8) + "-0000-4000-8000-000000001073";
+    {
+        let mut core = registry.lock().unwrap();
+        core.entries.get_mut(&id).unwrap().meta.agent_session_id = Some(conversation.clone());
+        core.handle(Request::Close { id: id.clone() }).unwrap();
+        core.finish_close(u64::MAX);
+        assert!(!core.entries.contains_key(&id), "the row is gone");
+        assert!(
+            !fs::read_to_string(home.join("sessions.json"))
+                .unwrap()
+                .contains(&conversation)
+        );
+        let ran: serde_json::Value =
+            serde_json::from_slice(&fs::read(home.join(crate::import::RAN)).unwrap()).unwrap();
+        assert_eq!(ran["conversations"], serde_json::json!([conversation]));
+    }
+    end_writes(registry, home);
+}
+
+// Ticket 1073 round 4: a home from before ran.json (old chat records, no ran.json) is seeded at the first start; a
+// second start changes nothing, also when another chat record appeared meanwhile.
+#[test]
+fn open_seeds_ran_json_once_from_old_chat_records() {
+    let home = scratch("ran-seed-1073");
+    let chat = home.join("chat");
+    fs::create_dir_all(&chat).unwrap();
+    let old = "2".repeat(8) + "-0000-4000-8000-000000001073";
+    fs::write(chat.join(format!("claude-{old}.json")), "{}").unwrap();
+    fs::write(chat.join("shell-0123.json"), "{}").unwrap();
+    drop(Sessions::open(&home).unwrap());
+    let first = fs::read(home.join(crate::import::RAN)).unwrap();
+    let ran: serde_json::Value = serde_json::from_slice(&first).unwrap();
+    assert_eq!(ran["seeded"], true);
+    assert_eq!(ran["conversations"], serde_json::json!([old]));
+    fs::write(chat.join("claude-later.json"), "{}").unwrap();
+    drop(Sessions::open(&home).unwrap());
+    assert_eq!(
+        fs::read(home.join(crate::import::RAN)).unwrap(),
+        first,
+        "a second start changes nothing"
+    );
+    let _ = fs::remove_dir_all(&home);
 }
 
 // V2-6d follow-up: a close-pending row still blocks its account's removal, and Undo brings it back on that account.
@@ -9092,7 +10038,7 @@ fn an_owner_start_runs_the_approved_path_and_flag_and_stores_neither() {
     let mut core = Sessions::open(&home).unwrap();
     let (path, log) = (home.join("my-claude"), home.join("argv.log"));
     let script = format!(
-        "#!/bin/sh\n[ \"$1\" = --version ] && {{ echo '2.1.310 (Claude Code)'; exit 0; }}\nprintf '%s\\n' \"$0\" \"$@\" > '{}'\nexec cat >/dev/null\n",
+        "#!/bin/sh\n[ \"$1\" = --version ] && {{ echo '2.1.310 (Claude Code)'; exit 0; }}\nprintf '%s\\n' \"$0\" \"$@\" > '{0}.tmp' && mv '{0}.tmp' '{0}'\nexec cat >/dev/null\n",
         log.display()
     );
     fs::write(&path, script).unwrap();
@@ -9110,6 +10056,7 @@ fn an_owner_start_runs_the_approved_path_and_flag_and_stores_neither() {
     let id = core.start(&launch).unwrap().id;
     launch.committed = true;
     let until = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    // argv.log appears only complete: the fake agent renames it into place, since printf writes in pieces.
     while !log.exists() {
         assert!(std::time::Instant::now() < until, "the agent never ran");
         std::thread::sleep(std::time::Duration::from_millis(20));
@@ -9310,6 +10257,7 @@ fn approved_arguments_reach_owner_starts_only() {
 }
 
 // Ticket 1002 lane 1: the Home seat lock's tests (kept apart: this file passed the publish scan's 1 MiB line).
+mod advance_start_tests; // ticket 1081 part B security round
 mod home_lock_tests;
 mod lock_followups_tests; // S-m1, Q9 en-b-J7-2, ticket 1002
 // Ticket 39: a core that starts stopping after the first decision (set by the hook) refuses the hand-off under
@@ -9789,4 +10737,876 @@ fn list_does_not_mutate_grants() {
     assert_eq!(grants(&core), before);
     assert_eq!(fs::read(core.home.join("sessions.json")).unwrap(), stored);
     end_family(core, launches);
+}
+
+// Ticket 1081 (security look on 7f03e3307): the auto-advance resend runs the delivery tick's checks on the original
+// row; it never types a copy for a sender the tick would refuse.
+fn stuck(core: &mut Sessions, sender: &str, target: &str) -> crate::delivery::Send {
+    core.begin_send(sender, target, "stuck line".into(), vec![], true, "queued")
+        .unwrap()
+}
+fn sent_count(core: &Sessions, target: &str) -> usize {
+    let meta = &core.entries[target].meta;
+    meta.send_queue
+        .iter()
+        .chain(&meta.send_log)
+        .filter(|s| s.content == "stuck line" && s.status != "canceled")
+        .count()
+}
+#[test]
+fn a_resend_cancels_a_stuck_row_of_a_revoked_token_sender() {
+    let (mut core, home, target, sender) = two_shells("resend1081tok");
+    // A token session whose token is gone (no tokens file): the tick refuses its rows.
+    core.entry(&sender).unwrap().meta.token_origin = Some("token-revoked".into());
+    let row = stuck(&mut core, &sender, &target);
+    let _ = core.resend_queued(&target, &row.id);
+    assert_eq!(status_of(&core, &target, &row.id), "canceled");
+    assert_eq!(
+        sent_count(&core, &target),
+        0,
+        "nothing typed for a revoked sender"
+    );
+    finish(core, home);
+}
+#[test]
+fn a_resend_does_not_deliver_a_stuck_row_of_a_closed_sender() {
+    let (mut core, home, target, sender) = two_shells("resend1081closed");
+    let row = stuck(&mut core, &sender, &target);
+    core.handle(Request::Close { id: sender.clone() }).unwrap();
+    let _ = core.resend_queued(&target, &row.id);
+    assert_eq!(status_of(&core, &target, &row.id), "canceled");
+    assert_eq!(
+        sent_count(&core, &target),
+        0,
+        "nothing typed for a closed sender"
+    );
+    finish(core, home);
+}
+#[test]
+fn a_resend_delivers_a_valid_stuck_row_once_with_its_sender_and_stamp() {
+    let (mut core, home, target, sender) = two_shells("resend1081ok");
+    let row = stuck(&mut core, &sender, &target);
+    assert_eq!(row.remote, Some(false));
+    // A peer forwarding under the same id later must not restamp the row.
+    core.grants.remote.insert(sender.clone());
+    let _ = core.resend_queued(&target, &row.id);
+    let meta = &core.entries[&target].meta;
+    let rows: Vec<_> = meta
+        .send_queue
+        .iter()
+        .chain(&meta.send_log)
+        .filter(|s| s.content == "stuck line")
+        .collect();
+    assert_eq!(rows.len(), 1, "one row, not a copy: {rows:?}");
+    assert_eq!(rows[0].id, row.id);
+    assert_eq!(rows[0].sender, sender);
+    assert_eq!(rows[0].remote, Some(false));
+    assert!(
+        matches!(rows[0].status.as_str(), "delivered" | "attempting"),
+        "{rows:?}"
+    );
+    finish(core, home);
+}
+
+// Ticket 1081 (security look 2 on 668d1524e): auto-advance's nudge and heartbeat are the core's own lines. They are
+// sent as the core, never under a seat's identity, and pass one check (core_may) before the write and before a queued
+// row is delivered: a seat whose token was revoked gets nothing.
+const CORE_LINE: &str = "core line 1081";
+fn core_seats(name: &str) -> (Sessions, PathBuf, String, String) {
+    let (mut core, home, builder, lead) = two_shells(name);
+    core.entry(&lead).unwrap().meta.teammate = Some("lead-1081".into());
+    let ledger = crate::ledger::Ledger::open(&home);
+    let (task, _) = ledger
+        .make(&home, Some("lead-1081"), "tax", &[], false, 1)
+        .unwrap();
+    ledger
+        .seat_on(&task.id, &builder, "Builder · tax", None, 1, &|_| true)
+        .unwrap();
+    (core, home, builder, lead)
+}
+fn core_rows_of(core: &Sessions, target: &str) -> Vec<crate::delivery::Send> {
+    let meta = &core.entries[target].meta;
+    meta.send_queue
+        .iter()
+        .chain(&meta.send_log)
+        .filter(|s| s.content == CORE_LINE)
+        .cloned()
+        .collect()
+}
+#[test]
+fn core_line_to_a_ready_seat_with_a_revoked_token_is_not_written() {
+    let (mut core, home, builder, lead) = core_seats("coreline1081ready");
+    // The nudge goes to the builder, the heartbeat to the lead's own seat.
+    for target in [builder.clone(), lead.clone()] {
+        core.entry(&target).unwrap().meta.token_origin = Some("token-revoked".into());
+        let sent = core.core_line(&target, CORE_LINE.into());
+        assert!(sent.is_err(), "{target}: {sent:?}");
+        assert!(
+            core_rows_of(&core, &target).is_empty(),
+            "{target}: nothing typed"
+        );
+    }
+    finish(core, home);
+}
+#[test]
+fn a_queued_core_line_to_a_seat_whose_token_was_revoked_is_not_delivered() {
+    let (mut core, home, builder, lead) = core_seats("coreline1081queued");
+    for target in [builder.clone(), lead.clone()] {
+        // Not ready: a send on its way holds the queue.
+        core.delivery_inflight.insert(target.clone(), u64::MAX);
+        core.core_line(&target, CORE_LINE.into()).unwrap();
+        let rows = core_rows_of(&core, &target);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status, "queued");
+        core.entry(&target).unwrap().meta.token_origin = Some("token-revoked".into());
+        core.delivery_inflight.remove(&target);
+        core.flush_delivery().unwrap();
+        assert_eq!(
+            status_of(&core, &target, &rows[0].id),
+            "canceled",
+            "{target}"
+        );
+    }
+    finish(core, home);
+}
+#[test]
+fn a_core_line_to_a_valid_seat_is_delivered_as_the_core() {
+    let (mut core, home, builder, lead) = core_seats("coreline1081ok");
+    for target in [builder.clone(), lead.clone()] {
+        core.core_line(&target, CORE_LINE.into()).unwrap();
+        let rows = core_rows_of(&core, &target);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0].sender, "core");
+        assert!(
+            matches!(rows[0].status.as_str(), "delivered" | "attempting"),
+            "{rows:?}"
+        );
+    }
+    // Auto-advance off in the place: the core types nothing more there.
+    crate::ledger::Ledger::open(&home)
+        .set_place(&home, None, None, Some(false))
+        .unwrap();
+    assert!(core.core_line(&builder, CORE_LINE.into()).is_err());
+    assert_eq!(core_rows_of(&core, &builder).len(), 1);
+    finish(core, home);
+}
+
+// Ticket 1085: an automatic line the core pastes into a lead's input box (a worker's wake line, the room's notice, the
+// core's heartbeat) and the owner's next message are two submissions, never one. Before the fix the window composer's
+// text was typed right behind a paste whose Enter waited, and a dropped Enter left the line in the box for the owner's
+// words to join.
+const OWNER_1085: &str = "owner words 1085";
+fn automatic_1085() -> [(&'static str, String); 3] {
+    [
+        ("worker-1085", "worker w1 done".to_string()),
+        ("", crate::room::notice(3)), // the seat itself sends its notice (room.rs)
+        (CORE, crate::advance::beat_line(0, 2, 1).unwrap()),
+    ]
+}
+/// A Claude seat with bracketed paste on, its box showing `shown`; the automatic line pasted, its Enter pending.
+fn pasted_1085(name: &str, sender: &str, text: &str, shown: &str) -> Flood {
+    let screen = format!(
+        "\x1b[?2004h\x1b[2J\x1b[H{RULE}{RULE}{RULE}\r\n\u{276f} {shown}\r\n{RULE}{RULE}{RULE}\r\n  footer\r\n"
+    );
+    let mut f = unobserved(name, screen.as_bytes());
+    f.core.tick().unwrap();
+    let id = f.id.clone();
+    let sender = if sender.is_empty() {
+        id.clone()
+    } else {
+        sender.to_string()
+    };
+    let row = f
+        .core
+        .begin_send(&sender, &id, text.into(), vec![], true, "attempting")
+        .unwrap();
+    if sender != id {
+        f.core.wake_rows.insert(row.id.clone());
+    }
+    if sender == CORE {
+        f.core.core_rows.insert(row.id.clone());
+    }
+    assert_eq!(
+        f.core.write_send(&id, &row),
+        Ok(true),
+        "pasted, its Enter waits"
+    );
+    f
+}
+fn paste_1085(text: &str) -> Vec<u8> {
+    [b"\x1b[200~", text.as_bytes(), b"\x1b[201~"].concat()
+}
+/// Writes the pending Enter now (as at its settle deadline).
+fn enter_1085(f: &mut Flood) {
+    let id = f.id.clone();
+    f.core.pending_enter.get_mut(&id).unwrap().written -= SETTLE * (PASTE_WAIT + 1);
+    f.core.flush_enters().unwrap();
+    assert!(!f.core.pending_enter.contains_key(&id), "the Enter went");
+}
+fn owner_sends_1085(f: &mut Flood) {
+    f.core
+        .handle(text_request(f, OWNER_1085, true, &[]))
+        .unwrap();
+    composer_keys(f, &["enter"], &[]).unwrap();
+}
+#[test]
+fn t1085_owner_words_wait_behind_a_pasted_automatic_line() {
+    for (i, (sender, text)) in automatic_1085().into_iter().enumerate() {
+        let mut f = pasted_1085(&format!("t1085-pending-{i}"), sender, &text, "");
+        owner_sends_1085(&mut f);
+        assert_eq!(
+            got(&f),
+            paste_1085(&text),
+            "{text}: nothing typed behind the paste"
+        );
+        enter_1085(&mut f);
+        hook(&mut f, "UserPromptSubmit");
+        hook(&mut f, "Stop");
+        f.core.deliver().unwrap();
+        enter_1085(&mut f);
+        let want = [
+            paste_1085(&text),
+            b"\r".to_vec(),
+            paste_1085(OWNER_1085),
+            b"\r".to_vec(),
+        ]
+        .concat();
+        assert_eq!(
+            String::from_utf8_lossy(&got(&f)),
+            String::from_utf8_lossy(&want),
+            "{text}: two submissions"
+        );
+        let owner: Vec<_> = rows(&f)
+            .into_iter()
+            .filter(|s| s.sender == "user")
+            .collect();
+        assert_eq!(owner.len(), 1);
+        assert_eq!(
+            (owner[0].content.as_str(), owner[0].status.as_str()),
+            (OWNER_1085, "delivered")
+        );
+    }
+}
+#[test]
+fn t1085_a_dropped_automatic_line_is_cleared_and_goes_after_the_owner() {
+    for (i, (sender, text)) in automatic_1085().into_iter().enumerate() {
+        let mut f = pasted_1085(&format!("t1085-dropped-{i}"), sender, &text, &text);
+        let id = f.id.clone();
+        // A permission request comes up before the Enter: the Enter is dropped, the line stays in the box.
+        let now = queue::now_ms();
+        let tool = serde_json::json!({"tool_name": "Bash", "tool_input": {"command": "ls"}});
+        f.core
+            .queue
+            .observe(&id, "PermissionRequest", &tool, "hook", now)
+            .unwrap();
+        f.core.flush_enters().unwrap();
+        assert!(!f.core.pending_enter.contains_key(&id));
+        let auto = rows(&f).into_iter().find(|s| s.content == text).unwrap();
+        assert_eq!(
+            auto.status, "queued",
+            "{text}: it waits in the queue, not in the box"
+        );
+        f.core
+            .queue
+            .observe(&id, "PostToolUse", &serde_json::json!({}), "hook", now + 1)
+            .unwrap();
+        assert!(pending_ids(&f).is_empty());
+        owner_sends_1085(&mut f);
+        // Ctrl+U clears the line the core left (one box row: two Ctrl+U per row and one more), then the owner's words.
+        let typed = [
+            paste_1085(&text),
+            b"\x15\x15\x15".to_vec(),
+            OWNER_1085.as_bytes().to_vec(),
+            b"\r".to_vec(),
+        ]
+        .concat();
+        assert_eq!(
+            String::from_utf8_lossy(&got(&f)),
+            String::from_utf8_lossy(&typed),
+            "{text}: the owner's words alone"
+        );
+        // The line goes again after the owner's turn, alone, through every delivery check once more: the room's notice
+        // (the seat is its own sender) is written; the wake line's and the heartbeat's senders are no live worker and no
+        // auto-advance task in this fixture, so those checks cancel them and nothing more is typed.
+        hook(&mut f, "UserPromptSubmit");
+        hook(&mut f, "Stop");
+        // Ticket 1121: the agent took his message and drew its box empty; the line goes again only into a box read so.
+        let empty = format!(
+            "\x1b[2J\x1b[H{RULE}{RULE}{RULE}\r\n\u{276f} \r\n{RULE}{RULE}{RULE}\r\n  footer\r\n"
+        );
+        f.core
+            .entries
+            .get_mut(&id)
+            .unwrap()
+            .observer
+            .screen
+            .feed(empty.as_bytes());
+        f.core.deliver().unwrap();
+        let auto = |f: &Flood| rows(f).into_iter().find(|s| s.content == text).unwrap();
+        if sender.is_empty() {
+            enter_1085(&mut f);
+            let want = [typed, paste_1085(&text), b"\r".to_vec()].concat();
+            assert_eq!(
+                String::from_utf8_lossy(&got(&f)),
+                String::from_utf8_lossy(&want),
+                "{text}"
+            );
+            assert_eq!(auto(&f).status, "delivered", "{text}");
+        } else {
+            assert_eq!(
+                String::from_utf8_lossy(&got(&f)),
+                String::from_utf8_lossy(&typed),
+                "{text}"
+            );
+            assert_eq!(auto(&f).status, "canceled", "{text}");
+        }
+    }
+}
+/// Ticket 1085: words typed by hand after the dropped line make the box the owner's: nothing in it is cleared.
+#[test]
+fn t1085_words_typed_by_hand_are_never_cleared() {
+    let (sender, text) = automatic_1085()[1].clone();
+    let mut f = pasted_1085("t1085-hand", sender, &text, &text);
+    let id = f.id.clone();
+    let now = queue::now_ms();
+    let tool = serde_json::json!({"tool_name": "Bash", "tool_input": {"command": "ls"}});
+    f.core
+        .queue
+        .observe(&id, "PermissionRequest", &tool, "hook", now)
+        .unwrap();
+    f.core.flush_enters().unwrap();
+    f.core
+        .queue
+        .observe(&id, "PostToolUse", &serde_json::json!({}), "hook", now + 1)
+        .unwrap();
+    f.core.handle(text_request(&f, "x", false, &[])).unwrap(); // a key typed in the terminal
+    owner_sends_1085(&mut f);
+    assert!(!got(&f).contains(&0x15), "no Ctrl+U");
+}
+
+// Ticket 1113: only the current lead may tidy a foreign session; owner answers never become session authority.
+#[test]
+fn lead_session_tidy_uses_owner_cards_and_preserves_builder_close_rules() {
+    let (mut core, launches, [lead, builder, _, target]) = family("session-tidy");
+    let mate: crate::team::Teammate = serde_json::from_value(serde_json::json!({
+        "id":"", "name":"Lead", "job":"Lead this place", "kind":"claude",
+        "project":lead.project, "lead":true
+    }))
+    .unwrap();
+    let mate = crate::team::Team::open(&core.home)
+        .save(None, mate)
+        .unwrap()
+        .remove(0);
+    core.entries.get_mut(&lead.id).unwrap().meta.teammate = Some(mate.id);
+    core.grants.remote.insert(lead.id.clone());
+    assert!(
+        core.tidy_session(&lead, &target.id, "Unused account", queue::now_ms())
+            .is_err()
+    );
+    core.grants.remote.remove(&lead.id);
+    core.entries.get_mut(&target.id).unwrap().meta.machine = Some("other-machine".into());
+    assert!(
+        core.tidy_session(&lead, &target.id, "Unused account", queue::now_ms())
+            .is_err()
+    );
+    core.entries.get_mut(&target.id).unwrap().meta.machine = None;
+    core.entries.get_mut(&target.id).unwrap().meta.project = lead.project.join("another-place");
+    assert!(
+        core.tidy_session(&lead, &target.id, "Unused account", queue::now_ms())
+            .is_err()
+    );
+    core.entries.get_mut(&target.id).unwrap().meta.project = lead.project.clone();
+    assert!(
+        core.tidy_session(&lead, &target.id, "  ", queue::now_ms())
+            .is_err()
+    );
+    assert!(
+        core.tidy_session(&builder, &target.id, "Unused account", queue::now_ms())
+            .is_err()
+    );
+    assert!(
+        core.handle_agent(
+            &builder,
+            Request::Close {
+                id: target.id.clone()
+            }
+        )
+        .is_err()
+    );
+    core.handle_agent(
+        &lead,
+        Request::SessionTidy {
+            id: target.id.clone(),
+            why: "Unused account".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(core.entries[&target.id].meta.state, SessionState::Running);
+    let card = core.queue.owner_items().remove(0);
+    assert!(
+        core.handle_agent(
+            &lead,
+            Request::Answer {
+                item: card.id.clone(),
+                answer: queue::Answer::AllowOnce,
+                confirmed: true
+            }
+        )
+        .is_err()
+    );
+    assert!(
+        core.handle_agent(
+            &target,
+            Request::Answer {
+                item: card.id.clone(),
+                answer: queue::Answer::AllowOnce,
+                confirmed: true
+            }
+        )
+        .is_err()
+    );
+    core.handle(Request::Answer {
+        item: card.id,
+        answer: queue::Answer::Deny,
+        confirmed: false,
+    })
+    .unwrap();
+    assert!(core.queue.owner_items().is_empty());
+    assert_eq!(core.entries[&target.id].meta.state, SessionState::Running);
+    core.tidy_session(&lead, &target.id, "Unused account", queue::now_ms())
+        .unwrap();
+    let card = core.queue.owner_items().remove(0);
+    core.handle(Request::Answer {
+        item: card.id,
+        answer: queue::Answer::AllowOnce,
+        confirmed: true,
+    })
+    .unwrap();
+    assert!(core.queue.owner_items().is_empty());
+    assert_ne!(core.entries[&target.id].meta.state, SessionState::Running);
+    end_family(core, launches);
+}
+
+// Ticket 1113: missing history alone never proves a session empty. A known untouched first-run picker does.
+#[test]
+fn lead_closes_only_a_proven_empty_first_run_directly() {
+    let (mut core, launches, [lead, _, _, target]) = family("tidy-empty");
+    let mate: crate::team::Teammate = serde_json::from_value(serde_json::json!({
+        "id":"", "name":"Lead", "job":"Lead this place", "kind":"claude",
+        "project":lead.project, "lead":true
+    }))
+    .unwrap();
+    let mate = crate::team::Team::open(&core.home)
+        .save(None, mate)
+        .unwrap()
+        .remove(0);
+    core.entries.get_mut(&lead.id).unwrap().meta.teammate = Some(mate.id);
+    let at = queue::now_ms() + 10 * 60_000 + 1000;
+    assert!(
+        !core.empty_session(&target.id, at),
+        "a shell without a transcript is unknown"
+    );
+    let e = core.entries.get_mut(&target.id).unwrap();
+    e.meta.kind = AgentKind::Claude;
+    e.observer.before_box = true;
+    e.observer.screen.feed(b"Choose the text style that looks best with your terminal\r\nTo change this later, run /theme\r\n1. Dark mode\r\n2. Light mode\r\n");
+    assert!(
+        !core.empty_session(&target.id, queue::now_ms()),
+        "ten minutes must pass"
+    );
+    assert!(core.empty_session(&target.id, at));
+    core.touch_input(&target.id);
+    assert!(
+        !core.empty_session(&target.id, at),
+        "even unsubmitted keys or a draft need a card"
+    );
+    core.touched.remove(&target.id);
+    core.entries
+        .get_mut(&target.id)
+        .unwrap()
+        .observer
+        .transcript = Some(core.home.join("conversation.jsonl"));
+    assert!(!core.empty_session(&target.id, at));
+    core.entries
+        .get_mut(&target.id)
+        .unwrap()
+        .observer
+        .transcript = None;
+    core.entries
+        .get_mut(&target.id)
+        .unwrap()
+        .observer
+        .before_box = false;
+    assert!(
+        !core.empty_session(&target.id, at),
+        "a restored session has uncertain history"
+    );
+    core.entries
+        .get_mut(&target.id)
+        .unwrap()
+        .observer
+        .before_box = true;
+    core.tidy_session(&lead, &target.id, "No work in this account", at)
+        .unwrap();
+    assert!(core.queue.owner_items().is_empty());
+    assert_ne!(core.entries[&target.id].meta.state, SessionState::Running);
+    let room = crate::room::Log::open(&core.home, &lead.project)
+        .read()
+        .unwrap();
+    assert!(format!("{room:?}").contains("Closed empty session"));
+    assert!(room.iter().filter_map(|m| m.team.as_ref()).any(|n| {
+        n.what == "session_empty_closed"
+            && n.name
+                .as_deref()
+                .unwrap_or_default()
+                .contains("No work in this account")
+    }));
+    end_family(core, launches);
+}
+
+// Plan checkpoint m1576: Home has no extra cross-project close authority in this round.
+#[test]
+fn home_lead_cannot_tidy_another_project() {
+    let (mut core, launches, [lead, _, _, target]) = family("tidy-home-scope");
+    let home = crate::team::Team::open(&core.home).home();
+    fs::create_dir_all(&home).unwrap();
+    let mate: crate::team::Teammate = serde_json::from_value(serde_json::json!({
+        "id":"", "name":"Home lead", "job":"Lead Home", "kind":"claude", "lead":true
+    }))
+    .unwrap();
+    let mate = crate::team::Team::open(&core.home)
+        .save(None, mate)
+        .unwrap()
+        .remove(0);
+    let meta = &mut core.entries.get_mut(&lead.id).unwrap().meta;
+    meta.teammate = Some(mate.id);
+    meta.project = home;
+    assert!(
+        core.tidy_session(&lead, &target.id, "Unused account", queue::now_ms())
+            .is_err()
+    );
+    assert!(core.queue.owner_items().is_empty());
+    assert_eq!(core.entries[&target.id].meta.state, SessionState::Running);
+    end_family(core, launches);
+}
+
+#[test]
+fn session_tidy_is_never_a_browser_request() {
+    assert!(!crate::http::browser::request_allowed(
+        &Request::SessionTidy {
+            id: "target".into(),
+            why: "Unused account".into(),
+        }
+    ));
+}
+
+/// Ticket 1121: Claude's footer rows under the box (the auto-mode line, a usage ring, the agents' dots) are no dialog;
+/// read as one, no box showed and every Enter was dropped. Two marked rows there are a radio list, as before.
+#[test]
+fn t1121_status_rows_under_the_box_are_no_choice() {
+    let rule = "─".repeat(120);
+    let auto = "  ⏵⏵ auto mode on (shift+tab to cycle) · ← 2 agents";
+    let boxed =
+        |row: &str, footer: &str| format!("⏺ done\n\n{rule}\n{row}\n{rule}\n{auto}\n{footer}\n");
+    let claude = |s: &str| composer(s, AgentKind::Claude);
+    for footer in [
+        "  ○ 6%",
+        "  ● 100%",
+        "  ◔ 26%",
+        "  📊 ctx ○ 7%/1M │ 🔴 7d 92%",
+    ] {
+        assert_eq!(
+            claude(&boxed("❯ ", footer)).as_deref(),
+            Some(""),
+            "{footer}"
+        );
+        assert_eq!(
+            claude(&boxed("❯ 1 new message: run nunchiro agent check", footer)).as_deref(),
+            Some("1 new message: run nunchiro agent check"),
+            "{footer}"
+        );
+    }
+    assert_eq!(
+        claude(&boxed("❯ hi", "  ● Yes\n  ○ No")),
+        None,
+        "a radio list"
+    );
+    // The real screen of an idle 2.1.331 Builder (06055124, 11-25) as the core read it: the bottom rule lost, the footer
+    // in pieces. Its Enter was dropped as "composer" and the message sat typed in the box.
+    let real = format!(
+        "✻ Churned for 25m 6s · done 9:32 AM\n\n{}\n❯\n\n\n         ◔ 30%             2      8\n                  (shift+tab to cycle) · ← 2 agents\n",
+        "─".repeat(160)
+    );
+    assert_eq!(claude(&real).as_deref(), Some(""));
+    let low = real.replace("◔ 30%", "○ 6%");
+    assert_eq!(claude(&low).as_deref(), Some(""), "the ring below 12%");
+    let typed = real.replace("❯\n", "❯ 1 new message: run nunchiro agent check\n");
+    assert_eq!(
+        claude(&typed).as_deref(),
+        Some("1 new message: run nunchiro agent check")
+    );
+    // Review r2: a single marked choice under the box is a dialog, ring or not of the box.
+    assert_eq!(
+        claude(&boxed("❯ hi", "  ● Continue")),
+        None,
+        "one radio choice"
+    );
+    assert_eq!(claude(&boxed("❯ hi", "  ● main   ◯ worker-a")), None);
+    // Review r2: with the bottom rule lost, only Claude's footer words make it the box.
+    assert_eq!(
+        claude(&format!("{rule}\n❯ hi\n\n  some other text\n")),
+        None,
+        "no footer words"
+    );
+    assert_eq!(
+        claude(&format!(
+            "{rule}\n❯ hi\n\n  ● Continue\n  (shift+tab to cycle)\n"
+        )),
+        None
+    );
+    // With the rule lost, an option under the row is still a dialog, and so is a numbered row.
+    assert_eq!(claude(&format!("{rule}\n❯ hi\n  1. Yes\n  2. No")), None);
+    assert_eq!(claude(&format!("{rule}\n❯ 1. Yes\n  2. No")), None);
+    assert_eq!(claude(&format!("{rule}\n❯ hi\n   ❯ Yes")), None);
+    assert_eq!(
+        claude(&boxed("❯ hi", "  ❯ 1. Yes\n    2. No")),
+        None,
+        "a cursor list"
+    );
+}
+/// Ticket 1121: a dropped row goes again only into a box the screen reads free of its earlier copy. While the box
+/// shows that copy the core clears it (Ctrl+U) and pastes nothing; the box read empty takes it once. The owner's
+/// message arrived as six glued copies.
+#[test]
+fn t1121_a_repaste_never_glues() {
+    let footer = "\r\n  ⏵⏵ auto mode on (shift+tab to cycle) · ← 2 agents\r\n  ○ 6%\r\n";
+    let copy = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi there\r\n{RULE}{footer}");
+    let empty = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}{footer}");
+    let shell = |s: &str| {
+        s.replace('\x1b', "\\033")
+            .replace("\r\n", "\\r\\n")
+            .replace('%', "%%")
+    };
+    let mut f = flood_script(
+        "t1121-repaste",
+        copy.as_bytes(),
+        &format!(
+            "cat > got <&0 &\ncat burst\nj=0; while [ ! -f empty ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
+            shell(&empty)
+        ),
+    );
+    wait_end(&f, copy.len());
+    f.core.entries.get_mut(&f.id).unwrap().meta.kind = AgentKind::Claude;
+    catch_up(&mut f);
+    let id = f.id.clone();
+    hook(&mut f, "UserPromptSubmit");
+    f.core.prompt_as_user(&id, "hi there".into()).unwrap();
+    let row = rows(&f)
+        .into_iter()
+        .find(|s| s.content == "hi there")
+        .unwrap();
+    f.core.drops.insert(row.id.clone(), 1);
+    f.core.left_typed.insert(id.clone());
+    hook(&mut f, "Stop");
+    for _ in 0..5 {
+        f.core.tick().unwrap();
+    }
+    let copies = |f: &Flood| got(f).windows(8).filter(|w| w == b"hi there").count();
+    assert_eq!(copies(&f), 0, "pasted behind its own copy");
+    assert!(got(&f).contains(&0x15), "the copy is cleared first");
+    fs::write(f.home.join("empty"), "").unwrap();
+    wait_end(&f, copy.len() + empty.len());
+    catch_up(&mut f);
+    w14_tick_until(&mut f, 20, "the empty box never took it", |f| {
+        copies(f) == 1
+    });
+    for _ in 0..5 {
+        f.core.tick().unwrap();
+    }
+    assert_eq!(copies(&f), 1, "once");
+}
+/// Ticket 1121: past REPASTES drops a row waits in the queue and is never pasted again, even into an empty box.
+#[test]
+fn t1121_repastes_are_bounded() {
+    let empty = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
+    let mut f = unobserved("t1121-bound", empty.as_bytes());
+    catch_up(&mut f);
+    let id = f.id.clone();
+    hook(&mut f, "UserPromptSubmit");
+    f.core.prompt_as_user(&id, "hi there".into()).unwrap();
+    let row = rows(&f)
+        .into_iter()
+        .find(|s| s.content == "hi there")
+        .unwrap();
+    f.core.drops.insert(row.id.clone(), REPASTES + 1);
+    hook(&mut f, "Stop");
+    for _ in 0..5 {
+        f.core.tick().unwrap();
+    }
+    assert!(
+        !got(&f).windows(8).any(|w| w == b"hi there"),
+        "pasted past the bound"
+    );
+    assert_eq!(send_row(&f, &row.id).status, "queued");
+}
+/// Ticket 1121 (review r1): at exactly REPASTES drops the row still goes into an empty box, once; one drop more stops it
+/// and the snapshot names it, so the composer can say it will not go again.
+#[test]
+fn t1121_the_repaste_bound_is_exact() {
+    let empty = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
+    for (n, pasted) in [(REPASTES, true), (REPASTES + 1, false)] {
+        let mut f = unobserved(&format!("t1121-edge-{n}"), empty.as_bytes());
+        catch_up(&mut f);
+        let id = f.id.clone();
+        hook(&mut f, "UserPromptSubmit");
+        f.core.prompt_as_user(&id, "hi there".into()).unwrap();
+        let row = rows(&f)
+            .into_iter()
+            .find(|s| s.content == "hi there")
+            .unwrap();
+        f.core.drops.insert(row.id.clone(), n);
+        hook(&mut f, "Stop");
+        for _ in 0..5 {
+            f.core.tick().unwrap();
+        }
+        let copies = got(&f).windows(8).filter(|w| w == b"hi there").count();
+        assert_eq!(copies, usize::from(pasted), "{n} drops");
+        let snap = f.core.snapshot_session(&f.core.entries[&id].meta);
+        assert_eq!(snap.stopped_sends.contains(&row.id), !pasted, "{n} drops");
+        if !pasted {
+            assert_eq!(send_row(&f, &row.id).status, "queued");
+            let json = serde_json::to_value(&snap).unwrap();
+            assert_eq!(json["stopped_sends"][0], row.id.as_str());
+        }
+    }
+}
+/// Ticket 1121 (review r1): while the box may hold the core's dropped copy, a later message is not pasted into a box the
+/// screen does not read (the clear would write no Ctrl+U and glue it to the copy). A box read empty takes it once; with
+/// none read for CLEAN_WAIT it stops and waits in the queue, named in the snapshot.
+#[test]
+fn t1121_a_later_row_waits_for_a_read_box() {
+    let unread = "\x1b[2J\x1b[H  working on something\r\n";
+    let mut f = unobserved("t1121-later", unread.as_bytes());
+    catch_up(&mut f);
+    let id = f.id.clone();
+    // One finished turn: an idle agent is ready though its box does not read (the incident's seats).
+    hook(&mut f, "UserPromptSubmit");
+    hook(&mut f, "Stop");
+    f.core.left_typed.insert(id.clone());
+    f.core.prompt_as_user(&id, "new words".into()).unwrap();
+    let row = rows(&f)
+        .into_iter()
+        .find(|s| s.content == "new words")
+        .unwrap();
+    for _ in 0..5 {
+        f.core.tick().unwrap();
+    }
+    let copies = |f: &Flood| got(f).windows(9).filter(|w| w == b"new words").count();
+    assert_eq!(copies(&f), 0, "pasted into an unread box");
+    assert!(
+        f.core.clean_wait.contains_key(&row.id),
+        "the guard holds it"
+    );
+    // The wait ran out: stopped, still queued, never pasted, even into a box read later.
+    let long_ago = std::time::Instant::now() - CLEAN_WAIT - std::time::Duration::from_secs(1);
+    f.core
+        .clean_wait
+        .insert(row.id.clone(), (long_ago, std::time::Instant::now()));
+    f.core.tick().unwrap();
+    let snap = f.core.snapshot_session(&f.core.entries[&id].meta);
+    assert_eq!(snap.stopped_sends, vec![row.id.clone()]);
+    assert_eq!(send_row(&f, &row.id).status, "queued");
+    // A new message goes once the box reads empty.
+    let empty = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
+    f.core
+        .entries
+        .get_mut(&id)
+        .unwrap()
+        .observer
+        .screen
+        .feed(empty.as_bytes());
+    f.core.prompt_as_user(&id, "fresh one".into()).unwrap();
+    w14_tick_until(&mut f, 20, "the read box never took the new message", |f| {
+        got(f).windows(9).any(|w| w == b"fresh one")
+    });
+    assert!(
+        !f.core.left_typed.contains(&id),
+        "the fresh send cleared the copy tracking"
+    );
+    // Review r2: the stopped row stays stopped once nothing guards the box any more.
+    // The fixture has no bracketed paste: the fresh message went with its Enter; its turn runs and ends.
+    hook(&mut f, "UserPromptSubmit");
+    hook(&mut f, "Stop");
+    for _ in 0..5 {
+        f.core.tick().unwrap();
+    }
+    assert_eq!(copies(&f), 0, "the stopped row never went");
+    assert_eq!(send_row(&f, &row.id).status, "queued");
+}
+/// Ticket 1121 (review r1): an automatic line held with no clean box for CLEAN_WAIT fails, as its second drop does; it
+/// never waits in the queue for ever.
+#[test]
+fn t1121_a_stopped_automatic_line_fails() {
+    let unread = "\x1b[2J\x1b[H  working on something\r\n";
+    let mut f = unobserved("t1121-auto", unread.as_bytes());
+    catch_up(&mut f);
+    let id = f.id.clone();
+    hook(&mut f, "UserPromptSubmit");
+    hook(&mut f, "Stop");
+    let row = f
+        .core
+        .begin_send(&id, &id, "room notice".into(), vec![], true, "queued")
+        .unwrap();
+    f.core.retried.insert(row.id.clone());
+    f.core.tick().unwrap();
+    assert_eq!(send_row(&f, &row.id).status, "queued");
+    let long_ago = std::time::Instant::now() - CLEAN_WAIT - std::time::Duration::from_secs(1);
+    f.core
+        .clean_wait
+        .insert(row.id.clone(), (long_ago, std::time::Instant::now()));
+    f.core.tick().unwrap();
+    assert_eq!(send_row(&f, &row.id).status, "failed");
+    assert!(!got(&f).windows(11).any(|w| w == b"room notice"));
+}
+/// Ticket 1121 review r2: the box proof never writes the Enter past output not read yet. A dialog drawn after the box
+/// showed the paste would take it.
+#[test]
+fn t1121_box_proof_waits_for_unread_output() {
+    let boxed =
+        format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi\r\n{RULE}\r\n  (shift+tab to cycle)\r\n");
+    let dialog = " Pick one\r\n \u{276f} 1. Yes\r\n   2. No\r\n";
+    let mut f = flood_script(
+        "t1121-proof-unread",
+        boxed.as_bytes(),
+        &format!(
+            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nsleep 30\n",
+            PROMPT.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            dialog.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
+        ),
+    );
+    wait_end(&f, PROMPT.len());
+    f.core.observe().unwrap();
+    let Ok(Reply::Delivery { send }) = f.core.handle(Request::AgentPrompt {
+        id: f.id.clone(),
+        text: "hi".into(),
+    }) else {
+        panic!("the prompt was not taken")
+    };
+    wait_end(&f, PROMPT.len() + boxed.len());
+    catch_up(&mut f);
+    f.core.flush_enters().unwrap(); // the box shows the paste: held
+    assert!(f.core.pending_enter[&f.id].held);
+    // The dialog is drawn and not read yet; the paste is late and the output is not quiet.
+    fs::write(f.home.join("more"), "").unwrap();
+    wait_end(&f, PROMPT.len() + boxed.len() + dialog.len());
+    let enter = f.core.pending_enter.get_mut(&f.id).unwrap();
+    enter.written -= SETTLE;
+    enter.quiet = std::time::Instant::now();
+    f.core.flush_enters().unwrap();
+    assert!(
+        f.core.pending_enter.contains_key(&f.id),
+        "the Enter waits for the unread output"
+    );
+    assert!(!got(&f).contains(&b'\r'), "no Enter past unread output");
+    assert_ne!(send_row(&f, &send.id).status, "delivered");
 }

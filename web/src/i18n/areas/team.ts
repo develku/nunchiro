@@ -2,6 +2,7 @@
 declare module '../index' {
   interface AreaKeys {
     'field.team': true;
+    'field.place': true;
     'team.title': true;
     'team.desc': true;
     'team.section': true;
@@ -39,6 +40,7 @@ declare module '../index' {
 
 export const en = {
   'field.team': "Team",
+  'field.place': "How this place works", // ticket 1099, English only until ticket 1035
   'team.title': "Team",
   'team.desc': "Saved agents with a name, a job and a memory of their own.",
   'team.section': "Teammates",

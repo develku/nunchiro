@@ -11,6 +11,7 @@ import { StrokeIcon } from '../shell/NavIcon';
 import { ErrorLine, rawError } from '../../errors';
 import { useFeatureSetting } from '../useFeatureSetting';
 import { ASK_CLOSE_RUNNING } from '../../chrome/closeAsk';
+import { keyText } from '../../keys';
 
 export interface LifetimeValues {
   lifetime: 'keep_running' | 'end_with_app';
@@ -77,7 +78,7 @@ export function LifetimeSection({ core, t, part }: { core: CoreClient; t: T; par
       />
       <Row label={t('settings.row.startAtLogin')} desc={t('settings.row.startAtLoginDesc')} reset={<Reset t={t} label={t('settings.row.startAtLogin')} show={values.start_at_login} run={() => void apply({ start_at_login: false })} />} control={<Switch setting="startAtLogin" label={t('settings.row.startAtLogin')} checked={values.start_at_login} onChange={(v) => void apply({ start_at_login: v })} />} />
       <Row label={t('lifetime.keepAwake')} desc={t('lifetime.keepAwakeHint')} reset={<Reset t={t} label={t('lifetime.keepAwake')} show={values.keep_awake} run={() => void apply({ keep_awake: false })} />} control={<Switch setting="keepAwake" label={t('lifetime.keepAwake')} checked={values.keep_awake} onChange={(v) => void apply({ keep_awake: v })} />} />
-      <Row label={t('closeAsk.row')} desc={t('closeAsk.rowDesc')} reset={<Reset t={t} label={t('closeAsk.row')} show={askClose !== false} run={() => setAskClose(false)} />} control={<Switch setting="confirmCloseRunning" label={t('closeAsk.row')} checked={askClose} onChange={setAskClose} />} />
+      <Row label={t('closeAsk.row')} desc={t('closeAsk.rowDesc', { key: keyText('tab.close') })} reset={<Reset t={t} label={t('closeAsk.row')} show={askClose !== false} run={() => setAskClose(false)} />} control={<Switch setting="confirmCloseRunning" label={t('closeAsk.row')} checked={askClose} onChange={setAskClose} />} />
     </>
   ) : (
     <>

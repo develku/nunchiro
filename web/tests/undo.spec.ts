@@ -5,74 +5,71 @@ import AxeBuilder from '@axe-core/playwright';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, openWindow, REPO, test, agentsZone, type Core, showComposer } from './fixtures';
+import { closeFromTab, expect, openWindow, REPO, test, stripOnTop, type Core, showComposer } from './fixtures';
 import { card as themeCard, menu, openTheme } from './theme-harness';
 import { bar, editBar, names, startEdit } from './d5b';
 import { openQuiet } from './tree-seed';
 
 const line = (p: Page) => p.locator('footer.status .undoline');
 const undoButton = (p: Page) => line(p).getByRole('button', { name: 'Undo' });
-const agentIds = (p: Page) => p.locator('.ar').evaluateAll((els) => els.map((e) => e.getAttribute('data-agent')));
 const shot = (p: Page, name: string) => p.screenshot({ path: path.join(REPO, '.scratch/shots', `v2-6a-${name}-${test.info().project.name}.png`) });
 const seed = (p: Page, settings: Record<string, unknown>) =>
   p.addInitScript((s) => {
     if (!localStorage.getItem('nunchiro.settings.v1')) localStorage.setItem('nunchiro.settings.v1', JSON.stringify(s));
   }, settings);
 
-/** Three sessions, two of them closed (done), in the AGENTS rows. */
-function doneSessions(core: Core) {
+const stateOf = (core: Core, id: string) => (core.cli('snapshot', '--json').sessions as { id: string; state: string }[]).find((x) => x.id === id)?.state;
+
+/** Two shells; the status-line Undo comes from closing `a` (one that ends when told) through its tab menu: the core undoes the close of an ended session. */
+function twoShells(core: Core) {
   const p = core.project('demo');
-  const a = core.shell(p, 'a').id;
-  const b = core.shell(p, 'b').id;
-  const c = core.shell(p, 'c').id;
-  core.cli('session', 'close', a);
-  core.cli('session', 'close', b);
-  return { a, b, c };
+  return { a: core.shell(p, 'a', '/bin/sh', '-c', 'read x; exit 0').id, b: core.shell(p, 'b').id };
+}
+async function end(core: Core, id: string) {
+  core.cli('session', 'send-text', id, 'x\r');
+  await expect.poll(() => stateOf(core, id)).toBe('exited');
 }
 
-test.describe('clear done', () => {
-  test.beforeEach(({ core }) => agentsZone(core));
+test.describe('close undo', () => {
+  test.beforeEach(({ core }) => stripOnTop(core));
 
-  test('undo_clear_done_restores', async ({ app, core }) => {
-    const { c } = doneSessions(core);
+  test('undo_close_restores', async ({ app, core }) => {
+    const { a } = twoShells(core);
     await openWindow(app);
-    await expect.poll(async () => (await agentIds(app)).length).toBe(3);
-    const before = await agentIds(app);
-    expect(before[0]).toBe(c);
-    await app.getByRole('button', { name: 'Clear done' }).click();
-    await expect.poll(() => agentIds(app)).toEqual([c]);
-    await expect(line(app)).toContainText('Cleared 2 done sessions');
-    await shot(app, 'clear-done');
+    await end(core, a);
+    await closeFromTab(app, a);
+    await expect(line(app)).toContainText('Closed a');
+    await expect.poll(() => stateOf(core, a)).toBeUndefined(); // closed: the session is gone from the snapshot
+    await shot(app, 'close');
     await undoButton(app).click();
-    await expect.poll(() => agentIds(app)).toEqual(before);
+    await expect.poll(() => stateOf(core, a)).toBeDefined();
     await expect(line(app)).toHaveCount(0);
   });
 
   test('undo_expires_after_10s', async ({ app, core }) => {
-    const { c } = doneSessions(core);
+    const { a } = twoShells(core);
     await app.clock.install();
     await openWindow(app);
-    await app.getByRole('button', { name: 'Clear done' }).click();
-    await expect.poll(() => agentIds(app)).toEqual([c]);
+    await end(core, a);
+    await closeFromTab(app, a);
     await expect(line(app)).toBeVisible();
     await app.clock.fastForward(9_000);
     await expect(line(app)).toBeVisible();
     await app.clock.fastForward(2_000);
     await expect(line(app)).toHaveCount(0);
-    await app.locator(`.ar[data-agent="${c}"]`).focus();
     await app.keyboard.press('Meta+KeyZ');
     await app.waitForTimeout(200);
-    expect(await agentIds(app)).toEqual([c]);
+    expect(stateOf(core, a)).toBeUndefined();
   });
 
   test('undo_cmd_z_outside_fields_only', async ({ app, core }) => {
-    const { c } = doneSessions(core);
+    const { a, b } = twoShells(core);
     await openWindow(app);
-    await expect.poll(async () => (await agentIds(app)).length).toBe(3);
-    const before = await agentIds(app);
-    await app.getByRole('button', { name: 'Clear done' }).click();
-    await expect.poll(() => agentIds(app)).toEqual([c]);
+    await end(core, a);
+    await closeFromTab(app, a);
+    await expect(line(app)).toBeVisible();
     // The composer, the terminal and a text field keep their own undo.
+    await app.locator(`.tab[data-tab="${b}"]`).click();
     await showComposer(app); // V2.5-34: a shell's composer is asked for
     await app.locator('#composer').focus();
     await app.keyboard.press('Meta+KeyZ');
@@ -83,20 +80,21 @@ test.describe('clear done', () => {
     await expect(search).toBeFocused();
     await app.keyboard.press('Meta+KeyZ');
     await app.waitForTimeout(200);
-    expect(await agentIds(app)).toEqual([c]);
+    expect(stateOf(core, a)).toBeUndefined();
     await expect(line(app)).toBeVisible();
     await app.keyboard.press('Escape');
     // On the tree row it runs.
-    await app.locator(`.ar[data-agent="${c}"]`).focus();
+    await app.locator(`button.row.wt2[data-menu-session="${b}"]`).focus();
     await app.keyboard.press('Meta+KeyZ');
-    await expect.poll(() => agentIds(app)).toEqual(before);
+    await expect.poll(() => stateOf(core, a)).toBeDefined();
     await expect(line(app)).toHaveCount(0);
   });
 
   test('undo_status_line_axe_and_live', async ({ app, core }) => {
-    doneSessions(core);
+    const { a } = twoShells(core);
     await openWindow(app);
-    await app.getByRole('button', { name: 'Clear done' }).click();
+    await end(core, a);
+    await closeFromTab(app, a);
     await expect(line(app)).toBeVisible();
     await expect(line(app)).toHaveAttribute('role', 'status');
     await expect(line(app)).toHaveAttribute('aria-live', 'polite');
@@ -203,7 +201,7 @@ test('undo_layout_edit_stale_entry_dropped', async ({ app }) => {
 
 // Ticket 78: the worktree toast and the status-line entry each listen for Cmd+Z; one press undoes one of them.
 test.describe('undo followups (ticket 78)', () => {
-  test.beforeEach(({ core }) => agentsZone(core));
+  test.beforeEach(({ core }) => stripOnTop(core));
 
   test('one_cmd_z_undoes_one_action', async ({ app, core }) => {
     const p = core.project('repo');
@@ -211,15 +209,13 @@ test.describe('undo followups (ticket 78)', () => {
     git('init', '-q', '-b', 'main');
     git('commit', '-q', '--allow-empty', '-m', 'init');
     const w = (core.cli('worktree', 'create', '--project', p, '--branch', 'tidy', '--no-focus').worktrees as { path: string; branch: string }[]).find((x) => x.branch === 'tidy')!;
-    const ids = ['a', 'b', 'c'].map((n) => core.shell(p, n).id);
-    core.cli('session', 'close', ids[0]);
-    core.cli('session', 'close', ids[1]);
+    const a = core.shell(p, 'a', '/bin/sh', '-c', 'read x; exit 0').id;
+    core.shell(p, 'b');
     openQuiet(core);
     await openWindow(app);
-    await expect.poll(async () => (await agentIds(app)).length).toBe(3);
-    await app.getByRole('button', { name: 'Clear done' }).click();
-    await expect.poll(() => agentIds(app)).toEqual([ids[2]]);
-    await expect(line(app)).toContainText('Cleared 2 done sessions');
+    await end(core, a);
+    await closeFromTab(app, a);
+    await expect(line(app)).toContainText('Closed a');
     const tidy = app.locator('.row.wt2').filter({ hasText: 'tidy' }).first();
     await tidy.focus();
     await app.keyboard.press('Backspace');
@@ -230,7 +226,7 @@ test.describe('undo followups (ticket 78)', () => {
     await app.locator('.row').first().focus();
     await app.keyboard.press('Meta+KeyZ');
     await app.waitForTimeout(500);
-    const clearUndone = (await agentIds(app)).length === 3;
+    const clearUndone = stateOf(core, a) !== undefined;
     const worktreeUndone = fs.existsSync(w.path);
     test.info().annotations.push({ type: 'winner', description: clearUndone ? 'status-line' : worktreeUndone ? 'worktree toast' : 'none' });
     expect(Number(clearUndone) + Number(worktreeUndone)).toBe(1);
@@ -240,25 +236,7 @@ test.describe('undo followups (ticket 78)', () => {
       await expect.poll(() => fs.existsSync(w.path)).toBe(true);
     } else {
       await undoButton(app).click();
-      await expect.poll(async () => (await agentIds(app)).length).toBe(3);
+      await expect.poll(() => stateOf(core, a)).toBeDefined();
     }
-  });
-
-  test('clear_done_with_none_shows_no_undo', async ({ app, core }) => {
-    doneSessions(core);
-    await openWindow(app);
-    await expect.poll(async () => (await agentIds(app)).length).toBe(3);
-    const seen: string[] = [];
-    const watch = setInterval(() => void line(app).allTextContents().then((t) => seen.push(...t)).catch(() => {}), 25);
-    const clear = app.getByRole('button', { name: 'Clear done' });
-    await clear.click();
-    await expect(clear).toHaveCount(0);
-    await expect(line(app).filter({ hasText: 'Cleared 2' }).first()).toBeVisible(); // waited for: the 25 ms watch can miss it under load
-    await undoButton(app).click();
-    await expect.poll(async () => (await agentIds(app)).length).toBe(3);
-    await clear.click();
-    await expect(clear).toHaveCount(0);
-    clearInterval(watch);
-    expect(seen.filter((t) => t.includes('Cleared 0'))).toEqual([]);
   });
 });

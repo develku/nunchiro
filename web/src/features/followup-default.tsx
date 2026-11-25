@@ -5,6 +5,7 @@ import type { T } from '../i18n';
 import { Reset, Row, Sec, Seg } from '../settings/shell/Row';
 import { defineSetting, useFeatureSetting } from '../settings/useFeatureSetting';
 import { registerSettingsSection } from './registry';
+import { keyText } from '../keys';
 
 export type Followup = 'queue' | 'steer';
 export const FOLLOWUP = defineSetting<Followup>('composer.followup', 'queue', (v) => (v === 'queue' || v === 'steer' ? v : undefined));
@@ -17,7 +18,7 @@ function FollowupRow({ t }: { t: T }) {
       <Row
         setting="composer.followup"
         label={label}
-        desc={t(value === 'steer' ? 'followup.steerDesc' : 'followup.queueDesc')}
+        desc={t(value === 'steer' ? 'followup.steerDesc' : 'followup.queueDesc', { key: keyText('composer.steerNow') })}
         reset={<Reset t={t} label={label} show={value !== 'queue'} run={() => set('queue')} />}
         control={<Seg name="followup-default" label={label} value={value} onChange={set} options={[['queue', t('followup.queue')], ['steer', t('followup.steer')]]} />}
       />

@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { boxes, expect, openWindow, test, unmoved, type Core, agentsZone } from './fixtures';
+import { boxes, expect, openWindow, test, unmoved, type Core, stripOnTop } from './fixtures';
 import { openQuiet } from './tree-seed';
 
-test.beforeEach(({ core }) => agentsZone(core, { below: true })); // D5b: the default window has no AGENTS rows; ticket 180: strip under the composer (needs 107)
+test.beforeEach(({ core }) => stripOnTop(core, { below: true })); // D5b: the default window has no AGENTS rows; ticket 180: strip under the composer (needs 107)
 
 const arrive = (dir: string, trigger: string) => fs.writeFileSync(path.join(dir, trigger), '');
 /** The default fake leaves its dialog on screen after an answer; this one clears it, so the item really resolves. */
@@ -95,11 +95,8 @@ test('tree C: three items show two rows and +1, a click opens the panel card', a
   expect(ids).toContain(session);
   // DECISIONW: the Decisions widget (right sidebar) shows it; the tab does not change.
   await expect(app.locator(`aside.sbar[data-side="right"] .deccard[data-session="${session}"]`)).toBeVisible();
-  // Tab dots and AGENTS dots show waiting too.
-  for (const id of ids) {
-    await expect(app.locator(`.tab[data-tab="${id}"] .tdot`)).toHaveAttribute('data-s', 'waiting');
-    await expect(app.locator(`[data-agent="${id}"] .st`)).toHaveAttribute('data-s', 'waiting');
-  }
+  // Tab dots show waiting too.
+  for (const id of ids) await expect(app.locator(`.tab[data-tab="${id}"] .tdot`)).toHaveAttribute('data-s', 'waiting');
 });
 
 test('tree C: a collapsed project hides its worktree rows, keeps its decision rows, and shows waiting in its counts and group bar', async ({ app, core }) => {
@@ -193,18 +190,6 @@ test('tree C: a worktree shows as its own row (rail and icon) whenever the proje
   await expect(grp.locator('.row.wt2:not([data-menu="treerow"]) .ic svg')).toHaveCount(0); // ticket 1041: an idle row is bare (owner 11-22)
   await grp.getByRole('button', { name: 'Collapse repo' }).click(); // a user-folded project hides its rows
   await expect(grp.locator('.row.wt2')).toHaveCount(0);
-});
-
-test('AGENTS lists every session in spawn order and never re-sorts', async ({ app, core }) => {
-  const p = core.project('demo');
-  const ids = ['one', 'two', 'three', 'four'].map((l) => core.shell(p, l).id);
-  await openWindow(app);
-  await expect(app.locator('.ar')).toHaveCount(4);
-  expect(await app.locator('.ar').evaluateAll((els) => els.map((e) => e.getAttribute('data-agent')))).toEqual(ids);
-  const five = core.agent(p, 'five', 'go').id;
-  arrive(p, 'go');
-  await expect(app.locator(`[data-agent="${five}"] .st`)).toHaveAttribute('data-s', 'waiting', { timeout: 5000 });
-  expect(await app.locator('.ar').evaluateAll((els) => els.map((e) => e.getAttribute('data-agent')))).toEqual([...ids, five]);
 });
 
 test('tree C: an item arriving while hovered changes no row and shows the new chip, then applies after leave', async ({ app, core }) => {

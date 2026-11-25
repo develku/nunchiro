@@ -1,17 +1,19 @@
 // SPLITS: the session view with its splits around it (frame-ko-e `.tsplit` / `#tmp`): left splits, then a column of the
 // splits above, the view itself and the splits below, then right splits. A split's header has its icon, name, the
 // Temporary chip, 📌 (widgets only) and ✕, each icon-only with a label and tooltip (NODUP).
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { CoreClient } from '../api';
 import type { T } from '../i18n';
 import { SideChat } from '../chat/SideChat';
 import { WIDGET_LABEL } from '../layout/bars';
 import { Icon } from '../layout/icons';
+import { resizing } from '../layout/resizing';
 import { kindOf } from '../layout/model';
 import { sessionName } from '../Sidebar';
 import type { Session } from '../types';
 import { Chooser, type Choice } from './Chooser';
 import { CHOOSER, SIDE_START, RATIO, ratioOf, sessionOf, setRatio, useRatios, useSplits, type Split } from './store';
+import { keepComposerClear } from '../pane/composerRoom';
 import './split.css';
 
 interface Props {
@@ -37,7 +39,6 @@ function Gutter({ split, t }: { split: Split; t: T }) {
   // Moving the gutter toward the chat grows the split: left split grows to the right, a right split to the left.
   const grow = split.side === 'left' || split.side === 'up' ? 1 : -1;
   const v = ratioOf(split.id);
-  const drag = useRef<{ start: number; from: number; size: number } | null>(null);
   const axis = (el: HTMLElement) => {
     const box = el.closest(row ? '[data-split-host]' : '.scol')?.getBoundingClientRect();
     return box ? (row ? box.width : box.height) : 0;
@@ -57,14 +58,9 @@ function Gutter({ split, t }: { split: Split; t: T }) {
       onDoubleClick={() => setRatio(split.id, RATIO.dflt)}
       onPointerDown={(e) => {
         e.preventDefault();
-        e.currentTarget.setPointerCapture(e.pointerId);
-        drag.current = { start: row ? e.clientX : e.clientY, from: v, size: axis(e.currentTarget) };
+        const d = { start: row ? e.clientX : e.clientY, from: v, size: axis(e.currentTarget) };
+        resizing(e.currentTarget, e.pointerId, (ev) => d.size > 0 && setRatio(split.id, d.from + (grow * ((row ? ev.clientX : ev.clientY) - d.start) * 100) / d.size));
       }}
-      onPointerMove={(e) => {
-        const d = drag.current;
-        if (d && d.size > 0) setRatio(split.id, d.from + (grow * ((row ? e.clientX : e.clientY) - d.start) * 100) / d.size);
-      }}
-      onPointerUp={() => (drag.current = null)}
       onKeyDown={(e) => {
         const step = e.shiftKey ? 10 : 2;
         const dir = row ? { ArrowLeft: -1, ArrowRight: 1 }[e.key] : { ArrowUp: -1, ArrowDown: 1 }[e.key];
@@ -85,6 +81,15 @@ export function SplitHost(p: Props) {
   const mine = p.session ? (all[p.session.id] ?? []) : [];
   // A closed split, or another session's, is not maximised any more (the id is never reused).
   const maxed = mine.find((s) => s.id === maxId) ?? null;
+  // Ticket 1093 (review): the window's composer ends at the chat column beside a split of any content (a session, a Preview,
+  // a file), by the rule every Preview host uses (pane/composerRoom.ts).
+  const box = useRef<HTMLDivElement>(null);
+  const beside = mine.map((s) => `${s.id}:${s.side}`).join();
+  useEffect(() => {
+    const els = [...(box.current?.querySelectorAll(':scope > .split[data-side="left"], :scope > .split[data-side="right"]') ?? [])];
+    const offs = els.map(keepComposerClear);
+    return () => offs.forEach((off) => off());
+  }, [beside, maxed?.id]);
   const on = (side: Split['side']) =>
     mine
       .filter((s) => s.side === side)
@@ -149,7 +154,7 @@ export function SplitHost(p: Props) {
   }
 
   return (
-    <div className="shost" data-split-host data-session={p.session?.id} data-maxed={maxed ? maxed.side : undefined}>
+    <div className="shost" ref={box} data-split-host data-session={p.session?.id} data-maxed={maxed ? maxed.side : undefined}>
       {on('left')}
       <div className="scol">
         {on('up')}

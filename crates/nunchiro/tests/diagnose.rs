@@ -526,12 +526,14 @@ fn diagnose_settings_keys_match_core() {
     let fields: BTreeSet<String> = body
         .lines()
         .filter(|l| l.starts_with("    ") && !l.trim_start().starts_with("//"))
+        .filter(|l| !l.trim_start().starts_with("#[")) // a field's attribute line
         .filter_map(|l| {
             l.trim()
                 .split(':')
                 .next()
                 .map(|n| n.trim_start_matches("pub ").to_string())
         })
+        .filter(|n| n != "user_home") // ticket 1083: `serde(skip)`, read from $HOME, never in settings.json
         .collect();
     let listed: BTreeSet<String> = names(&allowlist()["subset"]["settings.json"])
         .into_iter()

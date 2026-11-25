@@ -19,6 +19,8 @@ import * as agents from '../src/i18n/areas/agents';
 import * as leftovers from '../src/i18n/areas/english-leftovers';
 import * as own from '../src/i18n/areas/own-sentences';
 import * as koreanA11y from '../src/i18n/areas/korean-a11y';
+import * as machines from '../src/i18n/areas/machines'; // machines.linkBad (ticket 1122)
+import * as leader from '../src/i18n/areas/leader'; // lead.freshStuck and lead.freshStuckHanded (ticket 1122)
 import { openRow } from './accounts-rows';
 import { expect, grantClipboard, openWindow, REPO, test } from './fixtures';
 import { enable, freePort, phone } from './web-access-shared';
@@ -286,7 +288,8 @@ for (const lang of LANGS) {
     await openRow(app, 'Claude');
     const pick = app.getByRole('combobox', { name: `${t('providersManage.permission')} · Claude` });
     await expect(pick).toHaveValue('full-access');
-    const raw = 'settings.json: Resource busy (os error 16)';
+    // Not "<name>.json: <fault>": since ticket 1122 that is a known file fault (ledger/package.rs, a task package file).
+    const raw = 'settings.toml: Resource busy (os error 16)';
     arm((r) => r.op === 'agent_permission_set', raw);
     await pick.selectOption('ask');
     const box = app.locator('#s-accounts [role="alert"]').filter({ hasText: raw });
@@ -388,7 +391,7 @@ test('errors_plain_known_all_languages: each KNOWN line has its own words and it
   const { KNOWN, explainError } = await import('../src/errors');
   const schedule = await import('../src/i18n/areas/schedule');
   const levels = await import('../src/i18n/areas/levels'); // level.customOn: the line of team.rs's custom-model refusal
-  const tables = mergeAreas({ en: {}, ko: {}, ja: {}, 'zh-Hans': {}, 'zh-Hant': {}, es: {}, fr: {}, pt: {} }, { errors, errorsCore, errorsGaps, errorsGroups, kit, dialog, about, exitWidgets, tree, providersManage, agents, schedule, levels, own, koreanA11y }) as unknown as Record<string, Record<string, string>>;
+  const tables = mergeAreas({ en: {}, ko: {}, ja: {}, 'zh-Hans': {}, 'zh-Hant': {}, es: {}, fr: {}, pt: {} }, { errors, errorsCore, errorsGaps, errorsGroups, kit, dialog, about, exitWidgets, tree, providersManage, agents, schedule, levels, own, koreanA11y, machines, leader }) as unknown as Record<string, Record<string, string>>;
   expect(KNOWN.length).toBeGreaterThan(30);
   const missing: string[] = [];
   for (const lang of ALL_LANGS) {

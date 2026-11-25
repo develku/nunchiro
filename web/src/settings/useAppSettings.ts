@@ -8,7 +8,7 @@ import { ABOUT_EVENT } from '../features/about';
 import { publishFeatures } from './useFeatureSetting';
 import { openSchedules } from '../schedule/schedules';
 
-const NAME_KEY: Record<string, Key> = Object.fromEntries(['tree', 'agents', 'waiting', 'terminal', 'composer', 'diff', 'files', 'board', 'search', 'preview', 'artifacts', 'decisions', 'settings', 'layout', 'browser', 'team'].map((k) => [k, `shell.widget.${k}` as Key]).concat([['schedules', 'schedule.title'], ['history', 'history.title']]));
+const NAME_KEY: Record<string, Key> = Object.fromEntries(['tree', 'waiting', 'terminal', 'composer', 'diff', 'files', 'board', 'search', 'preview', 'artifacts', 'decisions', 'settings', 'layout', 'browser', 'team'].map((k) => [k, `shell.widget.${k}` as Key]).concat([['schedules', 'schedule.title'], ['history', 'history.title']]));
 
 /** The window's settings (settings.json through `load`/`save`), its catalogue lookup `t` and what they set on the page. */
 export function useAppSettings() {
@@ -33,6 +33,11 @@ export function useAppSettings() {
     root.style.setProperty('--tabf', `${settings.tabFont}px`);
     root.style.setProperty('--chat-w', `${(700 * settings.chatWidth) / 100}px`); // v25-chat-calm
   }, [settings.density, settings.rowHeight, settings.tabFont, settings.chatWidth]);
+  // Ticket 1071: the webview's own zoom in the app; data-ui-zoom is what a browser-run spec reads (and the browser slot).
+  useEffect(() => {
+    document.documentElement.dataset.uiZoom = String(settings.uiZoom);
+    if ('__TAURI_INTERNALS__' in window) void import('@tauri-apps/api/webview').then(({ getCurrentWebview }) => getCurrentWebview().setZoom(settings.uiZoom)).catch(() => {});
+  }, [settings.uiZoom]);
   // V2-14: the window's text language (same call as SettingsView); <html lang> follows the language actually shown.
   const t = useMemo(() => makeT(settings.language, navigator.language), [settings.language]);
   // V2.5-54 A12: widget names (rails, sidebar headers, zone tabs) in the UI language, read by WIDGET_LABEL and TITLE during this render.

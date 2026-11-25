@@ -6,6 +6,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useId, useMemo, useRef, useState } from 'react'; // v1b-28: useId
 import type { Boot, CoreClient } from '../api';
 import { ICON, openInFiles, PROBLEM, PROBLEM_TEXT } from '../artifacts/Card';
+import { useShownInPreview } from '../artifacts/Preview';
 import { select } from '../artifacts/store';
 import { loadContent, useWatched } from '../artifacts/watch';
 import { chatFeed, type ChatEvent } from '../chat/feed';
@@ -19,6 +20,8 @@ import { entries, type Entry } from './model';
 import './artifacts-widget.css';
 
 export const ROW = 40;
+/** Older chat pages the widget reads (2 MB each) before it stops looking for artifacts. */
+const MAX_BACK = 20;
 
 type Held = { session: string | null; generation: number | null; events: ChatEvent[]; error?: string };
 
@@ -27,10 +30,24 @@ function useEvents(boot: Boot, session: string | null) {
   const [held, setHeld] = useState<Held>({ session, generation: null, events: [] });
   const at = useRef(new Map<number, number>());
   useEffect(() => {
+    let alive = true;
+    let run = 0; // a newer first page (reconnect, reset) ends the older loop
+    // Ticket 1058: the newest page alone misses an artifact written earlier in a long session; page back (bounded) without drawing the chat.
+    const back = async (from: number | null) => {
+      const mine = ++run;
+      for (let n = 0; alive && mine === run && from !== null && n < MAX_BACK; n++) {
+        const p = await chatFeed(boot).older(session!, from).catch(() => null);
+        if (!alive || mine !== run || !p) return;
+        // Only what entries() reads, so a long session does not hold its whole chat here.
+        const kept = p.events.filter((e) => e.data.kind === 'artifact' || e.data.kind === 'image' || e.data.kind === 'message');
+        setHeld((h) => ({ ...h, events: mergeEvents(h.events, kept) }));
+        from = p.before;
+      }
+    };
     at.current = new Map();
     setHeld({ session, generation: null, events: [] });
     if (!session) return;
-    return chatFeed(boot).open(session, {
+    const stop = chatFeed(boot).open(session, {
       page: (p, kind) => {
         // Fail closed on a schema this window was not built for, as the chat view does.
         if (p.schema_version !== 1) return setHeld({ session, generation: null, events: [], error: `chat schema ${p.schema_version} is not supported by this window` });
@@ -38,9 +55,11 @@ function useEvents(boot: Boot, session: string | null) {
         if (kind === 'reset') at.current = new Map();
         if (kind === 'live') for (const e of p.events) if (!at.current.has(e.cursor)) at.current.set(e.cursor, Date.now());
         setHeld((h) => (fresh(h) ? { session, generation: p.generation, events: p.events } : { ...h, events: mergeEvents(h.events, p.events), error: undefined }));
+        if (kind !== 'live') void back(p.before);
       },
       error: (error) => setHeld((h) => ({ ...h, error })),
     });
+    return () => (alive = false, stop());
   }, [boot, session]);
   // A focus switch shows the new session's (empty) list in the same render, never the old one's.
   return held.session === session ? { events: held.events, error: held.error, at: at.current } : { events: [], at: at.current };
@@ -99,9 +118,10 @@ function ArtifactRow({ session, e, t }: { session: string; e: Extract<Entry, { l
   const problem = w.status === 'ready' || w.status === 'loading' ? null : w.status;
   const click = !problem ? () => select(session, e.target) : problem === 'too_large' ? () => openInFiles(e.target) : undefined;
   const why = useId();
+  const current = useShownInPreview(session, e.target); // ticket 1088
   return (
     <>
-      <button type="button" className="it" data-state={w.status} title={problem ? PROBLEM_TEXT[problem] : e.target.path} disabled={!click} onClick={click} aria-describedby={problem && !click ? why : undefined}>
+      <button type="button" className="it" data-state={w.status} aria-current={current || undefined} title={problem ? PROBLEM_TEXT[problem] : e.target.path} disabled={!click} onClick={click} aria-describedby={problem && !click ? why : undefined}>
         <span className="ic" aria-hidden>
           {ICON[e.kind]}
         </span>
@@ -140,12 +160,13 @@ function ImageRow({ session, e, t }: { session: string; e: Extract<Entry, { labe
       ? undefined
       : () => thumb.current?.querySelector<HTMLButtonElement>('button')?.click();
   const why = useId();
+  const current = useShownInPreview(session, f ?? { root: '', path: '' }); // ticket 1088
   return (
     <>
       <span ref={thumb} className="awthumb">
         <Thumbnail source={e.source} />
       </span>
-      <button type="button" className="it" title={f?.path ?? e.name} disabled={!click} onClick={click} aria-describedby={!click ? why : undefined}>
+      <button type="button" className="it" aria-current={(!!f && current) || undefined} title={f?.path ?? e.name} disabled={!click} onClick={click} aria-describedby={!click ? why : undefined}>
         <Name e={e} t={t} />
       </button>
       {/* v1b-28: a disabled attachment's reason (aria-describedby), in ticket V1B-05's placeholder wording */}

@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { REPO, stripOnTop } from './fixtures';
-import { installHost } from './fixtures/artifacts/cards/host';
+import { installHost, showFrame } from './fixtures/artifacts/cards/host';
 import { append, chat, expect, openChat, rec, test as chatTest } from './fixtures/chat/harness';
 import { artifactServer } from './sandbox-server';
 import { layoutCli } from './d5b';
@@ -52,6 +52,9 @@ function written(s: { cwd: string; file: string }, id: string, rel: string, cont
 }
 
 const card = (page: Page, session: string, rel: string) => chat(page, session).locator(`.acard[data-path="${rel}"]`);
+// Ticket 1086: in Normal and Thinking a written Markdown or image file is Open on its changed-files row, so the tests of the
+// one-line card itself read the Verbose view, which draws every row as built.
+const verbose = (page: Page) => page.addInitScript(() => localStorage.setItem('nunchiro.chatView.v2', 'verbose'));
 
 test('artifacts card opens preview in one click', async ({ page, chatCore, host }) => {
   const s = chatCore.chat();
@@ -59,6 +62,7 @@ test('artifacts card opens preview in one click', async ({ page, chatCore, host 
   await openChat(page, s.id);
   const c = card(page, s.id, 'site/index.html');
   await expect(c).toHaveAttribute('data-state', 'ready');
+  await showFrame(c);
   await expect(c.locator('.af-title')).toHaveText('Sales chart');
   const id = await c.locator('.artifact-frame').getAttribute('data-artifact');
   const hash = await c.getAttribute('data-hash');
@@ -85,6 +89,7 @@ test('artifacts changed file marks card', async ({ page, chatCore }) => {
   await openChat(page, s.id);
   const c = card(page, s.id, 'report.html');
   await expect(c).toHaveAttribute('data-state', 'ready');
+  await showFrame(c);
   const first = await c.getAttribute('data-hash');
   await expect(c.locator('.af-chip.changed')).toHaveCount(0);
   fs.writeFileSync(path.join(s.cwd, 'report.html'), page1('Report', '<p>v2</p>'));
@@ -211,6 +216,7 @@ test('artifacts each failure has its own message: unsupported, command missing, 
   const texts = new Set<string>();
   for (const [rel, label, text] of want) {
     const c = card(page, s.id, rel);
+    await showFrame(c);
     await expect(c.locator('.astate')).toHaveText(label);
     await expect(c.locator('.abody')).toHaveText(text);
     texts.add((await c.locator('.abody').textContent()) ?? '');
@@ -219,6 +225,7 @@ test('artifacts each failure has its own message: unsupported, command missing, 
 });
 
 test('artifacts markdown and image cards show "changed" like HTML cards', async ({ page, chatCore }) => {
+  await verbose(page);
   const s = chatCore.chat();
   append(s.file, written(s, 'm1', 'notes.md', '# Notes\n\nv1'), written(s, 'm2', 'shot.png', PNG));
   await openChat(page, s.id);
@@ -276,6 +283,7 @@ test('artifacts over 2 MB: too large with Open in Files', async ({ page, chatCor
 });
 
 test('artifacts deleted file shows missing', async ({ page, chatCore }) => {
+  await verbose(page);
   const s = chatCore.chat();
   append(s.file, written(s, 'd1', 'gone.html', page1('Gone')), written(s, 'd2', 'gone.md', '# Gone'));
   await openChat(page, s.id);
@@ -291,6 +299,7 @@ test('artifacts deleted file shows missing', async ({ page, chatCore }) => {
 });
 
 test('artifacts markdown: one-line card, Preview renders raw HTML, javascript: links and remote images inert', async ({ page, chatCore }) => {
+  await verbose(page);
   const remote: string[] = [];
   await page.route(/nunchiro\.test/, (r) => (remote.push(r.request().url()), r.abort()));
   const s = chatCore.chat();
@@ -324,6 +333,7 @@ test('artifacts markdown: one-line card, Preview renders raw HTML, javascript: l
 });
 
 test('artifacts image: one-line card, Preview shows it from its bytes', async ({ page, chatCore }) => {
+  await verbose(page);
   const s = chatCore.chat();
   append(s.file, written(s, 'i1', 'shots/screen.png', PNG));
   await openChat(page, s.id);
@@ -373,6 +383,7 @@ test('artifacts fenced block: saved under the data folder and shown like a file'
   await openChat(page, s.id);
   const c = chat(page, s.id).locator('.acard[data-path^="artifacts/"]');
   await expect(c).toHaveAttribute('data-state', 'ready');
+  await showFrame(c);
   await expect(c.locator('.af-title')).toHaveText('Block chart');
   await expect(c.frameLocator('iframe').locator('p')).toHaveText('bars');
   const rel = (await c.getAttribute('data-path'))!;
@@ -381,6 +392,7 @@ test('artifacts fenced block: saved under the data folder and shown like a file'
 });
 
 test('artifacts title with Hangul and RTL text ellipsises without widening the column', async ({ page, chatCore }) => {
+  await verbose(page);
   const s = chatCore.chat();
   const long = `눈치로 아티팩트 제목이 아주 길어서 한 줄에 다 들어가지 않습니다 ${'שלום עולם '.repeat(12)}끝`;
   append(s.file, written(s, 't1', 'long.html', page1(long)), written(s, 't2', 'long.md', `# ${long}`), rec.assistant('짧은 답'));
@@ -432,7 +444,7 @@ test('artifacts 5,000-event history with 3 inline cards keeps the virtual list f
     // V1A-50: a card in view settles (ready or a problem) before it is counted; on a loaded host its load from the
     // core outlasts the pause, and the next wheel scrolled past it unmounted (V1A-17: wait on the state).
     await expect(view.locator('.acard.frame[data-state="loading"]')).toHaveCount(0);
-    most = Math.max(most, await page.locator('iframe').count());
+    most = Math.max(most, await view.locator('.acard').count()); // ticket 1088: a card is one line by default (no frame)
   }
   // The scroll passed at least one card, mounted only while near the view.
   expect(most).toBeGreaterThan(0);
@@ -456,6 +468,8 @@ test('artifacts two windows opening the same artifact share 04 grant semantics',
   const [a, b] = pages.map((p) => card(p, s.id, 'net.html'));
   await expect(a).toHaveAttribute('data-state', 'ready');
   await expect(b).toHaveAttribute('data-state', 'ready');
+  await showFrame(a);
+  await showFrame(b);
   const id = await a.locator('.artifact-frame').getAttribute('data-artifact');
   expect(await b.locator('.artifact-frame').getAttribute('data-artifact')).toBe(id);
   expect(await b.getAttribute('data-hash')).toBe(await a.getAttribute('data-hash'));

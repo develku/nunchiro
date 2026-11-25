@@ -39,6 +39,13 @@ test('chat_turn_shows_changed_files_open_diff', async ({ page, chatCore }) => {
   await openChat(page, c.s.id);
   await expect(row(page, c.s.id)).toHaveCount(1);
   await expect(row(page, c.s.id)).toContainText('6 files changed');
+  // Ticket 1057: three rows and one button; it unfolds the rest in place and folds back.
+  const rows = row(page, c.s.id).locator('.frow');
+  await expect(rows).toHaveCount(3);
+  await row(page, c.s.id).getByRole('button', { name: '3 more files' }).click();
+  await expect(rows).toHaveCount(6);
+  await row(page, c.s.id).getByRole('button', { name: 'Show fewer' }).click();
+  await expect(rows).toHaveCount(3);
   await expect(chat(page, c.s.id).locator('.turnfiles')).toHaveCount(0); // B19: one card, not two
   const open = row(page, c.s.id).getByRole('button', { name: 'View in Diff' });
   await shot(page, 'row');
@@ -64,6 +71,23 @@ test('chat_turn_shows_changed_files_open_diff', async ({ page, chatCore }) => {
   await expect(dock.getByRole('list', { name: 'Changed files' }).locator('[data-path]')).toHaveCount(6);
 });
 
+test('chat_turn_four_files_show_all_and_outside_path_is_short', async ({ page, chatCore }) => {
+  const c = session(chatCore);
+  // Built from parts: a literal home path would be a publish-scan hit (docs/release/publish-check.md).
+  const outside = ['', 'Users', 'someone', 'Documents/a/very/long/folder/name/that/cannot/fit/in/the/card/at/all/outside.txt'].join('/');
+  c.write(c.at(rec.user('go')), ...['a.txt', 'b.txt', 'c.txt'].flatMap((f, i) => c.edit(`e${i}`, f)), ...rec.edit('o', outside, ['+x']).map(c.at), c.at(rec.assistant('done')), c.end());
+  await openChat(page, c.s.id);
+  await expect(row(page, c.s.id).locator('.frow')).toHaveCount(4);
+  await expect(row(page, c.s.id).locator('.more')).toHaveCount(0);
+  const p = row(page, c.s.id).locator('.p.out');
+  await expect(p).toHaveAttribute('title', outside);
+  await expect(p.locator('.nm')).toHaveText('outside.txt');
+  await expect(p.locator('.dir')).toHaveText(/^~\/Documents/);
+  const [h, nm] = await Promise.all([p.evaluate((e) => e.getBoundingClientRect().height), p.locator('.nm').evaluate((e) => e.scrollWidth - e.clientWidth)]);
+  expect(h).toBeLessThan(24); // one line
+  expect(nm).toBe(0); // the file name is whole
+});
+
 test('chat_turn_row_hidden_without_file_writes', async ({ page, chatCore }) => {
   const c = session(chatCore);
   // A finished turn that only read and talked; then a turn that writes but has not finished.
@@ -76,6 +100,28 @@ test('chat_turn_row_hidden_without_file_writes', async ({ page, chatCore }) => {
   await expect(row(page, c.s.id)).toHaveCount(1);
   c.write(c.end());
   await expect(row(page, c.s.id)).toHaveCount(1);
-  await expect(row(page, c.s.id)).toContainText('1 file changed');
+  await expect(row(page, c.s.id)).toHaveAttribute('aria-label', /^1 file changed, \d+ added, \d+ removed, this turn$/);
   await expect(chat(page, c.s.id).locator('.turnfiles')).toHaveCount(0);
+});
+
+// Ticket 1074: one changed file is one line: path, numbers, View in Diff; no head text.
+test('chat_turn_one_file_is_one_line', async ({ page, chatCore }) => {
+  const c = session(chatCore);
+  c.write(c.at(rec.user('go')), ...c.edit('e1', 'a.txt'), c.at(rec.assistant('done')), c.end());
+  await openChat(page, c.s.id);
+  const card = row(page, c.s.id);
+  const btn = card.getByRole('button', { name: 'View in Diff' });
+  await expect(card).toHaveAttribute('aria-label', '1 file changed, 1 added, 0 removed, this turn');
+  await expect(card.locator('.h')).toHaveCount(0);
+  const line = async () => {
+    const [p, a, b] = await Promise.all([card.locator('.frow .p'), card.locator('.frow .add'), btn].map((l) => l.boundingBox()));
+    expect(Math.abs(p!.y - b!.y)).toBeLessThan(12);
+    expect(Math.abs(a!.y - b!.y)).toBeLessThan(12);
+    expect(b!.x).toBeGreaterThan(a!.x);
+  };
+  await line();
+  await card.evaluate((e) => (e.style.width = '220px')); // a narrow chat, as view_in_diff_stays_one_line_when_narrow: the path shrinks, the button stays
+  await line();
+  await btn.click();
+  await expect(page.getByRole('complementary', { name: 'Diff' }).getByRole('radio', { name: 'Turn files' })).toHaveAttribute('aria-checked', 'true');
 });

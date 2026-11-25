@@ -20,24 +20,38 @@ struct Harness {
 impl Harness {
     fn new() -> Self {
         let home = home::short("cevents");
+        let core = Self::serve(&home);
+        Self { home, core }
+    }
+    fn serve(home: &Path) -> Child {
         let core = home::git_env::scrubbed(env!("CARGO_BIN_EXE_nunchiro"))
             .arg("serve")
-            .env("NUNCHIRO_HOME", &home)
+            .env("NUNCHIRO_HOME", home)
             .env("CLAUDE_CONFIG_DIR", home.join("claude-data"))
             .env("CODEX_HOME", home.join("codex-data"))
-            .env("ZDOTDIR", &home)
+            .env("ZDOTDIR", home)
             .env_remove("NUNCHIRO_TOKEN")
             .spawn()
             .unwrap();
-        let h = Self { home, core };
         let until = Instant::now() + Duration::from_secs(30);
-        while !h.home.join("core.token").exists()
-            || UnixStream::connect(h.home.join("core.sock")).is_err()
+        while !home.join("core.token").exists()
+            || UnixStream::connect(home.join("core.sock")).is_err()
         {
             assert!(Instant::now() < until, "core never came up");
             thread::sleep(Duration::from_millis(20));
         }
-        h
+        core
+    }
+    /// As `serve restart`: this core exits (the agents stay) and a new one starts on the same home.
+    fn restart(&mut self) {
+        self.owner(json!({"op":"exit"})).unwrap();
+        let until = Instant::now() + Duration::from_secs(10);
+        while self.core.try_wait().unwrap().is_none() {
+            assert!(Instant::now() < until, "core never exited");
+            thread::sleep(Duration::from_millis(20));
+        }
+        let _ = fs::remove_file(self.home.join("core.token"));
+        self.core = Self::serve(&self.home);
     }
     fn call(&self, token: &str, request: Value) -> Result<Value, String> {
         let mut s = UnixStream::connect(self.home.join("core.sock")).map_err(|e| e.to_string())?;
@@ -165,6 +179,67 @@ fn of<'a>(events: &'a [Value], id: &str) -> Vec<(&'a str, &'a str)> {
             )
         })
         .collect()
+}
+
+/// Ticket 1130 C-C3: the journal keeps the events across a core restart and `--history` prints them, oldest first.
+#[test]
+fn events_history_keeps_events_across_a_core_restart() {
+    let mut h = Harness::new();
+    let (id, token) = h.start(&h.home);
+    let until = Instant::now() + Duration::from_secs(10);
+    while !of(
+        &h.owner(json!({"op":"events","since":0})).unwrap()["events"]
+            .as_array()
+            .unwrap()
+            .clone(),
+        &id,
+    )
+    .contains(&("session_started", "waiting"))
+    {
+        assert!(Instant::now() < until, "no session_started");
+        thread::sleep(Duration::from_millis(50));
+    }
+    h.restart();
+    let out = h.run(&["events", "--history", "1"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let events: Vec<Value> = String::from_utf8(out.stdout)
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let starts: Vec<&Value> = events
+        .iter()
+        .filter(|e| e["type"] == "core_started")
+        .collect();
+    assert_eq!(starts.len(), 2, "{events:?}");
+    assert_eq!(
+        starts[1]["data"],
+        json!({"kept": 1, "lost": 0, "exited": 0})
+    );
+    let started = events
+        .iter()
+        .position(|e| e["type"] == "session_started" && e["session"] == id.as_str())
+        .expect("the first core's session_started");
+    assert!(
+        started
+            < events
+                .iter()
+                .rposition(|e| e["type"] == "core_started")
+                .unwrap()
+    );
+    let ids: Vec<u64> = events.iter().map(|e| e["id"].as_u64().unwrap()).collect();
+    assert!(ids.windows(2).all(|w| w[0] < w[1]), "{ids:?}");
+    // A session's token never reads every project's journal.
+    let refused = h
+        .cli(&["events", "--history", "1"])
+        .env("NUNCHIRO_TOKEN", &token)
+        .output()
+        .unwrap();
+    assert!(!refused.status.success());
 }
 
 #[test]

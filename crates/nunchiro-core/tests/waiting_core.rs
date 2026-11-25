@@ -2492,3 +2492,35 @@ home::FAKE_INPUT_RAW),
         thread::sleep(Duration::from_millis(20));
     }
 }
+
+/// Ticket 1130 C6 (round 2): the composer's restart closes only an idle session. The check and the close are one
+/// request, so a turn that started after the window looked is never ended by it.
+#[test]
+fn close_idle_refuses_a_busy_session_and_closes_an_idle_one() {
+    let core = Core::with_screen("ready\r\n");
+    let s = core.start();
+    let hook = |event: &str| {
+        core.request(Request::Hook {
+            id: s.id.clone(),
+            event: event.into(),
+            payload: serde_json::json!({}),
+        })
+        .unwrap();
+    };
+    let state = || match core.request(Request::Snapshot).unwrap() {
+        Reply::Snapshot { sessions, .. } => {
+            sessions.into_iter().find(|x| x.id == s.id).unwrap().state
+        }
+        other => panic!("{other:?}"),
+    };
+    hook("UserPromptSubmit");
+    let refused = core
+        .request(Request::CloseIdle { id: s.id.clone() })
+        .unwrap_err();
+    assert!(refused.contains("busy"), "{refused}");
+    assert_eq!(state(), SessionState::Running);
+    hook("Stop");
+    core.request(Request::CloseIdle { id: s.id.clone() })
+        .unwrap();
+    assert_ne!(state(), SessionState::Running);
+}

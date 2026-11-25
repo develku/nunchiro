@@ -497,6 +497,8 @@ pub(crate) fn allowed(text: &str) -> Result<Option<&'static str>, String> {
         {
             refused()
         }
+        // Ticket 1059: the refresh types /context into the session; it is the owner window's alone, the read stays Watch.
+        (Some(Request::SessionContext { refresh: true, .. }), None, None) => refused(),
         (None, Some(_), None) | (None, None, Some(_)) => Ok(None),
         (Some(request), None, None) if request_allowed(request) => Ok(match request {
             Request::Answer { .. } => Some("answer"),
@@ -523,6 +525,7 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | DiffList { .. }
         | DiffFile { .. }
         | UserCommands { .. }
+        | AgentModels // ticket 1100: the model list the window sees, no paths
         | ChatPage { .. } => true,
         // Answer.
         Answer { .. } | SendText { .. } => true,
@@ -534,6 +537,8 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | MachineDetails { .. }
         | MachineAliases
         | MachineProbe { .. }
+        | MachineShare // ticket 1050
+        | MachineTrust { .. }
         | MachineStatus { .. }
         | Forwarded { .. }
         | HandoffPreview { .. }
@@ -618,12 +623,14 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | Resize { .. }
         | Close { .. }
         | CloseUndo { .. }
+        | CloseIdle { .. }
         | Label { .. }
         | Hook { .. }
         | QueueConnect
         | Stop
         | Exit
         | ExitIfIdle { .. }
+        | ExitBlockers { .. }
         | WindowAuth
         // V2.5-20: agent browser verbs are session-token only; the app's job poll is the owner's.
         | Browser { .. }
@@ -686,7 +693,8 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | SchedulePropose { .. }
         | ScheduleChange { .. }
         | OutboxStage { .. } // ticket 1002
-        | OutboxSpend { .. } => false,
+        | OutboxSpend { .. }
+        | SessionTidy { .. } => false, // ticket 1113: local lead CLI only
     }
 }
 

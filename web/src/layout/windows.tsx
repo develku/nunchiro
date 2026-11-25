@@ -8,10 +8,11 @@ import { Artifacts } from '../artifacts-widget/Artifacts'; // v1b-13
 import { Preview } from '../artifacts/Preview'; // v1b-06
 import { Board } from '../board/Board'; // v1b-16
 import { DiffDock } from '../diff/Diff'; // v1b-11
-import { Agents, sessionName } from '../Sidebar';
+import { sessionName } from '../Sidebar';
 import type { Decision, Session } from '../types';
 import { UserWidget } from '../widgets/UserWidget'; // v1b-19
 import { RoomPane } from '../room/RoomPane'; // ticket 990
+import { ContextWidget } from './ContextWidget'; // ticket 1048
 import type { RoomWorktrees } from '../room/RoomView';
 import { isUserKind, kindOf, pinOf, type Item, type Kind } from './model';
 
@@ -20,7 +21,6 @@ export interface WindowCtx {
   boot: Boot;
   core: CoreClient;
   sessions: Session[];
-  order: Parameters<typeof Agents>[0]['order'];
   current: Session | null;
   /** The session a pin names, if it is open. */
   pinned: (pin: string) => Session | null;
@@ -46,6 +46,8 @@ export interface WindowCtx {
   /** Ticket 990: the managed worktrees and their facts (the room's colour bars, the leader's band and hand-over). */
   /** Ticket 990 (owner 11-17): the owner decisions (a lead's merge card puts its task under "needs you") and how to show one in Decisions. */
   owner: Decision[];
+  /** Ticket 1073: this Mac's projects in the tree (none with a machine's session), whose on-disk conversations History lists. */
+  projects?: string[];
   decide: (id: string) => void;
   wt?: RoomWorktrees & { team: (path: string, lead: string) => Promise<unknown>; open: (path: string) => Promise<Session | null>; refresh: () => void; settled: ReadonlySet<string> };
 }
@@ -56,38 +58,40 @@ interface At {
   session: Session | null;
   /** V2.5-38: the zone the widget sits in (a layout zone id, or a bar side); the board keeps its saved view there. */
   zone?: string;
+  /** Ticket 1084: what removes the host of this widget (zone tab, split, sidebar); the Preview draws its close button from it. */
+  close?: () => void;
 }
 
 const WINDOWS: Record<Kind, (c: WindowCtx, at: At) => ReactNode> = {
   tree: (c) => c.tree(),
-  agents: (c) => <Agents sessions={c.sessions} order={c.order} current={c.current?.id ?? null} onOpen={c.open} core={c.core} />,
   waiting: (c, at) => c.strip(at.first),
   terminal: (c, at) => c.terminal(at.pin),
   composer: (c, at) => c.composer(at.first, at.pin),
   // v1b-11: a placed Diff follows the focused session, or its pinned one.
   diff: (c, { session: s }) => <DiffDock core={c.core} session={s?.id ?? null} label={s ? sessionName(s) : ''} owner={s} focus={c.diff} t={c.t} machine={s?.machine} browser={c.boot.browser} quote={s && s.id === c.current?.id ? c.quote : undefined} />, // ticket 373: owner
   files: (c) => c.files(), // v1b-09
-  preview: (_, at) => <Preview session={at.session?.id ?? null} label={at.session ? sessionName(at.session) : ''} />, // v1b-06; V2-10c: label
+  preview: (_, at) => <Preview session={at.session?.id ?? null} label={at.session ? sessionName(at.session) : ''} onClose={at.close} />, // v1b-06; V2-10c: label; 1084: onClose
   search: (c, at) => c.search(at.pin ? at.session : c.filesSession), // v1b-10
   // v1b-13: follows the focused session, or its pinned one
   artifacts: (c, { session: s }) => <Artifacts boot={c.boot} core={c.core} session={s?.id ?? null} label={s ? sessionName(s) : ''} t={c.t} />,
   decisions: (c) => c.decisions(), // V2-8e
   board: (c, at) => <Board core={c.core} sessions={c.sessions} onOpen={c.open} t={c.t} zone={at.zone} />, // v1b-16; V2-14h; V2.5-38: zone
   room: (c, at) => <RoomPane core={c.core} t={c.t} session={at.session} sessions={c.sessions} open={c.open} wt={c.wt} />, // ticket 990
+  context: (c, at) => <ContextWidget core={c.core} session={at.session} t={c.t} />, // ticket 1048
 };
 
-export function renderWidget(item: Item, first: boolean, c: WindowCtx, zone?: string): ReactNode {
+export function renderWidget(item: Item, first: boolean, c: WindowCtx, zone?: string, close?: () => void): ReactNode {
   const pin = pinOf(item);
   const kind = kindOf(item);
   // N28 (look 1117 v3): a file tab is no session; Diff keeps the session the file belongs to.
-  const at = { pin, first, session: pin ? c.pinned(pin) : (c.current ?? (kind === 'diff' ? c.filesSession : null)), zone };
+  const at = { pin, first, session: pin ? c.pinned(pin) : (c.current ?? (kind === 'diff' ? c.filesSession : null)), zone, close };
   // v1b-19: user widgets (`widget:<name>`) follow the pinned or focused session like the terminal.
   if (isUserKind(kind)) return <UserWidget core={c.core} name={kind.slice('widget:'.length)} session={at.session} />;
   return Object.hasOwn(WINDOWS, kind) ? WINDOWS[kind](c, at) : null;
 }
 
 /** D5b lane B (B04): a widget nested under `project`, scoped to it. Files and Search start at the project's main folder,
- *  Agents lists its sessions, Board shows its cards. Diff, Preview and Artifacts are not project-scoped: they follow the
+ *  Board shows its cards. Diff, Preview and Artifacts are not project-scoped: they follow the
  *  focused session as in a sidebar. */
 export function renderScoped(kind: string, project: string, c: WindowCtx): ReactNode {
   const mine = c.sessions.filter((s) => s.project === project);

@@ -6,12 +6,14 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import type { CoreClient } from '../api';
 import { Preview } from '../artifacts/Preview';
 import type { T } from '../i18n';
+import { resizing } from '../layout/resizing';
 import { BrowserSpaces } from './browser/view/BrowserView';
 import { sessionName } from '../Sidebar';
 import { terminals } from '../Terminal';
 import { ptyInSplit, useSplits } from '../split/store';
 import type { Session } from '../types';
-import { CHAT_MIN, FOCUS_FRESH_MS, PANE_MIN, PANE_SHARE, addShell, blocked, clearFocus, isOpen, removeShell, select, setWidth, shellsOf, show, tabKey, tabOf, usePane, widthKey, type PaneTab } from './store';
+import { CHAT_MIN, FOCUS_FRESH_MS, PANE_MIN, PANE_SHARE, addShell, blocked, clearFocus, isOpen, removeShell, select, setWidth, shellsOf, show, tabKey, tabOf, toggle as paneToggle, usePane, widthKey, type PaneTab } from './store';
+import { keepComposerClear } from './composerRoom';
 import './pane.css';
 
 interface Props {
@@ -43,31 +45,6 @@ export async function startShell(core: CoreClient, session: Session, then?: (she
 const DIV = 1;
 const same = (a: PaneTab, b: PaneTab) => tabKey(a) === tabKey(b);
 
-/** The composer card's width that keeps its chips on one line (ticket 991 C12, with the terminal's rows), each at no less
- *  than its floor of about eight characters (B8: the chips shorten in place before the row wraps). Read from a hidden copy
- *  with each shortening chip at its floor (its flex-basis): the floors change with the model name and the language.
- *  Look 1117 v4f C S2-2: this was the chips' full words, so a card that held its chips on one line at their floors still
- *  spanned under the pane, over the Browser's page. */
-const cardMin = (composer: Element, avail: number) => {
-  const chips = composer.querySelector<HTMLElement>('.cbox .chips');
-  if (!chips?.parentElement) return 0;
-  const copy = chips.cloneNode(true) as HTMLElement;
-  copy.removeAttribute('id');
-  copy.setAttribute('aria-hidden', 'true');
-  copy.style.cssText = 'position:absolute;visibility:hidden;width:max-content;flex-wrap:nowrap';
-  [...chips.children].forEach((c, i) => {
-    const basis = getComputedStyle(c).flexBasis;
-    if (basis !== 'auto') (copy.children[i] as HTMLElement).style.cssText += `;flex:none;width:${basis}`;
-  });
-  // Look v20 (Q5): the chips keep their words whole, so the floor is their text. A card this narrow drops the picker's agent words
-  // (picker.css, the cbox container at 680 px): measured as that card would draw it, not at today's wider one.
-  if (avail <= 680) copy.querySelectorAll<HTMLElement>('.pk-agent').forEach((e) => (e.style.display = 'none'));
-  chips.parentElement.append(copy);
-  const w = copy.getBoundingClientRect().width;
-  copy.remove();
-  return w + chips.parentElement.offsetWidth - chips.clientWidth;
-};
-
 export function SidePane({ core, session, all, term, insert, t }: Props) {
   const st = usePane();
   // One live view per PTY: the session's PTY shown in a split leaves the pane until that split closes.
@@ -89,45 +66,24 @@ export function SidePane({ core, session, all, term, insert, t }: Props) {
     document.documentElement.setAttribute('data-browser-full', '');
     return () => document.documentElement.removeAttribute('data-browser-full');
   }, [full]);
-  // Ticket 991 C12 (5): the window's composer sits in the row under the centre; the part of it under this pane's column is
-  // kept clear (`--pane-room`, its right padding), so the composer card stays in the chat column at every width.
-  useEffect(() => {
-    const el = aside;
-    if (!el) return;
-    const root = document.documentElement.style;
-    const fit = () => {
-      const composer = document.querySelector('.composer:not([data-pinned])');
-      const c = composer?.getBoundingClientRect();
-      const a = el.getBoundingClientRect();
-      const room = c && a.width && !el.hasAttribute('data-max') ? Math.max(0, Math.round(c.right - a.left)) : 0;
-      // A chat column too narrow for the card's one line of chips (at their floors) would wrap them and grow the composer, which shrinks the
-      // terminal: the agent redraws and its waiting prompt is re-filed under a new id (queue, answer-strip-modes). There the
-      // card spans under the pane as before C12.
-      root.setProperty('--pane-room', `${c && room && c.width - 40 - room >= cardMin(composer!, c.width - 40 - room) ? room : 0}px`);
-      root.setProperty('--pane-over', `${room}px`); // ticket 1030: the card floating above the composer stays out of this pane
-    };
-    fit();
-    const watch = new ResizeObserver(fit);
-    watch.observe(el);
-    // The composer's own width too (a zone or window change that leaves the pane alone); its border box only, as the
-    // padding this sets changes its content box.
-    const composer = document.querySelector('.composer:not([data-pinned])');
-    if (composer) watch.observe(composer, { box: 'border-box' });
-    return () => void (watch.disconnect(), root.removeProperty('--pane-room'), root.removeProperty('--pane-over'));
-  }, [aside]);
+  // Ticket 991 C12 (5), 1062: the composer card stays in the chat column beside this pane (composerRoom.ts, one rule for every host).
+  useEffect(() => (aside ? keepComposerClear(aside) : undefined), [aside]);
 
   // A request to focus the pane's terminal (prefix o, a blocked screen): retried while the terminal mounts.
   const want = st.focus?.id === session.id ? st.focus.n : 0;
   useEffect(() => {
     if (!want || !open) return;
     if (Date.now() - st.focus!.at > FOCUS_FRESH_MS) return void clearFocus(session.id);
-    const id = typeof shown === 'string' ? session.id : shown.shell;
+    // The stored tab, not `shown`: a shell just started (pane.shell.new) is not in `all` yet, so `shown` still says the PTY.
+    const asked = tabOf(st, session.id);
+    const id = typeof asked === 'string' ? session.id : asked.shell;
+    const at = st.focus!.at;
     let tries = 0;
     let raf = 0;
     const go = () => {
       const t = terminals.get(id);
       if (t) return (t.focus(), clearFocus(session.id));
-      if (tries++ < 40) raf = requestAnimationFrame(go);
+      if (tries++ < 40 || Date.now() - at < FOCUS_FRESH_MS) raf = requestAnimationFrame(go);
       else clearFocus(session.id);
     };
     go();
@@ -150,9 +106,7 @@ export function SidePane({ core, session, all, term, insert, t }: Props) {
     // makes the pane jump by that pixel (v25-fix-layout, pane_resize_drag).
     const w0 = (el.nextElementSibling as HTMLElement).getBoundingClientRect().width;
     const x0 = e.clientX;
-    el.setPointerCapture(e.pointerId);
-    el.onpointermove = (ev) => setWidth(shown, Math.min(view.width - CHAT_MIN - DIV, Math.max(PANE_MIN, w0 + x0 - ev.clientX)));
-    el.onpointerup = () => ((el.onpointermove = null), (el.onpointerup = null));
+    resizing(el, e.pointerId, (ev) => setWidth(shown, Math.min(view.width - CHAT_MIN - DIV, Math.max(PANE_MIN, w0 + x0 - ev.clientX))));
   };
   const dividerKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const w = (e.currentTarget.nextElementSibling as HTMLElement).getBoundingClientRect().width;
@@ -244,7 +198,11 @@ export function SidePane({ core, session, all, term, insert, t }: Props) {
           {shown === 'browser' && <BrowserSpaces initial={session.id} own={session.id} sessions={all} insert={insert} to={label} t={t} />}
           {shown === 'preview' && (
             <div className="pprev">
-              <Preview session={session.id} label={label} />
+              <Preview
+                session={session.id}
+                label={label}
+                onClose={() => (paneToggle(session.id), setTimeout(() => document.querySelector<HTMLTextAreaElement>('.composer textarea:not(.hoff-edit)')?.focus()))}
+              />
             </div>
           )}
           {pick && (

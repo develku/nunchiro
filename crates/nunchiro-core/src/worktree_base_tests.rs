@@ -110,7 +110,7 @@ fn new_worktree_starts_from_origin_default_and_owns_no_phantom_commits() {
     let (root, writer, project) = repos("wtb-default");
     let home = root.join("home");
     std::fs::create_dir_all(&home).unwrap();
-    let core = Sessions::open(&home).unwrap();
+    let core = Sessions::open(&home).unwrap().with_user_home(&home);
     git(
         &writer,
         &["commit", "-q", "--allow-empty", "-m", "on github"],
@@ -179,7 +179,9 @@ fn no_origin_keeps_head() {
     std::fs::create_dir_all(&project).unwrap();
     git(&project, &["init", "-q", "-b", "main"]);
     git(&project, &["commit", "-q", "--allow-empty", "-m", "x"]);
-    let core = Sessions::open(&root.join("home")).unwrap();
+    let core = Sessions::open(&root.join("home"))
+        .unwrap()
+        .with_user_home(&root);
     let w = create(&core, &project, "n", None, "")
         .unwrap()
         .pop()

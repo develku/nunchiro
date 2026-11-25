@@ -69,9 +69,13 @@ export function useSplitGlue({ core, connected, sessions, byId, ordered, current
     if (!snapped.current || !sessions.length) return;
     // A closed session's splits go, and the shells started for them end with it (an agent started for one stays a session).
     // Only for a session the snapshot shows closed: one merely missing from a list (a reconnect) never ends a live shell.
-    for (const { session, started } of pruneSplits(sessions))
+    for (const { session, started, moved } of pruneSplits(sessions)) {
       if (byId.get(session)?.state === 'closed')
         for (const id of started) if (byId.get(id)?.kind === 'shell' && byId.get(id)?.state === 'running') endShell(id);
+      // Ticket 1069: a session moved in from the strip outlives its host's splits and gets its tab back.
+      const back = moved.filter((id) => byId.has(id) && byId.get(id)?.state !== 'closed');
+      if (back.length) setTabs((t) => [...t, ...back.filter((id) => !t.includes(id))]);
+    }
   }, [sessions, core]);
   // SPLITS: a session started in `s`'s folder for a split: a shell, or an agent with the New Session defaults (its model
   // and effort, as NewSession's `like`). Returns the session, or null after saying why it did not start.
@@ -139,7 +143,9 @@ export function useSplitGlue({ core, connected, sessions, byId, ordered, current
     removeSplit(current.id, sp.id);
     const id = sessionOf(sp.what);
     const started = id ? byId.get(id) : undefined;
-    if (started) endWithSplit(started);
+    // Ticket 1069: a session moved in from the strip goes back there; only a split's own session closes with it.
+    if (started && sp.tab && started.state !== 'closed') setTabs((t) => (t.includes(started.id) ? t : [...t, started.id]));
+    else if (started) endWithSplit(started);
     composer.current?.focus(); // at once: a deferred focus would take it from a split the next key opens
   };
   /** 📌: the widget joins the layout beside the zone that holds the split, for every session (one step of the trail, ⌘Z undoes it). */

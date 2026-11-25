@@ -81,7 +81,8 @@ const WORDS: Row[] = [
   // Ticket 821: the name finder (Orca "Go to File", VS Code "Quick Open").
   [['files.quickOpen'], ['go to file|quick open|find file|open file by name|file name', '파일로 이동|빠르게 열기|파일 찾기|이름으로 파일 열기|파일 이름', 'ファイルへ移動|クイックオープン|ファイルを探す|名前でファイルを開く|ファイル名', '转到文件|快速打开|查找文件|按名称打开文件|文件名', '前往檔案|快速開啟|尋找檔案|依名稱開啟檔案|檔案名稱', 'ir al archivo|apertura rápida|buscar archivo|abrir archivo por nombre|nombre de archivo', 'aller au fichier|ouverture rapide|trouver un fichier|ouvrir un fichier par son nom|nom de fichier', 'ir para o arquivo|abertura rápida|encontrar arquivo|abrir arquivo pelo nome|nome do arquivo']],
   [['search.open'], ['search|search files|find in files|search project|search code|grep|find text in project', '검색|파일 검색|파일에서 찾기|프로젝트 검색|코드 검색|내용 검색', '検索|ファイルを検索|ファイル内を検索|プロジェクトを検索|コードを検索', '搜索|搜索文件|在文件中查找|搜索项目|搜索代码', '搜尋|搜尋檔案|在檔案中尋找|搜尋專案|搜尋程式碼', 'buscar|buscar archivos|buscar en archivos|buscar en el proyecto|buscar código', 'chercher|recherche|chercher dans les fichiers|rechercher dans le projet|rechercher du code|grep', 'buscar|pesquisar|buscar arquivos|pesquisar nos arquivos|pesquisar no projeto|pesquisar código']],
-  [['search.sessions'], ['search|search chats|search conversations|find old chat|history|chat history', '검색|채팅 검색|대화 검색|이전 대화 찾기|기록|채팅 기록', '検索|チャットを検索|会話を検索|過去のチャットを探す|履歴|チャット履歴', '搜索|搜索聊天|搜索对话|查找旧聊天|历史记录|聊天记录', '搜尋|搜尋聊天|搜尋對話|尋找舊聊天|歷史記錄|聊天記錄', 'buscar|buscar chats|buscar conversaciones|encontrar un chat antiguo|historial|historial de chats', 'chercher|recherche|chercher une conversation|rechercher dans les conversations|retrouver une ancienne conversation|historique', 'buscar|pesquisar|buscar chats|pesquisar conversas|encontrar um chat antigo|histórico|histórico de chats']],
+  // Ticket 1099: the bare word "history" opens History (the finished sessions); "chat history" still finds this one.
+  [['search.sessions'], ['search|search chats|search conversations|find old chat|chat history', '검색|채팅 검색|대화 검색|이전 대화 찾기|채팅 기록', '検索|チャットを検索|会話を検索|過去のチャットを探す|チャット履歴', '搜索|搜索聊天|搜索对话|查找旧聊天|聊天记录', '搜尋|搜尋聊天|搜尋對話|尋找舊聊天|聊天記錄', 'buscar|buscar chats|buscar conversaciones|encontrar un chat antiguo|historial de chats', 'chercher|recherche|chercher une conversation|rechercher dans les conversations|retrouver une ancienne conversation', 'buscar|pesquisar|buscar chats|pesquisar conversas|encontrar um chat antigo|histórico de chats']],
   [['terminal.clear'], ['clear screen|clear terminal|clear output|cls|clean terminal', '화면 지우기|터미널 지우기|출력 지우기|화면 청소', '画面をクリア|ターミナルをクリア|出力を消す', '清屏|清除终端|清除输出', '清除畫面|清除終端|清除輸出', 'limpiar pantalla|limpiar terminal|borrar salida', "effacer l'écran|effacer le terminal|effacer la sortie", 'limpar tela|limpar terminal|apagar saída']],
   [['terminal.edit'], ['open in editor|edit scrollback|scrollback in editor|view output in editor', '에디터로 열기|스크롤백 편집|출력을 편집기로 열기', 'エディタで開く|スクロールバックを編集|出力をエディタで開く', '在编辑器中打开|编辑回滚内容|在编辑器中查看输出', '在編輯器中開啟|編輯捲動緩衝區|在編輯器中檢視輸出', 'abrir en el editor|editar el historial|ver salida en el editor', "ouvrir dans l'éditeur|modifier l'historique|voir la sortie dans l'éditeur", 'abrir no editor|editar o histórico|ver saída no editor']],
   [['artifacts.toggle'], ['artifacts|show artifacts|generated files|outputs|results', '아티팩트|산출물|결과물|생성된 파일', 'アーティファクト|成果物|生成されたファイル', '产物|成果|生成的文件', '產物|成果|產生的檔案', 'artefactos|mostrar artefactos|archivos generados|resultados', 'artefacts|afficher les artefacts|fichiers générés|résultats', 'artefatos|mostrar artefatos|arquivos gerados|resultados']],
@@ -196,6 +197,19 @@ const WORDS: Row[] = [
   [['settings.general.keepAwake'], ['prevent sleep|no sleep|stay awake|caffeinate', '절전 방지|잠자기 방지|화면 꺼짐 방지', 'スリープ防止|眠らせない|スリープさせない', '防止睡眠|不休眠|保持唤醒', '防止睡眠|不休眠|保持喚醒', 'evitar suspensión|no dormir|mantener activo', 'empêcher la veille|rester éveillé|garder actif', 'evitar suspensão|não dormir|manter ativo']],
   [['settings.appearance.uiFont'], ['interface font|app font|change font', '화면 글꼴|앱 글꼴|폰트 바꾸기', '画面のフォント|アプリのフォント|フォントを変える', '界面字体|应用字体|更改字体', '介面字型|App 字型|應用程式字型|更改字型', 'fuente de la interfaz|fuente de la app|cambiar fuente', "police de l'interface|police de l'app|changer la police", 'fonte da interface|fonte do app|mudar fonte']],
   [['settings.appearance.chatLine'], ['line spacing|line gap|line height', '줄 간격|줄 높이|행간', '行間|行の高さ', '行距|行高', '行距|行高', 'interlineado|altura de línea', 'interligne|hauteur de ligne', 'espaçamento de linhas|altura da linha']],
+  // Ticket 1099 (feature cohesion): the rows that had no command or no words.
+  [['bars.autohide'], ['auto-hide bars|hide icon bars automatically|autohide toolbar|bars auto hide', '바 자동 숨김|아이콘 바 자동 숨기기|도구 모음 자동 숨김', 'バーを自動で隠す|アイコンバーの自動非表示|ツールバー自動非表示', '自动隐藏栏|自动隐藏图标栏|工具栏自动隐藏', '自動隱藏列|自動隱藏圖示列|工具列自動隱藏', 'ocultar barras automáticamente|autoocultar barra de iconos', 'masquer les barres automatiquement|masquage auto des barres', 'ocultar barras automaticamente|ocultar barra de ícones sozinha']],
+  [['tree.clear-finished'], ['clear finished|clean up finished work|remove done sessions|tidy finished', '끝난 작업 정리|끝난 세션 정리|완료 정리', '終わった作業を片付ける|終了したセッションを片付ける|完了を整理', '清理已完成|清理已结束的会话|整理完成的工作', '清理已完成|清理已結束的工作階段|整理完成的工作', 'limpiar lo terminado|quitar sesiones terminadas|ordenar lo acabado', 'nettoyer le travail fini|retirer les sessions finies|ranger ce qui est fini', 'limpar o que terminou|remover sessões encerradas|arrumar o concluído']],
+  [['history.open'], ['history|open history|finished sessions|past sessions|session history', '기록|기록 열기|끝난 세션|지난 세션', '履歴|履歴を開く|終了したセッション|過去のセッション', '历史记录|打开历史记录|已结束的会话|过去的会话', '歷史記錄|開啟歷史記錄|已結束的工作階段|過去的工作階段', 'historial|abrir historial|sesiones terminadas|sesiones anteriores', 'historique|ouvrir l’historique|sessions terminées|sessions passées', 'histórico|abrir histórico|sessões encerradas|sessões anteriores']],
+  [['usage.page'], ['usage|usage limits|limits|quota|plan usage', '사용량|사용 한도|한도|쿼터', '使用量|使用上限|上限|クォータ', '用量|使用限额|限额|配额', '用量|使用限額|限額|配額', 'uso|límites de uso|límites|cuota', 'utilisation|limites d’utilisation|limites|quota', 'uso|limites de uso|limites|cota']],
+  [['team.page'], ['team page|teammates|how this place works|way of working|live seats', '팀 페이지|팀원|작업 방식|동시 좌석', 'チームページ|チームメイト|進め方|同時席数', '团队页面|队友|工作方式|同时席位', '團隊頁面|隊友|工作方式|同時席位', 'página del equipo|compañeros|forma de trabajo|asientos a la vez', 'page de l’équipe|coéquipiers|façon de travailler|sièges en même temps', 'página da equipe|colegas|forma de trabalho|assentos ao mesmo tempo']],
+  [['assistants.page'], ['assistants page|assistant|chief of staff|home assistant', '어시스턴트 페이지|어시스턴트|비서실장', 'アシスタントページ|アシスタント|首席補佐官', '助手页面|助手|幕僚长', '助理頁面|助理|幕僚長', 'página de asistentes|asistente|jefe de gabinete', 'page des assistants|assistant|chef de cabinet', 'página de assistentes|assistente|chefe de gabinete']],
+  [['keys.sheet'], ['all shortcuts|keyboard shortcuts list|cheat sheet|every key|key sheet', '모든 단축키|단축키 목록|단축키 표|모든 키', 'すべてのショートカット|ショートカット一覧|チートシート|すべてのキー', '全部快捷键|快捷键列表|速查表|所有按键', '全部快速鍵|快速鍵清單|速查表|所有按鍵', 'todos los atajos|lista de atajos|chuleta|todas las teclas', 'tous les raccourcis|liste des raccourcis|aide-mémoire|toutes les touches', 'todos os atalhos|lista de atalhos|cola|todas as teclas']],
+  [['decisions.open'], ['decisions|outbox|open decisions|what needs me|approvals', '결정|보낼 편지함|결정 열기|내 차례|승인', '決定|送信トレイ|決定を開く|自分の番|承認', '决定|发件箱|打开决定|待我处理|审批', '決定|寄件匣|開啟決定|待我處理|核准', 'decisiones|bandeja de salida|abrir decisiones|aprobaciones', 'décisions|boîte d’envoi|ouvrir les décisions|approbations', 'decisões|caixa de saída|abrir decisões|aprovações']],
+  [['schedules.open'], ['schedule|schedules|cron|timer|every day', '예약|예약 열기|크론|타이머|매일', 'スケジュール|スケジュールを開く|cron|タイマー|毎日', '定时任务|计划|cron|定时器|每天', '排程|開啟排程|cron|計時器|每天', 'programaciones|programar|cron|temporizador|cada día', 'planifications|planifier|cron|minuteur|chaque jour', 'agendamentos|agendar|cron|temporizador|todo dia']],
+  [['schedules.new'], ['new schedule|add schedule|schedule a run|run every day', '새 예약|예약 추가|매일 실행', '新しいスケジュール|スケジュールを追加|毎日実行', '新建定时任务|添加定时任务|每天运行', '新增排程|加入排程|每天執行', 'nueva programación|añadir programación|ejecutar cada día', 'nouvelle planification|ajouter une planification|lancer chaque jour', 'novo agendamento|adicionar agendamento|executar todo dia']],
+  [['context.open'], ['context|context widget|open context|context window', '컨텍스트|컨텍스트 위젯|컨텍스트 열기', 'コンテキスト|コンテキストウィジェット|コンテキストを開く', '上下文|上下文小组件|打开上下文', '上下文|上下文小工具|開啟上下文', 'contexto|widget de contexto|abrir contexto', 'contexte|widget de contexte|ouvrir le contexte', 'contexto|widget de contexto|abrir contexto']],
+  [['notify.session.all', 'notify.session.waiting', 'notify.session.off'], ['session alerts|alerts for this session|bell for this session|tell me when it waits', '세션 알림 종류|이 세션 알림|이 세션 벨', 'このセッションのアラート|セッションのベル|待つときに知らせる', '此会话的提醒|会话铃声|等待时提醒我', '此工作階段的提醒|工作階段鈴聲|等待時提醒我', 'alertas de esta sesión|campana de la sesión|avísame cuando espere', 'alertes de cette session|cloche de la session|préviens-moi quand elle attend', 'alertas desta sessão|sino da sessão|avise quando esperar']],
 ];
 
 /** One phrase template per language ({x} filled per language), joined into the 8-language entry. */
@@ -224,7 +238,23 @@ for (let n = 1; n <= 9; n++) {
 
 const table = (i: number) => Object.fromEntries(WORDS.flatMap(([ids, words]) => ids.map((id) => [`palette.kw.${id}`, words[i]])));
 
-export const en = table(0);
+// Ticket 1071: the window zoom commands, English only until ticket 1035 adds the other seven languages.
+const ZOOM_EN: Record<string, string> = {
+  'palette.kw.zoom.in': 'zoom in|make everything bigger|enlarge the window|bigger interface',
+  'palette.kw.zoom.out': 'zoom out|make everything smaller|shrink the window|smaller interface',
+  'palette.kw.zoom.reset': 'actual size|reset zoom|zoom 100%|default zoom',
+};
+
+// Ticket 1122: the split moves (ticket 1069) and the bars' auto-hide row (ticket 1093) had no words; English only until 1035.
+const LATER_EN: Record<string, string> = {
+  'palette.kw.tab.split.right': 'split right|move tab right|side by side|open beside',
+  'palette.kw.tab.split.down': 'split down|split below|move tab down|open below',
+  'palette.kw.settings.layout.barsAutohide': 'auto-hide bars|hide icon bars|hide toolbars|autohide sidebar icons',
+  // Ticket 1130 C2.
+  'palette.kw.session.new.worktree': 'agent in worktree|new worktree agent|parallel agent|start agent on a new branch',
+};
+
+export const en = { ...table(0), ...ZOOM_EN, ...LATER_EN };
 export const ko = table(1);
 export const ja = table(2);
 export const zhHans = table(3);

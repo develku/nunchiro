@@ -17,6 +17,7 @@
 import { flushSync } from 'react-dom';
 import type { Card, Column, LaneKey } from './model';
 import { agentState, type Session } from '../types';
+import { seatWorking } from './tasks';
 import type { WatchLanes } from './views';
 
 export type Bucket = 'attention' | 'working' | 'next' | 'done' | 'idle';
@@ -30,7 +31,8 @@ export const BUCKETS: Bucket[] = ['attention', 'working', 'next', 'done'];
  *   `session` (ticket 407), a card the core calls working whose session is not working (an agent that has not run a
  *   turn yet, a quiet shell) is Idle, as the tree's dot says; without one the card's state alone decides.
  * - A task or integration card by what its column claims: a decision column or Review -> Needs you (it waits on you),
- *   Working, Done (or a proof column), and a column that claims nothing (To do) -> Next. A task card whose attached
+ *   Done (or a proof column), Working only while one of its seats is in a turn (ticket 1090, `seatWorking`), and else
+ *   (To do, or Working with no seat in a turn) -> Next. A task card whose attached
  *   worker is asking is Needs you whatever its column says.
  * - A lead's task card (look v9 B N-S3-4) needs you by the Team view's rule only: a seat asks, or its merge card is open
  *   (the core parks it in the decision column, board `park_task`). In Review it is ready to merge and waits on nobody: Done.
@@ -44,6 +46,8 @@ export function bucketOf(card: Card, columns: Column[], session?: Session): Buck
         return 'attention';
       case 'review':
         return session?.teammate && agentState(session) === 'running' ? 'idle' : 'done';
+      case 'idle':
+        return 'idle'; // ticket 1092: a seat with no turn yet
       case 'done':
         return session && agentState(session) !== 'running' ? 'done' : 'idle';
       default:
@@ -56,8 +60,9 @@ export function bucketOf(card: Card, columns: Column[], session?: Session): Buck
   if (claims('done') || column?.proof) return 'done';
   if (card.attachments?.some((a) => a.state === 'needs_decision')) return 'attention';
   if (claims('review') && card.task) return 'done';
-  if (card.task) return card.attachments?.some((a) => a.state === 'working') ? 'working' : 'idle';
-  if (claims('working')) return 'working';
+  if (card.task) return seatWorking(card) ? 'working' : 'idle';
+  // Ticket 1090: a Working column alone is not work; with no seat in a turn the card waits under Next.
+  if (claims('working') && seatWorking(card)) return 'working';
   return 'next';
 }
 

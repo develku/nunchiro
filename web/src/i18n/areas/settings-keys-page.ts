@@ -37,6 +37,10 @@ declare module '../index' {
     "settings.kbd.layoutOnly": true;
     "settings.kbd.drawing": true;
     "settings.kbd.drawingDesc": true;
+    // Ticket 1071: English only until ticket 1035.
+    "settings.kbd.cmd.zoom.in": true;
+    "settings.kbd.cmd.zoom.out": true;
+    "settings.kbd.cmd.zoom.reset": true;
   }
 }
 
@@ -76,6 +80,9 @@ export const en = {
   "settings.kbd.layoutOnly": "Shown only when the system does not report your keyboard layout.",
   "settings.kbd.drawing": "Keyboard drawing",
   "settings.kbd.drawingDesc": "Blue dot = hint letter, orange dot = kind key. Press a key to add or remove it.",
+  "settings.kbd.cmd.zoom.in": "Zoom in",
+  "settings.kbd.cmd.zoom.out": "Zoom out",
+  "settings.kbd.cmd.zoom.reset": "Actual size",
 };
 
 export const ko = {

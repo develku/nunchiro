@@ -1,5 +1,8 @@
 # Nunchiro
 
+> **Status: pre-release, in active development.** Expect breaking changes between versions, in the app, the
+> `nunchiro` command and the files it keeps. There is no support yet: issues are read, but nothing is promised.
+
 Nunchiro is a Mac app for working with coding agents. It runs Claude Code and Codex in real terminals under a small
 background service, and shows each session as a terminal, a chat, its files and its diff, in one window. Images, HTML
 and Markdown that an agent writes open as cards in the chat. Every permission request and question from every agent
@@ -9,10 +12,10 @@ sign-ins; it does not call a model itself.
 <!-- Screenshot: the main window with a few sessions in the tree, one chat open and one request in the queue.
      Add it as docs/screenshot.png (taken on a clean test home) and put the image line here. -->
 
-## Status
+## How it is built today
 
-Pre-release. It builds and runs on macOS from source as an unsigned local build. There is no signed download, no
-automatic update, and the interfaces may still change.
+It builds and runs on macOS from source, signed on your own Mac (`scripts/local-signing.sh`: self-signed, or ad hoc
+when that identity is missing; no Apple Developer ID). There is no download and no automatic update yet.
 
 ## Requirements
 
@@ -37,6 +40,9 @@ scripts/local-signing.sh sign ~/Applications/Nunchiro.app
 open ~/Applications/Nunchiro.app
 ```
 
+Run `scripts/local-signing.sh create` once before the first install: without that identity, `sign` falls back to ad hoc
+signing, and macOS may not keep folder permissions across installs.
+
 [docs/first-run.md](docs/first-run.md) explains each step, the macOS folder permissions Nunchiro may ask for, and how
 to quit and update. The `nunchiro` command is described in [docs/cli.md](docs/cli.md).
 
@@ -44,14 +50,39 @@ A new worktree of this repository needs its own packages and `web/dist` before `
 `scripts/setup-worktree.sh` does both. `orca.yaml` names it as the worktree setup script, so Nunchiro offers to run it
 (once you approve its text) when it creates a worktree of this project.
 
+## CI
+
+[.github/workflows/ci.yml](.github/workflows/ci.yml) runs on GitHub-hosted runners for every pull request and again in
+the merge queue on the merged tree; the queue is the only way into `main`, and its one required check is the `gate`
+job, which passes only when every other job passed.
+
+- `lint` (Linux): `cargo fmt --check`, `sh -n` of the scenario scripts, `pnpm typecheck` in `web/`.
+- `rust-build` (macOS): clippy with warnings as errors, doctests, and one nextest archive of every Rust test.
+- `rust-test` (macOS, three runners): the archive, split with `cargo nextest run --partition count:k/3`.
+- `app` (macOS): `scripts/check-app.sh` (the Tauri app's fmt, clippy, tests and licence notices).
+- `web` (macOS): `scripts/check-cli-docs.sh`, `scripts/scenario-tests.sh`, and the Playwright core set
+  (`web/tests/core-set.txt`) on Chromium through `.github/scripts/web-core.sh`.
+
+The Rust crates use macOS system calls and do not build on Linux, so every Rust job runs on macOS. A push to `main`
+only refreshes the build caches that pull requests read.
+
 ## Reporting a problem
 
 Open an issue in this repository with what you did, what you expected and what happened, plus your macOS version and
 the output of `nunchiro --version`. `nunchiro diagnose` writes a bundle of logs with secrets removed; read it before
 you attach it. Please report a security problem privately through the repository's Security tab ("Report a
-vulnerability"), not in a public issue.
+vulnerability"), not in a public issue; see [SECURITY.md](SECURITY.md).
+
+## Privacy
+
+Nunchiro has no telemetry. [PRIVACY.md](PRIVACY.md) lists every host it connects to and when.
+
+## Contributing
+
+Outside pull requests are not accepted yet.
 
 ## Licence
 
 MIT, see [LICENSE](LICENSE). Code adapted from other MIT projects keeps its notice: [NOTICES](NOTICES),
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the dependency licences in [licenses/](licenses/).
+The licence covers the code. It does not cover the Nunchiro name or mark; a fork must use its own name and mark.

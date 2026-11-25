@@ -1,0 +1,19 @@
+schema_version: "1.1"
+name: trigger-artifacts-skip-03
+description: Should not load the artifacts skill.
+tags: [trigger, trigger-artifacts]
+runs: 1
+execution:
+  prompt: "Add a .gitignore entry for node_modules."
+  append_system_prompt: "You are running inside a Nunchiro session: NUNCHIRO_SESSION is set and the `nunchiro` CLI is on PATH. Reply to the request as you normally would."
+  allowed_tools: [Skill, Read, Glob, Grep]
+  max_turns: 4
+  timeout_seconds: 120
+graders:
+  - name: skill-not-loaded
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?artifacts"'
+    min: 0
+    max: 0
+    arm: both

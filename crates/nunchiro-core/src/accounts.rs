@@ -86,6 +86,14 @@ pub(crate) fn folder_by_label(
         )),
     }
 }
+/// Ticket 1120: `agent`'s account labels in registry order; empty when the registry cannot be read.
+pub(crate) fn labels(home: &Path, agent: Agent) -> Vec<String> {
+    find(home, agent, |_, _| true)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(_, label)| label)
+        .collect()
+}
 /// V2-2d: a launch on `folder` (through `variable`) still names a registered account, checked again under the session
 /// lock so a launch prepared before a remove never starts on the moved folder.
 pub(crate) fn still_registered(
@@ -437,6 +445,26 @@ fn session_defaults(home: &Path) -> [Option<String>; 2] {
         let key = format!("accounts.default.{}", agent_name(agent));
         features[key.as_str()].as_str().map(str::to_string)
     })
+}
+
+/// Owner 2026-11-25 ("적용하고"): "Leads may use any of my accounts" (`settings.json` `features`; absent is off). Written by
+/// the owner only (`quit_settings`); a session that asks gets a card for the owner (`account_near::asks_leads_any`).
+pub const LEADS_ANY: &str = "accounts.leads_any";
+/// Ticket 1126: the label of the account the owner picked for new sessions of `agent`, read fresh on every start. None
+/// for "Your own" or an id the registry no longer has (ticket 358 falls back to "Your own" the same way).
+// shortcut: a picked account known to be signed out is still returned (the core keeps no sign-in state); its start
+// shows the agent's own login. Keep a last-known state per account when that matters.
+pub(crate) fn default_label(home: &Path, agent: Agent) -> Option<String> {
+    default_pick(home, agent).flatten()
+}
+/// Round 2 review MUST 1: the pick as a start uses it: `Some(None)` is an explicit "Your own" (the owner's own folder,
+/// no label), `None` is no usable pick (absent, or an id the registry no longer has), where the caller's own applies.
+pub(crate) fn default_pick(home: &Path, agent: Agent) -> Option<Option<String>> {
+    let id = session_defaults(home)[agent as usize].clone()?;
+    if id == OWN {
+        return Some(None);
+    }
+    by_id(home, agent, &id).ok().map(|(_, label)| Some(label))
 }
 
 fn own_label_key(agent: Agent) -> String {

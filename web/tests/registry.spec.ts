@@ -6,14 +6,13 @@ import { expect, openWindow, REPO, test } from './fixtures';
 import { isKind, MIN, TITLE, WIDGETS } from '../src/layout/model';
 import { parse, tokenize } from '../src/layout/command';
 
-const KINDS = ['tree', 'agents', 'waiting', 'terminal', 'composer', 'diff', 'files', 'board', 'search', 'preview', 'artifacts', 'decisions', 'room'];
+const KINDS = ['tree', 'waiting', 'terminal', 'composer', 'diff', 'files', 'board', 'search', 'preview', 'artifacts', 'decisions', 'room', 'context'];
 const USER = 'widget:demo';
-const LIST = 'tree, agents, waiting, terminal, composer, diff, files, board, search, preview, artifacts, decisions, room';
+const LIST = 'tree, waiting, terminal, composer, diff, files, board, search, preview, artifacts, decisions, room, context';
 
 // Pre-refactor snapshot: kind -> [title, min w, min h].
 const PINNED: Record<string, [string, number, number]> = {
   tree: ['Tree', 160, 120],
-  agents: ['Agents', 160, 80],
   waiting: ['Answer strip', 200, 40],
   terminal: ['Terminal', 240, 120],
   composer: ['Composer', 240, 56],
@@ -25,13 +24,13 @@ const PINNED: Record<string, [string, number, number]> = {
   artifacts: ['Artifacts', 220, 160],
   decisions: ['Decisions', 240, 120],
   room: ['Room', 280, 160], // ticket 990
+  context: ['Context', 200, 80], // ticket 1048
   [USER]: ['demo', 200, 80],
 };
 
 // Drawer cards with no sessions: [data-card, aria-label, preview markup].
 const CARDS: [string, string, string][] = [
   ['tree', 'Tree widget: waiting slots', '<i class="bar"></i><i class="ln"></i><i class="ln"></i>'],
-  ['agents', 'Agents widget: one dot per agent, showing its state', '<i class="ln"></i>'],
   ['waiting', 'Answer strip widget: answer here', '<span class="txt">appears when waiting</span>'],
   ['terminal', 'Terminal widget: follows or pinned', '<span class="txt mono">$ _</span>'],
   ['composer', 'Composer widget: hideable', '<span class="box"></span>'],
@@ -43,12 +42,12 @@ const CARDS: [string, string, string][] = [
   ['artifacts', 'Artifacts widget: attachments · artifacts', '<span class="txt">◧ this session</span>'],
   ['decisions', 'Decisions widget: pending answers · risky allow', '<span class="txt">Nothing waiting</span>'],
   ['room', 'Room widget: the leader and its team', '<span class="txt">Room</span>'], // ticket 990
+  ['context', 'Context widget: context window of the session', '<span class="txt">36% used</span>'], // ticket 1048
 ];
 
 // The window's first rendered element per kind: tag.class.
 const RENDERED: Record<string, string> = {
   tree: 'aside.dock l',
-  agents: 'section.agents',
   waiting: 'section.strip',
   terminal: 'div.centre',
   composer: 'div.composer',
@@ -60,6 +59,7 @@ const RENDERED: Record<string, string> = {
   artifacts: 'aside.dock zone aw',
   decisions: 'div.dw',
   room: 'div.roompane',
+  context: 'section.ctxw',
   [USER]: 'div.uw',
 };
 

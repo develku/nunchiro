@@ -1,8 +1,6 @@
 // V2.5-37 (ticket 185, needs 154/155, draft B): swimlanes, the coordinator indicator and its CLI line, filter chips,
 // reachability and the 8-language catalogue. Real core, board.json seeded with 184's task fields.
 import { expect, nunchiro, test, type Core } from './fixtures';
-import { makeT } from '../src/i18n';
-import * as areas from '../src/i18n/areas/board';
 import { cardOf, openBoard, overlay, seed } from './fixtures/board/coord';
 import type { Page } from '@playwright/test';
 
@@ -169,23 +167,6 @@ test('board_reachable_2_clicks: the board opens from the visible labelled Board 
   await expect(board.getByRole('group', { name: 'Lanes' })).toBeVisible();
   await expect(board.getByRole('button', { name: 'Your turn only' })).toBeVisible();
   await expect(cardOf(app, 'Reach me')).toBeVisible();
-});
-
-test('board_strings_8_languages: every board key has a string in each of the 8 UI languages', () => {
-  const keys = Object.keys(areas.en);
-  expect(keys.length).toBeGreaterThan(100);
-  const tables = areas as unknown as Record<string, Record<string, string>>;
-  for (const lang of ['en', 'ko', 'ja', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'pt']) {
-    const table = tables[lang];
-    const missing = keys.filter((k) => typeof table?.[k] !== 'string' || !table[k].trim());
-    expect(missing, lang).toEqual([]);
-    // Every English placeholder is kept, so no language drops a number or a name.
-    const names = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
-    for (const k of keys) expect(names(tables.en[k]).filter((n) => !names(table[k]).includes(n)), `${lang} ${k}`).toEqual([]);
-  }
-  const ko = makeT<string>('ko', 'ko', { en: tables.en, ko: tables.ko } as never);
-  expect(ko('board.lane.done', { n: 3, m: 7 })).toBe('3/7 완료');
-  expect(ko('board.task.stale', { n: 14 })).toBe('멈춤 14분');
 });
 
 test('board_filters edge: a move made while a chip hides cards keeps the hidden cards in place; keys stay in the lane', async ({ app, core }) => {

@@ -1,6 +1,6 @@
 //! S9: the core's CPU while nothing happens: one idle shell session, one window connected over /ws (ticket 463: with the
 //! window's periodic reads, and every git process the core starts listed).
-//! Run: `cargo test -p nunchiro --release --test idle_cpu -- --ignored --nocapture` (prints the percentage; fails
+//! Run: `cargo test -p nunchiro --release --features measure --test idle_cpu -- --nocapture` (prints the percentage; fails
 //! over `NUNCHIRO_IDLE_CPU_MAX`, default 0.5).
 #[path = "../../nunchiro-core/tests/fixtures/git_env.rs"]
 mod git_env;
@@ -44,7 +44,6 @@ fn frame(text: &str) -> Vec<u8> {
 }
 
 #[test]
-#[ignore = "measurement: 70 s of wall time"]
 fn idle_core_cpu() {
     measure("fresh", None, false, |home| {
         start(home, home, AgentKind::Shell, "idle")
@@ -74,7 +73,6 @@ fn ok(home: &std::path::Path, request: Request) {
 /// their input box drawn and a transcript on disk (r3), and one live shell that printed a full screen. The window watches
 /// the shell.
 #[test]
-#[ignore = "measurement: about 90 s of wall time"]
 fn idle_core_cpu_real_home() {
     measure(
         "real home",
@@ -197,7 +195,6 @@ fn idle_core_cpu_real_home() {
 /// changes (its git facts every 30 s), and a live Codex session named its session id but has no transcript, while
 /// `~/.codex/sessions` holds a year of other rollouts, so each search for it walks about 4000 entries.
 #[test]
-#[ignore = "measurement: 70 s of wall time"]
 fn idle_core_cpu_diff_dock_and_codex() {
     measure("diff dock and codex", None, true, |home| {
         use std::os::unix::fs::PermissionsExt;

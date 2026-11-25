@@ -411,6 +411,26 @@ fn one_job_with_a_correction_a_second_writer_a_review_an_edit_and_a_restart() {
         )["Err"]
             .is_string()
     );
+    // Ticket 1054: --effort asks the seat's effort; one the agent does not have is refused; without it the level's
+    // (none for Claude at standard) stays.
+    let asked = task(
+        &lead,
+        json!({"operation":"staff","id":"t1","text":"reviewer","effort":"high"}),
+    );
+    assert_eq!(
+        (
+            &asked["Ok"]["session"]["model"],
+            &asked["Ok"]["session"]["effort"]
+        ),
+        (&json!("sonnet"), &json!("high")),
+        "{asked}"
+    );
+    let refused = task(
+        &lead,
+        json!({"operation":"staff","id":"t1","text":"reviewer","effort":"huge"}),
+    );
+    assert!(refused["Err"].is_string(), "{refused}");
+    assert!(staff["Ok"]["session"]["effort"].is_null(), "{staff}");
     assert!(
         task(
             &lead,
@@ -527,6 +547,114 @@ fn one_job_with_a_correction_a_second_writer_a_review_an_edit_and_a_restart() {
     assert!(yes["Err"].is_null(), "{yes}");
     let roles = raw(&home, owner, json!({"op":"role","operation":"list"}));
     assert_eq!(roles["Ok"]["roles"].as_array().unwrap().len(), 3, "{roles}");
+    // Ticket 1099 panel 4: the lead asks for another live-seat cap on a card; only the user's yes sets it.
+    let cap_cards = || {
+        let snap = raw(&home, owner, json!({"op":"snapshot"}));
+        snap["Ok"]["owner_decisions"]
+            .as_array()
+            .map(|cards| {
+                cards
+                    .iter()
+                    .filter(|c| c["owner"]["type"] == "cap")
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    };
+    // The place's cap is left out of the JSON at its default, 4.
+    let cap_now = || {
+        let place = task(owner, json!({"operation":"list","project":proj}))["Ok"]["place"].clone();
+        assert!(place.is_object(), "{place}");
+        place["cap"].as_u64().unwrap_or(4)
+    };
+    let refused = task(&lead, json!({"operation":"cap","text":"6"}));
+    assert!(
+        refused["Err"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("task ask-cap"),
+        "a lead still cannot set the cap: {refused}"
+    );
+    for (token, ask) in [
+        (
+            &builder_token,
+            json!({"operation":"ask-cap","text":"6","why":"x"}),
+        ),
+        (&lead, json!({"operation":"ask-cap","text":"4","why":"x"})),
+        (&lead, json!({"operation":"ask-cap","text":"5","why":"x"})),
+        (&lead, json!({"operation":"ask-cap","text":"6"})),
+    ] {
+        let r = task(token, ask.clone());
+        assert!(r["Err"].is_string(), "{ask}: {r}");
+    }
+    assert!(cap_cards().is_empty());
+    let asked = task(
+        &lead,
+        json!({"operation":"ask-cap","text":"8","why":"first reason"}),
+    );
+    assert!(
+        asked["Ok"]["text"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("from 4 to 8"),
+        "{asked}"
+    );
+    let asked = task(
+        &lead,
+        json!({"operation":"ask-cap","text":"6","why":"3 reviews have waited 20 minutes for a free seat"}),
+    );
+    assert!(asked["Ok"].is_object(), "{asked}");
+    let cards = cap_cards();
+    assert_eq!(cards.len(), 1, "a second ask replaces the first: {cards:?}");
+    let card = &cards[0];
+    assert_eq!(
+        (
+            &card["owner"]["was"],
+            &card["owner"]["cap"],
+            &card["owner"]["why"]
+        ),
+        (
+            &json!(4),
+            &json!(6),
+            &json!("3 reviews have waited 20 minutes for a free seat")
+        ),
+        "{card}"
+    );
+    assert_eq!(cap_now(), 4, "nothing changes before the yes");
+    // The lead cannot answer its own card: a session never reaches an owner item.
+    let own = raw(
+        &home,
+        &lead,
+        json!({"op":"answer","item":card["id"],"answer":{"type":"allow_once"},"confirmed":true}),
+    );
+    assert!(own["Err"].is_string(), "{own}");
+    assert_eq!(cap_now(), 4);
+    assert_eq!(cap_cards().len(), 1);
+    let yes = raw(
+        &home,
+        owner,
+        json!({"op":"answer","item":card["id"],"answer":{"type":"allow_once"},"confirmed":true}),
+    );
+    assert!(yes["Err"].is_null(), "{yes}");
+    assert_eq!(cap_now(), 6, "the yes sets the cap Settings sets");
+    assert!(cap_cards().is_empty());
+    // Not now drops the card and changes nothing.
+    let asked = task(
+        &lead,
+        json!({"operation":"ask-cap","text":"8","why":"more"}),
+    );
+    assert!(asked["Ok"].is_object(), "{asked}");
+    let card = cap_cards().remove(0);
+    let no = raw(
+        &home,
+        owner,
+        json!({"op":"answer","item":card["id"],"answer":{"type":"deny"}}),
+    );
+    assert!(no["Err"].is_null(), "{no}");
+    assert!(cap_cards().is_empty());
+    assert_eq!(cap_now(), 6);
+    let back = task(owner, json!({"operation":"cap","text":"4","project":proj}));
+    assert!(back["Err"].is_null(), "{back}");
     // Ticket 993 rule 9: a role with a model of its own keeps it, whatever level is asked.
     let own = json!({"name":"Architect","job":"Designs the hard parts.","kind":"claude","model":"opus","writes":true});
     let saved = raw(
@@ -546,6 +674,115 @@ fn one_job_with_a_correction_a_second_writer_a_review_an_edit_and_a_restart() {
         json!({"op":"role","operation":"remove","name":"Architect"}),
     );
     assert!(removed["Ok"].is_object(), "{removed}");
+
+    // Ticket 1055: Settings > Team > Worker models. "Workers open on" fixes every role seat at that level, the "Upper
+    // limit" clamps an asked level and says why, and a reviewer never opens below its builder's level.
+    let workers = |v: Value| {
+        raw(
+            &home,
+            owner,
+            json!({"op":"quit_settings","patch":{"features":{"team.workers":v}}}),
+        )
+    };
+    assert!(workers(json!({"level":"huge"}))["Err"].is_string());
+    assert!(workers(json!({"level":"deep"}))["Err"].is_null());
+    for role in ["builder", "reviewer"] {
+        let s = task(
+            &lead,
+            json!({"operation":"staff","id":"t1","text":role,"level":"light"}),
+        );
+        assert_eq!(
+            (&s["Ok"]["level"], &s["Ok"]["session"]["model"]),
+            (&json!("deep"), &json!("opus")),
+            "{s}"
+        );
+        assert!(
+            s["Ok"]["why"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("pinned to deep"),
+            "{s}"
+        );
+    }
+    assert!(workers(json!({"level_max":"standard"}))["Err"].is_null());
+    let s = task(
+        &lead,
+        json!({"operation":"staff","id":"t1","text":"builder","level":"deep"}),
+    );
+    assert_eq!(
+        (&s["Ok"]["level"], &s["Ok"]["session"]["model"]),
+        (&json!("standard"), &json!("sonnet")),
+        "{s}"
+    );
+    assert!(
+        s["Ok"]["why"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("goes up to standard"),
+        "{s}"
+    );
+    let s = task(
+        &lead,
+        json!({"operation":"staff","id":"t1","text":"builder"}),
+    );
+    assert!(s["Ok"]["why"].is_null(), "{s}");
+    assert!(workers(json!({}))["Err"].is_null());
+    // The floor: the builder's seat opened at deep, so a reviewer asked at light (or at nothing) opens at deep.
+    let assigned = task(
+        &lead,
+        json!({"operation":"assign","id":"t1","session":builder,"level":"deep"}),
+    );
+    assert!(assigned["Ok"].is_object(), "{assigned}");
+    for asked in [json!("light"), Value::Null] {
+        let s = task(
+            &lead,
+            json!({"operation":"staff","id":"t1","text":"reviewer","level":asked}),
+        );
+        assert_eq!(s["Ok"]["level"], "deep", "{s}");
+        assert!(
+            s["Ok"]["why"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("builder"),
+            "{s}"
+        );
+    }
+    let shown =
+        |t: &Value| nunchiro_core::ledger::lines(&serde_json::from_value(t.clone()).unwrap(), true);
+    let t = tasks(&task(&lead, json!({"operation":"show","id":"t1"}))).remove(0);
+    assert!(t["floor"].is_null(), "{t}");
+    // A Reviewer role with its own model keeps it; the task says in one line that the floor could not apply.
+    let own =
+        json!({"name":"Reviewer","job":"Reviews.","kind":"claude","model":"sonnet","writes":false});
+    let saved = raw(
+        &home,
+        owner,
+        json!({"op":"role","operation":"save","role":own}),
+    );
+    assert!(saved["Ok"].is_object(), "{saved}");
+    let s = task(
+        &lead,
+        json!({"operation":"staff","id":"t1","text":"reviewer"}),
+    );
+    assert_eq!(
+        (&s["Ok"]["level"], &s["Ok"]["session"]["model"]),
+        (&Value::Null, &json!("sonnet")),
+        "{s}"
+    );
+    let t = tasks(&task(&lead, json!({"operation":"show","id":"t1"}))).remove(0);
+    assert!(
+        shown(&t).contains(
+            "note: review-tax runs its role's own model, so it did not open at its builder's level"
+        ),
+        "{t}"
+    );
+    let plain = json!({"name":"Reviewer","job":"Reviews.","kind":"claude","writes":false});
+    let saved = raw(
+        &home,
+        owner,
+        json!({"op":"role","operation":"save","role":plain}),
+    );
+    assert!(saved["Ok"].is_object(), "{saved}");
 
     // Slice i: the place's own choices. Only the user sets them; where seats may edit without asking, a Builder
     // seat starts in that mode (a Reviewer never does), and the lead reads the way of working with its tasks.
@@ -617,6 +854,22 @@ fn one_job_with_a_correction_a_second_writer_a_review_an_edit_and_a_restart() {
     ] {
         assert!(refused["Err"].is_string(), "{refused}");
     }
+    // Ticket 1054: a reviewer's note keeps its lines and its length (it was cut to one line of 300 chars).
+    let long: String = (0..12)
+        .map(|i| format!("{i:02} {}\n", "x".repeat(96)))
+        .collect();
+    let asked = task(&reviewer_token, json!({"operation":"changes","text":long}));
+    assert!(asked["Ok"].is_object(), "{asked}");
+    let t = tasks(&task(&lead, json!({"operation":"show","id":"t1"}))).remove(0);
+    assert_eq!(t["review"]["note"], long.trim_end(), "{t}");
+    let view: nunchiro_core::ledger::View = serde_json::from_value(t).unwrap();
+    let whole = nunchiro_core::ledger::lines(&view, true);
+    assert!(long.lines().all(|l| whole.contains(l)), "{whole}");
+    let list = nunchiro_core::ledger::lines(&view, false);
+    assert!(
+        list.contains("00 x") && !list.contains("01 x") && list.contains("task show t1"),
+        "{list}"
+    );
     fs::write(
         Path::new(&wt).join("tax.py"),
         "def tax(x):\n    return x * 110 // 100\n",

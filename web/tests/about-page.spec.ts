@@ -246,18 +246,18 @@ test('about_updates_row_off_with_reason_outside_a_self_updating_build', async ({
   const row = app.locator('[data-row="updates"]');
   const check = row.getByRole('button', { name: 'Check now' });
   await expect(check).toBeDisabled();
-  await expect(row.locator('[data-why="why-updates"]')).toHaveText('This build does not update itself: only the official signed app and the RC check for new builds, and only when their update source is found.');
+  await expect(row.locator('[data-why="why-updates"]')).toHaveText('This build does not update itself: only the installed Nunchiro.app does. A test build keeps its own home and never updates.');
   await expect(check).toHaveAttribute('aria-describedby', 'why-updates');
 });
 
-test('about_updates_row_runs_the_palette_check_in_an_rc', async ({ app }) => {
+test('about_updates_row_runs_the_palette_check_in_a_self_updating_build', async ({ app }) => {
   await shell(app); // `rc_update_check` answers null: nothing newer
   await openWindow(app, { rcUpdates: true });
   await openAbout(app);
   const row = app.locator('[data-row="updates"]');
-  await expect(row.locator('.sds')).toHaveText('Check for a new build.');
+  await expect(row.locator('.sds').first()).toHaveText('Check for a new build.');
   await row.getByRole('button', { name: 'Check now' }).click();
-  await expect(row.locator('.sds')).toHaveText('No newer build');
+  await expect(row.locator('.sds').first()).toHaveText('No newer build');
 });
 
 test('about_has_its_own_nav_icon', async ({ app }) => {

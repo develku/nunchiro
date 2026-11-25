@@ -73,6 +73,7 @@ export const rec = {
     message: { role: 'user', content: [{ type: 'text', text }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'c2FtcGxl' } }] },
   }),
   assistant: (text: string) => ({ type: 'assistant', uuid: id(), message: { role: 'assistant', content: [{ type: 'text', text }] } }),
+  note: (text: string) => ({ type: 'assistant', thinkingDisplay: 'updates', uuid: id(), message: { role: 'assistant', content: [{ type: 'thinking', thinking: text, signature: 'x' }] } }),
   thinking: (text: string) => ({ type: 'assistant', uuid: id(), message: { role: 'assistant', content: [{ type: 'thinking', thinking: text, signature: 'x' }] } }),
   use: (tool_id: string, name: string, input: unknown) => ({
     type: 'assistant',

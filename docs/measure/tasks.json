@@ -1,0 +1,894 @@
+{
+ "apps": [
+  "Nunchiro",
+  "Orca",
+  "T3 Code",
+  "herdr",
+  "Claude Desktop",
+  "ChatGPT",
+  "Claude Code",
+  "Codex"
+ ],
+ "names": {
+  "T1": "First launch to the first agent prompt",
+  "T2": "New agent session in a chosen folder",
+  "T3": "Answer one permission request",
+  "T4": "Switch the model of a running session",
+  "T5": "Find a past conversation by a word",
+  "T6": "Two agent tasks at once, each in its own worktree",
+  "T7": "See the diff of the agent's changes",
+  "T8": "Open a shell beside the agent",
+  "T9": "Quit and reopen: the session continues",
+  "T10": "Add an integration (MCP server or skill)",
+  "T11": "Answer a multiple-choice question by keyboard only",
+  "T12": "Fresh conversation for the same standing agent"
+ },
+ "timed": {
+  "Nunchiro": {
+   "T1": "launch_cold_s",
+   "T9": "launch_warm_s"
+  }
+ },
+ "note": "Steps from docs/code for every app, Nunchiro included (lead m1192); no app was driven this round. Orca, T3 Code and herdr from their source and docs; Claude Desktop and ChatGPT from their public docs only; Claude Code and Codex from --help and docs. A cell marked unknown (the docs read show the feature but not its steps) is left out of that app's mean and of the task's best. Timed rows for Nunchiro come from the measure script. Peer shots are from the timed GUI run of 2026-11-02 (Orca 1.4.245, T3 Code 0.1.6, Herdr.app 0.1.11); Nunchiro shots are this run's gate pictures of the isolated RC. Hover a cell for its path and evidence. Orca cells cite its source at commit 00910c0495; CLI cells cite the --help text kept in docs/measure/evidence/.",
+ "versions": {
+  "Nunchiro": "origin/main f5a578f6b (2026-11-24); app 0.1.0 unsigned local build",
+  "Orca": "repo 00910c0495 (Mon Nov 23 2026); older clone 0cee6cbd not read; installed Orca.app 1.4.256 (Info.plist). Shots from 2026-11-02 run, v1.4.245",
+  "T3 Code": "repo d14ace82 (Fri Oct 23 2026); installed 0.1.6 (Beta). Shots from 2026-11-02 run, v0.1.6",
+  "herdr": "repo 5608de0 (Sat Oct 24 2026); 0.1.11 per 2026-11-02 run (Herdr.app GUI and TUI). Docs read from docs/next, newer than 0.1.11",
+  "Claude Desktop": "6.28899.6 (CFBundleShortVersionString)",
+  "ChatGPT": "26.1117.41037 (CFBundleShortVersionString)",
+  "Claude Code": "2.1.331",
+  "Codex": "codex-cli 0.161.0"
+ },
+ "tasks": {
+  "T1": {
+   "Nunchiro": {
+    "result": "yes",
+    "steps": 6,
+    "path": "Onboarding opens by itself on first launch; click Quick setup; Browse folder; pick the folder in the macOS dialog; click Open; the agent starts on its own; type the prompt; Enter",
+    "evidence": "web/src/App.tsx:378-388; web/src/settings/onboarding/OnboardingPage.tsx:212-221; web/src/firstrun/added.ts:57; web/src/tree/ProjectTools.tsx:112,156",
+    "stuck": "A folder on an external disk shows 'Permission needed' until macOS grants access (docs/first-run.md). Whether the new session's composer is focused for typing was not verified.",
+    "shots": []
+   },
+   "Orca": {
+    "result": "yes",
+    "steps": 6,
+    "path": "open app; pick agent; pick Chat or CLI; add project folder; finish; type prompt; Enter",
+    "evidence": "src/renderer/src/components/onboarding/OnboardingFlow.tsx:12-25",
+    "stuck": "Multi-step onboarding (agent, surface, theme, notifications, integrations); count estimated.",
+    "shots": []
+   },
+   "T3 Code": {
+    "result": "yes",
+    "steps": 6,
+    "path": "Continue x3 in wizard; click project new thread; type prompt; Enter",
+    "evidence": "docs/user/welcome-wizard.md:1-95",
+    "stuck": "Agent CLI not signed in: wizard opens a terminal. Count estimated from docs.",
+    "shots": []
+   },
+   "herdr": {
+    "result": "yes",
+    "steps": 4,
+    "path": "type herdr; type claude; type prompt; Enter",
+    "evidence": "docs/next/website/src/content/docs/quick-start.mdx:5-45",
+    "stuck": "Agent install and sign-in are outside herdr. Needs a terminal.",
+    "shots": []
+   },
+   "Claude Desktop": {
+    "result": "yes",
+    "steps": 4,
+    "path": "sign in; click Code tab; type prompt; Enter",
+    "evidence": "https://code.claude.com/docs/en/desktop-quickstart (Install: sign in, open Code tab)",
+    "stuck": "Needs paid plan and its own sign-in, separate from the CLI",
+    "shots": []
+   },
+   "ChatGPT": {
+    "result": "yes",
+    "steps": 4,
+    "path": "sign in; open folder; type prompt; Enter",
+    "evidence": "https://learn.chatgpt.com/docs/app (install, sign in, open a folder)",
+    "stuck": "Needs ChatGPT account; no CLI sign-in reuse documented",
+    "shots": []
+   },
+   "Claude Code": {
+    "result": "yes",
+    "steps": 1,
+    "path": "claude \"prompt\"",
+    "evidence": "docs/measure/evidence/claude-help.txt:4 (claude [prompt]); https://code.claude.com/docs/en/cli-reference",
+    "stuck": "Shows first-run trust and theme dialogs on a fresh install",
+    "shots": []
+   },
+   "Codex": {
+    "result": "yes",
+    "steps": 1,
+    "path": "codex \"prompt\"",
+    "evidence": "docs/measure/evidence/codex-help.txt:8,44 (codex [PROMPT])",
+    "stuck": "First run asks Sign in with ChatGPT; this sign-in is not the Claude CLI's",
+    "shots": []
+   }
+  },
+  "T2": {
+   "Nunchiro": {
+    "result": "yes",
+    "steps": 2,
+    "path": "Ctrl+digit selects the project; Shift+Cmd+C starts Claude in it (Shift+Cmd+O starts Codex). Fallback: Cmd+T, type the project name, Enter = 3",
+    "evidence": "web/src/keys.ts:85,53 (session.new.claude); web/src/chrome/commands.ts:207-211; web/src/NewSession.tsx:331-358",
+    "stuck": "A folder not yet in the tree needs Choose folder (the native dialog). The key does nothing when the agent is turned off in Settings.",
+    "shots": []
+   },
+   "Orca": {
+    "result": "yes",
+    "steps": 3,
+    "path": "new-workspace shortcut; pick project and agent; Enter",
+    "evidence": "orca@00910c0495 src/renderer/src/hooks/app-commands/new-workspace-command.ts:29-36 (shortcut opens the new-workspace composer); skill-guides/orca-cli.md:66-70 (Starting agents)",
+    "stuck": "New workspace creates a worktree by default.",
+    "shots": []
+   },
+   "T3 Code": {
+    "result": "yes",
+    "steps": 3,
+    "path": "click project new-thread button; type prompt; Enter. CLI: t3 thread start <path> msg (1 string)",
+    "evidence": "packages/shared/src/keybindings.ts:195; apps/server/src/cli/thread.ts:535",
+    "stuck": "CLI needs a running T3 server.",
+    "shots": []
+   },
+   "herdr": {
+    "result": "yes",
+    "steps": 3,
+    "path": "cd to folder; type herdr; type claude",
+    "evidence": "quick-start.mdx:5-26; agent-automation.mdx:22 (workspace create --cwd)",
+    "stuck": "No folder picker in the TUI; GUI + duplicates the current space (11-02 run).",
+    "shots": []
+   },
+   "Claude Desktop": {
+    "result": "yes",
+    "steps": 4,
+    "path": "click project folder control; choose folder; type prompt; Enter",
+    "evidence": "https://code.claude.com/docs/en/desktop (Starting a session)",
+    "stuck": "",
+    "shots": []
+   },
+   "ChatGPT": {
+    "result": "yes",
+    "steps": 4,
+    "path": "open folder; New chat; type prompt; Enter",
+    "evidence": "https://learn.chatgpt.com/docs/app (Start a chat, project or open a folder)",
+    "stuck": "",
+    "shots": []
+   },
+   "Claude Code": {
+    "result": "yes",
+    "steps": 2,
+    "path": "cd dir; claude \"prompt\"",
+    "evidence": "claude --help: [prompt]; https://code.claude.com/docs/en/cli-reference",
+    "stuck": "",
+    "shots": []
+   },
+   "Codex": {
+    "result": "yes",
+    "steps": 1,
+    "path": "codex -C dir \"prompt\"",
+    "evidence": "docs/measure/evidence/codex-help.txt:107 (-C, --cd <DIR>)",
+    "stuck": "",
+    "shots": []
+   }
+  },
+  "T3": {
+   "Nunchiro": {
+    "result": "yes",
+    "steps": 1,
+    "path": "Click 'Allow once' on the docked decision card (keyboard: Shift+Tab to the card, then 1 = 2)",
+    "evidence": "web/src/chat/DecisionCard.tsx:262-264,316; web/src/queue/answer.ts:7-9",
+    "stuck": "The docked card never takes focus by itself, so the 1 key does nothing until the card has focus. A risky permission allows only by focus then Enter.",
+    "shots": []
+   },
+   "Orca": {
+    "result": "yes",
+    "steps": 1,
+    "path": "click Allow once on the approval card (chat); CLI mode answers in terminal",
+    "evidence": "orca@00910c0495 src/renderer/src/components/native-chat/prompts/NativeChatApprovalCard.tsx:367-368 (one button per approval option)",
+    "stuck": "Orca starts Claude in bypass mode by default (run 11-02), so no prompt until changed.",
+    "shots": [
+     "peer-1102-chat-1-orca-start.jpg"
+    ]
+   },
+   "T3 Code": {
+    "result": "yes",
+    "steps": 1,
+    "path": "click Approve in the approval panel (Supervised mode)",
+    "evidence": "apps/web/src/components/chat/ComposerPendingApprovalActions.tsx:29; docs/user/permission-modes.md",
+    "stuck": "Default is Full access, so no prompt until switched. No approve shortcut (11-02 run: 3 keys).",
+    "shots": [
+     "peer-1102-chat-1-t3-start.jpg",
+     "peer-1102-chat-1-t3.jpg"
+    ]
+   },
+   "herdr": {
+    "result": "yes",
+    "steps": 2,
+    "path": "focus the blocked agent (sidebar row, or prefix+g Enter); press the agent's allow-once key",
+    "evidence": "quick-start.mdx:46; agent-automation.mdx:78",
+    "stuck": "Herdr only shows blocked; the answer is the agent's own prompt.",
+    "shots": [
+     "peer-1102-chat-1-herdr-start.jpg"
+    ]
+   },
+   "Claude Desktop": {
+    "result": "yes",
+    "steps": 1,
+    "path": "click Allow/approve in the Manual-mode prompt",
+    "evidence": "https://code.claude.com/docs/en/desktop (Permission modes; Allow once for sites)",
+    "stuck": "Docs name Allow once only for browser sites and computer use; edit/command prompt wording not shown",
+    "shots": []
+   },
+   "ChatGPT": {
+    "result": "partial",
+    "steps": 1,
+    "path": "click approve in prompt",
+    "evidence": "https://learn.chatgpt.com/docs/app (links to /codex/permission-modes)",
+    "stuck": "Prompt wording and allow-once not shown in fetched docs",
+    "shots": []
+   },
+   "Claude Code": {
+    "result": "yes",
+    "steps": 1,
+    "path": "press Yes/Enter on the permission dialog",
+    "evidence": "https://code.claude.com/docs/en/interactive-mode",
+    "stuck": "'Yes' vs 'always' choice is a user choice",
+    "shots": []
+   },
+   "Codex": {
+    "result": "yes",
+    "steps": 1,
+    "path": "press approve key on the prompt",
+    "evidence": "https://learn.chatgpt.com/docs/developer-commands?surface=cli (--ask-for-approval)",
+    "stuck": "Prompt wording and allow-once key not shown in docs",
+    "shots": []
+   }
+  },
+  "T4": {
+   "Nunchiro": {
+    "result": "yes",
+    "steps": 2,
+    "path": "Click the model chip in the composer; click the model",
+    "evidence": "web/src/picker/Picker.tsx:1-4,166,317",
+    "stuck": "Remote (SSH) sessions and Claude models outside the four aliases have limits. The next turn using the new model was not checked in the real app.",
+    "shots": []
+   },
+   "Orca": {
+    "result": "partial",
+    "steps": 2,
+    "path": "open chat composer model control; pick model",
+    "evidence": "orca@00910c0495 src/renderer/src/components/native-chat/composer/controls/NativeChatComposerActions.tsx:244-250 (model picker in the chat composer)",
+    "stuck": "Chat sessions only; CLI mode uses /model. Control placement not verified.",
+    "shots": []
+   },
+   "T3 Code": {
+    "result": "yes",
+    "steps": 3,
+    "path": "mod+shift+m; pick model; send next prompt",
+    "evidence": "docs/user/keybindings.md:33-40; keybindings.ts:200",
+    "stuck": "Switching provider mid-thread may need restart or handoff.",
+    "shots": []
+   },
+   "herdr": {
+    "result": "partial",
+    "steps": 3,
+    "path": "type /model in the agent; pick model; Enter",
+    "evidence": "agent-automation.mdx:46",
+    "stuck": "No herdr model control; relies on the agent's command.",
+    "shots": []
+   },
+   "Claude Desktop": {
+    "result": "yes",
+    "steps": 2,
+    "path": "Cmd+Shift+I; pick model",
+    "evidence": "https://code.claude.com/docs/en/desktop (model picker)",
+    "stuck": "",
+    "shots": []
+   },
+   "ChatGPT": {
+    "result": "yes",
+    "steps": 2,
+    "path": "click chat-bar model picker; choose",
+    "evidence": "https://help.openai.com/en/articles/9703738-desktop-app-for-chatgpt-macos (Nov 14 2024: model picker)",
+    "stuck": "Mid-session switch for Codex threads not confirmed",
+    "shots": []
+   },
+   "Claude Code": {
+    "result": "yes",
+    "steps": 2,
+    "path": "/model; pick",
+    "evidence": "https://code.claude.com/docs/en/commands (During a task: /model)",
+    "stuck": "",
+    "shots": []
+   },
+   "Codex": {
+    "result": "yes",
+    "steps": 2,
+    "path": "/model; pick",
+    "evidence": "https://learn.chatgpt.com/docs/codex/cli (Switching models)",
+    "stuck": "",
+    "shots": []
+   }
+  },
+  "T5": {
+   "Nunchiro": {
+    "result": "yes",
+    "steps": 6,
+    "path": "Cmd+K; type 'search sessions'; Enter; type the word; ArrowDown; Enter",
+    "evidence": "web/src/chrome/commands.ts:308; web/src/search/Sessions.tsx:236-262; web/src/search/Search.tsx:80",
+    "stuck": "Searches only chats of sessions Nunchiro started, not sessions made in a plain terminal. A closed session opens read-only with Resume. The 300 ms pause before results was not counted as a step.",
+    "shots": []
+   },
+   "Orca": {
+    "result": "yes",
+    "steps": 4,
+    "path": "open search palette; type word; arrow to result; Enter",
+    "evidence": "skill-guides/orca-cli.md:373-378; src/renderer/src/components/session-search/",
+    "stuck": "Entry shortcut not confirmed. Cmd+K with terminal focus went to the shell (11-02 run).",
+    "shots": [
+     "peer-1102-tree-1-orca.jpg"
+    ]
+   },
+   "T3 Code": {
+    "result": "yes",
+    "steps": 3,
+    "path": "mod+k; type word; Enter",
+    "evidence": "docs/user/thread-sidebar.md:189-191; keybindings.ts:169",
+    "stuck": "Search starts at 2 characters; covers user messages and final replies only. Settings rank above thread match.",
+    "shots": [
+     "peer-1102-tree-1-t3.jpg"
+    ]
+   },
+   "herdr": {
+    "result": "partial",
+    "steps": 3,
+    "path": "in the agent type /resume; type word; Enter",
+    "evidence": "keyboard.mdx:66 (Goto picker covers names, tabs, branches, paths only)",
+    "stuck": "Cannot search conversation text; only the agent's own resume.",
+    "shots": [
+     "peer-1102-tree-1-herdr.jpg"
+    ]
+   },
+   "Claude Desktop": {
+    "result": "partial",
+    "steps": 3,
+    "path": "click sidebar search; type word; click result",
+    "evidence": "https://code.claude.com/docs/en/desktop (sidebar View all/Archived)",
+    "stuck": "Fetched docs show grouping and asking Claude to find sessions; no keyword search documented",
+    "shots": []
+   },
+   "ChatGPT": {
+    "result": "yes",
+    "steps": 3,
+    "path": "click search bar; type word; click result",
+    "evidence": "https://help.openai.com/en/articles/9703738-desktop-app-for-chatgpt-macos (Dec 19 2024: search all conversations)",
+    "stuck": "",
+    "shots": []
+   },
+   "Claude Code": {
+    "result": "yes",
+    "steps": 3,
+    "path": "/resume; type word; Enter",
+    "evidence": "https://code.claude.com/docs/en/cli-reference (claude -r)",
+    "stuck": "Picker search wording not read in fetched docs",
+    "shots": []
+   },
+   "Codex": {
+    "result": "partial",
+    "steps": 3,
+    "path": "codex resume; type; Enter",
+    "evidence": "codex resume --help: 'picker by default'; https://learn.chatgpt.com/docs/developer-commands?surface=cli",
+    "stuck": "No keyword search documented, picker only",
+    "shots": []
+   }
+  },
+  "T6": {
+   "Nunchiro": {
+    "result": "yes",
+    "steps": 6,
+    "path": "Per agent: Cmd+T; click the Worktree place choice; Enter (default agent). Repeat for the second. Prompts not counted",
+    "evidence": "web/src/NewSession.tsx:161-166,206-208,475; web/src/tree/worktrees.tsx:421-424 (Cmd+N: name + Enter makes a worktree only)",
+    "stuck": "The Worktree choice resets to 'here' every time the popover opens. The project's setup-script gate can delay the start (NewSession.tsx:316-325).",
+    "shots": []
+   },
+   "Orca": {
+    "result": "yes",
+    "steps": 6,
+    "path": "new workspace, name and prompt, Enter; repeat",
+    "evidence": "orca@00910c0495 skill-guides/orca-cli.md:66-70 (worktree create --agent per task); src/renderer/src/hooks/app-commands/new-workspace-command.ts:29-36",
+    "stuck": "Each dialog needs a name or branch. CLI: 2 commands.",
+    "shots": [
+     "peer-1102-tree-5-orca-start.jpg",
+     "peer-1102-tree-5-orca.jpg"
+    ]
+   },
+   "T3 Code": {
+    "result": "yes",
+    "steps": 2,
+    "path": "CLI: t3 thread start . msg --worktree --branch x, twice. UI about 4 steps each",
+    "evidence": "apps/server/src/cli/thread.ts:553-561; docs/user/keybindings.md:41-44",
+    "stuck": "mod+shift+l reuses the previous worktree. UI creates worktree on first send.",
+    "shots": [
+     "peer-1102-tree-5-t3-start.jpg",
+     "peer-1102-tree-5-t3.jpg"
+    ]
+   },
+   "herdr": {
+    "result": "yes",
+    "steps": 10,
+    "path": "per task: workspace row menu, New worktree, type branch, Enter, type claude; twice. CLI: herdr worktree create --branch x2",
+    "evidence": "configuration.mdx:96-111; socket-api.mdx:344-366; herdr worktree create --help",
+    "stuck": "Menu is mouse-oriented. 11-02 GUI run: palette had no worktree action.",
+    "shots": [
+     "peer-1102-tree-5-herdr-fail.jpg"
+    ]
+   },
+   "Claude Desktop": {
+    "result": "yes",
+    "steps": 8,
+    "path": "per session: Cmd+N; Worktree on; type prompt; Enter (x2)",
+    "evidence": "https://code.claude.com/docs/en/desktop (Parallel sessions, Worktree toggle)",
+    "stuck": "Worktree toggle must be on before the session starts; needs Git",
+    "shots": []
+   },
+   "ChatGPT": {
+    "result": "unknown",
+    "steps": null,
+    "path": "Git worktrees page exists; steps not in fetched docs",
+    "evidence": "https://learn.chatgpt.com/docs/app (links /codex/environments/git-worktrees)",
+    "stuck": "Unknown: partial in the docs, steps not found in the pages read. Page body not read",
+    "shots": []
+   },
+   "Claude Code": {
+    "result": "yes",
+    "steps": 2,
+    "path": "claude --bg \"task A\"; claude --bg \"task B\"",
+    "evidence": "https://code.claude.com/docs/en/agent-view (Worktrees: dispatched sessions get own worktree)",
+    "stuck": "Isolation skipped if not a git repo",
+    "shots": []
+   },
+   "Codex": {
+    "result": "yes",
+    "steps": 2,
+    "path": "codex --worktree \"A\"; codex --worktree \"B\"",
+    "evidence": "docs/measure/evidence/codex-help.txt:110 (--worktree)",
+    "stuck": "",
+    "shots": []
+   }
+  },
+  "T7": {
+   "Nunchiro": {
+    "result": "yes",
+    "steps": 1,
+    "path": "Click the Diff icon in the right bar (keyboard: prefix G = 2 chords)",
+    "evidence": "web/src/keys.ts:112; web/src/chrome/commands.ts:379 (diff.open); web/src/diff/Diff.tsx",
+    "stuck": "The patch for the latest turn is still shown against the start of the session (inventory R3, partial).",
+    "shots": []
+   },
+   "Orca": {
+    "result": "yes",
+    "steps": 2,
+    "path": "open Source Control in right sidebar; click changed file",
+    "evidence": "orca@00910c0495 src/renderer/src/components/editor/combined-diff/CombinedDiffViewer.tsx:45; timed 11-02: docs/measure/evidence/peer-compare-1102-rows.csv:3 (1 click, 2 s)",
+    "stuck": "Sidebar may be hidden.",
+    "shots": [
+     "peer-1102-chat-5-orca.jpg"
+    ]
+   },
+   "T3 Code": {
+    "result": "yes",
+    "steps": 1,
+    "path": "mod+d (diff toggle)",
+    "evidence": "keybindings.ts:161; docs/user/keybindings.md:55-61",
+    "stuck": "Large diff loads lazily.",
+    "shots": [
+     "peer-1102-chat-5-t3.jpg"
+    ]
+   },
+   "herdr": {
+    "result": "yes",
+    "steps": 1,
+    "path": "click Changes panel (Herdr.app)",
+    "evidence": "Herdr.app GUI, timed 11-02: docs/measure/evidence/peer-compare-1102-rows.csv:4 (Changes panel, 1 click, 2 s; shot peer-1102-chat-5-herdr.jpg). The TUI docs have no diff view.",
+    "stuck": "In the TUI the user runs git diff in a split pane (4 steps).",
+    "shots": [
+     "peer-1102-chat-5-herdr.jpg"
+    ]
+   },
+   "Claude Desktop": {
+    "result": "yes",
+    "steps": 1,
+    "path": "Cmd+Shift+D",
+    "evidence": "https://code.claude.com/docs/en/desktop (Viewing diffs)",
+    "stuck": "",
+    "shots": []
+   },
+   "ChatGPT": {
+    "result": "unknown",
+    "steps": null,
+    "path": "diff view; steps not in fetched docs",
+    "evidence": "https://learn.chatgpt.com/docs/app (links git-worktrees)",
+    "stuck": "Unknown: partial in the docs, steps not found in the pages read. No in-app diff viewer described in fetched pages",
+    "shots": []
+   },
+   "Claude Code": {
+    "result": "yes",
+    "steps": 1,
+    "path": "/diff",
+    "evidence": "https://code.claude.com/docs/en/commands (Before you ship: /diff)",
+    "stuck": "",
+    "shots": []
+   },
+   "Codex": {
+    "result": "partial",
+    "steps": 1,
+    "path": "/review (or git diff in shell)",
+    "evidence": "https://learn.chatgpt.com/docs/codex/cli (Reviewing changes)",
+    "stuck": "Fetched docs show /review findings, not a diff view; a /diff command not confirmed",
+    "shots": []
+   }
+  },
+  "T8": {
+   "Nunchiro": {
+    "result": "yes",
+    "steps": 3,
+    "path": "Cmd+K; type 'new shell'; Enter (opens a shell in the side pane, in the session's folder)",
+    "evidence": "web/src/chrome/commands.ts:392 (pane.shell.new); web/src/pane/SidePane.tsx:31-33",
+    "stuck": "Cmd+J only shows the agent's own terminal, not a new shell. The 'new shell' palette wording was not checked.",
+    "shots": []
+   },
+   "Orca": {
+    "result": "yes",
+    "steps": 2,
+    "path": "new terminal tab in workspace; split pane",
+    "evidence": "orca@00910c0495 src/shared/keybindings/definitions-core-4.ts:107,119 (terminal.splitRight, splitDown); skill-guides/orca-cli.md:281; timed 11-02: docs/measure/evidence/peer-compare-1102-rows.csv:5 (2 clicks)",
+    "stuck": "Split binding not confirmed.",
+    "shots": []
+   },
+   "T3 Code": {
+    "result": "yes",
+    "steps": 1,
+    "path": "mod+j (terminal toggle)",
+    "evidence": "keybindings.ts:151,155; docs/user/terminal.md",
+    "stuck": "Terminal may be a bottom drawer, not beside chat; not confirmed.",
+    "shots": []
+   },
+   "herdr": {
+    "result": "yes",
+    "steps": 2,
+    "path": "prefix (ctrl+b), v (split right; new pane is a shell)",
+    "evidence": "keyboard.mdx:22-27; quick-start.mdx:38-44",
+    "stuck": "New pane keeping the cwd not confirmed.",
+    "shots": []
+   },
+   "Claude Desktop": {
+    "result": "yes",
+    "steps": 1,
+    "path": "Ctrl+` opens Terminal pane in the session folder",
+    "evidence": "https://code.claude.com/docs/en/desktop (Built-in terminal)",
+    "stuck": "",
+    "shots": []
+   },
+   "ChatGPT": {
+    "result": "unknown",
+    "steps": null,
+    "path": "Integrated terminal page exists; steps not read",
+    "evidence": "https://learn.chatgpt.com/docs/app (links /codex/integrated-terminal)",
+    "stuck": "Unknown: partial in the docs, steps not found in the pages read. Page body not read",
+    "shots": []
+   },
+   "Claude Code": {
+    "result": "partial",
+    "steps": 1,
+    "path": "! shell mode, or user's terminal split",
+    "evidence": "https://code.claude.com/docs/en/interactive-mode (Shell mode with ! prefix)",
+    "stuck": "Not a pane beside the agent; the terminal app does that",
+    "shots": []
+   },
+   "Codex": {
+    "result": "partial",
+    "steps": 1,
+    "path": "user's own terminal split",
+    "evidence": "docs/measure/evidence/codex-help.txt:128 (--no-alt-screen: inline TUI; the split is the terminal app's)",
+    "stuck": "The terminal app does it, not the CLI",
+    "shots": []
+   }
+  },
+  "T9": {
+   "Nunchiro": {
+    "result": "yes",
+    "steps": 4,
+    "path": "Cmd+Q (window only closes; the core and agents keep running); open the app again; type the prompt; Enter",
+    "evidence": "app/src-tauri/src/main.rs:762-765; docs/first-run.md (Quit); web/src/settings/lifetime/ResumeOffer.tsx:1-2",
+    "stuck": "After 'Quit and stop all agents' (Cmd+Alt+Q plus a confirm) nothing resumes by itself: one more Restart/Resume click per session. That path is 6 steps.",
+    "shots": []
+   },
+   "Orca": {
+    "result": "yes",
+    "steps": 2,
+    "path": "Cmd+Q; reopen; type prompt in restored session",
+    "evidence": "orca@00910c0495 src/renderer/src/store/terminals/terminal-actions.ts:15,229-230 (saved provider session resumed); src/renderer/src/components/terminal-pane/session-restore/SessionRestoredBanner.tsx (banner); skill-guides/orca-cli.md:74-82",
+    "stuck": "A terminal-mode agent may stay absent from lists until its next turn.",
+    "shots": []
+   },
+   "T3 Code": {
+    "result": "yes",
+    "steps": 4,
+    "path": "quit; open app; select thread; type prompt, Enter",
+    "evidence": "docs/user/background-service.md; docs/user/terminal.md:1-8",
+    "stuck": "Restart interrupts running turns; threads resume through handoff.",
+    "shots": []
+   },
+   "herdr": {
+    "result": "yes",
+    "steps": 5,
+    "path": "prefix, q (detach; server keeps agents); type herdr; type prompt; Enter",
+    "evidence": "quick-start.mdx:55-59; session-state.mdx:84-111",
+    "stuck": "After machine restart or server stop, only agents with an installed integration resume.",
+    "shots": []
+   },
+   "Claude Desktop": {
+    "result": "partial",
+    "steps": 5,
+    "path": "Cmd+Q; reopen; click session; type; Enter",
+    "evidence": "https://code.claude.com/docs/en/desktop (sidebar sessions)",
+    "stuck": "Restore on relaunch not described in fetched docs",
+    "shots": []
+   },
+   "ChatGPT": {
+    "result": "no",
+    "steps": null,
+    "path": "searched app and release-notes pages; no restore described",
+    "evidence": "https://help.openai.com/en/articles/9703738-desktop-app-for-chatgpt-macos",
+    "stuck": "Only draft restore (Oct 30 2024) is documented",
+    "shots": []
+   },
+   "Claude Code": {
+    "result": "yes",
+    "steps": 4,
+    "path": "Ctrl+C twice; claude -c; type prompt; Enter",
+    "evidence": "https://code.claude.com/docs/en/cli-reference (claude -c)",
+    "stuck": "",
+    "shots": []
+   },
+   "Codex": {
+    "result": "yes",
+    "steps": 3,
+    "path": "Ctrl+C twice; codex resume --last \"prompt\"",
+    "evidence": "docs/measure/evidence/codex-resume-help.txt:2,23 (resume --last)",
+    "stuck": "",
+    "shots": []
+   }
+  },
+  "T10": {
+   "Nunchiro": {
+    "result": "yes",
+    "steps": 8,
+    "path": "Cmd+,; click Agent extensions; click the name field; type the name; click the command field; type the command; click Add; start a new session (Shift+Cmd+C)",
+    "evidence": "web/src/features/extensions.tsx:4-5,536-541; crates/nunchiro-core/src/extensions.rs:474,1042,1100,1117",
+    "stuck": "Only new sessions get the server. Own servers are sealed on add and cannot be edited outside Nunchiro. Agent-configured servers are listed read-only. Skills are added by 'New skill' (a folder), not from a registry.",
+    "shots": []
+   },
+   "Orca": {
+    "result": "partial",
+    "steps": 5,
+    "path": "open Skills page; pick catalog skill; install; start new session",
+    "evidence": "src/renderer/src/components/skills/SkillsPage.tsx; skill-guides/orca-plugin-authoring.md:50",
+    "stuck": "No UI found to add a general MCP server for agents.",
+    "shots": []
+   },
+   "T3 Code": {
+    "result": "partial",
+    "steps": 4,
+    "path": "add MCP/skill in provider config outside app; mod+k Restart agent session; Enter",
+    "evidence": "docs/user/composer.md:233-236",
+    "stuck": "No in-app form to add an MCP server or skill.",
+    "shots": []
+   },
+   "herdr": {
+    "result": "partial",
+    "steps": 2,
+    "path": "in a shell pane type claude mcp add ...; Enter",
+    "evidence": "integrations.mdx:13-22; rg 'mcp' no hits",
+    "stuck": "No MCP or skill manager. herdr integration only does state detection and resume.",
+    "shots": []
+   },
+   "Claude Desktop": {
+    "result": "yes",
+    "steps": 4,
+    "path": "click +; Add connectors; pick; connect",
+    "evidence": "https://code.claude.com/docs/en/desktop (Connectors; Plugins)",
+    "stuck": "Manual MCP servers outside the directory need settings files",
+    "shots": []
+   },
+   "ChatGPT": {
+    "result": "unknown",
+    "steps": null,
+    "path": "MCP and Skills & Plugins pages exist; steps not read",
+    "evidence": "https://learn.chatgpt.com/docs/app (links /codex/extend/mcp)",
+    "stuck": "Unknown: partial in the docs, steps not found in the pages read.",
+    "shots": []
+   },
+   "Claude Code": {
+    "result": "yes",
+    "steps": 2,
+    "path": "claude mcp add ...; claude",
+    "evidence": "https://code.claude.com/docs/en/mcp (claude mcp add)",
+    "stuck": "Running session must restart or run /mcp",
+    "shots": []
+   },
+   "Codex": {
+    "result": "yes",
+    "steps": 2,
+    "path": "codex mcp add name -- cmd; codex",
+    "evidence": "https://learn.chatgpt.com/docs/developer-commands?surface=cli (codex mcp add)",
+    "stuck": "",
+    "shots": []
+   }
+  },
+  "T11": {
+   "Nunchiro": {
+    "result": "yes",
+    "steps": 2,
+    "path": "Shift+Tab from the composer to the docked question card; press the digit of the option. From another tab: prefix W (2 chords) + digit = 3",
+    "evidence": "web/src/chat/DecisionCard.tsx:36,262-269; web/src/chrome/commands.ts:257-267; web/src/queue/Strip.tsx:243-249",
+    "stuck": "The free-text row ('Type something.') needs a typed answer, so its digit alone only opens a text field (answer.ts:20). Shift+Tab reaching the card was read from a comment, not run.",
+    "shots": []
+   },
+   "Orca": {
+    "result": "partial",
+    "steps": 2,
+    "path": "arrow to option; Enter",
+    "evidence": "orca@00910c0495 src/renderer/src/components/native-chat/prompts/NativeChatQuestionCard.tsx:278-285 (card opens focused, Enter confirms); NativeChatQuestionCard.test.tsx:91 (ArrowDown moves between options)",
+    "stuck": "Card key handling not read in full. CLI mode uses the agent's own TUI.",
+    "shots": []
+   },
+   "T3 Code": {
+    "result": "yes",
+    "steps": 2,
+    "path": "press digit 1-9; Enter if not auto-submitted",
+    "evidence": "apps/web/src/components/chat/ComposerPendingUserInputPanel.tsx:151-172",
+    "stuck": "Digit ignored while focus is in the composer.",
+    "shots": []
+   },
+   "herdr": {
+    "result": "yes",
+    "steps": 3,
+    "path": "prefix+g; Enter on blocked row; option key or arrows+Enter in the agent",
+    "evidence": "keyboard.mdx:66; agent-automation.mdx:78",
+    "stuck": "The answer is the agent's own UI; herdr only routes focus and keys.",
+    "shots": []
+   },
+   "Claude Desktop": {
+    "result": "partial",
+    "steps": 2,
+    "path": "press number key; Enter",
+    "evidence": "https://code.claude.com/docs/en/desktop (keyboard shortcut table: 1-9 select in open menu)",
+    "stuck": "Not confirmed for agent questions",
+    "shots": []
+   },
+   "ChatGPT": {
+    "result": "no",
+    "steps": null,
+    "path": "searched app pages; keyboard answering not mentioned",
+    "evidence": "https://learn.chatgpt.com/docs/app",
+    "stuck": "",
+    "shots": []
+   },
+   "Claude Code": {
+    "result": "yes",
+    "steps": 2,
+    "path": "number or arrows; Enter",
+    "evidence": "https://code.claude.com/docs/en/interactive-mode (Left/Right arrows cycle dialog tabs)",
+    "stuck": "Exact question-dialog keys not read",
+    "shots": []
+   },
+   "Codex": {
+    "result": "partial",
+    "steps": 2,
+    "path": "arrow/number; Enter",
+    "evidence": "https://learn.chatgpt.com/docs/app-server (tool/requestUserInput)",
+    "stuck": "TUI keys not documented in fetched pages",
+    "shots": []
+   }
+  },
+  "T12": {
+   "Nunchiro": {
+    "result": "partial",
+    "steps": 5,
+    "path": "Click Stop on the stuck seat; confirm Stop; click the teammate in Home/Team to open the seat; type the prompt; Enter",
+    "evidence": "crates/nunchiro-core/src/team.rs:931-933,1030-1075; web/src/lead/HomeGroup.tsx:80; web/src/room/RoomView.tsx:182-184",
+    "stuck": "No 'new conversation' button for a seat. An open seat is reused as it is, so the user must close it first and may not know to. /clear exists, but not on a stuck turn.",
+    "shots": []
+   },
+   "Orca": {
+    "result": "partial",
+    "steps": 3,
+    "path": "agent launch in same worktree (CLI), or new agent tab in workspace",
+    "evidence": "orca@00910c0495 skill-guides/orca-cli.md:313 (start a fresh agent with agent launch in the current worktree), :82 (a chat keeps its ID across /clear)",
+    "stuck": "New agent is a separate launch; role and settings not copied. Fork not read.",
+    "shots": []
+   },
+   "T3 Code": {
+    "result": "partial",
+    "steps": 4,
+    "path": "mod+n new thread; set model, mode, workspace again; type prompt; Enter",
+    "evidence": "docs/user/permission-modes.md:6-9; apps/server/src/mcp/toolkits/thread/tools.ts:203",
+    "stuck": "New thread uses defaults, not the old thread's settings. No standing-agent role. Fork exists.",
+    "shots": []
+   },
+   "herdr": {
+    "result": "partial",
+    "steps": 3,
+    "path": "prefix, c (new tab); type claude; Enter",
+    "evidence": "keyboard.mdx Tabs table; agent-automation.mdx:44-50",
+    "stuck": "No standing-agent concept. Role and settings not carried; flags repeated by hand.",
+    "shots": []
+   },
+   "Claude Desktop": {
+    "result": "partial",
+    "steps": 4,
+    "path": "Cmd+N; choose folder; set model/mode; type",
+    "evidence": "https://code.claude.com/docs/en/desktop (+ New / Cmd+N)",
+    "stuck": "Folder and settings are not carried over automatically per docs",
+    "shots": []
+   },
+   "ChatGPT": {
+    "result": "partial",
+    "steps": 2,
+    "path": "click New chat; type",
+    "evidence": "https://learn.chatgpt.com/docs/app (New chat)",
+    "stuck": "Role/folder/settings carry-over not documented",
+    "shots": []
+   },
+   "Claude Code": {
+    "result": "yes",
+    "steps": 2,
+    "path": "Ctrl+C; /clear",
+    "evidence": "https://code.claude.com/docs/en/commands (/clear)",
+    "stuck": "Stuck turn must be interrupted first; /clear keeps folder and settings",
+    "shots": []
+   },
+   "Codex": {
+    "result": "partial",
+    "steps": 1,
+    "path": "/new",
+    "evidence": "https://learn.chatgpt.com/docs/codex/cli (slash list, /new not shown)",
+    "stuck": "/new unconfirmed; fallback is Ctrl+C then codex -C dir (2 steps)",
+    "shots": []
+   }
+  }
+ },
+ "gallery": [
+  [
+   "nunchiro-launch.jpg",
+   "Nunchiro RC, first window on a fresh home (gate picture, this run)"
+  ],
+  [
+   "nunchiro-20-sessions.jpg",
+   "Nunchiro RC with 20 shell sessions in the tree; the toast says this window did not start the core it uses (gate picture, this run)"
+  ],
+  [
+   "peer-1102-tree-1-orca.jpg",
+   "Orca 1.4.245, search (T5), 2026-11-02"
+  ],
+  [
+   "peer-1102-tree-1-t3.jpg",
+   "T3 Code 0.1.6, palette search (T5), 2026-11-02"
+  ],
+  [
+   "peer-1102-tree-5-orca.jpg",
+   "Orca, create worktree from a branch (T6), 2026-11-02"
+  ],
+  [
+   "peer-1102-chat-1-t3.jpg",
+   "T3 Code, approval (T3), 2026-11-02"
+  ],
+  [
+   "peer-1102-chat-5-herdr.jpg",
+   "Herdr.app 0.1.11, changes panel (T7), 2026-11-02"
+  ]
+ ]
+}

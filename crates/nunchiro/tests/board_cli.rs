@@ -221,10 +221,15 @@ fn board_cli_round_trip() {
             .ends_with("abc1234 · cargo test · 12 passed"),
         "{text}"
     );
-    assert_eq!(
-        h.json(None, &["list", "--json"])["cards"],
-        h.board()["cards"]
-    );
+    // Ticket 1066: --json is the window's snapshot plus an "archived" flag on each card.
+    let mut cards = h.json(None, &["list", "--json"])["cards"].clone();
+    for card in cards.as_array_mut().unwrap() {
+        assert_eq!(
+            card.as_object_mut().unwrap().remove("archived"),
+            Some(json!(false))
+        );
+    }
+    assert_eq!(cards, h.board()["cards"]);
 }
 
 #[test]

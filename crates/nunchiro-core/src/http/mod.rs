@@ -1112,13 +1112,13 @@ fn serve(
                         jobs.spawn(frame.id, move || crate::pr::answer(&registry, request))
                     }
                     Ok(frame) if matches!(frame.request, Some(Request::SessionContext { .. })) => {
-                        let Some(Request::SessionContext { id }) = frame.request else {
+                        let Some(Request::SessionContext { id, refresh }) = frame.request else {
                             unreachable!()
                         };
                         let registry = registry.clone();
                         let home = home.to_path_buf();
                         dispatch_session_context(&mut jobs, frame.id, move || {
-                            crate::session_context::reply(&home, &registry, &id)
+                            crate::session_context::reply(&home, &registry, &id, refresh)
                         })
                     }
                     Ok(frame) if matches!(frame.request, Some(Request::ForgetMachine { .. })) => {
@@ -1168,7 +1168,12 @@ fn serve(
                     Ok(frame)
                         if matches!(
                             frame.request,
-                            Some(Request::MachineAliases | Request::MachineProbe { .. })
+                            Some(
+                                Request::MachineAliases
+                                    | Request::MachineProbe { .. }
+                                    | Request::MachineShare
+                                    | Request::MachineTrust { .. }
+                            )
                         ) =>
                     {
                         let registry = registry.clone();
@@ -1177,6 +1182,10 @@ fn serve(
                         jobs.spawn(frame.id, move || match request {
                             Request::MachineProbe { host, user, port } => {
                                 crate::machines::aliases::probe(&host, user.as_deref(), port)
+                            }
+                            Request::MachineShare => crate::machines::share::reply(),
+                            Request::MachineTrust { alias, link } => {
+                                crate::machines::share::trust(&registry, &home, &alias, &link)
                             }
                             _ => crate::machines::aliases::reply(&registry, &home),
                         })
@@ -1201,11 +1210,20 @@ fn serve(
                         })
                     }
                     Ok(frame) if matches!(frame.request, Some(Request::AccountUsage { .. })) => {
-                        let home = home.to_path_buf();
+                        let (home, registry) = (home.to_path_buf(), registry.clone());
                         let Some(Request::AccountUsage { limits }) = frame.request else {
                             unreachable!()
                         };
-                        jobs.spawn(frame.id, move || crate::usage::reply(&home, limits))
+                        jobs.spawn(frame.id, move || {
+                            let reply = crate::usage::reply(&home, limits);
+                            crate::account_near::after_usage(
+                                &registry,
+                                &home,
+                                &reply,
+                                crate::queue::now_ms() as i64 / 1000,
+                            );
+                            reply
+                        })
                     }
                     // v4 Usage page: up to 90 days of transcripts, off this loop.
                     Ok(frame) if matches!(frame.request, Some(Request::UsageDetail { .. })) => {
@@ -2055,12 +2073,18 @@ fn answer(
             | Request::PrLiveSet { .. }
             | Request::PrWatch { .. }
             | Request::PrFront { .. }) => crate::pr_live::answer(registry, request),
-            Request::SessionContext { id } => crate::session_context::reply(home, registry, &id),
+            Request::SessionContext { id, refresh } => {
+                crate::session_context::reply(home, registry, &id, refresh)
+            }
             Request::ForgetMachine { alias } => crate::sessions::forget_machine(registry, &alias),
             Request::MachineDetails { alias } => crate::machines::discovery::reply(registry, alias),
             Request::MachineAliases => crate::machines::aliases::reply(registry, home),
             Request::MachineProbe { host, user, port } => {
                 crate::machines::aliases::probe(&host, user.as_deref(), port)
+            }
+            Request::MachineShare => crate::machines::share::reply(),
+            Request::MachineTrust { alias, link } => {
+                crate::machines::share::trust(registry, home, &alias, &link)
             }
             Request::MachineStatus { label, retry } => {
                 crate::machines::status(registry, home, label, retry)

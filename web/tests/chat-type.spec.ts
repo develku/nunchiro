@@ -158,7 +158,7 @@ test('chat_math_renders_with_local_katex', async ({ page, chatCore }) => {
   // KaTeX's own stylesheet and fonts, bundled: no CDN.
   expect(await css(page, '.md .katex', 'font-family')).toContain('KaTeX_Main');
   // The stylesheet matches the renderer's class names (0.19 CSS renamed .base to .katex-base).
-  expect(await css(page, '.md .katex .base', 'display')).toBe('inline-block');
+  expect(await css(page, '.md .katex .katex-base', 'display')).toBe('inline-block');
   expect([...hosts].filter((h) => h !== 'localhost' && h !== '127.0.0.1')).toEqual([]);
 });
 

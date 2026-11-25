@@ -3,6 +3,7 @@ use nunchiro_core::{
     queue::{
         Queue,
         journal::{self, Event},
+        now_ms,
     },
 };
 use serde_json::json;
@@ -149,34 +150,43 @@ fn event(id: &str, kind: &str, payload: serde_json::Value, created: u64) -> Even
 }
 #[test]
 fn agent_sessionstart_does_not_order_out_turn_hooks() {
+    // Ticket 1094: a journaled prompt 5 min old starts no turn, so the turn is stamped now, not in 1970.
+    let t = now_ms();
     let h = home("agent-start");
     let mut q = Queue::open(&h).unwrap();
     q.register("s", AgentKind::Codex, 0).unwrap();
-    q.replay(&event("e0", "SessionStart", json!({"session_id":"a"}), 200))
-        .unwrap();
     q.replay(&event(
-        "e1",
-        "UserPromptSubmit",
-        json!({"turn_id":"t1"}),
-        100,
+        "e0",
+        "SessionStart",
+        json!({"session_id":"a"}),
+        t + 100,
     ))
     .unwrap();
-    q.replay(&event("e2", "Stop", json!({"turn_id":"t1"}), 101))
+    q.replay(&event("e1", "UserPromptSubmit", json!({"turn_id":"t1"}), t))
+        .unwrap();
+    q.replay(&event("e2", "Stop", json!({"turn_id":"t1"}), t + 1))
         .unwrap();
     assert_eq!(q.attention("s").completion_seq, 1);
     fs::remove_dir_all(h).unwrap();
 }
 #[test]
 fn replayed_turn_after_sessionstart_counts_once() {
+    // Ticket 1094: a journaled prompt 5 min old starts no turn, so the turn is stamped now, not in 1970.
+    let t = now_ms();
     let h = home("replay-once");
     let mut q = Queue::open(&h).unwrap();
     q.register("s", AgentKind::Codex, 0).unwrap();
     let turn = [
-        event("e1", "UserPromptSubmit", json!({"turn_id":"t1"}), 100),
-        event("e2", "Stop", json!({"turn_id":"t1"}), 101),
+        event("e1", "UserPromptSubmit", json!({"turn_id":"t1"}), t),
+        event("e2", "Stop", json!({"turn_id":"t1"}), t + 1),
     ];
-    q.replay(&event("e0", "SessionStart", json!({"session_id":"a"}), 200))
-        .unwrap();
+    q.replay(&event(
+        "e0",
+        "SessionStart",
+        json!({"session_id":"a"}),
+        t + 100,
+    ))
+    .unwrap();
     for e in &turn {
         q.replay(e).unwrap();
     }
@@ -189,13 +199,15 @@ fn replayed_turn_after_sessionstart_counts_once() {
     for e in &turn {
         q.replay(e).unwrap();
     }
-    q.observe("s", "Stop", &json!({"turn_id":"t1"}), "transcript", 102)
+    q.observe("s", "Stop", &json!({"turn_id":"t1"}), "transcript", t + 2)
         .unwrap();
     assert_eq!(q.attention("s").completion_seq, 1);
     fs::remove_dir_all(h).unwrap();
 }
 #[test]
 fn future_stamped_sessionstart_cannot_mute_turns() {
+    // Ticket 1094: a journaled prompt 5 min old starts no turn, so the turn is stamped now, not in 1970.
+    let t = now_ms();
     let h = home("future-start");
     let mut q = Queue::open(&h).unwrap();
     q.register("s", AgentKind::Codex, 0).unwrap();
@@ -207,18 +219,13 @@ fn future_stamped_sessionstart_cannot_mute_turns() {
         u64::MAX / 2,
     ))
     .unwrap();
-    q.replay(&event(
-        "e1",
-        "UserPromptSubmit",
-        json!({"turn_id":"t1"}),
-        100,
-    ))
-    .unwrap();
-    q.replay(&event("e2", "Stop", json!({"turn_id":"t1"}), 101))
+    q.replay(&event("e1", "UserPromptSubmit", json!({"turn_id":"t1"}), t))
+        .unwrap();
+    q.replay(&event("e2", "Stop", json!({"turn_id":"t1"}), t + 1))
         .unwrap();
     assert_eq!(q.attention("s").completion_seq, 1);
     // Another session's clock is its own.
-    let mut other = event("e3", "UserPromptSubmit", json!({"turn_id":"t1"}), 100);
+    let mut other = event("e3", "UserPromptSubmit", json!({"turn_id":"t1"}), t);
     other.session_id = "o".into();
     q.replay(&other).unwrap();
     assert!(q.attention("o").working);

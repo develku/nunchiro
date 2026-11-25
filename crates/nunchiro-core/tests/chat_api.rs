@@ -24,6 +24,7 @@ mod no_transcript {
     fn session(home: &std::path::Path, agent_session_id: Option<&str>) -> Session {
         Session {
             side_chat: false,
+            stopped_sends: Vec::new(),
             side_parent: None,
             teammate: None,
             resumed_from: vec![],

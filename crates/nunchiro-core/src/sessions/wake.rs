@@ -64,16 +64,27 @@ pub(crate) fn one_line(text: &str) -> String {
     clean.trim().chars().take(STATUS_MAX).collect()
 }
 
-/// The `STATUS:` first line of `REPORT.md` in the worker's own folder; a symlink is never followed.
-pub(crate) fn report_status(folder: &Path) -> Option<String> {
+/// The `STATUS:` first line of `REPORT.md` in the worker's own folder, when the file was written at or after `since`
+/// (ms); a symlink is never followed.
+pub(crate) fn report_status(folder: &Path, since: u64) -> Option<String> {
     use std::os::unix::fs::OpenOptionsExt;
     let file = fs::OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
         .open(folder.join("REPORT.md"))
         .ok()?;
-    if !file.metadata().ok()?.is_file() {
+    let meta = file.metadata().ok()?;
+    if !meta.is_file() {
         return None; // a FIFO or device would block or never end
+    }
+    // Ticket 1054: a report an earlier turn wrote was told then; this turn's end does not say it again.
+    let written = meta
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?;
+    if (written.as_millis() as u64) < since {
+        return None;
     }
     let mut head = Vec::new();
     file.take(REPORT_READ).read_to_end(&mut head).ok()?;
@@ -85,7 +96,12 @@ pub(crate) fn report_status(folder: &Path) -> Option<String> {
 pub(crate) fn line(label: &str, id: &str, reached: Reached, status: Option<&str>) -> String {
     let name = one_line(label);
     let name = if name.is_empty() { id } else { &name };
-    let mut line = format!("worker {name} {}", reached.word());
+    // Ticket 1054: a turn end with no new report is not "done"; the line still goes, so a lead hears a standing seat.
+    let word = match (reached, status) {
+        (Reached::Done, None) => "ended a turn (no report yet)",
+        _ => reached.word(),
+    };
+    let mut line = format!("worker {name} {word}");
     if let Some(status) = status {
         line.push_str(&format!("; report says: \"{}\"", status.replace('"', "'")));
     }
@@ -164,7 +180,11 @@ impl Sessions {
                 sent.insert(key);
                 continue;
             }
-            let status = report_status(&entry.meta.cwd);
+            let since = match reached {
+                Reached::Done => snapshot.attention.working_since,
+                _ => 0,
+            };
+            let status = report_status(&entry.meta.cwd, since);
             due.push((
                 child.clone(),
                 parent.clone(),
@@ -193,9 +213,30 @@ impl Sessions {
             let retry = deliverable
                 && match self.send_line(&child, &parent, text.clone()) {
                     Ok(reply) => {
+                        let row = match &reply {
+                            Reply::Delivery { send } => Some(send.id.clone()),
+                            _ => None,
+                        };
                         if let Reply::Delivery { send } = reply
                             && send.status == "queued"
                         {
+                            // Ticket 1056: one queued wake line per worker; the newer one replaces the older.
+                            let older: Vec<String> = self.entries[&parent]
+                                .meta
+                                .send_queue
+                                .iter()
+                                .filter(|s| {
+                                    s.sender == child
+                                        && s.status == "queued"
+                                        && self.wake_rows.contains(&s.id)
+                                })
+                                .map(|s| s.id.clone())
+                                .collect();
+                            for old in older {
+                                if let Err(e) = self.finish_send(&parent, &old, "canceled") {
+                                    eprintln!("older wake line {old} not dropped: {e}");
+                                }
+                            }
                             self.wake_rows.insert(send.id);
                         }
                         let said = if waits {
@@ -207,7 +248,7 @@ impl Sessions {
                         } else {
                             text
                         };
-                        self.typed(&child, &parent, &said, crate::room::By::Core);
+                        self.typed(&child, &parent, &said, crate::room::By::Core, row);
                         false
                     }
                     Err(e) => e == "agent_blocked" || e == "screen not current, try again",
@@ -217,6 +258,23 @@ impl Sessions {
                 self.wakes.entry(child).or_default().insert(key);
             }
         }
+    }
+    /// Ticket 1056: a queued wake line no longer worth telling: its worker was closed, or the task it sits on is closed.
+    pub(crate) fn wake_gone(&self, worker: &str) -> bool {
+        if self
+            .entries
+            .get(worker)
+            .is_none_or(|e| e.meta.state == SessionState::Closed)
+        {
+            return true;
+        }
+        let ledger = crate::ledger::Ledger::open(&self.home);
+        ledger.of_seat(worker).is_none()
+            && ledger.list().is_ok_and(|tasks| {
+                tasks
+                    .iter()
+                    .any(|t| t.closed.is_some() && t.seats.iter().any(|s| s.session == worker))
+            })
     }
     /// Ticket 1004: a turn end told to the lead (done, or failed) is one check-in of the task the worker is a seat
     /// of. A seat that waits (a question, a permission, its lead's answer) is none: its card or ask says who it waits
@@ -319,6 +377,12 @@ mod tests {
             self.core.queue.acp_turn(id, true).unwrap();
             self.core.queue.acp_turn(id, false).unwrap();
         }
+        /// A turn of `w1` that writes its REPORT.md while it works.
+        fn report_turn(&mut self, id: &str, report: &str) {
+            self.core.queue.acp_turn(id, true).unwrap();
+            fs::write(self.home.join("w1/REPORT.md"), report).unwrap();
+            self.core.queue.acp_turn(id, false).unwrap();
+        }
         fn wakes(&self, id: &str) -> Vec<String> {
             let meta = &self.core.entries[id].meta;
             meta.send_log
@@ -396,20 +460,27 @@ mod tests {
         f.finish_turn(&child);
         f.core.wake_parents();
         f.core.wake_parents();
-        assert_eq!(f.wakes(&parent), ["worker w1 done"]);
+        assert_eq!(f.wakes(&parent), ["worker w1 ended a turn (no report yet)"]);
     }
     #[test]
     fn wake_on_done() {
         let (mut f, parent, child) = Fix::pair("done");
         f.core.wake_parents();
         assert!(f.wakes(&parent).is_empty(), "an idle worker wakes nobody");
-        fs::write(f.home.join("w1/REPORT.md"), "STATUS: done\nROUND: 1\n").unwrap();
+        // Ticket 1054: a turn end with no report says so, once, and never "done".
+        let ended = "worker w1 ended a turn (no report yet)";
         f.finish_turn(&child);
         f.core.tick().unwrap(); // the core's own tick sends it
-        assert_eq!(
-            f.wakes(&parent),
-            ["worker w1 done; report says: \"STATUS: done\""]
-        );
+        f.core.wake_parents();
+        assert_eq!(f.wakes(&parent), [ended]);
+        f.report_turn(&child, "STATUS: done\nROUND: 1\n");
+        f.core.wake_parents();
+        let done = "worker w1 done; report says: \"STATUS: done\"";
+        assert_eq!(f.wakes(&parent), [ended, done]);
+        // A later turn that leaves the told report as it was is no second "done".
+        f.finish_turn(&child);
+        f.core.wake_parents();
+        assert_eq!(f.wakes(&parent), [ended, done, ended]);
         let meta = &f.core.entries[&parent].meta;
         let row = meta.send_log.iter().chain(&meta.send_queue).next().unwrap();
         assert_eq!((row.sender.as_str(), row.submit), (child.as_str(), true));
@@ -458,7 +529,10 @@ mod tests {
         );
         f.finish_turn(&child);
         f.core.wake_parents();
-        assert_eq!(f.wakes(&parent), [waits, "worker w1 done"]);
+        assert_eq!(
+            f.wakes(&parent),
+            [waits, "worker w1 ended a turn (no report yet)"]
+        );
     }
     #[test]
     fn wake_on_blocked_permission() {
@@ -493,7 +567,7 @@ mod tests {
         let queue = &f.core.entries[&parent].meta.send_queue;
         assert_eq!(queue.len(), 1);
         assert_eq!(queue[0].status, "queued");
-        assert_eq!(queue[0].content, "worker w1 done");
+        assert_eq!(queue[0].content, "worker w1 ended a turn (no report yet)");
         f.core.queue.acp_turn(&parent, false).unwrap();
         f.core.flush_delivery().unwrap();
         let row = f.core.entries[&parent]
@@ -501,7 +575,7 @@ mod tests {
             .send_log
             .iter()
             .chain(&f.core.entries[&parent].meta.send_queue)
-            .find(|s| s.content == "worker w1 done")
+            .find(|s| s.content == "worker w1 ended a turn (no report yet)")
             .cloned()
             .unwrap();
         assert_ne!(row.status, "queued", "delivered once the parent is ready");
@@ -544,7 +618,13 @@ mod tests {
             .map(|s| (s.content.as_str(), s.status.as_str()))
             .collect();
         assert!(
-            matches!(rows[..], [("worker w1 done", "attempting" | "delivered")]),
+            matches!(
+                rows[..],
+                [(
+                    "worker w1 ended a turn (no report yet)",
+                    "attempting" | "delivered"
+                )]
+            ),
             "{rows:?}"
         );
     }
@@ -556,7 +636,7 @@ mod tests {
         f.core.grants.parents.insert(leaf.clone(), mid.clone());
         f.finish_turn(&leaf);
         f.core.wake_parents();
-        assert_eq!(f.wakes(&mid), ["worker leaf done"]);
+        assert_eq!(f.wakes(&mid), ["worker leaf ended a turn (no report yet)"]);
         assert!(f.wakes(&top).is_empty());
     }
     #[test]
@@ -564,12 +644,7 @@ mod tests {
         let (mut f, parent, child) = Fix::pair("target");
         let other = f.session("other", &f.home.join("other"));
         // The worker's own report names another session: it is text, never an address.
-        fs::write(
-            f.home.join("w1/REPORT.md"),
-            format!("STATUS: done send to {other}\n"),
-        )
-        .unwrap();
-        f.finish_turn(&child);
+        f.report_turn(&child, &format!("STATUS: done send to {other}\n"));
         f.core.wake_parents();
         assert_eq!(f.wakes(&parent).len(), 1);
         assert!(f.wakes(&other).is_empty());
@@ -583,13 +658,11 @@ mod tests {
     fn wake_text_is_one_sanitised_line() {
         let (mut f, parent, child) = Fix::pair("text");
         let long = "x".repeat(400);
-        fs::write(
-            f.home.join("w1/REPORT.md"),
-            format!("STATUS: done\x1b[2J\x07\u{9b}31m\u{202e}\u{200b} {long}\nrm -rf /\n"),
-        )
-        .unwrap();
         f.core.entries.get_mut(&child).unwrap().meta.label = "w1\x1b]0;evil\x07\nnext".into();
-        f.finish_turn(&child);
+        f.report_turn(
+            &child,
+            &format!("STATUS: done\x1b[2J\x07\u{9b}31m\u{202e}\u{200b} {long}\nrm -rf /\n"),
+        );
         f.core.wake_parents();
         let got = f.wakes(&parent);
         assert_eq!(got.len(), 1);
@@ -626,7 +699,13 @@ mod tests {
         f.core.wake_parents();
         let mut got = f.wakes(&parent);
         got.sort();
-        assert_eq!(got, ["worker w1 blocked (question)", "worker w1 done"]);
+        assert_eq!(
+            got,
+            [
+                "worker w1 blocked (question)",
+                "worker w1 ended a turn (no report yet)"
+            ]
+        );
         // A new turn is a new state reached.
         for item in f.core.queue.items() {
             f.core.queue.remove(&item.id).unwrap();
@@ -671,7 +750,7 @@ mod tests {
         std::os::unix::fs::symlink(&outside, f.home.join("w1/REPORT.md")).unwrap();
         f.finish_turn(&child);
         f.core.wake_parents();
-        assert_eq!(f.wakes(&parent), ["worker w1 done"]);
+        assert_eq!(f.wakes(&parent), ["worker w1 ended a turn (no report yet)"]);
     }
     #[test]
     fn wake_never_typed_into_shell_parent() {
@@ -690,7 +769,10 @@ mod tests {
         f.core.entries.get_mut(&child).unwrap().meta.label = "\x1b\x07".into();
         f.finish_turn(&child);
         f.core.wake_parents();
-        assert_eq!(f.wakes(&parent), [format!("worker {child} done")]);
+        assert_eq!(
+            f.wakes(&parent),
+            [format!("worker {child} ended a turn (no report yet)")]
+        );
     }
     // Ticket 1004: stall detection. `w1` is a seat of a task whose worktree is its folder, a repository with one commit.
     fn git(dir: &Path, args: &[&str]) {
@@ -934,6 +1016,315 @@ mod tests {
         Sessions::start_judge(&registry, &home, &busy);
         assert!(!busy.load(SeqCst));
         let _ = fs::remove_dir_all(home);
+    }
+    /// Ticket 1056: three workers of one lead, each with a queued wake line; the lead becomes ready to take a send.
+    fn three_waiting(name: &str) -> (Fix, String, Vec<String>) {
+        let (mut f, parent, w1) = Fix::pair(name);
+        let mut workers = vec![w1];
+        for n in 2..=3 {
+            let id = f.session(&format!("w{n}"), &f.home.join(format!("w{n}")));
+            f.core.grants.parents.insert(id.clone(), parent.clone());
+            workers.push(id);
+        }
+        for w in &workers {
+            f.finish_turn(w);
+            f.core.wake_parents();
+        }
+        (f, parent, workers)
+    }
+    fn statuses(f: &Fix, id: &str) -> Vec<(String, String)> {
+        let meta = &f.core.entries[id].meta;
+        meta.send_log
+            .iter()
+            .chain(&meta.send_queue)
+            .map(|s| (s.content.clone(), s.status.clone()))
+            .collect()
+    }
+    #[test]
+    fn a_user_row_goes_before_queued_wake_lines() {
+        let (mut f, parent, _) = three_waiting("user-first");
+        assert_eq!(
+            f.core.entries[&parent].meta.send_queue.len(),
+            3,
+            "the lead is not ready: queued"
+        );
+        f.core
+            .handle(Request::AgentPrompt {
+                id: parent.clone(),
+                text: "owner words".into(),
+            })
+            .unwrap();
+        f.finish_turn(&parent);
+        assert!(f.core.deliver().unwrap());
+        let delivered: Vec<_> = statuses(&f, &parent)
+            .into_iter()
+            .filter(|(_, s)| s == "delivered")
+            .collect();
+        assert_eq!(
+            delivered,
+            [("owner words".to_string(), "delivered".to_string())]
+        );
+    }
+    #[test]
+    fn a_newer_wake_line_replaces_the_older_one_of_its_worker() {
+        let (mut f, parent, child) = Fix::pair("one-per-worker");
+        f.finish_turn(&child);
+        f.core.wake_parents();
+        f.finish_turn(&child);
+        f.core.wake_parents();
+        let queue = &f.core.entries[&parent].meta.send_queue;
+        assert_eq!(queue.len(), 1, "{:?}", statuses(&f, &parent));
+        assert_eq!(
+            f.core.entries[&parent]
+                .meta
+                .send_log
+                .iter()
+                .filter(|s| s.status == "canceled")
+                .count(),
+            1
+        );
+    }
+    #[test]
+    fn queued_wake_lines_go_out_as_one_message() {
+        let (mut f, parent, _) = three_waiting("one-message");
+        f.finish_turn(&parent);
+        assert!(f.core.deliver().unwrap());
+        assert!(f.core.entries[&parent].meta.send_queue.is_empty());
+        let log = &f.core.entries[&parent].meta.send_log;
+        let whole: Vec<_> = log
+            .iter()
+            .filter(|s| s.content.lines().count() == 3)
+            .collect();
+        assert_eq!(whole.len(), 1, "{:?}", statuses(&f, &parent));
+        for name in ["w1", "w2", "w3"] {
+            assert!(
+                whole[0].content.contains(&format!("worker {name} ")),
+                "{}",
+                whole[0].content
+            );
+        }
+    }
+    /// Queues `n` wake lines of `line` from `child` to `parent`, as wake.rs does.
+    fn queue_wakes(f: &mut Fix, child: &str, parent: &str, n: usize, line: &str) {
+        for _ in 0..n {
+            let send = f
+                .core
+                .begin_send(child, parent, line.into(), vec![], true, "queued")
+                .unwrap();
+            f.core.wake_rows.insert(send.id);
+        }
+    }
+    /// Ticket 1056 (Codex look, MUST 1): a joined row above the send limit was saved, and the next core refused to load.
+    #[test]
+    fn a_wake_batch_stays_inside_the_send_limit_across_a_restart() {
+        let (mut f, parent, child) = Fix::pair("batch-limit");
+        let line = format!("worker w1 {}", "x".repeat(798)); // 808 bytes, 100 of them pass the limit
+        queue_wakes(&mut f, &child, &parent, 100, &line);
+        f.finish_turn(&parent);
+        f.core.deliver().unwrap();
+        let meta = &f.core.entries[&parent].meta;
+        assert!(
+            meta.send_log
+                .iter()
+                .chain(&meta.send_queue)
+                .all(|s| s.content.len() <= crate::delivery::SEND_LIMIT)
+        );
+        assert!(
+            meta.send_queue.iter().any(|s| s.status == "queued"),
+            "the lines past the limit wait for the next batch"
+        );
+        f.core.save().unwrap();
+        // The restart: a new core opens what this one saved.
+        let copy = scratch("batch-limit-copy");
+        fs::copy(f.home.join("sessions.json"), copy.join("sessions.json")).unwrap();
+        let reopened = Sessions::open(&copy);
+        let _ = fs::remove_dir_all(&copy);
+        assert!(reopened.is_ok(), "{:?}", reopened.err());
+    }
+    /// Ticket 1056 (Codex look, MUST 2): the joined lines wait for the batch's Enter, and a dropped Enter fails them all.
+    #[test]
+    fn joined_wake_lines_end_with_their_batch() {
+        let mut f = Fix::new("batch-enter");
+        // An agent with bracketed paste on: the batch is pasted and its Enter waits for a later pass.
+        fs::write(
+            f.home.join("idle.sh"),
+            "#!/bin/sh\nstty raw -echo\nprintf '\\033[?2004h'\ni=0; while [ ! -f stop ] && [ $i -lt 2400 ]; do sleep 0.05; i=$((i+1)); done\n",
+        )
+        .unwrap();
+        let parent = f.session("coord", &f.home.clone());
+        f.core.entries.get_mut(&parent).unwrap().meta.kind = AgentKind::Claude;
+        let child = f.session("w1", &f.home.join("w1"));
+        f.core.grants.parents.insert(child.clone(), parent.clone());
+        let paste = |f: &Fix| {
+            f.core.entries[&parent]
+                .pty
+                .as_ref()
+                .is_some_and(Pty::bracketed_paste)
+        };
+        for _ in 0..100 {
+            if paste(&f) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(paste(&f), "the fake agent turned bracketed paste on");
+        queue_wakes(&mut f, &child, &parent, 3, "worker w1 done");
+        f.finish_turn(&parent);
+        f.core.deliver().unwrap();
+        assert!(
+            f.core.pending_enter.contains_key(&parent),
+            "the Enter waits"
+        );
+        assert!(
+            f.core.entries[&parent]
+                .meta
+                .send_queue
+                .iter()
+                .all(|s| s.status == "attempting"),
+            "{:?}",
+            statuses(&f, &parent)
+        );
+        // A permission dialog comes up before the Enter: the Enter is dropped.
+        f.core
+            .queue
+            .observe(
+                &parent,
+                "PermissionRequest",
+                &serde_json::json!({"tool_name": "Bash", "tool_input": {"command": "ls"}}),
+                "hook",
+                queue::now_ms(),
+            )
+            .unwrap();
+        for _ in 0..40 {
+            if !f.core.pending_enter.contains_key(&parent) {
+                break;
+            }
+            f.core.flush_enters().unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        // Ticket 1085: the batch is queued again once (cleared from the box before its next write), its joined lines
+        // still with it; a second dropped Enter fails them all.
+        let batch = |f: &Fix| {
+            let meta = &f.core.entries[&parent].meta;
+            let mut s: Vec<_> = meta
+                .send_queue
+                .iter()
+                .chain(&meta.send_log)
+                .filter(|s| s.sender == child)
+                .map(|s| s.status.clone())
+                .collect();
+            s.sort();
+            s
+        };
+        assert_eq!(
+            batch(&f),
+            ["attempting", "attempting", "queued"],
+            "{:?}",
+            statuses(&f, &parent)
+        );
+        assert!(f.core.left_typed.contains(&parent));
+        let row = f.core.entries[&parent]
+            .meta
+            .send_queue
+            .iter()
+            .find(|s| s.status == "queued")
+            .unwrap()
+            .clone();
+        f.core.finish_send(&parent, &row.id, "attempting").unwrap();
+        assert_eq!(f.core.write_send(&parent, &row), Ok(true));
+        for _ in 0..40 {
+            if !f.core.pending_enter.contains_key(&parent) {
+                break;
+            }
+            f.core.flush_enters().unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let meta = &f.core.entries[&parent].meta;
+        assert!(meta.send_queue.is_empty(), "{:?}", statuses(&f, &parent));
+        assert_eq!(batch(&f), ["failed"; 3], "{:?}", statuses(&f, &parent));
+    }
+    #[test]
+    fn a_closed_workers_wake_line_is_dropped() {
+        let (mut f, parent, child) = Fix::pair("closed-worker");
+        f.finish_turn(&child);
+        f.core.wake_parents();
+        assert_eq!(f.core.entries[&parent].meta.send_queue.len(), 1);
+        f.core.handle(Request::Close { id: child.clone() }).unwrap();
+        f.finish_turn(&parent);
+        f.core.deliver().unwrap();
+        assert_eq!(
+            statuses(&f, &parent),
+            [(
+                "worker w1 ended a turn (no report yet)".to_string(),
+                "canceled".to_string()
+            )]
+        );
+    }
+    /// Ticket 1085: every automatic line form the core types into a seat's input box (wake lines here, the room's notice,
+    /// auto-advance's heartbeat and nudge through `core_line`), against the shared fixture the web spec folds
+    /// (web/tests/wake-lines-1085.spec.ts). A new form fails here until the fixture, and so the fold, has it.
+    #[test]
+    fn automatic_line_forms_match_the_shared_fixture() {
+        let mut made: Vec<serde_json::Value> = vec![];
+        let mut add =
+            |kind: &str, text: String| made.push(serde_json::json!({"kind": kind, "text": text}));
+        for reached in [
+            Reached::Done,
+            Reached::BlockedQuestion,
+            Reached::BlockedPermission,
+            Reached::AsksLead,
+            Reached::Failed,
+            Reached::Exited,
+        ] {
+            add("wake", line("w1", "id", reached, None));
+            add(
+                "wake",
+                line(
+                    "Builder · ticket 1070",
+                    "id",
+                    reached,
+                    Some("STATUS: done \"quoted\""),
+                ),
+            );
+        }
+        add("notice", crate::room::notice(1));
+        add("notice", crate::room::notice(2));
+        for (review, merge, stalled) in [
+            (1, 0, 0),
+            (2, 0, 0),
+            (0, 1, 0),
+            (0, 2, 0),
+            (0, 0, 1),
+            (0, 0, 2),
+            (0, 2, 1),
+            (1, 1, 1),
+            (2, 2, 2),
+        ] {
+            add(
+                "heartbeat",
+                crate::advance::beat_line(review, merge, stalled).unwrap(),
+            );
+        }
+        assert_eq!(crate::advance::beat_line(0, 0, 0), None);
+        add("nudge", crate::advance::nudge_line(15));
+        add(
+            "forward",
+            crate::advance::forward_line(
+                "Reviewer · tax",
+                "0123456789abcdef fedcba9876543210",
+                "two MUSTs. See sessions.rs",
+                1,
+            ),
+        );
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/automatic-lines.json"))
+                .unwrap();
+        assert_eq!(
+            fixture["lines"],
+            serde_json::Value::Array(made.clone()),
+            "the fixture must list exactly these forms:\n{}",
+            serde_json::to_string_pretty(&serde_json::json!({"lines": made})).unwrap()
+        );
     }
     #[test]
     fn hidden_copies_use_shared_set() {

@@ -4,9 +4,9 @@
 import fs from 'node:fs';
 import type { Session } from '../src/types';
 import { agentsToml, fakeAcp, ownerOk, owner, tomlEntry } from './acp-fakes';
-import { agentsZone, expect, openWindow, test, type Core } from './fixtures';
+import { stripOnTop, expect, openWindow, test, type Core } from './fixtures';
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: these specs read the AGENTS rows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const snapshot = (core: Core) => core.cli('snapshot', '--json').sessions as Session[];
 function approve(core: Core, name: string) {
@@ -19,7 +19,7 @@ async function show(app: import('@playwright/test').Page, core: Core, agent: str
   await expect.poll(() => snapshot(core).find((s) => s.acp_agent === agent)?.problem?.case, { timeout: 20_000 }).toBeTruthy();
   const id = snapshot(core).find((s) => s.acp_agent === agent)!.id;
   await openWindow(app);
-  await app.locator(`.ar[data-agent="${id}"]`).click();
+  await app.locator(`button.row.wt2[data-menu-session="${id}"]`).click();
   return id;
 }
 
@@ -36,7 +36,7 @@ test('not installed: a known agent offers its install page, a custom entry has n
   await band(app).getByRole('button', { name: 'Install page ↗' }).click();
   expect(await app.evaluate(() => (window as any).__opened)).toBe('https://github.com/google-gemini/gemini-cli');
   const mine = snapshot(core).find((s) => s.acp_agent === 'mine')!;
-  await app.locator(`.ar[data-agent="${mine.id}"]`).click();
+  await app.locator(`button.row.wt2[data-menu-session="${mine.id}"]`).click();
   await expect(band(app)).toContainText('mine is not installed.');
   await expect(band(app).getByRole('button')).toHaveCount(0);
 });
@@ -87,7 +87,7 @@ test('a running ACP session never gets a card from what its agent prints', async
   await expect.poll(() => (snapshot(core).find((s) => s.id === id) as Session & { model?: string } | undefined)?.model).toBeTruthy();
   ownerOk(core, { op: 'agent_prompt', id, text: 'say:auth_required: Authentication required. No such file. not found. Please log in.' });
   await openWindow(app);
-  await app.locator(`.ar[data-agent="${id}"]`).click();
+  await app.locator(`button.row.wt2[data-menu-session="${id}"]`).click();
   await app.waitForTimeout(800);
   expect(snapshot(core).find((s) => s.id === id)).toMatchObject({ state: 'running' });
   await expect(band(app)).toHaveCount(0);

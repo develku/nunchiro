@@ -2,6 +2,8 @@
 // (a broken store is ignored, never partially trusted); the open tab, maximise and an auto-open are for this window run only.
 import { useSyncExternalStore } from 'react';
 import type { Decision, Session } from '../types';
+import { tEn } from '../i18n';
+import { plan } from '../queue/answer';
 
 export type PaneTab = 'pty' | 'browser' | 'preview' | { shell: string };
 export const tabKey = (t: PaneTab) => (typeof t === 'string' ? t : `shell:${t.shell}`);
@@ -125,9 +127,11 @@ export const autoClose = (id: string) => state.auto[id] && set({ auto: without(s
 
 /** Sources of an item as the core serialises them (types.ts does not carry the field). */
 const sources = (d: Decision): string[] => (d as Decision & { sources?: string[] }).sources ?? [];
-/** A pending item the chat cannot draw: a dialog, or a prompt only the screen detector saw (hooks silent). */
+/** A pending item the chat cannot answer: a dialog, or a prompt only the screen detector saw (hooks silent) that the chat's
+ *  card cannot answer either (not actionable). Ticket 1097: a screen-only question the docked card answers is the card's;
+ *  opening the PTY for it showed the same question twice under a banner saying the chat could not show it. */
 export const blocked = (s: Session | null | undefined): boolean =>
-  !!s && s.state === 'running' && s.pending.some((d) => d.kind === 'dialog' || (['permission', 'question'].includes(d.kind) && sources(d).length === 1 && sources(d)[0] === 'screen'));
+  !!s && s.state === 'running' && s.pending.some((d) => d.kind === 'dialog' || (['permission', 'question'].includes(d.kind) && sources(d).length === 1 && sources(d)[0] === 'screen' && !!plan(d, s, tEn).note));
 
 /** A focus request is for the moment it is made: the pane that takes it clears it, and a stale one is never replayed. */
 export const FOCUS_FRESH_MS = 1500;

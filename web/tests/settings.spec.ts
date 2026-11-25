@@ -1,12 +1,12 @@
 import type { Page } from '@playwright/test';
 import { DEFAULTS, load, parse } from '../src/settings';
-import { expect, openWindow, test, agentsZone } from './fixtures';
+import { expect, openWindow, test, stripOnTop } from './fixtures';
 import { openQuiet } from './tree-seed';
 import { harness } from './theme-harness';
 import { BUILTIN_BUTTONS, BUILTIN_TITLES, groupsOf } from './settings-nav';
 import { openSettings } from './settings-modal';
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: the default window has no AGENTS rows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const page = (app: Page, name: string) => app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name, exact: true }); // needs 192 (ticket 250): Terminal / Terminal History
 // needs 192 (ticket 250): the final draft's pages in 7 groups; the built-in list lives in tests/settings-nav.ts.
@@ -14,7 +14,6 @@ const page = (app: Page, name: string) => app.getByRole('navigation', { name: 'S
 const heights = (page: Page) =>
   page.evaluate(() => ({
     tree: document.querySelector('.grp .head')!.getBoundingClientRect().height,
-    agents: parseFloat(getComputedStyle(document.querySelector('.ar')!).minHeight), // fix-menus-tree-d: Agents rows are 2 lines tall, the density sets their minimum
     tabs: document.querySelector('.tabs')!.getBoundingClientRect().height,
     tabFont: getComputedStyle(document.querySelector('.tab')!).fontSize,
   }));
@@ -23,7 +22,7 @@ test('density defaults to comfortable (head 25 / 24 / 36 px, tab text 13 px; tic
   core.shell(core.project('demo'), 'alpha');
   openQuiet(core); // V2-9a: quiet projects start folded
   await openWindow(app);
-  expect(await heights(app)).toEqual({ tree: 25, agents: 24, tabs: 36, tabFont: '13px' }); // the project head is the ko/ 25 px .proj; session rows are 32 (A+B+C)
+  expect(await heights(app)).toEqual({ tree: 25, tabs: 36, tabFont: '13px' }); // the project head is the ko/ 25 px .proj; session rows are 32 (A+B+C)
 });
 
 test('density, tab font, waiting strip and theme persist across a reload', async ({ app, core }) => {
@@ -47,7 +46,7 @@ test('density, tab font, waiting strip and theme persist across a reload', async
   await expect(app.getByRole('status').filter({ hasText: /^Connected$/ })).toBeVisible();
   await app.keyboard.press('Escape'); // v25f: the reload keeps the Settings modal open; Esc closes it
   await app.locator('.tab').first().click();
-  expect(await heights(app)).toEqual({ tree: 22, agents: 20, tabs: 26, tabFont: '13px' });
+  expect(await heights(app)).toEqual({ tree: 22, tabs: 26, tabFont: '13px' });
   await expect(app.locator('#waiting-strip')).toHaveAttribute('data-mode', 'off');
   await expect(app.locator('html')).toHaveAttribute('data-theme', 'dark');
 });

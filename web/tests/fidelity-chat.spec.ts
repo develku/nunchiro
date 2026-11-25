@@ -59,10 +59,11 @@ test('change_card_header', async ({ page, chatCore }) => {
   mockupTurn(s.file, s.cwd);
   await openChat(page, s.id);
   const card = chat(page, s.id).locator('.chcard');
-  await expect(card.locator('.h')).toContainText('1 file changed');
-  await expect(card.locator('.h')).toContainText('+4 −2');
-  await expect(card.locator('.h .scope')).toHaveText('this turn'); // B18 (ticket 991): the count names its scope, as the header pill and Diff do
+  // Ticket 1074: one file is one row; the head's words (with the turn scope, B18) are the card's aria-label.
+  await expect(card).toHaveAttribute('aria-label', '1 file changed, 4 added, 2 removed, this turn');
+  await expect(card.locator('.h')).toHaveCount(0);
   await expect(card.locator('li')).toHaveCount(1);
+  await expect(card.locator('li')).toContainText('+4 −2');
   await expect(card.locator('li')).toContainText('web/src/tree/tree.css');
   await card.getByRole('button', { name: 'View in Diff' }).click();
   await expect(page.locator('.sbar[data-widget="diff"]')).toBeVisible();

@@ -255,8 +255,6 @@ const BEFORE: [Key, Record<string, string | number> | undefined, string][] = [
   ['tree.sessionLabelField', undefined, 'Session name'],
   ['tree.sessionLabelHint', undefined, 'Enter saves · Esc cancels'],
   ['tree.sessionNeedsName', undefined, 'A session name cannot be empty'],
-  // V2.5-41 rc2b-fb2 (needs 190 (2)): the Agents header counts what it says.
-  ['tree.agentsCount', { running: 2, total: 3 }, '2 of 3 running'],
   // ticket 195 (needs 171): drag a project head onto a group head; the keys live in their own area file.
   ['tree.drag.over', { group: 'Web' }, 'Move to Web'],
   ['tree.drag.moved', { name: 'alpha', group: 'Web' }, 'Moved alpha to Web'],
@@ -323,6 +321,12 @@ const BEFORE: [Key, Record<string, string | number> | undefined, string][] = [
   ['tree.sessionMenuTitle', { name: 'shell-1' }, 'shell-1 · session'],
   ['tree.cmd.settle', undefined, 'Move to done'], // Q7 point 4 (new words, no source on main)
   ['tree.settled', { name: 'calm' }, 'Moved calm to done'], // seventh look A S3-4 (new words, no source on main)
+  ['tree.cmd.clearFinished', undefined, 'Clear finished'], // ticket 1063 (new words, no source on main)
+  ['tree.clearKept', { names: 'a, b' }, 'Kept the worktrees with unsaved work: a, b'], // ticket 1063
+  ['tree.needYou', { n: 2 }, '2 need you'], // ticket 1067 (new words, no source on main)
+  ['tree.workers.badge', { n: 3 }, '3 working'], // ticket 1115 (new words, no source on main)
+  ['tree.workers.more', { n: 2 }, '▸ 2 more working'], // ticket 1115
+  ['tree.workers.moreIdle', { n: 3 }, '▸ 3 more'], // ticket 1115 review r1
 ];
 
 test('english_text_unchanged: every new EN key holds the string the source had on main', () => {
@@ -375,7 +379,7 @@ test('no_catalogue_collision: new keys start with tree., dialog. or projects.new
 const RETIRED = ['tree.mergedRemove', 'tree.mergedRemoveLabel', 'tree.pillWaiting', 'tree.pillFailed'];
 
 test('every_new_key_is_used: each key appears in an Own file, directly or as a plural base', () => {
-  const used = [...OWN, 'tree/strip.tsx', 'tree.ts'].map(read).join('\n'); // tree.ts: ticket 701 moved the age and tip keys there
+  const used = [...OWN, 'tree/strip.tsx', 'tree.ts', 'chrome/commands.ts'].map(read).join('\n'); // tree.ts: ticket 701 moved the age and tip keys there; commands.ts: 1063's Clear finished
   const dead = Object.keys(EN)
     .filter(mine)
     .filter((k) => !RETIRED.includes(k))

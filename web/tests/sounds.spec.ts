@@ -3,10 +3,10 @@
 import type { Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, openWindow, test, type Core, agentsZone } from './fixtures';
+import { expect, openWindow, test, type Core, stripOnTop } from './fixtures';
 import { openSettings } from './settings-modal';
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: these specs read the AGENTS rows, which the default window no longer shows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 async function recordInvokes(page: Page) {
   await page.addInitScript(() => {
@@ -72,7 +72,7 @@ test('a muted session plays nothing when it finishes or waits', async ({ app, co
   fs.writeFileSync(path.join(p, 'go'), '');
   fs.writeFileSync(path.join(p, 'go-a'), '');
   await done(core, s.id);
-  await expect(app.locator(`[data-agent="${a.id}"] .st`)).toHaveAttribute('data-s', 'waiting', { timeout: 5000 });
+  await expect(app.locator(`button.row.wt2[data-menu-session="${a.id}"]`)).toHaveClass(/\byou\b/, { timeout: 5000 });
   await settle(app);
   expect(await sounds(app)).toEqual([]);
 });
@@ -85,7 +85,7 @@ test('a new permission item plays the waiting sound (Ping) once; the chosen soun
   const a = core.agent(p, 'agent-a', 'go-a');
   await openWindow(app);
   fs.writeFileSync(path.join(p, 'go-a'), '');
-  await expect(app.locator(`[data-agent="${a.id}"] .st`)).toHaveAttribute('data-s', 'waiting', { timeout: 5000 });
+  await expect(app.locator(`button.row.wt2[data-menu-session="${a.id}"]`)).toHaveClass(/\byou\b/, { timeout: 5000 });
   await expect.poll(() => sounds(app)).toEqual([{ name: 'Tink', volume: 0.5 }]);
   await settle(app);
   expect(await sounds(app)).toHaveLength(1);
@@ -103,10 +103,10 @@ for (const [notifyFocused, heard] of [[true, []], [false, [{ name: 'Ping', volum
     const p = core.project('demo');
     const a = core.agent(p, 'agent-a', 'go-a');
     await openWindow(app);
-    await app.locator(`[data-tab="${a.id}"], [data-agent="${a.id}"]`).first().click();
+    await app.locator(`[data-tab="${a.id}"], button.row.wt2[data-menu-session="${a.id}"]`).first().click();
     await expect(app.getByRole('tab', { name: /agent-a/ }).first()).toHaveAttribute('aria-selected', 'true');
     fs.writeFileSync(path.join(p, 'go-a'), '');
-    await expect(app.locator(`[data-agent="${a.id}"] .st`)).toHaveAttribute('data-s', 'waiting', { timeout: 5000 });
+    await expect(app.locator(`button.row.wt2[data-menu-session="${a.id}"]`)).toHaveClass(/\byou\b/, { timeout: 5000 });
     await settle(app);
     expect(await sounds(app)).toEqual(heard);
   });
@@ -122,7 +122,7 @@ test('sounds set to Off play nothing', async ({ app, core }) => {
   fs.writeFileSync(path.join(p, 'go'), '');
   fs.writeFileSync(path.join(p, 'go-a'), '');
   await done(core, s.id);
-  await expect(app.locator(`[data-agent="${a.id}"] .st`)).toHaveAttribute('data-s', 'waiting', { timeout: 5000 });
+  await expect(app.locator(`button.row.wt2[data-menu-session="${a.id}"]`)).toHaveClass(/\byou\b/, { timeout: 5000 });
   await settle(app);
   expect(await sounds(app)).toEqual([]);
 });
@@ -189,7 +189,7 @@ test('a session that exits while it waits still plays done after the waiting sou
   const a = core.agent(p, 'agent-a', 'go-a');
   await openWindow(app);
   fs.writeFileSync(path.join(p, 'go-a'), '');
-  await expect(app.locator(`[data-agent="${a.id}"] .st`)).toHaveAttribute('data-s', 'waiting', { timeout: 5000 });
+  await expect(app.locator(`button.row.wt2[data-menu-session="${a.id}"]`)).toHaveClass(/\byou\b/, { timeout: 5000 });
   await expect.poll(() => sounds(app)).toEqual([{ name: 'Ping', volume: 1 }]);
   fs.writeFileSync(path.join(p, 'go-a.exit'), '');
   await expect.poll(() => sounds(app), { timeout: 5000 }).toEqual([{ name: 'Ping', volume: 1 }, { name: 'Glass', volume: 1 }]);
@@ -234,7 +234,7 @@ test('a core that crashes and comes back plays no false done sound', async ({ ap
   await openWindow(app);
   await expect.poll(() => last?.sessions.length).toBe(2);
   await first!.close();
-  await expect(app.locator('.ar .st[data-s="done"]')).toHaveCount(2, { timeout: 10000 });
+  await expect(app.locator('.tab .tdot[data-s="done"]')).toHaveCount(2, { timeout: 10000 });
   await expect(app.getByRole('status').filter({ hasText: /^Connected$/ })).toBeVisible();
   await settle(app);
   expect(await sounds(app)).toEqual([]);

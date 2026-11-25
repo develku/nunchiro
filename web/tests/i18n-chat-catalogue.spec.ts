@@ -165,7 +165,7 @@ const BEFORE: Record<string, string> = {
   'chat.view.thinking': 'Thinking',
   'chat.view.verbose': 'Verbose',
   'chat.view.aria': 'Transcript view: {view}',
-  'chat.view.tip': 'Transcript view (Ctrl+O cycles Normal, Thinking, Verbose)',
+  'chat.view.tip': 'Transcript view ({key} cycles Normal, Thinking, Verbose)',
   'chat.banner.tail': "is an untested version: chat shows each turn's final text only{extra}.",
   'chat.openTerminal': 'Open terminal',
   'chat.terminal': 'Terminal',
@@ -252,6 +252,35 @@ const BEFORE: Record<string, string> = {
   'chat.empty.seatTitle': 'What should {name} do?',
   'composer.waitsHint': 'Answer its question first. A message you send now waits until you answer.', // A9 (ticket 991)
   'composer.toCard': 'Shift+Tab: to the card.', // ticket 1030
+  // Ticket 1044: a clipboard image's chip name, and /new in Claude's slash menu (English only until ticket 1035).
+  'composer.imageN': 'Image #{n}',
+  'composer.cmd.claude.new': 'Start a new conversation (same as /clear)',
+  // Ticket 1056: the true reason a held message waits, and Send now for Claude (English only until ticket 1035).
+  'chat.held.working': 'Waiting for the agent to finish its turn:',
+  'chat.held.behind': 'Waiting for earlier messages to go first ({n}):',
+  // Ticket 1094 (English only until ticket 1035).
+  'chat.held.retry': 'The agent did not take it yet. It goes again when the agent is ready:',
+  // Ticket 1121 (English only until ticket 1035).
+  'chat.held.stopped': 'The agent did not take it and it will not be pasted again. Cancel send puts it back in the box:',
+  'composer.steerNowTitleClaude': "Send now. The message goes in at the agent's next step; the turn goes on.",
+  'composer.queue.sentWaiting': 'Sent. Waiting for the agent to take it.',
+  // Ticket 1087: the composer's shell look and the chat's shell row (English only until ticket 1035).
+  'composer.shell': 'Shell',
+  'composer.shellHint': 'Runs as a shell command in {folder}',
+  // Ticket 1097: the composer answers a question's "Type something" (English only until ticket 1035).
+  'composer.answersCard': 'What you send answers its question as "{option}".',
+  'chat.empty.waitCard': 'Answer on the card above the message box. The conversation starts after that.',
+  // Ticket 1130 B-L4 (C6): the offer row for a pasted `claude mcp add` line (English only until ticket 1035).
+  'composer.mcp.offer': 'Add MCP server "{name}"',
+  'composer.mcp.restart': 'Add and restart session',
+  'composer.mcp.forNew': 'Add for new sessions',
+  'composer.mcp.runs': 'This command will run in every Nunchiro session from now on.',
+  'composer.mcp.keeps': 'Restart keeps this conversation.',
+  'composer.mcp.busy': '{session} is busy, so this session is not restarted. It gets {name} after its next restart.',
+  'composer.mcp.restarted': 'Added {name}. This session restarted with it.',
+  'composer.mcp.sealed': 'Sealed',
+  'composer.mcp.kept': 'The conversation is kept.',
+  'composer.mcp.listed': 'Listed in Settings > Skills & hooks, where you can remove it.',
 };
 
 const src = path.resolve(import.meta.dirname, '../src');

@@ -111,6 +111,8 @@ pub enum OwnerAsk {
     },
     /// Turn the verified-yes option (`permission_answers`) on for this canonical project.
     PermissionAnswers { project: PathBuf },
+    /// Owner 2026-11-25: turn "Leads may use any of my accounts" on (`accounts::LEADS_ANY`), asked by a session.
+    LeadAccounts,
     /// Ticket 259: approve the repo setup script of this new worktree at the hash read when it was made.
     Setup { path: PathBuf, hash: String },
     /// Needs 225: spend one Codex reset ticket of this account (`folder` `None` = "Your own"; `account` its label)
@@ -217,6 +219,23 @@ pub enum OwnerAsk {
         file: String,
         place: PathBuf,
     },
+    /// Ticket 1113: an owner-only request to close one foreign session.
+    SessionClose {
+        #[serde(default)]
+        from: String,
+        target: String,
+        label: String,
+        place: PathBuf,
+        why: String,
+    },
+    /// Ticket 1099 panel 4: a place's lead asks to change its live seats (`Place.cap`) from `was` to `cap`, for its
+    /// reason `why` (`nunchiro task ask-cap`). Nothing changes before the yes, which sets the cap as Settings does.
+    Cap {
+        place: PathBuf,
+        was: u32,
+        cap: u32,
+        why: String,
+    },
 }
 /// Ticket 1002 lane 2: every `OwnerAsk` tag this core reads. A stored owner item of another tag (a newer core's kind)
 /// is left out at load, so a downgrade keeps the rest of the store.
@@ -233,8 +252,10 @@ const OWNER_KINDS: &[&str] = &[
     // Ticket 1004 (fable/w31-stall) adds `OwnerAsk::Stall`; listed early so whichever lands second shows stall cards.
     // Until that variant is here, a store holding a stall card fails to load (only a 1004 core writes one).
     "stall",
-    "loop", // ticket 1003
-    "tidy", // ticket 1005
+    "loop",          // ticket 1003
+    "tidy",          // ticket 1005
+    "session_close", // ticket 1113
+    "cap",           // ticket 1099
 ];
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Choice {
@@ -311,6 +332,10 @@ pub struct Decision {
     /// server and the tool. A built-in's request already says what it is ("Edit app.py").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool: Option<String>,
+    /// Ticket 1130 S1: the kind of an outward call (`outward::Kind::name`: mail, calendar, post, publish), set on the
+    /// snapshot's copy only; the card names it ("Send mail").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outward: Option<String>,
 }
 fn yes() -> bool {
     true
@@ -368,6 +393,10 @@ struct State {
     finished: BTreeSet<String>,
     #[serde(default)]
     stop_pending: bool,
+    /// Ticket 1094: when the Stop that `stop_pending` holds arrived (core clock, ms); `tick` settles it after
+    /// `HELD_STOP_MS`, so a background task's end that never reaches the core cannot hold the session for ever.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    stop_at: u64,
     /// Ticket 991: when the session was registered (ms): the snapshot lists sessions in this order, so sessions a
     /// window first sees together open their tabs in the order they were started. 0 on a store from before this.
     #[serde(default)]
@@ -376,6 +405,20 @@ struct State {
     /// and in its transcript (`<local-command-stdout>`) with no model turn and no Stop, which then ends it.
     #[serde(default)]
     local_command: bool,
+}
+/// Ticket 1133: `Disk` equality without `seen`. Destructured so a new field must be named here.
+fn same_except_seen(a: &Disk, b: &Disk) -> bool {
+    let Disk {
+        version,
+        sessions,
+        seen: _,
+        owner,
+        outbox_domains,
+    } = a;
+    *version == b.version
+        && *sessions == b.sessions
+        && *owner == b.owner
+        && *outbox_domains == b.outbox_domains
 }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 struct Disk {
@@ -540,6 +583,12 @@ fn carries_no_turn_state(event: &str, p: &Value) -> bool {
         _ => false,
     }
 }
+/// The most replayed hook ids `queue.json` keeps (`validate`); `replay` drops the oldest quarter when full.
+const SEEN_MAX: usize = 32768;
+/// Ticket 1094: how long a Stop held for background work waits before `tick` ends its turn (ms).
+pub const HELD_STOP_MS: u64 = 60_000;
+/// Ticket 1094: a journaled prompt this old (ms) is not replayed as a turn start.
+const REPLAY_PROMPT_STALE_MS: u64 = 5 * 60_000;
 /// The most session states `queue.json` keeps (`validate`).
 const MAX_SESSIONS: usize = 4096;
 impl Queue {
@@ -676,11 +725,30 @@ impl Queue {
                 item.hook_event_id = None;
             }
         }
+        // Ticket 1109: a setup ask for a worktree removed while it waited opened the start-up sheet at every start. Only a
+        // gone folder whose parent is there counts, so a worktree on an unmounted volume keeps its ask; a lookup that fails
+        // (permission, I/O) proves nothing either.
+        queue.disk.owner.retain(|i| match &i.owner {
+            Some(OwnerAsk::Setup { path, .. })
+                if matches!(path.try_exists(), Ok(false))
+                    && path
+                        .parent()
+                        .is_some_and(|p| matches!(p.try_exists(), Ok(true))) =>
+            {
+                eprintln!(
+                    "queue: setup ask {} dropped: worktree {} is gone",
+                    i.id,
+                    path.display()
+                );
+                false
+            }
+            _ => true,
+        });
         Ok(queue)
     }
     fn validate(disk: &Disk) -> Result<(), String> {
         // `version` is 1 or 2 here: `open` sets any other integer aside and the typed parse refuses the rest.
-        if disk.sessions.len() > MAX_SESSIONS || disk.seen.len() > 32768 {
+        if disk.sessions.len() > MAX_SESSIONS || disk.seen.len() > SEEN_MAX {
             return Err("queue limit exceeded".into());
         }
         let mut ids = BTreeSet::new();
@@ -755,10 +823,18 @@ impl Queue {
         }
         store::atomic_write(&self.home.join("queue.json"), &bytes)
     }
+    /// Ticket 1133: writes the replayed ids `change` kept in memory (once, after the startup replay).
+    pub fn flush(&self) -> Result<(), String> {
+        self.save()
+    }
     fn change(&mut self, f: impl FnOnce(&mut Self) -> Result<(), String>) -> Result<(), String> {
         let old = self.disk.clone();
         if let Err(e) = f(self).and_then(|()| {
-            if self.disk != old {
+            // Ticket 1133: a change of the replayed ids alone is not saved. Most hooks (every tool call) change
+            // nothing else, and a full rewrite of a 1.6 MB queue.json per hook wrote 137 GB in 2.4 h on 11-23.
+            // Safe: the hook deletes its journal file after the core's ack, startup deletes each file it replayed,
+            // and the next real save (or `flush` after startup replay) writes the ids too.
+            if !same_except_seen(&self.disk, &old) {
                 self.save()
             } else {
                 Ok(())
@@ -810,6 +886,7 @@ impl Queue {
                     turn: None,
                     finished: BTreeSet::new(),
                     stop_pending: false,
+                    stop_at: 0,
                     registered: now,
                     local_command: false,
                 },
@@ -964,6 +1041,41 @@ impl Queue {
         live: &BTreeSet<String>,
     ) -> Result<(), String> {
         self.end_graces(now)?; // v1a-71
+        // Ticket 1094: a turn that ended with background work still counted settles once its Stop is HELD_STOP_MS old.
+        // The agent is at its prompt by then; a task whose end was lost (or that runs on) no longer holds every send.
+        let held: Vec<_> = self
+            .disk
+            .sessions
+            .iter()
+            .filter(|(id, s)| {
+                live.contains(*id)
+                    && s.attention.working
+                    && s.stop_pending
+                    && now.saturating_sub(s.stop_at) >= HELD_STOP_MS
+                    // Review r1 point 3: a turn Claude starts by itself (a task's end with another still running)
+                    // sends no prompt; its records and output are activity, and a turn that shows any is not settled.
+                    && now.saturating_sub(
+                        self.activity
+                            .get(*id)
+                            .copied()
+                            .unwrap_or(0)
+                            .max(s.attention.last_activity),
+                    ) >= HELD_STOP_MS
+                    && !waits(&s.items)
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        if !held.is_empty() {
+            self.change(|q| {
+                for id in &held {
+                    if let Some(s) = q.disk.sessions.get_mut(id) {
+                        Self::finish(s);
+                        s.attention.waiting = waits(&s.items);
+                    }
+                }
+                Ok(())
+            })?;
+        }
         let due: Vec<_> = self
             .disk
             .sessions
@@ -1084,6 +1196,12 @@ impl Queue {
                 if turn.is_some_and(|t| s.finished.contains(t)) {
                     return Ok(());
                 }
+                // Ticket 1094: a Stop held for background work, then a new prompt: Claude took the prompt at its input
+                // box, so the held turn ended. Kept working, the turn never ended for the queue: every later Stop was
+                // held again behind a task whose end was never seen.
+                if s.stop_pending {
+                    Self::finish(s);
+                }
                 if let Some(turn) = turn {
                     s.turn = Some(turn.into());
                 }
@@ -1117,7 +1235,9 @@ impl Queue {
                 }
             }
             "Answered" => s.items.retain(|i| !i.scope.starts_with(ASYNC_SCOPE)),
-            "Stop" => {
+            // Ticket 1054: a Stop from inside a subagent (it carries the subagent's agent_id) ends that subagent, not
+            // the session's turn; it is handled as SubagentStop below.
+            "Stop" if p["agent_id"].as_str().is_none_or(str::is_empty) => {
                 if let Some(turn) = p["turn_id"].as_str().or_else(|| p["prompt_id"].as_str())
                     && (s.finished.contains(turn)
                         || s.turn.as_deref().is_some_and(|active| active != turn))
@@ -1150,6 +1270,7 @@ impl Queue {
                 s.attention.background = background;
                 s.stop_pending = background > 0;
                 if background > 0 {
+                    s.stop_at = now;
                     self.upsert(
                         id,
                         "background",
@@ -1172,7 +1293,7 @@ impl Queue {
                     s.attention.background = s.tasks.len() as u64;
                 }
             }
-            "SubagentStop" | "TaskCompleted" => {
+            "Stop" | "SubagentStop" | "TaskCompleted" => {
                 let task = p["task_id"].as_str().unwrap_or(scope);
                 s.items.retain(|i| i.scope != task);
                 if s.tasks.is_empty() || s.tasks.remove(task) {
@@ -1290,6 +1411,7 @@ impl Queue {
             s.finished.insert(turn);
         }
         s.stop_pending = false;
+        s.stop_at = 0;
         s.local_command = false;
         s.tasks.clear();
         s.attention.working = false;
@@ -1403,6 +1525,7 @@ impl Queue {
                         allow_always: None,
                         allow_scope: None,
                         tool: None,
+                        outward: None,
                     });
                 }
             }
@@ -1523,6 +1646,7 @@ impl Queue {
                 allow_always: None,
                 allow_scope: None,
                 tool: None,
+                outward: None,
             });
         }
         if let Some(text) = screen_text
@@ -1747,20 +1871,33 @@ impl Queue {
         if self.disk.seen.contains_key(&event.event_id) {
             return Ok(());
         }
+        // Ticket 1094 (review r1 point 2): a prompt journaled long ago (a hook no core took, replayed at the next
+        // start) says nothing about now; its Stop may never have been journaled, and replayed it set an idle seat
+        // working for hours. Only the session's own evidence (its transcript, read from the saved cursor) starts a turn.
+        let stale = matches!(event.event.as_str(), "UserPromptSubmit")
+            && now_ms().saturating_sub(event.created) >= REPLAY_PROMPT_STALE_MS;
         self.change(|q| {
             q.disk
                 .seen
                 .retain(|_, at| event.created.saturating_sub(*at) <= journal::MAX_AGE_MS);
-            if q.disk.seen.len() >= 32768 {
-                return Err("event replay limit exceeded".into());
+            // Ticket 1094: a full set refused every hook from then on (a day of tool calls from a few busy seats fills
+            // 32768 ids), and no Stop reached the queue. The oldest quarter goes instead: an id is needed only while its
+            // journal file may still be replayed, and the journal holds at most `journal::MAX_EVENTS` files.
+            if q.disk.seen.len() >= SEEN_MAX {
+                let mut ages: Vec<u64> = q.disk.seen.values().copied().collect();
+                ages.sort_unstable();
+                let cut = ages[SEEN_MAX / 4];
+                q.disk.seen.retain(|_, at| *at > cut);
             }
-            q.apply(
-                &event.session_id,
-                &event.event,
-                &event.payload,
-                "hook",
-                event.created,
-            )?;
+            if !stale {
+                q.apply(
+                    &event.session_id,
+                    &event.event,
+                    &event.payload,
+                    "hook",
+                    event.created,
+                )?;
+            }
             q.disk.seen.insert(event.event_id.clone(), event.created);
             Ok(())
         })
@@ -1875,6 +2012,7 @@ impl Queue {
                 allow_always: None,
                 allow_scope: None,
                 tool: None,
+                outward: None,
             });
             s.attention.waiting = true;
             Ok(())
@@ -1935,6 +2073,7 @@ impl Queue {
                 Some(OwnerAsk::PermissionAnswers { project }),
                 OwnerAsk::PermissionAnswers { project: p },
             ) => project == p,
+            (Some(OwnerAsk::LeadAccounts), OwnerAsk::LeadAccounts) => true,
             (Some(OwnerAsk::Setup { path, .. }), OwnerAsk::Setup { path: p, .. }) => path == p,
             // Needs 225: one waiting ask per session and account; a new reason replaces the old ask.
             (Some(OwnerAsk::CodexReset { folder, .. }), OwnerAsk::CodexReset { folder: f, .. }) => {
@@ -1998,6 +2137,12 @@ impl Queue {
                     ..
                 },
             ) => teammate == m && file == f,
+            // Ticket 1099: one card per place; a newer ask replaces the one not yet answered.
+            (Some(OwnerAsk::Cap { place, .. }), OwnerAsk::Cap { place: p, .. }) => place == p,
+            (
+                Some(OwnerAsk::SessionClose { target, .. }),
+                OwnerAsk::SessionClose { target: t, .. },
+            ) => target == t,
             _ => false,
         };
         if let Some(i) = self
@@ -2030,6 +2175,11 @@ impl Queue {
                 "turn on verified yes (answer permission prompts with allow once) for {}",
                 project.display()
             ),
+            OwnerAsk::LeadAccounts => {
+                "let your team leads start sessions on any of your accounts and move themselves \
+                 (each start or move is a line in the room)"
+                    .into()
+            }
             OwnerAsk::CodexReset {
                 account, reason, ..
             } => format!("use one Codex reset ticket of {account}: {reason}"),
@@ -2091,6 +2241,24 @@ impl Queue {
                     _ => format!("overdue: {words}"),
                 }
             }
+            OwnerAsk::SessionClose {
+                label, place, why, ..
+            } => format!(
+                "Close {label} · {}: {why}",
+                place.file_name().unwrap_or_default().to_string_lossy()
+            ),
+            OwnerAsk::Cap {
+                place,
+                was,
+                cap,
+                why,
+            } => format!(
+                "change the live seats of {} from {was} to {cap}: {why}",
+                place
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            ),
             OwnerAsk::Tidy { name, file, .. } => format!(
                 "{name}'s {file} is over the 6 KB its brief quotes, so the rest does not reach {name}: let {name} tidy it?"
             ),
@@ -2114,6 +2282,7 @@ impl Queue {
             allow_always: None,
             allow_scope: None,
             tool: None,
+            outward: None,
         };
         let id = item.id.clone();
         self.change(|q| {
@@ -2392,7 +2561,13 @@ impl Queue {
         // hook refuses every other MCP tool) only reads. The window says "read only" of a safe MCP tool, so nothing
         // else may make one safe. Without the lock the name proves nothing: a project's own server may carry it.
         let read = home_lock && tool.is_some_and(|t| crate::home_lock::reads(t));
-        item.risky = !read && risk::risky(tool.map(String::as_str), &item.text, cwd);
+        let input = serde_json::from_str::<Value>(&item.text).unwrap_or_default();
+        item.outward = tool
+            .and_then(|t| crate::outward::kind(t, &input))
+            .map(|k| k.name().to_string());
+        // Ticket 1130 S1: an outward call is never one "allow always" may cover.
+        item.risky = item.outward.is_some()
+            || (!read && risk::risky(tool.map(String::as_str), &item.text, cwd));
         item.deny_note = item.actionable;
         let (rules, scope) = self.session_scope(item, cwd);
         item.allow_scope = (!rules.is_empty()).then(|| scope.join(", "));
@@ -3099,6 +3274,8 @@ fn edits_shown(block: &[(char, String)], edits: &[(Vec<String>, Vec<String>)]) -
 
 // v1a-23: owner items in the store.
 #[cfg(test)]
+mod turn_ends;
+#[cfg(test)]
 mod owner_tests {
     use super::*;
 
@@ -3139,6 +3316,46 @@ mod owner_tests {
         assert_eq!(items[0].owner, Some(widget("b")));
         // Session callers' lookup never finds an owner item.
         assert!(q.decision(&second).is_err());
+        fs::remove_dir_all(home).unwrap();
+    }
+
+    #[test]
+    fn a_setup_ask_for_a_gone_worktree_is_dropped_on_load() {
+        let home = home("setup-gone");
+        let setup = |name: &str| OwnerAsk::Setup {
+            path: home.join("wt").join(name),
+            hash: "h".into(),
+        };
+        fs::create_dir_all(home.join("wt/kept")).unwrap();
+        fs::create_dir_all(home.join("wt/gone")).unwrap();
+        let mut q = Queue::open(&home).unwrap();
+        q.ask_owner("s1", setup("kept")).unwrap();
+        q.ask_owner("s1", setup("gone")).unwrap();
+        // A parent that is not there (an unmounted volume) is no proof the worktree went.
+        let unmounted = OwnerAsk::Setup {
+            path: home.join("no-volume/wt"),
+            hash: "h".into(),
+        };
+        q.ask_owner("s1", unmounted.clone()).unwrap();
+        // A folder that cannot be looked into (no search permission) is no proof either.
+        use std::os::unix::fs::PermissionsExt;
+        let locked = home.join("locked");
+        fs::create_dir(&locked).unwrap();
+        let unreadable = OwnerAsk::Setup {
+            path: locked.join("wt"),
+            hash: "h".into(),
+        };
+        q.ask_owner("s1", unreadable.clone()).unwrap();
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+        fs::remove_dir(home.join("wt/gone")).unwrap();
+        let owners: Vec<_> = Queue::open(&home)
+            .unwrap()
+            .owner_items()
+            .into_iter()
+            .filter_map(|i| i.owner)
+            .collect();
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(owners, vec![setup("kept"), unmounted, unreadable]);
         fs::remove_dir_all(home).unwrap();
     }
 
@@ -3591,6 +3808,48 @@ mod resize_tests {
         }
         fs::remove_dir_all(home).unwrap();
     }
+    /// Ticket 1130 S1: an outward call's card names its kind and is risky (no "allow always"); a read is no kind.
+    #[test]
+    fn t1130_outward_card_names_its_kind() {
+        let (home, mut q) = queue("t1130");
+        for (n, (tool, input, kind)) in [
+            (
+                "mcp__claude_ai_Gmail__send_message",
+                serde_json::json!({"to": ["a@example.org"]}),
+                Some("mail"),
+            ),
+            (
+                "Bash",
+                serde_json::json!({"command": "npm publish"}),
+                Some("publish"),
+            ),
+            ("Bash", serde_json::json!({"command": "git push"}), None),
+            (
+                "mcp__claude_ai_Gmail__search_threads",
+                serde_json::json!({"query": "x"}),
+                None,
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let event = format!("ev{n}");
+            let ask = serde_json::json!({"tool_name": tool, "tool_use_id": event, "tool_input": input, "nunchiro_event_id": event});
+            q.observe("s", "PermissionRequest", &ask, "hook", 10 + n as u64)
+                .unwrap();
+            let mut item = q
+                .items()
+                .into_iter()
+                .find(|i| i.hook_event_id.as_deref() == Some(event.as_str()))
+                .unwrap();
+            q.annotate(&mut item, &home, false);
+            assert_eq!(item.outward.as_deref(), kind, "{tool}");
+            if kind.is_some() {
+                assert!(item.risky && item.allow_always.is_none(), "{tool}");
+            }
+        }
+        fs::remove_dir_all(home).unwrap();
+    }
     #[test]
     fn n1_question_keeps_its_words_through_redraws() {
         let (home, mut q) = queue("n1");
@@ -3984,6 +4243,26 @@ mod order_tests {
         assert_eq!(q.attention("s").completion_seq, 1);
         hook(&mut q, "Stop", json!({"turn_id": "t1"}), 101);
         assert_eq!(q.attention("s").completion_seq, 1, "counted once");
+        fs::remove_dir_all(home).unwrap();
+    }
+
+    /// Ticket 1054: a lead got "worker done" lines while its worker was mid-job: a subagent's Stop counted as the
+    /// worker's turn end.
+    #[test]
+    fn a_subagents_stop_is_no_turn_end() {
+        let (home, mut q) = queue("subagent-stop");
+        hook(&mut q, "UserPromptSubmit", json!({"turn_id": "t1"}), 100);
+        hook(&mut q, "Stop", json!({"agent_id": "sub-1"}), 101);
+        let a = q.attention("s");
+        assert!(a.working, "a subagent's Stop ended the turn");
+        assert_eq!(a.completion_seq, 0);
+        hook(
+            &mut q,
+            "Stop",
+            json!({"turn_id": "t1", "agent_id": ""}),
+            102,
+        );
+        assert_eq!(q.attention("s").completion_seq, 1, "the main Stop ends it");
         fs::remove_dir_all(home).unwrap();
     }
 

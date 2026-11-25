@@ -118,7 +118,7 @@ test('tree_worktree_row_menu_keeps_mockup_05_order', async ({ app, core }) => {
   await expect(row).toBeVisible();
   await row.click({ button: 'right' });
   await expect(menu(app)).toBeVisible();
-  expect(await commands(app)).toEqual(['worktree.open', 'session.new', 'worktree.rename', 'worktree.copy-path', 'worktree.reveal', 'worktree.open-editor', 'session.restart', 'session.close', 'diff.open', 'worktree.remove']); // A14: its session's items too; its idle shell has no Stop (4bf0a62d4)
+  expect(await commands(app)).toEqual(['worktree.open', 'session.new', 'worktree.rename', 'worktree.copy-path', 'worktree.reveal', 'worktree.open-editor', 'session.restart', 'session.close', 'session.settle', 'diff.open', 'worktree.remove']); // 1063: Move to done; A14: its session's items too; its idle shell has no Stop (4bf0a62d4)
 });
 
 // Look 1117 v7 (S2-2): "Create a new session…" on a worktree row opened the popover on the project's main checkout
@@ -333,9 +333,10 @@ test('finished_row_menu_offers_no_stop', async ({ app, core }) => {
   core.cli('session', 'send-text', s.id, 'exit\r');
   await expect.poll(() => (core.cli('snapshot', '--json').sessions as { id: string; state: string }[]).find((x) => x.id === s.id)?.state).toBe('exited');
   await openWindow(app);
-  const row = app.locator('[data-menu="worktree"]', { hasText: 'feature-x' }).first();
-  await expect(row).toBeVisible();
-  await row.click({ button: 'right' });
+  // Ticket 1063: the finished worktree row leaves the tree; its session's menu is now the one in the head's done popover.
+  await expect(app.locator('.row.wt2', { hasText: 'feature-x' })).toHaveCount(0);
+  await app.locator('.grp[data-project="lumen"] > .row.head button.dbar').click();
+  await app.locator(`[data-done-pop] [data-done-item="${s.id}"]`).click({ button: 'right' });
   await expect(menu(app)).toBeVisible();
   const ids = await commands(app);
   expect(ids).toContain('session.restart');

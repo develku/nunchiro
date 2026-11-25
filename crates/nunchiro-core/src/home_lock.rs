@@ -14,11 +14,8 @@ use std::path::Path;
 
 /// Settings > Assistants: the Home seat's mode (`Mode`'s names; absent or unreadable = Ask).
 pub(crate) const MODE_KEY: &str = "home.chief_mode";
-/// The claude.ai Gmail connector as the CLI names its tools (`mcp__claude_ai_Gmail__*`).
-pub const MAIL: &str = "claude_ai_Gmail";
-/// The claude.ai Google Calendar connector (not loaded by the CLI on 2026-11-20; its tool names are the connector's own,
-/// as Claude Desktop lists them).
-pub const CALENDAR: &str = "claude_ai_Google_Calendar";
+/// The two connectors (the Google Calendar one did not load in the CLI on 2026-11-20); one list with the outward hook's.
+pub use crate::outward::{CALENDAR, MAIL};
 /// The tools the seat may call as the mode allows. No draft tools: a draft is an Outbox card's own hashed copy.
 const READ_ALLOW: &[(&str, &str)] = &[
     (MAIL, "search_threads"),
@@ -563,6 +560,18 @@ mod tests {
         assert!(spend(&sock, "t", tool, &input).is_err(), "a second call");
         core.join().unwrap();
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Ticket 1130 S1: every tool the Outbox gates is one the outward list names, so every other session asks for it.
+    #[test]
+    fn t1130_gated_tools_are_outward() {
+        for (server, name) in GATED {
+            assert!(
+                crate::outward::kind(&format!("mcp__{server}__{name}"), &serde_json::Value::Null)
+                    .is_some(),
+                "{name}"
+            );
+        }
     }
 
     #[test]

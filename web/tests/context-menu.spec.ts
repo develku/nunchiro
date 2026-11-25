@@ -6,14 +6,14 @@ import path from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { MENU_ONLY, SURFACES } from '../src/menu/surfaces';
-import { expect, openWindow, test, agentsZone, showComposer, grantClipboard } from './fixtures';
+import { expect, openWindow, test, stripOnTop, showComposer, grantClipboard, openSessionFromPalette } from './fixtures';
 import { openQuiet } from './tree-seed';
 import { patchSnapshots } from './visual/compare';
 import { append, chat, expect as chatExpect, openChat, rec, test as chatTest } from './fixtures/chat/harness';
 import { setup as filesSetup, row as fileRow } from './fixtures/files/harness';
 import { hit, search, setup as searchSetup } from './fixtures/search/harness';
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: these specs read the AGENTS rows, which the default window no longer shows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const menu = (p: Page) => p.getByRole('menu', { name: 'Actions' });
 const items = (p: Page) => menu(p).getByRole('menuitem');
@@ -35,7 +35,7 @@ test('context_menu_items_map_to_palette_ids', async ({ app, core }) => {
 test('context_menu_height_contains_every_item', async ({ app, core }) => {
   const s = core.shell(core.project('demo'), 'alpha');
   await openWindow(app);
-  await app.locator(`.ar[data-agent="${s.id}"]`).click({ button: 'right' });
+  await app.locator(`button.row.wt2[data-menu-session="${s.id}"]`).click({ button: 'right' });
   await expect(menu(app)).toBeVisible();
   const bounds = (await menu(app).boundingBox())!;
   const rows = await items(app).evaluateAll((els) => els.map((el) => {
@@ -52,12 +52,12 @@ test('context_menu_height_contains_every_item', async ({ app, core }) => {
 test('context_menu_keyboard_only', async ({ app, core }) => {
   const s = core.shell(core.project('demo'), 'alpha');
   await openWindow(app);
-  const rowEl = app.locator(`.ar[data-agent="${s.id}"]`);
+  const rowEl = app.locator(`button.row.wt2[data-menu-session="${s.id}"]`);
   await rowEl.focus();
   await app.keyboard.press('Shift+F10');
   await expect(menu(app)).toBeVisible();
   // Look 1117 v5 (A): an idle shell has no turn to stop; it is ended by Close session.
-  expect(await names(app)).toEqual(['Create a new session…', 'Close session', 'Rename the session tab', 'Focus the terminal', 'Open Diff (changes since the session started)']);
+  expect(await names(app)).toEqual(['New session…', 'Restart session', 'Close session', 'Move to done', 'Rename session', 'Copy path', 'Open session in editor', 'Focus the terminal', 'Open Diff (changes since the session started)', 'Tidy worktrees…']);
   // The first item is current; arrows move; the menu key opens it the same way (below).
   await expect(menu(app)).toHaveAttribute('aria-activedescendant', /.+/);
   await app.keyboard.press('ArrowDown');
@@ -67,14 +67,13 @@ test('context_menu_keyboard_only', async ({ app, core }) => {
   await app.keyboard.press('Escape');
   await expect(menu(app)).toHaveCount(0);
   await expect(rowEl).toBeFocused();
-  // The menu key opens it too; Enter runs the item (rename opens the tab's name field).
+  // The menu key opens it too; Enter runs the item (rename opens the row's name field).
   await app.keyboard.press('ContextMenu');
   await expect(menu(app)).toBeVisible();
-  await app.keyboard.press('ArrowDown');
-  await app.keyboard.press('ArrowDown');
+  for (let i = 0; i < 4; i++) await app.keyboard.press('ArrowDown');
   await app.keyboard.press('Enter');
   await expect(menu(app)).toHaveCount(0);
-  await expect(app.locator('.tab input')).toBeVisible();
+  await expect(app.getByRole('textbox', { name: 'Session name' })).toBeVisible();
 });
 
 test('context_menu_runs_on_the_row_it_opened_from', async ({ app, core }) => {
@@ -83,18 +82,17 @@ test('context_menu_runs_on_the_row_it_opened_from', async ({ app, core }) => {
   const b = core.shell(p, 'beta');
   await openWindow(app);
   // beta is not the active tab: the item acts on beta, not on the active session.
-  await app.locator(`.ar[data-agent="${b.id}"]`).click({ button: 'right' });
-  await items(app).filter({ hasText: 'Rename the session tab' }).click();
-  await expect(app.locator(`.tab[data-tab="${b.id}"] input`)).toBeVisible();
+  await app.locator(`button.row.wt2[data-menu-session="${b.id}"]`).click({ button: 'right' });
+  await items(app).filter({ hasText: 'Rename session' }).click();
+  await expect(app.getByRole('textbox', { name: 'Session name' })).toBeVisible();
 });
 
 test('context_menu_shows_bindings', async ({ app, core }) => {
   const s = core.shell(core.project('demo'), 'alpha');
   await openWindow(app);
-  await app.locator(`.ar[data-agent="${s.id}"]`).click({ button: 'right' });
+  await app.locator(`button.row.wt2[data-menu-session="${s.id}"]`).click({ button: 'right' });
   const item = (t: string) => items(app).filter({ hasText: t });
-  await expect(item('Create a new session…').locator('.kbd')).toHaveText('⌘T');
-  await expect(item('Rename the session tab').locator('.kbd')).toHaveText('◆ ,');
+  await expect(item('New session…').locator('.kbd')).toHaveText('⌘T');
   await expect(item('Focus the terminal').locator('.kbd')).toHaveText('◆ o');
   // No binding, no key chip.
   await expect(item('Stop this session').locator('.kbd')).toHaveCount(0);
@@ -111,7 +109,7 @@ for (const into of ['terminal', 'composer'] as const) {
     const where = into === 'terminal' ? `.term[data-session="${a.id}"]` : '.cbox';
     await app.locator(into === 'terminal' ? `.term[data-session="${a.id}"] .xterm-helper-textarea` : '.cbox textarea').focus();
     expect(await activeInside(app, where)).toBe(true);
-    await app.locator(`.ar[data-agent="${b.id}"]`).click({ button: 'right' });
+    await app.locator(`.tab[data-tab="${b.id}"]`).click({ button: 'right' });
     await expect(menu(app)).toBeVisible();
     expect(await activeInside(app, where)).toBe(true);
     await app.keyboard.press('Escape');
@@ -136,19 +134,19 @@ test('terminal_and_text_field_right_click_unchanged', async ({ app, core }) => {
   await app.locator('.cbox textarea').click({ button: 'right' });
   await expect(menu(app)).toHaveCount(0);
   // Sanity: the same probe on a menu row is handled.
-  expect(await plain(`.ar[data-agent="${s.id}"]`)).toBe(true);
+  expect(await plain(`button.row.wt2[data-menu-session="${s.id}"]`)).toBe(true);
   // Ticket 991 A6: empty space (the tree below its rows, the page itself) never gets the web view's Reload / AutoFill menu.
   expect(await plain('.tree')).toBe(true);
   expect(await plain('body')).toBe(true);
   await expect(menu(app)).toHaveCount(0);
 });
 
-test('context_menu_every_surface: tree row, tab, AGENTS row', async ({ app, core }) => {
+test('context_menu_every_surface: project head, tab, session row', async ({ app, core }) => {
   const s = core.shell(core.project('demo'), 'alpha');
   openQuiet(core); // V2-9a: quiet projects start folded
   await openWindow(app);
   // Ticket 1032: the tree's first head is the Assistants group's (no menu), so the project's head is named.
-  for (const sel of ['.tree .grp[data-project] .row.head .n', `.tab[data-tab="${s.id}"]`, `.ar[data-agent="${s.id}"]`]) {
+  for (const sel of ['.tree .grp[data-project] .row.head .n', `.tab[data-tab="${s.id}"]`, `button.row.wt2[data-menu-session="${s.id}"]`]) {
     await app.locator(sel).first().click({ button: 'right' });
     await expect(menu(app), sel).toBeVisible();
     expect((await names(app)).length, sel).toBeGreaterThan(0);
@@ -201,11 +199,11 @@ test('context_menu_enabled_follows_the_row_not_the_active_tab', async ({ app, co
   await app.locator(`.tab[data-tab="${s.id}"]`).hover(); // the tab's close button shows on hover
   await app.locator(`.tab[data-tab="${s.id}"] ~ .x`).click(); // v25f: Settings is a modal, not a tab; with the only tab closed no session is current
   await expect(app.locator('.tab[data-tab]')).toHaveCount(0);
-  await app.locator(`.ar[data-agent="${s.id}"]`).click({ button: 'right' });
-  const rename = items(app).filter({ hasText: 'Rename the session tab' });
+  await app.locator(`button.row.wt2[data-menu-session="${s.id}"]`).click({ button: 'right' });
+  const rename = items(app).filter({ hasText: 'Rename session' });
   await expect(rename).not.toHaveAttribute('aria-disabled', 'true');
   await rename.click();
-  await expect(app.locator(`.tab[data-tab="${s.id}"] input`)).toBeVisible();
+  await expect(app.getByRole('textbox', { name: 'Session name' })).toBeVisible();
 });
 
 // V2-6a follow-up: an item disabled for the row's session runs nothing and does not activate that session. Since look 1117
@@ -216,11 +214,7 @@ test('stopped_row_item_is_disabled_without_activating', async ({ app, core }) =>
   const gone = core.shell(p, 'gone', '/bin/sh', '-c', 'exit 0');
   await openWindow(app);
   await expect.poll(() => (core.cli('snapshot', '--json').sessions as { id: string; state: string }[]).find((s) => s.id === gone.id)?.state).not.toBe('running');
-  await app.locator(`.ar[data-agent="${gone.id}"]`).click({ button: 'right' });
-  await expect(menu(app)).toBeVisible();
-  await expect(items(app).filter({ hasText: 'Stop this session' })).toHaveCount(0); // the decided rule: nothing runs there to stop
-  await app.keyboard.press('Escape');
-  await app.locator(`.ar[data-agent="${gone.id}"]`).click(); // opens its tab: the stopped session is the active one
+  await openSessionFromPalette(app, gone.id); // the stopped session is the active one
   const selected = app.locator('.tab[aria-selected="true"]');
   await expect(selected).toHaveAttribute('data-tab', gone.id);
   await app.locator(`.tab[data-tab="${gone.id}"]`).click({ button: 'right' });
@@ -269,12 +263,12 @@ chatTest('chat_row_context_menu_by_keyboard', async ({ page, chatCore }) => {
 test('context_menu_keeps_the_focus_ring_of_its_rows', async ({ app, core }) => {
   const s = core.shell(core.project('demo'), 'alpha');
   await openWindow(app);
-  await app.locator(`.ar[data-agent="${s.id}"]`).focus();
+  await app.locator(`button.row.wt2[data-menu-session="${s.id}"]`).focus();
   await app.keyboard.press('Shift+F10'); // a keyboard-driven focus comes back to the row on Esc: :focus-visible applies
   await app.keyboard.press('Escape');
-  await expect(app.locator(`.ar[data-agent="${s.id}"]`)).toBeFocused();
-  const outline = await app.locator(`.ar[data-agent="${s.id}"]`).evaluate((e) => getComputedStyle(e).outlineStyle);
-  expect(outline).not.toBe('none');
+  await expect(app.locator(`button.row.wt2[data-menu-session="${s.id}"]`)).toBeFocused();
+  const ring = await app.locator(`button.row.wt2[data-menu-session="${s.id}"]`).evaluate((e) => getComputedStyle(e).outlineStyle !== 'none' || getComputedStyle(e).boxShadow !== 'none');
+  expect(ring).toBe(true);
 });
 
 /** Serious or critical axe violations inside the open menu. */
@@ -294,7 +288,7 @@ test('context_menu_axe_clean: tree row, tab', async ({ app, core }) => {
     await app.keyboard.press('Escape');
   }
   // Keyboard-opened (focus inside the menu, aria-activedescendant set).
-  await app.locator(`.ar[data-agent="${s.id}"]`).focus();
+  await app.locator(`button.row.wt2[data-menu-session="${s.id}"]`).focus();
   await app.keyboard.press('Shift+F10');
   await expect(menu(app)).toBeVisible(); // axe on a not-yet-mounted menu reports a clean empty result
   expect(await axeBad(app)).toEqual([]);
@@ -435,14 +429,14 @@ test('menu_stop_follows_the_row_target', async ({ app, core }) => {
   await openWindow(app);
   await expect.poll(() => (core.cli('snapshot', '--json').sessions as { id: string; state: string }[]).find((s) => s.id === gone.id)?.state).not.toBe('running');
   const stop = items(app).filter({ hasText: 'Stop this session' });
-  await app.locator(`.ar[data-agent="${gone.id}"]`).click(); // opens the stopped session's tab: it is the active one, the live row must still be stoppable
-  await app.locator(`.ar[data-agent="${live.id}"]`).click({ button: 'right' });
+  await openSessionFromPalette(app, gone.id); // the stopped session is the active one, the live row must still be stoppable
+  await app.locator(`button.row.wt2[data-menu-session="${live.id}"]`).click({ button: 'right' });
   await expect(stop).not.toHaveAttribute('aria-disabled', 'true');
   await app.keyboard.press('Escape');
   await app.locator(`.tab[data-tab="${live.id}"]`).click();
-  await app.locator(`.ar[data-agent="${gone.id}"]`).click({ button: 'right' });
+  await app.locator(`.tab[data-tab="${gone.id}"]`).click({ button: 'right' });
   await expect(menu(app)).toBeVisible();
-  await expect(stop).toHaveCount(0); // the active session can stop, the ended row's menu still offers no Stop
+  await expect(stop).toHaveCount(0); // the active session can stop, the ended session's menu still offers no Stop
 });
 
 test('menu_danger_on_any_surface', async ({ app }) => {

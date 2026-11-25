@@ -39,7 +39,7 @@ test('resume_bar_dismiss: no resume bar after a core restart or a reload, so not
 // The ticket 290 New tab rows (session.new.terminal, .claude, .codex, tab.new.browser) are titled "New <thing> ..." on purpose, as the popover rows are.
 const VERB_EN = /^(Create|Go|Move|Close|Rename|Stop|Open|Copy|New|Reopen) /;
 const SAY_EN: Record<string, string> = {
-  'session.new': 'Create a new session…',
+  'session.new': 'New session…',
   'session.next': 'Go to the next tab',
   'session.prev': 'Go to the previous tab',
   'session.last': 'Go back to the last tab (toggle)',
@@ -83,7 +83,9 @@ test('keymap_labels_say_the_verb: session and tab rows say create, go to or move
   const ko = await titles();
   for (const [id, title] of Object.entries(SAY_KO)) expect(ko[id], id).toBe(title);
   // No session or tab row is left in English; ticket 473 translated the per-session "Go to <name> (<project>)" rows too.
-  for (const [id, title] of Object.entries(ko)) expect(title, id).toMatch(/[가-힣]/);
+  // owner 11-21 (ticket 1035): a new string is English only until the one pass before the release; these rows wait for it.
+  const ENGLISH_UNTIL_1035 = ['session.new.worktree']; // ticket 1130 B-L1, src/i18n/areas/first-use-1123.ts (en only)
+  for (const [id, title] of Object.entries(ko)) expect(title, id).toMatch(ENGLISH_UNTIL_1035.includes(id) ? new RegExp(`^${en[id]}$`) : /[가-힣]/);
 });
 
 test('settings_view_scrolls_to_end: with a sized composer zone, Settings fills its modal and its longest page scrolls to its last row', async ({ app, core }) => {

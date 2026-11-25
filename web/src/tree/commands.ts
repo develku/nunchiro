@@ -10,16 +10,17 @@ import { enT, type ProjectTree, type T } from './state';
 
 // The menu offers a surface's commands in the palette's order: the order here is the menu's order.
 Object.assign(SURFACES, {
-  // Ticket 990: 'lead.add' (Add a leader…) is listed only while the project has no lead (LeaderDialog.leaderCommands).
-  project: [...SURFACES.tree, 'worktree.create', 'lead.add', ...FILING, 'group.remove', ...FOLDER, 'project.remove'],
+  // Ticket 990: 'lead.add' (Add a leader…) is listed only while the project has no lead (LeaderDialog.leaderCommands);
+  // ticket 1096: 'lead.fresh' (New Lead conversation) only while it has one.
+  project: [...SURFACES.tree, 'worktree.create', 'lead.add', 'lead.fresh', ...FILING, 'group.remove', ...FOLDER, 'project.remove'],
   // An ungrouped project's row has nothing to remove it from: the menu does not offer it (it cannot show an item disabled).
-  'project-loose': [...SURFACES.tree, 'worktree.create', 'lead.add', ...FILING, ...FOLDER, 'project.remove'],
+  'project-loose': [...SURFACES.tree, 'worktree.create', 'lead.add', 'lead.fresh', ...FILING, ...FOLDER, 'project.remove'],
   // 370: Remove was never checked against another machine's sessions, so those heads do not offer it.
   'project-remote': [...SURFACES.tree, 'worktree.create', ...FILING, 'group.remove', ...FOLDER],
   'project-remote-loose': [...SURFACES.tree, 'worktree.create', ...FILING, ...FOLDER],
   // 370: a project with no session. session.* and worktree.create would act on the active session's project, so they are not here.
-  'project-empty': ['lead.add', ...FILING, 'group.remove', ...FOLDER],
-  'project-empty-loose': ['lead.add', ...FILING, ...FOLDER],
+  'project-empty': ['lead.add', 'lead.fresh', ...FILING, 'group.remove', ...FOLDER],
+  'project-empty-loose': ['lead.add', 'lead.fresh', ...FILING, ...FOLDER],
   group: ['group.rename', 'group.dissolve'],
 });
 

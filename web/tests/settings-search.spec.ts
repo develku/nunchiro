@@ -7,7 +7,7 @@ import { SMALL_ROWS_FIELDS } from '../src/features/small-rows-values';
 const DIFF_OPTION_KEYS = ['diffHideWhitespace', 'diffWrap', 'diffCollapse', 'diffHideList', 'diffColours']; // ticket 261, pinned by name for the same reason
 // v25-fix-settings: 9 pages; the kept ids alerts and keys show as Notifications and Keyboard.
 // needs 192 (ticket 250): the final draft's pages; ticket 391 moved Advanced and Orchestration into Skills & hooks.
-const TITLES: Record<string, string> = { general: 'General', providers: 'Providers', alerts: 'Notifications', keys: 'Keyboard', git: 'Git & worktrees', extensions: 'Skills & hooks', machines: 'SSH machines', browser: 'Browser access', libraries: 'Artifact libraries', history: 'Terminal history' };
+const TITLES: Record<string, string> = { general: 'General', providers: 'Providers', alerts: 'Notifications', keys: 'Keyboard', git: 'Git & worktrees', extensions: 'Skills & hooks', machines: 'SSH machines', browser: 'Phone and web access', libraries: 'Artifact libraries', history: 'Terminal history' };
 const title = (page: string) => TITLES[page] ?? page;
 
 import { expect, openWindow, test } from './fixtures';
@@ -15,6 +15,18 @@ import { expect, openWindow, test } from './fixtures';
 // Ticket 259: the Setup scripts section registers its own fields (features/setup-scripts.tsx), outside FIELDS here.
 const SETUP_KEYS = ['setupScript', 'cleanupScript', 'setupPolicy', 'setupWait'];
 import { harness } from './theme-harness';
+
+// Ticket 1049: the remote-access page is found by what it does and by its old name.
+test('settings_search_phone_and_web_access_1049: "phone", "remote" and "browser access" find Allow phone and web access', async ({ app, core }) => {
+  core.shell(core.project('demo'), 'alpha');
+  await openWindow(app);
+  await app.getByRole('navigation', { name: 'Left bar' }).getByRole('button', { name: 'Settings' }).click();
+  const box = app.getByRole('searchbox', { name: 'Search settings' });
+  for (const q of ['phone', 'remote', 'browser access']) {
+    await box.fill(q);
+    await expect(app.getByRole('list', { name: 'Matching settings' }).getByRole('button', { name: /Allow phone and web access/ }), q).toBeVisible();
+  }
+});
 
 test('settings-search-and-palette: "font" finds the Appearance fields; the palette opens every setting on its field', async ({ app, core }) => {
   core.shell(core.project('demo'), 'alpha');

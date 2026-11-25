@@ -1,7 +1,7 @@
 //! CHAT-USAGE: read only the selected conversation's last 256 KiB; never return transcript text.
 use crate::{
     accounts,
-    api::{AgentKind, Reply, Response},
+    api::{AgentKind, Breakdown, BreakdownRow, Reply, Response},
     sessions::Sessions,
     usage,
 };
@@ -37,19 +37,26 @@ pub(crate) struct Target {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Context {
     used: u64,
-    window: u64,
+    /// None: a Claude model outside `claude_window`'s table; the status line's window may still name it (ticket 1048).
+    window: Option<u64>,
 }
 /// The model the transcript last named and the effort that same request ran at (ticket 994), when it names one.
 type Seen = (String, Option<String>);
 /// B15 (ticket 991): the context fill when known, and the model the transcript last named either way.
-fn reply_of(value: Option<Context>, seen: Option<Seen>) -> Reply {
+/// Ticket 1048: `told` is the window Claude Code's status line reported for this session; it wins over the table.
+fn reply_of(value: Option<Context>, seen: Option<Seen>, told: Option<u64>) -> Reply {
     let (model, effort) = seen.map_or((None, None), |(m, e)| (Some(m), e));
+    let value = value.and_then(|c| {
+        let window = told.or(c.window)?;
+        (window > 0 && c.used <= window).then_some((c.used, window))
+    });
     match (value, model) {
-        (Some(c), model) => Reply::SessionContext {
-            used: c.used,
-            window: c.window,
+        (Some((used, window)), model) => Reply::SessionContext {
+            used,
+            window,
             model,
             effort,
+            breakdown: None,
         },
         (None, Some(model)) => Reply::SessionModel { model, effort },
         (None, None) => Reply::Unknown,
@@ -63,6 +70,7 @@ struct Cached {
     stamp: (u64, i64, i64, u64, u64),
     value: Option<Context>,
     model: Option<Seen>,
+    breakdown: Option<Breakdown>,
 }
 struct Miss {
     search: PathBuf,
@@ -75,6 +83,8 @@ struct Cache {
     miss: Option<Miss>,
     /// The model of the file the last `read` reached; cleared at each read's start.
     model: Option<Seen>,
+    /// Ticket 1059: the /context table of that same file, as `model`.
+    breakdown: Option<Breakdown>,
     entries: Vec<Cached>,
     #[cfg(test)]
     reads: Vec<(PathBuf, usize)>,
@@ -91,12 +101,43 @@ struct Reader {
     cache: Arc<Mutex<Cache>>,
 }
 static CACHE: Mutex<Vec<Reader>> = Mutex::new(Vec::new());
+/// Ticket 1048: `context_window.context_window_size` of each Claude session's last status line, by Nunchiro session id.
+/// In memory only: after a core restart the next status line (each assistant message sends one) fills it again.
+static TOLD: Mutex<Vec<(String, u64)>> = Mutex::new(Vec::new());
+const MAX_TOLD: usize = 512;
 
-pub(crate) fn reply(home: &Path, registry: &Mutex<Sessions>, id: &str) -> Response {
-    let target = registry
+/// Ticket 1048: keeps the window the status line reports; a payload without a positive size changes nothing.
+pub(crate) fn observe(id: &str, context_window: &Value) {
+    let Some(size) = context_window["context_window_size"]
+        .as_u64()
+        .filter(|s| *s > 0)
+    else {
+        return;
+    };
+    let Ok(mut told) = TOLD.lock() else {
+        return;
+    };
+    told.retain(|(k, _)| k != id);
+    told.push((id.to_string(), size));
+    if told.len() > MAX_TOLD {
+        told.remove(0);
+    }
+}
+fn told(id: &str) -> Option<u64> {
+    let told = TOLD.lock().ok()?;
+    told.iter().find(|(k, _)| k == id).map(|(_, s)| *s)
+}
+
+pub(crate) fn reply(home: &Path, registry: &Mutex<Sessions>, id: &str, refresh: bool) -> Response {
+    let mut sessions = registry
         .lock()
-        .map_err(|_| "session registry unavailable")?
-        .context_target(id);
+        .map_err(|_| "session registry unavailable")?;
+    // Ticket 1059: queued only; Claude writes its answer later, so this reply still carries the previous table.
+    if refresh {
+        sessions.context_send(id)?;
+    }
+    let target = sessions.context_target(id);
+    drop(sessions);
     let observed = target
         .as_ref()
         .filter(|t| t.kind == AgentKind::Codex)
@@ -132,10 +173,20 @@ pub(crate) fn reply(home: &Path, registry: &Mutex<Sessions>, id: &str) -> Respon
     // Look 11-17 B15: a Codex whose sessions folder is a link (the owner's) still names its model, from the file its
     // observer already reads.
     let value = match value {
-        Some((c, Some(m))) => Some((c, Some(m))),
-        _ => observed.and_then(|path| codex_tail(&path)).or(value),
+        Some((c, Some(m), b)) => Some((c, Some(m), b)),
+        _ => observed
+            .and_then(|path| codex_tail(&path))
+            .map(|(c, m)| (c, m, None))
+            .or(value),
     };
-    Ok(value.map_or(Reply::Unknown, |(c, m)| reply_of(c, m)))
+    let told = told(id);
+    Ok(value.map_or(Reply::Unknown, |(c, m, b)| {
+        let mut reply = reply_of(c, m, told);
+        if let Reply::SessionContext { breakdown, .. } = &mut reply {
+            *breakdown = b;
+        }
+        reply
+    }))
 }
 /// The context and model the last `TAIL` bytes of a Codex rollout name; a cut first line is skipped. The file itself is
 /// never a link and never a FIFO or device (it would block or point elsewhere); its folders may be links, as the
@@ -163,7 +214,7 @@ fn read_cached(
     id: &str,
     codex: bool,
     project: &str,
-) -> Option<(Option<Context>, Option<Seen>)> {
+) -> Option<(Option<Context>, Option<Seen>, Option<Breakdown>)> {
     if !uuid(id) {
         return None;
     }
@@ -192,7 +243,7 @@ fn read_cached(
     // Only this conversation waits for its disk I/O; the global cache lock covers lookup alone.
     let mut reader = reader.lock().ok()?;
     let value = reader.read(folder, id, codex, project);
-    Some((value, reader.model.take()))
+    Some((value, reader.model.take(), reader.breakdown.take()))
 }
 
 #[cfg(test)]
@@ -215,6 +266,7 @@ fn uuid(id: &str) -> bool {
 impl Cache {
     fn read(&mut self, folder: &Path, id: &str, codex: bool, project: &str) -> Option<Context> {
         self.model = None;
+        self.breakdown = None;
         if !uuid(id) {
             return None;
         }
@@ -325,6 +377,7 @@ impl Cache {
             && self.entries[i].stamp == stamp
         {
             self.model = self.entries[i].model.clone();
+            self.breakdown = self.entries[i].breakdown.clone();
             return self.entries[i].value;
         }
         // Canonical confinement is checked as well as descriptor-relative no-link traversal.
@@ -370,6 +423,8 @@ impl Cache {
         let value = parse(tail, codex);
         let model = model(tail, codex);
         self.model = model.clone();
+        let breakdown = if codex { None } else { breakdown(tail) };
+        self.breakdown = breakdown.clone();
         if let Some(i) = prior {
             self.entries.remove(i);
         }
@@ -384,6 +439,7 @@ impl Cache {
             stamp,
             value,
             model,
+            breakdown,
         });
         value
     }
@@ -434,7 +490,7 @@ fn parse(bytes: &[u8], codex: bool) -> Option<Context> {
             // Codex tui/token_usage.rs: last_token_usage is active context; total_token_usage is cumulative.
             (
                 info["last_token_usage"]["total_tokens"].as_u64()?,
-                info["model_context_window"].as_u64()?,
+                Some(info["model_context_window"].as_u64()?),
             )
         } else {
             if v["type"] != "assistant"
@@ -460,9 +516,10 @@ fn parse(bytes: &[u8], codex: bool) -> Option<Context> {
                         .get("cache_creation_input_tokens")
                         .map_or(Some(0), Value::as_u64)?,
                 )?;
-            (used, claude_window(message["model"].as_str()?)?)
+            (used, claude_window(message["model"].as_str()?))
         };
-        return (window > 0 && used <= window).then_some(Context { used, window });
+        // The window check is in `reply_of`, where the status line's window can replace the table's.
+        return Some(Context { used, window });
     }
     None
 }
@@ -494,6 +551,115 @@ fn model(bytes: &[u8], codex: bool) -> Option<Seen> {
         .then(|| (m.to_string(), effort.map(str::to_string)))
     })
 }
+/// Ticket 1059: Claude's own record of a /context answer (`isMeta` user text); the chat and the turn tracker skip it too.
+pub(crate) fn context_usage(v: &Value) -> Option<&str> {
+    (v["type"] == "user" && v["isMeta"] == true)
+        .then(|| v["message"]["content"].as_str())??
+        .strip_prefix("## Context Usage")
+}
+/// Ticket 1059: the newest /context table in the tail. A /clear, /new or /compact after it, or a compaction, drops it:
+/// that table no longer describes the conversation.
+// shortcut: a table older than the 256 KiB tail is not seen; press Show breakdown again (a long turn can push it out).
+fn breakdown(bytes: &[u8]) -> Option<Breakdown> {
+    let reset = |text: &str| {
+        ["/clear", "/new", "/compact"].iter().any(|c| {
+            text.trim_start()
+                .starts_with(&format!("<command-name>{c}</command-name>"))
+        })
+    };
+    for line in bytes.split(|&b| b == b'\n').rev() {
+        let Ok(v) = serde_json::from_slice::<Value>(line) else {
+            continue;
+        };
+        // Claude 2.1.329 wrote a command line as user text; today's Claude writes a system `local_command` record.
+        if v["subtype"] == "compact_boundary"
+            || [&v["content"], &v["message"]["content"]]
+                .iter()
+                .any(|t| t.as_str().is_some_and(reset))
+        {
+            return None;
+        }
+        let Some(text) = context_usage(&v) else {
+            continue;
+        };
+        let Some(at) = v["timestamp"]
+            .as_str()
+            .and_then(crate::usage::epoch)
+            .and_then(|s| u64::try_from(s).ok())
+        else {
+            continue;
+        };
+        let at = at * 1000;
+        return Some(Breakdown {
+            at,
+            rows: rows(text),
+        });
+    }
+    None
+}
+/// The "Estimated usage by category" table only; the MCP, memory and skills tables after it are not read. A row whose
+/// numbers do not read (the header, the `|---|` line) is skipped; any label is kept as Claude wrote it.
+fn rows(text: &str) -> Vec<BreakdownRow> {
+    let Some((_, table)) = text.split_once("### Estimated usage by category") else {
+        return vec![];
+    };
+    table
+        .lines()
+        .map(str::trim)
+        .skip_while(|l| !l.starts_with('|'))
+        .take_while(|l| l.starts_with('|'))
+        .filter_map(|l| {
+            let cells: Vec<&str> = l.trim_matches('|').split('|').map(str::trim).collect();
+            let [label, tokens, pct] = cells[..] else {
+                return None;
+            };
+            let pct: f64 = pct.strip_suffix('%')?.parse().ok()?;
+            Some(BreakdownRow {
+                label: label.chars().take(64).collect(),
+                tokens: tokens_of(tokens)?,
+                pct: pct.is_finite().then_some(pct)?,
+            })
+        })
+        .take(32)
+        .collect()
+}
+/// "4.5k" = 4500, "1m" = 1000000, "812" = 812, as /context writes its counts.
+fn tokens_of(text: &str) -> Option<u64> {
+    let (number, unit) = match text.as_bytes().last()? {
+        b'k' | b'K' => (&text[..text.len() - 1], 1e3),
+        b'm' | b'M' => (&text[..text.len() - 1], 1e6),
+        _ => (text, 1.0),
+    };
+    let n: f64 = number.replace(',', "").parse().ok()?;
+    (n.is_finite() && n >= 0.0).then(|| (n * unit).round() as u64)
+}
+/// Ticket 1059: /context goes only into a live local Claude at rest: a working turn would take it as queued input, a
+/// question would take its Enter as an answer, and words already in the box would be sent with it.
+pub(crate) fn may_refresh(
+    claude: bool,
+    working: bool,
+    asking: bool,
+    typed: bool,
+) -> Result<(), String> {
+    let why = if !claude {
+        "the breakdown is read from a local Claude session only"
+    } else if asking {
+        "a question is waiting for an answer"
+    } else if working {
+        "the agent is working"
+    } else if typed {
+        "words are typed in the terminal input"
+    } else {
+        return Ok(());
+    };
+    Err(format!("context breakdown not sent: {why}"))
+}
+/// Ticket 1059: the /context record as a real Claude wrote it on 2026-11-23 (the table, then a section not read).
+#[cfg(test)]
+pub(crate) fn context_record() -> Value {
+    let table = "## Context Usage\n\n**Model:** claude-fable-5-2  \n**Tokens:** 255.7k / 1m (26%)\n\n### Estimated usage by category\n\n| Category | Tokens | Percentage |\n|----------|--------|------------|\n| System prompt | 4.5k | 0.4% |\n| System tools | 3.4k | 0.3% |\n| MCP server instructions | 1.1k | 0.1% |\n| Memory files | 4.3k | 0.4% |\n| Skills | 10k | 1.0% |\n| Messages | 232.5k | 23.2% |\n| Free space | 711.3k | 71.1% |\n| Autocompact buffer | 33k | 3.3% |\n\n### MCP Tools\n\n| Tool | Server | Tokens |\n|------|--------|--------|\n| mcp__x__y | x | 1.2k |\n";
+    serde_json::json!({"type":"user","isMeta":true,"timestamp":"2026-11-23T02:22:39.372Z","message":{"role":"user","content":table}})
+}
 fn claude_window(model: &str) -> Option<u64> {
     // Owner-approved CHAT-USAGE table (needs 66/121); standard 200k windows:
     // https://platform.claude.com/docs/en/build-with-claude/context-windows
@@ -513,6 +679,7 @@ fn claude_window(model: &str) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use std::sync::atomic::{AtomicUsize, Ordering};
     const ID: &str = "00000000-0000-4000-8000-000000000001";
     /// Look 11-17 B15: a rollout the observer reads names its model (the reply's fallback for a linked folder).
@@ -750,7 +917,7 @@ mod tests {
             cache.read(&p, ID, false, "p"),
             Some(Context {
                 used: 124000,
-                window: 200000
+                window: Some(200000)
             })
         );
         assert_eq!(cache.reads, vec![(path.clone(), 262_144)]);
@@ -767,7 +934,7 @@ mod tests {
             cache.read(&p, ID, false, "p"),
             Some(Context {
                 used: 1,
-                window: 200000
+                window: Some(200000)
             })
         );
         cache.reads.clear();
@@ -777,7 +944,7 @@ mod tests {
             cache.read(&p, ID, false, "p"),
             Some(Context {
                 used: 1,
-                window: 200000
+                window: Some(200000)
             })
         );
         assert_eq!(cache.stats, 1);
@@ -788,7 +955,7 @@ mod tests {
             cache.read(&p, ID, false, "p"),
             Some(Context {
                 used: 12000,
-                window: 200000
+                window: Some(200000)
             })
         );
         assert_eq!(cache.reads.len(), 1);
@@ -846,6 +1013,53 @@ mod tests {
         assert!(cache.opens.is_empty());
         fs::remove_dir_all(p).unwrap();
     }
+    /// Ticket 1048: a 1M session (a model outside the table) answers with the window its status line reported; with no
+    /// status line it still answers no number, never a guessed window.
+    #[test]
+    fn t1048_status_line_window_wins_and_no_guess() {
+        let fill = Some(Context {
+            used: 359_900,
+            window: None,
+        });
+        let seen = || Some(("claude-fable-5-2".to_string(), None));
+        let id = "t1048-session";
+        assert_eq!(told(id), None);
+        observe(
+            id,
+            &serde_json::json!({"context_window_size": 1_000_000, "used_percentage": 36}),
+        );
+        assert_eq!(told(id), Some(1_000_000));
+        // A status line without a size (before the first response) keeps what was told.
+        observe(id, &Value::Null);
+        observe(id, &serde_json::json!({"context_window_size": null}));
+        assert_eq!(told(id), Some(1_000_000));
+        assert!(matches!(
+            reply_of(fill, seen(), told(id)),
+            Reply::SessionContext {
+                used: 359_900,
+                window: 1_000_000,
+                ..
+            }
+        ));
+        // The status line wins over the table, too.
+        let table = Some(Context {
+            used: 250_000,
+            window: Some(200_000),
+        });
+        assert!(matches!(
+            reply_of(table, None, told(id)),
+            Reply::SessionContext {
+                window: 1_000_000,
+                ..
+            }
+        ));
+        assert!(matches!(
+            reply_of(fill, seen(), None),
+            Reply::SessionModel { .. }
+        ));
+        assert!(matches!(reply_of(fill, None, None), Reply::Unknown));
+        assert_eq!(told("t1048-other"), None);
+    }
     #[test]
     fn usage_counts_input_and_cache_partial_line_and_bad_store() {
         let p = root();
@@ -858,16 +1072,23 @@ mod tests {
             Cache::default().read(&p, ID, false, "p"),
             Some(Context {
                 used: 124000,
-                window: 200000
+                window: Some(200000)
             })
         );
+        // Ticket 1048: a fill above its window is read, then refused where the status line's window can replace it.
         let excessive = line(250000);
+        for over in [
+            excessive.as_bytes(),
+            br#"{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"total_tokens":20},"model_context_window":10}}}"#,
+        ] {
+            fs::write(&path, over).unwrap();
+            let read = Cache::default().read(&p, ID, false, "p");
+            assert!(matches!(reply_of(read, None, None), Reply::Unknown));
+        }
         for bad in [
             b"{broken".as_slice(),
             b"[]",
             br#"{"type":"assistant","message":{"model":"claude-sonnet-4-20250514","usage":{"input_tokens":"12"}}}"#,
-            br#"{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"total_tokens":20},"model_context_window":10}}}"#,
-            excessive.as_bytes(),
         ] {
             fs::write(&path, bad).unwrap();
             let before = fs::read(&path).unwrap();
@@ -875,5 +1096,109 @@ mod tests {
             assert_eq!(fs::read(&path).unwrap(), before);
         }
         fs::remove_dir_all(p).unwrap();
+    }
+    /// Ticket 1059: the fixture's table reads to its 8 rows; the MCP section after it is not read.
+    #[test]
+    fn t1059_context_table_reads_eight_rows() {
+        let record = context_record();
+        let got = breakdown(format!("{record}\n").as_bytes()).unwrap();
+        assert_eq!(got.at, 1795400559000);
+        let rows: Vec<(&str, u64, f64)> = got
+            .rows
+            .iter()
+            .map(|r| (r.label.as_str(), r.tokens, r.pct))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                ("System prompt", 4_500, 0.4),
+                ("System tools", 3_400, 0.3),
+                ("MCP server instructions", 1_100, 0.1),
+                ("Memory files", 4_300, 0.4),
+                ("Skills", 10_000, 1.0),
+                ("Messages", 232_500, 23.2),
+                ("Free space", 711_300, 71.1),
+                ("Autocompact buffer", 33_000, 3.3),
+            ]
+        );
+        assert_eq!(tokens_of("1m"), Some(1_000_000));
+        assert_eq!(tokens_of("711.3k"), Some(711_300));
+        assert_eq!(tokens_of("812"), Some(812));
+        assert_eq!(tokens_of("k"), None);
+    }
+    /// Ticket 1059: a /context record without its table is the could-not-read state (no rows), not an error.
+    #[test]
+    fn t1059_record_without_table_reads_no_rows() {
+        let mut record = context_record();
+        record["message"]["content"] = "## Context Usage\n\n**Tokens:** 1k / 1m (0%)\n".into();
+        let got = breakdown(format!("{record}\n").as_bytes()).unwrap();
+        assert!(got.rows.is_empty());
+        // Without any /context record there is no breakdown at all.
+        assert_eq!(breakdown(line(1).as_bytes()), None);
+    }
+    /// Ticket 1059: after /clear, /new, /compact (either record form) or a compaction the cached table is dropped.
+    #[test]
+    fn t1059_breakdown_dropped_after_clear() {
+        let record = context_record();
+        let later = [
+            json!({"type":"system","subtype":"local_command","content":"<command-name>/clear</command-name>\n<command-message>clear</command-message>"}),
+            json!({"type":"user","message":{"role":"user","content":"<command-name>/new</command-name>"}}),
+            json!({"type":"system","subtype":"local_command","content":"<command-name>/compact</command-name>"}),
+            json!({"type":"system","subtype":"compact_boundary"}),
+        ];
+        for after in later {
+            assert_eq!(
+                breakdown(format!("{record}\n{after}\n").as_bytes()),
+                None,
+                "{after}"
+            );
+        }
+        // Another command (or a turn) after it keeps it.
+        let other = json!({"type":"system","subtype":"local_command","content":"<command-name>/context</command-name>"});
+        assert!(breakdown(format!("{record}\n{other}\n{}", line(5)).as_bytes()).is_some());
+        // Through the reader's cache: the same file read again after /clear answers no breakdown.
+        let p = root();
+        let path = p.join(format!("projects/p/{ID}.jsonl"));
+        fs::write(&path, format!("{}{record}\n", line(1))).unwrap();
+        let caches = Mutex::default();
+        assert!(
+            read_cached(&caches, &p, ID, false, "p")
+                .unwrap()
+                .2
+                .is_some()
+        );
+        fs::write(&path, format!("{}{record}\n{}\n", line(1), later_clear())).unwrap();
+        assert!(
+            read_cached(&caches, &p, ID, false, "p")
+                .unwrap()
+                .2
+                .is_none()
+        );
+        fs::remove_dir_all(p).unwrap();
+    }
+    fn later_clear() -> Value {
+        json!({"type":"system","subtype":"local_command","content":"<command-name>/clear</command-name>"})
+    }
+    /// Ticket 1059: /context goes in only for a local Claude at rest.
+    #[test]
+    fn t1059_refresh_refused_unless_idle_claude() {
+        assert_eq!(may_refresh(true, false, false, false), Ok(()));
+        let why = |r: Result<(), String>| r.unwrap_err();
+        assert_eq!(
+            why(may_refresh(false, false, false, false)),
+            "context breakdown not sent: the breakdown is read from a local Claude session only"
+        );
+        assert_eq!(
+            why(may_refresh(true, true, false, false)),
+            "context breakdown not sent: the agent is working"
+        );
+        assert_eq!(
+            why(may_refresh(true, true, true, false)),
+            "context breakdown not sent: a question is waiting for an answer"
+        );
+        assert_eq!(
+            why(may_refresh(true, false, false, true)),
+            "context breakdown not sent: words are typed in the terminal input"
+        );
     }
 }

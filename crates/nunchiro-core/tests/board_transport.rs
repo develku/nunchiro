@@ -244,6 +244,8 @@ fn board_observer_resets_stale_context_without_changing_legacy_replies() {
         );
         bad["seen"].as_object_mut().unwrap().remove("s");
         bad["held"].as_object_mut().unwrap().remove("s");
+        // Ticket 1066: without the stale hold the exited session shows in Done, stamped at its last activity.
+        bad["done_at"] = json!({"s":100});
         let repaired: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         assert_eq!(
             repaired, bad,

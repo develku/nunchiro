@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { agentsZone, expect, openWindow, REPO, test } from './fixtures';
+import { stripOnTop, expect, openWindow, REPO, test } from './fixtures';
 
 type W = { __calls: [string, Record<string, unknown>][]; __cb: Record<number, (e: unknown) => void>; __on: Record<string, number[]>; __TAURI_INTERNALS__: unknown };
 const fakeApp = (page: Page) =>
@@ -34,7 +34,7 @@ const moved = (page: Page, space: string, url: string) =>
     [space, url],
   );
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const nav = (app: Page) => app.locator('.settings > nav');
 const openPage = async (app: Page) => {
@@ -56,7 +56,7 @@ test('inapp_browser_page_in_interface_group_with_fixed_section_ids', async ({ ap
   const group = await nav(app).locator('[data-group="interface"] button[data-page]').evaluateAll((els) => els.map((e) => e.getAttribute('data-page')));
   expect(group).toEqual(['appearance', 'terminal', 'layout', 'alerts', 'keys', 'inapp-browser']);
   await expect(nav(app).locator('button[data-page="inapp-browser"]')).toHaveAttribute('aria-current', 'page');
-  // Its nav icon is the browser glyph (the Browser access page's), not the gear a registered page gets by default.
+  // Its nav icon is the browser glyph (the Phone and web access page's), not the gear a registered page gets by default.
   const icon = (id: string) => nav(app).locator(`button[data-page="${id}"] svg`).evaluate((e) => e.innerHTML);
   expect(await icon('inapp-browser')).toBe(await icon('browser'));
   expect(await icon('inapp-browser')).not.toBe(await icon('general'));
@@ -170,7 +170,7 @@ test('media_rows_default_off_and_store_each_change', async ({ app, core }) => {
   await openPage(app);
   const body = app.locator('.sbody');
   await expect(body.locator('[data-row="browserSites"]')).toContainText('No sites yet');
-  await expect(body.locator('[data-row="browserSites"]')).toContainText('When off, the site is refused without a question. When on, Nunchiro still asks you each time.');
+  await expect(body.locator('[data-row="browserSites"]')).toContainText('When off, the site is refused without a question. When on, Nunchiro does not refuse, but macOS (WebKit) still asks you once per page');
   expect('browser.site_permissions' in features(core.home)).toBe(false);
   // One site, added once: both kinds on.
   await body.getByLabel('Site', { exact: true }).fill('https://call.example/room');

@@ -56,10 +56,11 @@ test('followup_queue_default: Enter while working waits in the list, the steer c
   expect(reads(core, s.id)).toEqual([]);
   await ta.fill('now please');
   await ta.press('Control+Enter');
-  // Look 11-17 N0 (607438fc2): Claude back at its box after the Esc ends the turn, so the steered text goes in at once,
-  // then the waiting row: one Esc first, each text once, in that order.
-  await expect.poll(() => written(core, s.id), { timeout: 15_000 }).toEqual(['1b', 'now please', 'wait for it']);
-  await expect(rows).toHaveCount(0);
+  // Ticket 1056 (rule 5): the steered text goes into Claude's running turn with no Esc; the waiting row goes when the turn
+  // ends. Each text once, in that order. A sent row may stay marked as sent: the fake writes no transcript.
+  await expect.poll(() => written(core, s.id), { timeout: 15_000 }).toEqual(['now please']);
+  hook(core, s.id, 'Stop');
+  await expect.poll(() => written(core, s.id), { timeout: 15_000 }).toEqual(['now please', 'wait for it']);
 });
 
 test('followup_steer: Enter while working sends now, the steer chord queues; an idle Enter sends at once', async ({ app, core }) => {
@@ -76,15 +77,16 @@ test('followup_steer: Enter while working sends now, the steer chord queues; an 
   await ta.fill('now please');
   await ta.press('Enter');
   await expect(ta).toHaveValue('');
-  // Look 11-17 N0 (607438fc2): the Esc ends the turn once Claude is back at its box: the steered text, then the queued row.
-  await expect.poll(() => written(core, s.id), { timeout: 15_000 }).toEqual(['1b', 'now please', 'wait for it']);
-  // Idle again, Enter sends at once with no Stop byte.
+  // Ticket 1056 (rule 5): the steered text goes into Claude's running turn with no Esc; the queued row when the turn ends.
+  await expect.poll(() => written(core, s.id), { timeout: 15_000 }).toEqual(['now please']);
   hook(core, s.id, 'Stop');
+  await expect.poll(() => written(core, s.id), { timeout: 15_000 }).toEqual(['now please', 'wait for it']);
+  // Idle again, Enter sends at once with no Stop byte.
   await expect(app.locator('.composer .send')).toHaveAccessibleName('Send');
   await ta.fill('idle send');
   await ta.press('Enter');
   await expect.poll(() => reads(core, s.id).filter((r) => r.includes(hex('idle send'))).length, { timeout: 15_000 }).toBe(1);
-  expect(reads(core, s.id).filter((r) => r === '1b')).toHaveLength(1);
+  expect(reads(core, s.id).filter((r) => r === '1b')).toHaveLength(0);
 });
 
 test('followup_row_on_keyboard_page: the row stores Steer, says what the other key does, and resets to Queue', async ({ app, core }) => {

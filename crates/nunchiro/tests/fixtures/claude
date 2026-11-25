@@ -15,7 +15,7 @@ args = sys.argv[1:]
 print('LAUNCH:' + json.dumps(args), flush=True)
 print('CWD:' + os.getcwd(), flush=True)
 settings = json.load(open(args[args.index('--settings') + 1])) if '--settings' in args else {}
-if 'hooks' in settings:  # v1b-07: with hook injection off the settings file carries only the artifact rule
+if 'SessionStart' in settings.get('hooks', {}):  # ticket 1130 S1: the outward hook alone is PreToolUse. v1b-07: with hook injection off the settings file carries only the artifact rule
     command = settings['hooks']['SessionStart'][0]['hooks'][0]['command']
     flag = '--resume' if '--resume' in args else '--session-id'
     subprocess.run(command, shell=True, input=json.dumps({'session_id': args[args.index(flag)+1]}).encode(), check=True)

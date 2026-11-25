@@ -1,0 +1,27 @@
+schema_version: "1.1"
+name: task-artifact
+description: >-
+  Scorecard p31 SK3 (b): publish an artifact. An eval run has no artifact folder and no file-writing grant, so the
+  skill's way is the fenced `nunchiro-artifact html` block that Nunchiro saves and shows.
+tags: [task]
+runs: 1
+execution:
+  prompt: "Make a small HTML page titled Fruit prices with a three-row table of fruits and their prices, and publish it so I can see it in Nunchiro."
+  append_system_prompt: "You are running inside a Nunchiro session: NUNCHIRO_SESSION is set."
+  allowed_tools: [Skill, Read, Glob, Grep]
+  max_turns: 8
+  timeout_seconds: 180
+graders:
+  - name: published
+    type: regex
+    target: last_message
+    pattern: '```nunchiro-artifact html'
+  - name: titled
+    type: regex
+    target: last_message
+    pattern: '<title>[^<]*Fruit prices'
+    flags: i
+  - name: skill-loaded
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?artifacts"'

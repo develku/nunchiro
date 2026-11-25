@@ -3,10 +3,10 @@
 // fake never makes a folder (unlike 494's), and its login waits like a real one. The agent is a fake, never a login.
 import fs from 'node:fs';
 import path from 'node:path';
-import { agentsZone, expect, openWindow, test, type Core } from './fixtures';
+import { stripOnTop, expect, openWindow, test, type Core } from './fixtures';
 import { openSettings } from './settings-modal';
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 // Signed out; the login stays open (as a real one waits for its code); any other run idles as `cat`. No mkdir anywhere.
 const CLAUDE = `#!/bin/sh

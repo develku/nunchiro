@@ -13,6 +13,36 @@
   background: var(--page);
   --focus-ring: var(--ring-focus);
 }
+/* Ticket 1047: auto-hide. The bar leaves the row (the content takes its width) and floats over the content's edge; it slides in
+   at the window edge or while focus is inside. No visibility:hidden, so Tab still reaches an icon and focus brings the bar back. */
+.body:has(> .ib[data-auto]) {
+  position: relative;
+  overflow-x: clip; /* the right bar waits just outside the window: focus must not scroll to it; popovers may still grow down */
+}
+.ib[data-auto] {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 45;
+  box-shadow: var(--shadow-float);
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+.ib.l[data-auto] {
+  left: 0;
+  transform: translateX(-100%);
+}
+.ib.r[data-auto] {
+  right: 0;
+  transform: translateX(100%);
+}
+.ib[data-auto][data-reveal='true'] {
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ib[data-auto] {
+    transition: none;
+  }
+}
 /* v25-fix-layout: the tree's `.slot` rule (styles.css, a waiting-slot row) shares the class name; a bar slot resets it. */
 .ib .slot,
 .ib .slotmore {
@@ -42,6 +72,7 @@
 }
 .ib .ai,
 .ib .sidebtn,
+.ib .autobtn,
 .ib .more {
   position: relative;
   flex: none;
@@ -64,6 +95,7 @@
 }
 .ib .ai:hover,
 .ib .sidebtn:hover,
+.ib .autobtn:hover,
 .ib .more:hover {
   background: var(--tint-1);
   color: var(--text);
@@ -165,6 +197,19 @@
   height: 32px;
   margin: 0 0 var(--sp-4);
 }
+/* Ticket 1093: the auto-hide toggle sits at the left bar's foot, right above the foot slot (Settings). */
+.ib .autobtn {
+  width: 32px;
+  height: 32px;
+  margin: auto 0 var(--sp-4);
+}
+.ib .autobtn + .slot[data-slot='9'] {
+  margin-top: 0;
+}
+.ib .autobtn[aria-pressed='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+}
 /* A short window: the slots it cuts off are behind ⋯, which counts them. */
 .ib .more {
   font-size: var(--fs-15);
@@ -190,10 +235,10 @@
   border-radius: var(--r-12);
 }
 .ib.l .pop {
-  left: 40px;
+  left: calc(var(--barw, 48px) - 8px);
 }
 .ib.r .pop {
-  right: 40px;
+  right: calc(var(--barw, 48px) - 8px);
 }
 .ib .pop .hd {
   padding: 3px 8px;
@@ -212,6 +257,66 @@
 }
 .ib .pop button:hover {
   background: var(--hover);
+}
+
+/* Ticket 1052 (ticket 283's steps, back): a bar wider than the 48 px default (`--barw`, set only then) shows a label under each
+   icon: the first letter, then the name cut with an ellipsis, then the whole name. The buttons fill the bar but for a 4 px
+   gutter each side; the same tint, hover and focus as the icons-only bar. The tooltip keeps the full name at every step. */
+.ib[data-compact] .slot,
+.ib[data-compact] .slotmore {
+  width: calc(var(--barw) - var(--sp-8));
+  height: 44px;
+}
+.ib[data-compact] .slot .aiw,
+.ib[data-compact] .slot .ai,
+.ib[data-compact] .more {
+  width: 100%;
+  height: 44px;
+}
+.ib[data-compact] .ai {
+  place-content: center;
+  gap: var(--sp-2);
+}
+.ib[data-compact] .ai .al {
+  max-width: calc(var(--barw) - var(--sp-8) - var(--sp-4));
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--fs-11); /* the theme floor: no text under 11px */
+  line-height: 1.1;
+}
+.ib[data-compact='letter'] .ai .al {
+  font-weight: 600;
+}
+/* The edge to widen the bars: a 6 px hit zone from the bar's inner side into the bar, so none of it lies over the sidebar
+   (the tree's chevron box starts at that side). */
+.ib > .bdiv {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 5;
+  touch-action: none;
+}
+.ib > .bdiv[data-side='left'] {
+  right: 0;
+}
+.ib > .bdiv[data-side='right'] {
+  left: 0;
+}
+.ib > .bdiv:hover,
+.ib > .bdiv:focus-visible {
+  background: linear-gradient(to left, var(--ring-focus) 3px, transparent 3px);
+  outline: none;
+}
+.ib > .bdiv[data-side='right']:hover,
+.ib > .bdiv[data-side='right']:focus-visible {
+  background: linear-gradient(to right, var(--ring-focus) 3px, transparent 3px);
+}
+/* Ticket 1052 with auto-hide (1047): a hidden bar's edge is out of reach; it comes back with the bar. */
+.ib[data-auto]:not([data-reveal='true']) > .bdiv {
+  display: none;
 }
 
 /* Sidebar inner edge (the owner finding 23): an 8 px hit zone from the border, col-resize cursor, a line on hover or focus.

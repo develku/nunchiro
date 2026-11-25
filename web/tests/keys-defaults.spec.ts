@@ -50,8 +50,12 @@ const CHANGED: Record<string, string[]> = {
   'bars.toggle': ['Shift+Meta+Backslash'],
   'files.show': ['Shift+Meta+KeyE', 'prefix KeyX'],
   'search.open': ['Shift+Meta+KeyF', 'prefix KeyS'],
+  'search.sessions': ['Alt+Meta+KeyF'], // ticket 1130 C3
+  'pane.shell.new': ['Control+Backquote'], // ticket 1130 C4
   'chat.cycleView': ['Control+KeyO'],
-  'keys.help': ['prefix Shift+Slash', 'Meta+Slash'],
+  'keys.help': ['prefix Shift+Slash'],
+  'keys.sheet': ['Meta+Slash'], // ticket 1099: ⌘/ is the whole sheet (mockup cohesion-1099 panel 5)
+  'session.side-chat': ['prefix KeyA'], // ticket 1099: the side chat had only its header button
   'tab.rename': ['prefix Comma', 'F2'],
   'pane.focus.left': ['Alt+Meta+ArrowLeft'],
   'pane.focus.right': ['Alt+Meta+ArrowRight'],
@@ -65,9 +69,9 @@ const CHANGED: Record<string, string[]> = {
 const KEPT: Record<string, string[]> = {
   prefix: ['Control+Period', 'Control+Space'],
   'settings.open': ['Meta+Comma'],
-  'font.bigger': ['Meta+Equal', 'Shift+Meta+Equal'],
-  'font.smaller': ['Meta+Minus'],
-  'font.reset': ['Meta+Digit0'],
+  'zoom.in': ['Meta+Equal', 'Shift+Meta+Equal'], // ticket 1071: were font.* (v1a-39)
+  'zoom.out': ['Meta+Minus'],
+  'zoom.reset': ['Meta+Digit0'],
   'hints.show': ['prefix KeyF'],
   'hints.copy': ['prefix KeyY'],
   'terminal.find': ['Meta+KeyF'],
@@ -98,6 +102,7 @@ const KEPT: Record<string, string[]> = {
   'preview.toggle': ['prefix KeyQ'],
   'projects.pick': ['prefix KeyJ'],
   'files.quickOpen': ['Meta+KeyP'], // ticket 821
+  'session.new.worktree': ['Shift+Meta+KeyN'], // ticket 1130 C2
 };
 
 test('default_keymap_table: DEFAULT_BINDINGS is the brief’s table for the changed ids, the old value for the rest, every id has an area', () => {
@@ -110,9 +115,10 @@ test('default_keymap_table: DEFAULT_BINDINGS is the brief’s table for the chan
 // Bare chords (no Meta) a default may hold. ⌃⇧` is the editors' new terminal (ticket 299): allowed for that command id alone.
 const BARE = new Set(['Control+Enter', 'Control+KeyO', 'F2']);
 // Ticket 570 (owner, 2026-11-13): ⌃1-9 show the tree's projects, as ⌘ digits stay the shown project's tabs.
-const BARE_FOR = new Map([['Control+Shift+Backquote', 'session.new.terminal'], ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`Control+Digit${n}`, `project.jump.${n}`] as const)]);
-// Alt+Meta+KeyB: the owner's right-sidebar key (v25f F13), the one Alt+Meta chord outside pane focus.
-const PANE = new Set(['Alt+Meta+ArrowLeft', 'Alt+Meta+ArrowRight', 'Alt+Meta+ArrowUp', 'Alt+Meta+ArrowDown', 'Alt+Meta+KeyB']);
+// Ticket 1130 C4: ⌃` is the shell beside the agent (Claude Desktop's terminal key); in a PTY it would only send NUL.
+const BARE_FOR = new Map([['Control+Shift+Backquote', 'session.new.terminal'], ['Control+Backquote', 'pane.shell.new'], ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`Control+Digit${n}`, `project.jump.${n}`] as const)]);
+// Alt+Meta+KeyB: the owner's right-sidebar key (v25f F13); Alt+Meta+KeyF: Search sessions beside ⇧⌘F (ticket 1130 C3).
+const PANE = new Set(['Alt+Meta+ArrowLeft', 'Alt+Meta+ArrowRight', 'Alt+Meta+ArrowUp', 'Alt+Meta+ArrowDown', 'Alt+Meta+KeyB', 'Alt+Meta+KeyF']);
 /** What breaks the "no bare default" rule in `bindings`, as `id chord` lines. */
 const bareViolations = (bindings: Record<string, string[]>) => {
   const bad: string[] = [];
@@ -420,7 +426,7 @@ test('tooltips_follow_first_binding: Files (⇧⌘E), Search (⇧⌘F), New sess
   await app.locator('.ai[data-hint-icon="search.open"]').hover();
   await expect(tip).toHaveText('Search');
   await app.locator('.tab[data-tab]').first().click({ button: 'right' });
-  await expect(app.getByRole('menu', { name: 'Actions' }).getByRole('menuitem', { name: /Create a new session…/ }).locator('.kbd')).toHaveText('⌘T');
+  await expect(app.getByRole('menu', { name: 'Actions' }).getByRole('menuitem', { name: /New session…/ }).locator('.kbd')).toHaveText('⌘T');
 });
 
 test('path_reveal_refuses_a_relative_path: Reveal in Finder takes an absolute path only', async ({ app, core }) => {

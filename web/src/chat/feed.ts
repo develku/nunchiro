@@ -7,7 +7,7 @@ import type { ArtifactData } from '../artifacts/host'; // v1b-06
 import type { PrChipData } from './PrChip'; // v2-8b
 
 export type Data =
-  | { kind: 'message'; role: 'user' | 'assistant'; text: string }
+  | { kind: 'message'; role: 'user' | 'assistant'; text: string; note?: boolean }
   | { kind: 'image'; role: 'user' | 'assistant'; source: { type: string; media_type?: string; url?: string; path?: string } }
   | { kind: 'thinking'; text: string }
   | { kind: 'tool_use'; tool_id: string; name: string; input: unknown }
@@ -27,6 +27,7 @@ export type Data =
   | { kind: 'skipped'; count: number }
   | { kind: 'version_banner'; agent: string; version: string }
   | { kind: 'final_text'; turn_id: string; text: string }
+  | { kind: 'shell'; command?: string; output?: string } // ticket 1087: a "!" command the person ran (core chat/mod.rs shell_command)
   | ArtifactData; // v1b-06
 
 export interface ChatEvent {

@@ -5,6 +5,7 @@ import type { CoreClient } from '../../api';
 import { ErrorLine, rawError } from '../../errors';
 import type { Key } from '../../i18n';
 import { DEFAULTS, type NewSplit, type Settings } from '../../settings';
+import { toggleBarsAuto } from '../../layout/bars';
 import { PageSummary } from '../shell/PageActions';
 import { RadioCards, Reset, Row, Sec, Switch } from '../shell/Row';
 
@@ -39,6 +40,15 @@ export function LayoutPage({ t, core, settings, update }: { t: T; core: CoreClie
               ariaLabels={Object.fromEntries(CHOICES.map(([v, title]) => [v, t(title === 'settings.layout.chooser' ? 'settings.layout.chooserName' : title)]))}
             />
           }
+        />
+      </Sec>
+      <Sec label={t('shell.chrome.barsAutohide')}>
+        {/* Ticket 1047: the Dock-style bars; the setting lives with the arrangement (bars.barsAuto), so each layout keeps its own. */}
+        <Row
+          label={t('shell.chrome.barsAutohide')}
+          desc={t('shell.chrome.barsAutohideDesc')}
+          reset={<Reset t={t} label={t('shell.chrome.barsAutohide')} show={settings.bars.barsAuto === true} run={() => update({ bars: toggleBarsAuto(settings.bars) })} />}
+          control={<Switch setting="barsAutohide" label={t('shell.chrome.barsAutohide')} checked={settings.bars.barsAuto === true} onChange={() => update({ bars: toggleBarsAuto(settings.bars) })} />}
         />
       </Sec>
       <Sec id="h-widgets" title={t('settings.section.widgets')}>

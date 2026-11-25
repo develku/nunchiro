@@ -26,10 +26,16 @@ libc = "0.2"
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls"] }
 # Already in the tree through tauri: the sleep between update checks.
 tokio = { version = "1", features = ["time"] }
+# Ticket 1107: the stored version floor, compared as the updater plugin compares versions (the plugin's own crate).
+semver = "1"
 
 # v1a-67: Tauri's mock runtime for the font commands' IPC test (a feature of the same crate, no new crate).
 [dev-dependencies]
 tauri = { version = "2", features = ["tray-icon", "unstable", "test"] }
+# Ticket 1107: the feed tests make their own minisign key (Ed25519) and encode it as tauri does; both are already in
+# the tree (rustls's ring, the updater's base64).
+ring = "0.17"
+base64 = "0.23"
 
 # v1a-38: NSSound plays the allowlisted macOS system sounds (both crates are already in the tree through tauri).
 [target.'cfg(target_os = "macos")'.dependencies]

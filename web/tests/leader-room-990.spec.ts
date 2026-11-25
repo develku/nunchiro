@@ -89,12 +89,13 @@ test('lead_header_team_chip (990 c5, owner 11-17): a lead\'s seat wears a Lead t
   // Day one (mockup J ①): no task yet, so the Tasks part is the way card: what to do, the way of working, the user's roles.
   const card = team.locator('[data-way-card]');
   await expect(card).toContainText('Tell Main what you want. It creates a task, assigns your roles to it and asks you before a merge.');
-  await expect(card.getByRole('button', { name: 'build + review' })).toBeVisible();
+  await expect(card.locator('[data-way-line]')).toContainText('Reviewers check each task automatically');
   await expect(card.locator('.way-roles li')).toHaveText([/^BBuilderBuild the task in its worktree.*Claude$/, /^RReviewer.*$/]);
-  // The way is the user's to set: the menu sends it to the core and the card shows the stored value.
-  await card.getByRole('button', { name: 'build + review' }).click();
-  await card.getByRole('menuitemradio', { name: /^build \+ review \+ security/ }).click();
-  await expect(card.getByRole('button', { name: 'build + review + security' })).toBeVisible();
+  // The way is the user's to set (ticket 1099: in Settings > Team, from the card's Change); the card shows the stored value.
+  await card.getByRole('button', { name: 'Change' }).click();
+  await app.locator('.settings .place-sec').getByRole('radio', { name: 'Strict' }).click();
+  await app.keyboard.press('Escape');
+  await expect(card.locator('[data-way-line]')).toContainText('Reviewers and a security review check each task');
   expect(owner(core, { op: 'task', operation: 'list', project }).Ok.place).toEqual({ way: 'strict', seats: 'ask' });
   made(core, await tokenOf(core, seat), project, 'ssh-retry');
   await expect(chip).toHaveAccessibleName('1 task');

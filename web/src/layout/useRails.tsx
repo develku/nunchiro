@@ -8,12 +8,12 @@ import { add as addSplit } from '../split/store';
 import { forgetView } from '../board/views';
 import type { Key, T } from '../i18n';
 import { measureDom, type DragSource, type Landing } from './DragLayer';
-import { drop as dropOnBar, freeSlot, icons as barIcons, maxWidth, PSEUDO, refuses, SIDEBAR_MIN, SIDEBAR_STEP, SIDEBAR_W, slotOf, where, withTree, without, WIDGET_LABEL, type Bars, type Side } from './bars';
+import { BAR_W, compactOf, drop as dropOnBar, freeSlot, HISTORY, icons as barIcons, maxWidth, PSEUDO, refuses, SIDEBAR_MIN, SIDEBAR_STEP, SIDEBAR_W, slotOf, toggleBarsAuto, where, withTree, without, WIDGET_LABEL, type Bars, type Side } from './bars';
 import { IconBar, type IconInfo } from './IconBar';
 import { Sidebar } from './Sidebars';
 import { useArrange } from './useArrange';
 import { DOCKS, useFold } from './fold';
-import { apply, find, isLeaf, kindOf, leaves, TITLE, type Dir, type Kind, type Layout, type Node, type Op } from './model';
+import { apply, find, kindOf, leaves, TITLE, type Dir, type Kind, type Layout, type Node, type Op } from './model';
 import { renderWidget, type WindowCtx } from './windows';
 import { useNest } from './nest';
 import { count, LayoutStore } from './store';
@@ -93,11 +93,9 @@ type Deps = {
 /** v1a-60: side panels fold to their icon bar while the main zone is under MAIN_MIN_COLS columns; a panel's icon and
  *  command show a folded one again. */
 export function useRailFold({ layout, editing, settings, active, bars }: FoldDeps) {
-  // ☰ folds the zones that hold only AGENTS. Not a Tree zone (needs 157 (2)): no bar icon could show it again.
-  const side = (n: Node): boolean => (isLeaf(n) ? n.widgets.every((w) => kindOf(w) === 'agents') : n.children.every(side));
   // v1a-60: side panels fold to their icon bar while the main zone is under MAIN_MIN_COLS columns (view state).
   const bodyRef = useRef<HTMLDivElement>(null);
-  const fold = useFold(bodyRef, layout, editing, { size: settings.termFontSize, family: settings.termFont }, active, (n) => side(n) || hasBoard(n));
+  const fold = useFold(bodyRef, layout, editing, { size: settings.termFontSize, family: settings.termFont }, active, hasBoard);
   /** The folded node that `has` picks out, or undefined. */
   const foldedNode = (has: (n: Node) => boolean) =>
     fold.folded.find((k) => {
@@ -105,7 +103,6 @@ export function useRailFold({ layout, editing, settings, active, bars }: FoldDep
       return !!n && has(n);
     });
   const foldKey = {
-    projects: foldedNode(side),
     board: foldedNode(hasBoard),
     left: fold.folded.find((k) => k === DOCKS.left),
     right: fold.folded.find((k) => k === DOCKS.right),
@@ -169,7 +166,7 @@ export function useRails({ store, layout, editing, bars, layoutSeen, setSettings
   const [browserTab] = useBrowserTab(); // ticket 997 L1
   const schedSide = !schedAt.tab && !!schedAt.open && !editing;
   useEffect(() => onOpenSchedules(() => (schedAt.tab ? showSchedTab() : putSched({ open: true }))), [schedAt.tab, putSched]);
-  // Ticket 1022: the History widget, the same way (its icon after Schedules').
+  // Ticket 1022: the History widget, the same way. Ticket 1073: its icon is placed on a bar (bars.ts HISTORY), not added here.
   const [histAt, putHist] = useHistAt();
   const histSide = !histAt.tab && !!histAt.open && !editing;
   useEffect(() => onOpenHistory(() => (histAt.tab ? showHistTab() : putHist({ open: true }))), [histAt.tab, putHist]);
@@ -187,7 +184,7 @@ export function useRails({ store, layout, editing, bars, layoutSeen, setSettings
     for (const k of on) if (k !== keep) ({ team: putTeam, sched: putSched, hist: putHist })[k]({ open: false });
   }, [teamSide, schedSide, histSide]); // eslint-disable-line react-hooks/exhaustive-deps
   const rightSlots = (() => {
-    const add = [...(teamIcon ? ['team'] : []), ...(editing ? [] : ['schedules', 'history'])];
+    const add = [...(teamIcon ? ['team'] : []), ...(editing ? [] : ['schedules'])];
     return bars.right.map((w, i) => (w === null && i < bars.right.length - 1 && add.length ? add.shift()! : w));
   })();
   // needs 157 (2): the Tree is in one place, on a bar or in a zone. A tree zone wins over the bar icon (a move, never a
@@ -355,11 +352,11 @@ export function useRails({ store, layout, editing, bars, layoutSeen, setSettings
     if (key && !(sd === 'right' && overSide)) return fold.unfold(key); // an over view (Team, Schedules, History) shows: Hide hides
     setSettings((st) => {
       const was = lastOpen.current[sd];
-      const next = st.bars.active[sd] ? null : was && st.bars[sd].includes(was) ? was : (barIcons(st.bars, sd).find((w) => kindOf(w) !== 'board' && !PSEUDO.includes(w)) ?? null);
+      const next = st.bars.active[sd] ? null : was && st.bars[sd].includes(was) ? was : (barIcons(st.bars, sd).find((w) => kindOf(w) !== 'board' && !PSEUDO.includes(w) && w !== HISTORY) ?? null);
       return { ...st, bars: { ...st.bars, active: { ...st.bars.active, [sd]: next } } };
     });
   };
-  // v25-shell-chrome (ticket 283): the Sidebar widths live in the arrangement (`Bars.sidebarW`), so
+  // v25-shell-chrome (ticket 283): the Sidebar widths and (ticket 1052) the Icon bar width live in the arrangement (`Bars.sidebarW`, `barW`), so
   // every layout keeps its own; changing them is not an arrangement step (no undo trail, no dirty mark). Ticket 997 L2 (rule A7):
   // each widget its own (`Bars.widgetW`); the side's older `sidebarW` is the width of a widget not resized since.
   /** The widget a side's sidebar shows (the order `sidebar` draws them in), or null. */
@@ -385,6 +382,12 @@ export function useRails({ store, layout, editing, bars, layoutSeen, setSettings
   /** The palette's Sidebars wider / narrower: the widget shown on each side one step. */
   const stepSidebarW = (dir: 1 | -1) =>
     setSettings((st) => ({ ...st, bars: (['left', 'right'] as Side[]).reduce((b, sd) => withWidth(b, sd, sidebarW(sd, st.bars) + dir * SIDEBAR_STEP), st.bars) }));
+  /** The default width is stored as absent, so a bar dragged back to it is today's bar again. */
+  const setBarW = (w: number | null) =>
+    setSettings((st) => {
+      const { barW: _old, ...rest } = st.bars;
+      return { ...st, bars: w === null || w <= BAR_W ? rest : { ...rest, barW: w } };
+    });
   /** A drag under the minimum closes the side; it reopens at the width it had before the drag. */
   const closeSide = (sd: Side, restore: number) =>
     setSettings((st) => ({ ...st, bars: { ...withWidth(st.bars, sd, restore), active: { ...st.bars.active, [sd]: null } } }));
@@ -454,7 +457,7 @@ export function useRails({ store, layout, editing, bars, layoutSeen, setSettings
     if (sd === 'right' && histSide)
       return (
         <Sidebar side={sd} widget="history" width={sidebarW(sd)} other={otherW(sd)} onWidth={setSidebarW(sd)} onClose={(restore) => (setSidebarW(sd)(restore), putHist({ open: false }))} t={t}>
-          <HistoryView core={core} t={t} sessions={sessions} open={open} where="side" settled={windowCtx().wt?.settled} places={windowCtx().wt?.list} />
+          <HistoryView core={core} t={t} sessions={sessions} open={open} where="side" settled={windowCtx().wt?.settled} places={windowCtx().wt?.list} projects={windowCtx().projects} />
         </Sidebar>
       );
     // Ticket 288: the user's own Browser takes the side of its icon until closed (or another widget opens there).
@@ -468,7 +471,7 @@ export function useRails({ store, layout, editing, bars, layoutSeen, setSettings
     if (!w || !bars[sd].includes(w)) return null;
     return (
       <Sidebar side={sd} widget={w} width={sidebarW(sd)} other={otherW(sd)} onWidth={setSidebarW(sd)} onClose={(restore) => closeSide(sd, restore)} t={t}>
-        {renderWidget(w, true, windowCtx(), sd)}
+        {renderWidget(w, true, windowCtx(), sd, () => closeSide(sd, sidebarW(sd)))}
       </Sidebar>
     );
   };
@@ -478,7 +481,7 @@ export function useRails({ store, layout, editing, bars, layoutSeen, setSettings
     if (w === 'settings') return { pressed: overlay === 'settings', folded: false, tip: WIDGET_LABEL('settings') };
     if (w === 'team') return { pressed: teamSide, folded: false, tip: t('lead.team.open'), injected: true, count: teamNeeds, countSay: t('lead.tasks.needs', { n: teamNeeds }) };
     if (w === 'schedules') return { pressed: schedSide, folded: false, tip: WIDGET_LABEL(w), injected: true, failed: schedFailed ? t('schedule.iconFailed') : undefined };
-    if (w === 'history') return { pressed: histSide, folded: false, tip: WIDGET_LABEL(w), injected: true };
+    if (w === 'history') return { pressed: histSide, folded: false, tip: WIDGET_LABEL(w) };
     return { pressed: pressed(w), folded: !!foldOf(w), tip: barTip(w), waiting: waiting(w) };
   };
   const iconBar = (sd: Side) => (
@@ -487,11 +490,17 @@ export function useRails({ store, layout, editing, bars, layoutSeen, setSettings
       slots={sd === 'right' ? rightSlots : bars[sd]}
       info={iconInfo}
       editing={editing}
+      auto={bars.barsAuto === true && !editing /* ticket 1047: Layout edit needs the bars in place */}
       dragging={drag && 'bar' in drag ? drag.widget : null}
       onClick={iconClick}
       onRemove={removeIcon}
       onGrab={(w) => grab({ widget: w, bar: sd })({ button: 0, preventDefault: () => {} })}
       onKey={iconKey}
+      width={bars.barW ?? BAR_W}
+      compact={compactOf(bars.barW ?? BAR_W)}
+      onWidth={setBarW}
+      onAutoHide={sd === 'left' ? () => setSettings((st) => ({ ...st, bars: toggleBarsAuto(st.bars) })) : undefined /* ticket 1093: the Settings switch's setting */}
+      autoOn={bars.barsAuto === true}
       sideOpen={(!!bars.active[sd] && !foldedSide(sd)) || (sd === 'right' && overSide)}
       t={t}
       onToggleSide={() => toggleSide(sd)}

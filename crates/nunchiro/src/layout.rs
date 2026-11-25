@@ -55,7 +55,7 @@ nunchiro layout move <zone> split <dir>|stack|edge <dir> [--zone ZONE] [--tab N]
 nunchiro layout remove <widget> | remove --zone ZONE [--tab N]
 nunchiro layout pin <session> [--zone ZONE] [--tab N] | unpin [--zone ZONE] [--tab N]
 nunchiro layout resize <zone> <px> | reset | undo
-Widgets: tree, agents, waiting, terminal, composer, diff, files, board, search, preview, artifacts, decisions, room. Needs an open Nunchiro window; layout.toml is in NUNCHIRO_HOME."
+Widgets: tree, waiting, terminal, composer, diff, files, board, search, preview, artifacts, decisions, room, context. Needs an open Nunchiro window; layout.toml is in NUNCHIRO_HOME."
         );
     }
 }

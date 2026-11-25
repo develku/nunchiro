@@ -21,6 +21,12 @@ declare module '../index' {
     "composer.hintStop": true;
     "composer.steerNow": true;
     "composer.steerNowTitle": true;
+    // Ticket 1056: Send now for Claude, and a row it took into its turn (English only until ticket 1035).
+    "composer.steerNowTitleClaude": true;
+    "composer.queue.sentWaiting": true;
+    // Ticket 1087: the composer's shell look (English only until ticket 1035).
+    "composer.shell": true;
+    "composer.shellHint": true;
     "composer.steerNoInterrupt": true;
     "composer.queue.head": true;
     "composer.queue.note": true;
@@ -35,6 +41,7 @@ declare module '../index' {
     "composer.queue.notSent": true;
     "composer.waitsHint": true;
     "composer.toCard": true;
+    "composer.answersCard": true;
     "composer.queue.notSaved": true;
     "composer.agentEnded": true;
     "composer.backgroundSend": true;
@@ -52,6 +59,7 @@ declare module '../index' {
     "composer.hint.folder": true;
     "composer.hint.modified": true;
     "composer.hint.new": true;
+    "composer.imageN": true;
     "composer.cmd.claude.add-dir": true;
     "composer.cmd.claude.agents": true;
     "composer.cmd.claude.btw": true;
@@ -68,6 +76,7 @@ declare module '../index' {
     "composer.cmd.claude.mcp": true;
     "composer.cmd.claude.memory": true;
     "composer.cmd.claude.model": true;
+    "composer.cmd.claude.new": true;
     "composer.cmd.claude.permissions": true;
     "composer.cmd.claude.resume": true;
     "composer.cmd.claude.review": true;
@@ -86,6 +95,17 @@ declare module '../index' {
     "composer.cmd.codex.review": true;
     "composer.cmd.codex.status": true;
     "composer.cmd.codex.undo": true;
+    // Ticket 1130 B-L4 (C6): the offer row for a pasted `claude mcp add` line (English only until ticket 1035).
+    "composer.mcp.offer": true;
+    "composer.mcp.restart": true;
+    "composer.mcp.forNew": true;
+    "composer.mcp.runs": true;
+    "composer.mcp.keeps": true;
+    "composer.mcp.busy": true;
+    "composer.mcp.restarted": true;
+    "composer.mcp.sealed": true;
+    "composer.mcp.kept": true;
+    "composer.mcp.listed": true;
   }
 }
 
@@ -110,6 +130,10 @@ export const en = {
   "composer.hintStop": "stop",
   "composer.steerNow": "Send now",
   "composer.steerNowTitle": "Send now. The running turn stops and this message is sent.",
+  "composer.steerNowTitleClaude": "Send now. The message goes in at the agent's next step; the turn goes on.",
+  "composer.queue.sentWaiting": "Sent. Waiting for the agent to take it.",
+  "composer.shell": "Shell",
+  "composer.shellHint": "Runs as a shell command in {folder}",
   "composer.steerNoInterrupt": "This agent cannot take a message while it works; it stays queued.",
   "composer.queue.head": "{n} queued",
   "composer.queue.note": "When the turn ends, the messages are sent one at a time, from the top.",
@@ -124,6 +148,7 @@ export const en = {
   "composer.queue.notSent": "Not sent: {error}",
   "composer.waitsHint": "Answer its question first. A message you send now waits until you answer.",
   "composer.toCard": "Shift+Tab: to the card.", // ticket 1030, English only (owner 11-21)
+  "composer.answersCard": "What you send answers its question as \"{option}\".", // ticket 1097, English only
   "composer.queue.notSaved": "Not queued: the browser storage refused it. Your text is still in the box.",
   "composer.agentEnded": "The agent has ended: type in the terminal.",
   "composer.backgroundSend": "Start a new session with this text and stay here",
@@ -141,6 +166,7 @@ export const en = {
   "composer.hint.folder": "Folder",
   "composer.hint.modified": "Modified",
   "composer.hint.new": "New",
+  "composer.imageN": "Image #{n}",
   "composer.cmd.claude.add-dir": "Add a working directory",
   "composer.cmd.claude.agents": "Manage subagents",
   "composer.cmd.claude.btw": "Side question",
@@ -156,6 +182,7 @@ export const en = {
   "composer.cmd.claude.init": "Create CLAUDE.md",
   "composer.cmd.claude.mcp": "MCP servers",
   "composer.cmd.claude.memory": "Edit memory files",
+  "composer.cmd.claude.new": "Start a new conversation (same as /clear)",
   "composer.cmd.claude.model": "Switch model",
   "composer.cmd.claude.permissions": "Permission rules",
   "composer.cmd.claude.resume": "Resume a conversation",
@@ -175,6 +202,17 @@ export const en = {
   "composer.cmd.codex.review": "Review changes",
   "composer.cmd.codex.status": "Status",
   "composer.cmd.codex.undo": "Undo the last turn",
+  // Ticket 1130 B-L4 (C6).
+  "composer.mcp.offer": "Add MCP server \"{name}\"",
+  "composer.mcp.restart": "Add and restart session",
+  "composer.mcp.forNew": "Add for new sessions",
+  "composer.mcp.runs": "This command will run in every Nunchiro session from now on.",
+  "composer.mcp.keeps": "Restart keeps this conversation.",
+  "composer.mcp.busy": "{session} is busy, so this session is not restarted. It gets {name} after its next restart.",
+  "composer.mcp.restarted": "Added {name}. This session restarted with it.",
+  "composer.mcp.sealed": "Sealed",
+  "composer.mcp.kept": "The conversation is kept.",
+  "composer.mcp.listed": "Listed in Settings > Skills & hooks, where you can remove it.",
 };
 
 export const ko = {

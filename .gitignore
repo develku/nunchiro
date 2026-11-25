@@ -9,3 +9,6 @@ dist/
 /REPORT.r*.md
 /.claude/coordinator-run
 __pycache__/
+
+# claude plugin eval results (scripts/skill-eval.sh keeps a short copy in docs/measure/evidence)
+plugin/evals/results/

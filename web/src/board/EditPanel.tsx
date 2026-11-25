@@ -4,7 +4,7 @@
 import { PLAIN } from '../plainText';
 import { useEffect, useId, useState } from 'react';
 import { ColumnEditor } from './ColumnEditor';
-import { LANE_KEYS, minutes, type BoardSettings, type Column } from './model';
+import { DONE_DAYS, LANE_KEYS, minutes, type BoardSettings, type Column } from './model';
 import { DENSITIES, FIELDS, type View } from './views';
 import type { T } from './Board';
 import './edit.css';
@@ -148,6 +148,14 @@ export function EditPanel({ t, columns, onPut, view, onView, roles, settings, on
           <label className="berow">
             {t('board.edit.nudge')}
             <input type="checkbox" role="switch" className="btg" checked={settings.turn_end_nudge} onChange={(e) => void save({ ...settings, turn_end_nudge: e.target.checked })} />
+          </label>
+          <label className="berow">
+            {t('board.edit.doneDays')}
+            <select value={settings.done_days} onChange={(e) => void save({ ...settings, done_days: Number(e.target.value) as BoardSettings['done_days'] })}>
+              {DONE_DAYS.map((n) => (
+                <option key={n} value={n}>{t(`board.edit.doneDays.${n}`)}</option>
+              ))}
+            </select>
           </label>
           {error && (
             <div className="berr" role="alert">

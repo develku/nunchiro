@@ -59,6 +59,17 @@ declare module '../index' {
     'lead.band.mates': true;
     'lead.mates': true;
     'lead.inTeamNote': true;
+    // Ticket 1096: a fresh Lead conversation (English only until ticket 1035).
+    'lead.fresh': true;
+    'lead.freshHint': true;
+    'lead.freshTitle': true;
+    'lead.freshWait': true;
+    'lead.freshStuck': true;
+    'lead.freshStuckHanded': true;
+    'lead.freshLost': true;
+    'lead.freshClose': true;
+    'lead.freshKeep': true;
+    'lead.freshHide': true;
   }
 }
 
@@ -114,12 +125,22 @@ export const en = {
   'lead.home': 'Home',
   'lead.notRunning': 'not running',
   'room.noLeadShort': "No lead",
-  'lead.paneNone': "Open a session to see the room of its place.",
+  'lead.paneNone': "Open a session to see the Team view of its project.",
   'shell.widget.room': "Room",
   'lead.widgetNote': "the leader and its team",
   'lead.band.mates': "Assistants. Press a row to talk to one assistant alone.",
   'lead.mates': "Assistants: {n}",
   'lead.inTeamNote': "what you say here reaches the lead as one line",
+  'lead.fresh': 'New Lead conversation',
+  'lead.freshHint': 'a new conversation; a running Lead hands over first',
+  'lead.freshTitle': 'New Lead conversation for {project}',
+  'lead.freshWait': 'If {name} is running, it first writes what is unfinished. The new conversation opens when that turn ends; if it does not end in time, this says so.',
+  'lead.freshStuck': '{name} did not finish its turn within {minutes} minutes. It is still open, no new conversation started, and the handover message was withdrawn.',
+  'lead.freshStuckHanded': '{name} did not finish its turn within {minutes} minutes. It is still open and already has the handover message, so it stops after its current turn. Choose New Lead conversation again then; no second message is sent.',
+  'lead.freshLost': 'The window lost the core while the new Lead conversation was opening. It may still open; it shows in the tree when it does.',
+  'lead.freshClose': 'Close the old Lead and open a new one',
+  'lead.freshKeep': 'Keep it open',
+  'lead.freshHide': 'Hide',
 };
 export const ko = {
   'lead.tag': '리더',

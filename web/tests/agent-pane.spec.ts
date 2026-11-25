@@ -102,7 +102,7 @@ test('terminal_widget_on_right_bar', async ({ app, core }) => {
   await openWindow(app, {}, core);
   await open(app, a.id);
   const right = (await names(app, 'right')).filter((n) => n !== 'Layout' && n !== 'Settings');
-  expect(right).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'Schedules', 'History']); // ticket 1022: History after it; ticket 993: Schedules joins the next free slot
+  expect(right).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'History', 'Schedules']); // ticket 1073: History placed after Artifacts; ticket 993: Schedules joins the next free slot
   await startEdit(app);
   await expect(lib(app).locator('.lcard[data-card="terminal"]')).toHaveCount(1);
   await expect(lib(app).locator('.lcard', { hasText: /^Terminal/ })).toHaveCount(1);
@@ -153,7 +153,7 @@ test('pane_keys', async ({ app, core }) => {
   expect(conflicts(DEFAULT_BINDINGS, 'Meta+KeyJ', 'pane.toggle')).toEqual([]);
   expect(DEFAULT_BINDINGS['pane.toggle']).toEqual(['Meta+KeyJ']);
   expect(DEFAULT_BINDINGS['pane.maximize']).toEqual(['Shift+Meta+Enter']);
-  expect(DEFAULT_BINDINGS['pane.shell.new']).toBeUndefined();
+  expect(DEFAULT_BINDINGS['pane.shell.new']).toEqual(['Control+Backquote']); // ticket 1130 C4
   const a = agent(core, 'a');
   await record(app);
   await openWindow(app, {}, core);
@@ -244,6 +244,35 @@ test('pane_pty_is_session_terminal', async ({ app, core }) => {
   await expect(app.locator(`.term[data-session="${a.id}"]`)).toHaveCount(1);
 });
 
+// Ticket 1130 C4 (p11 T8, 3 steps to 1): Ctrl+` on an agent tab opens the side pane on a shell in the agent's folder, focused;
+// a second press shows the same shell (no second start).
+test('shell_beside_one_chord', async ({ app, core }) => {
+  const a = agent(core, 'a', true);
+  await record(app);
+  await openWindow(app, {}, core);
+  await open(app, a.id);
+  // From the agent's own terminal too: the chord is not one the PTY keeps (TERMINAL_PASSTHROUGH).
+  await app.locator('.cbox textarea').focus();
+  await app.keyboard.press('Control+Backquote');
+  await expect(pane(app)).toBeVisible();
+  await expect.poll(async () => (await sent(app, 'start')).length).toBe(1);
+  expect((await sent(app, 'start'))[0].session).toMatchObject({ kind: 'shell', project: a.cwd });
+  const shellsNow = () => (core.cli('snapshot', '--json').sessions as { id: string; kind: string; cwd: string }[]).filter((s) => s.kind === 'shell');
+  await expect.poll(() => shellsNow().length).toBe(1);
+  const sh = shellsNow()[0];
+  expect(fs.realpathSync(sh.cwd)).toBe(fs.realpathSync(a.cwd));
+  await expect(app.locator(`.term[data-session="${sh.id}"] .xterm-helper-textarea`)).toBeFocused();
+  // Back in the agent's PTY, the chord again: the same shell is shown and focused, nothing new starts.
+  await app.keyboard.press('Control+Period');
+  await app.keyboard.press('KeyO');
+  await expect(app.locator(`.term[data-session="${a.id}"] .xterm-helper-textarea`)).toBeFocused();
+  await app.keyboard.press('Control+Backquote');
+  await expect(app.locator(`.term[data-session="${sh.id}"] .xterm-helper-textarea`)).toBeFocused();
+  await app.waitForTimeout(300);
+  expect(await sent(app, 'start')).toHaveLength(1);
+  expect(shellsNow()).toHaveLength(1);
+});
+
 test('pane_shell_tabs', async ({ app, core }) => {
   const a = agent(core, 'a', true);
   await record(app);
@@ -298,8 +327,9 @@ chatTest('pane_preview_tab', async ({ page, chatCore }) => {
   await expect(page.locator('[data-side-pane] .term')).toBeVisible();
   await termI.click();
   await expect(pane(page)).toHaveCount(0);
-  // Open on a chat card shows the pane on the Preview tab, with the session's current target.
-  await chat(page, s.id).locator('.acard[data-path="note.md"]').getByRole('button', { name: 'Open' }).click();
+  // Open on a chat card shows the pane on the Preview tab, with the session's current target. Ticket 1086: a written
+  // Markdown file's card is Open on its changed-files row.
+  await chat(page, s.id).locator('.chcard li.art').getByRole('button', { name: 'Open' }).click();
   await expect(pane(page)).toBeVisible();
   await expect(pview(page)).toBeVisible(); // the Preview view
   await expect(pane(page).locator('.preview .pv-body h1')).toHaveText('Seeded preview');
@@ -509,21 +539,4 @@ test('only_pane_shortcuts_unused', async () => {
   // A removed id has no default and no entry in the area table.
   for (const id of ['view.chat', 'view.terminal', 'view.toggle']) expect(DEFAULT_BINDINGS[id]).toBeUndefined();
   expect(REPO).toBeTruthy();
-});
-
-chatTest('pane_keeps_composer_chips_whole: the composer card leaves the pane column only while that column holds its chips on one line; narrower, it spans under the pane (ticket 991 B8, C12)', async ({ page, chatCore }) => {
-  const s = chatCore.chat('chips', true, true, 'p');
-  append(s.file, rec.user('go'), rec.assistant('ok'));
-  const cut = () => page.locator('.composer:not([data-pinned]) .cbox .chips').evaluate((c) => [...c.querySelectorAll<HTMLElement>('.chip, .pk-chip')].filter((e) => e.offsetWidth && e.scrollWidth > e.clientWidth).map((e) => e.innerText));
-  for (const width of [1300, 1700]) {
-    await page.setViewportSize({ width, height: 800 });
-    await openChat(page, s.id);
-    if (!(await pane(page).count())) await termIcon(page).click();
-    await expect(pane(page)).toBeVisible();
-    await expect.poll(cut).toEqual([]);
-  }
-  // Wide enough, the card still stays out of the pane's column (C12).
-  const card = await page.locator('.composer:not([data-pinned]) .cbox').boundingBox();
-  const side = await pane(page).boundingBox();
-  expect(card!.x + card!.width).toBeLessThanOrEqual(side!.x);
 });

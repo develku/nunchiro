@@ -36,6 +36,11 @@ pub(crate) fn options(home: &Path, alias: &str) -> Result<Vec<OsString>, String>
         Err(e) => return Err(e.to_string()),
     };
     let mut options = Vec::new();
+    // Ticket 1050: a host key trusted from a share link; the user's ~/.ssh files are read too and never written.
+    let known = super::share::known_hosts(home, alias);
+    if known.exists() {
+        options.extend(["-o".into(), known_hosts_option(&known)?.into()]);
+    }
     if let Some(c) = config.machines.get(alias) {
         if let Some(host) = &c.host {
             validate(host, c.user.as_deref(), c.port)?;
@@ -53,6 +58,18 @@ pub(crate) fn options(home: &Path, alias: &str) -> Result<Vec<OsString>, String>
         }
     }
     Ok(options)
+}
+/// UserKnownHostsFile replaces ssh's default list, so the user's two files stay first. ssh splits the value on
+/// spaces: a path with one is refused rather than quoted.
+pub(crate) fn known_hosts_option(path: &Path) -> Result<String, String> {
+    let path = path
+        .to_str()
+        .filter(|p| !p.contains(char::is_whitespace) && !p.contains('"'));
+    let path =
+        path.ok_or("the Nunchiro home path has a space; a link's host key cannot be used")?;
+    Ok(format!(
+        "UserKnownHostsFile=~/.ssh/known_hosts ~/.ssh/known_hosts2 {path}"
+    ))
 }
 /// What settings.json holds for the alias, without what `ssh -G` adds: the Edit form starts from these.
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -74,7 +91,7 @@ pub struct Details {
     #[serde(default)]
     pub saved: Saved,
 }
-fn read(program: &str, args: &[&str]) -> Result<String, String> {
+pub(super) fn read(program: &str, args: &[&str]) -> Result<String, String> {
     let mut command = crate::process::command(program);
     command.args(args);
     let output =

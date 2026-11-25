@@ -1,5 +1,6 @@
 // Ticket 392 (mock providers-391 scene e): a project in the tree lists that folder's past Claude and Codex conversations,
-// read-only, folded under one quiet row; a click imports that one conversation and opens it read-only. Each test runs a
+// read-only; a click imports that one conversation and opens it read-only. Ticket 1073: the tree's fold is gone; the
+// conversations are rows of History's one list (history/pastChats.ts keeps the same store), asked once History is open. Each test runs a
 // real core on fixture agent homes (CLAUDE_CONFIG_DIR / CODEX_HOME), which must stay byte-identical.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -54,8 +55,10 @@ function lists(p: Page) {
     ws.on('framesent', (f) => {
       try {
         const m = JSON.parse(String(f.payload));
-        if (m?.request?.op) ops.set(m.id, m.request.op);
-        if (m?.request?.op === 'import_list') asked.push(m.request.projects);
+        // Ticket 1123: the first run's Quick setup lists Claude's folders (folders_only), apart from the tree's listing.
+        const folders = m?.request?.op === 'import_list' && m.request.folders_only;
+        if (m?.request?.op) ops.set(m.id, folders ? 'import_folders' : m.request.op);
+        if (m?.request?.op === 'import_list' && !folders) asked.push(m.request.projects);
       } catch {
         /* not JSON */
       }
@@ -71,7 +74,9 @@ function lists(p: Page) {
   });
   return Object.assign(asked, { answers });
 }
-const block = (p: Page, name: string) => p.locator(`.grp[data-project="${name}"]`);
+/** History's rows for the on-disk conversations of project folder `name`. */
+const past = (p: Page, name: string) => p.locator(`[data-history-view] .hr[data-outside][data-project$="/${name}"]`);
+const openHistory = (p: Page) => p.getByRole('navigation', { name: 'Right bar' }).getByRole('button', { name: 'History', exact: true }).click();
 const C1 = 'claude:c1';
 
 test('tree_past_row_lists_and_opens_read_only', async ({ app, core }) => {
@@ -82,25 +87,19 @@ test('tree_past_row_lists_and_opens_read_only', async ({ app, core }) => {
   const before = digest(core);
   const asked = lists(app);
   await openWindow(app);
+  await openHistory(app);
 
-  // Folded: one grey row with the count; a project with none has no row.
-  const row = block(app, 'shop').getByRole('button', { name: 'Past conversations 2' });
-  await expect(row).toHaveAttribute('aria-expanded', 'false');
-  await expect(block(app, 'shop').locator('.row.pitem')).toHaveCount(0);
-  await expect(block(app, 'empty').locator('.row.past')).toHaveCount(0);
-
-  // Unfolded: its own two, newest first; the sub-folder and the sibling folder are left out.
-  await row.click();
-  await expect(row).toHaveAttribute('aria-expanded', 'true');
-  const items = block(app, 'shop').locator('.row.pitem');
-  await expect(items.locator('.n')).toHaveText(['webhook retry with backoff', 'order API tests']);
-  await expect(items.nth(1).locator('.tm')).toHaveText('3 days ago');
-  await expect(block(app, 'shop')).not.toContainText('sub-folder');
-  await expect(block(app, 'shop')).not.toContainText('sibling');
+  // Its own two, newest first; the sub-folder and the sibling folder are left out; a project with none has no row.
+  const items = past(app, 'shop');
+  await expect(items.locator('.hr-go b')).toHaveText(['webhook retry with backoff', 'order API tests']);
+  await expect(past(app, 'empty')).toHaveCount(0);
+  const hist = app.locator('[data-history-view]');
+  await expect(hist).not.toContainText('sub-folder');
+  await expect(hist).not.toContainText('sibling');
   await app.screenshot({ path: path.join(REPO, `.scratch/shots/import-tree-${test.info().project.name}.png`) });
 
   // A click opens the existing read-only view: the note, and no composer.
-  await items.first().click();
+  await items.first().locator('.hr-go').click();
   const tab = app.locator(`.tab[data-tab="imported:${C1}"]`);
   await expect(tab).toHaveAttribute('aria-selected', 'true');
   const view = app.locator(`.fview[data-imported="${C1}"]`);
@@ -108,7 +107,7 @@ test('tree_past_row_lists_and_opens_read_only', async ({ app, core }) => {
   await expect(view.getByRole('note')).toHaveText('Imported · read-only');
   await expect(app.locator('textarea:visible')).toHaveCount(0);
   // Again: the same tab, not a second one.
-  await items.first().click();
+  await items.first().locator('.hr-go').click();
   await expect(app.locator('.tab[data-tab^="imported:"]')).toHaveCount(1);
   await expect(tab).toHaveAttribute('aria-selected', 'true');
 
@@ -123,14 +122,10 @@ test('tree_past_row_by_keyboard', async ({ app, core }) => {
   transcripts(core, shop);
   seed(core, { op: 'add', project: shop, added: true });
   await openWindow(app);
-  const row = block(app, 'shop').getByRole('button', { name: 'Past conversations 2' });
-  await row.focus();
-  await app.keyboard.press('ArrowRight');
-  await expect(row).toHaveAttribute('aria-expanded', 'true');
-  await app.keyboard.press('ArrowDown');
-  const first = block(app, 'shop').locator('.row.pitem').first();
-  await expect(first).toBeFocused();
-  await expect(first).toHaveAccessibleName(/^webhook retry with backoff, Claude, .+, read-only$/);
+  await openHistory(app);
+  const first = past(app, 'shop').first().locator('.hr-go');
+  await first.focus();
+  await expect(first).toHaveAccessibleName('webhook retry with backoff');
   await app.keyboard.press('Enter');
   await expect(app.locator(`.tab[data-tab="imported:${C1}"]`)).toHaveAttribute('aria-selected', 'true');
 });
@@ -142,10 +137,10 @@ test('tree_past_titles_are_plain_text', async ({ app, core }) => {
   fs.writeFileSync(path.join(dir, 'h1.jsonl'), user(shop, '<img src=x onerror="window.__pwned=1"><b>bold</b>'));
   seed(core, { op: 'add', project: shop, added: true });
   await openWindow(app);
-  await block(app, 'shop').getByRole('button', { name: 'Past conversations 1' }).click();
-  const item = block(app, 'shop').locator('.row.pitem').first();
-  await expect(item.locator('.n')).toHaveText('<img src=x onerror="window.__pwned=1"><b>bold</b>');
-  await expect(item.locator('img, b')).toHaveCount(0);
+  await openHistory(app);
+  const item = past(app, 'shop').first();
+  await expect(item.locator('.hr-go b')).toHaveText('<img src=x onerror="window.__pwned=1"><b>bold</b>');
+  await expect(item.locator('.hr-go img, .hr-go b b')).toHaveCount(0);
   expect(await app.evaluate(() => (window as { __pwned?: number }).__pwned)).toBeUndefined();
 });
 
@@ -167,7 +162,9 @@ test.describe('round 2: one listing for the whole tree', () => {
     const before = digest(core);
     const asked = lists(app);
     await openWindow(app);
-    for (const [i, n] of names.entries()) await expect(block(app, n).getByRole('button', { name: `Past conversations ${i + 1}` })).toBeVisible();
+    await app.keyboard.press('Escape'); // the first run's Settings page covers the bars
+    await openHistory(app);
+    for (const [i, n] of names.entries()) await expect(past(app, n)).toHaveCount(i + 1);
     // Exactly one listing went out, naming every project; the start requests still got their answers.
     expect([...asked]).toEqual([[...projects].sort()]);
     expect(asked.answers.filter((a) => a.op === 'import_list').map((a) => a.ok)).toEqual([true]);
@@ -193,5 +190,6 @@ test('tree_past_row_leaves_out_live_conversations (N11)', async ({ app, core }) 
     });
   });
   await openWindow(app);
-  await expect(block(app, 'shop').getByRole('button', { name: 'Past conversations 1' })).toBeVisible();
+  await openHistory(app);
+  await expect(past(app, 'shop').locator('.hr-go b')).toHaveText(['order API tests']);
 });

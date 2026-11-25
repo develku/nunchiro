@@ -140,7 +140,73 @@ fn subagents_refused_for_session_token() {
         serde_json::from_str::<Value>(&answer).unwrap(),
         json!({"Err":"operation not granted"})
     );
+    // Ticket 1059: nor may a session token type /context through the Context widget's refresh.
+    let mut sock = std::os::unix::net::UnixStream::connect(core.home.join("core.sock")).unwrap();
+    writeln!(
+        sock,
+        "{}",
+        json!({"token":token,"request":{"op":"session_context","id":s.id,"refresh":true}})
+    )
+    .unwrap();
+    let mut answer = String::new();
+    BufReader::new(sock).read_line(&mut answer).unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&answer).unwrap(),
+        json!({"Err":"operation not granted"})
+    );
+    assert!(!core.reads(&s.id).concat().contains(CONTEXT_HEX));
     call(&core.home, Request::Close { id: agent.id }).unwrap();
+}
+
+/// "/context" as the fake Claude logs its stdin (hex).
+const CONTEXT_HEX: &str = "2f636f6e74657874";
+
+/// Ticket 1059: the window's refresh types /context into an idle local Claude through the send queue, and is refused
+/// for a shell and while the agent works (nothing typed then).
+#[test]
+fn t1059_context_refresh_only_into_idle_claude() {
+    let core = Core::new();
+    let s = core.start(AgentKind::Claude, vec![]);
+    core.transcript(&s, "");
+    let refresh = |id: &str| core.window(json!({"op":"session_context","id":id,"refresh":true}));
+    let shell = core.start(
+        AgentKind::Shell,
+        vec!["/bin/sh".into(), "-c".into(), "exec cat".into()],
+    );
+    assert_eq!(
+        refresh(&shell.id)["Err"],
+        "context breakdown not sent: the breakdown is read from a local Claude session only"
+    );
+    let hook = |event: &str, payload: Value| {
+        call(
+            &core.home,
+            Request::Hook {
+                id: s.id.clone(),
+                event: event.into(),
+                payload,
+            },
+        )
+        .unwrap()
+    };
+    hook("UserPromptSubmit", json!({"prompt":"work"}));
+    assert_eq!(
+        refresh(&s.id)["Err"],
+        "context breakdown not sent: the agent is working"
+    );
+    assert!(!core.reads(&s.id).concat().contains(CONTEXT_HEX));
+    hook("Stop", json!({}));
+    let reply = refresh(&s.id);
+    assert!(reply["Ok"].is_object(), "{reply}");
+    let until = Instant::now() + Duration::from_secs(10);
+    while !core.reads(&s.id).concat().contains(CONTEXT_HEX) {
+        assert!(
+            Instant::now() < until,
+            "/context never reached the agent: {:?}",
+            core.reads(&s.id)
+        );
+        thread::sleep(Duration::from_millis(50));
+    }
+    call(&core.home, Request::Close { id: shell.id }).unwrap();
 }
 
 /// A reporting ACP agent's children reach the tree through the same op, with its lifecycle states; its chat carries no

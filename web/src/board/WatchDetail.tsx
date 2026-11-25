@@ -7,6 +7,7 @@ import { Icon } from '../icons/Icon';
 import { composing } from '../keys';
 import { sessionName } from '../Sidebar';
 import { status, type Session } from '../types';
+import { resizing } from '../layout/resizing';
 import type { T } from './Board';
 import { startCard } from './CardEditor';
 import { DoneFacts } from './DoneFacts';
@@ -62,9 +63,7 @@ export function WatchDetail({ t, core, card, session, sessions, bucket, now, onC
     // From the press, not from the pointer's distance to the edge: a press a pixel off the middle does not make the panel jump.
     const w0 = panel.current!.getBoundingClientRect().width;
     const x0 = e.clientX;
-    el.setPointerCapture(e.pointerId);
-    el.onpointermove = (ev) => size(w0 + x0 - ev.clientX);
-    el.onpointerup = () => ((el.onpointermove = null), (el.onpointerup = null));
+    resizing(el, e.pointerId, (ev) => size(w0 + x0 - ev.clientX));
   };
   const nudge = (e: KeyboardEvent<HTMLDivElement>) => {
     const dx = e.key === 'ArrowLeft' ? STEP : e.key === 'ArrowRight' ? -STEP : 0;

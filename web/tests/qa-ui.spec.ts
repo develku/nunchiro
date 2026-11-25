@@ -1,10 +1,10 @@
 // V1A-49 QA UI bugs: one spec per ticket outcome, each red before its fix (REPORT.md has the receipts).
 import type { Page } from '@playwright/test';
-import { expect, goTab, openWindow, test, agentsZone } from './fixtures';
+import { expect, goTab, openWindow, test, stripOnTop } from './fixtures';
 import { closeModal } from './settings-modal';
 import { chat, openChat, test as chatTest } from './fixtures/chat/harness';
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: these specs read the AGENTS rows, which the default window no longer shows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const LONG = 'a-very-long-project-name-that-fills-the-whole-agents-row-for-sure';
 
@@ -131,18 +131,6 @@ test('outcome 2: the board icon toggles the board like Artifacts, Diff and Previ
   await expect(icon).toHaveAttribute('aria-pressed', 'false');
   await icon.click();
   await expect(app.locator('.board')).toBeVisible();
-});
-
-test('outcome 3: a session name keeps a readable width next to a long project name', async ({ app, core }) => {
-  core.shell(core.project(LONG), 'work');
-  await openWindow(app);
-  const n = app.locator('.ar .n').first();
-  await expect(n).toBeVisible();
-  const box = (await n.boundingBox())!;
-  expect(box.width).toBeGreaterThanOrEqual(40);
-  const row = (await app.locator('.ar').first().boundingBox())!;
-  const s = (await app.locator('.ar .s').first().boundingBox())!;
-  expect(s.x + s.width).toBeLessThanOrEqual(row.x + row.width + 0.5);
 });
 
 const lum = (c: number[]) => {

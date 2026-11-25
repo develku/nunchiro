@@ -331,12 +331,12 @@ test('picker_modes_codex: Default and nine models with digits, reasoning levels,
   fakeAgents(core);
   start(core, 'codex', '--model', 'gpt-6.1-sol', '--effort', 'medium');
   await openWindow(app);
-  await expect.poll(() => drawn(app, 'model')).toBe('GPT-6.1 Sol');
+  await expect.poll(() => drawn(app, 'model')).toBe('GPT-6.1-Sol'); // ticket 1100: Codex's own name
   await expect.poll(() => drawn(app, 'effort')).toBe('medium');
   await chip(app, 'model').click();
   const models = await rows(app, 'model');
-  expect(models.slice(0, 3)).toEqual(['Default 1', 'GPT-6.1 Terra 2', 'GPT-6.1 Sol ✓ 3']);
-  expect(models[8]).toMatch(/^GPT-\S+ \S+ 9$/); // nine digits; the tenth row and on have none
+  expect(models.slice(0, 3)).toEqual(['Default 1', 'GPT-6.1 Terra 2', 'GPT-6.1-Sol ✓ 3']);
+  expect(models[8]).toMatch(/^GPT-\S+( \S+)? 9$/); // nine digits; the tenth row and on have none
   expect(models.length).toBeGreaterThanOrEqual(9);
   await expect(menu(app, 'model').locator('[data-toggle]')).toHaveCount(0);
   await app.keyboard.press('Escape');

@@ -142,7 +142,7 @@ test('layout_a26_reset_default', async ({ app, core }) => {
   expect(await zones(app)).toContain('board');
   await editBar(app).getByRole('button', { name: 'Default', exact: true }).click();
   expect(await names(app, 'left')).toEqual(['Tree', 'Files', 'Search', 'Settings']);
-  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'Layout']);
+  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'History', 'Layout']); // ticket 1073: History is placed
   expect(await zones(app)).toEqual(['terminal', 'composer']);
   await toast(app).getByRole('button', { name: 'Undo' }).click();
   expect(await names(app, 'right')).toContain('Files');
@@ -206,14 +206,14 @@ test('layout_a29_keyboard_move', async ({ app }) => {
   await expect(icon(app, 'left', 'Files')).toBeFocused();
   // Alt+Right: the same slot of the right bar; Terminal was there (v25 placement), so the two swap.
   await app.keyboard.press('Alt+ArrowRight');
-  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Files', 'Browser', 'Diff', 'Artifacts', 'Layout']);
+  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Files', 'Browser', 'Diff', 'Artifacts', 'History', 'Layout']);
   expect(await names(app, 'left')).toEqual(['Tree', 'Search', 'Terminal', 'Settings']);
   await expect(icon(app, 'right', 'Files')).toBeFocused();
   await app.keyboard.press('Alt+ArrowUp');
-  expect(await names(app, 'right')).toEqual(['Board', 'Files', 'Decisions', 'Browser', 'Diff', 'Artifacts', 'Layout']);
+  expect(await names(app, 'right')).toEqual(['Board', 'Files', 'Decisions', 'Browser', 'Diff', 'Artifacts', 'History', 'Layout']);
   await expect(icon(app, 'right', 'Files')).toBeFocused(); // the focus follows the icon to its new slot
   await app.keyboard.press('Delete');
-  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Browser', 'Diff', 'Artifacts', 'Layout']);
+  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Browser', 'Diff', 'Artifacts', 'History', 'Layout']);
   await icon(app, 'left', 'Tree').focus();
   await app.keyboard.press('Delete');
   expect(await names(app, 'left')).toContain('Tree');
@@ -338,7 +338,7 @@ test('layout_a34_persistence', async ({ app }) => {
   await app.reload();
   await expect(app.getByRole('status').filter({ hasText: /^Connected$/ })).toBeVisible();
   expect(await names(app, 'left')).toEqual(['Tree', 'Files', 'Search', 'Settings']);
-  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'Schedules', 'History', 'Layout']); // ticket 1022: History after it; ticket 993: Schedules joins the right bar's next free slot (outside Layout edit)
+  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'History', 'Schedules', 'Layout']); // ticket 1073: History placed after Artifacts, Schedules after it; ticket 993: Schedules joins the right bar's next free slot (outside Layout edit)
   await expect(app.locator('header.title')).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -370,12 +370,12 @@ test('layout_a36_seam_no_project_targets', async ({ app, core }) => {
   const row = app.locator('.sbar .tree .row.head[data-project-path]').first();
   await expect(row).toBeVisible();
   const before = JSON.stringify(await stored(app));
-  await drag(app, card(app, 'agents'), row, { release: false });
+  await drag(app, card(app, 'context'), row, { release: false });
   await expect(app.locator('.dropprev')).toHaveCount(1);
   await expect(app.locator('.tree [data-hot]')).toHaveCount(1);
   await app.mouse.up();
   expect(JSON.stringify(await stored(app))).not.toBe(before);
-  expect((await stored(app)).bars.nest).toEqual({ [p]: ['agents'] });
+  expect((await stored(app)).bars.nest).toEqual({ [p]: ['context'] });
   expect(await zones(app)).toEqual(['terminal', 'composer']);
 });
 

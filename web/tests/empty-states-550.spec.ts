@@ -25,12 +25,12 @@ async function emptyExtensions(app: Page) {
   await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name: 'Skills & hooks' }).click();
 }
 
-test('no_mcp: the empty MCP list offers Add a server, which puts the cursor in the server-name field', async ({ app }) => {
+test('no_mcp: the empty MCP list offers Add a server, which puts the cursor in the command field (ticket 1123: one field)', async ({ app }) => {
   await emptyExtensions(app);
   const empty = app.locator('[data-mcp="agents"] .empty');
   await expect(empty).toContainText('No MCP servers configured.');
   await empty.getByRole('button', { name: 'Add a server', exact: true }).click();
-  await expect(app.getByRole('textbox', { name: 'Server name' })).toBeFocused();
+  await expect(app.getByRole('textbox', { name: 'Command' })).toBeFocused();
 });
 
 test('no_widgets: the empty user-widget line says how one is made and where it is approved', async ({ app }) => {

@@ -14,7 +14,7 @@
 .room-thead b { color: var(--text); }
 .room-thead .sp { flex: 1; }
 .room-state { background: var(--you-bg); color: var(--you); border-radius: var(--r-pill); padding: 0 6px; font-size: var(--fs-11, 11px); }
-.room-msg { padding: 6px 10px; display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; align-items: baseline; }
+.room-msg { padding: 6px 10px; display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 2px 8px; align-items: baseline; }
 .room-msg + .room-msg { border-top: 1px dashed var(--line); }
 .room-who { font-weight: 600; white-space: nowrap; }
 .room-who[data-you] { color: var(--you); }
@@ -58,9 +58,12 @@
    and the time keep their width, the thread tag gives way. Look 1117 v12/v13 B N12-S3-3: the role, agent and addressee words
    all giving way at once read "Lead L. c.. -> Builder . ...": they have their own line (.room-line-to), cut only at its end. */
 .room-line-head > b { flex-shrink: 0; max-width: 65%; } /* a share of a pixel taken from the name drew its ellipsis */
-.room-line-head > time { flex: none; }
+.room-line-head > time, .room-reached { flex: none; }
 .room-line-head > .room-ttag { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.room-line-to { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.room-line-to { display: flex; gap: 6px; white-space: nowrap; overflow: hidden; }
+.room-line-roles, .room-line-addr { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.room-line-roles { flex: 0 100 auto; } /* the role words give way before the addressee (ticket 1089) */
+.room-line-addr { flex: none; max-width: 50%; } /* whole up to half the line: a share of a pixel drew "→ …" */
 .room-line blockquote { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-12); }
 .room-line[data-you] blockquote { padding: 4px 8px; border-radius: var(--r-8); background: var(--tint-1); }
 .room-rail { flex: none; align-self: stretch; width: 3px; border-radius: var(--r-2); background: var(--tree-idle); }

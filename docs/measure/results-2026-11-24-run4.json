@@ -1,0 +1,247 @@
+{
+ "date": "2026-11-24 15:43",
+ "commit": "7abc00571",
+ "host": "Mac16,10",
+ "macos": "27.2.1 26B131",
+ "repeats": 5,
+ "sessions": 20,
+ "load": [
+  4.4,
+  7.96
+ ],
+ "figures": {
+  "launch_cold_s": {
+   "median": 1.241,
+   "min": 1.184,
+   "max": 1.358,
+   "n": 5,
+   "values": [
+    1.241,
+    1.192,
+    1.184,
+    1.31,
+    1.358
+   ]
+  },
+  "launch_warm_s": {
+   "median": 0.509,
+   "min": 0.462,
+   "max": 0.532,
+   "n": 5,
+   "values": [
+    0.512,
+    0.503,
+    0.462,
+    0.532,
+    0.509
+   ]
+  },
+  "core_start_s": {
+   "median": 0.205,
+   "min": 0.194,
+   "max": 0.308,
+   "n": 5,
+   "values": [
+    0.205,
+    0.23,
+    0.308,
+    0.199,
+    0.194
+   ]
+  },
+  "send_ms": {
+   "median": 5.5,
+   "min": 4.8,
+   "max": 6.8,
+   "n": 5,
+   "values": [
+    4.8,
+    5.1,
+    5.5,
+    6.7,
+    6.8
+   ]
+  },
+  "idle_cpu_pct": {
+   "median": 0.86,
+   "min": 0.53,
+   "max": 1.96,
+   "n": 5,
+   "values": [
+    1.73,
+    0.53,
+    0.76,
+    0.86,
+    1.96
+   ]
+  },
+  "idle_mib": {
+   "median": 344.8,
+   "min": 277.1,
+   "max": 354.3,
+   "n": 5,
+   "values": [
+    354.3,
+    296.0,
+    277.1,
+    348.3,
+    344.8
+   ]
+  },
+  "mib_per_session": {
+   "median": 0.48,
+   "min": -1.82,
+   "max": 3.14,
+   "n": 5,
+   "values": [
+    -1.82,
+    0.48,
+    1.81,
+    -1.63,
+    3.14
+   ]
+  },
+  "sessions_json_kib_per_session": {
+   "median": 1.27,
+   "min": 1.27,
+   "max": 1.27,
+   "n": 5,
+   "values": [
+    1.27,
+    1.27,
+    1.27,
+    1.27,
+    1.27
+   ]
+  },
+  "snapshot_kib_per_session": {
+   "median": 0.68,
+   "min": 0.68,
+   "max": 0.68,
+   "n": 5,
+   "values": [
+    0.68,
+    0.68,
+    0.68,
+    0.68,
+    0.68
+   ]
+  },
+  "cpu_pct_sessions": {
+   "median": 1.16,
+   "min": 0.9,
+   "max": 2.59,
+   "n": 5,
+   "values": [
+    1.16,
+    0.9,
+    1.26,
+    1.13,
+    2.59
+   ]
+  },
+  "mib_sessions": {
+   "median": 315.6,
+   "min": 305.6,
+   "max": 407.7,
+   "n": 5,
+   "values": [
+    317.8,
+    305.6,
+    313.4,
+    315.6,
+    407.7
+   ]
+  }
+ },
+ "installs": {
+  "ok": 5,
+  "of": 5
+ },
+ "launches": {
+  "drawn": 10,
+  "of": 10
+ },
+ "sessions_alive_pct": {
+  "median": 100.0,
+  "min": 100.0,
+  "max": 100.0,
+  "n": 5,
+  "values": [
+   100.0,
+   100.0,
+   100.0,
+   100.0,
+   100.0
+  ]
+ },
+ "mainwatch": {
+  "runs": 30,
+  "green": 25,
+  "green_pct": 83.3,
+  "median_min": 9.8,
+  "min_min": 9.1,
+  "max_min": 107.7,
+  "installs": {
+   "n": 20,
+   "installed": 1,
+   "skipped": 17,
+   "failed": 2,
+   "landed_pct": 5.0
+  }
+ },
+ "locale": {
+  "english_keys": 5266,
+  "per_language_pct": {
+   "ko": 94.1,
+   "ja": 94.1,
+   "zh-Hans": 94.1,
+   "zh-Hant": 94.1,
+   "es": 94.1,
+   "fr": 94.1,
+   "pt": 94.1
+  },
+  "mean_pct": 94.1
+ },
+ "repeat_loads": [
+  5.64,
+  7.05,
+  7.96,
+  4.4,
+  5.53
+ ],
+ "owner_check": {
+  "owner_core_before": [
+   "1230"
+  ],
+  "owner_core_after": [
+   "1230"
+  ],
+  "same": true,
+  "owner_files_open_by_our_processes": [],
+  "dirs_checked": [
+   ".nunchiro",
+   ".claude",
+   ".codex"
+  ],
+  "processes_checked_per_sample": [
+   7,
+   7,
+   51,
+   10,
+   7,
+   51,
+   10,
+   7,
+   51,
+   21,
+   7,
+   51,
+   8,
+   7,
+   51
+  ],
+  "home_verified_processes": 29,
+  "home": "fresh temp HOME and NUNCHIRO_HOME for every process started"
+ }
+}

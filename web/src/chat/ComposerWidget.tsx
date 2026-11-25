@@ -1,6 +1,6 @@
 // Chat: the composer widget (split out of App.tsx, needs 183).
 import { PLAIN } from '../plainText';
-import { errorNote, notePlain, type Note } from '../errors';
+import { errorNote, notePlain, rawError, type Note } from '../errors';
 import { CoreClient } from '../api';
 import { hasTranscript } from './ChatView';
 import { download } from '../terminal/save';
@@ -17,7 +17,6 @@ import { agentState, status, type Session } from '../types';
 import { Picker } from '../picker/Picker';
 import { PermChip } from './PermChip';
 import { HandoffChip } from './HandoffChip';
-import { WayChip } from '../lead/WayMenu'; // ticket 990 slice i
 import { openAgents } from '../settings/agents/open';
 import { composerDrop, useImages } from '../images/attach';
 import { ImageChips } from '../images/Chips';
@@ -29,12 +28,19 @@ import { busyRow, takeRow, useQueue } from './queued';
 import type { RefObject } from 'react';
 import type { T } from '../i18n';
 import { FOLLOWUP } from '../features/followup-default';
-import { DecisionCard, focusCard } from './DecisionCard'; // ticket 1030
+import { DecisionCard, digitButton, focusCard } from './DecisionCard'; // ticket 1030
 import { OutboxCard } from '../lead/OutboxCard';
-import { alsoInDecisions, asks as waitingAsks } from '../tree/decisions';
+import { alsoInDecisions, asks as waitingAsks, rowPlan, type Item } from '../tree/decisions';
+import { answered, DENY_NOTE_MAX, takesText } from '../queue/answer';
+import { plain as shown } from './pending';
 import type { OnAnswer } from '../tree/DecisionLine';
 import type { Decision } from '../types';
 import { useFeatureSetting } from '../settings/useFeatureSetting';
+import { useEffect, useState } from 'react';
+import { composerOffer } from '../features/pasted-server';
+import { restartKeeping } from '../features/restart-keeping';
+import { restartStart } from '../PermissionNeeded';
+import { escaped, joinWords } from '../settings/agents/words';
 
 /** A pane terminal's selection goes to the composer as a quote; nothing is sent. */
 export const insertQuote = (composer: RefObject<HTMLTextAreaElement | null>) => (text: string) => {
@@ -135,10 +141,84 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
   // Enter steers only plain text: send carries images, a handoff and a retry (ticket 526: the hint must say the same).
   const plain = !!target && !images.of(target.id).length && (handoff?.fork?.id ?? handoff?.from) !== target.id && !pendingEnter[target.id];
   const rowAct = stopShows ? t('composer.steerNow') : t('composer.queue.send');
+  // Ticket 1056: Claude takes a send-now at its next step; other agents stop the turn first.
+  const rowTip = !stopShows ? t('composer.queue.sendTitle') : target?.kind === 'claude' ? t('composer.steerNowTitleClaude') : t('composer.steerNowTitle');
+  // Ticket 1056: a held row says why it waits: a question or permission, rows ahead of it in the core's queue, or the turn.
+  // The queue's own order: send_log is sorted by time, and a user row goes ahead of older wake lines.
+  const heldLog = ((target as (Session & { send_queue?: { id: string; status: string; settle?: string | null }[] }) | null)?.send_queue ?? []).filter((r) => r.status === 'queued');
+  // Ticket 1121: rows the core will not paste again (dropped past its re-paste bound, or no clean box read).
+  const stopped = (target as (Session & { stopped_sends?: string[] }) | null)?.stopped_sends ?? [];
+  const heldWhy = (id?: string) => {
+    if (target && asks(target)) return t('chat.held.card');
+    // Ticket 1094: the agent did not take it (its Enter was dropped); the core tries again when the agent is ready.
+    if (id && stopped.includes(id)) return t('chat.held.stopped');
+    if (id && heldLog.find((r) => r.id === id)?.settle?.startsWith('enter_dropped')) return t('chat.held.retry');
+    const ahead = id ? heldLog.findIndex((r) => r.id === id) : -1;
+    return ahead > 0 ? t('chat.held.behind', { n: ahead }) : t('chat.held.working');
+  };
   // Ticket 1030: the card of the session in front; its keys act only while it has focus (Shift+Tab from the box).
   const inFront = !pin && !!target && target.id === front;
   const dockAsks = inFront ? waitingAsks(target.pending) : [];
+  // Ticket 1097: the card's first item is a question with a "Type something" option (the card's own box, S2-7): what the box
+  // sends goes as that option's answer, as T3 Code's composer does, not as a message held behind the card.
+  const asked = dockAsks[0] as Item | undefined;
+  const typeAt = target && asked?.kind === 'question' && !answered(asked.id) && !rowPlan([asked], target, t).note ? asked.choices.findIndex((c) => takesText(c.label)) : -1;
+  const answersText = typeAt >= 0 ? t('composer.answersCard', { option: shown(asked!.choices[typeAt].label).trim().replace(/\.$/, '') }) : '';
+  const answerCard = (box: HTMLTextAreaElement) => {
+    const text = box.value.trim();
+    // shortcut: words past the card box's 500-character limit, or with an image, go the held way; upgrade if a real answer needs either.
+    if (!target || typeAt < 0 || !text || text.length > DENY_NOTE_MAX || images.of(target.id).length) return false;
+    const p = onAnswer(asked!, { type: 'choose_with', index: typeAt, text });
+    if (!p) return false;
+    box.value = '';
+    grow(box);
+    setDrafts((d) => ({ ...d, [target.id]: false }));
+    setDraft(target.id, '');
+    void p.catch((e) => (toBox(box, text), setPaneNote(errorNote(notePlain(t, e), e))));
+    return true;
+  };
   const dockOut = inFront ? owner.filter((d) => d.owner?.type === 'outward' && d.session_id === target.id) : [];
+  // Ticket 1130 C6 (owner Q2; mockup docs/design/first-use-b-1130/mockup.html #c6): a pasted stdio `claude mcp add` line
+  // shows one offer row with the name and the whole command. Nothing is added before the click; the text stays in the box
+  // and Enter still sends it. The add is Settings > Skills & hooks' own sealed `extensions_mcp_add` (env values never
+  // saved). An idle agent restarts on its conversation; a busy one is never restarted by this button.
+  const [offer, setOffer] = useState<(NonNullable<ReturnType<typeof composerOffer>> & { sid: string }) | null>(null);
+  const [mcpAdded, setMcpAdded] = useState<{ name: string; restarted: boolean; kept: boolean; project: string } | null>(null);
+  const [adding, setAdding] = useState(false);
+  // Only on a change of drafts: a send empties the box (drafts false), and the offer goes with it.
+  useEffect(() => void (offer && !drafts[offer.sid] && setOffer(null)), [drafts]); // eslint-disable-line react-hooks/exhaustive-deps
+  const offers = !!target && target.kind !== 'shell' && !target.side_chat && !sideChats.includes(target.id) && agentState(target) === 'running';
+  const shownOffer = offers && offer?.sid === target.id && drafts[target.id] ? offer : null;
+  const restartsNow = offers && status(target) === 'idle';
+  const keeps = restartsNow && !!restartStart(target).resume;
+  const addOffered = async (box: HTMLTextAreaElement | null | undefined) => {
+    if (!target || !shownOffer || !box || adding) return;
+    const [s, o, restart] = [target, shownOffer, restartsNow];
+    setAdding(true);
+    try {
+      await core.request({ op: 'extensions_mcp_add', name: o.name, command: o.command });
+    } catch (e) {
+      return setPaneNote(errorNote(notePlain(t, e), e));
+    } finally {
+      setAdding(false);
+    }
+    // The pasted line leaves the box, so Enter cannot send it by mistake (before the restart copies the draft over).
+    // The add is async: the shared box may hold another session's draft by now, so only its own text is changed.
+    const own = (box.dataset.draftFor ?? s.id) === s.id;
+    const left = (own ? box.value : getDraft(s.id)).replace(o.line, '').trim();
+    if (own) (box.value = left), grow(box);
+    setDrafts((d) => ({ ...d, [s.id]: !!left }));
+    setDraft(s.id, left);
+    setOffer(null);
+    setMcpAdded({ name: o.name, restarted: restart, kept: restart && keeps, project: s.project });
+    // The core closes only an idle session (close_idle): one that started a turn meanwhile keeps it and gets the server
+    // at its next restart, which is the "Add for new sessions" outcome.
+    if (restart)
+      await restartKeeping(core, s).catch((e) => {
+        setMcpAdded((a) => a && { ...a, restarted: false, kept: false });
+        if (!rawError(e).includes('is busy: not closed')) setPaneNote(errorNote(notePlain(t, e), e));
+      });
+  };
   const editRow = (rowId: string, button: HTMLElement) => {
     const box = button.closest('.composer')?.querySelector<HTMLTextAreaElement>('textarea:not(.hoff-edit)');
     if (!target || !box) return; // the row stays: without a box its text would have nowhere to land
@@ -157,15 +237,23 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
             )}
           </p>
           {queued.rows.map((r, i) => {
-            const off = !connected || busyRow(queued, r.id);
+            const off = !connected || busyRow(queued, r.id) || !!r.sent;
             const name = (action: string) => t('composer.queue.rowAction', { n: i + 1, action });
+            // Ticket 1087: a saved image goes as its path line (useComposerSend v1b-05); the row names it as its chip did.
+            const lines = r.text.split('\n');
+            const pic = (l: string) => l.startsWith('/') && l.includes(`/images/${target.id}/`);
+            const pics = lines.filter(pic).length;
             return (
               <div className="qrow" key={r.id}>
                 <span className="qn">{i + 1}</span>
-                <span className="qt" title={r.text}>{r.text}</span>
+                <span className="qt" title={r.text}>{lines.filter((l) => !pic(l)).join(' ')}</span>
+                {Array.from({ length: pics }, (_, k) => (
+                  <span className="qimg" key={k}>{t('composer.imageN', { n: k + 1 })}</span>
+                ))}
+                {r.sent && <span className="qn qsent" role="status">{t('composer.queue.sentWaiting')}</span>}
                 <button className="qa" type="button" disabled={off} aria-label={name(t('composer.queue.edit'))} onClick={(e) => editRow(r.id, e.currentTarget)}>{t('composer.queue.edit')}</button>
                 <button className="qa" type="button" disabled={off} aria-label={name(t('composer.queue.remove'))} onClick={() => takeRow(target.id, r.id)}>{t('composer.queue.remove')}</button>
-                <button className="qa" type="button" disabled={off || (!stopShows && asks(target))} title={stopShows ? t('composer.steerNowTitle') : t('composer.queue.sendTitle')} aria-label={name(rowAct)} onClick={() => void pressRow(target, r.id)}>{rowAct}</button>
+                <button className="qa" type="button" disabled={off || (!stopShows && asks(target))} title={rowTip} aria-label={name(rowAct)} onClick={() => void pressRow(target, r.id)}>{rowAct}</button>
               </div>
             );
           })}
@@ -181,6 +269,34 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
             </div>
           ))}
           {dockAsks.length > 0 && <DecisionCard session={target} docked onAnswer={onAnswer} onBack={() => composer.current?.focus()} t={t} note={dockAsks.some(alsoInDecisions) ? t('decisions.alsoInDecisions') : undefined} />}
+        </div>
+      )}
+      {shownOffer && (
+        <div className="mcp-offer" role="group" aria-label={t('composer.mcp.offer', { name: shownOffer.name })}>
+          <div className="mo-t">
+            <b>{t('composer.mcp.offer', { name: shownOffer.name })}</b>
+            <button type="button" className="btn p" disabled={adding} aria-busy={adding || undefined} onClick={(e) => void addOffered(e.currentTarget.closest('.composer')?.querySelector<HTMLTextAreaElement>('textarea:not(.hoff-edit)'))}>
+              {t(restartsNow ? 'composer.mcp.restart' : 'composer.mcp.forNew')}
+            </button>
+            <button type="button" className="mo-x" aria-label={t('mw.dismiss')} onClick={() => setOffer(null)}>
+              ×
+            </button>
+          </div>
+          <span className="mono">{escaped(joinWords(shownOffer.command))}</span>
+          <small>{restartsNow ? `${t('composer.mcp.runs')}${keeps ? ` ${t('composer.mcp.keeps')}` : ''}` : t('composer.mcp.busy', { session: name ?? '', name: shownOffer.name })}</small>
+          {shownOffer.dropped.length > 0 && <small>{t('firstUse.mcp.envDropped', { names: shownOffer.dropped.join(', ') })}</small>}
+        </div>
+      )}
+      {target && mcpAdded && !shownOffer && target.project === mcpAdded.project && (
+        <div className="mcp-offer" role="status">
+          <div className="mo-t">
+            <b className="ok-line">{t(mcpAdded.restarted ? 'composer.mcp.restarted' : 'firstUse.mcp.added', { name: mcpAdded.name })}</b>
+            <span className="mo-seal">{t('composer.mcp.sealed')}</span>
+            <button type="button" className="mo-x" aria-label={t('mw.dismiss')} onClick={() => setMcpAdded(null)}>
+              ×
+            </button>
+          </div>
+          <small>{`${mcpAdded.kept ? `${t('composer.mcp.kept')} ` : ''}${t('composer.mcp.listed')}`}</small>
         </div>
       )}
       {/* v1b-05: paste and drop of images, and their chips */}
@@ -206,18 +322,19 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
         )}
         {briefHeld && (
           <p className="queued held" role="status">
-            <b>{t('chat.held.card')}</b> <span className="queued-text">{t('chat.row.brief')}</span>
+            <b>{heldWhy()}</b> <span className="queued-text">{t('chat.row.brief')}</span>
           </p>
         )}
         {cardHeld.map((r) => (
           <p key={r.id} className="queued held" role="status">
-            <b>{t('chat.held.card')}</b> <span className="queued-text">{r.content}</span>
+            <b>{heldWhy(r.id)}</b> <span className="queued-text">{r.content}</span>
             <button className="steer" aria-label={t('chat.held.cancel')} data-tip={t('chat.held.cancelTip')} onClick={(e) => void cancelCardHeld(e.currentTarget.closest('.cbox')!.querySelector('textarea:not(.hoff-edit)')!, r)}>
               {t('chat.held.cancel')}
             </button>
           </p>
         ))}
         {target && held !== undefined && refused && <p className="chint held-why" role="status">{t('chat.held.second')}</p>}
+        {target && answersText && drafts[target.id] && <p className="chint" role="status">{answersText}</p>}
         {target && uncertainSend[target.id] && <p className="chint" role="status">{t('chat.handoff.unknown')}</p>}
         {target && pendingEnter[target.id] && <p className="chint" role="status">{t('chat.handoff.retry')}</p>}
         <label className="sr" htmlFor={first ? 'composer' : undefined}>
@@ -226,6 +343,7 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
         <textarea
           {...PLAIN}
           id={first ? 'composer' : undefined}
+          data-kind={target?.kind}
           ref={(el) => {
             if (!first) return;
             composer.current = el;
@@ -248,10 +366,15 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
           aria-label={first ? undefined : t('composer.label', { name: name ?? t('composer.sessionFallback') })}
           aria-describedby={first && target && agentState(target) !== 'running' ? 'composer-why' : undefined}
           disabled={!connected || !target || agentState(target) !== 'running'}
-          placeholder={target ? (agentState(target) === 'running' ? (target.kind !== 'shell' && asks(target) ? t('composer.waitsHint') + (dockAsks.length ? ` ${t('composer.toCard')}` : '') : t('composer.placeholder', { name: sessionName(target).replace(/(\.\.\.|…)$/, '') }) /* N8: a name cut to "..." gets the placeholder's one "…" */) : '') : pin ? t('composer.notRunning', { pin }) : t('composer.open')}
+          placeholder={target ? (agentState(target) === 'running' ? (target.kind !== 'shell' && asks(target) ? (answersText || t('composer.waitsHint')) + (dockAsks.length ? ` ${t('composer.toCard')}` : '') : t('composer.placeholder', { name: sessionName(target).replace(/(\.\.\.|…)$/, '') }) /* N8: a name cut to "..." gets the placeholder's one "…" */) : '') : pin ? t('composer.notRunning', { pin }) : t('composer.open')}
+          onPaste={(e) => {
+            const o = offers && target ? composerOffer(e.clipboardData.getData('text/plain')) : null;
+            if (o && target) setOffer({ ...o, sid: target.id });
+          }}
           onInput={(e) => {
             const el = e.currentTarget; // read now: the updater below runs after the event is gone
             grow(el);
+            if (offer && offer.sid === target?.id && !el.value.includes(offer.line)) setOffer(null); // the pasted line was edited away
             if (!target) return;
             if (givenBack[target.id]) setGivenBack(({ [target.id]: _, ...rest }) => rest); // typed over: it is the user's now
             const typed = !!el.value;
@@ -261,6 +384,14 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
           onKeyDown={(e) => {
             // Ticket 1030: Shift+Tab goes to the card above (its first safe action), where 1 and 3 answer.
             if (e.key === 'Tab' && e.shiftKey && !e.nativeEvent.isComposing && dockAsks.length && focusCard(e.currentTarget.closest('.composer')?.querySelector('.deccard.docked'))) return e.preventDefault();
+            // Ticket 1097: in an empty box a digit answers the card above, as Claude Code's own prompt takes it (T3 Code and Orca
+            // too); after any text it is text. digitButton keeps a risky permission to focus then Enter. The key's code, as the
+            // card's own keys: under a Korean input source e.key may not be the digit. Never with Shift: "!" is the shell cue
+            // (ticket 1044) and "@" a mention, and neither may answer (review r2 MUST).
+            if (!e.currentTarget.value && dockAsks.length && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+              const button = digitButton(e.currentTarget.closest('.composer')?.querySelector('.deccard.docked'), /^Digit([1-9])$/.exec(e.code)?.[1] ?? '');
+              if (button) return (e.preventDefault(), button.click());
+            }
             // A held message waits on a pending ask, which reads "waiting" (no Stop; Esc would answer the dialog), so this Esc only
             // gives the words back; once nothing is held and the agent works, the next Esc reaches CHAT-STOP below (V2.5-82).
             if (e.key === 'Escape' && held !== undefined && !e.nativeEvent.isComposing && e.keyCode !== 229) return (e.preventDefault(), giveBackHeld(e.currentTarget));
@@ -286,7 +417,7 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
             e.preventDefault();
             if (steer) return void steerNow(e.currentTarget, target);
             if (background) return void backgroundSend(e.currentTarget, target);
-
+            if (answerCard(e.currentTarget)) return;
             void send(e.currentTarget, target);
           }}
         />
@@ -330,8 +461,13 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
               <Icon name="project" size={12} /> <span className="chip-t">{placeText(target)}</span>
             </span>
           )}
+          {/* Ticket 1087: shown by CSS while the box holds a "!" command (data-shell, set by grow) */}
+          {target && (target.kind === 'claude' || target.kind === 'codex') && (
+            <span className="chip shellchip" title={t('composer.shellHint', { folder: target.cwd })}>
+              <b aria-hidden="true">!</b> {t('composer.shell')} <span className="chip-t">{t('composer.shellHint', { folder: target.cwd.split('/').filter(Boolean).pop() ?? target.cwd })}</span>
+            </span>
+          )}
           <span className="sp" />
-          <WayChip t={t} core={core} session={target} connected={connected} sessions={sessions} />
           {/* v1a-10: model and effort for this session; a Codex switch resumes under a new id, so its tab follows. */}
           <Picker
             key={target?.id}
@@ -354,7 +490,10 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
                 <Icon name="square-fill" size={16} />
               </button>
             ) : (
-              <button className="send" aria-label={t('composer.send')} onClick={(e) => void send(e.currentTarget.closest('.cbox')!.querySelector('textarea:not(.hoff-edit)')!, target)} disabled={!target || agentState(target) !== 'running' || !(drafts[target.id] || images.of(target.id).length || pendingEnter[target.id] || (handoff?.fork?.id ?? handoff?.from) === target.id)}>
+              <button className="send" aria-label={t('composer.send')} onClick={(e) => {
+                const box = e.currentTarget.closest('.cbox')!.querySelector<HTMLTextAreaElement>('textarea:not(.hoff-edit)')!;
+                if (!answerCard(box)) void send(box, target);
+              }} disabled={!target || agentState(target) !== 'running' || !(drafts[target.id] || images.of(target.id).length || pendingEnter[target.id] || (handoff?.fork?.id ?? handoff?.from) === target.id)}>
                 <ChromeIcon name="arrow-up" size={16} />
               </button>
             )}

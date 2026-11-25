@@ -42,6 +42,12 @@
   -webkit-line-clamp: 2;
   overflow-wrap: anywhere;
 }
+.shint {
+  flex: none;
+  padding: 0 10px 4px;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
 .sstat[role='alert'] {
   color: var(--error); /* N079: a failure is red */
 }

@@ -177,7 +177,9 @@ fn board_json_broken_task_fields_refused_unchanged() {
 #[test]
 fn attached_session_has_no_auto_card() {
     let home = Home::new();
-    let sessions = [session("w1"), session("free")];
+    let mut w1 = session("w1");
+    w1.attention.working = true; // in a turn (ticket 1090: a seat at its prompt is not working)
+    let sessions = [w1, session("free")];
     let id = home.add("task");
     let board = home.send(&sessions, json!({"op": "board_task_put", "id": id, "attachments": [{"session_id": "w1", "role": "build"}]}));
     let ids: Vec<_> = board
@@ -190,10 +192,66 @@ fn attached_session_has_no_auto_card() {
     assert_eq!(card(&board, &id)["attachments"][0]["state"], "working");
 }
 
+/// Ticket 1090: a seat is working only while it is in a turn. A seat that never finished a turn and is not in one (an
+/// agent at its first prompt, a shell) counted as working before, so the board said "working" far more than agents ran.
+#[test]
+fn seat_is_working_only_in_a_turn() {
+    let home = Home::new();
+    let mut busy = session("busy");
+    busy.attention.working = true;
+    let sessions = [session("idle"), busy, session("fresh")];
+    let id = home.add("task");
+    let board = home.send(&sessions, json!({"op": "board_task_put", "id": id, "attachments": [{"session_id": "idle", "role": "build"}, {"session_id": "busy", "role": "review"}]}));
+    let task = card(&board, &id);
+    assert_ne!(task["attachments"][0]["state"], "working", "an idle seat");
+    assert_eq!(
+        task["attachments"][1]["state"], "working",
+        "a seat in a turn"
+    );
+    let fresh = card(&board, "fresh");
+    assert_ne!(fresh["state"], "working", "a session card with no turn yet");
+    assert_ne!(fresh["column"], "working");
+}
+
+#[test]
+fn seat_with_no_turn_is_neutral() {
+    let home = Home::new();
+    let mut busy = session("busy");
+    busy.attention.working = true;
+    let mut ended = session("ended"); // one finished turn, already seen
+    ended.completion_seq = 1;
+    let sessions = [session("fresh"), session("seat"), busy, ended];
+    let id = home.add("task");
+    let board = home.send(&sessions, json!({"op": "board_task_put", "id": id, "attachments": [{"session_id": "seat", "role": "build"}]}));
+    for state in [
+        card(&board, "fresh")["state"].clone(),
+        card(&board, &id)["attachments"][0]["state"].clone(),
+    ] {
+        assert_eq!(state, "idle", "no turn yet is neither Review nor Done");
+    }
+    assert_eq!(
+        card(&board, "fresh")["column"],
+        "todo",
+        "the neutral column"
+    );
+    assert_eq!(card(&board, "busy")["state"], "working");
+    let board = home.send(
+        &sessions,
+        json!({"op": "board_seen", "id": "ended", "completion_seq": 1}),
+    );
+    assert_eq!(
+        card(&board, "ended")["state"],
+        "done",
+        "after its turn is seen, as before"
+    );
+}
+
 #[test]
 fn unattached_session_keeps_auto_card() {
     let home = Home::new();
-    let sessions = [session("w1")];
+    let mut w1 = session("w1");
+    w1.attention.working = true; // ticket 1090: in a turn
+    let sessions = [w1];
     home.add("task");
     let board = home.snapshot(&sessions);
     let auto = card(&board, "w1");
@@ -505,6 +563,42 @@ fn documented(section: &str) -> BTreeSet<String> {
 }
 fn keys(value: &Value) -> BTreeSet<String> {
     value.as_object().unwrap().keys().cloned().collect()
+}
+
+/// Ticket 1066 rule 3: a session card's done time is stored when the board first sees it in Done; later activity
+/// moves its `updated_at`, not its `done_at`. A card that leaves Done and returns counts from its newest arrival.
+#[test]
+fn session_done_time_does_not_move_on_update() {
+    let home = Home::new();
+    let ended = |activity: u64| {
+        let mut s = serde_json::to_value(session("w1")).unwrap();
+        s["state"] = json!("exited");
+        s["attention"]["last_activity"] = json!(activity);
+        serde_json::from_value::<Session>(s).unwrap()
+    };
+    let at = |board: &board::Snapshot| card(board, "w1")["done_at"].clone();
+    assert_eq!(at(&home.snapshot(&[ended(1000)])), json!(1000));
+    let later = home.snapshot(&[ended(9000)]);
+    assert_eq!(
+        (card(&later, "w1")["updated_at"].clone(), at(&later)),
+        (json!(9000), json!(1000))
+    );
+    // Out of Done (running again, in a turn) and back: the newest arrival.
+    let mut again = session("w1");
+    again.attention.working = true;
+    assert_eq!(at(&home.snapshot(&[again])), Value::Null);
+    assert_eq!(at(&home.snapshot(&[ended(12000)])), json!(12000));
+    // A manual card: its last move into Done.
+    let id = home.add("task");
+    assert_eq!(card(&home.snapshot(&[]), &id)["done_at"], Value::Null);
+    let moved = home.send(
+        &[],
+        json!({"op": "board_move", "source": "manual", "id": id, "column": "done"}),
+    );
+    assert_eq!(
+        card(&moved, &id)["done_at"],
+        card(&moved, &id)["last_moved_at"]
+    );
 }
 
 #[test]

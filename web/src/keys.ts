@@ -38,17 +38,21 @@ export const DEFAULT_BINDINGS: Bindings = {
   'palette.open': ['Meta+KeyK', 'Shift+Meta+KeyP'], // needs 166: the ⌘ chord first, so tooltips and first-run text show it; old prefix keys stay as the second binding
   'settings.open': ['Meta+Comma'],
   'settings.search': ['Meta+KeyF'], // ticket 516: only while Settings is open (SETTINGS_ONLY), so it shares ⌘F with terminal.find
-  'font.bigger': ['Meta+Equal', 'Shift+Meta+Equal'], // v1a-39
-  'font.smaller': ['Meta+Minus'],
-  'font.reset': ['Meta+Digit0'],
+  // Ticket 1071: these zoom the whole window, as T3 Code and Orca do; the terminal font commands (v1a-39) lost them.
+  // Not view.*: chat.spec.ts pins that the removed view.* commands (REMOVED below) stay out of the palette.
+  'zoom.in': ['Meta+Equal', 'Shift+Meta+Equal'],
+  'zoom.out': ['Meta+Minus'],
+  'zoom.reset': ['Meta+Digit0'],
   'hints.show': ['prefix KeyF'],
-  'keys.help': ['prefix Shift+Slash', 'Meta+Slash'], // v1a-57: `?` after the prefix shows the prefix keys at once; ⌘/ is the same overlay (needs 170 (3))
+  'keys.help': ['prefix Shift+Slash'], // v1a-57: `?` after the prefix shows the prefix keys at once
+  'keys.sheet': ['Meta+Slash'], // ticket 1099 (mockup panel 5): ⌘/ is the whole sheet, every key; was keys.help's second key (needs 170 (3))
   'hints.copy': ['prefix KeyY'], // v1a-37
   'terminal.find': ['Meta+KeyF'], // v1a-35
   'terminal.copy': ['prefix BracketLeft'], // v1a-42 (tmux copy-mode)
   'terminal.edit': ['prefix KeyV'], // v1a-38b
   'zone.zoom': ['prefix KeyZ'], // v1a-37
   'worktree.create': ['Meta+KeyN'], // was a hard-wired listener in App.tsx (needs 166)
+  'session.new.worktree': ['Shift+Meta+KeyN'], // ticket 1130 C2: the default agent in a new worktree, one chord
   'tab.close': ['Meta+KeyW'], // the app menu's Close Window moved to ⌘⇧W, so the page owns ⌘W
   'session.new': ['Meta+KeyT', 'prefix KeyC'],
   // v25-new-tab (ticket 290, needs 209): the New tab popover's rows, each with a key of its own (a session in the current
@@ -94,6 +98,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   'layout.edit': ['prefix KeyL'],
   'pane.mode': ['prefix KeyR'], // v1a-43
   'composer.toggle': ['prefix KeyT'],
+  'session.side-chat': ['prefix KeyA'], // ticket 1099: the side chat had only its header button (a = aside)
   // v25-sendkeys: Claude Code's chat:sendNow and a background start from the composer.
   'composer.steerNow': ['Control+Enter'],
   'composer.backgroundSend': ['Meta+Enter'],
@@ -101,6 +106,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   'focus.composer': ['prefix KeyI'],
   'focus.terminal': ['prefix KeyO'],
   'pane.toggle': ['Meta+KeyJ'], // AGENTVIEW: the session's side pane (the Right bar's Terminal icon)
+  'pane.shell.new': ['Control+Backquote'], // ticket 1130 C4: Claude Desktop's terminal key; shows the pane's shell, or starts one
   'pane.maximize': ['Shift+Meta+Enter'],
   // SPLITKEYS: split the focused pane (the chat: a split beside it; a side-pane terminal: the terminal grid), as iTerm, VS Code
   // and t3code do, and tmux's prefix % and ". split.close has no default key.
@@ -109,6 +115,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   // v1b-11
   'diff.open': ['prefix KeyG'],
   'search.open': ['Shift+Meta+KeyF', 'prefix KeyS'], // v1b-10
+  'search.sessions': ['Alt+Meta+KeyF'], // ticket 1130 C3: the Sessions scope had no key
   // v1a-48: icons without a shortcut get one, so each icon's hint key is its own shortcut's key
   'sidebar.left.toggle': ['Meta+KeyB', 'prefix KeyB'],
   'sidebar.right.toggle': ['Alt+Meta+KeyB'], // v25f F13
@@ -158,6 +165,7 @@ export const AREA: Record<string, Area> = {
   'providers.signin': WINDOW, // ticket 610: opens Settings > Providers, as firstrun.open opens Onboarding
   'firstrun.open': WINDOW, // v2-5a had no area, which drew an "Other" card of one unbound command
   'keys.help': WINDOW,
+  'keys.sheet': WINDOW,
   'window.detach': WINDOW,
   'quit.all': WINDOW,
   'session.new': SESSIONS,
@@ -169,6 +177,7 @@ export const AREA: Record<string, Area> = {
   'browser.tab.new': SESSIONS,
   'session.new.claude': SESSIONS,
   'session.new.codex': SESSIONS,
+  'session.new.worktree': SESSIONS, // ticket 1130 C2
   'worktree.create': SESSIONS, // needs 166: the stem `worktree` covers the others, this id is bound
   'tab.close': SESSIONS,
   'tab.close.others': SESSIONS,
@@ -258,9 +267,25 @@ export const AREA: Record<string, Area> = {
   'project.pin': VIEWS,
   'lead.add': VIEWS, // ticket 990: the project row menu's Add a leader…, beside the other project rows
   'room.open': VIEWS, // look 1117 v11-A-S3-1: the palette's way back to a lead's Room (Team view) as a tab
+  'lead.fresh': VIEWS, // ticket 1096: New Lead conversation
+  // Ticket 1099: palette commands that had no area (Keys page "Other"), and the ones the cohesion pass adds.
+  'bars.autohide': VIEWS,
+  'tree.clear-finished': VIEWS,
+  'history.open': VIEWS,
+  'usage.page': WINDOW,
+  'team.page': WINDOW,
+  'assistants.page': WINDOW,
+  'decisions.open': VIEWS,
+  'schedules.open': VIEWS,
+  'schedules.new': VIEWS,
+  'context.open': VIEWS,
+  'notify.session': SESSIONS, // stem: notify.session.all | waiting | off
   'font.bigger': FONT,
   'font.smaller': FONT,
   'font.reset': FONT,
+  'zoom.in': WINDOW,
+  'zoom.out': WINDOW,
+  'zoom.reset': WINDOW,
 };
 export const areaOf = (id: string): Area => AREA[id] ?? AREA[id.slice(0, id.lastIndexOf('.'))] ?? OTHER;
 /** Bound ids with no area of their own (a stem does not count): a new default binding must name its area. */
@@ -359,6 +384,13 @@ export function conflicts(bindings: Bindings, binding: Binding, except: string):
 
 /** Defaults under the user's overrides; a key the user gave one command leaves the default that held it (V1A-57), so a
  *  new default never takes over a key the user already bound. */
+/** Ticket 1099: the window's bindings as App drew them last, so a help line says the user's own key, not a fixed one.
+ *  shortcut: set during App's render (as setKindNames), so a line drawn before a rebind changes on its next render. */
+let live: Bindings | null = null;
+export const setLiveBindings = (b: Bindings) => void (live = b);
+/** A command's first key as text (`⌘T`, `◆ k`), or '' when it has none. */
+export const keyText = (id: string) => ((b?: Binding) => (b ? label(b) : ''))((live ?? DEFAULT_BINDINGS)[id]?.[0]);
+
 export function merge(overrides: Bindings): Bindings {
   const taken = new Set(Object.values(overrides).flat());
   const defaults = Object.fromEntries(Object.entries(DEFAULT_BINDINGS).map(([id, bs]) => [id, id in overrides ? bs : bs.filter((b) => !taken.has(b))]));

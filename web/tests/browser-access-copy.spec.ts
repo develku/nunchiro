@@ -43,8 +43,8 @@ test('browser_on_with_no_address: a taken port keeps On and the paired list says
     await openBrowserAccess(app);
     await app.getByRole('textbox', { name: 'Port' }).fill(String(port));
     await app.getByRole('textbox', { name: 'Port' }).blur();
-    await app.getByRole('switch', { name: 'Allow browser access', exact: true }).click();
-    await expect(app.getByRole('switch', { name: 'Allow browser access', exact: true })).toBeChecked();
+    await app.getByRole('switch', { name: 'Allow phone and web access', exact: true }).click();
+    await expect(app.getByRole('switch', { name: 'Allow phone and web access', exact: true })).toBeChecked();
     await expect(app.locator('.browser-page [role="alert"][data-field="problem"]')).toContainText('in use');
     await expect(app.getByText('None yet. No address is available to open right now.')).toBeVisible();
     await expect(app.getByText('Turn on access')).toHaveCount(0);
@@ -98,7 +98,7 @@ test('browser_address_text_is_plain: every copied or opened string is a listed b
 test('browser_address_buttons_only_where_addresses_show: off, nothing is listed and no button', async ({ app }) => {
   await openWindow(app);
   await openBrowserAccess(app);
-  await expect(app.getByRole('switch', { name: 'Allow browser access', exact: true })).not.toBeChecked();
+  await expect(app.getByRole('switch', { name: 'Allow phone and web access', exact: true })).not.toBeChecked();
   await expect(app.getByRole('button', { name: /^(Copy|Open) http/ })).toHaveCount(0);
 });
 

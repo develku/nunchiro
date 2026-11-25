@@ -11,6 +11,7 @@ import { DEFAULT_AGENT } from '../onboarding/state';
 import { AGENTS_OFF, isOff, MODEL_NAME, modelChoices, MODELS_OFF, NEW_DEFAULTS, useCustomModels, type AgentCli, type Defaults, type ModelDefault, type Stored } from '../agents/newDefaults';
 import type { CoreClient } from '../../api';
 import { Ln, type T } from './providers';
+import { keyText } from '../../keys';
 
 const CUSTOM = '__custom';
 
@@ -33,7 +34,7 @@ export function DefaultAgentRow({ t, acp }: { t: T; acp: AcpRow[] }) {
     <Row
       setting="newDefaultAgent"
       label={t('agents.new.agent')}
-      desc={t('providersPage.agentDesc')}
+      desc={t('providersPage.agentDesc', { key: keyText('session.new') })}
       reset={<Reset t={t} label={t('agents.new.agent')} show={agent !== ''} run={() => setAgent('')} />}
       control={
         <Select label={t('agents.new.agent')} value={agent} onChange={setAgent}>

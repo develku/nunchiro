@@ -7,15 +7,11 @@ mod home;
 use home::cli;
 use std::{
     fs,
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufRead, BufReader, Write},
     net::TcpStream,
     os::unix::{fs::PermissionsExt, net::UnixStream},
     path::PathBuf,
     process::{Child, Stdio},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-    },
     thread,
     time::{Duration, Instant},
 };
@@ -598,7 +594,13 @@ fn owner_hardening_old_window_json_is_overwritten() {
 
 /// `n` slow sockets that trickle a partial request and reopen as soon as they are closed, for at least
 /// 10 s, while the owner connects and authenticates at least 20 times. Idle loopback sockets, no spinning.
+#[cfg(feature = "measure")]
 fn refill(n: usize) {
+    use std::io::Read;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    };
     let core = Core::new();
     let (port, token) = core.window();
     let stop = Arc::new(AtomicBool::new(false));
@@ -673,17 +675,17 @@ fn refill(n: usize) {
 }
 
 // Socket flood with a latency bound: kept out of the merge gate (V1A-17; host load rule). Run with
-// `cargo test -p nunchiro-core --test owner_hardening refill -- --ignored` when the 1-minute load is below 15.
+// `cargo test -p nunchiro-core --features measure --test owner_hardening refill` when the 1-minute load is below 15.
+#[cfg(feature = "measure")]
 #[test]
-#[ignore = "socket flood; run explicitly when host load is below 15"]
 fn owner_hardening_handshake_refill_16() {
     refill(16);
 }
 
 // Socket flood with a latency bound: kept out of the merge gate (V1A-17; host load rule). Run with
-// `cargo test -p nunchiro-core --test owner_hardening refill -- --ignored` when the 1-minute load is below 15.
+// `cargo test -p nunchiro-core --features measure --test owner_hardening refill` when the 1-minute load is below 15.
+#[cfg(feature = "measure")]
 #[test]
-#[ignore = "socket flood; run explicitly when host load is below 15"]
 fn owner_hardening_handshake_refill_40() {
     refill(40);
 }

@@ -18,6 +18,7 @@ import { keyOf, type Card } from './model';
 import { startCard } from './CardEditor';
 import { elapsed, morph, summaryOf, type Bucket } from './watch';
 import { kindOfChip, STATE_PRESENTATION } from './prFacts';
+import { Archive, DoneDays } from './Archive';
 import './watch.css';
 
 export const bucketWord = (t: T, b: Bucket) => t(`board.watch.col.${b}`);
@@ -205,7 +206,8 @@ export function WatchCard({ t, core, card, session, bucket, open, showProject, c
   );
 }
 
-export function WatchGrid({ t, buckets, lanes, counts, bucketOf, cell }: { t: T; buckets: Bucket[]; lanes: Lane[]; counts: Map<Bucket, number>; bucketOf: (card: Card) => Bucket; cell: (card: Card, bucket: Bucket) => React.ReactNode }) {
+/** Ticket 1090: Done cards sit under day heads and `old` ones (past the Archive age) in the Archive fold, as the columns view does (1066). */
+export function WatchGrid({ t, buckets, lanes, counts, bucketOf, cell, old, now }: { t: T; buckets: Bucket[]; lanes: Lane[]; counts: Map<Bucket, number>; bucketOf: (card: Card) => Bucket; cell: (card: Card, bucket: Bucket) => React.ReactNode; old: Card[]; now: number }) {
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const fold = (key: string) => setFolded((f) => (f.has(key) ? new Set([...f].filter((k) => k !== key)) : new Set([...f, key])));
   const rows: (Lane | null)[] = lanes.length ? lanes : [null];
@@ -237,14 +239,11 @@ export function WatchGrid({ t, buckets, lanes, counts, bucketOf, cell }: { t: T;
             {open &&
               buckets.map((b) => {
                 const cards = (lane?.cards ?? []).filter((c) => bucketOf(c) === b);
+                const item = (c: Card) => <li key={keyOf(c)}>{cell(c, b)}</li>;
                 return (
                   <div key={b} className="wcol" data-bucket={b} data-lane={lane?.key ?? ''}>
                     {cards.length ? (
-                      <ul className="wcards">
-                        {cards.map((c) => (
-                          <li key={keyOf(c)}>{cell(c, b)}</li>
-                        ))}
-                      </ul>
+                      <ul className="wcards">{b === 'done' ? <DoneDays t={t} cards={cards} now={now} item={item} /> : cards.map(item)}</ul>
                     ) : (
                       <p className="wnone dim">{t('board.watch.empty')}</p>
                     )}
@@ -254,6 +253,12 @@ export function WatchGrid({ t, buckets, lanes, counts, bucketOf, cell }: { t: T;
           </Fragment>
         );
       })}
+      {old.length > 0 &&
+        buckets.map((b) => (
+          <div key={b} className="wcol" data-bucket={b} data-archive-cell>
+            {b === 'done' && <Archive t={t} cards={old} />}
+          </div>
+        ))}
     </div>
   );
 }

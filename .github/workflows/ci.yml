@@ -1,0 +1,168 @@
+# The merge gate (ticket 1134): pull requests run it, the merge queue runs it on the merged tree, and the one required
+# check is the `gate` job. A push to main runs only the jobs that save build caches: caches written on main can be read
+# by every pull request and merge-queue run, caches written there cannot (GitHub cache scoping; Orca warms main the same
+# way, .github/workflows/ci-cache-warmup.yml:89 at stablyai/orca 2fbb071e).
+# Rust runs on macOS only: nunchiro-core uses macOS APIs (libproc, LOCAL_PEERTOKEN, renameatx_np) and does not build for
+# Linux, so the tests are split over macOS runners from one nextest archive instead of over Linux runners.
+name: CI
+
+on:
+  pull_request:
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels its older run; merge-queue and main runs are never cancelled (T3 Code ci.yml:12-14).
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  NEXTEST_VERSION: 0.9.150
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install # the version and components in rust-toolchain.toml
+      - run: cargo fmt --all --check
+      - name: sh -n scripts/scenario/*.sh
+        run: for f in scripts/scenario/*.sh; do sh -n "$f"; done
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1, version from packageManager
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+        working-directory: web
+
+  # clippy, doctests and one build of every test binary; the partitions below run the archive.
+  rust-build:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: macos-dev
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-nextest@${{ env.NEXTEST_VERSION }}
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+      - name: Packages and web/dist (the core embeds it)
+        run: scripts/setup-worktree.sh
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo nextest archive --workspace --config-file scripts/nextest.toml --archive-file nextest-archive.tar.zst
+      - run: cargo test --workspace --doc
+      - if: github.event_name != 'push'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nextest-archive
+          path: nextest-archive.tar.zst
+          retention-days: 1
+          compression-level: 0 # already zstd
+
+  rust-test:
+    if: github.event_name != 'push'
+    needs: rust-build
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-nextest@${{ env.NEXTEST_VERSION }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nextest-archive
+      - run: git config --global user.name ci && git config --global user.email ci@localhost
+      # Extracted over the checkout, so target/debug/nunchiro sits where the core tests look for it (tests/fixtures/cli.rs).
+      - name: cargo nextest run (partition ${{ matrix.partition }}/${{ strategy.job-total }})
+        run: >-
+          cargo nextest run --archive-file nextest-archive.tar.zst --workspace-remap . --extract-to . --extract-overwrite
+          --config-file scripts/nextest.toml --no-tests fail --partition count:${{ matrix.partition }}/${{ strategy.job-total }}
+
+  app:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: app/src-tauri -> target
+          shared-key: macos-app
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: scripts/setup-worktree.sh
+      - run: scripts/check-app.sh
+
+  # cli docs, the Python scenario suite and the Playwright core set: all three need the core binary.
+  web:
+    if: github.event_name != 'push'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: macos-dev
+          save-if: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: scripts/setup-worktree.sh
+      - run: git config --global user.name ci && git config --global user.email ci@localhost
+      - run: scripts/check-cli-docs.sh
+      - run: scripts/scenario-tests.sh
+        env:
+          SCENARIO_JOBS: 2
+      - id: pw
+        run: echo "version=$(cd web && pnpm exec playwright --version)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - run: pnpm exec playwright install chromium
+        working-directory: web
+      - run: .github/scripts/web-core.sh
+
+  # The one required check of the merge queue. `always()`: a skipped or cancelled job must still fail it (T3 Code
+  # ci.yml:660-696; Orca pr.yml:1279). Add every new job to `needs`.
+  gate:
+    if: always() && github.event_name != 'push'
+    needs: [lint, rust-build, rust-test, app, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' > /dev/null

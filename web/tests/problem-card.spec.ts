@@ -3,9 +3,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Session } from '../src/types';
-import { expect, openWindow, test, type Core, agentsZone } from './fixtures';
+import { expect, openWindow, test, type Core, stripOnTop } from './fixtures';
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: these specs read the AGENTS rows, which the default window no longer shows
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const snapshot = (core: Core) => core.cli('snapshot', '--json').sessions as Session[];
 /** A fake agent: prints `text`, waits for `<project>/go` when `wait` is set, then exits with `code`. */
@@ -24,7 +24,7 @@ test('an unknown exit shows the generic card above the pane, a red dot, and a ke
   const old = start(core, 'claude', project, 'crash');
   await ended(core, old.id).toBe('unexpected');
   await openWindow(app);
-  await app.locator(`.ar[data-agent="${old.id}"]`).click();
+  await app.locator(`button.row.wt2[data-menu-session="${old.id}"]`).click();
   const band = app.locator('.problem-band');
   await expect(band).toHaveAttribute('data-problem', 'unexpected');
   await expect(band).toContainText('Session ended unexpectedly (exit code 3).');
@@ -34,9 +34,8 @@ test('an unknown exit shows the generic card above the pane, a red dot, and a ke
   const b = (await band.boundingBox())!;
   const pane = (await app.locator('.pane').boundingBox())!;
   expect(b.y + b.height).toBeLessThanOrEqual(pane.y + 0.5);
-  // Red in AGENTS and in the tree (a broken row, never the orange of "your turn").
-  const red = await app.locator(`.ar[data-agent="${old.id}"] .st`).evaluate((e) => getComputedStyle(e).backgroundColor);
-  expect(red).toMatch(/rgb\((207, 34, 46|248, 81, 73)\)/);
+  // Red in the tree (a broken row, never the orange of "your turn").
+  await expect(app.locator(`button.row.wt2[data-menu-session="${old.id}"]`)).toHaveAttribute('data-kind', 'fail');
   await expect(app.locator('.tree .cstrip > .sg[data-tone="r"]')).toHaveAttribute('data-n', '1');
   // The keyboard reaches the fix from the session header; Enter restarts in the same folder.
   await app.locator('.shead b').click();
@@ -58,13 +57,13 @@ test('a card that arrives while the pointer is over the pane waits until it leav
   fake(core, 'claude', 'working on it', 3, true);
   const s = start(core, 'claude', project, 'later');
   await openWindow(app);
-  await app.locator(`.ar[data-agent="${s.id}"]`).click();
+  await app.locator(`button.row.wt2[data-menu-session="${s.id}"]`).click();
   const pane = app.locator('.pane');
   const before = (await pane.boundingBox())!;
   await app.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
   fs.writeFileSync(path.join(project, 'go'), '');
   await ended(core, s.id).toBe('unexpected');
-  await expect(app.locator(`.ar[data-agent="${s.id}"] .st`)).toHaveAttribute('data-problem', 'unexpected');
+  await expect(app.locator(`button.row.wt2[data-menu-session="${s.id}"]`)).toHaveAttribute('data-kind', 'fail');
   // Under the pointer the band does not come in: the pane stays where the ended session's view put it.
   const ended1 = await pane.boundingBox();
   await app.waitForTimeout(500);
@@ -80,7 +79,7 @@ test('a Codex usage limit shows the reset time and Switch agent, never Switch ac
   const s = start(core, 'codex', project, 'limit');
   await ended(core, s.id).toBe('usage_limit');
   await openWindow(app);
-  await app.locator(`.ar[data-agent="${s.id}"]`).click();
+  await app.locator(`button.row.wt2[data-menu-session="${s.id}"]`).click();
   const band = app.locator('.problem-band');
   await expect(band).toContainText('Codex usage limit reached. Resets 2:20 PM per Codex.');
   await expect(band.getByRole('button')).toHaveText(['Switch agent']);
@@ -94,7 +93,7 @@ test('a hook trust failure offers a hook-less start that says what it loses', as
   const s = start(core, 'codex', project, 'hooks');
   await ended(core, s.id).toBe('hook_trust');
   await openWindow(app);
-  await app.locator(`.ar[data-agent="${s.id}"]`).click();
+  await app.locator(`button.row.wt2[data-menu-session="${s.id}"]`).click();
   const band = app.locator('.problem-band');
   await expect(band.locator('.loss')).toContainText('Nunchiro finds waiting sessions only by reading the screen');
   fake(core, 'codex', 'fake agent ready', 0, true);
@@ -118,7 +117,7 @@ test('a missing agent opens a failed tab with Open install page', async ({ app, 
   )) as { Ok?: { session: Session } };
   const s = reply.Ok!.session;
   expect(s).toMatchObject({ state: 'failed', problem: { case: 'not_installed' } });
-  await app.locator(`.ar[data-agent="${s.id}"]`).click();
+  await app.locator(`button.row.wt2[data-menu-session="${s.id}"]`).click();
   await expect(app.locator('.problem-band')).toContainText('Claude is not installed (claude is not on PATH).');
   await expect(app.locator('.problem-band').getByRole('button')).toHaveText(['Open install page']);
 });

@@ -294,8 +294,10 @@ dependencies = [
 name = "nunchiro"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "nunchiro-core",
  "serde_json",
+ "sha2",
  "tungstenite",
 ]
 

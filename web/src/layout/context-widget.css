@@ -1,0 +1,84 @@
+/* Ticket 1048: the Context widget. The bar is the status bar's usage bar (chrome/usage-block.css): muted fill,
+   the limited light near the limit, the bad light at it. */
+.ctxw {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  padding: var(--sp-8) var(--sp-12);
+  font-size: var(--fs-2);
+  color: var(--text);
+}
+.ctxw-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-8);
+}
+.ctxw-n,
+.ctxw-model,
+.ctxw-src,
+.ctxw-asof,
+.ctxw-note,
+.ctxw-why {
+  color: var(--muted);
+}
+.ctxw-n {
+  font-variant-numeric: tabular-nums;
+}
+.ctxw-src,
+.ctxw-asof,
+.ctxw-note,
+.ctxw-model {
+  font-size: var(--fs-1);
+}
+.ctxw-why {
+  margin: 0;
+}
+.ctxw-bar {
+  height: var(--sp-6);
+  border-radius: var(--r-2);
+  background: var(--line);
+  overflow: hidden;
+}
+.ctxw-bar i {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-2);
+  background: var(--muted);
+}
+.ctxw-bar.warn i {
+  background: var(--light-limited);
+  box-shadow: var(--glow-limited);
+}
+.ctxw-bar.bad i {
+  background: var(--light-bad);
+  box-shadow: var(--glow-bad);
+}
+/* Ticket 1059: the /context rows under the bar; each row's bar is the main bar's, thinner. */
+.ctxw-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ctxw-rows li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--sp-2) var(--sp-8);
+}
+.ctxw-rowbar {
+  grid-column: 1 / -1;
+  height: var(--sp-2);
+  border-radius: var(--r-2);
+  background: var(--line);
+  overflow: hidden;
+}
+.ctxw-rowbar i {
+  display: block;
+  height: 100%;
+  background: var(--muted);
+}
+.ctxw-show {
+  align-self: flex-start;
+}

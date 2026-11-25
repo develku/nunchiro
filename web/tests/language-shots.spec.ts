@@ -1,10 +1,10 @@
 // V2-14a: the Language picker (General page since 309459ab) next to the Appearance page (no mockup exists for it), saved under .scratch/language/.
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, openWindow, test, agentsZone, REPO } from './fixtures';
+import { expect, openWindow, test, stripOnTop, REPO } from './fixtures';
 
 test('language_shots: Appearance and Language (on General) pages, side by side', async ({ app, core }) => {
-  agentsZone(core);
+  stripOnTop(core);
   core.shell(core.project('demo'), 'alpha');
   await openWindow(app);
   await app.keyboard.press('Meta+Comma');

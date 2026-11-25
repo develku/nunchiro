@@ -20,6 +20,8 @@ pub enum Case {
     // V2-4b: an ACP agent that never answered the handshake, and a Claude entry refused for lack of an API key.
     AcpNoAnswer,
     AcpRefused,
+    // Ticket 1100: a new Claude Code or Codex version that a screen reader no longer reads right (agent_canary.rs).
+    AgentChanged,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

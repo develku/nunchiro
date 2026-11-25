@@ -62,6 +62,8 @@ export interface PageContext {
   /** q67 look (new 1): the window's live sessions. A running agent that completed a turn proves its account signed in;
    *  Providers and Onboarding both read that proof here, so one never says "Couldn't check" beside the other's "Signed in". */
   sessions?: Session[];
+  /** Ticket 1123 T10: the window's open session, which Skills & hooks offers to restart with a new server. */
+  current?: Session | null;
 }
 
 export interface SettingsPageDef {

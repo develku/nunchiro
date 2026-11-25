@@ -75,7 +75,8 @@ fn board_settings_put_round_trip() {
         before.settings,
         board::Settings {
             stale_minutes: 10,
-            turn_end_nudge: true
+            turn_end_nudge: true,
+            done_days: 7
         }
     );
     let after = home.put(&before.revision, 5, false).unwrap();
@@ -83,13 +84,14 @@ fn board_settings_put_round_trip() {
         after.settings,
         board::Settings {
             stale_minutes: 5,
-            turn_end_nudge: false
+            turn_end_nudge: false,
+            done_days: 7
         }
     );
     // Columns and comments keep their bytes; `[settings]` is appended.
     assert_eq!(
         fs::read_to_string(home.toml()).unwrap(),
-        format!("{HAND}\n[settings]\nstale_minutes = 5\nturn_end_nudge = false\n")
+        format!("{HAND}\n[settings]\nstale_minutes = 5\nturn_end_nudge = false\ndone_days = 7\n")
     );
     assert_eq!(after.columns, before.columns);
     assert_ne!(after.revision, before.revision);
@@ -109,7 +111,7 @@ fn board_settings_put_round_trip() {
     let wire = serde_json::to_value(&again).unwrap();
     assert_eq!(
         wire["settings"],
-        json!({"stale_minutes": 30, "turn_end_nudge": false})
+        json!({"stale_minutes": 30, "turn_end_nudge": false, "done_days": 7})
     );
 }
 
@@ -176,7 +178,7 @@ fn board_settings_put_creates_only_what_is_needed() {
         "{text}"
     );
     assert!(
-        text.ends_with("\n[settings]\nstale_minutes = 5\nturn_end_nudge = true\n"),
+        text.ends_with("\n[settings]\nstale_minutes = 5\nturn_end_nudge = true\ndone_days = 7\n"),
         "{text}"
     );
     assert_eq!(text.matches("[[columns]]").count(), 5);
@@ -221,6 +223,48 @@ fn board_settings_both_keys_parse() {
     }
 }
 
+/// Ticket 1066: `done_days` is 1, 7 or 30 (default 7); any other value refuses the file.
+#[test]
+fn done_days_parses_1_7_30_and_refuses_the_rest() {
+    let home = Home::new();
+    for (tail, want) in [
+        ("", Some(7)),
+        ("\n[settings]\ndone_days = 1\n", Some(1)),
+        ("\n[settings]\ndone_days = 7\n", Some(7)),
+        ("\n[settings]\ndone_days = 30\n", Some(30)),
+        ("\n[settings]\ndone_days = 3\n", None),
+        ("\n[settings]\ndone_days = 0\n", None),
+    ] {
+        fs::write(home.toml(), format!("{HAND}{tail}")).unwrap();
+        let board = home.snapshot();
+        match want {
+            Some(days) => assert_eq!(
+                (board.error.as_deref(), board.settings.done_days),
+                (None, days),
+                "{tail}"
+            ),
+            None => assert!(
+                board
+                    .error
+                    .as_deref()
+                    .is_some_and(|e| e.contains("done_days must be 1, 7 or 30")),
+                "{tail}: {:?}",
+                board.error
+            ),
+        }
+    }
+    // The panel's write keeps the other keys when it gives only done_days' new value.
+    fs::write(home.toml(), format!("{HAND}\n[settings]\ndone_days = 30\n")).unwrap();
+    let before = home.snapshot();
+    let after = home.put(&before.revision, 10, true).unwrap();
+    assert_eq!(after.settings.done_days, 30);
+    assert!(
+        fs::read_to_string(home.toml())
+            .unwrap()
+            .contains("done_days = 30")
+    );
+}
+
 // Threat 1: an agent's session token cannot turn the nudge off or hide stale cards. The rights check refuses it
 // (second wall) and, through a real `serve`, `check_agent` refuses it first; board.toml keeps its bytes.
 #[test]
@@ -262,11 +306,15 @@ fn board_settings_put_agent_refused() {
             revision,
             stale_minutes: 7,
             turn_end_nudge: true,
+            done_days: Some(30),
         },
     )
     .unwrap()
     {
-        Reply::BoardSnapshot { board } => assert_eq!(board.settings.stale_minutes, 7),
+        Reply::BoardSnapshot { board } => assert_eq!(
+            (board.settings.stale_minutes, board.settings.done_days),
+            (7, 30)
+        ),
         other => panic!("{other:?}"),
     }
 }

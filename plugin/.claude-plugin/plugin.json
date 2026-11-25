@@ -1,5 +1,6 @@
 {
   "name": "nunchiro",
   "version": "1",
+  "license": "MIT",
   "description": "How to start, prompt, wait for and read other coding agents with the nunchiro CLI."
 }

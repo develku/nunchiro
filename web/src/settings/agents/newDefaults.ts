@@ -1,9 +1,9 @@
 // Ticket 223 (B3): what a new session starts with when the owner set it. Per agent CLI, with a project override field by
 // field; a field nobody set leaves the session to its old inheritance (NewSession's `likeNew`). Shape after T3 Code's
 // ProjectDefaultsSettings.tsx (a global default, a project value over it; MIT License, Copyright (c) 2026 T3 Tools Inc.; idea only).
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { CoreClient } from '../../api';
-import { models, type Option } from '../../picker/catalog';
+import { models, modelsRead, readCodexModels, subscribeModels, type Option } from '../../picker/catalog';
 import type { AgentKind } from '../../types';
 import { currentFeature, defineSetting } from '../useFeatureSetting';
 
@@ -85,6 +85,9 @@ export function withoutDefaultModel({ all, projects }: Stored, kind: AgentCli, m
 /** The stored ids for a list outside Settings, read again when `again` changes. A window the core refuses (a browser tab) lists the built-ins. */
 export function useCustomModels(core: CoreClient, again?: unknown): CustomModels {
   const [value, setValue] = useState<CustomModels>({});
+  // Ticket 1100: every model list reads this hook, so Codex's own list is read here too and drawn again once it arrives.
+  useEffect(() => readCodexModels(core, !!again), [core, again]);
+  useSyncExternalStore(subscribeModels, modelsRead);
   useEffect(() => {
     let live = true;
     core.request({ op: 'quit_settings' }).then(

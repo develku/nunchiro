@@ -1,7 +1,7 @@
 // CHROME round 3: one Ctrl+O listener, the view control within 2 clicks, a decision shown once.
 import fs from 'node:fs';
 import path from 'node:path';
-import { type Core, agentsZone, expect, openWindow, REPO, test } from './fixtures';
+import { type Core, stripOnTop, expect, openWindow, REPO, test } from './fixtures';
 import { append, chat, openChat, rec, test as chatTest } from './fixtures/chat/harness';
 import { patchSnapshots } from './visual/compare';
 
@@ -53,7 +53,7 @@ chatTest('transcript_view_reachable_in_2_clicks', async ({ page, chatCore }) => 
 });
 
 chatTest('decision_shown_once', async ({ page, chatCore }) => {
-  agentsZone(chatCore); // a window with the answer strip placed (strip on)
+  stripOnTop(chatCore); // a window with the answer strip placed (strip on)
   const s = chatCore.chat('asks');
   append(s.file, rec.user('go'), rec.assistant('Need to run it.'));
   await patchSnapshots(page, { asks: { waiting: 'permission', text: 'Bash: pnpm install' } });

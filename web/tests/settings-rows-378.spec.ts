@@ -1,10 +1,10 @@
 // Ticket 378 (설정 나머지), four small rows: the branch prefix answers while typing, a missing CLI's chip is grey, and the
 // SSH machines list is read again on its own. The agents are fakes in the test's bin, never a real login.
 import type { Page } from '@playwright/test';
-import { agentsZone, expect, openWindow, test } from './fixtures';
+import { stripOnTop, expect, openWindow, test } from './fixtures';
 import { openSettings } from './settings-modal';
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 async function page(app: Page, name: string) {
   await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name, exact: true }).click();

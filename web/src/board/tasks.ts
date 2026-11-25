@@ -52,6 +52,43 @@ export function lanes(cards: Card[], key: LaneKey): Lane[] {
 /** Columns a card counts as done in: the ones that take the done state or need proof. */
 export const isDone = (c: Column) => c.states.includes('done') || !!c.proof;
 
+const DAY = 86_400_000;
+
+/** Ticket 1066: when a card arrived in Done (an older core sends no `done_at`: its last column change). */
+export const doneAt = (c: Card) => c.done_at ?? c.last_moved_at ?? c.updated_at;
+
+/** Ticket 1090: a done card past the Archive age; the columns view asks it of a done column, the watch view of its Done bucket. */
+export const aged = (days: number, now: number) => (c: Card) => now - doneAt(c) > days * DAY;
+
+/** The Archive's test: a card in a done column that arrived there more than `days` days before `now`. */
+export function archivedIn(columns: Column[], days: number, now: number) {
+  const done = new Set(columns.filter(isDone).map((c) => c.id));
+  const old = aged(days, now);
+  return (c: Card) => done.has(c.column) && old(c);
+}
+
+const HEADS = ['today', 'yesterday', 'week', 'earlier'] as const;
+export type DoneHead = (typeof HEADS)[number];
+
+/** The group head of a done card: calendar day for today and yesterday, then within 7 days, then earlier (30 days only). */
+export function doneHead(at: number, now: number): DoneHead {
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  return HEADS[at >= today.getTime() ? 0 : at >= yesterday.getTime() ? 1 : now - at <= 7 * DAY ? 2 : 3];
+}
+
+/** The cards of a Done cell, newest arrival first, in runs under their heads. */
+export function doneGroups(cards: Card[], now: number): { head: DoneHead; cards: Card[] }[] {
+  const out: { head: DoneHead; cards: Card[] }[] = [];
+  for (const card of [...cards].sort((a, b) => doneAt(b) - doneAt(a))) {
+    const head = doneHead(doneAt(card), now);
+    (out.at(-1)?.head === head ? out.at(-1)! : out[out.push({ head, cards: [] }) - 1]).cards.push(card);
+  }
+  return out;
+}
+
 /** Minutes since the card last changed column, when that is past the threshold; null otherwise or where it cannot go stale. */
 export function staleMinutes(card: Card, column: Column | undefined, now: number, threshold = STALE_MIN): number | null {
   if (card.source === 'integration' || !column || !column.states.length || isDone(column)) return null;
@@ -69,11 +106,19 @@ export const broken = (card: Card, session?: Session) => (session ? status(sessi
 
 const TODO_DOT = 'todo'; // a data token: the To do column claims no state
 
+/**
+ * Ticket 1090: the one rule for "working" on a card that is not a session's own (a task, an integration card): one of
+ * its attached seats is in a turn (the core's seat state, board/mod.rs `session_state`). Its column alone never says it:
+ * a card left in Working after its seat stopped, closed or never started is waiting.
+ */
+export const seatWorking = (card: Card) => !!card.attachments?.some((a) => a.state === 'working');
+
 /** The task card's dot (draft B): red broken, orange your turn, else its column's state colour (To do: grey). */
 export function taskDot(card: Card, session: Session | undefined, column: Column | undefined) {
   if (broken(card, session)) return 'bad';
   if (yourTurn(card, session)) return 'you';
-  return column?.states[0] ?? TODO_DOT;
+  const state = column?.states[0] ?? TODO_DOT;
+  return state === 'working' && !seatWorking(card) ? TODO_DOT : state;
 }
 
 /**

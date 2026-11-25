@@ -350,6 +350,8 @@ test('team_words_at_rest (993 rule 8): at most 40 fixed words, in the page head 
       const copy = page.cloneNode(true) as HTMLElement;
       // The user's own words and data: a teammate's name, its job, its project and agent.
       copy.querySelectorAll('.team-go, .team-row .sds, .team-where').forEach((e) => e.remove());
+      // Ticket 1099: How this place works (owner-approved mockup cohesion-1099 panel 1, one sentence per row) is not the teammates' words.
+      copy.querySelectorAll('.place-sec').forEach((e) => e.remove());
       [...copy.querySelectorAll('.team-row')].slice(rows).forEach((e) => e.remove());
       // A clone is not rendered (no innerText): its text nodes, a space between them.
       const out: string[] = [];

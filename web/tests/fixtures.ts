@@ -367,13 +367,13 @@ export async function terminalText(page: Page, id: string) {
 }
 
 /** Box of every row, tab and the composer, keyed so later arrivals can be told apart from moved rows. */
-export const boxes = (page: Page, selector = '.tree .row, .tree .q, .tree .more, .ar, .tab, .cbox, #waiting-strip') =>
+export const boxes = (page: Page, selector = '.tree .row, .tree .q, .tree .more, .tab, .cbox, #waiting-strip') =>
   page.$$eval(selector, (els) =>
     Object.fromEntries(
       els.map((e, i) => {
         const r = e.getBoundingClientRect();
         const h = e as HTMLElement;
-        const key = h.dataset.agent ?? h.dataset.tab ?? (e.closest('.tree') ? `tree-${i}` : e.className);
+        const key = h.dataset.tab ?? (e.closest('.tree') ? `tree-${i}` : e.className);
         return [key, [r.x, r.y, r.width, r.height].map(Math.round).join(',')];
       }),
     ),
@@ -381,16 +381,21 @@ export const boxes = (page: Page, selector = '.tree .row, .tree .q, .tree .more,
 export const unmoved = (before: Record<string, string>, after: Record<string, string>) =>
   Object.keys(before).filter((k) => before[k] !== after[k]);
 
-/** LAYOUT D5b: the default window has no AGENTS rows (Agents is a library widget). A spec that reads or clicks them
- *  seeds the user layout it always had, an `agents` zone left of the centre column: `test.beforeEach(({ core }) => agentsZone(core))`.
- *  needs 107 (ticket 180): a strip right above the composer draws nothing, so the strip sits at the top of the column
- *  (`below`: under the composer, where an arrival takes its height from the terminal's bottom edge as the old place did). */
-export function agentsZone(core: Core, { below = false } = {}) {
-  const zone = (id: string, extra = '') => `\n[[root.children${id === 'agents' ? '' : '.children'}]]\nid = "${id}"\n${extra}widgets = ["${id}"]\n`;
-  fs.writeFileSync(
-    path.join(core.home, 'layout.toml'),
-    `version = 1\nlocked = false\n\n[root]\nid = "main"\nsplit = "row"\n${zone('agents', 'size = 256\n')}\n[[root.children]]\nid = "centre"\nsplit = "column"\n${below ? zone('terminal') + zone('composer') + zone('waiting') : zone('waiting') + zone('terminal') + zone('composer')}`,
-  );
+/** Ticket 1070: opens a session, ended ones too, from the command palette (the tree lists only the running ones and its project). */
+export async function openSessionFromPalette(page: Page, id: string) {
+  const dialog = page.getByRole('dialog', { name: 'Command palette' });
+  await expect(async () => {
+    if (!(await dialog.isVisible())) await page.keyboard.press('Meta+KeyK'); // the window may still be loading after a reload
+    await expect(dialog).toBeVisible({ timeout: 1000 });
+  }).toPass();
+  await dialog.locator(`[data-command="session.open.${id}"]`).click();
+  await expect(dialog).toHaveCount(0);
+}
+
+/** Ticket 1070: closes a session from its tab menu: the core keeps the close for 10 s and the status line offers Undo. */
+export async function closeFromTab(page: Page, id: string) {
+  await page.locator(`.tab[data-tab="${id}"]`).click({ button: 'right' });
+  await page.getByRole('menu', { name: 'Actions' }).getByRole('menuitem', { name: 'Close session' }).click();
 }
 
 /** needs 107 (ticket 180): the shipped default layout keeps the strip's zone right above the composer, where it draws
@@ -403,20 +408,19 @@ export function stripOnTop(core: { home: string }, { below = false } = {}) {
 }
 
 /** needs 107 (ticket 180): the strip in its own zone right of the terminal (a user's placement), for specs that pin "an
- *  arrival moves nothing but the strip": that zone keeps its size, so the terminal never resizes. `agents` keeps the
- *  agentsZone column on the left. */
-export function stripBeside(core: { home: string }, { agents = false } = {}) {
-  const c = agents ? 'root.children' : 'root';
+ *  arrival moves nothing but the strip": that zone keeps its size, so the terminal never resizes. */
+export function stripBeside(core: { home: string }) {
   const leaf = (at: string, id: string, extra = '') => `\n[[${at}]]\nid = "${id}"\n${extra}widgets = ["${id}"]\n`;
-  const centre = `split = "column"\n\n[[${c}.children]]\nid = "upper"\nsplit = "row"\n${leaf(`${c}.children.children`, 'terminal')}${leaf(`${c}.children.children`, 'waiting', 'size = 820\n')}${leaf(`${c}.children`, 'composer')}`;
-  const root = agents ? `id = "main"\nsplit = "row"\n${leaf('root.children', 'agents', 'size = 256\n')}\n[[root.children]]\nid = "centre"\n${centre}` : `id = "centre"\n${centre}`;
-  fs.writeFileSync(path.join(core.home, 'layout.toml'), `version = 1\nlocked = false\n\n[root]\n${root}`);
+  const centre = `split = "column"\n\n[[root.children]]\nid = "upper"\nsplit = "row"\n${leaf(`root.children.children`, 'terminal')}${leaf(`root.children.children`, 'waiting', 'size = 820\n')}${leaf(`root.children`, 'composer')}`;
+  fs.writeFileSync(path.join(core.home, 'layout.toml'), `version = 1\nlocked = false\n\n[root]\nid = "centre"\n${centre}`);
 }
 
-/** LAYOUT D5b: the shape of the pre-D5b default layout (a left column of two zones, `tree` over `agents`, beside the centre
+/** LAYOUT D5b: the shape of the pre-D5b default layout (a left column of two zones, `tree` over a second zone, beside the centre
  *  column), for specs about zones, sizes, folding and pane mode that were written against it. The tree is a sidebar widget
- *  now, so the zone named `tree` holds Files. */
-export function legacyLayout(core: Core, { strip = 'above' as 'above' | 'top' | 'beside' } = {}) {
+ *  now, so the zone named `tree` holds Files. `retired` makes the second zone name the Agents widget of before ticket 1070, for the
+ *  test that an old file still loads. */
+export function legacyLayout(core: Core, { strip = 'above' as 'above' | 'top' | 'beside', retired = false } = {}) {
+  const second = retired ? 'agents' : 'context'; // Context: a light widget with the old zone's 80 px minimum height
   const term = '\n[[root.children.children]]\nid = "terminal"\nwidgets = ["terminal"]\n';
   const wait = '\n[[root.children.children]]\nid = "waiting"\nwidgets = ["waiting"]\n';
   // needs 107 (ticket 180): a strip right above the composer draws nothing; `top` puts it over the terminal, `beside` in
@@ -442,9 +446,9 @@ id = "tree"
 widgets = ["files"]
 
 [[root.children.children]]
-id = "agents"
+id = "${second}"
 size = 190
-widgets = ["agents"]
+widgets = ["${second}"]
 
 [[root.children]]
 id = "centre"

@@ -2,7 +2,7 @@
 // xterm theme for every open terminal. System mode follows the OS live.
 import { useLayoutEffect, useMemo, useSyncExternalStore } from 'react';
 import type { Settings } from '../settings';
-import { deriveTokens, isDark, xtermTheme } from './derive';
+import { chatAccent, deriveTokens, isDark, xtermTheme } from './derive';
 import { DARK_PICK, LIGHT_PICK, type ThemePick } from './nunchiro';
 
 const DARK = '(prefers-color-scheme: dark)';
@@ -47,11 +47,15 @@ export function useTheme(s: Settings) {
       sel.textContent = '::selection { background: var(--selection-bg); color: var(--selection-text); }';
       document.head.append(sel);
     }
+    // Ticket 1064, 1088: the chat accent is the theme's colour (0) or a palette slot; a bundled theme's own colour is its blue
+    // (palette 4, the ko/ run hue), so at 0 or 4 it keeps tokens.css as it is.
+    const keep = bundled && (s.chatAccent === 0 || s.chatAccent === 4);
+    for (const [k, v] of Object.entries(chatAccent(pick.colors, s.chatAccent))) keep ? root.style.removeProperty(k) : root.style.setProperty(k, v);
     const scheme = isDark(pick.colors) ? 'dark' : 'light';
     // chat, diff, files and sheet styles key their own light/dark sets off this attribute.
     root.dataset.theme = scheme;
     root.style.colorScheme = scheme;
-  }, [pick]);
+  }, [pick, s.chatAccent]);
   // Ticket 1039: Plain turns the chat's accent rules off; chat/chat.css keys them off this attribute.
   useLayoutEffect(() => {
     if (s.chatColours === 'plain') document.documentElement.dataset.chatColours = 'plain';

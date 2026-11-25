@@ -648,6 +648,30 @@ fn linked_codex(target: &Path, files: u64) -> PathBuf {
     std::os::unix::fs::symlink(target, own.join("sessions")).unwrap();
     h
 }
+/// Ticket 1045: the cap drops the oldest rollouts, so the newest record's limits are still read.
+#[test]
+fn usage_budget_cap_keeps_the_newest_codex_limits() {
+    let h = home::short("usage");
+    let own = h.join(".codex");
+    let rollout = |day: &str, pct: u32| {
+        let dir = own.join(format!("sessions/2026/10/{day}"));
+        fs::create_dir_all(&dir).unwrap();
+        let reset = NOW + 3600;
+        fs::write(
+            dir.join("r.jsonl"),
+            format!(
+                "{{\"timestamp\":\"2026-10-{day}T01:00:00.000Z\",\"type\":\"event_msg\",\"payload\":{{\"type\":\"token_count\",\"info\":{{\"total_token_usage\":{{\"total_tokens\":10}},\"last_token_usage\":{{\"input_tokens\":10,\"output_tokens\":0}}}},\"rate_limits\":{{\"primary\":{{\"used_percent\":{pct}.0,\"window_minutes\":300,\"resets_at\":{reset}}}}}}}}}\n"
+            ),
+        )
+        .unwrap();
+    };
+    rollout("20", 90);
+    rollout("24", 30);
+    let row = codex_own(&h, &mut Budget::new(1000, 1, u64::MAX));
+    assert!(row.partial);
+    assert_eq!(row.session.map(|l| l.left_pct), Some(70));
+    fs::remove_dir_all(&h).unwrap();
+}
 fn codex_own(h: &Path, budget: &mut Budget) -> usage::Row {
     let own = h.join(".codex");
     usage::rows(

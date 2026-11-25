@@ -35,8 +35,11 @@ for (const head of ['project', 'group'] as const) {
       await expect(folded(app)).toHaveAttribute('aria-expanded', 'false');
       const block = app.locator('.sess').filter({ has: q });
       await expect(block.locator('[data-act="allow"], [data-act="deny"], [data-act="choose"], [data-act="peek"], .dn, .menu')).toHaveCount(0);
-      const focus = head === 'project' ? block.locator('.row.wt2') : q;
+      // A line under its row takes no focus, so the row is the target in both cases. Ticket 1097: a digit typed into the
+      // empty composer presses the docked card's button, so the keys must not reach the composer fold() focused.
+      const focus = block.locator('.row.wt2');
       await focus.focus();
+      await expect(focus).toBeFocused();
       for (const key of ['Digit1', 'Digit3', 'Space']) await app.keyboard.press(key);
       await expect(app.locator('.peek, .dn')).toHaveCount(0);
       expect(px.sent).toEqual([]);

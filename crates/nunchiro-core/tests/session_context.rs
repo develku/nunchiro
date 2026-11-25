@@ -380,6 +380,7 @@ fn remote_session_context_refused_locally() {
             machine: "fixture".into(),
             request: Box::new(Request::SessionContext {
                 id: "abcd1234".into(),
+                refresh: false,
             }),
         },
     );

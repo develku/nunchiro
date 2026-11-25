@@ -480,12 +480,22 @@ fn dialog_or_picker_drawn_after_the_paste_drops_the_enter() {
         assert_eq!(send["status"], "attempting");
         h.until(|| h.row(&id, &send)["status"] != "attempting");
         let row = h.row(&id, &send);
-        assert_eq!(row["status"], "failed", "{flag}");
+        // Ticket 1094 rules 6-7: the user's own message whose Enter is dropped (dialog, picker, composer) waits queued.
+        assert_eq!(row["status"], "queued", "{flag}");
         assert_eq!(row["settle"], reason, "{flag}");
         thread::sleep(Duration::from_millis(300));
         assert!(
             !h.reads(&id).iter().any(|r| r == "\r"),
             "{flag}: an Enter reached the PTY"
+        );
+        assert_ne!(h.row(&id, &send)["status"], "delivered", "{flag}");
+        assert_eq!(
+            h.reads(&id)
+                .iter()
+                .filter(|r| r.contains(&long()[..20]))
+                .count(),
+            1,
+            "{flag}: pasted again into the dialog"
         );
         if reason == "enter_dropped_blocked" {
             assert_eq!(h.session(&id)["pending"][0]["kind"], "permission");
@@ -501,12 +511,21 @@ fn a_dialog_cursor_row_is_not_a_held_paste() {
     let send = h.prompt(&id, &long());
     h.until(|| h.row(&id, &send)["status"] != "attempting");
     let row = h.row(&id, &send);
-    assert_eq!(row["status"], "failed");
+    assert_eq!(row["status"], "queued"); // ticket 1094 rule 6: the user's dropped message waits
     assert_eq!(row["settle"], "enter_dropped_composer");
     thread::sleep(Duration::from_millis(300));
     assert!(
         !h.reads(&id).iter().any(|r| r == "\r"),
         "an Enter reached the PTY"
+    );
+    assert_ne!(h.row(&id, &send)["status"], "delivered");
+    assert_eq!(
+        h.reads(&id)
+            .iter()
+            .filter(|r| r.contains(&long()[..20]))
+            .count(),
+        1,
+        "pasted again into the dialog"
     );
     assert!(
         h.screen(&id).contains("❯ 1. Yes"),
@@ -559,12 +578,21 @@ fn a_numbered_paste_and_an_undetected_dialog_does_not_get_the_enter() {
     let send = h.prompt(&id, "1. Yes, go ahead with the plan\n2. Then run tests");
     h.until(|| h.row(&id, &send)["status"] != "attempting");
     let row = h.row(&id, &send);
-    assert_eq!(row["status"], "failed");
+    assert_eq!(row["status"], "queued"); // ticket 1094 rule 6: the user's dropped message waits
     assert_eq!(row["settle"], "enter_dropped_composer");
     thread::sleep(Duration::from_millis(300));
     assert!(
         !h.reads(&id).iter().any(|r| r == "\r"),
         "an Enter reached the PTY"
+    );
+    assert_ne!(h.row(&id, &send)["status"], "delivered");
+    assert_eq!(
+        h.reads(&id)
+            .iter()
+            .filter(|r| r.contains(&"1. Yes, go ahead with the plan"[..20]))
+            .count(),
+        1,
+        "pasted again into the dialog"
     );
     assert!(
         h.screen(&id).contains("❯ 1. Yes"),
@@ -593,9 +621,10 @@ fn the_fixture_echoes_the_paste_start_and_the_tail_branch_is_gone() {
     let send = h.prompt(&id, "Review the plan, then Continue");
     h.until(|| h.row(&id, &send)["status"] != "attempting");
     let row = h.row(&id, &send);
-    assert_eq!(row["status"], "failed");
+    assert_eq!(row["status"], "queued"); // ticket 1094 rule 6: the user's dropped message waits
     assert_eq!(row["settle"], "enter_dropped_composer");
     assert!(!h.reads(&id).iter().any(|r| r == "\r"));
+    assert_ne!(h.row(&id, &send)["status"], "delivered");
 }
 
 #[test]
@@ -629,12 +658,21 @@ fn a_box_above_an_indented_dialog_does_not_get_the_enter() {
     let send = h.prompt(&id, &long());
     h.until(|| h.row(&id, &send)["status"] != "attempting");
     let row = h.row(&id, &send);
-    assert_eq!(row["status"], "failed");
+    assert_eq!(row["status"], "queued"); // ticket 1094 rule 6: the user's dropped message waits
     assert_eq!(row["settle"], "enter_dropped_composer");
     thread::sleep(Duration::from_millis(300));
     assert!(
         !h.reads(&id).iter().any(|r| r == "\r"),
         "an Enter reached the PTY"
+    );
+    assert_ne!(h.row(&id, &send)["status"], "delivered");
+    assert_eq!(
+        h.reads(&id)
+            .iter()
+            .filter(|r| r.contains(&long()[..20]))
+            .count(),
+        1,
+        "pasted again into the dialog"
     );
     assert!(
         h.screen(&id).contains(" ❯ 1. Yes"),
@@ -743,4 +781,31 @@ fn a_lost_enter_is_not_pressed_over_the_users_own_words_nor_for_ever() {
         "{:?}",
         h.reads(&id)
     );
+}
+
+/// Ticket 1121: the screen of a real idle 2.1.331 Builder in auto mode, as the core read it, lost the box's bottom rule
+/// and showed its footer in pieces. No box was read, so the Enter was dropped as "composer" after 21 s.
+#[test]
+fn the_auto_mode_footer_gets_the_enter() {
+    let h = Harness::new(None);
+    let id = h.agent("claude", &[PASTE, "--fixture-auto-footer"]);
+    let start = Instant::now();
+    h.submit(&id, "1 new message: run nunchiro agent check");
+    assert!(start.elapsed() < Duration::from_secs(4), "Enter waited");
+    assert_eq!(h.reads(&id).iter().filter(|r| *r == "\r").count(), 1);
+}
+
+/// Ticket 1121: an idle agent whose output is never quiet gets its Enter once the box showed the paste and still
+/// shows exactly it past the settle time; before, the paste was dropped and sat typed in the box.
+#[test]
+fn a_never_quiet_screen_gets_the_enter_on_box_proof() {
+    let h = Harness::new(Some(300));
+    let id = h.agent("claude", &[PASTE, "--fixture-ticking-footer"]);
+    let send = h.prompt(&id, "hello there");
+    h.until(|| h.row(&id, &send)["status"] != "attempting");
+    let row = h.row(&id, &send);
+    assert_eq!(row["status"], "delivered", "{row}");
+    h.until(|| h.reads(&id).iter().any(|r| r == "\r"));
+    assert_eq!(h.reads(&id).iter().filter(|r| *r == "\r").count(), 1);
+    assert!(acked(&h.screen(&id), "hello there"), "{}", h.screen(&id));
 }

@@ -4,6 +4,7 @@ mod channel; // V2-12m-a
 pub mod discovery;
 #[cfg(test)]
 pub(crate) mod refresh_tests;
+pub mod share; // ticket 1050
 mod transport;
 use crate::{api::*, grants, sessions::Sessions, store};
 pub use channel::{
@@ -86,6 +87,8 @@ pub fn valid_alias(alias: &str) -> Result<(), String> {
     if alias.is_empty()
         || alias.len() > 128
         || alias.starts_with('-')
+        // "." or ".." would name a folder, not a file, as known_hosts.d/<alias> (ticket 1050).
+        || alias.bytes().all(|b| b == b'.')
         || !alias
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))

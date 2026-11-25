@@ -10,6 +10,8 @@
 
 // Bounded (review MUST): a draft keeps its first 100 KB (never dropped whole), and at most 50 drafts stay, the least
 // recently written going first, so closed sessions' drafts cannot pile up in storage.
+import { withoutEnvValues } from './features/pasted-server';
+
 const MAX_CHARS = 100_000;
 const MAX_DRAFTS = 50;
 const KEY = 'nunchiro.composer.drafts.v1';
@@ -45,7 +47,8 @@ export function flushDrafts() {
   clearTimeout(timer);
   timer = undefined;
   try {
-    if (mem.size) localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(mem)));
+    // Ticket 1130 round 2: env values of a pasted `claude mcp add -e KEY=…` line stay in memory only.
+    if (mem.size) localStorage.setItem(KEY, JSON.stringify(Object.fromEntries([...mem].map(([id, text]) => [id, withoutEnvValues(text)]))));
     else localStorage.removeItem(KEY);
   } catch {
     /* quota or blocked storage: the draft lives in memory for this window */

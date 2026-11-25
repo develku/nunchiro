@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { CLAUDE_MODELS, CODEX_MODELS } from '../src/picker/catalog';
+import { CLAUDE_MODELS } from '../src/picker/catalog';
 import { blocked } from '../src/picker/blocked';
 import { makeT } from './i18n-tables';
 import type { Session } from '../src/types';
@@ -117,7 +117,7 @@ test('picker: a Codex switch resumes the conversation and the tab follows it', a
   const s = start(core, 'codex', '--model', 'gpt-6-luna', '--effort', 'medium');
   await expect.poll(() => core.cli('snapshot', '--json').sessions[0].agent_session_id).toBe('FAKE-CODEX-123');
   await openWindow(app);
-  await expect(chip(app, 'model')).toHaveText('Codex · GPT-6 Luna');
+  await expect(chip(app, 'model')).toHaveText('Codex · GPT-6-Luna'); // ticket 1100: Codex's own name
   // AGENTVIEW: the agent redraws when the window fits its terminal, which lives in the side pane.
   await app.getByRole('button', { name: 'Terminal', exact: true }).click();
   await expect.poll(() => core.screen(s.id)).toContain('gpt-fixture redrawn');
@@ -234,13 +234,33 @@ test('picker: Hangul composition survives opening the menu; prefix keys still wo
   await expect(app.getByRole('dialog', { name: 'Command palette' })).toBeVisible();
 });
 
+// Codex's list is the core's alone (ticket 1100): agent_models.rs `fallback_equals_the_recorded_cache` keeps its fixed list
+// equal to Codex's own file, and the next test shows the window lists what the core serves.
 test('picker: the window catalog equals the core allowlist', async () => {
   const rust = fs.readFileSync(path.join(REPO, 'crates/nunchiro-core/src/sessions.rs'), 'utf8');
   const claude = [...rust.slice(rust.indexOf('const CLAUDE_MODELS'), rust.indexOf('const CLAUDE_EFFORTS')).matchAll(/\("([^"]+)", "[^"]+"\)/g)].map((m) => m[1]);
   expect(claude).toEqual(CLAUDE_MODELS.map((m) => m.value));
-  const codexBlock = rust.slice(rust.indexOf('const CODEX_MODELS'), rust.indexOf('const PICKER_OPEN'));
-  const codex = [...codexBlock.matchAll(/\(\s*"([^"]+)",\s*&\[([^\]]+)\],?\s*\)/g)].map((m) => [m[1], m[2].split(/,\s*/).map((e) => e.replaceAll('"', ''))]);
-  expect(codex).toEqual(CODEX_MODELS.map((m) => [m.value, m.efforts]));
+  expect(claude.length).toBeGreaterThan(0);
+});
+
+// Ticket 1100: a model Codex lists in its own catalog shows in the menu with Codex's name and its own efforts; one Codex
+// hides does not; Settings > Providers lists the same rows.
+test('picker: Codex models come from its own catalog', async ({ app, core }) => {
+  fakeAgents(core);
+  const recorded = JSON.parse(fs.readFileSync(path.join(REPO, 'crates/nunchiro-core/tests/fixtures/codex/models_cache-0.161.0.json'), 'utf8'));
+  const levels = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'].map((effort) => ({ effort, description: 'd' }));
+  recorded.models.unshift({ slug: 'gpt-6.2-sol', display_name: 'GPT-6.2 Sol', supported_reasoning_levels: levels, visibility: 'list', priority: 0 });
+  fs.mkdirSync(path.join(core.home, 'codex-home'), { recursive: true });
+  fs.writeFileSync(path.join(core.home, 'codex-home/models_cache.json'), JSON.stringify(recorded));
+  start(core, 'codex', '--model', 'gpt-6.2-sol', '--effort', 'ultra');
+  await openWindow(app);
+  await expect(chip(app, 'model')).toHaveText('Codex · GPT-6.2 Sol');
+  await chip(app, 'model').click();
+  await expect(menu(app, 'model').getByRole('menuitemradio', { name: 'GPT-6.2 Sol' })).toBeVisible();
+  await expect(menu(app, 'model').getByText('GPT-Reserve')).toHaveCount(0);
+  await app.keyboard.press('Escape');
+  await chip(app, 'effort').click();
+  await expect(menu(app, 'effort').getByRole('menuitemradio', { name: /^ultra/ })).toBeVisible();
 });
 
 test('picker shots: composer with each menu open', async ({ app, core }) => {

@@ -60,13 +60,43 @@ function unwrapPastes(raw: string): string {
 
 /** B11 (ticket 991): a user message as the user typed it. Claude records a slash command as `<command-name>` tags and a
  *  long paste as `<pasted_content>`; a handoff (or a side chat's context) folds into its own part. */
-/** Ticket 990: a teammate's brief (the core's first message to a seat, team.rs `brief`), a worker's wake line
- *  (sessions/wake.rs `line`) and the room's notice (room.rs `NOTICE_TAIL`) arrive as user messages. None is what the
- *  person typed. */
+/** Ticket 990: a teammate's brief (the core's first message to a seat, team.rs `brief`) arrives as a user message. It is
+ *  not what the person typed. */
 const BRIEF = /^You are [^\n]{1,120}, a teammate of this user in Nunchiro\./;
-const WAKE = /^(?:worker .{1,200} (?:done|blocked \((?:question|permission)\)|failed|exited)(?:; report says: ".*")?|\d+ new messages?: run nunchiro agent check)$/;
+/** Ticket 1085: every line the core types into a seat's box by itself, also arriving as user messages: a worker's wake
+ *  line (sessions/wake.rs `line`), the room's notice (room.rs `notice`), and auto-advance's heartbeat and nudge
+ *  (advance.rs `beat_line`, `nudge_line`, and `forward_line` to a Builder; the pattern's group 1, the core's team lines). crates/nunchiro-core/tests/fixtures/automatic-lines.json lists each form; a
+ *  core test proves the core types only those, web/tests/wake-lines-1085.spec.ts that each one folds. */
+const BEAT_PART = String.raw`\d+ (?:reports? waits? for review|approved waits? to merge|seats? stalled)`;
+const AUTO = new RegExp(
+  String.raw`^(?:worker .{1,200}? (?:done|blocked \((?:question|permission)\)|failed|exited|ended a turn \(no report yet\)|waits for your answer to its question in the room)(?:; report says: "[^"\n]*")?|\d+ new messages?: run nunchiro agent check|(Team: ${BEAT_PART}(?:, ${BEAT_PART})*\.|Lead: you have been quiet for \d+ minutes with the task open; finish it or say what blocks you\.|Review round \d+ of \d+ asked for changes at [0-9a-f ]{1,200}: .{0,4000}?\. .{1,200}? sends you the full findings as a room message \(agent send\): read them with \`nunchiro agent check\`, fix them, commit, and write REPORT\.md again\.))`,
+);
+const AUTO_LINE = new RegExp(`${AUTO.source}$`);
 
-export function userView(raw: string): { text: string; handoff?: string; brief?: string; wake?: string } {
+/** Ticket 1072 + 1085: a user message that starts with automatic lines: how many, how many of them are the core's team
+ *  lines, and the rest (the owner's words). Older transcripts hold the owner's words after a line, on the next row or
+ *  glued on the same row. Glued counts only when one complete form is followed at once by a letter or digit: the core
+ *  put nothing between them, while the owner's own "worker 3 failed to start" or "worker w1 done, merge it" has a space
+ *  or a mark and stays whole. A message that quotes a line stays whole. Null when it does not start with one. */
+export function wakeSplit(raw: string): { n: number; team: number; rest: string } | null {
+  let rest = raw.trim();
+  let n = 0;
+  let team = 0;
+  for (;;) {
+    const line = rest.split('\n', 1)[0];
+    // A whole row first: a worker's name may hold words that also end a line.
+    const whole = AUTO_LINE.exec(line);
+    const m = whole ?? AUTO.exec(line);
+    if (!m || (!whole && !/^[\p{L}\p{N}]/u.test(line.slice(m[0].length)))) break;
+    n++;
+    if (m[1]) team++;
+    rest = rest.slice(m[0].length).replace(/^\n/, '');
+    if (!whole) break; // the owner's words follow on this row
+  }
+  return n ? { n, team, rest: rest.trim() } : null;
+}
+
+export function userView(raw: string): { text: string; handoff?: string; brief?: string } {
   // Plain scanning (a lazy regex rescans the rest of the message at every open tag): the first open tag, the first
   // close tag after it.
   const tag = (name: string) => {
@@ -81,7 +111,6 @@ export function userView(raw: string): { text: string; handoff?: string; brief?:
   // the brief stayed a huge bubble).
   const whole = text.trim();
   if (BRIEF.test(whole)) return { text: '', brief: whole };
-  if (!whole.includes('\n') && WAKE.test(whole)) return { text: '', wake: whole };
   const side = new RegExp(`^\\s*<${SIDE_CONTEXT}>\\n?([\\s\\S]*?)\\n?</${SIDE_CONTEXT}>\\s*`).exec(text);
   if (side) return { text: text.slice(side[0].length), handoff: side[1] };
   // A handoff to another agent is the handoff text and then what was typed with it, as one message.

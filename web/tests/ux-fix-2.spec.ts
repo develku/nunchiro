@@ -2,11 +2,11 @@
 // keyboard, the board as a centre tab, text labels under the rail icons, "Lifetime" renamed. One named test per promise.
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
-import { expect, openWindow, test, type Core, agentsZone } from './fixtures';
+import { expect, openWindow, test, type Core, stripOnTop, openSessionFromPalette } from './fixtures';
 import { openQuiet } from './tree-seed';
 import { closeModal } from './settings-modal';
 
-test.beforeEach(({ core }) => agentsZone(core)); // D5b: the default window has no AGENTS rows
+test.beforeEach(({ core }) => stripOnTop(core)); // D5b: the default window has no AGENTS rows
 
 const start = async (app: Page, core: Core) => {
   core.shell(core.project('demo'), 'alpha');
@@ -95,9 +95,9 @@ test('b3: the Keyboard page has Shortcuts and Hints tabs; the one large keyboard
   await axe(app, '[role="region"][aria-label="Settings"]');
 });
 
-test('reveal_only_on_open: a chosen widget tab stays through a session tab switch; opening from the tree returns to the terminal', async ({ app, core }) => {
+test('reveal_only_on_open: a chosen widget tab stays through a session tab switch; opening a session returns to the terminal', async ({ app, core }) => {
   const p = core.project('demo');
-  for (const l of ['alpha', 'beta']) core.shell(p, l);
+  const [, beta] = ['alpha', 'beta'].map((l) => core.shell(p, l).id);
   openQuiet(core);
   await openWindow(app);
   core.cli('layout', 'stack', 'preview');
@@ -111,7 +111,7 @@ test('reveal_only_on_open: a chosen widget tab stays through a session tab switc
     await app.keyboard.press(k);
     await expect(tab('Preview')).toHaveAttribute('aria-selected', 'true');
   }
-  await app.getByRole('region', { name: 'Agents' }).getByRole('button', { name: /^beta/ }).click(); // opening a session shows it
+  await openSessionFromPalette(app, beta); // opening a session shows it
   await expect(tab('Terminal')).toHaveAttribute('aria-selected', 'true');
 });
 

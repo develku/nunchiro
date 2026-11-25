@@ -11,6 +11,8 @@ export interface Split {
   id: string;
   side: Dir;
   what: What;
+  /** Ticket 1069: the session came from the tab strip, so closing the split puts it back there instead of closing it. */
+  tab?: true;
 }
 export const CHOOSER = 'chooser';
 export const SIDE_START = 'side-start';
@@ -69,23 +71,25 @@ export const useSplits = () =>
 export const splitsOf = (session: string): Split[] => state[session] ?? [];
 let n = 0;
 const cancelled = new Set<string>();
-export function add(session: string, side: Dir, what: What): string {
+export function add(session: string, side: Dir, what: What, tab?: true): string {
   const id = `${Date.now().toString(36)}-${n++}`;
-  set({ ...state, [session]: [...splitsOf(session), { id, side, what }] });
+  set({ ...state, [session]: [...splitsOf(session), { id, side, what, ...(tab ? { tab } : {}) }] });
   return id;
 }
-export const replace = (session: string, id: string, what: What) => set({ ...state, [session]: splitsOf(session).map((s) => (s.id === id ? { ...s, what } : s)) });
+export const replace = (session: string, id: string, what: What, tab?: true) => set({ ...state, [session]: splitsOf(session).map((s) => (s.id === id ? { id, side: s.side, what, ...(tab ? { tab } : {}) } : s)) });
 export const remove = (session: string, id: string) => {
   cancelled.add(id); // A failed storage write must not resurrect an explicitly closed pane.
   set({ ...state, [session]: splitsOf(session).filter((s) => s.id !== id) });
 };
 /** Sessions that are gone or closed lose their splits. Only called with a live snapshot (an empty list at start is not one). */
-export function prune(live: { id: string; state: string }[]): { session: string; started: string[] }[] {
+export function prune(live: { id: string; state: string }[]): { session: string; started: string[]; moved: string[] }[] {
   const keep = (id: string) => live.some((s) => s.id === id && s.state !== 'closed');
   const gone = Object.entries(state).filter(([id]) => !keep(id));
   if (gone.length) set(Object.fromEntries(Object.entries(state).filter(([id]) => keep(id))));
-  // Per dropped session, the sessions started for its splits: the caller ends their shells.
-  return gone.map(([session, l]) => ({ session, started: l.map((x) => sessionOf(x.what)).filter((x): x is string => !!x) }));
+  // Per dropped session, the sessions started for its splits (the caller ends their shells) and, ticket 1069, the ones moved
+  // in from the strip (the caller gives them their tab back; they are never ended with the host).
+  const ids = (l: Split[]) => l.map((x) => sessionOf(x.what)).filter((x): x is string => !!x);
+  return gone.map(([session, l]) => ({ session, started: ids(l.filter((x) => !x.tab)), moved: ids(l.filter((x) => x.tab)) }));
 }
 /** Sessions shown in a split (started for one): they are not also window tabs. */
 export const splitSessions = (s = state): string[] => Object.values(s).flat().map((x) => sessionOf(x.what)).filter((x): x is string => !!x);

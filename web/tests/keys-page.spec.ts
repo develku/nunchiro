@@ -22,7 +22,7 @@ test('keys-sections: area headers in a fixed order, tab rename and move rows und
   await expect(keys.locator('> section.karea:not(.kmode) > h3')).toHaveText(AREAS.filter((a) => a !== 'Other'));
   const tabs = keys.locator('section[data-area="sessions-and-tabs"]');
   for (const id of ['tab.rename', 'tab.move.left', 'tab.move.right', 'session.next', 'tab.close']) await expect(tabs.locator(`[data-command="${id}"]`)).toHaveCount(1);
-  await expect(keys.locator('section[data-area="font"] [data-command="font.bigger"]')).toContainText('⌘+');
+  await expect(keys.locator('section[data-area="palette-and-window"] [data-command="zoom.in"]')).toContainText('⌘+'); // ticket 1071
   await expect(tabs.locator('[data-command="tab.move.left"] td').nth(1)).toHaveText(/<$/);
   // The id is a tooltip, not a second visible line.
   const next = tabs.locator('[data-command="session.next"] td').first();

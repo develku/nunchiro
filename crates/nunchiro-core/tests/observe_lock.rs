@@ -119,9 +119,9 @@ fn a_dialog_in_a_firehose_is_still_detected_after_the_backlog_drains() {
 }
 
 // The before/after figure for the report (not a gate): the slowest snapshot while the burst drains.
-// Run: cargo test -j 2 -p nunchiro-core --test observe_lock -- --ignored --nocapture
+// Run: cargo test -j 2 -p nunchiro-core --features measure --test observe_lock measure_ -- --nocapture
+#[cfg(feature = "measure")]
 #[test]
-#[ignore]
 fn measure_snapshot_latency_during_a_bounded_firehose() {
     let core = Core::new("measure");
     let session = core.start();

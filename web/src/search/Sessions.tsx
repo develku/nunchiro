@@ -239,7 +239,9 @@ export function SessionSearch({
     if (ime(e)) return;
     if (e.key === 'Enter') {
       e.preventDefault();
-      go(e.currentTarget.value);
+      // Ticket 1130 C3: with hits for this very text on screen, Enter opens the first; otherwise it searches.
+      if (run?.query === e.currentTarget.value && flat.length) open(0);
+      else go(e.currentTarget.value);
     } else if (e.key === 'ArrowDown' && flat.length) {
       e.preventDefault();
       focusHit(at);
@@ -349,6 +351,7 @@ export function SessionSearch({
           {line}
         </div>
       )}
+      {!run?.error && flat.length > 0 && <div className="shint">{t('mw.ss.enterOpens')}</div>}
       {note && (
         <div className="snote" role="note" title={note}>
           {note}

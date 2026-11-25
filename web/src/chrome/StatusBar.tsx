@@ -6,7 +6,7 @@ import type { LayoutStore } from '../layout/store';
 import { UndoLine } from '../undo/UndoLine';
 import { AccountSwitch } from './AccountSwitch';
 import { UsageBlock } from './UsageBlock';
-import { useRcUpdate } from './rcUpdate';
+import { noteWorking, useRcUpdate } from './rcUpdate';
 import { status, type Session } from '../types';
 import type { T } from '../i18n';
 import type { useFold } from '../layout/fold';
@@ -37,6 +37,7 @@ type Props = {
 export function StatusBar({ current, t, core, sessions, ordered, open, store, editing, moved1, pane, paneNote, setPaneNote, fold, foldName, connected, manageAccounts }: Props) {
   const staleCount = useMemo(() => sessions.filter((s) => status(s) === 'stale').length, [sessions]);
   const update = useRcUpdate();
+  noteWorking(sessions.filter((s) => s.state === 'running' && s.attention.working).length); // ticket 1082: asked before an install
   // A note is words in the language of its moment: it goes when the language changes (q67 look: "Chat not copied…"
   // stayed English in the es, fr and ko windows).
   const lang = useRef(t);
@@ -86,9 +87,12 @@ export function StatusBar({ current, t, core, sessions, ordered, open, store, ed
       <AccountSwitch t={t} core={core} connected={connected} onManage={manageAccounts} current={current} onOpen={open} />
       {update.version && (
         <>
-          {/* Ticket 377: one button, as T3 Code's update item; a failed install relabels it as the retry. */}
-          <button className="it rcupdate" disabled={update.installing} data-version={update.version} data-tip={update.error || t('rc.update.tip')} onClick={update.install}>
-            {update.error ? t('rc.update.failed') : t('rc.update.ready')}
+          {/* Ticket 377: one button, as T3 Code's update item; a failed install relabels it as the retry. Ticket 1082: with
+              sessions working it asks once, in place: they keep running, Install or Later. */}
+          {update.ask > 0 && <span className="it" role="status">{t(update.ask === 1 ? 'selfUpdate.workingOne' : 'selfUpdate.working', { n: update.ask })}</span>}
+          {update.installing && update.waiting > 0 && <span className="it" role="status">{t('selfUpdate.waiting', { n: update.waiting })}</span>}
+          <button className="it rcupdate" disabled={update.installing} data-version={update.version} data-tip={update.error || t('rc.update.tip')} onClick={() => update.install(update.ask > 0)}>
+            {update.ask > 0 ? t('selfUpdate.yes') : update.error ? t('rc.update.failed') : t('selfUpdate.item', { version: update.version })}
           </button>
           <button className="it rclater" onClick={update.later}>
             {t('rc.update.later')}

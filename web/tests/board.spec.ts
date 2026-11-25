@@ -4,6 +4,8 @@ import type { Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Core, expect, openWindow, REPO, test, showComposer } from './fixtures';
+// Ticket 1090: a session is in the Working column only while it is in a turn; a quiet `cat` shell is not.
+import { busyShell } from './fixtures/board/coord';
 
 const FIXTURES = path.join(import.meta.dirname, 'fixtures/board');
 const BIN = path.join(REPO, 'target/debug/nunchiro');
@@ -36,7 +38,7 @@ async function newCard(page: Page, title: string, column?: string) {
 test('board default columns and session cards', async ({ app, core }) => {
   placeBoard(core);
   const p = core.project('demo');
-  core.shell(p, 'busy');
+  busyShell(core, p, 'busy');
   const waiting = core.agent(p, 'asks', 'go');
   reviewSession(core, p, 'finished');
   core.shell(p, 'gone', '/bin/sh', '-c', 'exit 0');
@@ -166,7 +168,7 @@ async function between(page: Page, a: string, b: string) {
 
 test('board drag places card', async ({ app, core }) => {
   placeBoard(core);
-  core.shell(core.project('demo'), 'busy');
+  busyShell(core, core.project('demo'), 'busy');
   await openWindow(app);
   await expect.poll(() => cardsIn(app, 'working')).toEqual(['busy']);
   for (const t of ['A', 'B', 'C']) await newCard(app, t, 'review');
@@ -216,7 +218,7 @@ test('board drag places card', async ({ app, core }) => {
 
 test('board no network beyond core', async ({ app, core }) => {
   placeBoard(core);
-  core.shell(core.project('demo'), 'busy');
+  busyShell(core, core.project('demo'), 'busy');
   const requests: string[] = [];
   const sockets: string[] = [];
   app.on('request', (r) => requests.push(r.url()));
@@ -244,14 +246,14 @@ test('board no network beyond core', async ({ app, core }) => {
 test('board update keeps boxes under pointer', async ({ app, core }) => {
   placeBoard(core);
   const p = core.project('demo');
-  core.shell(p, 'first');
+  busyShell(core, p, 'first');
   await openWindow(app);
   await expect.poll(() => cardsIn(app, 'working')).toEqual(['first']);
   const boxes = () => app.$$eval('.board .bcard, .board .bch, .board .bhead button, .board .bproj', (els) => els.map((e) => { const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map(Math.round).join(','); }));
   await card(app, 'first').hover();
   const before = await boxes();
-  core.shell(p, 'second');
-  core.shell(p, 'third');
+  busyShell(core, p, 'second');
+  busyShell(core, p, 'third');
   await expect(app.locator('.board .bnew')).toHaveText('new 2', { timeout: 5_000 });
   expect(await boxes()).toEqual(before);
   expect(await cardsIn(app, 'working')).toEqual(['first']);
@@ -332,8 +334,8 @@ const physical = (page: Page, init: { code: string; key: string; ctrlKey?: boole
 test('board prefix keys and hints reach cards with a Korean input source', async ({ app, core }) => {
   placeBoard(core);
   const p = core.project('demo');
-  const one = core.shell(p, 'one');
-  core.shell(p, 'two');
+  const one = busyShell(core, p, 'one');
+  busyShell(core, p, 'two');
   await openWindow(app);
   await expect.poll(async () => (await cardsIn(app, 'working')).sort()).toEqual(['one', 'two']);
   await app.locator('.tab', { hasText: 'two' }).click();
@@ -419,8 +421,8 @@ const pickProject = async (app: Page, name: string) => {
 
 test('board project filter chip shows one project or all', async ({ app, core }) => {
   placeBoard(core);
-  core.shell(core.project('alpha'), 'in-alpha');
-  core.shell(core.project('beta'), 'in-beta');
+  busyShell(core, core.project('alpha'), 'in-alpha');
+  busyShell(core, core.project('beta'), 'in-beta');
   await openWindow(app);
   await expect.poll(async () => (await cardsIn(app, 'working')).sort()).toEqual(['in-alpha', 'in-beta']);
   await pickProject(app, 'beta');
@@ -475,7 +477,8 @@ test('board columns share the width at 1440; at 640x480 New card Save and Column
 test('board marks a turn seen when it finishes on the session already in view', async ({ app, core }) => {
   placeBoard(core);
   const p = core.project('demo');
-  const script = `while [ ! -f go ]; do sleep 0.05; done; printf '{}' | '${BIN}' hook UserPromptSubmit; printf '{}' | '${BIN}' hook Stop; exec cat`;
+  // Ticket 1090: in a turn from the start (working only in a turn), finished once `go` exists.
+  const script = `printf '{}' | '${BIN}' hook UserPromptSubmit; while [ ! -f go ]; do sleep 0.05; done; printf '{}' | '${BIN}' hook Stop; exec cat`;
   const s = core.shell(p, 'in-view', '/bin/sh', '-c', script);
   await openWindow(app);
   await expect(app.locator('.tab[aria-selected="true"]')).toHaveAttribute('data-tab', s.id);
@@ -492,17 +495,17 @@ test('board new N counts held column changes and skips cards the filter hides', 
   placeBoard(core);
   const alpha = core.project('alpha');
   const beta = core.project('beta');
-  const first = core.shell(alpha, 'first');
-  core.shell(beta, 'other');
+  const first = busyShell(core, alpha, 'first');
+  busyShell(core, beta, 'other');
   await openWindow(app);
   await expect.poll(async () => (await cardsIn(app, 'working')).sort()).toEqual(['first', 'other']);
   await pickProject(app, 'alpha');
   await expect.poll(() => cardsIn(app, 'working')).toEqual(['first']);
   await card(app, 'first').hover();
-  core.shell(beta, 'hidden');
+  busyShell(core, beta, 'hidden');
   await app.waitForTimeout(1_500);
   await expect(app.locator('.board .bnew')).toHaveText('');
-  core.shell(alpha, 'second');
+  busyShell(core, alpha, 'second');
   await expect(app.locator('.board .bnew')).toHaveText('new 1', { timeout: 5_000 });
   core.windowClose(first.id); // ticket 1013 F6: the window's own Close keeps the done tab
   await expect(app.locator('.board .bnew')).toHaveText('new 2', { timeout: 5_000 });
@@ -511,7 +514,7 @@ test('board new N counts held column changes and skips cards the filter hides', 
 
 test('board shows a board.toml error even while the view is held', async ({ app, core }) => {
   placeBoard(core);
-  core.shell(core.project('demo'), 'busy');
+  busyShell(core, core.project('demo'), 'busy');
   await openWindow(app);
   await expect.poll(() => cardsIn(app, 'working')).toEqual(['busy']);
   await card(app, 'busy').hover();

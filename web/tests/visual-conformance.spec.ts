@@ -40,7 +40,7 @@ for (const scheme of ['light', 'dark'] as const) {
 
 // ---- LAYOUT D5b lane B: a sub-view under a project row against ko/layout-d5b.html `.view` (closed, and open with its body).
 // The mockup is Korean with emoji; its text is set to the app's English copy on the mockup page (`prepare`), so the diff
-// measures the sub-view's look. The open body holds the real Agents widget where the mockup draws two placeholder lines.
+// measures the sub-view's look. The open body holds the real Files widget where the mockup draws two placeholder lines.
 // layout-d5b.html ends inside its <script> (no closing tag), so a browser never runs it; the script is re-run here from
 // the element's own text, the file stays as approved.
 const english = (open: boolean) => async (m: Page) => {
@@ -54,7 +54,7 @@ const english = (open: boolean) => async (m: Page) => {
     // The glyph is the Octicon the owner's STYLE decision put in its place (the same path the app draws).
     vh.querySelector('.chv')!.innerHTML = `<svg viewBox="0 0 16 16" width="10" height="10" fill="currentColor" style="display:block"><path d="${chevron}"/></svg>`;
     for (const n of [...vh.childNodes]) if (n.nodeType === 3) n.textContent = '';
-    vh.querySelector('.chv')!.after(document.createTextNode('Agents '));
+    vh.querySelector('.chv')!.after(document.createTextNode('Files '));
     vh.querySelector('.tagv')!.textContent = 'view';
     // The mockup's first view sits at a half-pixel offset, which makes its crop one row taller; put it on a whole CSS pixel (element crops round to those).
     const y = vh.parentElement!.getBoundingClientRect().top;
@@ -67,7 +67,7 @@ for (const scheme of ['light', 'dark'] as const) {
       const p = repo(core, 'nunchiro');
       core.shell(p, 'one');
       openQuiet(core, 'nunchiro');
-      const bars = { ...defaultBars(), nest: { [p]: ['agents'] }, open: { [`${p}::agents`]: open } };
+      const bars = { ...defaultBars(), nest: { [p]: ['files'] }, open: { [`${p}::files`]: open } };
       await app.addInitScript(([k, v]) => localStorage.setItem(k as string, JSON.stringify(v)), ['nunchiro.settings.v1', { bars }] as const);
       await app.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
       await openWindow(app);
@@ -79,7 +79,7 @@ for (const scheme of ['light', 'dark'] as const) {
       const tag = await view.locator('.tagv').evaluate((e) => ({ bg: getComputedStyle(e).backgroundColor, c: getComputedStyle(e).color }));
       const polish = async (m: Page) => void (await m.addStyleTag({ content: `.view .tagv{border:0!important;background:${tag.bg}!important;color:${tag.c}!important}` }));
       if (!open) return expectMatchesMockup(app, 'layout-d5b.html', '.view', view, { name: 'subview-closed', prepare: async (m) => (await english(false)(m), await polish(m)) });
-      // Open: the mockup's body is two placeholder lines, the app's is the real Agents widget, so the pixel share below is
+      // Open: the mockup's body is two placeholder lines, the app's is the real Files widget, so the pixel share below is
       // content, not style (measured and recorded for the side-by-side page, never a pass condition). What the mockup
       // fixes for the body is its frame: indent, padding, the --done left rule, background and corner radius.
       const ratio = await measureMockup(app, 'layout-d5b.html', '.view', view, { name: 'subview-open', prepare: english(true) });

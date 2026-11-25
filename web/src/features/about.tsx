@@ -16,7 +16,7 @@ import { ErrorDetails, plainError, rawError } from '../errors';
 import { copyText } from '../terminal/clipboard';
 import { inApp } from '../settings/lifetime/tauri';
 import { reveal } from '../files/open';
-import { checkNow, rcUpdates } from '../chrome/rcUpdate';
+import { checkForUpdate, checkNow, rcUpdates, updateSource, useInstall } from '../chrome/rcUpdate';
 
 type T = PageContext['t'];
 type Info = { app: string; core: string | null; macos: string | null; resources?: string | null };
@@ -89,23 +89,81 @@ function Version({ t }: { t: T }) {
   );
 }
 
-/** The palette's "Check for updates": works only in a build that updates itself, like the palette item; a newer build shows
- *  in the status bar. Look v35 c S3-2: any other build (cargo, a debug run, an RC or official app whose update source is
- *  missing: rc_update.rs `start`) shows the row with the button off and the reason, rather than no row. */
+/** The update row (ticket 1082): the update folder, a check (the palette's "Check for updates" too), and a new build with
+ *  Install and restart. Look v35 c S3-2: a build that does not update itself (the isolated test build, a dev build) shows
+ *  the row with the button off and the reason, rather than no row. */
 function Updates({ t }: { t: T }) {
+  const on = rcUpdates();
   const [none, setNone] = useState(false);
   const [error, setError] = useState('');
-  const on = rcUpdates();
+  const [found, setFound] = useState<string | null>(null);
+  const [folder, setFolder] = useState<string | null>(null); // null until the shell answers
+  const [draft, setDraft] = useState('');
+  const install = useInstall();
+  const check = () => void checkNow().then((v) => (setFound(v), setNone(!v), setError('')), setError);
+  useEffect(() => {
+    if (!on) return;
+    void updateSource().then((f) => (setFolder(f), setDraft(f)), (e) => setError(rawError(e)));
+    void checkForUpdate().then(setFound, () => {});
+  }, [on]);
+  const save = () => {
+    if (folder === null || draft.trim() === folder) return;
+    void updateSource(draft).then(
+      (f) => (setFolder(f), setDraft(f), setFound(null), setNone(false), setError(''), f && check()),
+      (e) => setError(rawError(e)),
+    );
+  };
+  const failed = install.error ? t('selfUpdate.failed', { error: plainError(t, install.error) }) : error && t('rc.update.checkFailed', { error: plainError(t, error) });
+  const desc = failed ? (
+    <>
+      {failed}
+      <ErrorDetails t={t} details={install.error || error} />
+    </>
+  ) : install.ask ? (
+    t(install.ask === 1 ? 'selfUpdate.workingOne' : 'selfUpdate.working', { n: install.ask })
+  ) : found ? (
+    t('selfUpdate.ready', { version: found })
+  ) : folder === '' ? (
+    t('selfUpdate.off')
+  ) : none ? (
+    t('rc.update.none')
+  ) : (
+    t('about.updates.desc')
+  );
   return (
     <Row
       setting="updates"
+      top={on}
       label={t('about.updates')}
-      desc={error ? <>{t('rc.update.checkFailed', { error: plainError(t, error) })}<ErrorDetails t={t} details={error} /></> : none ? t('rc.update.none') : t('about.updates.desc')}
+      desc={desc}
       why={!on && <Why id="why-updates" reason={t('about.updates.off')} />}
+      extra={
+        on && (
+          <label className="sds" style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+            {t('selfUpdate.folderDesc')}
+            <input {...PLAIN} className="sinp mono" aria-label={t('selfUpdate.folder')} spellCheck={false} value={draft} disabled={folder === null} onChange={(e) => setDraft(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === 'Enter' && save()} />
+          </label>
+        )
+      }
       control={
-        <button className="btn" disabled={!on} aria-describedby={on ? undefined : 'why-updates'} onClick={() => void checkNow().then((v) => (setNone(!v), setError('')), setError)}>
-          {t('about.updates.check')}
-        </button>
+        found && install.ask ? (
+          <>
+            <button className="btn" onClick={() => install.install(true)}>
+              {t('selfUpdate.yes')}
+            </button>
+            <button className="btn" onClick={install.notNow}>
+              {t('rc.update.later')}
+            </button>
+          </>
+        ) : found ? (
+          <button className="btn" disabled={install.installing} aria-busy={install.installing || undefined} onClick={() => install.install()}>
+            {t('selfUpdate.install')}
+          </button>
+        ) : (
+          <button className="btn" disabled={!on} aria-describedby={on ? undefined : 'why-updates'} onClick={check}>
+            {t('about.updates.check')}
+          </button>
+        )
       }
     />
   );

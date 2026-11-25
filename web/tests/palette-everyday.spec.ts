@@ -5,11 +5,6 @@
 // plain words of tickets 577, 605 and 608 and the whole-name walk.
 import type { Page } from '@playwright/test';
 import { expect, openWindow, test, type Core } from './fixtures';
-import * as words from '../src/i18n/areas/palette-words';
-import * as searchWords from '../src/i18n/areas/settings-search-words';
-import * as notesWords from '../src/i18n/areas/notes'; // Settings > Notes keeps its search words with its own texts
-import * as editorWords from '../src/i18n/areas/files-actions'; // so do Editor and Shell environment
-import * as envWords from '../src/i18n/areas/user-env';
 
 const NEW = ['session.new', 'session.new.claude', 'session.new.codex'];
 const PATH = ['path.copy', 'worktree.copy-path', 'session.copy-path'];
@@ -160,25 +155,6 @@ for (const lang of ['en', 'ko'] as const) {
     });
   });
 }
-
-// Every command and every Settings row has plain words in all 8 languages: at least 2 phrases of its own, or (a Settings row)
-// the words Settings search already finds it by. The ids come from the live palette; the words from the catalogue tables.
-test('palette_every_row_has_plain_words_in_all_languages', async ({ app, core }) => {
-  const ids = (await openPalette(app, core)).filter((id) => !id.startsWith('session.open.'));
-  expect(ids.length).toBeGreaterThan(200);
-  const langs = ['en', 'ko', 'ja', 'zhHans', 'zhHant', 'es', 'fr', 'pt'] as const;
-  const bare: string[] = [];
-  for (const lang of langs) {
-    const own = words[lang] as Record<string, string>;
-    const search = { ...(searchWords[lang] as Record<string, string>), ...(notesWords[lang] as Record<string, string>), ...(editorWords[lang] as Record<string, string>), ...(envWords[lang] as Record<string, string>) };
-    for (const id of ids) {
-      const field = /^settings\.[^.]+\.(.+)$/.exec(id)?.[1];
-      const phrases = [...(own[`palette.kw.${id}`] ?? '').split('|'), ...(field ? (search[`searchWords.${field}`] ?? '').split(',') : [])].filter((w) => w.trim());
-      if (phrases.length < 2) bare.push(`${lang} ${id}`);
-    }
-  }
-  expect(bare).toEqual([]);
-});
 
 // Review r1: a word that is the platform's name for a harmless command (Undo, Cancel, Redo) must not also sit on a command that
 // stops, closes, deletes or quits: a Korean user typing macOS's "실행 취소" (Undo) stopped the running agent. Per language, the

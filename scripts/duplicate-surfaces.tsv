@@ -12,11 +12,10 @@ a decision waits for an answer	Desktop notification	web/src/queue/notify.tsx	s.p
 N decisions waiting (count text)	Decisions widget count line	web/src/decisions/DecisionsWidget.tsx	decisions.waiting
 N decisions waiting (count text)	Decision card header	web/src/chat/DecisionCard.tsx	decisions.waiting
 N decisions waiting (count text)	Tree head colour strip (orange bars, ticket 388)	web/src/tree/strip.tsx	tree.strip.o
-session status dot (working, waiting, idle, done)	Tree session row	web/src/Sidebar.tsx	className="st"
+session status dot (working, waiting, idle, done)	Tree session row	web/src/tree/RowIcon.tsx	RowIcon
 session status dot (working, waiting, idle, done)	Board session card	web/src/board/CardView.tsx	className="st"
 session status dot (working, waiting, idle, done)	Tab bar tab dot	web/src/chrome/CentreView.tsx	className="tdot"
 session status dot (working, waiting, idle, done)	Session header dot	web/src/chrome/CentreView.tsx	className="st"
-session status dot (working, waiting, idle, done)	Agents widget dots	web/src/layout/registry.tsx	className="dotl"
 start a new session	Tree project "+" button	web/src/Sidebar.tsx	tree.newSession
 start a new session	Tree empty-state action	web/src/Sidebar.tsx	tree.newSessionAction
 start a new session	Tab bar "+" button	web/src/chrome/CentreView.tsx	chrome.newSession

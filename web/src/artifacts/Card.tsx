@@ -3,10 +3,12 @@
 // anything loads, so a card arriving or loading above the view never moves what the user reads (needs 26).
 import { useContext, useState, type ReactNode } from 'react'; // V2-10b
 import { Pending } from '../chat/pending';
+import { Icon } from '../icons/Icon';
 import { openFileAt } from '../files/open';
 import { docT } from '../errors';
 import type { Key } from '../i18n';
 import { useHtmlLangT } from '../i18n/lib/useHtmlLangT';
+import { defineSetting, useFeatureSetting } from '../settings/useFeatureSetting';
 import { ArtifactFrame } from '../sandbox/ArtifactFrame';
 import { sessionName } from '../Sidebar';
 import { host, type ArtifactData, type Problem, type Target } from './host';
@@ -72,7 +74,7 @@ export function StateBar({ t, w, className }: { t: Target; w: Exclude<Watched<un
 
 /** `refused` (V2-10b): what to show instead of the problem card, so a chat image keeps V2-10a's muted chip; only
  * before the frame was ever shown, as a shown box that shrank would move the text below it. */
-export function FrameCard({ session, t, refused }: { session: string; t: Target; refused?: (why: Problem) => ReactNode }) {
+export function FrameCard({ session, t, refused, fold }: { session: string; t: Target; refused?: (why: Problem) => ReactNode; fold?: ReactNode }) {
   const w = useWatched(t, loadFrame);
   const words = useHtmlLangT(); // ticket 492 (`t` here is the artifact's target)
   const h = host();
@@ -93,6 +95,7 @@ export function FrameCard({ session, t, refused }: { session: string; t: Target;
           requester={chat?.id === session ? sessionName(chat) : undefined}
           actions={
             <>
+              {fold}
               <Changed w={w} />
               <button type="button" className="af-chip open" onClick={() => select(session, t)}>
                 {words('mw.open')}
@@ -115,11 +118,12 @@ export function FrameCard({ session, t, refused }: { session: string; t: Target;
 export const ICON: Record<Target['type'], string> = { html: 'html', svg: 'svg', markdown: 'md', image: 'img' };
 
 /** Markdown and images: one line, read and watched like a frame card; Preview shows the content. */
-function LineCard({ session, t }: { session: string; t: Target }) {
+function LineCard({ session, t, unfold }: { session: string; t: Target; unfold?: ReactNode }) {
   const w = useWatched(t, loadContent);
   const words = useHtmlLangT(); // ticket 492
   return (
     <div className="acard line" data-state={w.status} data-path={t.path} title={w.status === 'ready' || w.status === 'loading' ? t.path : PROBLEM_TEXT[w.status]}>
+      {unfold}
       <span className="ic mono">{ICON[t.type]}</span>
       <span className="at" dir="auto">
         {t.title}
@@ -138,7 +142,24 @@ function LineCard({ session, t }: { session: string; t: Target }) {
   );
 }
 
-export function ArtifactCard({ session, data }: { session: string; data: ArtifactData }) {
+// Ticket 1088: the artifacts whose newest card shows its frame, per window across restarts (as files.wrapped); the newest 200.
+const FRAMES_KEEP = 200;
+const FRAMES = defineSetting<string[]>('chat.artifact_frames', [], (v) => (Array.isArray(v) && v.every((x) => typeof x === 'string') ? v.slice(-FRAMES_KEEP) : undefined));
+
+/** Ticket 1057, 1088 (owner: a framed report takes too much room): an HTML or SVG file's newest card is one line with a chevron
+ *  that shows the frame in place; every older card of that file stays one line. `newest` is false for the older cards (chat model). */
+export function ArtifactCard({ session, data, newest = true }: { session: string; data: ArtifactData; newest?: boolean }) {
   const t = targetOf(session, data);
-  return t.type === 'html' || t.type === 'svg' ? <FrameCard session={session} t={t} /> : <LineCard session={session} t={t} />;
+  const [frames, setFrames] = useFeatureSetting(FRAMES);
+  const tr = useHtmlLangT();
+  if (t.type !== 'html' && t.type !== 'svg') return <LineCard session={session} t={t} />;
+  if (!newest) return <LineCard session={session} t={t} />;
+  const id = `${t.root}:${t.path}`;
+  const folded = !frames.includes(id);
+  const chevron = (
+    <button type="button" className="af-chip fold" aria-expanded={!folded} aria-label={tr(folded ? 'cards.unfold' : 'cards.fold')} onClick={() => setFrames([...frames.filter((x) => x !== id), ...(folded ? [id] : [])].slice(-FRAMES_KEEP))}>
+      <Icon name={folded ? 'chevron-right' : 'chevron-down'} size={12} />
+    </button>
+  );
+  return folded ? <LineCard session={session} t={t} unfold={chevron} /> : <FrameCard session={session} t={t} fold={chevron} />;
 }

@@ -152,3 +152,41 @@ fn a_test_core_records_open_in_editor_and_spawns_nothing() {
     std::thread::sleep(Duration::from_millis(300));
     assert!(!bin.join("open.ran").exists(), "a real `open` ran");
 }
+
+// Ticket 1061: with worktrees_dir unset, a worktree under the old default root (<home>/worktrees/<project>/) that no
+// session sits in still opens in the editor; only the new default root used to count.
+#[test]
+fn open_in_editor_accepts_a_legacy_root_worktree() {
+    let home = home::short("pj-leg");
+    let project = home::short("pj-legp");
+    let _core = home::spawn_serve(&home, &[]);
+    call(
+        &home,
+        Request::Start {
+            receipt: None,
+            env: Default::default(),
+            folder: None,
+            session: StartSession {
+                account: None,
+                kind: AgentKind::Shell,
+                project: project.clone(),
+                worktree: false,
+                label: String::new(),
+                args: vec!["/bin/cat".into()],
+                model: None,
+                effort: None,
+                resume: None,
+            },
+        },
+    )
+    .unwrap();
+    let wt = home
+        .join("worktrees")
+        .join(project.file_name().unwrap())
+        .join("old");
+    std::fs::create_dir_all(&wt).unwrap();
+    let owner = std::fs::read_to_string(home.join("core.token")).unwrap();
+    let p = wt.to_str().unwrap();
+    let answer = raw(&home, owner.trim(), json!({"op":"open_in_editor","path":p}));
+    assert_eq!(answer["Ok"]["type"], "ack", "{p}: {answer}");
+}

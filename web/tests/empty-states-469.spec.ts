@@ -67,15 +67,14 @@ test('no_schedule: the empty Schedules widget says what is missing; its Add sche
   await expect(empty).toHaveCount(0); // one way in at a time: the form replaces the lines
 });
 
-test('nothing_waiting: the empty Decisions widget offers Start a session, which opens the new-session popover', async ({ app, core }) => {
+test('nothing_waiting: the empty Decisions widget says so and has no button (ticket 1076)', async ({ app, core }) => {
   seed(core, { op: 'add', project: core.project('beta'), added: true });
   await openWindow(app);
   await icon(app, 'right', 'Decisions').click();
   const empty = sidebar(app, 'right').locator('.dw-empty');
   await expect(empty).toContainText('Nothing waiting');
   await shot(app, 'nothing-waiting');
-  await empty.getByRole('button', { name: 'Start a session', exact: true }).click();
-  await expect(app.getByRole('dialog', { name: 'New tab', exact: true }).locator('.nt-in')).toHaveAttribute('title', core.project('beta'));
+  await expect(empty.getByRole('button')).toHaveCount(0);
 });
 
 // Round 2: the default bars' Files, Diff and Artifacts widgets with no session open. Round 3: with the tree's one

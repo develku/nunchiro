@@ -178,6 +178,10 @@
   color: var(--text);
   font: 700 13px system-ui;
 }
+/* Ticket 1093: a drop that does nothing says why in the middle of the view, with no half drawn. */
+.dov[data-refused] .cap {
+  bottom: 50%;
+}
 .dov .cap {
   position: absolute;
   left: 50%;

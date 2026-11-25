@@ -51,13 +51,18 @@ declare module '../index' {
     "tree.loadFailed": true;
     "tree.counts": true;
     "tree.countsGroup": true;
-    "tree.agentsCount": true;
     "tree.rowMenuTitle": true;
     "tree.sessionMenuTitle": true;
     "tree.actionsFor": true;
     "tree.cmd.renameRow": true;
     "tree.cmd.settle": true;
     "tree.settled": true;
+    "tree.cmd.clearFinished": true;
+    "tree.needYou": true;
+    "tree.workers.badge": true;
+    "tree.workers.more": true;
+    "tree.workers.moreIdle": true;
+    "tree.clearKept": true;
     "tree.cmd.copyPath": true;
     "tree.cmd.openEditor": true;
     "tree.sessionLabelField": true;
@@ -202,13 +207,20 @@ export const en = {
   "tree.loadFailed": "could not load the project tree",
   "tree.counts": "{running} running, {working} working, {waiting} waiting, {attention} need attention",
   "tree.countsGroup": "{working} working, {waiting} waiting, {attention} need attention",
-  "tree.agentsCount": "{running} of {total} running",
   "tree.rowMenuTitle": "{name} · worktree row",
   "tree.sessionMenuTitle": "{name} · session",
   "tree.actionsFor": "Actions for {name}",
   "tree.cmd.renameRow": "Rename session",
   "tree.cmd.settle": "Move to done",
   "tree.settled": "Moved {name} to done",
+  "tree.cmd.clearFinished": "Clear finished",
+  // Ticket 1067: English only until ticket 1035.
+  "tree.needYou": "{n} need you",
+  // Ticket 1115 step 1: English only until ticket 1035.
+  "tree.workers.badge": "{n} working",
+  "tree.workers.more": "▸ {n} more working",
+  "tree.workers.moreIdle": "▸ {n} more",
+  "tree.clearKept": "Kept the worktrees with unsaved work: {names}",
   "tree.cmd.copyPath": "Copy path",
   "tree.cmd.openEditor": "Open session in editor",
   "tree.sessionLabelField": "Session name",
@@ -352,7 +364,6 @@ export const ko = {
   "tree.loadFailed": "프로젝트 트리를 불러올 수 없습니다",
   "tree.counts": "실행 {running} · 작업 {working} · 대기 {waiting} · 주의 필요 {attention}",
   "tree.countsGroup": "작업 {working} · 대기 {waiting} · 주의 필요 {attention}",
-  "tree.agentsCount": "{total}개 중 {running}개 실행 중",
   "tree.rowMenuTitle": "{name} · 워크트리 행",
   "tree.sessionMenuTitle": "{name} · 세션",
   "tree.actionsFor": "{name}의 동작",
@@ -502,7 +513,6 @@ export const ja = {
   "tree.loadFailed": "プロジェクトツリーを読み込めませんでした",
   "tree.counts": "実行中 {running}、作業中 {working}、待機中 {waiting}、要注意 {attention}",
   "tree.countsGroup": "作業中 {working}、待機中 {waiting}、要注意 {attention}",
-  "tree.agentsCount": "{total} 件中 {running} 件が実行中",
   "tree.rowMenuTitle": "{name} · ワークツリー行",
   "tree.sessionMenuTitle": "{name} · セッション",
   "tree.actionsFor": "{name} のアクション",
@@ -652,7 +662,6 @@ export const zhHans = {
   "tree.loadFailed": "无法加载项目树",
   "tree.counts": "{running} 个运行中，{working} 个工作中，{waiting} 个等待中，{attention} 个需要关注",
   "tree.countsGroup": "{working} 个工作中，{waiting} 个等待中，{attention} 个需要关注",
-  "tree.agentsCount": "共 {total} 个，{running} 个运行中",
   "tree.rowMenuTitle": "{name} · 工作树行",
   "tree.sessionMenuTitle": "{name} · 会话",
   "tree.actionsFor": "{name} 的操作",
@@ -802,7 +811,6 @@ export const zhHant = {
   "tree.loadFailed": "無法載入專案樹狀清單",
   "tree.counts": "{running} 個執行中、{working} 個工作中、{waiting} 個等待中、{attention} 個需要關注",
   "tree.countsGroup": "{working} 個工作中、{waiting} 個等待中、{attention} 個需要關注",
-  "tree.agentsCount": "{total} 個中 {running} 個執行中",
   "tree.rowMenuTitle": "{name} · 工作樹列",
   "tree.sessionMenuTitle": "{name} · 工作階段",
   "tree.actionsFor": "{name} 的操作",
@@ -952,7 +960,6 @@ export const es = {
   "tree.loadFailed": "no se pudo cargar el árbol del proyecto",
   "tree.counts": "{running} en ejecución, {working} trabajando, {waiting} esperando, {attention} requieren atención",
   "tree.countsGroup": "{working} trabajando, {waiting} esperando, {attention} requieren atención",
-  "tree.agentsCount": "{running} de {total} en ejecución",
   "tree.rowMenuTitle": "{name} · fila del árbol de trabajo",
   "tree.sessionMenuTitle": "{name} · sesión",
   "tree.actionsFor": "Acciones para {name}",
@@ -1102,7 +1109,6 @@ export const fr = {
   "tree.loadFailed": "Impossible de charger l’arborescence des projets",
   "tree.counts": "{running} en cours d’exécution, {working} au travail, {waiting} en attente, {attention} à surveiller",
   "tree.countsGroup": "{working} au travail, {waiting} en attente, {attention} à surveiller",
-  "tree.agentsCount": "{running} sur {total} en cours",
   "tree.rowMenuTitle": "{name} · ligne d’arbre de travail",
   "tree.sessionMenuTitle": "{name} · session",
   "tree.actionsFor": "Actions pour {name}",
@@ -1252,7 +1258,6 @@ export const pt = {
   "tree.loadFailed": "não foi possível carregar a árvore do projeto",
   "tree.counts": "{running} em execução, {working} trabalhando, {waiting} aguardando, {attention} precisando de atenção",
   "tree.countsGroup": "{working} trabalhando, {waiting} aguardando, {attention} precisando de atenção",
-  "tree.agentsCount": "{running} de {total} em execução",
   "tree.rowMenuTitle": "{name} · linha da árvore de trabalho",
   "tree.sessionMenuTitle": "{name} · sessão",
   "tree.actionsFor": "Ações para {name}",

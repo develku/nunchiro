@@ -4,9 +4,12 @@ import { useCallback, useEffect, useRef, useState, type ReactNode, type Dispatch
 import { CoreClient, type Boot } from '../api';
 import { SideChat, sideChatShown } from '../chat/SideChat';
 import { ChatPanes, hasTranscript } from '../chat/ChatView';
+import { TeamOpen } from '../chat/Rows';
 import { SidePane } from '../pane/SidePane';
 import { SplitHost } from '../split/SplitHost';
-import { ptyInSplit, remove as removeSplit, splitsOf } from '../split/store';
+import { add as addSplit, ptyInSplit, remove as removeSplit, replace as replaceSplit, sessionOf, splitsOf } from '../split/store';
+import { Preview, tabHit, type TabHit } from '../split/Overlay';
+import { createPortal } from 'react-dom';
 import { label, merge } from '../keys';
 import { jumpChip } from './useHeldKeys';
 import { PermissionNeeded } from '../PermissionNeeded';
@@ -41,11 +44,11 @@ import { leadOf, leadSeatMate, placeOfMate, seatOf, useTeam, workingFor } from '
 import { TeamChip, TeamLine } from '../lead/LeadHead';
 import { useDigest } from '../lead/HomeParts';
 import { useTasks, withMerges } from '../lead/tasks';
-import { focusTeam, onShowTeamTab, showTeamTab, useTeamAt } from '../lead/team'; // owner 11-17
+import { closeTeamTab, focusTeam, onShowTeamTab, showTeamTab, useTeamAt } from '../lead/team'; // owner 11-17
 import { TeamView } from '../lead/TeamView';
-import { onShowSchedTab, SCHED_TAB, useSchedAt } from '../schedule/schedules'; // ticket 993
+import { closeSchedTab, onShowSchedTab, SCHED_TAB, useSchedAt } from '../schedule/schedules'; // ticket 993
 import { SchedulesView } from '../schedule/SchedulesView';
-import { HIST_TAB, onShowHistTab, useHistAt } from '../history/history'; // ticket 1022
+import { closeHistTab, HIST_TAB, onShowHistTab, useHistAt } from '../history/history'; // ticket 1022
 import { HistoryView } from '../history/HistoryView';
 import { BROWSER_TAB, closeBrowserTab, onShowBrowserTab, useBrowserTab } from '../pane/browser/view/centreTab'; // ticket 997 L1
 import { BrowserSpaces } from '../pane/browser/view/BrowserView';
@@ -57,7 +60,7 @@ import { kindOf } from '../layout/model';
 import { useScrollKeep } from './scrollKeep';
 import { useSplitGlue } from '../split/useSplitGlue';
 import { insertQuote } from '../chat/ComposerWidget';
-import type { T } from '../i18n';
+import type { Key, T } from '../i18n';
 import type { Bars } from '../layout/bars';
 import type { Settings } from '../settings';
 
@@ -293,10 +296,10 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useScrollKeep(paneEl); // ticket 282 item 1: the chat's place comes back with the window
-  const paneTerm = (id: string, on: boolean) => {
+  const paneTerm = (id: string, on: boolean, peek = false) => {
     const t = byId.get(id);
     if (!t) return null; // a session that left the snapshot between two renders
-    return <TerminalView key={id} core={core} id={id} active={on} fontSize={settings.termFontSize} fontFamily={settings.termFont} theme={termTheme} connected={connected} name={sessionName(t)} kind={t.kind} copyOnSelect={settings.copyOnSelect} osc52={settings.osc52} />;
+    return <TerminalView key={id} core={core} id={id} active={on} fontSize={settings.termFontSize} fontFamily={settings.termFont} theme={termTheme} connected={connected} name={sessionName(t)} kind={t.kind} copyOnSelect={settings.copyOnSelect} osc52={settings.osc52} peek={peek} />;
   };
   // needs 171: arrows move to the neighbour and activate it (wrap), Home/End the first/last. Ticket 571: the project's Room tab is
   // the last stop of the walk.
@@ -310,6 +313,65 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
     setActive(walk[to]);
     if (!strip.includes(walk[to])) setTimeout(() => stripEl.current?.querySelector<HTMLElement>(`[role="tab"][data-tab="${CSS.escape(walk[to])}"]`)?.focus(), 0); // a view tab (browser, Schedules, Room)
     else focusTab(walk[to]);
+  };
+  // Ticket 1069: a tab dragged to an edge of a session view becomes a split there; onto a split, it replaces what the split
+  // shows (that session goes back to the strip); onto another tab, it moves there. Window pointer events, as the bar icon
+  // drag (IconBar.tsx): the HTML5 drag the strip had is not proven in the app's WKWebView (needs 171 finding 2).
+  // Ticket 1093: any tab, the shown one too: it goes into a split of the next session tab, which then shows. A tab the split
+  // host cannot show (file, imported conversation, Browser, Schedules, History, Team) and a lone tab say why instead.
+  const [tabHitNow, setTabHitNow] = useState<{ box: DOMRect; side?: TabHit['side']; refused?: Key } | null>(null);
+  const sessionTab = (id: string) => byId.has(id) && !fileOfTab(id) && !isImportedTab(id);
+  // The Room tab stays in the strip (each project has one); its split shows the Room widget beside the host.
+  const splitWhat = (id: string) => (sessionTab(id) ? `session:${id}` : isRoomTab(id) && !teamTab ? 'room' : null);
+  const nextHost = (id: string) => {
+    const at = strip.indexOf(id); // -1 for a view tab: the first session tab
+    return [...strip.slice(at + 1), ...strip.slice(0, Math.max(at, 0))].find((x) => x !== id && sessionTab(x)) ?? null;
+  };
+  const dropTab = (what: string, hit: TabHit) => {
+    const tab = what.startsWith('session:') ? true : undefined;
+    if (hit.side !== 'replace') addSplit(hit.host, hit.side, what, tab);
+    else {
+      const old = sessionOf(splitsOf(hit.host).find((s) => s.id === hit.split)?.what ?? '');
+      replaceSplit(hit.host, hit.split, what, tab);
+      if (old && byId.has(old) && byId.get(old)?.state !== 'closed') setTabs((t) => (t.includes(old) ? t : [...t, old]));
+    }
+    setActive(hit.host); // the shown tab left, or a view tab was shown: the host session shows with its new split
+  };
+  const grabTab = (e: React.PointerEvent, id: string) => {
+    if (e.button !== 0 || renaming?.id === id || (e.target as Element).closest('button')) return; // Stop and Close only click
+    const from = { x: e.clientX, y: e.clientY };
+    const what = splitWhat(id);
+    const hitAt = (ev: PointerEvent) => {
+      const h = tabHit(ev.clientX, ev.clientY, id, nextHost(id));
+      return h && (!what || 'refused' in h) ? { box: h.box, refused: (what ? 'rest.st.splitNeedsTab' : 'rest.st.splitNotThis') as Key } : h;
+    };
+    const move = (ev: PointerEvent) => {
+      if (dragTab.current !== id && Math.hypot(ev.clientX - from.x, ev.clientY - from.y) < 4) return;
+      dragTab.current = id;
+      setTabHitNow(hitAt(ev));
+    };
+    const up = (ev: PointerEvent) => {
+      const on = dragTab.current === id;
+      end();
+      if (!on) return;
+      const hit = hitAt(ev);
+      const over = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[role="tab"][data-tab]')?.dataset.tab;
+      if (hit && what && 'host' in hit) dropTab(what, hit);
+      else if (!hit && over && over !== id && strip.includes(over) && strip.includes(id)) moveTab(id, strip.indexOf(over));
+    };
+    const key = (ev: KeyboardEvent) => ev.key === 'Escape' && dragTab.current === id && (ev.preventDefault(), ev.stopPropagation(), end());
+    const end = () => {
+      dragTab.current = null;
+      setTabHitNow(null);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', end);
+      window.removeEventListener('keydown', key, true);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', end);
+    window.addEventListener('keydown', key, true);
   };
   // Look 1117 v12 C-V8: with no tab of its own left, the centre names a project whose tabs the strip hides (the last opened).
   const elsewhere = active ? undefined : tabs.toReversed().map((id) => byId.get(id)).find((s) => s && !strip.includes(s.id) && s.project !== project);
@@ -336,21 +398,14 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
               role="presentation"
               data-menu={s ? 'tab' : 'tabx'} // V2-6a: session tabs get the session commands; file tabs only close and move (needs 171)
               data-menu-session={id} // the menu makes the right-clicked tab active before its command runs
+              data-menu-arg={id} // ticket 1069: Move tab to split tells the menu's tab from the palette's (the tab shown before)
               data-tip={file ? file.path : full} // v1a-65: the full name or path when the name is cut off
               data-tip-clip=""
-              draggable={renaming?.id !== id}
+              onPointerDown={(e) => grabTab(e, id)}
               onClick={() => setActive(id)}
               onMouseDown={(e) => e.button === 1 && e.preventDefault() /* no autoscroll cursor */}
               onAuxClick={(e) => e.button === 1 && (e.preventDefault(), closeTab(id))}
               onDoubleClick={() => s && setRenaming({ id, error: '' })}
-              onDragStart={(e) => ((dragTab.current = id), (e.dataTransfer.effectAllowed = 'move'), e.dataTransfer.setData('text/plain', id))}
-              onDragOver={(e) => dragTab.current && e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (dragTab.current) moveTab(dragTab.current, strip.indexOf(id));
-                dragTab.current = null;
-              }}
-              onDragEnd={() => (dragTab.current = null)}
             >
               <div
                 className="tab"
@@ -360,6 +415,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
                 data-tab={id}
                 data-menu={s ? 'tab' : 'tabx'} // also here: the menu key opens on the focused tab and Esc hands focus back to it
                 data-menu-session={id}
+                data-menu-arg={id}
                 tabIndex={active === id ? 0 : -1}
                 onKeyDown={(e) => {
                   if (e.target === e.currentTarget) walkKey(e, id);
@@ -404,7 +460,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
           );
         })}
         {browserTab && (
-          <div className="tabw" role="presentation" data-tip={t('exitWidgets.myBrowser')} onClick={() => setActive(BROWSER_TAB)} onAuxClick={(e) => e.button === 1 && (e.preventDefault(), closeBrowserTab())}>
+          <div className="tabw" role="presentation" data-tip={t('exitWidgets.myBrowser')} onPointerDown={(e) => grabTab(e, BROWSER_TAB)} onClick={() => setActive(BROWSER_TAB)} onAuxClick={(e) => e.button === 1 && (e.preventDefault(), closeBrowserTab())}>
             <div className="stab" role="tab" aria-selected={browserOpen} aria-label={t('exitWidgets.myBrowser')} data-browser-tab data-tab={BROWSER_TAB} tabIndex={browserOpen ? 0 : -1} onKeyDown={(e) => e.target === e.currentTarget && walkKey(e, BROWSER_TAB)}>
               <span className="ticon" aria-hidden>
                 <WidgetIcon kind="browser" size={14} />
@@ -417,27 +473,33 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
           </div>
         )}
         {schedTab && (
-          <div className="tabw" role="presentation" data-tip={t('schedule.title')} onClick={() => setActive(SCHED_TAB)}>
+          <div className="tabw" role="presentation" data-tip={t('schedule.title')} onPointerDown={(e) => grabTab(e, SCHED_TAB)} onClick={() => setActive(SCHED_TAB)}>
             <div className="stab" role="tab" aria-selected={schedOpen} aria-label={t('schedule.title')} data-sched-tab data-tab={SCHED_TAB} tabIndex={schedOpen ? 0 : -1} onKeyDown={(e) => e.target === e.currentTarget && walkKey(e, SCHED_TAB)}>
               <span className="ticon" aria-hidden>
                 <Icon name="clock" size={14} />
               </span>
               <span className="tname">{t('schedule.title')}</span>
             </div>
+            <button className="x" aria-label={t('chrome.closeTab', { name: t('schedule.title') })} data-tip={t('chrome.closeTip')} data-tip-cmd="tab.close" onClick={(e) => (e.stopPropagation(), closeSchedTab())}>
+              <Icon name="x" size={12} />
+            </button>
           </div>
         )}
         {histTab && (
-          <div className="tabw" role="presentation" data-tip={t('history.title')} onClick={() => setActive(HIST_TAB)}>
+          <div className="tabw" role="presentation" data-tip={t('history.title')} onPointerDown={(e) => grabTab(e, HIST_TAB)} onClick={() => setActive(HIST_TAB)}>
             <div className="stab" role="tab" aria-selected={histOpen} aria-label={t('history.title')} data-hist-tab data-tab={HIST_TAB} tabIndex={histOpen ? 0 : -1} onKeyDown={(e) => e.target === e.currentTarget && walkKey(e, HIST_TAB)}>
               <span className="ticon" aria-hidden>
                 <Icon name="history" size={14} />
               </span>
               <span className="tname">{t('history.title')}</span>
             </div>
+            <button className="x" aria-label={t('chrome.closeTab', { name: t('history.title') })} data-tip={t('chrome.closeTip')} data-tip-cmd="tab.close" onClick={(e) => (e.stopPropagation(), closeHistTab())}>
+              <Icon name="x" size={12} />
+            </button>
           </div>
         )}
         {roomTab && project && (
-          <div className="tabw" role="presentation" data-tip={teamTab ? t('shell.widget.team') : t('room.tab')} onClick={() => setActive(roomTabId(project))}>
+          <div className="tabw" role="presentation" data-tip={teamTab ? t('shell.widget.team') : t('room.tab')} onPointerDown={(e) => grabTab(e, roomTabId(project))} onClick={() => setActive(roomTabId(project))}>
             <div
               className="rtab"
               role="tab"
@@ -455,6 +517,11 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
               <span className="tname">{teamTab ? t('shell.widget.team') : t('room.tab')}</span>
               {(teamTab ? needsYou : room.unread) > 0 && <span className="room-badge" data-needs={teamTab || undefined}>{teamTab ? needsYou : room.unread}</span>}
             </div>
+            {teamTab && (
+              <button className="x" aria-label={t('chrome.closeTab', { name: t('shell.widget.team') })} data-tip={t('chrome.closeTip')} data-tip-cmd="tab.close" onClick={(e) => (e.stopPropagation(), closeTeamTab(tabPlace!))}>
+                <Icon name="x" size={12} />
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -504,7 +571,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
             );
           })()}
           {/* end v1b-20 */}
-          {sideChatShown(current) && <button className="hbtn" onClick={() => void openSideChat(current)}>{t('chat.side.title')}</button>}
+          {sideChatShown(current) && <button className="hbtn" data-tip={t('settings.keys.cmd.sideChat')} data-tip-cmd="session.side-chat" onClick={() => void openSideChat(current)}>{t('chat.side.title')}</button>}
           <span className="sp" />
           {leadMate && <TeamChip t={t} mate={leadMate} tasks={tasks} sessions={sessions} onOpen={openTeam} digest={digest} waiting={needsYou} />}
           {/* Ticket 1031: the PR chip, moved here from the status bar (a shell has no chat to carry it). */}
@@ -561,7 +628,9 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
         )}
         {/* v1b-03: the 채팅 | 터미널 switch and one chat per open agent tab, over its terminal (still mounted, same
             size); an ended agent session shows its chat read-only instead of the "not live" line. */}
-        <ChatPanes boot={boot} sessions={tabs.map((id) => byId.get(id))} active={active} all={sessions} t={t} />
+        <TeamOpen.Provider value={openTeam}>
+          <ChatPanes boot={boot} sessions={tabs.map((id) => byId.get(id))} active={active} all={sessions} t={t} />
+        </TeamOpen.Provider>
         {/* v1a-59: an ended shell shows its last scrollback, input off; v1a-68: a closed shell's is kept in memory. */}
         {current && current.state !== 'running' && !hasTranscript(current) &&
           (current.state === 'closed' && current.kind !== 'shell' ? (
@@ -578,9 +647,9 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
         ))}
         {browserOpen && <BrowserSpaces initial={YOU_SPACE} sessions={sessions} insert={windowCtx().notes?.insert} to={windowCtx().notes?.name} t={t} />}
         {schedOpen && <SchedulesView core={core} t={t} sessions={sessions} open={open} where="tab" />}
-        {histOpen && <HistoryView core={core} t={t} sessions={sessions} open={open} where="tab" settled={wtc?.settled} places={wtc?.list} />}
-        {roomOpen && teamTab && <TeamView core={core} t={t} folder={project} sessions={sessions} open={open} wt={wtc} owner={owner} decide={windowCtx().decide} where="tab" />}
-        {roomOpen && !teamTab && <RoomView core={core} t={t} project={project} sessions={sessions} byId={byId} messages={room.messages} pins={room.pins} names={room.names} dropped={room.dropped} toggle={room.toggle} refresh={room.refresh} open={open} />}
+        {histOpen && <HistoryView core={core} t={t} sessions={sessions} open={open} where="tab" settled={wtc?.settled} places={wtc?.list} projects={windowCtx().projects} />}
+        {roomOpen && teamTab && <TeamView core={core} t={t} folder={project} sessions={sessions} open={open} wt={wtc} owner={owner} decide={windowCtx().decide} where="tab" term={(id) => paneTerm(id, true, true)} />}
+        {roomOpen && !teamTab && <RoomView core={core} t={t} project={project} sessions={sessions} byId={byId} messages={room.messages} pins={room.pins} names={room.names} delivery={room.delivery} dropped={room.dropped} toggle={room.toggle} refresh={room.refresh} open={open} />}
         {tabs.filter(isFileTab).map((id) => {
           const f = fileOfTab(id)!;
           return <FileView key={id} core={core} file={f} cwd={byId.get(f.root)?.cwd} visible={active === id} jump={jumps[id]} />;
@@ -589,6 +658,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
       {paneSession && <SidePane core={core} session={paneSession} all={sessions} term={paneTerm} insert={insertQuote(composer)} t={t} />}
       </div>
       </SplitHost>
+      {tabHitNow && createPortal(<Preview box={tabHitNow.box} side={tabHitNow.side} refused={tabHitNow.refused} />, document.body)}
     </div>
   );
 

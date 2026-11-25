@@ -43,7 +43,11 @@ impl Core {
             .env("NUNCHIRO_HOME", &home)
             .env("CODEX_HOME", home.join("codex-home"))
             .env("CLAUDE_CONFIG_DIR", home.join("claude-home"))
-            .env("PATH", format!("{}:/usr/bin:/bin", home.display()))
+            // Ticket 1100: `<home>-bin`, outside the home, holds a fake the canary may check (it skips fakes inside the home).
+            .env(
+                "PATH",
+                format!("{}-bin:{}:/usr/bin:/bin", home.display(), home.display()),
+            )
             .env_remove("NUNCHIRO_TOKEN")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -160,6 +164,7 @@ impl Drop for Core {
         let _ = self.process.kill();
         let _ = self.process.wait();
         let _ = fs::remove_dir_all(&self.home);
+        let _ = fs::remove_dir_all(format!("{}-bin", self.home.display()));
     }
 }
 /// The agent's argv once it is complete: under load `ps` can show "(python3.9)" right after exec, or a line cut short
@@ -203,6 +208,8 @@ fn picker_launch_args() {
     let plain = core.start(AgentKind::Claude, None, None, &[]);
     assert_eq!((plain.model, plain.effort), (None, None));
     assert!(!args_of(plain.pid.unwrap(), "claude").contains("--model"));
+    // Ticket 1100: fakes inside the core's home are never checked by the canary.
+    assert!(!core.home.join("agent-canary.json").exists());
 }
 
 #[test]
@@ -1842,5 +1849,191 @@ fn picker_ultracode_command_is_never_queued() {
             .count(),
         2,
         "the refused one is canceled: {log:?}"
+    );
+}
+
+/// Ticket 1100: Codex's own catalog (`$CODEX_HOME/models_cache.json`): the recorded 0.161.0 file with a new model on top.
+fn cache_with_a_new_model(home: &Path) {
+    let recorded = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/codex/models_cache-0.161.0.json");
+    let mut cache: serde_json::Value =
+        serde_json::from_slice(&fs::read(recorded).unwrap()).unwrap();
+    let levels: Vec<_> = ["low", "medium", "high", "xhigh", "max", "ultra"]
+        .iter()
+        .map(|e| serde_json::json!({ "effort": e, "description": "d" }))
+        .collect();
+    cache["models"].as_array_mut().unwrap().insert(
+        0,
+        serde_json::json!({ "slug": "gpt-6.2-sol", "display_name": "GPT-6.2 Sol", "supported_reasoning_levels": levels,
+            "visibility": "list", "priority": 0, "some_new_field": { "x": 1 } }),
+    );
+    fs::write(
+        home.join("codex-home/models_cache.json"),
+        serde_json::to_vec(&cache).unwrap(),
+    )
+    .unwrap();
+}
+fn codex_models(core: &Core) -> Vec<nunchiro_core::agent_models::Model> {
+    let Ok(Reply::AgentModels { codex }) = core.request(Request::AgentModels) else {
+        panic!("no model list")
+    };
+    codex
+}
+
+#[test]
+fn picker_codex_model_from_its_own_catalog_starts_and_switches_as_before() {
+    let core = Core::with(cache_with_a_new_model);
+    let listed = codex_models(&core);
+    assert_eq!(listed[0].value, "gpt-6.2-sol");
+    assert_eq!(listed[0].label, "GPT-6.2 Sol");
+    assert_eq!(
+        listed[0].efforts,
+        ["low", "medium", "high", "xhigh", "max", "ultra"]
+    );
+    // Codex hides these from its own picker.
+    assert!(
+        !listed
+            .iter()
+            .any(|m| m.value == "gpt-reserve" || m.value == "codex-auto-review")
+    );
+    // The fake Codex answers one conversation id: the switch (a resume) goes before the second start.
+    let old = codex(&core);
+    let Reply::Started { session } = core
+        .switch(&old.id, Some("gpt-6.2-sol"), Some("high"))
+        .unwrap()
+    else {
+        panic!()
+    };
+    let args = args_of(session.pid.unwrap(), "model_reasoning_effort=\"high\"");
+    assert!(
+        args.contains("-m gpt-6.2-sol -c model_reasoning_effort=\"high\""),
+        "{args}"
+    );
+    // gpt-6-luna lists no ultra in Codex's catalog.
+    assert_eq!(
+        core.switch(&session.id, Some("gpt-6-luna"), Some("ultra"))
+            .unwrap_err(),
+        "unknown effort for this model"
+    );
+    let s = core.start(AgentKind::Codex, Some("gpt-6.2-sol"), Some("ultra"), &[]);
+    let args = args_of(s.pid.unwrap(), "model_reasoning_effort=\"ultra\"");
+    assert!(
+        args.contains("-m gpt-6.2-sol -c model_reasoning_effort=\"ultra\""),
+        "{args}"
+    );
+}
+
+#[test]
+fn picker_codex_without_a_readable_catalog_offers_the_fixed_list() {
+    for bad in [None, Some(&b""[..]), Some(&b"{\"models\": 7"[..])] {
+        let core = Core::with(|home| {
+            if let Some(bytes) = bad {
+                fs::write(home.join("codex-home/models_cache.json"), bytes).unwrap();
+            }
+        });
+        let listed = codex_models(&core);
+        assert_eq!(listed, nunchiro_core::agent_models::fallback());
+        let s = core.start(AgentKind::Codex, None, None, &[]);
+        assert!(
+            core.switch(&s.id, Some("gpt-6.2-sol"), None)
+                .is_err_and(|e| e == "unknown model")
+        );
+    }
+}
+
+/// Ticket 1100 (canary): the first session on a version the core has not seen is watched (its box and footer read),
+/// then the agent starts once fresh in a temporary HOME with a cleared env. The fake Claude draws no welcome line there,
+/// so the snapshot carries one card naming the version and what failed, and the temporary folder is gone.
+#[test]
+fn canary_watches_a_new_version_then_starts_it_fresh_once() {
+    let core = Core::with(|home| {
+        let bin = PathBuf::from(format!("{}-bin", home.display()));
+        fs::create_dir_all(&bin).unwrap();
+        fs::copy(home.join("claude"), bin.join("claude")).unwrap();
+    });
+    let s = core.start(AgentKind::Claude, None, None, &["--fixture-footer"]);
+    core.prompt(&s.id);
+    let file = core.home.join("agent-canary.json");
+    let until = Instant::now() + Duration::from_secs(60);
+    while !fs::read_to_string(&file).is_ok_and(|t| t.contains("\"started\": true")) {
+        assert!(
+            Instant::now() < until,
+            "the canary did not finish: {:?}",
+            fs::read_to_string(&file)
+        );
+        thread::sleep(Duration::from_millis(100));
+    }
+    let record: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+    let claude = &record["claude"];
+    assert_eq!(claude["version"], "2.1.310 (Claude Code)");
+    assert_eq!(
+        (
+            claude["watched"].as_bool(),
+            claude["box_read"].as_bool(),
+            claude["footer_read"].as_bool()
+        ),
+        (Some(true), Some(true), Some(true))
+    );
+    assert_eq!(
+        claude["failed"],
+        serde_json::json!(["its first screen does not show the version it reports"])
+    );
+    assert!(record.get("codex").is_none());
+    let Ok(Reply::Snapshot {
+        problem: Some(card),
+        ..
+    }) = core.request(Request::Snapshot)
+    else {
+        panic!("no card")
+    };
+    assert_eq!(card.case, nunchiro_core::problems::Case::AgentChanged);
+    assert!(
+        card.cause
+            .starts_with("Claude Code 2.1.310 changed what Nunchiro reads"),
+        "{}",
+        card.cause
+    );
+    assert_eq!(
+        fs::read_dir(core.home.join("canary"))
+            .map(|d| d.count())
+            .unwrap_or(0),
+        0
+    );
+    // A second session on the same version checks nothing again.
+    let before = fs::read_to_string(&file).unwrap();
+    let again = core.start(AgentKind::Claude, None, None, &[]);
+    core.prompt(&again.id);
+    thread::sleep(Duration::from_millis(500));
+    assert_eq!(fs::read_to_string(&file).unwrap(), before);
+}
+
+/// Review r1 SHOULD 4: a model the fixed list has (saved by a schedule, role or team row) still starts after Codex's
+/// own list stopped naming it; a model neither lists is refused.
+#[test]
+fn picker_codex_model_dropped_from_its_catalog_still_starts_from_the_fixed_list() {
+    let core = Core::with(|home| {
+        let levels: Vec<_> = ["low", "medium"]
+            .iter()
+            .map(|e| serde_json::json!({ "effort": e }))
+            .collect();
+        let cache = serde_json::json!({ "models": [{ "slug": "gpt-6.2-sol", "display_name": "GPT-6.2 Sol",
+            "supported_reasoning_levels": levels, "visibility": "list", "priority": 0 }] });
+        fs::write(
+            home.join("codex-home/models_cache.json"),
+            serde_json::to_vec(&cache).unwrap(),
+        )
+        .unwrap();
+    });
+    assert_eq!(codex_models(&core).len(), 1);
+    let s = core.start(AgentKind::Codex, Some("gpt-6-luna"), Some("medium"), &[]);
+    let args = args_of(s.pid.unwrap(), "model_reasoning_effort=\"medium\"");
+    assert!(
+        args.contains("-m gpt-6-luna -c model_reasoning_effort=\"medium\""),
+        "{args}"
+    );
+    assert!(
+        core.switch(&s.id, Some("gpt-9-unknown"), None)
+            .is_err_and(|e| e == "unknown model")
     );
 }

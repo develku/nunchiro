@@ -32,7 +32,8 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
             Ok(())
         }
         ["list"] => {
-            let board = call(home, Request::BoardSnapshot)?;
+            let mut board = call(home, Request::BoardSnapshot)?;
+            mark_archived(&mut board);
             if json {
                 return print(&board);
             }
@@ -186,7 +187,21 @@ fn safe(text: &str) -> String {
         .collect()
 }
 
-/// `id  column  title  group  ref  session:role,...  receipt`, tab-separated.
+/// Ticket 1066: sets `archived` on every card: true when it is in a done column and arrived there more than
+/// `settings.done_days` days ago (the rule the window's Done column uses).
+fn mark_archived(board: &mut Value) {
+    let span = board["settings"]["done_days"].as_u64().unwrap_or(7) * 86_400_000;
+    let now = nunchiro_core::queue::now_ms();
+    for card in board["cards"].as_array_mut().into_iter().flatten() {
+        let old = card["done_at"]
+            .as_u64()
+            .is_some_and(|at| now.saturating_sub(at) > span);
+        card["archived"] = Value::Bool(old);
+    }
+}
+
+/// `id  column  title  group  ref  session:role,...  receipt  archived`, tab-separated; the last field is
+/// `archived` for a card past `done_days` in Done, else empty.
 fn line(card: &Value) -> String {
     let attached: Vec<String> = card["attachments"]
         .as_array()
@@ -215,17 +230,25 @@ fn line(card: &Value) -> String {
             receipt["result"].as_str().unwrap_or_default()
         )
     };
-    [
+    let attached = attached.join(",");
+    let mut fields = vec![
         card["id"].as_str().unwrap_or_default(),
         card["column"].as_str().unwrap_or_default(),
         card["title"].as_str().unwrap_or_default(),
         card["group"].as_str().unwrap_or_default(),
         card["ref"].as_str().unwrap_or_default(),
-        &attached.join(","),
+        &attached,
         &receipt,
-    ]
-    .map(safe)
-    .join("\t")
+    ];
+    // Only `list` marks cards; the other commands print the old seven fields.
+    if !card["archived"].is_null() {
+        fields.push(if card["archived"] == true {
+            "archived"
+        } else {
+            ""
+        });
+    }
+    fields.into_iter().map(safe).collect::<Vec<_>>().join("\t")
 }
 
 /// A column by id or by title (case-insensitive), else by a watch name: `next` is the first column that claims no
@@ -389,6 +412,28 @@ fn add(args: &[&str]) -> Result<(Request, Option<String>, Option<String>), Strin
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn mark_archived_follows_done_days() {
+        let day = 86_400_000;
+        let now = nunchiro_core::queue::now_ms();
+        let card = |ago: u64| serde_json::json!({"done_at": now - ago * day / 2});
+        let mut board = serde_json::json!({"settings": {"done_days": 7}, "cards": [card(2), card(20), serde_json::json!({"done_at": null})]});
+        super::mark_archived(&mut board);
+        let marks: Vec<_> = board["cards"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["archived"].clone())
+            .collect();
+        assert_eq!(marks, [false, true, false]);
+        assert_eq!(
+            super::line(&board["cards"][1].clone())
+                .split('\t')
+                .next_back(),
+            Some("archived")
+        );
+    }
+
     #[test]
     fn receipt_parses_three_parts() {
         let r = super::receipt("abc1234 · cargo test · 12 passed").unwrap();

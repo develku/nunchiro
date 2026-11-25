@@ -531,6 +531,7 @@ fn chat_recovery_keeps_distinct_journal_stop_texts_without_turn_ids() {
     let core = Core::with_setup("future", |home| {
         let session = Session {
             side_chat: false,
+            stopped_sends: Vec::new(),
             side_parent: None,
             teammate: None,
             resumed_from: vec![],

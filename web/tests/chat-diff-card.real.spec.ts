@@ -120,7 +120,7 @@ async function trial(page: Page, row: 'accept' | 'reject', n: number, k: number)
     }, boot);
     const s = core.cli('session', 'start', '--kind', 'claude', '--project', cwd, '--label', `${row}-${n}`, '--model', 'haiku', '--', '--permission-mode', 'default').session as { id: string };
     await page.goto('/');
-    await expect(page.locator('.ar')).toHaveCount(1);
+    await expect(page.locator('button.row.wt2[data-menu-session]')).toHaveCount(1);
     let cursor = 0;
     const read = () => {
       const out = core.cli('session', 'read', s.id, '--after', String(cursor));

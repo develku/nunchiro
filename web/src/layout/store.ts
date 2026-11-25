@@ -3,7 +3,7 @@
 import type { LayoutFile } from '../api';
 import { makeT, type Key, type Lang, type T } from '../i18n';
 import { format } from './command';
-import { apply, defaultLayout, dropCentreBoard, kindOf, leaves, type Kind, type Layout, type Measure, type Op } from './model';
+import { apply, defaultLayout, dropCentreBoard, kindOf, leaves, withoutRetired, type Kind, type Layout, type Measure, type Op } from './model';
 import { docT, OwnWords, rawError } from '../errors';
 
 /** The window's catalogue for words raised outside a component or without the window's `t` (a thrown refusal, a toast): App sets
@@ -118,7 +118,7 @@ export class LayoutStore {
       this.fileError = null;
       // A good file wins over a change this window could not save.
       this.saveError = null;
-      const next = f.layout ?? defaultLayout();
+      const next = f.layout ? { ...f.layout, root: withoutRetired(f.layout.root) ?? defaultLayout().root } : defaultLayout(); // ticket 1070: a file that still names Agents loads without it
       // The core sends no event for this window's own writes, so any other change is from outside.
       if (!same(next, this.saved)) {
         if (this.editing) this.outside = true;

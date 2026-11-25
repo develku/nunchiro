@@ -81,8 +81,8 @@ pub struct LifetimePatch {
     // Ticket 211: the owner names a folder Usage may read through a link in their own default folder; the core stores
     // its canonical path in `usage_link_roots` (settings.json). Only adds; the owner removes by editing the file.
     pub usage_allow_link: Option<PathBuf>,
-    // v25f (F7): the folder new worktrees go in, absolute or relative to the project (`../.worktrees`); "" is the default
-    // (`<home>/worktrees`). A relative path that leaves the project's folder or its parent is refused.
+    // v25f (F7): the folder new worktrees go in, absolute or relative to the project; "" is the default (ticket 1061:
+    // `../.worktrees`, beside the repository). A relative path that leaves the project's folder or its parent is refused.
     pub worktrees_dir: Option<String>,
     // Ticket 250: an absorb feature's own core value by dotted key (`^[a-z0-9]+(\.[a-z0-9_]+)+$`, at most 4096 bytes
     // serialised); a `null` value removes the key. A bad key, size, or a patch that grows the map past 256 keys
@@ -142,6 +142,10 @@ pub enum SessionState {
 pub struct Session {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub side_chat: bool,
+    /// Ticket 1121: queued rows the core will not paste again (their Enter dropped past the re-paste bound, or no clean
+    /// box read for CLEAN_WAIT); the composer says so. Snapshot only: never saved, never read from a store.
+    #[serde(default, skip_serializing_if = "Vec::is_empty", skip_deserializing)]
+    pub stopped_sends: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub side_parent: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -544,6 +548,12 @@ pub enum Request {
         user: Option<String>,
         port: Option<u32>,
     },
+    // Ticket 1050: Share this Mac (reads only) and a pasted link's Test (writes one Nunchiro-owned known_hosts line).
+    MachineShare,
+    MachineTrust {
+        alias: String,
+        link: String,
+    },
     MachineStatus {
         label: Option<String>,
         #[serde(default)]
@@ -709,6 +719,10 @@ pub enum Request {
     /// Context of one local conversation, resolved by the core registry.
     SessionContext {
         id: String,
+        /// Ticket 1059: the Context widget's Show breakdown first types /context into the session (window only, as the
+        /// read; `Sessions::context_send` says when).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        refresh: bool,
     },
     // ticket-98: the `/` menu's user-level commands, skills and prompts for an agent kind; read only, window and owner only.
     UserCommands {
@@ -753,6 +767,8 @@ pub enum Request {
         tool: crate::agent_update::Tool,
     },
     AgentUpdateState,
+    /// Ticket 1100: the models the window offers per agent (Codex's own catalog, else the fixed list).
+    AgentModels,
     // v2-5a: agents found on PATH with versions and the transcript counts of their own folders; read only, owner and window only.
     FirstRun,
     // v2-5b: a problem card's fix on an ended session (restart, or start without Nunchiro hooks); owner and window only.
@@ -857,6 +873,9 @@ pub enum Request {
         revision: String,
         stale_minutes: u32,
         turn_end_nudge: bool,
+        // Ticket 1066: absent keeps the board's current value.
+        #[serde(default)]
+        done_days: Option<u32>,
     },
     // V2.5-35 (ticket 183): `BoardTaskRequest` on the socket, same JSON; served by `board::rights::serve`.
     BoardTaskPut {
@@ -949,6 +968,16 @@ pub enum Request {
     Close {
         id: String,
     },
+    /// Ticket 1130 C6: close for a restart only while the session is idle; refused while a turn runs or it waits for
+    /// the owner, in the same lock as the close, so the window never ends a turn that started after it looked.
+    CloseIdle {
+        id: String,
+    },
+    /// Ticket 1113: a lead tidies a session; uncertain work needs an owner card.
+    SessionTidy {
+        id: String,
+        why: String,
+    },
     // V2-6d: owner and window only; brings back a stopped or done session closed less than 10 s ago.
     CloseUndo {
         id: String,
@@ -975,6 +1004,11 @@ pub enum Request {
     // F24: `exit`, refused with `server::EXIT_BUSY` while it would lose work (`Sessions::exit_blockers`). Owner only.
     // `holder_floor` is the asking binary's `frame::MIN_COMPATIBLE`: an older core cannot know the next one's.
     ExitIfIdle {
+        holder_floor: u16,
+    },
+    // Ticket 1130 A-D3: what `exit_if_idle` would count now, without exiting, so `update install` waits before it swaps
+    // the bundle instead of after. Owner only.
+    ExitBlockers {
         holder_floor: u16,
     },
     // v1a-13: the window's port and token, for an owner peer outside every session (the app at page load).
@@ -1407,7 +1441,7 @@ pub enum Request {
     /// that uses no worktree), `pass` / `changes` (a review of what the worktrees hold now, `text` its note), `learn`
     /// (a seat's lesson, `text`, for the merge card), `staff` (`text` is a role's name: what to
     /// start for that seat), `way` / `grant` (the owner's choice for the place, `text`), `merge` (the lead asks the user to merge an approved task: a
-    /// card), `done`, `drop`. The owner and a place's lead make and close tasks; only a seat that does not write, or the owner,
+    /// card), `done`, `drop`, `package-<part>` and `brief` (ticket 1095). The owner and a place's lead make and close tasks; only a seat that does not write, or the owner,
     /// reviews. `project` is read for the owner only; a session's place is its lead's.
     Task {
         operation: String,
@@ -1438,6 +1472,21 @@ pub enum Request {
         who: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         due: Option<String>,
+        /// Ticket 1054, `staff`: the effort the seat opens at (`--effort`), one of its agent's efforts; absent keeps
+        /// the level's.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        effort: Option<String>,
+        /// Ticket 1095, `package-<part>` (`nunchiro task package`): what the verb carries besides `text`: who said a
+        /// quote and when, its images, a link's kind and whether a mockup is approved. `brief` (`seat_up`) needs none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        package: Option<crate::ledger::package::Fill>,
+        /// Ticket 1099 panel 4, `ask-cap`: the lead's reason for the live-seat change it asks the user for.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        why: Option<String>,
+        /// Ticket 1120, `staff`: the account label the seat starts on (`--account`); absent: the place's account,
+        /// else the caller's own.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        account: Option<String>,
     },
     /// Ticket 990 slice i: the user's roles (`roles.rs`). `list`: anyone. `save` (`role`) and `remove` (`name`): the
     /// owner's only. `propose` (`role`, `why`): a place's lead asks the user on a card.
@@ -1551,6 +1600,9 @@ pub enum Reply {
         // Ticket 994: the effort that model's last request ran at, as the agent wrote it; omitted when none.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         effort: Option<String>,
+        // Ticket 1059: the newest /context table the transcript holds since the last /clear or compact; omitted when none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        breakdown: Option<Breakdown>,
     },
     /// B15: the transcript names its model but not a context window this core can trust.
     SessionModel {
@@ -1565,9 +1617,19 @@ pub enum Reply {
     },
     // v25f
     MachineAliases {
-        aliases: Vec<String>,
+        aliases: Vec<crate::machines::aliases::Alias>,
     },
     MachineProbe {
+        error: Option<String>,
+    },
+    // Ticket 1050
+    MachineShare {
+        remote_login: bool,
+        shares: Vec<crate::machines::share::Share>,
+    },
+    MachineTrust {
+        live: String,
+        trusted: bool,
         error: Option<String>,
     },
     Machines {
@@ -1610,6 +1672,10 @@ pub enum Reply {
         /// session starts on; absent when they name none (Claude then picks by plan, which Nunchiro does not know).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         claude_default: Option<String>,
+    },
+    // Ticket 1100
+    AgentModels {
+        codex: Vec<crate::agent_models::Model>,
     },
     // ticket-98
     UserCommands {
@@ -1756,6 +1822,10 @@ pub enum Reply {
         /// Look 1117 v13 Home S3-1: names of seats whose rows are gone, by session id (`room::Log::names`).
         #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
         names: std::collections::BTreeMap<String, String>,
+        /// Ticket 1089: for each of the newest lines sent to a seat (by message id), when it reached the seat (null:
+        /// it waits there).
+        #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+        delivery: std::collections::BTreeMap<String, Option<u64>>,
     },
     /// Ticket 593: the pins after a `RoomPin`.
     RoomPins {
@@ -1829,6 +1899,10 @@ pub enum Reply {
         decision: Option<serde_json::Value>,
     },
     Ack,
+    // Ticket 1130 A-D3: `exit_blockers`
+    ExitBlockers {
+        count: usize,
+    },
     // V2.5-20
     Browser {
         result: serde_json::Value,
@@ -1991,6 +2065,9 @@ pub enum Reply {
         /// with `assign`, so the seat's session carries it as a teammate's seat does.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         level: Option<crate::team::Level>,
+        /// Ticket 1055: why the seat does not open at the asked level (a Worker models rule, its Builder's level).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        why: Option<String>,
     },
     /// Ticket 990 slice h: notes, newest first.
     Notes {
@@ -2094,6 +2171,10 @@ pub enum Reply {
     // V2.5-12: first-run import, window only (`import::Op`, never a `Request`).
     ImportList {
         items: Vec<crate::import::Item>,
+    },
+    /// Ticket 1123: `import_list` with `folders_only`: the folders alone, no conversation words.
+    ImportFolders {
+        folders: Vec<crate::import::Folder>,
     },
     ImportAdded {
         total: usize,
@@ -2233,4 +2314,19 @@ pub struct OrchestrationPatch {
     pub enabled: Option<bool>,
     /// Creates the (empty) override folder so the window can open it; an empty folder changes nothing, the built-in files still serve.
     pub create_override: Option<bool>,
+}
+
+/// Ticket 1059: Claude's /context "Estimated usage by category" table, as its transcript record wrote it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Breakdown {
+    /// When Claude wrote the record, epoch ms.
+    pub at: u64,
+    /// Empty: the record was there but its table could not be read.
+    pub rows: Vec<BreakdownRow>,
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BreakdownRow {
+    pub label: String,
+    pub tokens: u64,
+    pub pct: f64,
 }

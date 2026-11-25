@@ -47,6 +47,7 @@ interface Props {
   project: PageContext['project'];
   projects: string[];
   sessions?: Session[];
+  current?: Session | null;
   onClose: () => void;
 }
 
@@ -106,7 +107,7 @@ const ALIAS: Partial<Record<SettingsPage, string>> = {
 /** A13: the last deep link an open took (App keeps the last one in its state, so a link seen before is not this open's). */
 const linked = { focus: 0, agent: 0 };
 
-export function SettingsView({ core, settings, commands, update, focus, agent, toast, hasProject, project, projects, sessions, onClose }: Props) {
+export function SettingsView({ core, settings, commands, update, focus, agent, toast, hasProject, project, projects, sessions, current, onClose }: Props) {
   const page = settings.settingsPage;
   const t = makeT(settings.language, navigator.language); // V2-14a
   useRegistry(); // a page registered after this drew joins the nav
@@ -291,7 +292,7 @@ export function SettingsView({ core, settings, commands, update, focus, agent, t
   };
   const bindings = merge(settings.bindings);
   const searchKey = bindings['settings.search']?.[0];
-  const ctx: PageContext = { core, t, settings, commands, update, focus: want, agent, toast, reveal: (p, at) => open(p, at, at), hasProject, project, projects, closeSettings: onClose, sessions };
+  const ctx: PageContext = { core, t, settings, commands, update, focus: want, agent, toast, reveal: (p, at) => open(p, at, at), hasProject, project, projects, closeSettings: onClose, sessions, current };
   return (
     <div className="settings" role="region" aria-label={t('settings.region')}>
       <nav aria-label={t('settings.nav')} onKeyDown={onNavKey}>

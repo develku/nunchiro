@@ -453,6 +453,88 @@
 .wtwrap:has(> .kidcount) > .wtmore {
   right: 52px;
 }
+/* Ticket 1067 (mockup 1): the lead row's "N need you" pill sits after the row in the wrap's flow, so the row's name gives
+   way first and the pill stays whole; the sub-agent count and the ⋯ menu join that flow instead of covering the row's end. */
+.wtwrap:has(> .needyou) {
+  display: flex;
+  align-items: center;
+}
+.wtwrap:has(> .needyou) > .row.wt2 {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  padding-right: 8px;
+}
+.wtwrap:has(> .needyou) > :is(.kidcount.over, .wtmore) {
+  position: static;
+  transform: none;
+  flex: none;
+  order: 1;
+}
+/* Ticket 1115 review r1 (default 250 px tree): the unseen "⋯" (opacity 0 until hover or keyboard focus, below) held 22 px
+   in this flow and cut the lead's name to one letter beside the pill; it takes its room only when it shows. */
+@media (hover: hover) {
+  .wtwrap:has(> .needyou):not(:hover, :has(:focus-visible), :has(> .wtmore:focus)) > .wtmore {
+    display: none;
+  }
+}
+/* Ticket 1115 step 1: a lead's worker rows sit one step in under its row; "▸ N more working" is quiet (the mockup's
+   faint line), not the your-turn orange of a waiting "+N". */
+.tree .crew {
+  margin-left: var(--sp-12);
+}
+.tree .crew .more.on {
+  color: var(--muted);
+  font-weight: 400;
+}
+/* Review r1: the line under the lead: "N working" (moved off the lead's row beside the pill) and the fold toggle. */
+.tree .crewsum {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  margin: var(--sp-2) 0 0 calc(3 * var(--sp-12));
+  font-size: var(--fs-1);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.tree .crewsum > .more {
+  margin: 0;
+}
+/* Ticket 1115 step 1: the lead row's "N working" tag gives way before the lead's name (ticket 995: the name wins). The
+   name's one-line word clamp cuts it at any shortfall (lead.css .lvl-mark), so the weight is the age's 1e8, not a small one. */
+.tree .row.wt2 .lead-tag {
+  flex: 0 100000000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.needyou {
+  flex: none;
+  order: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0 var(--sp-6) 0 var(--sp-2);
+  padding: 1px var(--sp-6);
+  font: inherit;
+  font-size: var(--fs-11);
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--you);
+  background: var(--you-bg);
+  border: 1px solid var(--you);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+}
+.needyou svg {
+  width: 12px;
+  height: 12px;
+}
+.needyou:focus-visible {
+  outline: 2px solid var(--ring-focus);
+  outline-offset: 1px;
+}
 .row.kid {
   --c: var(--idle);
   position: relative;
@@ -1395,21 +1477,6 @@
   outline-offset: 2px;
 }
 
-/* Agents shares narrow sidebars with the tree: metadata gets its own line before either word is clipped. */
-.agents .ar {
-  grid-template-columns: 12px minmax(0, 1fr);
-  height: auto;
-  min-height: var(--arow);
-  padding-block: var(--sp-4);
-  row-gap: 0;
-}
-.agents .ar .s {
-  grid-column: 2;
-}
-/* Ticket 257: the prompt-cache countdown ends the agent row's line, after its state word. */
-.agents .ar .s .cache::before {
-  content: ' · ';
-}
 .tm.cache {
   font-variant-numeric: tabular-nums;
 }
@@ -1417,17 +1484,6 @@
   color: var(--muted);
   font-size: var(--fs-11);
 }
-.agents .ar :is(.n, .s) {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-.agents .ph {
-  height: auto;
-  min-height: 28px;
-  flex-wrap: wrap;
-  padding-block: var(--sp-4);
-}
-
 /* The row's ⋯ lands on its elapsed time: while the ⋯ shows, the time steps aside in place (no row moves, needs 49), as
    t3code swaps a row's time for its actions on hover. Touch always shows the ⋯, so the time keeps clear of it there. */
 .wtwrap:has(> .wtmore):is(:hover, :has(:focus-visible), :has(> .wtmore:focus)) > .row.wt2 :is(.tm, .sw) {

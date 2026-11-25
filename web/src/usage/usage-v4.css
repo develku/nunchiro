@@ -183,14 +183,6 @@
 .usage4 .u4-r3 > * {
   flex: 1 1 240px;
 }
-.usage4 .u4-r3 > :first-child {
-  flex: 1 1 220px;
-  max-width: 250px;
-}
-.usage4 .u4-r3 > :last-child {
-  flex: 1 1 260px;
-  max-width: 340px;
-}
 .usage4 .u4-card {
   border-radius: var(--r-8);
   background: var(--panel);
@@ -217,10 +209,14 @@
 }
 .usage4 .cal {
   display: grid;
-  grid-template-columns: max-content repeat(6, 14px);
-  grid-auto-rows: 14px;
+  /* Ticket 1045: a cell grows from 14 px to 22 px with the card and stays square; past that the grid keeps its size. */
+  grid-template-columns: max-content repeat(6, minmax(14px, 22px));
   gap: 3px;
   justify-content: start;
+}
+.usage4 .cal .cell {
+  height: auto;
+  aspect-ratio: 1;
 }
 .usage4 .cal .wk {
   font-size: var(--fs-11);

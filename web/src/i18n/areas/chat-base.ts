@@ -70,6 +70,7 @@ declare module '../index' {
     "chat.empty.hint": true;
     "chat.empty.waitTitle": true;
     "chat.empty.waitHint": true;
+    "chat.empty.waitCard": true;
     "chat.empty.seatTitle": true;
     "chat.theAgent": true;
     "chat.feed": true;
@@ -182,7 +183,7 @@ export const en = {
   "chat.view.thinking": "Thinking",
   "chat.view.verbose": "Verbose",
   "chat.view.aria": "Transcript view: {view}",
-  "chat.view.tip": "Transcript view (Ctrl+O cycles Normal, Thinking, Verbose)",
+  "chat.view.tip": "Transcript view ({key} cycles Normal, Thinking, Verbose)",
   "chat.banner.tail": "is an untested version: chat shows each turn's final text only{extra}.",
   "chat.openTerminal": "Open terminal",
   "chat.terminal": "Terminal",
@@ -194,6 +195,7 @@ export const en = {
   "chat.empty.hint": "Write what you want the agent to do, and this conversation starts.",
   "chat.empty.waitTitle": "{name} asks you something first",
   "chat.empty.waitHint": "Answer in the terminal at the side. The conversation starts after that.",
+  "chat.empty.waitCard": "Answer on the card above the message box. The conversation starts after that.", // ticket 1097, English only
   "chat.empty.seatTitle": "What should {name} do?",
   "chat.theAgent": "the agent",
   "chat.feed": "Chat",
@@ -305,7 +307,7 @@ export const ko = {
   "chat.view.thinking": "사고 과정",
   "chat.view.verbose": "자세히",
   "chat.view.aria": "대화 기록 보기: {view}",
-  "chat.view.tip": "대화 기록 보기(Ctrl+O: 일반, 사고 과정, 자세히 순환)",
+  "chat.view.tip": "대화 기록 보기({key}: 일반, 사고 과정, 자세히 순환)",
   "chat.banner.tail": "버전은 테스트되지 않았습니다. 채팅에는 각 턴의 최종 텍스트만 표시됩니다{extra}.",
   "chat.openTerminal": "터미널 열기",
   "chat.terminal": "터미널",
@@ -428,7 +430,7 @@ export const ja = {
   "chat.view.thinking": "思考",
   "chat.view.verbose": "詳細",
   "chat.view.aria": "トランスクリプトビュー：{view}",
-  "chat.view.tip": "トランスクリプトビュー（Ctrl+O で標準 → 思考 → 詳細を切り替え）",
+  "chat.view.tip": "トランスクリプトビュー（{key} で標準 → 思考 → 詳細を切り替え）",
   "chat.banner.tail": "はテストされていないバージョンです。チャットには各ターンの最終テキストのみが表示されます{extra}。",
   "chat.openTerminal": "ターミナルを開く",
   "chat.terminal": "ターミナル",
@@ -551,7 +553,7 @@ export const zhHans = {
   "chat.view.thinking": "思考",
   "chat.view.verbose": "详细",
   "chat.view.aria": "记录视图：{view}",
-  "chat.view.tip": "记录视图（Ctrl+O 依次切换普通、思考、详细）",
+  "chat.view.tip": "记录视图（{key} 依次切换普通、思考、详细）",
   "chat.banner.tail": "是未经测试的版本：聊天仅显示每轮的最终文本{extra}。",
   "chat.openTerminal": "打开终端",
   "chat.terminal": "终端",
@@ -674,7 +676,7 @@ export const zhHant = {
   "chat.view.thinking": "思考",
   "chat.view.verbose": "詳細",
   "chat.view.aria": "對話記錄檢視：{view}",
-  "chat.view.tip": "對話記錄檢視（Ctrl+O 切換一般、思考、詳細）",
+  "chat.view.tip": "對話記錄檢視（{key} 切換一般、思考、詳細）",
   "chat.banner.tail": "是未經測試的版本：聊天僅顯示每輪的最終文字{extra}。",
   "chat.openTerminal": "開啟終端",
   "chat.terminal": "終端",
@@ -797,7 +799,7 @@ export const es = {
   "chat.view.thinking": "Pensamiento",
   "chat.view.verbose": "Detallado",
   "chat.view.aria": "Vista de transcripción: {view}",
-  "chat.view.tip": "Vista de transcripción (Ctrl+O alterna entre Normal, Pensamiento, Detallado)",
+  "chat.view.tip": "Vista de transcripción ({key} alterna entre Normal, Pensamiento, Detallado)",
   "chat.banner.tail": "es una versión no probada: el chat muestra solo el texto final de cada turno{extra}.",
   "chat.openTerminal": "Abrir terminal",
   "chat.terminal": "Terminal",
@@ -920,7 +922,7 @@ export const fr = {
   "chat.view.thinking": "Réflexion",
   "chat.view.verbose": "Détaillée",
   "chat.view.aria": "Vue de transcription : {view}",
-  "chat.view.tip": "Vue de transcription (Ctrl+O alterne Normale, Réflexion, Détaillée)",
+  "chat.view.tip": "Vue de transcription ({key} alterne Normale, Réflexion, Détaillée)",
   "chat.banner.tail": "est une version non testée : la conversation affiche uniquement le texte final de chaque tour{extra}.",
   "chat.openTerminal": "Ouvrir le terminal",
   "chat.terminal": "Terminal",
@@ -1043,7 +1045,7 @@ export const pt = {
   "chat.view.thinking": "Pensamento",
   "chat.view.verbose": "Detalhada",
   "chat.view.aria": "Visualização da transcrição: {view}",
-  "chat.view.tip": "Visualização da transcrição (Ctrl+O alterna entre Normal, Pensamento e Detalhada)",
+  "chat.view.tip": "Visualização da transcrição ({key} alterna entre Normal, Pensamento e Detalhada)",
   "chat.banner.tail": "é uma versão não testada: a conversa mostra apenas o texto final de cada turno{extra}.",
   "chat.openTerminal": "Abrir terminal",
   "chat.terminal": "Terminal",

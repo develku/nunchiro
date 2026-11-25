@@ -152,6 +152,7 @@ impl Sessions {
                 log: id,
                 pins: log.pins()?,
                 names: log.names(),
+                delivery: log.delivery(ROOM_READ_MAX, |seat, send| self.waits(seat, send))?,
             });
         }
         if let Request::RoomPin {
@@ -256,6 +257,10 @@ impl Sessions {
                 };
                 if let Some(reply) = reply {
                     self.room.waits.remove(&key);
+                    // Ticket 1089: the answer reached the asker as its `--wait` output.
+                    if reply.to == seat {
+                        log.reached(std::slice::from_ref(&reply.id))?;
+                    }
                     vec![reply]
                 } else if give_up {
                     self.room.waits.remove(&key);
@@ -290,6 +295,12 @@ impl Sessions {
             .waits
             .values()
             .any(|(at, s)| s == seat && at.elapsed() < WAIT_SEEN)
+    }
+    /// Ticket 1089: whether a typed line's send row still waits in `seat`'s queue.
+    fn waits(&self, seat: &str, send: &str) -> bool {
+        self.entries
+            .get(seat)
+            .is_some_and(|e| e.meta.send_queue.iter().any(|s| s.id == send))
     }
     fn room_notice(&mut self, project: &Path, message: &crate::room::Message) {
         if message.to == PERSON {
@@ -926,6 +937,140 @@ mod tests {
             })
             .unwrap();
     }
+    /// Ticket 1089: the room says when each line reached its seat. A lead's prompt to a working worker waits in the
+    /// worker's queue: its line has no time; once delivered it carries the time on the send row. A room message is got
+    /// when its seat reads its inbox. Two lines to two seats, each in one read.
+    #[test]
+    fn a_room_line_says_when_it_reached_its_seat() {
+        let (mut f, lead, worker, rev) = Fix::room("reached");
+        let room = f.home.join("p");
+        let read = |f: &mut Fix| -> Vec<(String, Option<u64>)> {
+            let Reply::RoomRead {
+                messages, delivery, ..
+            } = f
+                .core
+                .handle(Request::RoomRead {
+                    project: Some(room.clone()),
+                    since: None,
+                    log: None,
+                })
+                .unwrap()
+            else {
+                panic!("not a room read")
+            };
+            messages
+                .into_iter()
+                .filter_map(|m| Some((m.body, *delivery.get(&m.id)?)))
+                .collect()
+        };
+        f.core.queue.acp_turn(&worker, true).unwrap(); // the worker is busy: the prompt waits in its queue
+        let caller = f.caller(&lead);
+        f.core
+            .handle_agent(
+                &caller,
+                Request::AgentPrompt {
+                    id: worker.clone(),
+                    text: "fix the tests".into(),
+                },
+            )
+            .unwrap();
+        f.call(&lead, send(Some(&rev), None, "look at w1")).unwrap();
+        assert_eq!(
+            read(&mut f),
+            [
+                ("fix the tests".to_string(), None),
+                ("look at w1".to_string(), None)
+            ]
+        );
+        let before = crate::queue::now_ms();
+        f.core.queue.acp_turn(&worker, false).unwrap();
+        for _ in 0..3 {
+            f.core.tick().unwrap();
+        }
+        f.call(&rev, Request::RoomCheck { project: None }).unwrap();
+        let after = crate::queue::now_ms();
+        // The worker's own finish line to the lead is a third line; this test reads the two above.
+        let got: Vec<_> = read(&mut f)
+            .into_iter()
+            .filter(|(body, _)| !body.starts_with("worker w1"))
+            .collect();
+        assert_eq!(got.len(), 2, "{got:?}");
+        for ((body, at), want) in got.iter().zip(["fix the tests", "look at w1"]) {
+            assert_eq!(body, want);
+            let at = at.unwrap_or_else(|| panic!("{body} still waits"));
+            assert!((before..=after).contains(&at), "{body} at {at}");
+        }
+        // A core one version older must load what this one saved (the install puts the previous app back when an
+        // update fails). Its send rows are strict, so they gain no key; the room's files are read loosely.
+        f.core.save().unwrap();
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        #[allow(dead_code)]
+        struct OldSend {
+            id: String,
+            sender: String,
+            at: u64,
+            #[serde(default)]
+            completion_seq: u64,
+            #[serde(default)]
+            last_activity: u64,
+            content: String,
+            keys: Vec<String>,
+            submit: bool,
+            status: String,
+            #[serde(default)]
+            settle: Option<String>,
+            #[serde(default)]
+            remote: Option<bool>,
+        }
+        fn rows(v: &serde_json::Value, out: &mut Vec<serde_json::Value>) {
+            match v {
+                serde_json::Value::Object(m) => {
+                    for (k, v) in m {
+                        match (k.as_str(), v) {
+                            ("send_log" | "send_queue", serde_json::Value::Array(a)) => {
+                                out.extend(a.iter().cloned())
+                            }
+                            _ => rows(v, out),
+                        }
+                    }
+                }
+                serde_json::Value::Array(a) => a.iter().for_each(|v| rows(v, out)),
+                _ => {}
+            }
+        }
+        let store = fs::read_to_string(f.home.join("sessions.json")).unwrap();
+        assert!(!store.contains("delivered_at"), "{store}");
+        let mut saved = vec![];
+        rows(&serde_json::from_str(&store).unwrap(), &mut saved);
+        assert!(saved.iter().any(|r| r["content"] == "fix the tests"));
+        for row in saved {
+            serde_json::from_value::<OldSend>(row.clone()).unwrap_or_else(|e| panic!("{e}: {row}"));
+        }
+        #[derive(serde::Deserialize)]
+        #[allow(dead_code)]
+        struct OldMessage {
+            id: String,
+            from: String,
+            to: String,
+            body: String,
+        }
+        #[derive(serde::Deserialize)]
+        #[allow(dead_code)]
+        struct OldCursors {
+            ino: u64,
+            seats: std::collections::BTreeMap<String, usize>,
+        }
+        let dir = crate::room::Log::open(&f.home, &room).dir().to_path_buf();
+        let log = fs::read_to_string(dir.join("log.jsonl")).unwrap();
+        assert!(log.contains("\"send\""), "a typed line names its send row");
+        for line in log.lines() {
+            serde_json::from_str::<OldMessage>(line).unwrap();
+        }
+        let cursors = fs::read_to_string(dir.join("cursors.json")).unwrap();
+        assert!(cursors.contains("\"got\""), "{cursors}");
+        serde_json::from_str::<OldCursors>(&cursors).unwrap();
+    }
     /// Sixth look B6-S2-1, the rest of it: the user typed a key in the lead's terminal and sent nothing. Its workers'
     /// finish lines were refused by the box, kept as failed rows and counted as told: the lead never heard. They wait:
     /// the room has each line at once and says why, nothing is typed, and after the user's Enter there each goes in
@@ -944,7 +1089,10 @@ mod tests {
         let queued = |text: &str| (text.to_string(), "queued".to_string());
         assert_eq!(
             sends(&f, &lead),
-            [queued("worker w1 done"), queued("worker rev exited")]
+            [
+                queued("worker w1 ended a turn (no report yet)"),
+                queued("worker rev exited")
+            ]
         );
         let screen = shown(&mut f, &lead);
         assert!(
@@ -961,10 +1109,11 @@ mod tests {
         let said = room(&f);
         assert_eq!(said.len(), 2, "{said:?}");
         assert!(
-            said[0].starts_with("worker w1 done (waits: the input box of lead was edited by hand"),
+            said[0].starts_with("worker w1 ended a turn (no report yet) (waits: the input box of lead was edited by hand"),
             "{said:?}"
         );
-        // The user's Enter there: the mark is gone, and the lines go in, one a turn.
+        // The user's Enter there: the mark is gone, and the lines go in as one message (ticket 1056), the second row
+        // retired with the first.
         key(&mut f, &lead, "\r");
         f.core.tick().unwrap();
         turn(&mut f, &lead);
@@ -974,7 +1123,10 @@ mod tests {
         let delivered = |text: &str| (text.to_string(), "delivered".to_string());
         assert_eq!(
             sends(&f, &lead),
-            [delivered("worker w1 done"), delivered("worker rev exited")]
+            [
+                delivered("worker w1 ended a turn (no report yet)\nworker rev exited"),
+                delivered("worker rev exited")
+            ]
         );
         assert!(shown(&mut f, &lead).contains("worker rev exited"));
         assert_eq!(room(&f).len(), 2, "no line twice");
@@ -1292,6 +1444,7 @@ mod tests {
             created_by: By::Agent,
             ts: 1000,
             team: None,
+            send: None,
         }
     }
     // A room at its 10000-message cap, nearly every ask answered (by a reply, a plain message from the asked seat, a

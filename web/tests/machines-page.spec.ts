@@ -56,7 +56,9 @@ const hardcoded = (text: string) => { const code = text.replace(/\/\*[\s\S]*?\*\
 test('machines_text_from_catalogue', async ({ app }) => {
   await machines(app);
   const folder = path.resolve(import.meta.dirname, '../src/settings/machines');
-  for (const f of fs.readdirSync(folder).filter((f) => f.endsWith('.tsx'))) expect(hardcoded(fs.readFileSync(path.join(folder, f), 'utf8'))).toEqual([]);
+  // The link field's placeholder is the share link's own format (ticket 1050), not a word to translate.
+  const format = (s: string) => /^nunchiro-machine:v1\?/.test(s);
+  for (const f of fs.readdirSync(folder).filter((f) => f.endsWith('.tsx'))) expect(hardcoded(fs.readFileSync(path.join(folder, f), 'utf8')).filter((s) => !format(s))).toEqual([]);
   expect(hardcoded('<p>Injected English</p>')).toEqual(['Injected English']);
   expect(hardcoded('<input aria-label="Injected English" />')).toEqual(['Injected English']);
 });

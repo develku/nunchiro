@@ -278,7 +278,7 @@ fn now_ms() -> u64 {
 }
 
 /// How long the core took to raise `item` after `sent` (the call that caused the request): the core's own
-/// `observed_at`, so a starved test thread polling late does not count against the 1 s claim.
+/// `observed_at`, so a starved test thread polling late does not count against the measurement.
 fn reached(item: &Value, sent: u64) -> Duration {
     Duration::from_millis(item["observed_at"].as_u64().unwrap().saturating_sub(sent))
 }
@@ -318,14 +318,14 @@ fn acp_requests_reach_queue_30x() {
     let core = Core::new("acpq", FAKE);
     let id = started(&core);
     let mut seen = vec![];
-    let mut slowest = Duration::ZERO;
+    let mut latencies = vec![];
     let mut answered = 0;
     for run in 0..30 {
         // A permission with no prompt in flight (the turn already ended).
         let sent = now_ms();
         core.prompt(&id, "later");
         let (item, _) = core.next_item(&id, &seen);
-        slowest = slowest.max(reached(&item, sent));
+        latencies.push(reached(&item, sent));
         assert_eq!(item["kind"], "permission", "run {run}: {item}");
         seen.push(item["id"].as_str().unwrap().into());
         core.answer(&item, "allow_once");
@@ -337,7 +337,7 @@ fn acp_requests_reach_queue_30x() {
         let sent = now_ms();
         core.prompt(&id, "elicit");
         let (item, _) = core.next_item(&id, &seen);
-        slowest = slowest.max(reached(&item, sent));
+        latencies.push(reached(&item, sent));
         seen.push(item["id"].as_str().unwrap().into());
         core.answer(&item, "deny");
         answered += 1;
@@ -348,7 +348,7 @@ fn acp_requests_reach_queue_30x() {
         let sent = now_ms();
         core.prompt(&id, "cancel-me");
         let (first, _) = core.next_item(&id, &seen);
-        slowest = slowest.max(reached(&first, sent));
+        latencies.push(reached(&first, sent));
         seen.push(first["id"].as_str().unwrap().into());
         let sent = now_ms();
         core.ok(json!({"op":"agent_keys","id":id,"keys":["esc"]}));
@@ -359,7 +359,7 @@ fn acp_requests_reach_queue_30x() {
             "run {run}"
         );
         let (during, _) = core.next_item(&id, &seen);
-        slowest = slowest.max(reached(&during, sent));
+        latencies.push(reached(&during, sent));
         seen.push(during["id"].as_str().unwrap().into());
         core.answer(&during, "deny");
         answered += 1;
@@ -367,7 +367,13 @@ fn acp_requests_reach_queue_30x() {
         assert_eq!(last["result"]["outcome"]["optionId"], "no", "run {run}");
         assert_eq!(core.logged("session/cancel").len(), run + 1);
     }
-    assert!(slowest < Duration::from_secs(1), "slowest item {slowest:?}");
+    // Ticket 1114 (lead decision): keep a hard regression bound under build load; report ticket 16's 1 s target
+    // separately. This interval includes socket dispatch and scheduling the fake agent as well as queue ingestion.
+    latencies.sort_unstable();
+    let median = latencies[latencies.len() / 2];
+    let slowest = *latencies.last().unwrap();
+    eprintln!("ACP queue latency: median {median:?}, slowest {slowest:?}; target median < 1s");
+    assert!(slowest < Duration::from_secs(5), "slowest item {slowest:?}");
     assert_once_only(&core.responses());
 }
 

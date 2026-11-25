@@ -23,7 +23,7 @@ import { openBrowserTab } from './pane/browser/view/centreTab'; // ticket 997 L1
 import { YOU_SPACE } from './pane/browser/view/spaces';
 import { openAgents } from './settings/agents/open';
 import { Icon } from './icons/Icon';
-import { askLeader } from './lead/LeaderDialog';
+import { askFresh, askLeader } from './lead/LeaderDialog';
 import { leadOf, useTeam } from './lead/lead';
 import { AgentLogo } from './tree/AgentLogo';
 import { Icon as WidgetIcon } from './layout/icons';
@@ -355,10 +355,13 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
     // Owner 11-17: the leader is offered where agents are started, while this place has none (the palette and the project menu
     // were the only ways in). It opens the same Add a leader dialog.
     if (path && !machine && path !== team.home && !leadOf(team, path)) act({ id: 'lead', name: t('lead.newtab'), detail: t('lead.newtabHint'), wrap: true, icon: <Icon name="people" size={14} />, run: () => (onClose(), askLeader(path)) });
+    // Ticket 1096: with a lead, a fresh conversation for it (the palette's and the project menu's lead.fresh).
+    if (path && !machine && leadOf(team, path === team.home ? '' : path)) act({ id: 'lead-fresh', name: t('lead.fresh'), detail: t('lead.freshHint'), wrap: true, icon: <Icon name="people" size={14} />, run: () => (onClose(), askFresh(team, path)) });
     for (const r of acp) act({ id: `acp:${r.name}`, name: r.label, tag: t('newtab.acp'), icon: <AgentLogo kind="acp" name={r.label} />, run: () => start('acp', { acp: r.name }) });
     // ticket 299: the closed tabs of this window; with none, the row says so and does nothing (look 1117 v12 C-V13: on the row, not only in a tooltip).
     act({ id: 'reopen', name: t('reopen.cmd'), icon: <Icon name="clock" size={14} />, keyId: 'tab.reopen', disabled: closed.length ? undefined : t('reopen.none'), detail: closed.length ? undefined : t('reopen.none'), wrap: true, run: () => (onClose(), onReopen?.()) });
-    act({ id: 'settings', name: t('newtab.settings'), icon: <Icon name="gear" size={14} />, keyId: 'settings.open', run: () => (onClose(), openAgents()) });
+    // Ticket 1099: no ⌘, chip, which opens Settings on its last page; the row says where it goes instead (Providers).
+    act({ id: 'settings', name: t('newtab.settings'), detail: t('coh.newtab.settingsWhere'), icon: <Icon name="gear" size={14} />, run: () => (onClose(), openAgents()) });
     if (q) {
       for (const p of projects.filter((x) => x !== path && has(basename(x), x)).slice(0, MAX_EACH))
         out.push({ id: `project:${p}`, name: basename(p), detail: p, tag: t('newtab.project'), icon: <Icon name="file-directory" size={14} />, run: () => (setFolder(p), setQuery(''), setError('')) });

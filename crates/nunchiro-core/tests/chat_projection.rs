@@ -29,6 +29,47 @@ fn chat_claude_text_hides_waiting_markers() {
     }
 }
 
+/// Ticket 1087: records written by Claude 2.1.330 and Codex 0.161.0 for "! echo hi; echo oops >&2" and "! echo hi1087".
+#[test]
+fn chat_shell_command_row() {
+    let claude = |content: &str| {
+        project(
+            AgentKind::Claude,
+            &json!({"type":"user","message":{"role":"user","content":content}}),
+        )
+    };
+    assert_eq!(
+        claude("<bash-input>echo hi; echo oops >&2</bash-input>"),
+        vec![json!({"kind":"shell","command":"echo hi; echo oops >&2"})]
+    );
+    assert_eq!(
+        claude("<bash-stdout>hi\noops</bash-stdout><bash-stderr></bash-stderr>"),
+        vec![json!({"kind":"shell","output":"hi\noops"})]
+    );
+    assert_eq!(
+        claude("<bash-stdout></bash-stdout><bash-stderr>no such file</bash-stderr>"),
+        vec![json!({"kind":"shell","output":"no such file"})]
+    );
+    // An assistant quoting the tag is not a command.
+    assert_eq!(
+        project(
+            AgentKind::Claude,
+            &json!({"type":"assistant","message":{"content":"<bash-input>x</bash-input>"}})
+        ),
+        Vec::<serde_json::Value>::new()
+    );
+    let codex = project(
+        AgentKind::Codex,
+        &json!({"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<user_shell_command>\n<command>\necho hi1087\n</command>\n<result>\nExit code: 0\nDuration: 0.0249 seconds\nOutput:\nhi1087\n\n</result>\n</user_shell_command>"}],"internal_chat_message_metadata_passthrough":{"content_item_kinds":["shell.user_command"]}}}),
+    );
+    assert_eq!(
+        codex,
+        vec![
+            json!({"kind":"shell","command":"echo hi1087","output":"Exit code: 0\nDuration: 0.0249 seconds\nOutput:\nhi1087"})
+        ]
+    );
+}
+
 #[test]
 fn chat_claude_images() {
     assert_eq!(
@@ -53,6 +94,32 @@ fn chat_claude_assistant_blocks() {
             json!({"kind":"message","role":"assistant","text":"hello"}),
             json!({"kind":"thinking","text":"consider"})
         ]
+    );
+}
+
+#[test]
+fn chat_claude_update_notes() {
+    let note = |display: Option<&str>, text: &str| {
+        let mut r =
+            json!({"type":"assistant","message":{"content":[{"type":"thinking","thinking":text}]}});
+        if let Some(d) = display {
+            r["thinkingDisplay"] = json!(d);
+        }
+        project(AgentKind::Claude, &r)
+    };
+    assert_eq!(
+        note(Some("updates"), "Checking the exit path."),
+        vec![
+            json!({"kind":"message","role":"assistant","text":"Checking the exit path.","note":true})
+        ]
+    );
+    assert_eq!(
+        note(Some("updates"), ""),
+        vec![json!({"kind":"thinking","text":""})]
+    );
+    assert_eq!(
+        note(None, "consider"),
+        vec![json!({"kind":"thinking","text":"consider"})]
     );
 }
 

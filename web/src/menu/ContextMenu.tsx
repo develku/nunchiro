@@ -1,5 +1,5 @@
 // V2-6a: the app's one context menu. Surfaces opt in by attribute, as the tooltip does:
-//   data-menu="agents"          the surface (a key of SURFACES)
+//   data-menu="tab"             the surface (a key of SURFACES)
 //   data-menu-session="<id>"    the session its items act on (made the active one first)
 //   data-menu-arg="<text>"      handed to the command as its argument (a path, a message); page text, so commands treat it as a string only
 //   data-menu-project="<path>"  the project row's folder: the argument of the TAKES_PROJECT items only

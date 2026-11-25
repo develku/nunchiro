@@ -1166,7 +1166,8 @@ fn scan_all(
     let oldest = (first * DAY - offset(now) - DAY).min(now - horizon.max(8 * DAY));
     let mut files = vec![];
     walk(dir, 0, &mut files, budget);
-    files.sort();
+    // Newest first (Codex names its folders by date): when a cap trips, it drops the old rollouts, not the limits.
+    files.sort_by(|a, b| b.cmp(a));
     let mut out = Scanned::default();
     let mut seen = HashSet::new();
     let mut buf = Vec::with_capacity(MAX_LINE + 1);
@@ -1483,13 +1484,19 @@ pub(crate) fn claude_limits(home: &Path) -> BTreeMap<String, Told> {
         .unwrap_or_default()
 }
 
-/// A status line's `rate_limits` for the session whose account folder is `config_dir` (none for "Your own").
-pub(crate) fn observe_status(home: &Path, config_dir: Option<&Path>, limits: &Value, now: i64) {
+/// A status line's `rate_limits` for the session whose account folder is `config_dir` (none for "Your own"). True when
+/// the kept weekly share changed (ticket 1126 runs its rule only then).
+pub(crate) fn observe_status(
+    home: &Path,
+    config_dir: Option<&Path>,
+    limits: &Value,
+    now: i64,
+) -> bool {
     let id = match config_dir {
         None => crate::accounts::OWN.to_string(),
         Some(folder) => match folder.file_name().and_then(|n| n.to_str()) {
             Some(id) => id.to_string(),
-            None => return,
+            None => return false,
         },
     };
     let (session, weekly) = (
@@ -1497,12 +1504,19 @@ pub(crate) fn observe_status(home: &Path, config_dir: Option<&Path>, limits: &Va
         told_window(&limits["seven_day"]),
     );
     if session.is_none() && weekly.is_none() {
-        return;
+        return false;
     }
     let Ok(_one) = TOLD.lock() else {
-        return;
+        return false;
     };
     let mut all = claude_limits(home);
+    // A push may carry one window only; the other one stays while its reset is still ahead.
+    let kept = |new: Option<Limit>, old: Option<Limit>| new.or(old.filter(|l| l.resets_at > now));
+    let before = all.get(&id).copied();
+    let (session, weekly) = (
+        kept(session, before.and_then(|t| t.session)),
+        kept(weekly, before.and_then(|t| t.weekly)),
+    );
     let told = Told {
         at: now,
         session,
@@ -1512,7 +1526,7 @@ pub(crate) fn observe_status(home: &Path, config_dir: Option<&Path>, limits: &Va
         .get(&id)
         .is_some_and(|t| (t.session, t.weekly) == (session, weekly) && now - t.at < TOLD_QUIET)
     {
-        return;
+        return false;
     }
     all.insert(id, told);
     let path = home.join(CLAUDE_LIMITS);
@@ -1520,6 +1534,7 @@ pub(crate) fn observe_status(home: &Path, config_dir: Option<&Path>, limits: &Va
         use std::os::unix::fs::PermissionsExt;
         let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
     }
+    before.and_then(|t| t.weekly) != weekly
 }
 /// `{"used_percentage": 37.5, "resets_at": 1763740800}` (epoch seconds; an ISO time is read too) as a `Limit`.
 fn told_window(w: &Value) -> Option<Limit> {
@@ -2118,6 +2133,48 @@ mod tests {
             ),
             (None, Some(80), Some(100))
         );
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // Ticket 1045: a push with only the week must not erase the 5 h window the last push carried.
+    #[test]
+    fn status_push_with_one_window_keeps_the_other_while_ahead() {
+        use serde_json::json;
+        let dir = std::env::temp_dir().join(format!("ns-told-keep-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let both = json!({"five_hour": {"used_percentage": 10, "resets_at": 1000}, "seven_day": {"used_percentage": 20, "resets_at": 5000}});
+        let week = json!({"seven_day": {"used_percentage": 30, "resets_at": 5000}});
+        observe_status(&dir, None, &both, 100);
+        observe_status(&dir, None, &week, 200);
+        let t = claude_limits(&dir)["own"];
+        assert_eq!(t.session.map(|l| l.left_pct), Some(90));
+        assert_eq!(t.weekly.map(|l| l.left_pct), Some(70));
+        // Once its reset has passed, the old window is dropped.
+        observe_status(&dir, None, &week, 1500);
+        assert_eq!(claude_limits(&dir)["own"].session, None);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // Ticket 1045: a session on an added account is keyed by its folder name, which is the registry id the row uses.
+    #[test]
+    fn status_push_of_an_added_account_reaches_its_row() {
+        use serde_json::json;
+        let dir = std::env::temp_dir().join(format!("ns-told-acct-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let folder = dir.join("accounts/claude/abcd1234");
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(
+            dir.join("accounts.toml"),
+            "version = 1\n[[accounts]]\nagent = \"claude\"\nid = \"abcd1234\"\nlabel = \"Work\"\n",
+        )
+        .unwrap();
+        let week = json!({"seven_day": {"used_percentage": 30, "resets_at": 5000}});
+        observe_status(&dir, Some(&folder.canonicalize().unwrap()), &week, 100);
+        let own = |a: Agent| Some(dir.join(format!("{a:?}")));
+        let rows = rows(&dir, &own, 200, &|_| 0, &mut Budget::request()).unwrap();
+        let row = rows.iter().find(|r| r.id == "abcd1234").unwrap();
+        assert_eq!(row.weekly.map(|l| l.left_pct), Some(70));
         fs::remove_dir_all(&dir).unwrap();
     }
 }

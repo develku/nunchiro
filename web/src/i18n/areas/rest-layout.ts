@@ -49,7 +49,6 @@ declare module '../index' {
     'rest.layout.resizeSidebar.right': true;
     'rest.layout.pinned': true;
     'rest.layout.follows': true;
-    'rest.layout.note.agents': true;
     'rest.layout.note.waiting': true;
     'rest.layout.note.follows': true;
     'rest.layout.note.composer': true;
@@ -105,7 +104,7 @@ export const en = {
   'rest.layout.outside': 'layout.toml changed elsewhere. Done will overwrite it · ',
   'rest.layout.dragZone': 'Drag to move this widget',
   'rest.layout.min': 'min {w}×{h}',
-  'rest.layout.waitingWarn': 'Without it, Nunchiro shows waiting items only in tree rows, Agents dots, tab dots and the menu bar count.',
+  'rest.layout.waitingWarn': 'Without it, Nunchiro shows waiting items only in tree rows, tab dots and the menu bar count.',
   'rest.layout.removeFrom': 'Remove {name} from the {zone} zone',
   'rest.layout.zone': 'Zone {zone}',
   'rest.layout.resize': 'Resize {zone}',
@@ -128,7 +127,6 @@ export const en = {
   'rest.layout.resizeSidebar.right': 'Resize the right sidebar',
   'rest.layout.pinned': 'session: pinned to {name}',
   'rest.layout.follows': 'session: follows the focused one',
-  'rest.layout.note.agents': "one dot per agent, showing its state",
   'rest.layout.note.waiting': 'answer here',
   'rest.layout.note.follows': 'follows or pinned',
   'rest.layout.note.composer': 'hideable',
@@ -206,7 +204,6 @@ export const ko = {
   'rest.layout.resizeSidebar.right': '오른쪽 사이드바 크기 조절',
   'rest.layout.pinned': '세션: {name}에 고정',
   'rest.layout.follows': '세션: 포커스된 세션을 따름',
-  'rest.layout.note.agents': "에이전트마다 점 하나, 상태 표시",
   'rest.layout.note.waiting': '여기서 답변',
   'rest.layout.note.follows': '따라가기 또는 고정',
   'rest.layout.note.composer': '숨길 수 있음',
@@ -284,7 +281,6 @@ export const ja = {
   'rest.layout.resizeSidebar.right': '右サイドバーのサイズを変更',
   'rest.layout.pinned': 'セッション：{name} に固定',
   'rest.layout.follows': 'セッション：フォーカス中のものに追従',
-  'rest.layout.note.agents': "エージェントごとに 1 つの点で状態を表示",
   'rest.layout.note.waiting': 'ここで回答',
   'rest.layout.note.follows': '追従または固定',
   'rest.layout.note.composer': '非表示可',
@@ -362,7 +358,6 @@ export const zhHans = {
   'rest.layout.resizeSidebar.right': '调整右侧边栏大小',
   'rest.layout.pinned': '会话：固定到 {name}',
   'rest.layout.follows': '会话：跟随当前会话',
-  'rest.layout.note.agents': "每个代理一个圆点，显示其状态",
   'rest.layout.note.waiting': '在此回答',
   'rest.layout.note.follows': '跟随或固定',
   'rest.layout.note.composer': '可隐藏',
@@ -440,7 +435,6 @@ export const zhHant = {
   'rest.layout.resizeSidebar.right': '調整右側邊欄大小',
   'rest.layout.pinned': '工作階段：固定到 {name}',
   'rest.layout.follows': '工作階段：跟隨目前的工作階段',
-  'rest.layout.note.agents': "每個代理一個圓點，顯示其狀態",
   'rest.layout.note.waiting': '在此回答',
   'rest.layout.note.follows': '跟隨或固定',
   'rest.layout.note.composer': '可隱藏',
@@ -518,7 +512,6 @@ export const es = {
   'rest.layout.resizeSidebar.right': 'Redimensionar la barra lateral derecha',
   'rest.layout.pinned': 'sesión: fijada a {name}',
   'rest.layout.follows': 'sesión: sigue a la enfocada',
-  'rest.layout.note.agents': "un punto por agente, con su estado",
   'rest.layout.note.waiting': 'responde aquí',
   'rest.layout.note.follows': 'sigue o fijada',
   'rest.layout.note.composer': 'ocultable',
@@ -596,7 +589,6 @@ export const fr = {
   'rest.layout.resizeSidebar.right': 'Redimensionner la barre latérale droite',
   'rest.layout.pinned': 'session : épinglée à {name}',
   'rest.layout.follows': 'session : suit la session active',
-  'rest.layout.note.agents': "un point par agent, avec son état",
   'rest.layout.note.waiting': 'répondre ici',
   'rest.layout.note.follows': 'suit ou épinglé',
   'rest.layout.note.composer': 'masquable',
@@ -674,7 +666,6 @@ export const pt = {
   'rest.layout.resizeSidebar.right': 'Redimensionar a barra lateral direita',
   'rest.layout.pinned': 'sessão: fixada em {name}',
   'rest.layout.follows': 'sessão: segue a sessão em foco',
-  'rest.layout.note.agents': "um ponto por agente, com o seu estado",
   'rest.layout.note.waiting': 'responda aqui',
   'rest.layout.note.follows': 'segue ou fixado',
   'rest.layout.note.composer': 'ocultável',

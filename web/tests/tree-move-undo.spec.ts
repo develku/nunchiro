@@ -3,10 +3,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { agentsZone, expect, openWindow, test, type Core } from './fixtures';
+import { stripOnTop, expect, openWindow, test, type Core } from './fixtures';
 import { openQuiet, seed } from './tree-seed';
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 /** alpha in Web, beta in Docs, gamma loose; each with a shell so its project row exists. */
 async function open(app: Page, core: Core) {

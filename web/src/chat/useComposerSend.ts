@@ -13,7 +13,7 @@ import { show as paneShow } from '../pane/store';
 import { lastAccount, likeNew } from '../NewSession';
 import { useImages } from '../images/attach';
 import { asks, blocked, heldIds, holdText, refuseSecond, takeHeld } from './held';
-import { claimSteer, enqueue, finishSteer, nextRow, noteSteer, putBack, queueIds, queueOf, recordStop, setPaused, takeAll, takeRow, unclaimSteer, useQueues, type Row } from './queued';
+import { claimSteer, enqueue, finishSteer, markSent, nextRow, noteSteer, putBack, queueIds, queueOf, recordStop, setPaused, takeAll, takeRow, unclaimSteer, unsend, useQueues, type Row } from './queued';
 import { useSideChats } from './useSideChats';
 import type { T } from '../i18n';
 
@@ -40,6 +40,14 @@ type Deps = {
 /** sessions.rs `current` and `key_gate`: refusals before any byte is written that pass once the screen settles. */
 const GATE = /^(screen not current, try again|a request you have not seen is pending: )/;
 
+/** Ticket 1056: how long a sent row may go unseen in the transcript after the agent took it and went idle. */
+const SENT_MS = 15_000;
+/** Ticket 1056: at most one chat_page look a second for each sent row. */
+const LOOK_MS = 1_000;
+const seqOf = (s: Session) => (s as Session & { completion_seq?: number }).completion_seq ?? 0;
+/** The core's row of a send (the snapshot's send_log carries the queue too). */
+const logRow = (s: Session, send: string) => (s as Session & { send_log?: { id: string; status: string }[] }).send_log?.find((r) => r.id === send);
+
 /** The composer's send path: Enter (`send`, a handoff or a fork), Ctrl+Enter (`steerNow`), Cmd+Enter (`backgroundSend`)
  *  and Stop (`stopAgent`), with the per-session send state the composer shows (drafts, given-back text) and the queued rows' release (queued.ts),
  *  and the handoff and fork requests (HANDOFF_EVENT). */
@@ -58,6 +66,9 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
   const noDraft = (id: string) => (setDraft(id, ''), setDrafts((d) => ({ ...d, [id]: false })));
   /** The composer grows with its text up to a cap (claude-feel-2 .cmp textarea max-height 220). */
   const grow = (el: HTMLTextAreaElement) => {
+    // Ticket 1044: every path that puts text in the box calls grow. Ticket 1087: "!" opens Claude's bash mode and Codex
+    // 0.161's shell mode; an ACP agent gets the text as a prompt and a shell box is a shell already, so neither shows it.
+    el.closest('.cbox')?.toggleAttribute('data-shell', (el.dataset.kind === 'claude' || el.dataset.kind === 'codex') && el.value.startsWith('!'));
     el.style.height = 'auto';
     // scrollHeight is a whole number but the box's own height is fractional (14.5px at 1.45): while the text fits, keep
     // the CSS height, or the composer shifts by 0.03px when a send resets it (ticket 599, v25-empty).
@@ -155,6 +166,7 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
         const text = takeAll(id);
         if (text) rowsToDraft(id, text);
       } else if (!sendingFork.current.has(id)) {
+        for (const r of queueOf(id)?.rows ?? []) if (r.sent) void watchSent(target, r);
         // Two windows read the same rows: taking one is a read and a write, so it runs under a lock both windows share,
         // or both could take the row and send it twice (seen in the nightly, 2026-11-16).
         const release = () => {
@@ -170,6 +182,36 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
     const timer = setTimeout(() => setWake((n) => n + 1), soonest);
     return () => clearTimeout(timer);
   }, [sessions, connected, queues, wake]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Ticket 1056: a row sent into Claude's running turn leaves when the transcript shows it. When the core canceled or
+   *  failed it, it is a plain row again, once. Written and still unseen after SENT_MS of idle, it leaves too: the agent
+   *  has the words (a stopped Claude puts them back in its own box), and a row given back here could go in twice. */
+  const watching = useRef(new Set<string>());
+  const looked = useRef(new Map<string, number>());
+  const watchSent = async (s: Session, row: Row) => {
+    const sent = row.sent;
+    if (!sent || watching.current.has(row.id)) return;
+    // A working Claude sends many snapshots: one chat_page per row a second, and a skipped look comes back by itself.
+    const wait = (looked.current.get(row.id) ?? 0) + LOOK_MS - Date.now();
+    if (wait > 0) return void setTimeout(() => setWake((n) => n + 1), wait);
+    looked.current.set(row.id, Date.now());
+    watching.current.add(row.id);
+    try {
+      if ((await transcriptCount(s, row.text)) > (sent.base ?? 0)) return void takeRow(s.id, row.id);
+      const status = logRow(s, sent.send)?.status;
+      if (status === 'canceled' || status === 'failed') return unsend(s.id, row.id);
+      // A row gone from the log (its cap, a core restart) went in or was dropped; it must not stay "sent" for good.
+      if ((status === 'delivered' || status === undefined) && !s.attention.working && Date.now() - sent.at > SENT_MS) takeRow(s.id, row.id);
+    } catch {
+      /* the next snapshot looks again */
+    } finally {
+      watching.current.delete(row.id);
+    }
+  };
+  /** User messages with this text on the newest chat page (a `queued_command` is projected as one, chat/mod.rs). */
+  const transcriptCount = async (s: Session, text: string) => {
+    const page = ((await core.request({ op: 'chat_page', id: s.id })) as { page?: { events?: { data?: Record<string, unknown> }[] } }).page;
+    return (page?.events ?? []).filter(({ data }) => data?.kind === 'message' && data.role === 'user' && typeof data.text === 'string' && data.text.includes(text.trim())).length;
+  };
   /** Rows of a session that ended: first in its draft, any draft kept. A box showing that session is the draft's truth. */
   const rowsToDraft = (id: string, text: string) => {
     const box = document.querySelector<HTMLTextAreaElement>(`textarea[data-draft-for="${CSS.escape(id)}"]`);
@@ -209,10 +251,14 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
     const row = claimSteer(target.id, rowId);
     if (!row) return;
     try {
-      const reply = (await core.request({ op: 'steer_now', id: target.id, text: row.text, seen: target.pending.map((d) => d.id) })) as { send?: { status?: string } };
+      const base = target.kind === 'claude' ? await transcriptCount(target, row.text).catch(() => 0) : 0;
+      const reply = (await core.request({ op: 'steer_now', id: target.id, text: row.text, seen: target.pending.map((d) => d.id) })) as { send?: { id?: string; status?: string } };
       // Stop's own delivery can fail and still reply Ok; then the text was never queued.
       if (reply?.send?.status === 'failed') throw new CoreRefusal('the interrupt did not go through');
-      finishSteer(target.id, rowId, target);
+      // Ticket 1056 (ticket 371 item 15's guard): Claude takes it at its next step, so the row stays, marked, until the
+      // transcript shows it (`watchSent`).
+      if (target.kind === 'claude' && reply?.send?.id) markSent(target.id, rowId, { send: reply.send.id, seq: seqOf(target), at: Date.now(), base });
+      else finishSteer(target.id, rowId, target);
       noteSteer(target.id, row.text);
     } catch (e) {
       unclaimSteer(target.id);
@@ -233,6 +279,9 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
     escBusy.current = true;
     // shortcut: a stop pressed inside the terminal pane never comes through here, so the list still goes in after it; upgrade when the core reports an interrupted turn.
     const undo = recordStop(target); // before the Esc: the turn's end must find the list already held
+    // Ticket 1056: a sent row the core still holds is taken back before the Esc, so it never goes in after the Stop.
+    for (const r of queueOf(target.id)?.rows ?? [])
+      if (r.sent && logRow(target, r.sent.send)?.status === 'queued') void core.request({ op: 'cancel_send', id: target.id, send: r.sent.send }).then(() => unsend(target.id, r.id), () => {});
     markStopped(target.id); // N27
     core
       .sendKeys(target.id, ['esc'], target.pending.map((d) => d.id)) // ticket 115: what this window has drawn
@@ -273,6 +322,7 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
     if (!released && !ho && !retry && text && !sentTo.current.has(target.id) && blocked(target)) {
       el.value = '';
       el.style.height = '';
+      el.closest('.cbox')?.removeAttribute('data-shell'); // ticket 1044: the "!" cue ends with the text
       noDraft(target.id);
       saved.done();
       return holdText(target.id, text);
@@ -282,6 +332,7 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
     if (ho && !ho.fork) {
       el.value = '';
       el.style.height = '';
+      el.closest('.cbox')?.removeAttribute('data-shell'); // ticket 1044: the "!" cue ends with the text
       noDraft(target.id);
       setHandoff(null); // a second Enter meanwhile finds no handoff (the core also starts one target only)
       try {
@@ -302,6 +353,7 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
       if (!enqueue(target, text)) return setPaneNote(t('composer.queue.notSaved')); // the box and chips keep it
       el.value = '';
       el.style.height = '';
+      el.closest('.cbox')?.removeAttribute('data-shell'); // ticket 1044: the "!" cue ends with the text
       noDraft(target.id);
       saved.done();
       return;
@@ -312,6 +364,7 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
     // Cleared before the await: a cold tab's mode comes over the socket, and a second Enter or new typing must not meet the old text.
     el.value = '';
     el.style.height = '';
+    el.closest('.cbox')?.removeAttribute('data-shell'); // ticket 1044: the "!" cue ends with the text
     if (!released) noDraft(target.id);
     const body = (await bracketedPaste(core, target.id)) ? `\x1b[200~${clean}\x1b[201~` : clean;
     const seen = target.pending.map((d) => d.id); // ticket 123: before the text, so a dialog drawn in the gap is unseen
@@ -374,22 +427,35 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
   // An empty box with rows waiting sends the top row, as its own button would.
   const steerNow = async (el: HTMLTextAreaElement, target: Session | null) => {
     if (!target) return;
-    if (!el.value.trim()) {
-      const top = queueOf(target.id)?.rows[0];
+    const chips = images.of(target.id);
+    if (!el.value.trim() && !chips.length) {
+      const top = queueOf(target.id)?.rows.find((r) => !r.sent); // ticket 1056: a sent row is the agent's already
       return top ? pressRow(target, top.id) : undefined;
     }
-    const text = el.value;
+    // Ticket 1087: the images go with the words, as Enter's send does (v1b-05): saved first, each path on its own line.
+    if (chips.some((c) => c.saving)) return;
+    let saved: { paths: string[]; done: () => void } = { paths: [], done: () => {} };
+    if (chips.length)
+      try {
+        saved = await images.save(target.id);
+      } catch {
+        return; // the chips stay and say why
+      }
+    const typed = el.value;
+    const text = [typed, ...saved.paths].filter(Boolean).join('\n');
     el.value = '';
     el.style.height = '';
+    el.closest('.cbox')?.removeAttribute('data-shell'); // ticket 1044: the "!" cue ends with the text
     noDraft(target.id);
     try {
       await core.request({ op: 'steer_now', id: target.id, text, seen: target.pending.map((d) => d.id) });
+      saved.done();
       noteSteer(target.id, text);
     } catch (e) {
       const why = rawError(e);
-      // A kind with no turn to break refuses before writing: the text goes back in the box, where Enter queues it.
+      // A kind with no turn to break refuses before writing: the text goes back in the box (the chips stayed), where Enter queues it.
       if (why.startsWith(NO_INTERRUPT)) {
-        el.value = text;
+        el.value = typed;
         setDrafts((d) => ({ ...d, [target.id]: true }));
         grow(el);
         return setPaneNote(t('composer.steerNoInterrupt'));
@@ -397,7 +463,8 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
       // A write that failed after its bytes may have reached the agent says `uncertain:` and is never given back. Any other
       // failure is: a before-writing refusal sent nothing; a lost reply (socket drop, timeout; Q9 tt-J22-1) proves neither
       // way, so its text comes back marked as maybe sent.
-      if (!why.startsWith(UNCERTAIN)) giveBack(el, target, text);
+      if (!why.startsWith(UNCERTAIN)) giveBack(el, target, typed);
+      else saved.done(); // maybe sent: its images are not offered again
       if (why.startsWith(UNCERTAIN) || !(e instanceof CoreRefusal)) setUncertainSend((p) => ({ ...p, [target.id]: true }));
       setPaneNote(errorNote(t('composer.backgroundFailed', { error: notePlain(t, e) }), e));
     }
@@ -413,6 +480,7 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
     const kind = [...ordered].reverse().find((s) => s.project === project && s.kind !== 'shell')?.kind ?? 'claude';
     el.value = '';
     el.style.height = '';
+    el.closest('.cbox')?.removeAttribute('data-shell'); // ticket 1044: the "!" cue ends with the text
     if (box) noDraft(box.id); // Q9 tt-J22-2: a reload must not bring the sent text back
     let started: Session | null = null;
     try {

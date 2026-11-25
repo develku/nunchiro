@@ -68,7 +68,7 @@
 }
 .histv-q {
   display: flex;
-  flex: 1 1 100%;
+  flex: 1 1 0; /* the rest of its line, beside the "Started outside Nunchiro" toggle (ticket 1073); the controls wrap below */
   align-items: center;
   gap: var(--sp-6);
   min-width: 0;
@@ -473,6 +473,23 @@
   justify-self: end;
   max-width: 96px;
   color: var(--faint);
+  font-size: var(--fs-11);
+}
+/* Ticket 1073: the small terminal glyph before the project of a conversation started outside Nunchiro, and the line a
+   refused open leaves under its row. */
+.hr-tm {
+  display: inline-flex;
+  margin-right: 3px;
+  vertical-align: -2px;
+}
+.hr-tm svg {
+  width: 11px;
+  height: 11px;
+}
+.hr-fail {
+  grid-column: 3 / -1;
+  grid-row: 3;
+  color: var(--tree-bad);
   font-size: var(--fs-11);
 }
 .hr-acts {

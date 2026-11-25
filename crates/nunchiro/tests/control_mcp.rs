@@ -31,9 +31,18 @@ impl Harness {
         h.wait_up();
         h
     }
+    /// Ticket 1083: the user's home of this harness's core, beside (never inside) its Nunchiro home, so a token may use
+    /// the default worktrees folder there.
+    fn user_home(home: &std::path::Path) -> std::path::PathBuf {
+        let mut name = home.file_name().unwrap().to_os_string();
+        name.push("-user");
+        home.with_file_name(name)
+    }
     fn serve(home: &std::path::Path) -> Child {
+        std::fs::create_dir_all(Self::user_home(home)).unwrap();
         home::git_env::scrubbed(env!("CARGO_BIN_EXE_nunchiro"))
             .arg("serve")
+            .env("HOME", Self::user_home(home))
             .env("NUNCHIRO_HOME", home)
             .env("CLAUDE_CONFIG_DIR", home.join("claude-data"))
             .env("CODEX_HOME", home.join("codex-data"))
@@ -1205,8 +1214,6 @@ fn a_token_works_outside_the_data_folder_and_on_its_own() {
             "{inside:?}: {refused}"
         );
     }
-    let refused = start(&h.project, true).unwrap_err();
-    assert!(refused.contains("worktree folder"), "{refused}");
     // The core, the window's layout and the owner's sessions are not a token's.
     for request in [
         json!({"op":"stop"}),
@@ -1229,8 +1236,10 @@ fn a_token_works_outside_the_data_folder_and_on_its_own() {
     let mine = h.agent(&full, "mine");
     h.call(&full, json!({"op":"label","id":mine,"label":"renamed"}))
         .unwrap();
-    // Worktrees: a token removes the one it created, not the owner's.
-    let repo = &h.project;
+    // Worktrees: a token removes the one it created, not the owner's. Ticket 1061: the repository is a folder of the
+    // project folder, so the default root (beside the repository) is removed with it.
+    let repo = &h.project.join("repo");
+    fs::create_dir_all(repo).unwrap();
     for args in [
         vec!["init"],
         vec![
@@ -1276,13 +1285,32 @@ fn a_token_works_outside_the_data_folder_and_on_its_own() {
             json!({"op":"worktree","operation":"remove","project":repo,"path":path,"branch":null,"base":"","label":""}),
         )
     };
+    // Tickets 1061, 1083: the default worktree folder is in the user's home, so a token's --worktree start goes there.
+    let beside = fs::canonicalize(Harness::user_home(&h.home))
+        .unwrap()
+        .join("nunchiro/worktrees/repo");
+    let started = start(repo, true).unwrap();
+    let cwd = started["session"]["cwd"].as_str().unwrap_or_default();
+    assert!(cwd.starts_with(beside.to_str().unwrap()), "{started}");
+    // A setting that points inside the Nunchiro folder is still refused for a token.
+    let set = |dir: &str| {
+        h.call(
+            &owner,
+            json!({"op":"quit_settings","patch":{"worktrees_dir":dir}}),
+        )
+        .unwrap()
+    };
+    set(h.home.join("wt").to_str().unwrap());
+    let refused = start(repo, true).unwrap_err();
+    assert!(refused.contains("worktree folder"), "{refused}");
+    set("");
     let owners = create(&owner, "owners");
-    // Round 5 (security r4 NOTE 3): never inside the Nunchiro folder (the default worktree folder is in it).
-    assert!(owners.starts_with(&h.home), "{owners:?}");
+    assert!(owners.starts_with(&beside), "{owners:?}");
+    // Round 5 (security r4 NOTE 3): a token's `--path` is never inside the Nunchiro folder.
     let inside = h
         .call(
             &full,
-            json!({"op":"worktree","operation":"create","project":repo,"path":owners.parent().unwrap().join("inside"),
+            json!({"op":"worktree","operation":"create","project":repo,"path":h.home.join("worktrees/repo/inside"),
                 "branch":"inside","base":"HEAD","label":"inside"}),
         )
         .unwrap_err();
@@ -1291,6 +1319,84 @@ fn a_token_works_outside_the_data_folder_and_on_its_own() {
     let refused = remove(&full, &owners).unwrap_err();
     assert!(refused.contains("worktrees it created"), "{refused}");
     remove(&full, &tokens).unwrap();
+}
+
+// Ticket 1061 (security MUST): the default root sits in a folder other programs of the user may write. A
+// planted `<root>/<repo>` link is refused for a token and the owner, and nothing lands where it points. A linked
+// the root itself is resolved (the owner may move it to another disk that way), and a token is checked on the result.
+#[test]
+fn a_linked_worktree_folder_never_moves_a_checkout() {
+    let h = Harness::new();
+    let owner = h.owner_token();
+    let full = h.token("full");
+    let repo = &h.project.join("repo");
+    fs::create_dir_all(repo).unwrap();
+    for args in [
+        vec!["init"],
+        vec![
+            "-c",
+            "user.name=F",
+            "-c",
+            "user.email=f@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "i",
+        ],
+    ] {
+        let git = home::git_env::scrubbed("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output();
+        assert!(git.unwrap().status.success());
+    }
+    let start = |token: &str| {
+        h.call(
+            token,
+            json!({"op":"start","session":{"kind":"claude","project":repo,"worktree":true}}),
+        )
+    };
+    let create = |token: &str, branch: &str| {
+        h.call(
+            token,
+            json!({"op":"worktree","operation":"create","project":repo,"path":null,"branch":branch,
+                "base":"HEAD","label":branch}),
+        )
+    };
+    let planted = h.home.join("planted");
+    fs::create_dir_all(&planted).unwrap();
+    let worktrees = Harness::user_home(&h.home).join("nunchiro/worktrees");
+    fs::create_dir_all(&worktrees).unwrap();
+    std::os::unix::fs::symlink(&planted, worktrees.join("repo")).unwrap();
+    for (who, refused) in [
+        ("token start", start(&full).unwrap_err()),
+        ("owner start", start(&owner).unwrap_err()),
+        ("token create", create(&full, "a").unwrap_err()),
+        ("owner create", create(&owner, "b").unwrap_err()),
+    ] {
+        assert!(
+            refused.contains("is a link or not a folder"),
+            "{who}: {refused}"
+        );
+    }
+    assert_eq!(
+        fs::read_dir(&planted).unwrap().count(),
+        0,
+        "nothing under the link's target"
+    );
+    // A linked root into the Nunchiro folder: resolved, so a token is refused and the owner's lands there.
+    fs::remove_file(worktrees.join("repo")).unwrap();
+    fs::remove_dir(&worktrees).unwrap();
+    std::os::unix::fs::symlink(&planted, &worktrees).unwrap();
+    for refused in [start(&full).unwrap_err(), create(&full, "c").unwrap_err()] {
+        assert!(refused.contains("the Nunchiro folder"), "{refused}");
+    }
+    create(&owner, "d").unwrap();
+    // The normal case: a real root works for both.
+    fs::remove_file(&worktrees).unwrap();
+    start(&full).unwrap();
+    create(&full, "e").unwrap();
 }
 
 // Round 5 (review r4 MUST 1): a token session keeps its own room seat: it reads and answers what is sent to it, from

@@ -11,7 +11,7 @@ const legacy = (): Layout => ({
     id: 'main',
     split: 'row',
     children: [
-      { id: 'left', size: 256, split: 'column', children: [{ id: 'tree', widgets: ['tree'] }, { id: 'agents', size: 190, widgets: ['agents'] }] },
+      { id: 'left', size: 256, split: 'column', children: [{ id: 'tree', widgets: ['tree'] }, { id: 'context', size: 190, widgets: ['context'] }] },
       { id: 'centre', split: 'column', children: [{ id: 'terminal', widgets: ['terminal'] }, { id: 'waiting', widgets: ['waiting'] }, { id: 'composer', widgets: ['composer'] }] },
     ],
   },
@@ -24,7 +24,7 @@ test('default layout is the D5b centre column: terminal and composer (A22: no st
   expect(l).toMatchObject({ version: 1 });
   expect('locked' in l).toBe(false); // ticket 1031: the Lock switch and its state are gone
   expect(ids(l)).toEqual(['terminal:terminal', 'composer:composer']);
-  expect(ids(legacy())).toEqual(['tree:tree', 'agents:agents', 'terminal:terminal', 'waiting:waiting', 'composer:composer']);
+  expect(ids(legacy())).toEqual(['tree:tree', 'context:context', 'terminal:terminal', 'waiting:waiting', 'composer:composer']);
 });
 
 test('split right inserts a sibling in a row, split down wraps a column; ids stay unique', () => {
@@ -42,8 +42,8 @@ test('split right inserts a sibling in a row, split down wraps a column; ids sta
 });
 
 test('stack adds a tab and makes it active; edge adds a zone at the window edge with a fixed size', () => {
-  let l = run(legacy(), 'stack agents --zone terminal');
-  expect((find(l.root, 'terminal') as Leaf).widgets).toEqual(['terminal', 'agents']);
+  let l = run(legacy(), 'stack context --zone terminal');
+  expect((find(l.root, 'terminal') as Leaf).widgets).toEqual(['terminal', 'context']);
   expect((find(l.root, 'terminal') as Leaf).active).toBe(1);
   l = run(l, 'edge right waiting');
   expect(l.root).toMatchObject({ split: 'row' });
@@ -52,7 +52,7 @@ test('stack adds a tab and makes it active; edge adds a zone at the window edge 
 });
 
 test('remove collapses empty zones and single-child splits; the last zone signal may go: the Tree always shows waiting', () => {
-  let l = run(legacy(), 'remove agents');
+  let l = run(legacy(), 'remove context');
   expect(ids(l)).toEqual(['tree:tree', 'terminal:terminal', 'waiting:waiting', 'composer:composer']);
   // The left column had one child left, so it collapsed into that child (which keeps the column's width).
   expect(find(l.root, 'tree')).toMatchObject({ size: 256 });
@@ -72,9 +72,9 @@ test('move takes a widget with its pin; pin and unpin name the session (Hangul t
 });
 
 test('split minimum: a zone too small for both halves is refused with the sizes', () => {
-  const sizes = new Map([['agents', { w: 256, h: 190 }], ['terminal', { w: 900, h: 500 }]]);
+  const sizes = new Map([['context', { w: 256, h: 190 }], ['terminal', { w: 900, h: 500 }]]);
   const l = legacy();
-  expect(() => apply(l, parse(tokenize('split down terminal --zone agents'), undefined, l), (id) => sizes.get(id))).toThrow(/agents is 190 px .* needs 80 \+ 120/);
+  expect(() => apply(l, parse(tokenize('split down terminal --zone context'), undefined, l), (id) => sizes.get(id))).toThrow(/context is 190 px .* needs 80 \+ 120/);
   expect(() => apply(l, parse(tokenize('split right terminal --zone terminal'), undefined, l), (id) => sizes.get(id))).not.toThrow();
 });
 
@@ -89,15 +89,15 @@ test('resize and reset; lock is no command any more (ticket 1031); unknown widge
 });
 
 test('parse and format round-trip: the drag echo is the typed command', () => {
-  for (const line of ['split right terminal --pin v1a-03 --zone terminal', 'stack agents --zone terminal', 'edge left waiting', 'add waiting', 'move terminal split down --zone tree', 'remove --zone agents --tab 1', 'pin "my session" --zone terminal', 'resize left 300', 'reset', 'undo'])
+  for (const line of ['split right terminal --pin v1a-03 --zone terminal', 'stack context --zone terminal', 'edge left waiting', 'add waiting', 'move terminal split down --zone tree', 'remove --zone context --tab 1', 'pin "my session" --zone terminal', 'resize left 300', 'reset', 'undo'])
     expect(format(parse(tokenize(line)))).toBe(line);
   // The default zone is the selected one.
-  expect(format(parse(tokenize('split right agents'), 'tree'))).toBe('split right agents --zone tree');
+  expect(format(parse(tokenize('split right context'), 'tree'))).toBe('split right context --zone tree');
 });
 
 test('add waiting puts the strip under the composer (needs 107)', () => {
   const l = run(run(legacy(), 'remove waiting'), 'add waiting');
-  expect(ids(l)).toEqual(['tree:tree', 'agents:agents', 'terminal:terminal', 'composer:composer', 'waiting:waiting']);
+  expect(ids(l)).toEqual(['tree:tree', 'context:context', 'terminal:terminal', 'composer:composer', 'waiting:waiting']);
 });
 
 test('completion offers commands, then their arguments', () => {
@@ -105,22 +105,22 @@ test('completion offers commands, then their arguments', () => {
   expect(complete('split ', legacy(), []).map((c) => c.text)).toEqual(['split up ', 'split down ', 'split left ', 'split right ']);
   expect(complete('split right t', legacy(), []).map((c) => c.text)).toEqual(['split right tree ', 'split right terminal ']);
   expect(complete('pin ', legacy(), ['v1a-03']).map((c) => c.text)).toEqual(['pin v1a-03 ']);
-  expect(complete('split right tree --zone a', legacy(), []).map((c) => c.text)).toEqual(['split right tree --zone agents ']);
+  expect(complete('split right tree --zone con', legacy(), []).map((c) => c.text)).toEqual(['split right tree --zone context ']);
 });
 
 test('removing a tab before the active one keeps the same tab active', () => {
-  let l = run(legacy(), 'stack agents --zone terminal');
+  let l = run(legacy(), 'stack context --zone terminal');
   l = run(l, 'stack files --zone terminal'); // needs 157: the legacy layout has its one Tree already
   l = apply(l, { op: 'pin', session: 'x', zone: 'terminal', tab: 2 });
-  // Tabs: terminal, agents@x, files; make agents@x active, then remove the first tab.
+  // Tabs: terminal, context@x, files; make context@x active, then remove the first tab.
   l = { ...l, root: JSON.parse(JSON.stringify(l.root).replace('"active":2', '"active":1')) };
   expect((find(l.root, 'terminal') as Leaf).active).toBe(1);
   l = run(l, 'remove --zone terminal --tab 1');
   const z = find(l.root, 'terminal') as Leaf;
-  expect(z.widgets).toEqual(['agents@x', 'files']);
+  expect(z.widgets).toEqual(['context@x', 'files']);
   expect(z.active ?? 0).toBe(0);
   // Removing the active last tab falls back to the one before it.
-  const m = run(run(legacy(), 'stack agents --zone terminal'), 'remove --zone terminal --tab 2');
+  const m = run(run(legacy(), 'stack context --zone terminal'), 'remove --zone terminal --tab 2');
   expect((find(m.root, 'terminal') as Leaf).active ?? 0).toBe(0);
 });
 
@@ -137,16 +137,16 @@ test('zoom: one visible zone, unzoom shows all, and the serialised layout never 
 });
 
 test('swap exchanges two zones\' widgets and active tab, sibling or not, and keeps ids and sizes', () => {
-  let l = run(legacy(), 'stack agents --zone terminal');
+  let l = run(legacy(), 'stack context --zone terminal');
   l = apply(l, { op: 'pin', session: 'x', zone: 'terminal', tab: 1 });
   const before = ids(l);
   const s = apply(l, { op: 'swap', a: 'terminal', b: 'tree' });
-  expect(ids(s)).toEqual(['tree:terminal@x+agents', 'agents:agents', 'terminal:tree', 'waiting:waiting', 'composer:composer']);
+  expect(ids(s)).toEqual(['tree:terminal@x+context', 'context:context', 'terminal:tree', 'waiting:waiting', 'composer:composer']);
   expect((find(s.root, 'tree') as Leaf).active).toBe(1);
   expect((find(s.root, 'terminal') as Leaf).active ?? 0).toBe(0);
   expect(find(s.root, 'tree')).toMatchObject({ id: 'tree' });
   expect(find(s.root, 'left')).toMatchObject({ size: 256 });
-  expect(find(s.root, 'agents')).toMatchObject({ size: 190 });
+  expect(find(s.root, 'context')).toMatchObject({ size: 190 });
   // Siblings too, and swapping back restores the layout.
   expect(ids(apply(l, { op: 'swap', a: 'waiting', b: 'composer' }))).toContain('waiting:composer');
   expect(apply(s, { op: 'swap', a: 'terminal', b: 'tree' })).toEqual(l);
@@ -178,14 +178,14 @@ test('resize step: grows toward a neighbour, shrinks at the window edge, climbs 
   // `left` (256 wide) has its neighbour on the right: l grows, h shrinks.
   expect(resizeStep(l, 'tree', 'right', 16, (id) => (id === 'main' ? { w: 1200, h: 700 } : id === 'left' ? { w: 256, h: 700 } : { w: 256, h: 300 }))).toEqual({ op: 'resize', zone: 'left', size: 272 });
   expect(resizeStep(l, 'tree', 'left', 16, (id) => (id === 'main' ? { w: 1200, h: 700 } : id === 'left' ? { w: 256, h: 700 } : { w: 256, h: 300 }))).toEqual({ op: 'resize', zone: 'left', size: 240 });
-  // agents (190 high, last in its column): up grows (neighbour above), down shrinks.
-  expect(resizeStep(l, 'agents', 'up', 16, size(256, 190))).toEqual({ op: 'resize', zone: 'agents', size: 206 });
-  expect(resizeStep(l, 'agents', 'down', 16, size(256, 190))).toEqual({ op: 'resize', zone: 'agents', size: 174 });
+  // context (190 high, last in its column): up grows (neighbour above), down shrinks.
+  expect(resizeStep(l, 'context', 'up', 16, size(256, 190))).toEqual({ op: 'resize', zone: 'context', size: 206 });
+  expect(resizeStep(l, 'context', 'down', 16, size(256, 190))).toEqual({ op: 'resize', zone: 'context', size: 174 });
   // At the minimum nothing changes: no op.
-  const min = 80; // agents' minimum height (registry)
-  expect(resizeStep(l, 'agents', 'down', 16, size(256, min))).toBeNull();
+  const min = 80; // context' minimum height (registry)
+  expect(resizeStep(l, 'context', 'down', 16, size(256, min))).toBeNull();
   // A shrink never goes below the minimum, it clamps to it.
-  expect(resizeStep(l, 'agents', 'down', 16, size(256, min + 5))).toEqual({ op: 'resize', zone: 'agents', size: min });
+  expect(resizeStep(l, 'context', 'down', 16, size(256, min + 5))).toEqual({ op: 'resize', zone: 'context', size: min });
   // The only zone of a window has no split on any axis.
   expect(resizeStep({ ...l, root: { id: 'solo', widgets: ['terminal'] } }, 'solo', 'right', 16, size(900, 600))).toBeNull();
 });

@@ -635,6 +635,18 @@ button.lead-go {
 .lead-st[data-tone='idle'] {
   color: var(--muted);
 }
+.lead-auto {
+  color: var(--muted);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+/* Ticket 1081: a seat the core saw stalled; the reason is in the title. */
+.lead-stall {
+  color: var(--warn);
+  font-size: var(--fs-11);
+  font-weight: 600;
+  white-space: nowrap;
+}
 .lead-answer {
   flex: none;
   padding: 2px var(--sp-8);
@@ -728,80 +740,7 @@ button.lead-go {
 .row.wt2 .lead-tag {
   margin-left: var(--sp-6);
 }
-/* Slice i: the way chip in a lead's composer row, its menu, and the day-one way card (mockup J ① and ②). */
-.way-wrap {
-  position: relative;
-  display: inline-flex;
-}
-button.way-chip {
-  cursor: pointer;
-  font: inherit;
-}
-.way-menu {
-  position: absolute;
-  bottom: calc(100% + 4px);
-  left: 0;
-  z-index: 20;
-  display: grid;
-  gap: var(--sp-4);
-  width: 320px;
-  padding: var(--sp-6);
-  border-radius: var(--r-12);
-  font-size: var(--fs-12);
-  text-align: left;
-}
-.way-card .way-menu {
-  top: calc(100% + 4px);
-  bottom: auto;
-}
-.way-menu h4 {
-  margin: var(--sp-4) var(--sp-6) 2px;
-  color: var(--muted);
-  font-size: var(--fs-11);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-.way-item {
-  display: flex;
-  gap: var(--sp-6);
-  width: 100%;
-  padding: var(--sp-4) var(--sp-6);
-  border: 0;
-  border-radius: var(--r-6);
-  background: none;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.way-item:hover,
-.way-item:focus-visible {
-  background: var(--hover);
-  outline: none;
-}
-.way-item small {
-  display: block;
-  color: var(--muted);
-}
-.way-item b {
-  font-weight: 600;
-}
-.way-ck {
-  flex: none;
-  width: 14px;
-  color: var(--text); /* the check mark carries it; blue is the working light */
-}
-.way-quiet {
-  margin: 2px var(--sp-6) var(--sp-4);
-  color: var(--muted);
-  font-size: var(--fs-11);
-}
-.way-err {
-  margin-left: var(--sp-6);
-  color: var(--bad-text);
-  font-size: var(--fs-11);
-}
+/* The day-one way card (mockup J ①); ticket 1099: its way line is one sentence and a Change link (mockup cohesion-1099 ③). */
 .way-card {
   display: grid;
   gap: var(--sp-6);
@@ -815,25 +754,54 @@ button.way-chip {
   margin: 0;
 }
 .way-line {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-8);
   color: var(--muted);
 }
-.way-pill {
-  padding: 0 var(--sp-8);
+.way-change {
+  padding: 0;
   border: 0;
-  border-radius: var(--r-pill);
-  background: var(--control-quiet-hover);
-  color: var(--text);
+  background: none;
+  color: var(--run);
   font: inherit;
   cursor: pointer;
 }
-.way-pill:focus-visible,
-button.way-chip:focus-visible,
+.way-change:hover {
+  text-decoration: underline;
+}
+/* Ticket 1099 (mockup panel 2): the Team view head's gear opens Settings > Team > How this place works. */
+.teamv-gear {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.teamv-gear:hover {
+  background: var(--control-quiet-bg);
+  color: var(--text);
+}
+.way-change:focus-visible,
+.teamv-gear:focus-visible,
 .rcard button:focus-visible {
   outline: var(--focus-width) solid var(--focus-ring);
   outline-offset: 1px;
+}
+/* Settings > Team's place section (mockup panel 1): the quiet line under its rows, and a refused change. */
+.place-quiet {
+  margin: 0;
+  padding: var(--sp-6) var(--sp-16) var(--sp-8);
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.place-err {
+  margin: var(--sp-4) 0 0;
+  color: var(--bad-text);
+  font-size: var(--fs-12);
 }
 .way-roles {
   display: grid;
@@ -1180,4 +1148,167 @@ button.way-chip:focus-visible,
 }
 .home-setup > .row.wt2 .ic {
   color: var(--tree-mut);
+}
+
+/* Ticket 1115 step 2 (mockup docs/design/workers-1115/mockup.html panel 2): the Team tab's task cards (TaskBoard.tsx) and the
+   drawer that peeks at a seat's terminal. While the drawer is open it takes the room's column; narrow, it takes the view. */
+.teamv[data-wide][data-drawer] .teamv-body {
+  grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+}
+.teamv[data-drawer]:not([data-wide]) .teamv-tasks {
+  display: none;
+}
+.tboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--sp-8);
+  padding: var(--sp-8) 0;
+}
+.tcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  padding: var(--sp-8) var(--sp-12);
+  border: 1px solid var(--line);
+  border-radius: var(--r-10);
+  background: var(--raised);
+  min-width: 0;
+}
+.tcard[data-you] {
+  border-color: var(--you);
+}
+.tcard[data-selected] {
+  outline: 2px solid var(--run);
+  outline-offset: -1px;
+}
+.tcard[data-waits-seat],
+.tcard[data-gone] {
+  opacity: 0.7;
+}
+.tcard-go {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-6);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.tcard-go[data-none] {
+  cursor: default;
+}
+.tcard-t {
+  font-size: var(--fs-13);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tcard-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  font-size: var(--fs-11);
+}
+.tcard-stages > span {
+  padding: 1px var(--sp-6);
+  border-radius: var(--r-pill);
+  background: var(--tint-1);
+  color: var(--faint);
+}
+.tcard-stages > [data-at='done'] {
+  color: var(--ok-text);
+}
+.tcard-stages > [data-at='now'] {
+  background: var(--run);
+  color: var(--on-status);
+}
+.tcard-stages > [data-at='you'] {
+  background: var(--you);
+  color: var(--on-status);
+}
+.tcard-now {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tcard-now[data-said] {
+  font-family: var(--font-code);
+}
+.tcard-now[data-you] {
+  padding: var(--sp-4) var(--sp-8);
+  border-radius: var(--r-6);
+  background: var(--you-bg);
+  color: var(--you);
+  white-space: normal;
+}
+.tcard-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-12);
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.tcard > .lead-answer {
+  align-self: flex-start;
+}
+.tcard > .lead-more {
+  position: absolute;
+  top: var(--sp-6);
+  right: var(--sp-6);
+}
+.tdrawer {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+}
+.tdrawer-h {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  padding: var(--sp-6) var(--sp-12);
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.tdrawer-h > b {
+  font-size: var(--fs-13);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tdrawer-h > .room-meta {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A peek keeps the PTY's own size (Terminal.tsx `peek`): a grid wider or taller than the drawer scrolls. */
+.tdrawer-term > .term {
+  overflow: auto;
+}
+.tboard-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-8);
+}
+.tboard-head > .room-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tdrawer-x {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
 }

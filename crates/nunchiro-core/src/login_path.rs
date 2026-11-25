@@ -2,8 +2,9 @@
 //! app) gets the launchd PATH (/usr/bin:/bin:/usr/sbin:/sbin) and would not find `claude` or `codex`. Detection,
 //! probes and every spawned agent read the core's own PATH, so the fix is to set that variable once, before any thread.
 //! Taken from Orca (`hydrate-shell-path`) and T3 Code (`os-jank`): run `$SHELL -ilc` once, read PATH between two
-//! markers (rc banners cannot spoil it), 3 s ceiling. The core's own PATH keeps its order and comes first; only the
-//! login entries it lacks are appended, so a core started from a terminal or a test keeps the priority it was given.
+//! markers (rc banners cannot spoil it), 3 s ceiling. Ticket 1046: the login shell's order wins over the launchd
+//! defaults (/usr/bin comes before Homebrew in a Finder core's PATH, so python3 was the system 3.9), but a folder the
+//! core was deliberately given in front (Nunchiro's own, a terminal's, a test's) stays first (see `ordered`).
 //! Ticket 260: the same one run also prints the whole environment (`/usr/bin/env -0` between NUL-framed markers, as
 //! Orca's `login-shell-environment.ts`); that is never set on the core, only held by `user_env` for PTY sessions.
 use std::{
@@ -99,7 +100,7 @@ fn resolve(
     let (path, how, env) = match probe(shell, timeout) {
         // Relative entries (".", "bin", "") would resolve in the core's or a project's folder, maybe an untrusted clone.
         Ok((login, env)) => (
-            merge(&[current, &absolute_only(&login)]),
+            ordered(current, &absolute_only(&login)),
             "login shell".to_string(),
             env,
         ),
@@ -109,9 +110,8 @@ fn resolve(
                 .into_iter()
                 .chain(COMMON.map(OsString::from))
                 .collect::<Vec<_>>();
-            let mut parts: Vec<&OsStr> = vec![current];
-            parts.extend(extra.iter().map(OsString::as_os_str));
-            (merge(&parts), format!("fallback ({e})"), Err(e))
+            let extra = std::env::join_paths(extra).unwrap_or_default();
+            (ordered(current, &extra), format!("fallback ({e})"), Err(e))
         }
     };
     let note = format!("login PATH ({how}): {}", path.to_string_lossy());
@@ -185,6 +185,22 @@ fn absolute_only(list: &OsStr) -> OsString {
     std::env::join_paths(kept).unwrap_or_default()
 }
 
+/// Folders a Finder-started core gets from launchd; they must not outrank the user's own folders.
+const LAUNCHD: [&str; 4] = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+
+/// Ticket 1046: first the core's entries that are not launchd defaults (what it was deliberately started with; a real
+/// login shell lists them too, at the end, because it inherits the core's PATH and `path_helper` moves them), then
+/// `login` in its own order, then the rest of `current`.
+fn ordered(current: &OsStr, login: &OsStr) -> OsString {
+    let front = std::env::join_paths(std::env::split_paths(current).filter(|d| {
+        !LAUNCHD
+            .iter()
+            .any(|l| d.as_path() == std::path::Path::new(l))
+    }))
+    .unwrap_or_default();
+    merge(&[&front, login, current])
+}
+
 /// The entries of every list in order, each once (the first place wins, as in PATH lookup).
 fn merge(lists: &[&OsStr]) -> OsString {
     let mut seen = Vec::new();
@@ -223,11 +239,45 @@ mod tests {
             Some(OsStr::new("/h")),
             Duration::from_secs(5),
         );
-        assert_eq!(path, "/own/bin:/bin:/usr/bin:/x/bin");
+        assert_eq!(path, "/own/bin:/x/bin:/usr/bin:/bin");
         assert_eq!(
             note,
-            "login PATH (login shell): /own/bin:/bin:/usr/bin:/x/bin"
+            "login PATH (login shell): /own/bin:/x/bin:/usr/bin:/bin"
         );
+    }
+
+    #[test]
+    fn a_finder_core_gets_the_login_order_and_a_terminal_front_entry_stays_first() {
+        // A real login shell inherits the core's PATH and lists it too (path_helper moves it last): the front entry is
+        // in the login PATH as well, and must still stay first.
+        for (tag, front, current, want) in [
+            (
+                "finder",
+                "/app/MacOS",
+                "/app/MacOS:/usr/bin:/bin:/usr/sbin:/sbin",
+                "/app/MacOS:/opt/homebrew/bin:/usr/bin:/bin:/usr/local/bin:/usr/sbin:/sbin",
+            ),
+            (
+                "term",
+                "/custom/first",
+                "/custom/first:/usr/bin:/bin",
+                "/custom/first:/opt/homebrew/bin:/usr/bin:/bin:/usr/local/bin",
+            ),
+        ] {
+            let shell = fake_shell(
+                tag,
+                &format!(
+                    "printf %s __NUNCHIRO_LOGIN_PATH__/opt/homebrew/bin:/usr/bin:/bin:/usr/local/bin:{front}__NUNCHIRO_LOGIN_PATH__"
+                ),
+            );
+            let (path, _, _) = resolve(
+                shell.as_os_str(),
+                Some(OsStr::new(current)),
+                None,
+                Duration::from_secs(5),
+            );
+            assert_eq!(path, want);
+        }
     }
 
     #[test]
@@ -258,7 +308,7 @@ mod tests {
         assert!(started.elapsed() < Duration::from_secs(10));
         assert_eq!(
             path,
-            "/usr/bin:/bin:/h/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin"
+            "/h/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin"
         );
         assert!(note.starts_with("login PATH (fallback ("), "{note}");
     }
@@ -276,7 +326,7 @@ mod tests {
                 Duration::from_secs(5),
             );
             assert!(
-                path.to_string_lossy().starts_with("/bin:/opt/homebrew/bin"),
+                path.to_string_lossy().starts_with("/opt/homebrew/bin"),
                 "{path:?}"
             );
             assert!(note.contains("fallback"), "{note}");

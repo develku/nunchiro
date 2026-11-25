@@ -25,9 +25,9 @@ id = "tree"
 widgets = ["tree"]
 
 [[root.children.children]]
-id = "agents"
+id = "context"
 size = 190
-widgets = ["agents"]
+widgets = ["context"]
 
 [[root.children]]
 id = "centre"
@@ -50,7 +50,7 @@ test('layout_a01_default_bars', async ({ app }) => {
   await openWindow(app);
   // ICONBAR: slots; Settings and Layout are icons like the rest, at the feet of the two bars (v25 placement, owner 2026-10-31).
   expect(await names(app, 'left')).toEqual(['Tree', 'Files', 'Search', 'Settings']);
-  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'Schedules', 'History', 'Layout']); // ticket 1022: History after it; owner pick 16:5x: no Preview on the bar; ticket 993: Schedules joins the next free slot
+  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'History', 'Schedules', 'Layout']); // ticket 1073: History placed after Artifacts, Schedules after it; owner pick 16:5x: no Preview on the bar; ticket 993: Schedules joins the next free slot
   await expect(bar(app, 'right').locator('[data-slot="9"] .lay')).toHaveCount(1);
   await expect(bar(app, 'left').locator('[data-slot="9"] .gear')).toHaveCount(1);
   await expect(sidebar(app, 'right')).toHaveCount(0); // the right sidebar starts closed
@@ -187,12 +187,12 @@ test('layout_a06_tree_zone_kept', async ({ app, core }) => {
   await openWindow(app);
   // needs 157 (2) replaces A06 "the tree is a sidebar widget, not a zone": the Tree is a widget, so a file with a tree
   // zone loads with it kept (no one-time removal, no notice); the zone wins over the bar icon (one Tree, a move).
-  expect(await zones(app)).toEqual(['tree', 'agents', 'terminal', 'waiting', 'composer']);
+  expect(await zones(app)).toEqual(['tree', 'context', 'terminal', 'waiting', 'composer']);
   await expect(zone(app, 'tree').locator('.tree')).toHaveCount(1);
   await expect.poll(() => names(app, 'left')).toEqual(['Files', 'Search', 'Settings']);
   await expect(app.locator('.lnote')).toHaveCount(0);
   expect(readLayout(core)).toContain('widgets = ["tree"]');
-  expect(readLayout(core)).toContain('widgets = ["agents"]');
+  expect(readLayout(core)).toContain('widgets = ["context"]');
   expect(errors).toEqual([]);
 });
 
@@ -236,7 +236,7 @@ test('layout_a09_no_drag_outside_edit', async ({ app }) => {
   await openWindow(app);
   await drag(app, icon(app, 'left', 'Files'), await centre(app, 'right'));
   expect(await names(app, 'left')).toEqual(['Tree', 'Files', 'Search', 'Settings']);
-  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'Schedules', 'History', 'Layout']); // ticket 1022: History after it; ticket 993: Schedules joins the right bar's next free slot (outside Layout edit)
+  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'History', 'Schedules', 'Layout']); // ticket 1073: History placed after Artifacts, Schedules after it; ticket 993: Schedules joins the right bar's next free slot (outside Layout edit)
   await expect(toast(app)).toContainText('Turn on Layout to move icons');
 });
 
@@ -256,7 +256,7 @@ test('layout_a10_move_and_reorder', async ({ app }) => {
   await drag(app, icon(app, 'left', 'Search'), await barBefore(app, 'right', 0), { release: false });
   await expect(app.locator('.dragl .ins')).toHaveCount(1);
   await app.mouse.up();
-  expect(await names(app, 'right')).toEqual(['Search', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'Layout']);
+  expect(await names(app, 'right')).toEqual(['Search', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'History', 'Layout']);
   expect(await names(app, 'left')).toEqual(['Tree', 'Board', 'Files', 'Settings']);
   await expect(sidebar(app, 'right').locator('.sbh b')).toHaveText('Search');
   await expect(toast(app)).toContainText('Search moved to the right bar');
@@ -269,12 +269,12 @@ test('layout_a11_remove_icon', async ({ app }) => {
   expect(await names(app, 'left')).toEqual(['Tree', 'Files', 'Settings']);
   await expect(toast(app).getByRole('button', { name: 'Undo' })).toBeVisible();
   await drag(app, icon(app, 'right', 'Diff'), app.locator('[data-remove-area]'));
-  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Artifacts', 'Layout']);
+  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Artifacts', 'History', 'Layout']);
   // Settings and Layout move but cannot be removed: no ✕, and the remove area refuses them.
   await expect(app.locator('nav.ib').getByRole('button', { name: /^Remove (Settings|Layout|Browser)/ })).toHaveCount(0);
   await drag(app, icon(app, 'left', 'Settings'), app.locator('[data-remove-area]'));
   await expect(toast(app)).toContainText('Settings cannot be removed');
-  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Artifacts', 'Layout']);
+  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Artifacts', 'History', 'Layout']);
 });
 
 test('layout_a12_tree_required', async ({ app }) => {
@@ -289,7 +289,7 @@ test('layout_a12_tree_required', async ({ app }) => {
   expect(await names(app, 'left')).toEqual(['Tree', 'Files', 'Search', 'Settings']);
   await expect(toast(app)).toContainText('Tree is required and cannot be removed');
   await drag(app, icon(app, 'left', 'Tree'), await barEnd(app, 'right'));
-  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'Tree', 'Layout']);
+  expect(await names(app, 'right')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'History', 'Tree', 'Layout']);
   expect(await names(app, 'left')).toEqual(['Files', 'Search', 'Settings']);
   await drag(app, icon(app, 'right', 'Tree'), await barBefore(app, 'left', 0));
   expect(await names(app, 'left')).toEqual(['Tree', 'Files', 'Search', 'Settings']);
@@ -389,10 +389,10 @@ test('layout_a17_library_search', async ({ app }) => {
 test('layout_a18_card_to_bar', async ({ app }) => {
   await openWindow(app);
   await startEdit(app);
-  await drag(app, card(app, 'agents'), await barBefore(app, 'right', 0));
+  await drag(app, card(app, 'context'), await barBefore(app, 'right', 0));
   // The card dropped on an occupied slot takes it; the displaced Board goes to the first free slot.
-  expect(await names(app, 'right')).toEqual(['Agents', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'Board', 'Layout']);
-  await expect(sidebar(app, 'right').locator('.sbh b')).toHaveText('Agents');
+  expect(await names(app, 'right')).toEqual(['Context', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'History', 'Board', 'Layout']);
+  await expect(sidebar(app, 'right').locator('.sbh b')).toHaveText('Context');
   await drag(app, card(app, 'files'), await barEnd(app, 'right'));
   expect(await names(app, 'left')).toEqual(['Tree', 'Search', 'Settings']);
   expect(await names(app, 'right')).toContain('Files');

@@ -3,6 +3,7 @@
 // release anywhere else changes nothing (over a bar it says how to move icons: that still needs Layout, A09). The session
 // view is a drop target of the A36 list (bars.ts TARGETS), answering only these drags.
 import { useLayoutEffect, useState, type CSSProperties } from 'react';
+import { splitSessions } from './store';
 import { TARGETS, targetAt } from '../layout/bars';
 import type { Key } from '../i18n';
 import { useHtmlLangT } from '../i18n/lib/useHtmlLangT';
@@ -20,8 +21,26 @@ TARGETS.push((x, y, d) => {
   return el ? { kind: 'split', side: nearest(el.getBoundingClientRect(), x, y), el } : null;
 });
 
+/** Ticket 1069: where a tab dragged from the strip lands: an existing split it replaces, or an edge of the session view.
+ *  Ticket 1093: over the dragged tab's own view, or a view that shows no session (Room, Schedules), `fallback` hosts the
+ *  split (the next session tab); with none the drop is refused. None anywhere else; a session already in a split never lands. */
+export type TabHit = { host: string; box: DOMRect } & ({ side: Dir } | { side: 'replace'; split: string });
+export function tabHit(x: number, y: number, tab: string, fallback: string | null): TabHit | { box: DOMRect; refused: true } | null {
+  const at = document.elementFromPoint(x, y);
+  const el = at?.closest<HTMLElement>('[data-split-host]');
+  if (!el || splitSessions().includes(tab)) return null;
+  const own = el.dataset.session;
+  const host = own && own !== tab ? own : fallback;
+  const box = el.getBoundingClientRect();
+  if (!host) return { box, refused: true };
+  const sp = own === host ? at!.closest<HTMLElement>('[data-split-id]') : null; // the shown tab's own splits leave with its view
+  if (sp?.dataset.splitId) return { host, box: sp.getBoundingClientRect(), side: 'replace', split: sp.dataset.splitId };
+  return { host, box, side: nearest(box, x, y) };
+}
+
 export const CAPTION: Record<Dir, Key> = { right: 'rest.st.splitRight', left: 'rest.st.splitLeft', up: 'rest.st.splitUp', down: 'rest.st.splitDown' };
-const HALF: Record<Dir, CSSProperties> = {
+const HALF: Record<Dir | 'replace', CSSProperties> = {
+  replace: { left: 8, right: 8, top: 8, bottom: 8 },
   left: { left: 8, top: 8, bottom: 8, width: 'calc(50% - 12px)' },
   right: { right: 8, top: 8, bottom: 8, width: 'calc(50% - 12px)' },
   up: { left: 8, right: 8, top: 8, height: 'calc(50% - 12px)' },
@@ -37,7 +56,6 @@ interface Props {
 }
 
 export function Overlay({ widget, onDrop, onBar, onEnd }: Props) {
-  const t = useHtmlLangT();
   const [hit, setHit] = useState<{ side: Dir; box: DOMRect } | null>(null);
   // Listening starts before the next pointer event, so a quick drag and release is not lost.
   useLayoutEffect(() => {
@@ -62,15 +80,22 @@ export function Overlay({ widget, onDrop, onBar, onEnd }: Props) {
       window.removeEventListener('keydown', key, true);
     };
   }, [widget, onDrop, onBar, onEnd]);
-  if (!hit) return null;
-  const { box } = hit;
+  return hit && <Preview box={hit.box} side={hit.side} />;
+}
+
+/** The drop preview over `box`: the half a release fills, or the whole split a release replaces (ticket 1069); or, ticket
+ *  1093, only the caption saying why a release here does nothing. */
+export function Preview({ box, side, refused }: { box: DOMRect; side?: Dir | 'replace'; refused?: Key }) {
+  const t = useHtmlLangT();
   return (
-    <div className="dov" data-split-overlay style={{ left: box.left, top: box.top, width: box.width, height: box.height }}>
-      <div className="half" data-side={hit.side} style={HALF[hit.side]}>
-        {t(CAPTION[hit.side])}
-      </div>
+    <div className="dov" data-split-overlay data-refused={refused ? '' : undefined} style={{ left: box.left, top: box.top, width: box.width, height: box.height }}>
+      {side && (
+        <div className="half" data-side={side} style={HALF[side]}>
+          {t(side === 'replace' ? 'rest.st.splitReplace' : CAPTION[side])}
+        </div>
+      )}
       <div className="cap" role="status">
-        {t('rest.st.tempCaption')}
+        {t(refused ?? 'rest.st.tempCaption')}
       </div>
     </div>
   );

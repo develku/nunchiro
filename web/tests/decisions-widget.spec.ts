@@ -61,7 +61,7 @@ test('no_decision_card_in_chat: a jump from a row puts no answer control in the 
 
 test('decisions_widget_in_library_and_default_frame: library card (search 결정), Right bar Board, Decisions, Diff, Artifacts, sidebar closed', async ({ app }) => {
   await openWindow(app);
-  expect((await names(app, 'right')).filter((n) => n !== 'Layout' && n !== 'Settings')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'Schedules', 'History']); // ticket 1022: History after it; ticket 993: Schedules joins the next free slot
+  expect((await names(app, 'right')).filter((n) => n !== 'Layout' && n !== 'Settings')).toEqual(['Board', 'Decisions', 'Terminal', 'Browser', 'Diff', 'Artifacts', 'History', 'Schedules']); // ticket 1073: History placed after Artifacts, Schedules after it; ticket 993: Schedules joins the next free slot
   await expect(app.locator('aside.sbar[data-side="right"]')).toHaveCount(0);
   expect(await app.locator('nav[data-bar="right"] button.ai[aria-pressed="true"]').count()).toBe(0);
   // Ticket 1041: the icon has no label; its name is the tooltip.
@@ -348,6 +348,21 @@ test('v31_a_mail_read_card: a read tool the core marks safe names its server and
   await item.locator('[data-act="allow"]').click(); // a real mouse click, no focus + Enter
   await expect.poll(() => core.read(wt.b.id)).toContain('answered 1');
   expect(px.sent.map((s) => [s.session, s.answer.type])).toEqual([[wt.b.id, 'allow_once']]);
+});
+
+// Ticket 1130 S1: an outward call asks in every session; its card names the kind the core set ("Send mail") beside the
+// caution, and a card with no kind shows none.
+test('t1130_outward_card_names_its_kind: a mail send card says "Send mail" and keeps the caution', async ({ app, core }) => {
+  const { wt, px } = await setup(app, core, ['b']);
+  await noFront(app);
+  px.risky.add('wt-b');
+  px.patch((d) => void (d.kind === 'permission' && Object.assign(d, { text: '{"to":["a@example.org"],"subject":"Q4"}', tool: 'mcp__claude_ai_Gmail__send_message', outward: 'mail' })));
+  await ask(app, wt.b, 'b', PERMISSION('touch out-b'));
+  await open(app);
+  const item = side(app).locator(`[data-session="${wt.b.id}"] .dc-item`);
+  await expect(item.locator('.dc-outward')).toHaveText('Send mail');
+  await expect(item.locator('.warn')).toHaveText('Caution');
+  await expect(item.locator('.dc-what')).toHaveText(/^Caution\s*Send mail\s*What\s*Gmail · send message · /);
 });
 
 test('v31_a_unknown_mcp_tool_keeps_caution: an MCP tool the core leaves risky names its server and tool and keeps the warning; no input field reads as a command or a file', async ({ app, core }) => {

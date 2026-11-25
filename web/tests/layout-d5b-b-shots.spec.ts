@@ -37,7 +37,7 @@ async function seed(app: Page, core: Core, scheme: 'light' | 'dark', nest = true
   core.shell(p, 'ux-fix-2');
   core.shell(core.project('lumen'), 'backtest-v3');
   openQuiet(core, 'nunchiro', 'lumen', '');
-  const bars = { ...defaultBars(), nest: nest ? { [p]: ['agents', 'files'] } : {}, open: nest ? { [`${p}::agents`]: true } : {} };
+  const bars = { ...defaultBars(), nest: nest ? { [p]: ['context', 'files'] } : {}, open: nest ? { [`${p}::context`]: true } : {} };
   await app.addInitScript(([k, v]) => localStorage.setItem(k as string, JSON.stringify(v)), ['nunchiro.settings.v1', { bars }] as const);
   await app.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
   await openWindow(app);
@@ -49,7 +49,7 @@ for (const scheme of ['light', 'dark'] as const) {
   test(`shot row-hot ${scheme}`, async ({ app, core }) => {
     await seed(app, core, scheme, false);
     await startEdit(app);
-    const t = await drag(app, card(app, 'agents'), app.locator('.sbar .tree .row.head[data-project-path]').first(), { release: false });
+    const t = await drag(app, card(app, 'context'), app.locator('.sbar .tree .row.head[data-project-path]').first(), { release: false });
     // A tree update during the hold can re-create the row; the next pointer move re-marks it.
     await expect(async () => {
       await app.mouse.move(t.x + 1, t.y);

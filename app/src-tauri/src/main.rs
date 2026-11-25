@@ -30,8 +30,11 @@ mod fonts; // v1a-67
 mod gate_shot; // ticket 464 follow-up: a gate run's page picture
 mod passwd; // V2.5-34 r2
 mod permissions; // ticket 252
-mod rc_update; // G2: the RC build and the official release update themselves
+mod rc_update; // ticket 1082: the installed app updates itself (G2 for the official release)
 mod save; // v1a-68
+#[path = "../../../crates/nunchiro/src/update_claims.rs"]
+#[allow(dead_code)] // the CLI reads the claims; the app only writes its own
+mod update_claims; // ticket 1082 round 3: the update claims, shared with the CLI
 mod window_chrome; // v25f-title-hidden
 
 /// The owner's own app: bundle id, WebKit storage (`~/Library/WebKit/<bundle id>`) and core home `~/.nunchiro`.
@@ -53,12 +56,40 @@ fn home() -> Result<PathBuf, String> {
 }
 
 fn resolve_home() -> Result<(PathBuf, Option<String>), String> {
+    // Ticket 1111: a cargo test runs as the owner's build with no NUNCHIRO_HOME, so this gave ~/.nunchiro and
+    // rc_update's start test wrote its refusal into the owner's core.log. A test never resolves a real home.
+    #[cfg(test)]
+    {
+        static TEST_HOME: std::sync::OnceLock<Result<PathBuf, String>> = std::sync::OnceLock::new();
+        TEST_HOME
+            .get_or_init(|| create_test_home().map_err(|e| format!("create app test home: {e}")))
+            .clone()
+            .map(|home| (home, None))
+    }
+    #[cfg(not(test))]
     home_for(
         identifier(),
         std::env::var_os("NUNCHIRO_HOME"),
         std::env::var_os("HOME"),
         passwd::passwd_home(),
     )
+}
+
+/// Ticket 1116: create exclusively, with private permissions, before any test can write into it.
+/// A collision (including a symlink) is an error; an existing path is never reused.
+#[cfg(test)]
+fn create_test_home() -> std::io::Result<PathBuf> {
+    use std::io::Read;
+    use std::os::unix::fs::DirBuilderExt;
+    let mut random = [0u8; 16];
+    std::fs::File::open("/dev/urandom")?.read_exact(&mut random)?;
+    let home = std::env::temp_dir().join(format!(
+        "nunchiro-app-test-{}-{:032x}",
+        std::process::id(),
+        u128::from_ne_bytes(random)
+    ));
+    std::fs::DirBuilder::new().mode(0o700).create(&home)?;
+    Ok(home)
 }
 
 /// The one place a build's core home comes from (V2.5-34, owner 2026-11-05: an RC build must never touch the owner's data),
@@ -638,11 +669,32 @@ fn core_call(request: serde_json::Value) -> Option<serde_json::Value> {
 }
 // v1a-13: the whole `{"Ok"|"Err": ..}` reply, so `boot` can show why the core refused.
 fn core_reply(request: serde_json::Value) -> Option<serde_json::Value> {
+    core_reply_at(&home().ok()?, request, None)
+}
+/// `core_reply` to the core at `home`. With `bound` (until, bytes), the whole reply must be in by `until` and within
+/// `bytes`: ticket 1130 A-D3 round 2, a core that drips bytes cannot keep the blocking worker or grow its buffer.
+fn core_reply_at(
+    home: &std::path::Path,
+    request: serde_json::Value,
+    bound: Option<(Instant, u64)>,
+) -> Option<serde_json::Value> {
     use std::{
-        io::{BufRead, BufReader, Write},
+        io::{BufRead, BufReader, Read, Write},
         os::unix::net::UnixStream,
     };
-    let home = home().ok()?;
+    /// Each read waits at most until `until`, so the deadline is the whole reply's, not each read's.
+    struct Until(UnixStream, Instant);
+    impl Read for Until {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            let left = self.1.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Err(std::io::ErrorKind::TimedOut.into());
+            }
+            self.0
+                .set_read_timeout(Some(left.min(Duration::from_secs(3))))?;
+            self.0.read(buf)
+        }
+    }
     let token = std::fs::read_to_string(home.join("core.token")).ok()?;
     let mut stream = UnixStream::connect(home.join("core.sock")).ok()?;
     stream.set_read_timeout(Some(Duration::from_secs(3))).ok()?;
@@ -652,7 +704,17 @@ fn core_reply(request: serde_json::Value) -> Option<serde_json::Value> {
     let line = serde_json::json!({"token": token.trim(), "request": request}).to_string() + "\n";
     stream.write_all(line.as_bytes()).ok()?;
     let mut reply = String::new();
-    BufReader::new(stream).read_line(&mut reply).ok()?;
+    match bound {
+        None => BufReader::new(stream).read_line(&mut reply),
+        Some((until, bytes)) => {
+            BufReader::new(Until(stream, until).take(bytes)).read_line(&mut reply)
+        }
+    }
+    .ok()?;
+    // Codex round-2 look: a worker that resumes after the deadline with a whole reply must not count it (a late 0).
+    if bound.is_some_and(|(until, _)| Instant::now() >= until) {
+        return None;
+    }
     serde_json::from_str::<serde_json::Value>(&reply).ok()
 }
 
@@ -803,6 +865,47 @@ const QUIT_ALL_ACCELERATOR: &str = "CmdOrCtrl+Alt+Q";
 const QUIT_ACCELERATOR: &str = "CmdOrCtrl+Q";
 const SETTINGS_ACCELERATOR: &str = "CmdOrCtrl+,";
 
+/// Ticket 1071: the View menu's items run the page command of the same id (web/src/chrome/useGlobalKeys.ts listens).
+/// Here, not only in the page, so the keys work while the in-app browser view holds the keyboard (as ticket 197's Cmd+comma).
+const VIEW_COMMANDS: [(&str, &str, &str); 3] = [
+    ("zoom.reset", "Actual Size", "CmdOrCtrl+0"),
+    ("zoom.in", "Zoom In", "CmdOrCtrl+="),
+    ("zoom.out", "Zoom Out", "CmdOrCtrl+-"),
+];
+/// Ticket 1099 (feature cohesion): File, View and Help items that run a page command and carry no key of their own. The
+/// page's keys are the user's (Settings > Keyboard); a menu accelerator would answer first and ignore a rebind. The ⌘/
+/// sheet (Help > Keyboard Shortcuts) lists the live keys.
+const FILE_COMMANDS: [(&str, &str); 3] = [
+    ("session.new", "New Session…"),
+    ("worktree.create", "New Worktree…"),
+    ("tab.new.browser", "New Browser Tab"),
+];
+const VIEW_PAGES: [(&str, &str); 5] = [
+    ("palette.open", "Command Palette…"),
+    ("files.quickOpen", "Go to File…"),
+    ("decisions.open", "Decisions"),
+    ("history.open", "History"),
+    ("schedules.open", "Schedules"),
+];
+const HELP_COMMANDS: [(&str, &str); 1] = [("keys.sheet", "Keyboard Shortcuts")]; // the whole sheet, as ⌘/
+/// The "Go to Tab" items: session.jump.1..9 on CmdOrCtrl+1..9.
+const TAB_JUMPS: [&str; 9] = [
+    "session.jump.1",
+    "session.jump.2",
+    "session.jump.3",
+    "session.jump.4",
+    "session.jump.5",
+    "session.jump.6",
+    "session.jump.7",
+    "session.jump.8",
+    "session.jump.9",
+];
+
+/// What a View menu item evaluates in the page; only the fixed ids above get here, so the text needs no escaping.
+fn command_script(id: &str) -> String {
+    format!("window.dispatchEvent(new CustomEvent('nunchiro:command', {{ detail: '{id}' }}));")
+}
+
 /// What a menu item id does; `menus()` builds the items and `on_menu_event` runs these.
 #[derive(Debug, PartialEq)]
 enum MenuAct {
@@ -813,6 +916,8 @@ enum MenuAct {
     About,
     Settings,
     Waiting,
+    /// Ticket 1071: a page command from the View menu.
+    Page(&'static str),
 }
 
 fn menu_act(id: &str) -> Option<MenuAct> {
@@ -824,7 +929,19 @@ fn menu_act(id: &str) -> Option<MenuAct> {
         "quit_all" => Some(MenuAct::QuitAll),
         "quit" => Some(MenuAct::Quit),
         "close_window" => Some(MenuAct::CloseMain),
-        _ => None,
+        _ => VIEW_COMMANDS
+            .iter()
+            .map(|(c, _, _)| *c)
+            .chain(TAB_JUMPS)
+            .chain(
+                FILE_COMMANDS
+                    .iter()
+                    .chain(&VIEW_PAGES)
+                    .chain(&HELP_COMMANDS)
+                    .map(|(c, _)| *c),
+            )
+            .find(|c| *c == id)
+            .map(MenuAct::Page),
     }
 }
 
@@ -1213,11 +1330,67 @@ fn menus(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &PredefinedMenuItem::bring_all_to_front(app, None)?,
         ],
     )?;
+    let zoom = VIEW_COMMANDS
+        .iter()
+        .map(|(id, title, keys)| MenuItem::with_id(app, *id, *title, true, Some(*keys)))
+        .collect::<tauri::Result<Vec<_>>>()?;
+    let jumps = TAB_JUMPS
+        .iter()
+        .enumerate()
+        .map(|(i, id)| {
+            let n = i + 1;
+            MenuItem::with_id(
+                app,
+                *id,
+                format!("Tab {n}"),
+                true,
+                Some(format!("CmdOrCtrl+{n}")),
+            )
+        })
+        .collect::<tauri::Result<Vec<_>>>()?;
+    let jump_refs: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> =
+        jumps.iter().map(|m| m as _).collect();
+    let go_to_tab = Submenu::with_items(app, "Go to Tab", true, &jump_refs)?;
+    // Ticket 1099: page commands without a menu key (FILE_COMMANDS, VIEW_PAGES, HELP_COMMANDS).
+    let page = |list: &[(&str, &str)]| {
+        list.iter()
+            .map(|(id, title)| MenuItem::with_id(app, *id, *title, true, None::<&str>))
+            .collect::<tauri::Result<Vec<_>>>()
+    };
+    let (files, pages, helps) = (
+        page(&FILE_COMMANDS)?,
+        page(&VIEW_PAGES)?,
+        page(&HELP_COMMANDS)?,
+    );
+    let file = Submenu::with_items(app, "File", true, &[&files[0], &files[1], &files[2]])?;
+    let view = Submenu::with_items(
+        app,
+        "View",
+        true,
+        &[
+            &pages[0],
+            &pages[1],
+            &PredefinedMenuItem::separator(app)?,
+            &pages[2],
+            &pages[3],
+            &pages[4],
+            &PredefinedMenuItem::separator(app)?,
+            &zoom[0],
+            &zoom[1],
+            &zoom[2],
+            &PredefinedMenuItem::separator(app)?,
+            &go_to_tab,
+        ],
+    )?;
+    let help = Submenu::with_items(app, "Help", true, &[&helps[0]])?;
     #[cfg(all(debug_assertions, dev))]
     if let Some(develop) = dev_load::menu(app)? {
-        return Menu::with_items(app, &[&nunchiro, &edit, &window, &develop]);
+        return Menu::with_items(
+            app,
+            &[&nunchiro, &file, &edit, &view, &window, &help, &develop],
+        );
     }
-    Menu::with_items(app, &[&nunchiro, &edit, &window])
+    Menu::with_items(app, &[&nunchiro, &file, &edit, &view, &window, &help])
 }
 
 // Menu bar glyphs (docs/brand/assets, 16-unit, rendered at 32 px, raw RGBA beside their PNGs: tauri's PNG decoder
@@ -1569,6 +1742,7 @@ fn main() {
             cli_install::cli_install,
             rc_update::rc_update_check, // G2: refused unless this build updates itself
             rc_update::rc_update_install,
+            rc_update::update_source,      // ticket 1082
             window_chrome::window_buttons, // v25f-title-hidden
             startup_drawn                  // ticket 549
         ])
@@ -1618,12 +1792,13 @@ fn main() {
                 Some(MenuAct::About) => show_page(app, ABOUT_SCRIPT),
                 Some(MenuAct::Settings) => show_page(app, SETTINGS_SCRIPT),
                 Some(MenuAct::Waiting) => show_page(app, WAITING_SCRIPT),
+                Some(MenuAct::Page(id)) => show_page(app, &command_script(id)),
                 #[cfg(all(debug_assertions, dev))]
                 None if event.id().as_ref() == dev_load::RELOAD => dev_load::reload(app),
                 None => {}
             });
             watch_core(handle.clone());
-            rc_update::start(handle, identifier())?; // G2: returns at once in a build without an update key
+            rc_update::start(handle, identifier())?; // ticket 1082: returns at once outside an installed Nunchiro.app
             if login {
                 // Started at login: the core runs, the menu bar icon shows, no window pops up.
                 thread::spawn(|| {
@@ -1687,6 +1862,32 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_home_does_not_follow_the_old_pid_path_symlink() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+        let old = std::env::temp_dir().join(format!("nunchiro-app-test-{}", std::process::id()));
+        let target = std::env::temp_dir().join(format!(
+            "nunchiro-app-test-target-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&target).unwrap();
+        symlink(&target, &old).unwrap();
+        let result = super::resolve_home();
+        std::fs::remove_file(&old).unwrap();
+        assert!(std::fs::read_dir(&target).unwrap().next().is_none());
+        std::fs::remove_dir(&target).unwrap();
+        let (home, note) = result.unwrap();
+        assert_ne!(home, old);
+        let metadata = std::fs::symlink_metadata(&home).unwrap();
+        assert!(metadata.is_dir());
+        assert_eq!(metadata.permissions().mode() & 0o777, 0o700);
+        assert_eq!(super::resolve_home().unwrap().0, home);
+        assert!(note.is_none());
+    }
     /// Ticket 351 r2 (security, must): the main window denies every permission kind, and `open_window` installs the
     /// handler (without one wry grants media capture).
     #[test]
@@ -2723,6 +2924,62 @@ mod tests {
         assert!(flat.contains("&[&about,&sep0,&settings,&sep1,&hide,&sep,&quit_all,&quit,]"));
         assert!(menus.contains("PredefinedMenuItem::bring_all_to_front(app, None)"));
         assert!(SETTINGS_SCRIPT.contains("'nunchiro:settings'"));
+    }
+
+    // Ticket 1071: View > Actual Size / Zoom In / Zoom Out and Go to Tab 1..9, each on its key, run their page command.
+    #[test]
+    fn view_menu_has_zoom_and_the_nine_tab_jumps() {
+        use super::{TAB_JUMPS, VIEW_COMMANDS, command_script};
+        assert_eq!(
+            VIEW_COMMANDS,
+            [
+                ("zoom.reset", "Actual Size", "CmdOrCtrl+0"),
+                ("zoom.in", "Zoom In", "CmdOrCtrl+="),
+                ("zoom.out", "Zoom Out", "CmdOrCtrl+-"),
+            ]
+        );
+        for (n, id) in TAB_JUMPS.iter().enumerate() {
+            assert_eq!(*id, format!("session.jump.{}", n + 1));
+            assert_eq!(menu_act(id), Some(MenuAct::Page(id)));
+        }
+        for (id, _, _) in VIEW_COMMANDS {
+            assert_eq!(menu_act(id), Some(MenuAct::Page(id)));
+        }
+        assert_eq!(menu_act("session.jump.10"), None);
+        assert_eq!(
+            command_script("zoom.in"),
+            "window.dispatchEvent(new CustomEvent('nunchiro:command', { detail: 'zoom.in' }));"
+        );
+        let source = include_str!("main.rs");
+        let menus = &source[source.find(concat!("fn men", "us(")).unwrap()..];
+        let menus = &menus[..menus.find("\n}\n").unwrap()];
+        let flat: String = menus.split_whitespace().collect();
+        assert!(flat.contains(r#"Some(format!("CmdOrCtrl+{n}"))"#));
+        assert!(flat.contains(r#"Submenu::with_items(app,"GotoTab",true,&jump_refs)"#));
+        assert!(
+            flat.contains("Menu::with_items(app,&[&nunchiro,&file,&edit,&view,&window,&help])")
+        );
+    }
+
+    // Ticket 1099: File, View and Help items run their page command, with no menu key (the page's keys are the user's).
+    #[test]
+    fn page_menu_items_run_their_command_with_no_key() {
+        use super::{FILE_COMMANDS, HELP_COMMANDS, VIEW_PAGES};
+        for (id, _) in FILE_COMMANDS
+            .iter()
+            .chain(&VIEW_PAGES)
+            .chain(&HELP_COMMANDS)
+        {
+            assert_eq!(menu_act(id), Some(MenuAct::Page(id)));
+        }
+        assert_eq!(FILE_COMMANDS[0], ("session.new", "New Session…"));
+        assert_eq!(FILE_COMMANDS[1], ("worktree.create", "New Worktree…"));
+        assert_eq!(HELP_COMMANDS, [("keys.sheet", "Keyboard Shortcuts")]);
+        let source = include_str!("main.rs");
+        let menus = &source[source.find(concat!("fn men", "us(")).unwrap()..];
+        let menus = &menus[..menus.find("\n}\n").unwrap()];
+        let flat: String = menus.split_whitespace().collect();
+        assert!(flat.contains("MenuItem::with_id(app,*id,*title,true,None::<&str>)"));
     }
 
     // Ticket 197 (needs 39): the menu bar menu names the waiting count, and its item leads to the next waiting item.

@@ -1,0 +1,16 @@
+schema_version: "1.1"
+name: trigger-artifacts-load-01
+description: Should load the artifacts skill.
+tags: [trigger, trigger-artifacts]
+runs: 1
+execution:
+  prompt: "Make an HTML bar chart of these sales numbers: Jan 3, Feb 5, Mar 2."
+  append_system_prompt: "You are running inside a Nunchiro session: NUNCHIRO_SESSION is set and the `nunchiro` CLI is on PATH. Reply to the request as you normally would."
+  allowed_tools: [Skill, Read, Glob, Grep]
+  max_turns: 4
+  timeout_seconds: 120
+graders:
+  - name: skill-loaded
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?artifacts"'

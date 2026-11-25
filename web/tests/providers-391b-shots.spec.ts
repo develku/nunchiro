@@ -4,10 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { openRow } from './accounts-rows';
 import { agentsToml, fakeAcp, ownerOk, tomlEntry } from './acp-fakes';
-import { agentsZone, expect, openWindow, REPO, test } from './fixtures';
+import { stripOnTop, expect, openWindow, REPO, test } from './fixtures';
 import { openSettings } from './settings-modal';
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const DIR = path.join(REPO, '.scratch/shots/391b');
 for (const scheme of ['light', 'dark'] as const) {

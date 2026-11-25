@@ -1,6 +1,8 @@
 [build]
 target-dir = "target"
 jobs = 2
+# Ticket 1133: at most 2 crate compiles at once on the machine, across all worktrees and lanes (see the script).
+rustc-wrapper = "scripts/rustc-slot.py"
 
 [env]
 # Ticket 457: a core a test starts keeps no start secrets in the owner's login keychain (a developer's shell may hold

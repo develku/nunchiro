@@ -1,4 +1,4 @@
-// The catalogue for <html lang>, for a surface that takes no `t` prop (Search, the Agents zone, the model picker).
+// The catalogue for <html lang>, for a surface that takes no `t` prop (Search, the model picker).
 import { useEffect, useMemo, useState } from 'react';
 import { makeT, type Lang, type T } from '../index';
 

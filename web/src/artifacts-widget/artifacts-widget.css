@@ -77,6 +77,11 @@
 .aw .it:hover:not(:disabled) {
   background: var(--tint-1);
 }
+/* Ticket 1088: the artifact a Preview shows, in the app's selected step. */
+.aw .it[aria-current] {
+  background: var(--select-bg);
+  color: var(--select-text);
+}
 .aw .it:disabled {
   cursor: default;
 }

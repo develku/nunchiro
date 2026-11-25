@@ -47,6 +47,8 @@ export const KNOWN: [RegExp, Key, Key?][] = [
   [/^duplicate group name (?<name>.+)$/, 'err.groupExists', 'err.nameTaken.todo'],
   // Ticket 456, extensions.rs check_enabled: a window whose list is stale (another window turned an item off) sends it back unconfirmed.
   [/^(?<name>.+) was not turned on: it can run commands/, 'err.extensionUnread', 'err.extensionUnread.todo'],
+  // Ticket 1059, session_context.rs may_refresh: the Context widget's Show breakdown raced a turn, a question or typed words.
+  [/^context breakdown not sent: (?<why>.+)$/, 'err.contextNotSent'],
   // Ticket 536: the rest of 534's list that the window can show (the ticket's table names each place).
   [/^answer the waiting decision first$/, 'err.decisionWaiting', 'err.decisionWaiting.todo'], // sessions.rs:6284
   [/^approve the agent first$/, 'err.agentNotApproved', 'err.agentNotApproved.todo'], // acp/add.rs:187,224
@@ -156,6 +158,18 @@ export const KNOWN: [RegExp, Key, Key?][] = [
   [/^a teammate named (?<name>.+) already exists$/, 'err.nameTaken'], // team.rs; look 1117 v4f Home N-A: says the name, by the name field
   // approval/command.rs builds it from a const the core-reasons scan cannot see (`{agent} {DAMAGED}`), so it is not in GROUPS.
   [/^\S+ command file is damaged$/, 'err.h.fileBad'],
+  // sessions.rs writes it inside `restore(format!(..))`, which the core-reasons scan cannot see, so it is not in GROUPS.
+  [/^settings\.json write failed: .*; machines\.json rollback failed: .*; stores diverged$/, 'err.h.fileBad'],
+  // sessions.rs worktree_parent and make_root build it in `map_err(|e| { format!(..) })` closures the scan cannot see either.
+  [/^worktree folder [^;]+: /, 'err.h.io'],
+  // Ticket 1122: core refusals a window request can return that had no line (errors-core-reasons.spec.ts).
+  [/^invalid label in link$/, 'machines.linkBad'], // machines/share.rs: a label of dots passes the form's check
+  [/^cannot read this Mac's ed25519 host key$/, 'err.g.hostKeyRead'], // machines/share.rs: Share this Mac
+  [/^the Nunchiro home path has a space; a link's host key cannot be used$/, 'err.g.homeSpace'], // machines/discovery.rs
+  // team.rs fresh_lead: LeaderDialog reads the same line for its own card; these rows are for any other place it shows.
+  [/^(?<name>.+) did not finish its turn within (?<minutes>\d+) minutes, so it is still open and no new conversation started; the handover message was withdrawn$/, 'lead.freshStuck'],
+  // The core's only other ending is LATE_HANDED ("it already has the handover message ...").
+  [/^(?<name>.+) did not finish its turn within (?<minutes>\d+) minutes, so it is still open and no new conversation started; /, 'lead.freshStuckHanded'],
   // Ticket 601 r2: the reasons that share a next step (src/errors-groups.ts).
   ...GROUP_ROWS,
 ];

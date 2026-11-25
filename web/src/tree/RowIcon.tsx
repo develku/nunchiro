@@ -8,6 +8,9 @@ import { useReported } from '../chat/ContextRing';
 import type { Session } from '../types';
 import { isCut } from '../Tooltip';
 import { CacheTimer } from './CacheTimer'; // ticket 257
+import { askTitle, whatWhy, type Waiting } from './decisions';
+import { showTeamTab, type TeamAt } from '../lead/team';
+import { sessionName } from '../sessionNames';
 
 export const ICONS = ['hand', 'ask', 'fail', 'work', 'pr', 'merge', 'new', 'gone', 'stale', 'idle', 'limit', 'done', 'rest'] as const;
 export type IconKind = (typeof ICONS)[number];
@@ -269,6 +272,27 @@ export function WtRow({ name, pre, state, sessionId, selected, sub, count, onOpe
     </button>
   );
 }
+
+/** Ticket 1067 (mockup 1): with a lead, what only the owner can answer for its team is one pill on the lead's row; the
+ *  number is the Team view's (tree/decisions.ts `teamWaiting`). The row's sibling: a button cannot hold a button. */
+export function NeedYou({ t, n, tip, onOpen }: { t: T; n: number; tip: string; onOpen: () => void }) {
+  if (n <= 0) return null;
+  const say = t('tree.needYou', { n });
+  return (
+    <button className="needyou" title={tip} aria-label={`${say}. ${tip}`} onClick={onOpen}>
+      <RowIcon kind="hand" />
+      {say}
+    </button>
+  );
+}
+/** The pill's title: up to five items, oldest first, "Builder · ticket 1059: Run npm test". */
+export const needTip = (t: T, items: Waiting[]) =>
+  items
+    .slice(0, 5)
+    .map(({ d, s }) => ((what) => (s ? `${sessionName(s)}: ${what}` : what))((d.kind === 'permission' && askTitle(d, t)) || whatWhy(d, t).what))
+    .join('\n');
+/** As the lead header chip's press (CentreView `openTeam`): show the place's Team tab, or open its side view (true: focus it then). */
+export const teamOpen = (at: TeamAt, put: (next: TeamAt) => void, folder: string) => (at.tab ? (showTeamTab(folder), false) : (at.open || put({ ...at, open: true }), true));
 
 /** "Ready to clean up (N)": a closed fold at the end of a project's rows. The button is drawn only when the parent passes `onCleanUp` (the sheet is V2-8a). */
 export function CleanupLine({ items, open, onToggle, onCleanUp, t = enT }: { items: (WtRowProps & { key: string })[]; open: boolean; onToggle: (open: boolean) => void; onCleanUp?: () => void; t?: T }) {

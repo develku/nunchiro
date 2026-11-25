@@ -1,12 +1,15 @@
 // Preview (▶, ticket v1b-06, spec B3): the selected artifact, image or file at full size. HTML and SVG run in 04's
 // sandbox frame; Markdown renders with the chat's renderer (raw HTML escaped, links only through the browser path,
 // no image loaded); an image shows from its bytes. Read on view; "changed" when the file changes afterwards.
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Md } from '../chat/Rows';
+import { Icon } from '../icons/Icon';
 import { ArtifactFrame } from '../sandbox/ArtifactFrame';
 import { useHtmlLangT } from '../i18n/lib/useHtmlLangT';
 import { Changed, PROBLEM_TEXT, StateBar } from './Card';
 import { host, type Target } from './host';
 import { setDock, useSelection } from './store';
+import { keepComposerClear } from '../pane/composerRoom';
 import { loadContent, loadFrame, useWatched, type Watched } from './watch';
 import './artifacts.css';
 
@@ -47,11 +50,45 @@ function ContentPreview({ t }: { t: Target }) {
   );
 }
 
-export function Preview({ session, label }: { session: string | null; label?: string }) {
+// Ticket 1088: what each mounted Preview shows, so the Artifacts widget can mark it; a host that closes unmounts its Preview.
+const shown = new Map<string, number>();
+const shownSubs = new Set<() => void>();
+const shownKey = (session: string, t: Pick<Target, 'root' | 'path'>) => `${session}\n${t.root}\n${t.path}`;
+const count = (k: string, by: number) => {
+  const n = (shown.get(k) ?? 0) + by;
+  if (n > 0) shown.set(k, n);
+  else shown.delete(k);
+  shownSubs.forEach((f) => f());
+};
+/** True while a Preview shows `t` for `session`. */
+export const useShownInPreview = (session: string, t: Pick<Target, 'root' | 'path'>) =>
+  useSyncExternalStore(
+    (f) => (shownSubs.add(f), () => void shownSubs.delete(f)),
+    () => shown.has(shownKey(session, t)),
+  );
+
+/** `onClose`: what removes the host (side pane 1058; zone, split, sidebar 1084). The bar shows with or without an artifact. */
+export function Preview({ session, label, onClose }: { session: string | null; label?: string; onClose?: () => void }) {
   const sel = useSelection(session);
   const words = useHtmlLangT(); // ticket 508
+  const key = session && sel ? shownKey(session, sel) : null;
+  useEffect(() => {
+    if (!key) return;
+    count(key, 1);
+    return () => count(key, -1);
+  }, [key]);
+  // Ticket 1093: in every host (side pane, session split, layout zone, sidebar, dock) the composer stays out of the Preview.
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => (box.current ? keepComposerClear(box.current) : undefined), []);
   return (
-    <div className="preview" data-path={sel?.path}>
+    <div className="preview" ref={box} data-path={sel?.path}>
+      {onClose && (
+        <div className="pv-bar pv-top" onKeyDown={(e) => e.key === 'Escape' && onClose()}>
+          <button type="button" className="pclose" aria-label={words('rest.widgets.preview.closeAria')} onClick={onClose}>
+            <Icon name="x" size={12} />
+          </button>
+        </div>
+      )}
       {!sel ? (
         <div className="empty">{words('rest.widgets.preview.empty')}</div>
       ) : sel.type === 'html' || sel.type === 'svg' ? (

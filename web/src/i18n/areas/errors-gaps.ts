@@ -35,6 +35,8 @@ declare module '../index' {
     'err.g.codexUpdateArg': true;
     'err.g.answerRetry': true;
     'err.g.answerTerminal': true;
+    'err.g.hostKeyRead': true;
+    'err.g.homeSpace': true;
   }
 }
 
@@ -71,6 +73,9 @@ export const en = {
   'err.g.codexUpdateArg': "Nunchiro keeps Codex's update screen off, so the Codex arguments cannot set check_for_update_on_startup. Remove it from the arguments.",
   'err.g.answerRetry': "The agent’s screen changed. Wait a moment, then answer again.",
   'err.g.answerTerminal': "Nunchiro cannot answer this one for you. Answer it in the agent’s terminal.",
+  // Ticket 1122: English only until ticket 1035.
+  'err.g.hostKeyRead': "Nunchiro could not read this Mac's SSH host key. Turn Remote Login off and on in System Settings › General › Sharing, then open Share this Mac again.",
+  'err.g.homeSpace': "Nunchiro cannot use a machine link while the path of its data folder has a space. Add the machine with its host, user and port instead.",
 };
 
 export const ko = {

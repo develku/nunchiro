@@ -1,7 +1,8 @@
 # Second machine over SSH
 
 Each Mac runs its own core. Install the same Nunchiro version on the other Mac explicitly;
-Nunchiro never installs it, enables Remote Login, edits SSH configuration, or pairs machines.
+Nunchiro never installs it, enables Remote Login or edits SSH configuration. A share link (below) only fills the
+Add machine form and pins one host key; it is not a pairing secret.
 From an existing checkout on that Mac:
 
 ```sh
@@ -16,6 +17,35 @@ ssh arguments. Configure an SSH alias in your own
 `~/.ssh/config` and verify its host key as the user before using it. Nunchiro uses `BatchMode=yes`,
 `ConnectTimeout=3`, and `StrictHostKeyChecking=yes`; unknown or changed host keys fail without acceptance or prompts.
 A fresh checkout needs no SSH configuration for local commands or fake-transport checks.
+
+## Share link (ticket 1050)
+
+Settings > SSH machines > **Share this Mac** shows a link for Add machine on the other Mac:
+
+```text
+nunchiro-machine:v1?host=<name>&user=<user>&port=<port>&hostkey=SHA256:<fingerprint>[&label=<name>]
+```
+
+- **What it holds.** `host` is this Mac's local host name (`<LocalHostName>.local`), or its Tailscale name when
+  Tailscale runs (a picker shows each; no network scan). `user` is `$USER`. `port` is the first `Port` in
+  `/etc/ssh/sshd_config.d/*` or `/etc/ssh/sshd_config`, else 22. `hostkey` is the fingerprint of
+  `/etc/ssh/ssh_host_ed25519_key.pub` (read only). `label` is the local host name and becomes the machine's alias.
+  When Remote Login is off (nothing answers on that port), the page says how to turn it on instead of a link.
+- **What a leaked link gives.** A host name, a user name, a port and a public fingerprint. No password, key or token:
+  it gives no access. Signing in still needs your own SSH key on that Mac.
+- **Paste link.** Add machine > Paste link parses the link strictly (fields above only, each once; host
+  `[A-Za-z0-9.-]`, user `[A-Za-z0-9._-]`, neither starting with `-`; port 1-65535; `SHA256:` and 43 base64
+  characters; at most 1 KB), fills Host, User and Port, and shows the fingerprint. Nothing is added before Add.
+  Editing Host, User or Port drops the link.
+- **Test.** `ssh-keyscan -t ed25519 -p <port> -- <host>` reads the live key (no login). Equal to the link: that one
+  line is written to `NUNCHIRO_HOME/known_hosts.d/<alias>`, and the usual batch-mode Test runs. Different: refused
+  with both fingerprints, nothing written. `~/.ssh/config` and `~/.ssh/known_hosts` are never written.
+- **Afterwards.** For an alias with that file, every ssh command adds
+  `-o UserKnownHostsFile=~/.ssh/known_hosts ~/.ssh/known_hosts2 NUNCHIRO_HOME/known_hosts.d/<alias>`;
+  `BatchMode=yes` and `StrictHostKeyChecking=yes` stay, so a key that changes later fails as before. When your key
+  is not accepted, the form shows `ssh-copy-id -p <port> <user>@<host>` to run yourself.
+- **Jump host, ProxyCommand, identity file.** No form fields: set them for the host in `~/.ssh/config`, which the
+  Host field already reads.
 
 ## Persistent channel (V2-12m-a)
 

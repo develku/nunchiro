@@ -27,6 +27,14 @@ export function useFirstSessionMark(sessions: Session[], projects: string[]) {
   useEffect(() => void (started && !marks.includes('session') && setMarks([...marks, 'session'])), [started, marks, setMarks]);
 }
 
+/** A Quick setup Folder row entry: `agent` and `at` name the agent history that listed it ('' and 0 for a picked folder). */
+export type FolderRow = { path: string; agent: string; at: number };
+/** Ticket 1130 C7 (owner 11-25 Q3, mockup docs/design/first-use-b-1130): the Folder row's list, the first entry chosen.
+ *  The history folders (and any folder picked) as they are; with no Claude or Codex history, Assistants' own folder
+ *  (`home`, Team's Home) last, so the first prompt needs no folder. `null`: the history listing has not answered yet. */
+export const folderRows = (recent: FolderRow[] | null, home: string): FolderRow[] =>
+  !recent ? [] : recent.some((r) => r.agent) || !home ? recent : [...recent.filter((r) => r.path !== home), { path: home, agent: '', at: 0 }];
+
 /** The agents' official install pages; Nunchiro only opens them in the browser. */
 export const INSTALL: Record<AccountAgent, string> = {
   claude: 'https://docs.claude.com/en/docs/claude-code/setup',

@@ -55,6 +55,7 @@ export const BUILTIN_FIELDS: Field[] = [
   { page: 'appearance', key: 'titleBar', at: 'input[name="titlebar"]' },
   { page: 'terminal', key: 'osc52', at: 'input[name="osc52"]' },
   { page: 'layout', key: 'newSplit', at: 'input[name="newsplit"]' }, // SPLITNEW
+  { page: 'layout', key: 'barsAutohide', at: '[data-setting="barsAutohide"]' }, // ticket 1047
   { page: 'layout', key: 'scriptWidgets', at: '[data-setting="scriptWidgets"]' }, // ticket 872
   { page: 'appearance', key: 'themeMode', at: 'input[name="theme-mode"]' },
   { page: 'appearance', key: 'themes', at: '[data-setting="themes"]' },

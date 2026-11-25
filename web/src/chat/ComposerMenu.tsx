@@ -34,6 +34,7 @@ const BUILTIN: Record<string, Item[]> = {
     b('mcp', 'composer.cmd.claude.mcp'),
     b('memory', 'composer.cmd.claude.memory'),
     b('model', 'composer.cmd.claude.model'),
+    b('new', 'composer.cmd.claude.new'), // alias of /clear
     b('permissions', 'composer.cmd.claude.permissions'),
     b('resume', 'composer.cmd.claude.resume'),
     b('review', 'composer.cmd.claude.review'),
@@ -178,7 +179,9 @@ export function ComposerMenu({ core, session, t }: { core: CoreClient; session: 
     const refresh = () => !composing.current && setOpen(triggerAt(el.value, el.selectionStart));
     let position: PromptPosition | null = null;
     let recalling = false; // a recalled `/x` or `@x` is a past prompt, not a trigger: the next Up stays recall's
-    const input = (e: Event) => !(e as InputEvent).isComposing && !recalling && refresh();
+    // Ticket 1130 C6: a paste is no trigger: a pasted `claude mcp add … @scope/pkg` line would open the file menu over its
+    // own offer row. Typing after the paste still opens it.
+    const input = (e: Event) => ((e as InputEvent).inputType === 'insertFromPaste' ? setOpen(null) : !(e as InputEvent).isComposing && !recalling && refresh());
     const start = () => (composing.current = true);
     const end = () => ((composing.current = false), refresh());
     /** Ticket 371: Up and Down over the session's sent prompts; the guards are T3 Code's (useComposerCommandKey.ts). */

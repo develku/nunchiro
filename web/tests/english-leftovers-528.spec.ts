@@ -6,6 +6,7 @@ import type { Page } from '@playwright/test';
 import { english } from './fixtures/ui-scan';
 import { test, expect } from './fixtures';
 import { append, chat, rec, test as chatTest } from './fixtures/chat/harness';
+import { showFrame } from './fixtures/artifacts/cards/host';
 import { at, card, drag } from './d5b';
 import { enable, freePort } from './web-access-shared';
 import { ko as pf } from '../src/i18n/areas/rest-pair-files';
@@ -82,6 +83,7 @@ chatTest('artifact_card_problems_in_korean_528: a missing file and one outside t
   await expect(chat(page, s.id).locator('.clist')).toHaveAttribute('aria-busy', 'false');
   for (const [full, why] of [[outside, 'outside'], [gone, 'missing']] as const) {
     const c = chat(page, s.id).locator(`.acard[data-path="${full === gone ? 'never-there.html' : full}"]`);
+    await showFrame(c);
     await expect(c.locator('.astate')).toHaveText(left[`leftovers.card.${why}`]);
     await expect(c.locator('.abody')).toHaveText(left[`leftovers.card.text.${why}`]);
   }

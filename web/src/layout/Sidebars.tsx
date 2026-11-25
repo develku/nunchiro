@@ -6,6 +6,7 @@ import { useSyncExternalStore, type KeyboardEvent, type PointerEvent, type React
 import { maxWidth, SIDEBAR_MIN, SIDEBAR_STEP, WIDGET_LABEL, type Side } from './bars';
 import type { T } from '../i18n';
 import { glyph } from './icons';
+import { resizing } from './resizing';
 import './rails.css';
 import '../widgets-7a.css'; // ticket 1041 lane 7a: quiet controls and state edges inside Board, Decisions, Schedules, History, Team
 
@@ -45,15 +46,11 @@ export function Sidebar({ side, widget, width, other, onWidth, onClose, t, child
     const el = e.currentTarget;
     const x0 = e.clientX;
     const w0 = w;
-    el.setPointerCapture(e.pointerId);
-    document.documentElement.toggleAttribute('data-resizing', true); // look 1117 v3: a drag selects no text across the window
-    const stop = () => ((el.onpointermove = null), (el.onpointerup = null), (el.onpointercancel = null), document.documentElement.toggleAttribute('data-resizing', false));
-    el.onpointermove = (ev) => {
+    const stop = resizing(el, e.pointerId, (ev) => {
       const raw = w0 + (side === 'left' ? ev.clientX - x0 : x0 - ev.clientX);
       if (raw < SIDEBAR_MIN - CLOSE_UNDER) return (stop(), onClose(w0));
       onWidth(raw);
-    };
-    el.onpointerup = el.onpointercancel = stop;
+    });
   };
   const key = (e: KeyboardEvent<HTMLDivElement>) => {
     const grow = side === 'left' ? 'ArrowRight' : 'ArrowLeft';

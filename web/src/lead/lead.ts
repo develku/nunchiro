@@ -45,6 +45,13 @@ export async function openSeat(core: CoreClient, id: string) {
   return (await core.request({ op: 'team_open', id })) as { session: Session; started: boolean };
 }
 
+/** Ticket 1096: a new conversation as the lead's seat (never the old one resumed). `handover`: a running old seat writes
+ *  what is unfinished first and is closed once that turn ends; `close`: the owner closes it now. Uses the window's core. */
+export async function openFresh(id: string, how: 'handover' | 'close') {
+  if (!client) throw new Error('core disconnected');
+  return (await client.request({ op: 'team_open', id, fresh: how })) as { session: Session; started: boolean };
+}
+
 export const placeOfMate = (m: Teammate) => m.project ?? '';
 /** A session's place: Home for the Home folder, else its project (a worktree session's project is its main checkout). */
 export const placeOf = (s: Session, team: Team) => (team.home && s.project === team.home ? '' : s.project);

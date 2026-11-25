@@ -15,6 +15,12 @@ fn main() {
     if let Some(head) = git(&["rev-parse", "--git-path", "HEAD"]) {
         println!("cargo:rerun-if-changed={head}");
     }
+    // Ticket 1082: a commit on the checked-out branch moves its ref, not HEAD; the update compares this sha with the stamp's.
+    if let Some(branch) = git(&["symbolic-ref", "-q", "HEAD"])
+        && let Some(path) = git(&["rev-parse", "--git-path", &branch])
+    {
+        println!("cargo:rerun-if-changed={path}");
+    }
     println!("cargo:rerun-if-changed=build.rs");
     // In a worktree HEAD names the branch and does not change on a commit; a stamped build (an RC, a release) asks again.
     for stamp in ["NUNCHIRO_BUILD", "NUNCHIRO_RELEASE"] {

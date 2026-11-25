@@ -40,4 +40,7 @@ comm -13 "$tmp/help" "$tmp/docs" | sed 's/^/documented but not in --help: nunchi
 comm -12 "$tmp/help" "$tmp/pending" | sed 's/^/pending marker on a listed command (remove it): nunchiro /' >&2
 { comm -23 "$tmp/help" "$tmp/docs" | comm -23 - "$tmp/pending"; comm -13 "$tmp/help" "$tmp/docs"; comm -12 "$tmp/help" "$tmp/pending"; } | grep -q . && status=1
 [ "$status" = 0 ] && echo "cli docs cover $(wc -l < "$tmp/help" | tr -d ' ') help commands"
+# The skills, guides and AGENTS.md must name only real commands and paths (ticket 1130). Self-tests point CLI_DOCS at
+# fake docs, which the real guides do not match; scripts/check-guidance.sh has its own tests.
+if [ -z "${CLI_DOCS:-}" ]; then "$root/scripts/check-guidance.sh" || status=1; fi
 exit "$status"

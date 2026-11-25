@@ -1,0 +1,16 @@
+schema_version: "1.1"
+name: trigger-artifacts-load-06
+description: Should load the artifacts skill.
+tags: [trigger, trigger-artifacts]
+runs: 1
+execution:
+  prompt: "Create an HTML page with a table of the planets and how many moons each has."
+  append_system_prompt: "You are running inside a Nunchiro session: NUNCHIRO_SESSION is set and the `nunchiro` CLI is on PATH. Reply to the request as you normally would."
+  allowed_tools: [Skill, Read, Glob, Grep]
+  max_turns: 4
+  timeout_seconds: 120
+graders:
+  - name: skill-loaded
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?artifacts"'

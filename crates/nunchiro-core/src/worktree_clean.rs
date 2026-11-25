@@ -1138,7 +1138,8 @@ mod tests {
     fn create_rollback_runs_no_fsmonitor() {
         use std::os::unix::fs::PermissionsExt;
         let home = home("wtc-rollback");
-        let repo = home.join("repo");
+        // Ticket 1061: the default root is beside the repository, so a folder of its own keeps it writable below.
+        let repo = home.join("src/repo");
         std::fs::create_dir_all(&repo).unwrap();
         git(&repo, &["init", "-q", "-b", "main"]);
         git(&repo, &["commit", "-q", "--allow-empty", "-m", "initial"]);
@@ -1152,7 +1153,11 @@ mod tests {
             &repo,
             &["config", "core.fsmonitor", monitor.to_str().unwrap()],
         );
-        let registry = Mutex::new(Sessions::open(&home).unwrap());
+        let registry = Mutex::new(
+            Sessions::open(&home)
+                .unwrap()
+                .with_user_home(&home.join("src")),
+        );
         let plan = |operation: &str| {
             registry
                 .lock()
@@ -1197,6 +1202,47 @@ mod tests {
         let listed = String::from_utf8_lossy(&listed);
         assert_eq!(listed.matches("worktree ").count(), 1, "{listed}");
     }
+    // Tickets 1061, 1083: with no setting, a user home that cannot be written fails with a line that names the
+    // setting, and nothing goes into the Nunchiro folder instead.
+    #[test]
+    fn unwritable_user_home_names_the_setting() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = home("wtc-noparent");
+        let locked = home.join("locked");
+        let repo = home.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(&locked).unwrap();
+        git(&repo, &["init", "-q", "-b", "main"]);
+        git(&repo, &["commit", "-q", "--allow-empty", "-m", "initial"]);
+        let repo = std::fs::canonicalize(repo).unwrap();
+        let core = Sessions::open(&home).unwrap().with_user_home(&locked);
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o500)).unwrap();
+        let made = core
+            .worktree_plan(
+                None,
+                Request::Worktree {
+                    operation: "create".into(),
+                    project: Some(repo),
+                    path: None,
+                    branch: Some("b".into()),
+                    base: "HEAD".into(),
+                    label: String::new(),
+                    from: None,
+                    confirm: None,
+                },
+            )
+            .and_then(|plan| plan.run());
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let fell_back = home.join("worktrees/repo").exists();
+        std::fs::remove_dir_all(&home).unwrap();
+        let e = made.err().unwrap_or_default();
+        assert!(
+            e.contains("Settings > Git & Worktrees") && e.contains("(worktrees_dir)"),
+            "{e}"
+        );
+        assert_eq!(e.lines().count(), 1, "{e}");
+        assert!(!fell_back);
+    }
     // v25f (F7): Settings › Git's folder and prefix. A bad folder is refused with its reason and nothing is written; a
     // saved one is where the next create goes; the prefix goes on a one-field branch; an older record (default root)
     // still lists after the root moved.
@@ -1208,7 +1254,7 @@ mod tests {
         std::fs::create_dir_all(&repo).unwrap();
         git(&repo, &["init", "-q", "-b", "main"]);
         git(&repo, &["commit", "-q", "--allow-empty", "-m", "initial"]);
-        let mut core = Sessions::open(&home).unwrap();
+        let mut core = Sessions::open(&home).unwrap().with_user_home(&home);
         let dir = |d: &str| LifetimePatch {
             worktrees_dir: Some(d.into()),
             ..Default::default()
@@ -1233,7 +1279,7 @@ mod tests {
             .0
         };
         let old = create(&core, "before").pop().unwrap();
-        assert!(old.path.starts_with(home.join("worktrees")));
+        assert!(old.path.starts_with(home.join("nunchiro/worktrees/repo")));
         for bad in ["../../elsewhere", "a/../../b", "..", "~/wt", "/abs/../x"] {
             let e = core
                 .handle(Request::QuitSettings { patch: dir(bad) })
@@ -1312,8 +1358,8 @@ mod tests {
     #[test]
     fn worktree_dir_rule() {
         let p = Path::new("/r/repo");
-        let h = Path::new("/h");
-        let at = |d: &str| crate::sessions::worktree_root_for(h, Some(Path::new(d)), p);
+        let at =
+            |d: &str| crate::sessions::worktree_root_for(Some(Path::new(d)), p, Path::new("/u"));
         assert_eq!(at("../.worktrees").unwrap(), Path::new("/r/.worktrees"));
         assert_eq!(at(".wt").unwrap(), Path::new("/r/repo/.wt"));
         assert_eq!(at("./a/b").unwrap(), Path::new("/r/repo/a/b"));
@@ -1321,10 +1367,156 @@ mod tests {
         for bad in ["../..", "../../x", "a/../b", "", "~", "/a/../b"] {
             assert!(at(bad).is_err(), "{bad}");
         }
+        // Ticket 1083: unset is in the user's home, wherever the repository is.
         assert_eq!(
-            crate::sessions::worktree_root_for(h, None, p).unwrap(),
-            Path::new("/h/worktrees")
+            crate::sessions::worktree_root_for(None, p, Path::new("/u")).unwrap(),
+            Path::new("/u/nunchiro/worktrees")
         );
+        assert!(
+            crate::sessions::worktree_root_for(None, p, Path::new(""))
+                .unwrap_err()
+                .contains("(worktrees_dir)")
+        );
+    }
+    // Ticket 1083: the unset default is the visible `<user home>/nunchiro/worktrees`, never a `.nunchiro*` folder (peer.rs
+    // owner_home() would take it for the owner's data folder); records under the 1061 default (`../.worktrees`) and
+    // the older `<home>/worktrees` still list and remove after the default moved.
+    #[test]
+    fn the_default_folder_is_visible_and_three_roots_keep_working() {
+        use crate::api::LifetimePatch;
+        let default =
+            crate::sessions::worktree_root_for(None, Path::new("/r/repo"), Path::new("/u"))
+                .unwrap();
+        assert!(
+            !default
+                .components()
+                .any(|c| c.as_os_str().as_encoded_bytes().starts_with(b".nunchiro")),
+            "{default:?}"
+        );
+        let home = home("wtc-three");
+        let repo = home.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        git(&repo, &["init", "-q", "-b", "main"]);
+        git(&repo, &["commit", "-q", "--allow-empty", "-m", "initial"]);
+        let user = home.join("user");
+        std::fs::create_dir_all(&user).unwrap();
+        let mut core = Sessions::open(&home).unwrap().with_user_home(&user);
+        let dir = |d: &str| LifetimePatch {
+            worktrees_dir: Some(d.into()),
+            ..Default::default()
+        };
+        let create = |core: &Sessions, from: &str| {
+            core.worktree_plan(
+                None,
+                Request::Worktree {
+                    operation: "create".into(),
+                    project: Some(repo.clone()),
+                    path: None,
+                    branch: None,
+                    base: "HEAD".into(),
+                    label: String::new(),
+                    from: Some(from.into()),
+                    confirm: None,
+                },
+            )
+            .unwrap()
+            .run()
+            .unwrap()
+            .0
+        };
+        let mut made = vec![];
+        for (setting, under, name) in [
+            ("../.worktrees", ".worktrees", "prev"),
+            (home.join("worktrees").to_str().unwrap(), "worktrees", "old"),
+            ("", "user/nunchiro/worktrees", "new"),
+        ] {
+            core.handle(Request::QuitSettings {
+                patch: dir(setting),
+            })
+            .unwrap();
+            let listed = create(&core, name);
+            let w = listed.iter().find(|w| w.label == name).unwrap();
+            assert!(
+                w.path.starts_with(home.join(under).join("repo")),
+                "{:?}",
+                w.path
+            );
+            made.push(w.path.clone());
+        }
+        for path in made {
+            let listed = core
+                .worktree_plan(
+                    None,
+                    Request::Worktree {
+                        operation: "remove".into(),
+                        project: Some(repo.clone()),
+                        path: Some(path.clone()),
+                        branch: None,
+                        base: String::new(),
+                        label: String::new(),
+                        from: None,
+                        confirm: None,
+                    },
+                )
+                .unwrap()
+                .run()
+                .unwrap()
+                .0;
+            assert!(!listed.iter().any(|w| w.path == path), "{path:?} removed");
+            assert!(!path.exists());
+        }
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+    // Ticket 1083: `<user home>/nunchiro` is made 0755 on first use and holds the 0700 `worktrees`; a link or a file
+    // there is refused and nothing lands behind it.
+    #[test]
+    fn the_nunchiro_folder_in_the_home_is_made_and_never_a_link() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = home("wtc-base");
+        let repo = home.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        git(&repo, &["init", "-q", "-b", "main"]);
+        git(&repo, &["commit", "-q", "--allow-empty", "-m", "initial"]);
+        let user = home.join("user");
+        std::fs::create_dir_all(&user).unwrap();
+        let core = Sessions::open(&home).unwrap().with_user_home(&user);
+        let create = |core: &Sessions, from: &str| {
+            core.worktree_plan(
+                None,
+                Request::Worktree {
+                    operation: "create".into(),
+                    project: Some(repo.clone()),
+                    path: None,
+                    branch: None,
+                    base: "HEAD".into(),
+                    label: String::new(),
+                    from: Some(from.into()),
+                    confirm: None,
+                },
+            )
+            .and_then(|plan| plan.run())
+        };
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        let listed = create(&core, "one").unwrap().0;
+        assert!(
+            listed
+                .iter()
+                .any(|w| w.path.starts_with(user.join("nunchiro/worktrees/repo")))
+        );
+        assert_eq!(mode(&user.join("nunchiro")), 0o755);
+        assert_eq!(mode(&user.join("nunchiro/worktrees")), 0o700);
+        // A link in its place: refused, and the target stays empty.
+        let planted = home.join("planted");
+        std::fs::create_dir_all(&planted).unwrap();
+        std::fs::remove_dir_all(user.join("nunchiro")).unwrap();
+        std::os::unix::fs::symlink(&planted, user.join("nunchiro")).unwrap();
+        let e = create(&core, "two").err().unwrap_or_default();
+        assert!(
+            e.contains("is a link or not a folder") || e.contains("aliased"),
+            "{e}"
+        );
+        assert_eq!(std::fs::read_dir(&planted).unwrap().count(), 0);
+        std::fs::remove_dir_all(&home).unwrap();
     }
     // SHOULD 4 (r2): a session that started in the worktree after the pass read its running list: the real
     // `reserve_path` refuses, nothing is removed.
@@ -1336,7 +1528,7 @@ mod tests {
         git(&repo, &["init", "-q", "-b", "main"]);
         git(&repo, &["commit", "-q", "--allow-empty", "-m", "initial"]);
         let repo = std::fs::canonicalize(repo).unwrap();
-        let registry = Mutex::new(Sessions::open(&home).unwrap());
+        let registry = Mutex::new(Sessions::open(&home).unwrap().with_user_home(&home));
         let plan = registry
             .lock()
             .unwrap()
@@ -1418,7 +1610,9 @@ mod tests {
     #[test]
     fn the_task_ends_soon_after_stopping() {
         let home = home("wtc-stop");
-        let registry = Arc::new(Mutex::new(Sessions::open(&home).unwrap()));
+        let registry = Arc::new(Mutex::new(
+            Sessions::open(&home).unwrap().with_user_home(&home),
+        ));
         let stopping = Arc::new(AtomicBool::new(false));
         let task = spawn(home.clone(), registry, stopping.clone()).unwrap();
         stopping.store(true, Ordering::SeqCst);

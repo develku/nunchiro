@@ -1,8 +1,10 @@
-// Static model and effort catalog per agent (ticket 10). Sources: Claude Code 2.1.310 `--help` aliases and its
-// model picker effort levels; Codex 0.161.0 listed models and their reported reasoning efforts
-// (~/.codex/models_cache.json, read only). The core refuses anything else (CLAUDE_MODELS and CODEX_MODELS in
-// crates/nunchiro-core/src/sessions.rs; tests/picker.spec.ts keeps the two lists equal). Ids the owner added sit outside this
-// list: newDefaults `modelChoices` merges them and sessions.rs `check_stored_model` accepts them.
+// Model and effort catalog per agent (ticket 10). Claude: Claude Code 2.1.310 `--help` aliases and its model picker
+// effort levels, fixed here and in the core (CLAUDE_MODELS in crates/nunchiro-core/src/sessions.rs; tests/picker.spec.ts
+// keeps the two equal). Codex (ticket 1100): the core serves Codex's own list (`agent_models`: Codex's
+// models_cache.json, else the core's fixed list), so a model Codex adds shows without a Nunchiro update. The core refuses
+// anything else. Ids the owner added sit outside this list: newDefaults `modelChoices` merges them and sessions.rs
+// `check_stored_model` accepts them.
+import type { CoreClient } from '../api';
 import type { AgentKind } from '../types';
 import { seenVersion } from './seenModels';
 
@@ -11,7 +13,6 @@ export type Pick = string | null;
 export type Option = { value: Pick; label: string };
 
 const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
-const ULTRA = [...LEVELS, 'ultra'];
 
 export const CLAUDE_MODELS: Option[] = [
   { value: 'fable', label: 'Fable' },
@@ -19,16 +20,38 @@ export const CLAUDE_MODELS: Option[] = [
   { value: 'sonnet', label: 'Sonnet' },
   { value: 'haiku', label: 'Haiku' },
 ];
-export const CODEX_MODELS: (Option & { efforts: string[] })[] = [
-  { value: 'gpt-6.1-terra', label: 'GPT-6.1 Terra', efforts: ULTRA }, // ticket 994: in Codex's own list (models_cache.json, 2026-11-18)
-  { value: 'gpt-6.1-sol', label: 'GPT-6.1 Sol', efforts: ULTRA },
-  { value: 'gpt-6-astra', label: 'GPT-6 Astra', efforts: ULTRA },
-  { value: 'gpt-6-sol', label: 'GPT-6 Sol', efforts: ULTRA },
-  { value: 'gpt-6-luna', label: 'GPT-6 Luna', efforts: LEVELS },
-  { value: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', efforts: ULTRA },
-  { value: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', efforts: ULTRA },
-  { value: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', efforts: LEVELS },
-];
+/** What the core served (`agent_models`); empty until it answers. Filled in place, so a reader that imported it sees the list. */
+export const CODEX_MODELS: (Option & { efforts: string[] })[] = [];
+
+let codexFor: CoreClient | null = null;
+let codexRead = 0;
+const codexSubs = new Set<() => void>();
+const isRow = (r: unknown): r is { value: string; label: string; efforts: string[] } => {
+  const o = (r ?? {}) as Record<string, unknown>;
+  return typeof o.value === 'string' && typeof o.label === 'string' && Array.isArray(o.efforts) && o.efforts.every((e) => typeof e === 'string');
+};
+/** Reads Codex's list from `core`, once per core, or again with `again` (a menu opening: Codex may have fetched a new
+ *  model since). A core that refuses (a browser tab without the op) leaves the list as it was. */
+export function readCodexModels(core: CoreClient, again = false) {
+  if (codexFor === core && !again) return;
+  codexFor = core;
+  core.request({ op: 'agent_models' }).then(
+    (r) => {
+      const rows = (r as { codex?: unknown }).codex;
+      if (Array.isArray(rows)) setCodexModels(rows.filter(isRow));
+    },
+    () => void (codexFor === core && (codexFor = null)),
+  );
+}
+/** The served list, set; also the seam a test without a core uses. */
+export function setCodexModels(rows: { value: string; label: string; efforts: string[] }[]) {
+  CODEX_MODELS.splice(0, CODEX_MODELS.length, ...rows.map((m) => ({ value: m.value, label: m.label, efforts: m.efforts })));
+  codexRead++;
+  codexSubs.forEach((f) => f());
+}
+export const subscribeModels = (f: () => void) => (codexSubs.add(f), () => void codexSubs.delete(f));
+/** Changes each time the served list arrives, for `useSyncExternalStore`. */
+export const modelsRead = () => codexRead;
 
 const DEFAULT: Option = { value: null, label: 'Default' };
 

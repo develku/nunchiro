@@ -179,6 +179,7 @@ const EXEMPT: { match: RegExp; why: string }[] = [
   { match: /^providers: Providers \/ Use (Claude|Codex) \(no row\)$/, why: "the card head's own on/off switch: off closes the card and shows Off, and the switch itself is the way back" },
   { match: /^providers: Providers \/ (?!Default account|Permission|Default model|Effort|Use )[^]*\(no row\)$/, why: 'a per-item row: one switch for each model of the list, which "All on" puts back together; the list has no single default' },
   { match: /^usage: /, why: 'a view filter of the Usage dashboard (range, scope, account), not a stored setting' },
+  { match: /^team: How this place works.* \/ Project \(no row\)$/, why: "picks which project's section is shown (ticket 1099 A); not a stored setting" },
 ];
 
 type Kind = 'switch' | 'select' | 'number' | 'group';

@@ -1,5 +1,6 @@
-// G2 (owner 11-08): the RC build's update item. The app shell is a recording `__TAURI_INTERNALS__`; `rcUpdates` is what the shell
-// puts in the boot object only for a running RC, so without it (the owner's own build) nothing may be called or shown.
+// G2 (owner 11-08), ticket 1082: the update item of a build that updates itself. The app shell is a recording
+// `__TAURI_INTERNALS__`; `rcUpdates` is what the shell puts in the boot object only for such a build, so without it (the
+// isolated test build, a dev build) nothing may be called or shown.
 import type { Page } from '@playwright/test';
 import { expect, openWindow, test } from './fixtures';
 
@@ -68,7 +69,7 @@ test('rc_update_item_appears_for_a_verified_build_and_one_click_installs', async
     const w = window as unknown as W;
     w.__cb[w.__on['rc-update']]({ event: 'rc-update', id: 1, payload: '0.1.0-rc.2' });
   });
-  await expect(item(app)).toHaveText('Update ready · Restart');
+  await expect(item(app)).toHaveText('New build 0.1.0-rc.2 ready · Install and restart');
   await expect(item(app)).toHaveAttribute('data-version', '0.1.0-rc.2');
   await item(app).click();
   await expect.poll(() => calls(app)).toContain('rc_update_install');

@@ -1,0 +1,32 @@
+# cargo-deny policy, run weekly by scripts/supply-chain.sh (ticket 1124) for both Cargo workspaces:
+#   cargo deny --manifest-path <Cargo.toml> --config deny.toml check licenses bans sources
+# Advisories are not checked here: the script runs cargo audit for them, so the RustSec list is fetched once.
+# An advisory left unfixed is listed with its reason and removal condition in docs/release/supply-chain-log.md
+# ("Accepted advisories"), not ignored in a config file.
+
+[graph]
+# The shipped CLI and app are macOS arm64 builds; crates for other targets are not in the closure (as in gen-notices.sh).
+targets = ["aarch64-apple-darwin"]
+exclude-dev = true
+
+[licenses]
+# Keep in step with ALLOWED in scripts/gen-notices.sh, the licence gate of check-app.sh; add an id only after reading it.
+allow = [
+  "MIT", "MIT-0", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "0BSD", "Zlib", "Unlicense", "CC0-1.0",
+  "MPL-2.0", "Unicode-3.0", "Unicode-DFS-2016", "BSL-1.0",
+]
+confidence-threshold = 0.93
+# The ids above that no crate uses today stay allowed without a warning, so a new crate under one of them passes.
+unused-allowed-license = "allow"
+
+[licenses.private]
+ignore = true # the workspace's own crates
+
+[bans]
+multiple-versions = "allow" # two versions of one crate are common in the Tauri tree; not a supply-chain risk by itself
+# The workspace's own path dependencies count as wildcards (the crates are not marked publish = false); none come from a registry.
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

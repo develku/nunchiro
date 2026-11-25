@@ -10,7 +10,7 @@ import { ErrorDetails, plainError, tipError, rawError } from '../errors';
 import { lastAccount, likeNew } from '../NewSession';
 import { AGENTS_OFF, isOff, leadAgent, modelChoices, MODELS_OFF, useCustomModels } from '../settings/agents/newDefaults';
 import { DEFAULT_AGENT } from '../settings/onboarding/state';
-import { defineSetting, useFeatureSetting } from '../settings/useFeatureSetting';
+import { currentFeature, defineSetting, useFeatureSetting } from '../settings/useFeatureSetting';
 import type { Account, BranchRef, CoreClient, WorktreeBaseReply, WorktreeCleaned, WorktreeLoss, WorktreeOp, WorktreeReply, WorktreeStale } from '../api';
 import type { Command } from '../keys';
 import { TidyPanel } from './Tidy';
@@ -18,7 +18,7 @@ import { AlertSheet } from './Dialogs';
 import { copyText } from '../terminal/clipboard';
 import { openInEditor } from '../files/open'; // ticket 375
 import { basename, listedFact, listedName, type ListedWorktree, type WorktreeFact } from '../tree';
-import { agentState, type Session } from '../types';
+import { agentState, noCheckout, type Session } from '../types';
 import { push as pushUndo } from '../undo/store';
 import type { SetupStatus } from '../approval/types';
 import { enT, plural, type T } from './state';
@@ -91,6 +91,9 @@ export interface Worktrees {
   /** Reads the list again now (ticket 990: a team line in the room says a worktree was made or removed elsewhere). */
   refresh: () => void;
   open: (path: string) => Promise<Session | null>;
+  /** Ticket 1130 C2: the default agent in a new auto-named worktree of `project`, as the create dialog starts one (create,
+   *  the setup wait, start); with no agent on, the create dialog opens instead. Failures are toasts. */
+  startNew: (project: string) => Promise<void>;
   /** Ticket 375: opens a folder in the editor chosen in Settings; a refusal is a toast. */
   editor: (path: string) => void;
   undo: () => void;
@@ -331,7 +334,7 @@ export function useWorktrees(core: CoreClient, connected: boolean, sessions: Ses
     if (back.length) say(back.length === 1 ? t('dialog.worktree.restored', { name: back[0].label || back[0].branch }) : t('dialog.worktree.restoredMany', { n: back.length }));
     else say(t('dialog.worktree.nothingToUndo', { error: plainError(t, refused) }), undefined, refused);
   };
-  return {
+  const api: Worktrees = {
     list,
     sessions,
     facts,
@@ -395,8 +398,22 @@ export function useWorktrees(core: CoreClient, connected: boolean, sessions: Ses
         (r) => (r.session && onStarted?.(r.session), r.session ?? null),
         (e: Error) => (say(t('dialog.worktree.openFailed', { error: plainError(t, e) }), undefined, rawError(e)), null),
       ),
+    startNew: async (project) => {
+      const kind = leadAgent(currentFeature(DEFAULT_AGENT), sessions);
+      if (kind !== 'claude' && kind !== 'codex') return setAsk({ kind: 'create', project });
+      const made = await api.create(project, '');
+      if (!made || !(await api.setupGate(made.path))) return;
+      try {
+        const accounts = await core.accounts().then((r) => r.accounts, () => [] as Account[]);
+        const s = await api.start(project, made.path, kind, null, lastAccount(sessions, kind, project, accounts));
+        if (s.state !== 'running') throw new CoreRefusal(s.problem?.cause ?? t('dialog.worktree.notRunning'));
+      } catch (e) {
+        say(t('dialog.worktree.startFailed', { error: plainError(t, e) }), undefined, rawError(e));
+      }
+    },
     undo,
   };
+  return api;
 }
 
 /** Ticket 467: the last "Start an agent here" choice and its agent, kept with the window's other feature values; first use is off. */
@@ -950,12 +967,16 @@ export function worktreeCommands(wt: Worktrees, current: Session | null, firstPr
   const noWt = t('palette.why.noWorktree');
   const noSession = t('palette.why.noSession');
   const wtWhy = l?.missing ? t('palette.why.worktreeGone') : noWt;
+  const wtAgent = !!project && !current?.machine && !(current && project === current.project && noCheckout(current));
   const sOf = (id?: string) => (id ? wt.sessions.find((x) => x.id === id) : current);
   const local = (s: Session | null | undefined) => !!s && !s.machine;
   const edPath = l && !l.missing ? l.path : current && !current.machine && path === current.cwd ? current.cwd : null;
   const settleWhy = (s: Session | null | undefined) => (!s || canSettle(s) ? undefined : t(isDone(s) ? 'look8.settleWhy.done' : 'look8.settleWhy.busy'));
   return [
     { id: 'worktree.create', title: t('dialog.worktree.cmd.new'), enabled: !!project, why: t('palette.why.noProject'), run: () => project && wt.setAsk({ kind: 'create', project }) },
+    // Ticket 1130 C2: one chord, an agent in a new worktree. Off where no worktree can be made: no project, another
+    // machine, or a folder under no repository (Home).
+    { id: 'session.new.worktree', title: t('firstUse.cmd.worktreeAgent'), enabled: wtAgent, why: project ? t('firstUse.why.noRepo') : t('palette.why.noProject'), run: () => void (wtAgent && project && wt.startNew(project)) },
     { id: 'worktree.tidy', title: t('dialog.worktree.cmd.tidy'), run: () => wt.setAsk({ kind: 'tidy', project: project ?? null }) },
     { id: 'worktree.open', title: t('dialog.worktree.cmd.open'), enabled: !!l && !l.missing, why: wtWhy, run: () => l && void wt.open(l.path) },
     { id: 'worktree.copy-path', title: t('dialog.worktree.cmd.copyPath'), enabled: !!l, why: noWt, run: () => l && void copyText(l.path) },

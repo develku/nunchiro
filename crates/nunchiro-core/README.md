@@ -39,7 +39,9 @@ leaves the machine. A pre-v2 `core.log` in the data folder is left in place and 
 ```
 
 `worktrees_dir` (Settings › Git & Worktrees) may also be relative to the project: inside it or one level up beside it
-(`../.worktrees`); any other relative path is refused. Each worktree record keeps the root it was made under.
+(`../.worktrees`); any other relative path is refused. Unset, it is `~/nunchiro/worktrees` (in the user's home, never inside the data folder; made on first use). Set a folder
+to use another disk. Each worktree record keeps the root it was made under; a record made before ticket 1083 lies
+under `../.worktrees` (beside the repository) or, older, `<data folder>/worktrees`, and keeps working.
 
 Injection defaults on. Claude receives a session-specific settings file with the hook events
 listed in `sessions.rs`. Codex receives invocation-only hook overrides and
@@ -359,7 +361,7 @@ while retaining Stop texts. `page.generation` is additive; live watchers receive
 with a newest page when it changes. Consumers discard their old generation on that event.
 The fingerprint samples the first and last 4096 consumed bytes; edits strictly between these
 samples require source rotation to be detected. Release probe:
-`cargo test --release -p nunchiro-core --test chat_performance -- --ignored --nocapture`. No new dependency, rendering or image saving is included.
+`cargo test --release -p nunchiro-core --features measure --test chat_performance -- --nocapture`. No new dependency, rendering or image saving is included.
 ## Approvals
 
 One mechanism approves anything Nunchiro runs on the user's behalf (script widgets, web widgets, board
@@ -1357,8 +1359,10 @@ a successful switch.
 
 `{"op":"switch_model","id":…,"model":…|null,"effort":…|null}` changes a running session for that session
 only. It is owner-only: a session token gets `operation not granted`. The model and effort must be in the
-catalog (`CLAUDE_MODELS`, `CLAUDE_EFFORTS`, `CODEX_MODELS` in `sessions.rs`, equal to the window's
-`web/src/picker/catalog.ts`); anything else is refused before a byte reaches the PTY. It is refused while
+catalog (`CLAUDE_MODELS`, `CLAUDE_EFFORTS` in `sessions.rs`, equal to the window's
+`web/src/picker/catalog.ts`; for Codex, Codex's own listed models from `$CODEX_HOME/models_cache.json`, else the
+fixed list in `agent_models.rs`, which `{"op":"agent_models"}` serves to the window as `{codex: [{value, label,
+efforts}]}`); anything else is refused before a byte reaches the PTY. It is refused while
 the agent is working or a decision waits, while text is in the agent's own input box (Claude `❯ …`,
 Codex `› …`; their empty-box placeholders count as empty), for a shell, and while another switch of that
 session runs. `start` refuses a `model` or `effort` that is empty, over 100 bytes, starts with `-` or holds

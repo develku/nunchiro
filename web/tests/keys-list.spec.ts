@@ -157,7 +157,7 @@ test('keys_recorder_korean_input_source: keys are recorded by code under a Korea
   core.shell(core.project('demo'), 'alpha');
   await openWindow(app);
   await keysPage(app);
-  await change(app, 'session.new', 'Create a new session…').click();
+  await change(app, 'session.new', 'New session…').click();
   await korean(app, { code: 'Period', key: '.', ctrlKey: true });
   await expect(box(app)).toContainText('prefix detected');
   await korean(app, { code: 'KeyC', key: 'ㅊ' });
@@ -244,8 +244,8 @@ test('keys_second_binding_or: or on one row, + adds, Remove deletes one slot, re
   await keysPage(app);
   const r = row(app, 'session.new');
   await expect(r.locator('td').nth(1)).toHaveText(/^⌘T\s*or\s*◆\s*c$/);
-  await expect(r.getByRole('button', { name: 'Reset Create a new session…' })).toHaveCount(0);
-  await r.getByRole('button', { name: 'Add a second shortcut to Create a new session…' }).click();
+  await expect(r.getByRole('button', { name: 'Reset New session…' })).toHaveCount(0);
+  await r.getByRole('button', { name: 'Add a second shortcut to New session…' }).click();
   await app.keyboard.press('Meta+KeyU');
   await app.keyboard.press('Enter');
   await expect.poll(() => stored(app)).toMatchObject({ 'session.new': ['Meta+KeyT', 'prefix KeyC', 'Meta+KeyU'] });
@@ -258,9 +258,9 @@ test('keys_second_binding_or: or on one row, + adds, Remove deletes one slot, re
   await r.getByRole('button', { name: 'Remove' }).click();
   await expect.poll(() => stored(app)).toMatchObject({ 'session.new': ['prefix KeyC'] });
   // Reset restores every default and goes away.
-  await r.getByRole('button', { name: 'Reset Create a new session…' }).click();
+  await r.getByRole('button', { name: 'Reset New session…' }).click();
   await expect(r.locator('td').nth(1)).toHaveText(/^⌘T\s*or\s*◆\s*c$/);
-  await expect(r.getByRole('button', { name: 'Reset Create a new session…' })).toHaveCount(0);
+  await expect(r.getByRole('button', { name: 'Reset New session…' })).toHaveCount(0);
   expect(await stored(app)).not.toHaveProperty('session.new');
   // The prefix row names its default after a change.
   const p = row(app, 'prefix');

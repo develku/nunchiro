@@ -214,3 +214,39 @@
 .settings[role='region'] .ext-remove p {
   margin: 0 0 var(--sp-8);
 }
+
+/* Ticket 1123 T10 (mockup first-use-1123): one command field with Add beside it, the name it gives on the line below,
+   and after an add the line that offers the open session's restart. */
+.settings[role='region'] .srow.ext-add {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-6);
+}
+.settings[role='region'] .srow.ext-add .ext-paste {
+  display: flex;
+  gap: var(--sp-8);
+}
+.settings[role='region'] .srow.ext-add .ext-name {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.settings[role='region'] .srow.ext-add .ext-name input {
+  flex: 0 1 14em;
+}
+.settings[role='region'] .srow.ext-added {
+  display: block;
+}
+.settings[role='region'] .srow.ext-added .ok-line {
+  margin: 0 0 var(--sp-6);
+  color: var(--ok-text);
+}
+.settings[role='region'] .srow.ext-added .ob-acts {
+  align-items: center;
+}
+.settings[role='region'] .ext-keeps {
+  font-size: var(--fs-12);
+  color: var(--muted);
+}

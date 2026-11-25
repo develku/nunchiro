@@ -8,7 +8,6 @@ import { plain } from '../chat/pending';
 import { whoOf, type Answer } from '../queue/answer';
 import { asks, loopLine, loopWords, waitingCount } from '../tree/decisions';
 import { tEn, type OnAnswer, type T } from '../tree/DecisionLine';
-import { askNew } from '../NewSession';
 import { age, basename } from '../tree';
 import { withResumed, type Decision, type Session } from '../types';
 import './decisions.css';
@@ -19,6 +18,7 @@ import { RoleCard } from '../lead/RoleCard';
 import { GoalCard } from '../lead/GoalCard';
 import { OutboxCard } from '../lead/OutboxCard';
 import { ScheduleCard } from '../schedule/ScheduleCard';
+import { CapCard } from '../lead/CapCard';
 
 /** A jump from a decision row: the session to show first, and a number that changes with each jump. */
 export interface Ask {
@@ -241,16 +241,12 @@ export function DecisionsWidget({ sessions, onAnswer, ask, onBack, onFocused, on
   const schedules = owner.filter((d) => d.owner?.type === 'schedule'); // ticket 993
   const outbox = owner.filter((d) => d.owner?.type === 'outward'); // ticket 1002 lane 2
   const loops = owner.filter((d) => d.owner?.type === 'loop'); // ticket 1003
+  const caps = owner.filter((d) => d.owner?.type === 'cap' || d.owner?.type === 'session_close'); // ticket 1099 panel 4
   const count = waitingCount(sessions, owner);
   return (
     <div ref={root} className="dw" data-widget-body="decisions">
       {count === 0 ? (
-        <p className="dw-empty">
-          {t('decisions.none')}{' '}
-          <button type="button" className="btn" onClick={() => askNew()}>
-            {t('empty.startSession')}
-          </button>
-        </p>
+        <p className="dw-empty">{t('decisions.none')}</p>
       ) : (
         <>
           <p className="dw-count">{t('decisions.waiting', { count })}</p>
@@ -271,6 +267,9 @@ export function DecisionsWidget({ sessions, onAnswer, ask, onBack, onFocused, on
           ))}
           {schedules.map((d) => (
             <ScheduleCard key={d.id} d={d} sessions={sessions} core={core} onAnswer={onAnswer} t={t} />
+          ))}
+          {caps.map((d) => (
+            <CapCard key={d.id} d={d} sessions={sessions} onAnswer={onAnswer} t={t} />
           ))}
           {resets.map((d) => (
             <ResetCard key={d.id} d={d} sessions={sessions} onAnswer={onAnswer} t={t} />

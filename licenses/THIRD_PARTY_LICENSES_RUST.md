@@ -38,7 +38,7 @@ MPL-2.0 crates (cssparser, cssparser-macros, dtoa-short, selectors, option-ext) 
 - cfg-if 1.0.5 (MIT OR Apache-2.0) <https://github.com/rust-lang/cfg-if>
 - chacha20 0.10.2 (MIT OR Apache-2.0) <https://github.com/RustCrypto/stream-ciphers>
 - const-oid 0.10.2 (Apache-2.0 OR MIT) <https://github.com/RustCrypto/formats>
-- cookie 0.18.2 (MIT OR Apache-2.0) <https://github.com/SergioBenitez/cookie-rs>
+- cookie 0.18.3 (MIT OR Apache-2.0) <https://github.com/SergioBenitez/cookie-rs>
 - core-foundation 0.10.1 (MIT OR Apache-2.0) <https://github.com/servo/core-foundation-rs>
 - core-foundation-sys 0.8.7 (MIT OR Apache-2.0) <https://github.com/servo/core-foundation-rs>
 - core-graphics 0.25.0 (MIT OR Apache-2.0) <https://github.com/servo/core-foundation-rs>
@@ -89,7 +89,7 @@ MPL-2.0 crates (cssparser, cssparser-macros, dtoa-short, selectors, option-ext) 
 - foreign-types 0.5.0 (MIT/Apache-2.0) <https://github.com/sfackler/foreign-types>
 - foreign-types-macros 0.2.4 (MIT/Apache-2.0) <https://github.com/sfackler/foreign-types>
 - foreign-types-shared 0.3.1 (MIT/Apache-2.0) <https://github.com/sfackler/foreign-types>
-- form_urlencoded 1.2.2 (MIT OR Apache-2.0) <https://github.com/servo/rust-url>
+- form_urlencoded 1.2.3 (MIT OR Apache-2.0) <https://github.com/servo/rust-url>
 - futures-channel 0.3.34 (MIT OR Apache-2.0) <https://github.com/rust-lang/futures-rs>
 - futures-core 0.3.34 (MIT OR Apache-2.0) <https://github.com/rust-lang/futures-rs>
 - futures-macro 0.3.34 (MIT OR Apache-2.0) <https://github.com/rust-lang/futures-rs>
@@ -198,7 +198,7 @@ MPL-2.0 crates (cssparser, cssparser-macros, dtoa-short, selectors, option-ext) 
 - rfd 0.17.2 (MIT) <https://github.com/PolyMeilex/rfd>
 - ring 0.17.14 (Apache-2.0 AND ISC) <https://github.com/briansmith/ring>
 - rustc-hash 2.1.3 (Apache-2.0 OR MIT) <https://github.com/rust-lang/rustc-hash>
-- rustix 1.1.5 (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) <https://github.com/bytecodealliance/rustix>
+- rustix 1.1.6 (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) <https://github.com/bytecodealliance/rustix>
 - rustls 0.23.46 (Apache-2.0 OR ISC OR MIT) <https://github.com/rustls/rustls>
 - rustls-pki-types 1.15.1 (MIT OR Apache-2.0) <https://github.com/rustls/pki-types>
 - rustls-platform-verifier 0.7.1 (MIT OR Apache-2.0) <https://github.com/rustls/rustls-platform-verifier>
@@ -287,7 +287,7 @@ MPL-2.0 crates (cssparser, cssparser-macros, dtoa-short, selectors, option-ext) 
 - typenum 1.20.1 (MIT OR Apache-2.0) <https://github.com/paholg/typenum>
 - unicode-ident 1.0.27 ((MIT OR Apache-2.0) AND Unicode-3.0) <https://github.com/dtolnay/unicode-ident>
 - untrusted 0.9.0 (ISC) <https://github.com/briansmith/untrusted>
-- url 2.5.8 (MIT OR Apache-2.0) <https://github.com/servo/rust-url>
+- url 2.5.9 (MIT OR Apache-2.0) <https://github.com/servo/rust-url>
 - urlpattern 0.6.0 (MIT) <https://github.com/denoland/rust-urlpattern>
 - utf8_iter 1.0.4 (Apache-2.0 OR MIT) <https://github.com/hsivonen/utf8_iter>
 - uuid 1.29.0 (Apache-2.0 OR MIT) <https://github.com/uuid-rs/uuid>
@@ -548,7 +548,7 @@ limitations under the License.
 
 ### Text 3: LICENSE-MIT
 
-Used by: adler2 2.0.1, anyhow 1.0.104, atomic-waker 1.1.2, camino 1.2.6, cargo-platform 0.1.9, cargo_metadata 0.19.2, displaydoc 0.2.7, dtoa 1.0.11, dyn-clone 1.0.20, erased-serde 0.4.10, fastrand 2.5.0, itoa 1.0.18, once_cell 1.21.4, pin-project-lite 0.2.17, proc-macro2 1.0.107, quote 1.0.47, rustc-hash 2.1.3, rustix 1.1.5, semver 1.0.28, serde 1.0.229, serde-untagged 0.1.9, serde_core 1.0.229, serde_derive 1.0.229, serde_derive_internals 0.29.1, serde_json 1.0.154, serde_repr 0.1.21, servo_arc 0.4.3, syn 2.0.119, syn 3.0.9, thiserror 1.0.69, thiserror 2.0.21, thiserror-impl 1.0.69, thiserror-impl 2.0.21, typeid 1.0.3, unicode-ident 1.0.27, zmij 1.0.23
+Used by: adler2 2.0.1, anyhow 1.0.104, atomic-waker 1.1.2, camino 1.2.6, cargo-platform 0.1.9, cargo_metadata 0.19.2, displaydoc 0.2.7, dtoa 1.0.11, dyn-clone 1.0.20, erased-serde 0.4.10, fastrand 2.5.0, itoa 1.0.18, once_cell 1.21.4, pin-project-lite 0.2.17, proc-macro2 1.0.107, quote 1.0.47, rustc-hash 2.1.3, rustix 1.1.6, semver 1.0.28, serde 1.0.229, serde-untagged 0.1.9, serde_core 1.0.229, serde_derive 1.0.229, serde_derive_internals 0.29.1, serde_json 1.0.154, serde_repr 0.1.21, servo_arc 0.4.3, syn 2.0.119, syn 3.0.9, thiserror 1.0.69, thiserror 2.0.21, thiserror-impl 1.0.69, thiserror-impl 2.0.21, typeid 1.0.3, unicode-ident 1.0.27, zmij 1.0.23
 
 ```text
 Permission is hereby granted, free of charge, to any
@@ -849,7 +849,7 @@ END OF TERMS AND CONDITIONS
 
 ### Text 9: LICENSE-APACHE
 
-Used by: atomic-waker 1.1.2, base64 0.21.7, base64 0.23.1, bitflags 2.13.2, bstr 1.13.1, camino 1.2.6, cfg-if 1.0.5, core-foundation 0.10.1, core-foundation-sys 0.8.7, core-graphics 0.25.0, core-graphics-types 0.2.0, crossbeam-channel 0.5.17, crossbeam-deque 0.8.8, crossbeam-epoch 0.9.21, crossbeam-utils 0.8.23, displaydoc 0.2.7, equivalent 1.0.3, errno 0.3.14, fastrand 2.5.0, filetime 0.2.29, flate2 1.1.10, fnv 1.0.7, form_urlencoded 1.2.2, glob 0.3.4, hashbrown 0.12.3, hashbrown 0.17.1, heck 0.5.0, html5ever 0.39.0, httparse 1.10.1, hyper-rustls 0.27.10, idna 1.1.0, idna_adapter 1.2.2, indexmap 1.9.3, indexmap 2.14.2, keyboard-types 0.8.3, lock_api 0.4.14, log 0.4.34, markup5ever 0.39.0, mime 0.3.17, muda 0.20.0, once_cell 1.21.4, parking_lot 0.12.5, parking_lot_core 0.9.12, percent-encoding 2.3.2, png 0.18.1, regex 1.13.1, regex-automata 0.4.18, regex-syntax 0.8.11, rustix 1.1.5, rustls 0.23.46, scopeguard 1.2.0, security-framework 3.7.0, security-framework-sys 2.17.0, serde_with 3.24.0, serde_with_macros 3.24.0, servo_arc 0.4.3, smallvec 1.16.4, socket2 0.6.5, stable_deref_trait 1.2.1, string_cache 0.9.0, tar 0.4.46, tempfile 3.27.0, tendril 0.5.1, tray-icon 0.25.1, tungstenite 0.30.0, url 2.5.8, uuid 1.29.0, web_atoms 0.2.6, window-vibrancy 0.8.1, wry 0.57.1, xattr 1.6.1
+Used by: atomic-waker 1.1.2, base64 0.21.7, base64 0.23.1, bitflags 2.13.2, bstr 1.13.1, camino 1.2.6, cfg-if 1.0.5, core-foundation 0.10.1, core-foundation-sys 0.8.7, core-graphics 0.25.0, core-graphics-types 0.2.0, crossbeam-channel 0.5.17, crossbeam-deque 0.8.8, crossbeam-epoch 0.9.21, crossbeam-utils 0.8.23, displaydoc 0.2.7, equivalent 1.0.3, errno 0.3.14, fastrand 2.5.0, filetime 0.2.29, flate2 1.1.10, fnv 1.0.7, form_urlencoded 1.2.3, glob 0.3.4, hashbrown 0.12.3, hashbrown 0.17.1, heck 0.5.0, html5ever 0.39.0, httparse 1.10.1, hyper-rustls 0.27.10, idna 1.1.0, idna_adapter 1.2.2, indexmap 1.9.3, indexmap 2.14.2, keyboard-types 0.8.3, lock_api 0.4.14, log 0.4.34, markup5ever 0.39.0, mime 0.3.17, muda 0.20.0, once_cell 1.21.4, parking_lot 0.12.5, parking_lot_core 0.9.12, percent-encoding 2.3.2, png 0.18.1, regex 1.13.1, regex-automata 0.4.18, regex-syntax 0.8.11, rustix 1.1.6, rustls 0.23.46, scopeguard 1.2.0, security-framework 3.7.0, security-framework-sys 2.17.0, serde_with 3.24.0, serde_with_macros 3.24.0, servo_arc 0.4.3, smallvec 1.16.4, socket2 0.6.5, stable_deref_trait 1.2.1, string_cache 0.9.0, tar 0.4.46, tempfile 3.27.0, tendril 0.5.1, tray-icon 0.25.1, tungstenite 0.30.0, url 2.5.9, uuid 1.29.0, web_atoms 0.2.6, window-vibrancy 0.8.1, wry 0.57.1, xattr 1.6.1
 
 ```text
                               Apache License
@@ -1966,7 +1966,7 @@ DEALINGS IN THE SOFTWARE.
 
 ### Text 28: LICENSE-APACHE
 
-Used by: cookie 0.18.2
+Used by: cookie 0.18.3
 
 ```text
                               Apache License
@@ -2175,7 +2175,7 @@ limitations under the License.
 
 ### Text 29: LICENSE-MIT
 
-Used by: cookie 0.18.2
+Used by: cookie 0.18.3
 
 ```text
 Copyright (c) 2017 Sergio Benitez
@@ -5523,7 +5523,7 @@ SOFTWARE.
 
 ### Text 68: LICENSE-MIT
 
-Used by: form_urlencoded 1.2.2
+Used by: form_urlencoded 1.2.3
 
 ```text
 Copyright (c) 2013-2016 The rust-url developers
@@ -6771,7 +6771,7 @@ SOFTWARE.
 
 ### Text 91: LICENSE-MIT
 
-Used by: idna 1.1.0, percent-encoding 2.3.2, url 2.5.8
+Used by: idna 1.1.0, percent-encoding 2.3.2, url 2.5.9
 
 ```text
 Copyright (c) 2013-2025 The rust-url developers
@@ -10029,7 +10029,7 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### Text 142: COPYRIGHT
 
-Used by: rustix 1.1.5
+Used by: rustix 1.1.6
 
 ```text
 Short version for non-lawyers:
@@ -10065,7 +10065,7 @@ at your option.
 
 ### Text 143: LICENSE-Apache-2.0_WITH_LLVM-exception
 
-Used by: rustix 1.1.5
+Used by: rustix 1.1.6
 
 ```text
                                  Apache License

@@ -119,16 +119,18 @@ test('plus_popover_keyboard: arrows move, Enter picks, Esc closes and gives the 
   expect(await active()).toBe(first);
   await app.keyboard.press('ArrowUp'); // wraps to the last row
   await expect(row(app, 'Agent settings…')).toHaveAttribute('aria-selected', 'true');
-  // The shortcut comes from the keymap: ⌘, is `settings.open`.
-  await expect(row(app, 'Agent settings…').locator('.kbd')).toHaveText('⌘,');
+  // 1500fca28 (ticket 1099 C): Agent settings opens Settings > Providers, not what ⌘, (`settings.open`) opens, so it shows
+  // where it goes and no key.
+  await expect(row(app, 'Agent settings…').locator('.kbd')).toHaveCount(0);
+  await expect(row(app, 'Agent settings…')).toContainText('Settings > Providers');
   // Enter picks the selected row: type to narrow to Claude, then Enter starts it.
   await search(app).fill('claude');
   await app.keyboard.press('Enter');
   await expect.poll(() => snap(core).filter((s) => s.kind === 'claude').map((s) => s.project)).toEqual([alpha]);
   await expect(pop(app)).toHaveCount(0);
-  // The new session's terminal takes the focus a moment after it starts (36992b70d); under load that came after "+" opened
-  // the popover again, and the Esc below went to the terminal. Wait for it first.
-  await expect(app.getByRole('textbox', { name: 'Terminal: New Claude session (claude)' })).toBeFocused();
+  // A new session's terminal took the focus a moment after it started (36992b70d), so this waited for it. A Claude session
+  // now opens in its chat view, which leaves the focus where it was (1122: seen on "+"); wait for its tab instead.
+  await expect(app.getByRole('tab', { name: /New Claude session/ })).toHaveAttribute('aria-selected', 'true');
   // Esc closes and focus returns to where it was ("+": WebKit does not focus a button on a click, so focus it first).
   await plus(app).focus();
   await plus(app).click();
@@ -209,7 +211,7 @@ const calls = (page: Page) => page.evaluate(() => (window as unknown as { __call
 test('popover_rows_show_keys: New terminal, New browser tab, Claude and Codex show their keys; the key does the row\'s job and closes the popover', async ({ app, core }) => {
   const alpha = await open(app, core);
   await plus(app).click();
-  for (const [name, key] of [['New terminal', '⌃~'], ['New browser tab', '⇧⌘B'], ['Claude', '⇧⌘C'], ['Codex', '⇧⌘O'], ['Agent settings…', '⌘,']] as const)
+  for (const [name, key] of [['New terminal', '⌃~'], ['New browser tab', '⇧⌘B'], ['Claude', '⇧⌘C'], ['Codex', '⇧⌘O']] as const) // Agent settings has no key (1099 C)
     await expect(row(app, name).locator('.kbd')).toHaveText(key);
   await app.keyboard.press('Shift+Meta+KeyC');
   await expect(pop(app)).toHaveCount(0);

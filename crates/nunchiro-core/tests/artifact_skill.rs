@@ -13,7 +13,7 @@ use std::{
     fs,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
+    process::{Child, Stdio},
     thread,
     time::{Duration, Instant},
 };
@@ -354,7 +354,19 @@ fn artifact_skill_permission_rule_is_scoped_to_the_session_folder() {
 fn extensions_list_hooks_are_the_claude_launch_hooks() {
     let core = Core::new("hookview", None, None);
     let (_, argv, _) = core.start(AgentKind::Claude, None, &[]);
-    let launched = claude_settings(&argv)["hooks"].clone();
+    let mut launched = claude_settings(&argv)["hooks"].clone();
+    // Ticket 1130 S1: the outward hook is the session's own guard, not one of the listed hooks; it comes last.
+    let outward = launched["PreToolUse"]
+        .as_array_mut()
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert!(
+        outward["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .ends_with(" hook outward")
+    );
     let Reply::Extensions { hooks, .. } = call(&core.home, Request::ExtensionsList).unwrap() else {
         panic!("wrong reply")
     };
@@ -389,9 +401,22 @@ fn artifact_skill_hook_injection_off_keeps_folder_and_rule() {
         [folder.display().to_string()]
     );
     assert_eq!(env, folder.display().to_string());
+    // Ticket 1130 S1: the outward hook stays with Nunchiro's hooks off, and no other layer may turn it off.
+    let mut settings = claude_settings(&argv);
+    let outward = settings["hooks"]["PreToolUse"]
+        .as_array_mut()
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert!(
+        outward["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .ends_with(" hook outward")
+    );
     assert_eq!(
-        claude_settings(&argv),
-        json!({"permissions": permissions(&folder)})
+        settings,
+        json!({"permissions": permissions(&folder), "disableAllHooks": false, "hooks": {"PreToolUse": []}})
     );
     let (s, argv, _) = core.start(AgentKind::Codex, None, &[]);
     assert_eq!(
@@ -765,16 +790,17 @@ fn no_never_matches_warning_at_start() {
 }
 
 /// Ticket 287, real-agent check (needs a signed-in `claude` on PATH; one cheap Haiku call):
-/// `cargo test -p nunchiro-core --test artifact_skill deny_rules_enforced_by_current_claude -- --ignored --nocapture`.
+/// `cargo test -p nunchiro-core --features live --test artifact_skill deny_rules_enforced_by_current_claude -- --nocapture`.
 /// The session's own permission block goes to the installed Claude Code: a Write to the folder's `CLAUDE.md`,
 /// `claude.md` (another letter case) and `sub/CLAUDE.md` is refused, an ordinary file is written, and the debug log has
 /// no "not matched by file permission checks" line. The `.claude/x` refusal is asserted too but proves nothing about
 /// the session's rules: Claude Code 2.1.318 guards `.claude/` by itself (control run with no deny rule, ticket 287
 /// review S1); only the three rule-only paths attribute the refusal to the rules. Records `claude --version` (what
 /// this does not prove: other versions, NotebookEdit).
+#[cfg(feature = "live")]
 #[test]
-#[ignore = "real claude, signed in"]
 fn deny_rules_enforced_by_current_claude() {
+    use std::process::Command;
     let core = Core::new("real", None, None);
     let (s, argv, _) = core.start(AgentKind::Claude, None, &[]);
     let folder = core.folder(&s.id);
@@ -857,8 +883,9 @@ fn deny_rules_enforced_by_current_claude() {
 }
 
 /// Ticket 276 round 3 (code SHOULD 3): Claude's `--add-dir` and `--mcp-config` are variadic (`<directories...>`,
-/// `<configs...>`): in the split form they take every following word up to the next flag. With no `--settings` (no
-/// hooks, no allow rule) and no other extension flag, the user's prompt must still be the prompt.
+/// `<configs...>`): in the split form they take every following word up to the next flag. With no hooks, no allow rule
+/// and no other extension flag, the user's prompt must still be the prompt. Ticket 1130 S1: `--settings` (one word) now
+/// always carries the outward hook.
 #[test]
 fn variadic_launch_flags_never_swallow_the_prompt() {
     // `{` in the home path: `folder_permissions` gives no rule for a glob character, so no `--settings` is written.
@@ -884,10 +911,6 @@ fn variadic_launch_flags_never_swallow_the_prompt() {
         out
     };
     let (_, argv, _) = core.start(AgentKind::Claude, None, &["fix the bug"]);
-    assert!(
-        !argv.iter().any(|a| a.starts_with("--settings")),
-        "{argv:?}"
-    );
     assert!(argv.iter().any(|a| a.starts_with("--add-dir")), "{argv:?}");
     assert_eq!(argv.last().unwrap(), "fix the bug");
     assert!(swallowed(&argv).is_empty(), "{argv:?}");

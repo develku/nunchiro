@@ -4,12 +4,14 @@
 import { createContext, memo, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'; // v1b-12: useLayoutEffect, useRef, useState, MouseEvent
 import Markdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { remarkCjkStrong } from './cjk-strong'; // ticket 1065
 import remarkMath from 'remark-math'; // ticket 258: math in chat, behind Settings > Appearance > Math in chat
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css'; // bundled with its fonts: no CDN, and nothing new in font-src
 import { MATH } from '../features/chat-type';
 import { useFeatureSetting } from '../settings/useFeatureSetting';
-import { ArtifactCard, FrameCard, PROBLEM_TEXT } from '../artifacts/Card'; // v1b-06, V2-10b: FrameCard, PROBLEM_TEXT
+import { ArtifactCard, FrameCard, PROBLEM_TEXT, targetOf } from '../artifacts/Card'; // v1b-06, V2-10b: FrameCard, PROBLEM_TEXT
+import { select } from '../artifacts/store'; // ticket 1086
 import { Tr } from '../i18n';
 import { plainError, rawError } from '../errors';
 import { copyText } from '../terminal/clipboard';
@@ -26,6 +28,7 @@ import { fileOf, mdSource, nameOf, PathChip, savedPaths, Thumbnail } from '../im
 
 export const CAP = 200;
 import { Icon } from '../icons/Icon';
+import { tilde } from '../settings/shell/Row';
 import { ClaudeLinkCards } from './ClaudeLink'; // needs 117
 import { ChromeIcon } from '../chrome/icons';
 import { handOff, rewind, userView } from './conversation';
@@ -33,6 +36,9 @@ import { useSteered } from './queued'; // Q7 point 16
 import { useAppControl } from './commandRecord'; // ticket 1019
 import { agentState, status } from '../types';
 import { TurnFiles } from './TurnFiles'; // ticket 222
+
+/** Ticket 1072: what the lead's "View in Team" line calls (CentreView's openTeam); null where no Team view exists (a peek). */
+export const TeamOpen = createContext<(() => void) | null>(null);
 
 /** Expanded rows and "show all" outputs, held above the virtual list so scrolling a row away keeps its state. */
 export const Open = createContext<{ has: (k: string) => boolean; toggle: (k: string) => void }>({ has: () => false, toggle: () => {} });
@@ -226,8 +232,8 @@ const components: Components = {
 // escapes raw HTML, so math adds no live link and no markup of the agent's own. `maxSize` caps user sizes (\rule, \hspace)
 // at 10em; chat.css clips what is still pushed out.
 const KATEX: NonNullable<Options['rehypePlugins']>[number] = [rehypeKatex, { trust: false, strict: 'ignore', throwOnError: false, maxSize: 10 }];
-const WITH_MATH = { remark: [remarkGfm, remarkMath], rehype: [KATEX] };
-const PLAIN = { remark: [remarkGfm], rehype: [] };
+const WITH_MATH = { remark: [remarkGfm, remarkCjkStrong, remarkMath], rehype: [KATEX] };
+const PLAIN = { remark: [remarkGfm, remarkCjkStrong], rehype: [] };
 
 export function Md({ text }: { text: string }) {
   const plugins = useFeatureSetting(MATH)[0] ? WITH_MATH : PLAIN;
@@ -566,12 +572,46 @@ function Summary({ row, session }: { row: Extract<Row, { kind: 'summary' }>; ses
   );
 }
 
+/** A changed file's path: inside the session folder it is relative; outside it is drawn with the home folder as "~", on one
+ *  line: the folder part gives way with an ellipsis, the file name stays whole, the full path is the title (ticket 1057).
+ */
+function FilePath({ path, cwd }: { path: string; cwd?: string }) {
+  const rel = cwd ? sessionPath(path, cwd) : null;
+  if (rel) return <span className="p mono">{rel}</span>;
+  const shown = tilde(path);
+  const cut = shown.lastIndexOf('/') + 1;
+  return (
+    <span className="p mono out" title={path}>
+      <span className="dir">{shown.slice(0, cut)}</span>
+      <span className="nm">{shown.slice(cut)}</span>
+    </span>
+  );
+}
+
 /** CHROME: the turn's finished edits as one card; View opens the Diff widget. */
 function Changes({ row }: { row: Extract<Row, { kind: 'changes' }> }) {
   const { session } = useContext(Pending);
   const t = useContext(Tr);
+  const open = useContext(Open);
+  const id = `chg:${row.key}`;
+  const all = open.has(id);
+  // Ticket 1057: three files, then one button; a turn of four shows all (a "1 more" button would save no room).
+  const files = all || row.files.length <= 4 ? row.files : row.files.slice(0, 3);
+  const one = row.files.length === 1;
+  const nums = (f: { added: number; removed: number }) => (
+    <>
+      <span className="add">+{f.added}</span> <span className="del">−{f.removed}</span>
+    </>
+  );
+  const view = (
+    <button className="btn" onClick={() => (row.turn ? openDiff(undefined, 'turn', row.turn) : openDiff())}>
+      {t('chat.row.viewInDiff')}
+    </button>
+  );
   return (
-    <div className="chcard">
+    // Ticket 1074: one file says all its head would, so its row carries the button and the card has no head.
+    <div className={one ? 'chcard one' : 'chcard'} role={one ? 'group' : undefined} aria-label={one ? t('cards.oneFile', { added: row.added, removed: row.removed }) : undefined}>
+      {!one && (
       <div className="h">
         <b>
           {t(row.files.length === 1 ? 'chat.row.changed.one' : 'chat.row.changed.other', { n: row.files.length })}
@@ -581,21 +621,35 @@ function Changes({ row }: { row: Extract<Row, { kind: 'changes' }> }) {
         </span>
         {/* B18 (ticket 991): the count names its scope, as the header pill (whole session) and Diff do. */}
         <span className="dim scope">{t('chat.row.thisTurn')}</span>
-        <button className="btn" onClick={() => (row.turn ? openDiff(undefined, 'turn', row.turn) : openDiff())}>
-          {t('chat.row.viewInDiff')}
-        </button>
+        {view}
       </div>
+      )}
       <ul className="rows">
-        {row.files.map((f) => (
-          <li key={f.path}>
+        {files.map((f) => (
+          <li key={f.path} className={f.artifact && session ? 'art' : undefined}>
             {/* needs 171: the row opens Diff at that file, as the Artifacts widget's file rows do. */}
             <button type="button" className="frow" data-path={f.path} onClick={() => openDiff((session && sessionPath(f.path, session.cwd)) || undefined)}>
-              <span className="p mono">{(session && sessionPath(f.path, session.cwd)) || f.path}</span>
-              <span className="add">+{f.added}</span> <span className="del">−{f.removed}</span>
+              <FilePath path={f.path} cwd={session?.cwd} />
+              {!(f.artifact && session) && nums(f)}
             </button>
+            {/* Ticket 1086: the file's document card is this Open (Preview), its own tab stop between the path and the numbers. */}
+            {f.artifact && session && (
+              <>
+                <button type="button" className="af-chip open" onClick={() => select(session.id, targetOf(session.id, f.artifact!))}>
+                  {t('mw.open')}
+                </button>
+                <span className="n">{nums(f)}</span>
+              </>
+            )}
           </li>
         ))}
       </ul>
+      {one && view}
+      {row.files.length > 4 && (
+        <button type="button" className="more" aria-expanded={all} onClick={() => open.toggle(id)}>
+          {all ? t('cards.fewer') : t('cards.moreFiles', { n: row.files.length - 3 })}
+        </button>
+      )}
     </div>
   );
 }
@@ -661,7 +715,7 @@ export const RowView = memo(function RowView(p: { row: Row; session: string /* v
   // Ticket 1019: a command the app typed (the picker's Ultracode toggle) is no bubble, as a worker's wake line (ticket 990).
   const control = useAppControl(p.session, p.row.kind === 'user' ? p.row.key : null);
   return (
-    <div data-menu="chat" data-menu-session={p.session} tabIndex={-1} className={message ? `message-row${p.row.kind === 'user' ? (control || userView(p.row.text).wake ? ' message-wake' : ' message-user') : ''}` : undefined}>
+    <div data-menu="chat" data-menu-session={p.session} tabIndex={-1} className={message ? `message-row${p.row.kind === 'user' ? (control ? ' message-wake' : ' message-user') : ''}` : undefined}>
       <RowBody row={p.row} session={p.session} control={control} />
       {p.messageId && message && (p.row.kind === 'user' || p.row.kind === 'assistant' || p.row.kind === 'final') && (
         <MessageActions session={p.session} through={p.messageId} text={p.row.text}>
@@ -671,6 +725,24 @@ export const RowView = memo(function RowView(p: { row: Row; session: string /* v
     </div>
   );
 });
+
+/** Ticket 1072: a run of worker wake lines (the Team view has what they say) is one quiet centred line. Ticket 1085: a
+ *  run of only the core's team lines (heartbeat, nudge) says "Team update". */
+function WakeLine({ n, team }: { n: number; team: number }) {
+  const t = useContext(Tr);
+  const open = useContext(TeamOpen);
+  return (
+    <div className="msg wake" data-wakes={n}>
+      {team === n ? t('cards.teamUpdate') : t(n === 1 ? 'lead.wakes.one' : 'lead.wakes.other', { n })}
+      {open && (
+        <>
+          {' · '}
+          <button className="wake-link" onClick={open}>{t('lead.wakes.view')}</button>
+        </>
+      )}
+    </div>
+  );
+}
 
 /** Q7 point 16: a message that went in as a steer (it stopped the running turn) says so on its bubble. */
 function SteerTag({ session, text }: { session: string; text: string }) {
@@ -683,8 +755,6 @@ function RowBody({ row, session, control = false }: { row: Row; session: string;
   switch (row.kind) {
     case 'user': {
       const v = userView(row.text); // B11: what the user typed, a handoff folded
-      // Ticket 990: a worker's wake line is the core speaking to a lead, one quiet line, not the person's bubble.
-      if (v.wake) return <div className="msg wake">{plain(v.wake)}</div>;
       // Ticket 1019: a command the app typed (the picker's Ultracode toggle) is a quiet line too.
       if (control) return <div className="msg wake" data-control="">{plain(v.text)}</div>;
       return (
@@ -706,6 +776,8 @@ function RowBody({ row, session, control = false }: { row: Row; session: string;
       );
     }
     case 'assistant':
+      // Ticket 1075: an update note is plain assistant text in the muted colour, in every view.
+      return row.note ? <div className="unote"><Md text={row.text} /></div> : <Md text={row.text} />;
     case 'final':
       return <Md text={row.text} />;
     case 'image':
@@ -751,10 +823,24 @@ function RowBody({ row, session, control = false }: { row: Row; session: string;
           <ClaudeLinkCards text={outputText(row.output)} />
         </Disclose>
       );
+    case 'wakes':
+      return <WakeLine n={row.n} team={row.team} />;
     case 'interrupted':
       return <div className="turnx dim">{t('chat.row.interrupted')}</div>;
+    case 'shell': // ticket 1087
+      return (
+        <div className="shellrow">
+          {row.command && (
+            <div className="shc">
+              <span className="shm" title={t('composer.shell')} aria-label={t('composer.shell')}>!</span>
+              {row.command}
+            </div>
+          )}
+          {row.output && <Capped id={row.key} text={plain(row.output)} />}
+        </div>
+      );
     case 'artifact': // v1b-06
-      return <ArtifactCard session={session} data={row.data} />;
+      return <ArtifactCard session={session} data={row.data} newest={!row.older} />;
     case 'summary':
       return <Summary row={row} session={session} />;
     case 'changes':

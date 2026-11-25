@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { agentsZone, expect, openWindow, REPO, test } from './fixtures';
+import { stripOnTop, expect, openWindow, REPO, test } from './fixtures';
 import { icon } from './d5b';
 
 type Row = { id: string; name: string; live: number };
@@ -38,7 +38,7 @@ const rows = (id: string, live = 0): Row[] => [
   { id, name: 'Work', live },
 ];
 
-test.beforeEach(({ core }) => agentsZone(core));
+test.beforeEach(({ core }) => stripOnTop(core));
 
 const openPage = async (app: Page) => {
   await app.getByRole('navigation', { name: 'Left bar' }).getByRole('button', { name: 'Settings' }).click();

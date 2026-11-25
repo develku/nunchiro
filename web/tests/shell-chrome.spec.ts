@@ -200,8 +200,9 @@ test('sidebar_width_saved_per_layout: the width is kept with the layout; a saved
   await expect.poll(() => wide(left(app))).toBe(w0 + 70);
 });
 
-// Ticket 1041 (owner 2026-11-22): icons only at one width; ticket 283's label steps and bar-width drag are gone.
-test('rail_icons_only_fixed_width: both bars are 48 px of 32 px icons with no label and no width handle; an old stored width is ignored', async ({ app }) => {
+// Ticket 1041 (owner 2026-11-22): icons only at 48 px by default. Ticket 1052: the width handle is back (rail-width-1052.spec.ts);
+// a stored width under the default (ticket 283 allowed 32) is ignored.
+test('rail_icons_only_default_width: both bars are 48 px of 32 px icons with no label; a stored width under the default is ignored', async ({ app }) => {
   await app.addInitScript(() => {
     if (sessionStorage.getItem('seeded')) return;
     sessionStorage.setItem('seeded', '1');
@@ -215,7 +216,7 @@ test('rail_icons_only_fixed_width: both bars are 48 px of 32 px icons with no la
   for (const side of ['left', 'right'] as const) {
     expect(Math.round((await bar(app, side).boundingBox())!.width)).toBe(48);
     await expect(bar(app, side).locator('.al')).toHaveCount(0);
-    await expect(bar(app, side).getByRole('separator')).toHaveCount(0);
+    await expect(bar(app, side).getByRole('separator', { name: 'Resize the icon bars' })).toHaveCount(1);
     await expect(bar(app, side)).not.toHaveAttribute('data-compact');
     const b = (await bar(app, side).locator('button.ai').first().boundingBox())!;
     expect([Math.round(b.width), Math.round(b.height)]).toEqual([32, 32]);

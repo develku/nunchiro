@@ -1,22 +1,23 @@
-//! The app updates itself, like a normal app. Two builds do (`build_for`, the one gate behind `start`); any other
-//! (cargo, a debug build, an owner-id build made without the release key) registers no plugin, opens no port and never checks.
+//! The installed app updates itself (ticket 1082, owner 11-23: one channel, the latest build that passed; sessions are
+//! kept). `build_for` is the one gate behind `start`: only this app's own id, run from an installed `Nunchiro.app`,
+//! updates. The isolated test build (the RC, its own id and home) and any build where cargo or tauri left it register
+//! nothing and never check.
 //!
-//! The official app (owner 11-21, `scripts/build-release.sh`): Developer ID signed and notarized, built with the release
-//! update key. It reads `latest.json` of its channel from GitHub Releases of develku/nunchiro, and after that from the
-//! local feed `<core home>/update`, served on loopback as below. The repository is private for now and a private
-//! release asset needs a token; no token is put in an app (Orca and T3 Code both read public release URLs only, and T3
-//! Code tests against a local update server). So GitHub answers 404 and the local feed is the one in use, filled by
-//! `build-release.sh --local`. Once the repository is public GitHub answers first: no new build, nothing to clean.
+//! Every such build reads the update folder the owner set in Settings > About (`<core home>/update-source`) through its
+//! own CLI: `nunchiro update status` finds a new build there, `nunchiro update install` checks it, swaps the bundle and
+//! replaces the core while the holders keep the sessions, and puts the backup back on any failure
+//! (crates/nunchiro/src/update.rs). The app then relaunches.
 //!
-//! The RC build (G2, owner 11-08):
-//!
-//! `scripts/build-rc.sh --publish` leaves `latest.json` and a signed archive in `.scratch/rc/update/`, next to the
-//! running bundle. The updater plugin can only fetch over HTTP, so this process answers those two names on a loopback
-//! port of its own: no daemon, nothing for the owner to start, and it ends with the app. The core was not used because a route
-//! there would also exist in the owner's core.
-//!
-//! Both: all of it runs here in Rust and the page is granted no `updater:*` permission, so a page can never name an
-//! endpoint. A build is downloaded and verified before "Update ready" shows; a tampered one never shows and only logs a line.
+//! The official release (owner 11-21, `scripts/build-release.sh`: Developer ID signed, notarized, with the release update
+//! key) also reads `latest.json` from GitHub Releases of develku/nunchiro, then the local feed `<core home>/update`
+//! served on loopback (the updater plugin fetches only over HTTP). The repository is private for now and a private
+//! release asset needs a token; no token is put in an app (Orca and T3 Code both read public release URLs only). So
+//! GitHub answers 404 and the local feed is the one in use, filled by `build-release.sh --local`. All of it runs here in
+//! Rust and the page is granted no `updater:*` permission, so a page can never name an endpoint. A build is downloaded
+//! and verified (signature, signed version, never older than the stored floor) before it shows; a tampered one never
+//! shows and only logs a line. Ticket 1107: the verified archive then installs through the same CLI transaction as a
+//! folder build (`nunchiro update install --archive`), never through the plugin's own install. Both ways end in the
+//! same relaunch.
 //!
 //! Plugin use follows monocode `src-tauri/src/lib.rs` and `src/app/model/updater.ts` and vibe-kanban
 //! `crates/tauri-app/src/main.rs`; the quiet check, then a restart the user chooses, follows Orca `src/main/updater.ts`.
@@ -25,7 +26,7 @@ use std::{
     fs,
     io::{self, Read, Write},
     net::{Ipv4Addr, TcpListener, TcpStream},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
     thread,
     time::Duration,
@@ -33,33 +34,26 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager, Runtime, Url, async_runtime::Mutex};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
-const RC_IDENTIFIER: &str = "dev.nunchiro.app.rc";
 const MANIFEST: &str = "latest.json";
-const EVERY: Duration = Duration::from_secs(5 * 60);
+const ARCHIVE: &str = "Nunchiro.app.tar.gz";
+const EVERY: Duration = Duration::from_secs(10 * 60);
 /// Where `scripts/build-release.sh --publish` puts the official app's releases.
 const RELEASES: &str = "https://github.com/develku/nunchiro/releases";
+/// Ticket 1082: the update folder, one line in the core home (the CLI reads the same file).
+const SOURCE: &str = "update-source";
+/// Ticket 1107 (plan section 4): the highest version this home has run, in the core home; a feed build older than it is
+/// never offered. An intentional rollback is the owner's own act, outside the updater.
+const FLOOR: &str = "update-floor";
+/// Ticket 1107: the verified feed archive while the CLI installs it, in the core home; removed afterwards.
+const FEED_ARCHIVE: &str = "update-feed.tar.gz";
 
 /// The two builds that update themselves.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Build {
-    Rc,
+    /// A build from main: only the update folder.
+    Local,
+    /// The official release: the update folder, then its signed feed.
     Release,
-}
-
-impl Build {
-    fn bundle(self) -> &'static str {
-        match self {
-            Build::Rc => "Nunchiro RC.app",
-            Build::Release => "Nunchiro.app",
-        }
-    }
-
-    fn archive(self) -> &'static str {
-        match self {
-            Build::Rc => "Nunchiro-RC.app.tar.gz",
-            Build::Release => "Nunchiro.app.tar.gz",
-        }
-    }
 }
 
 /// Set by `start` once updates run; `boot` tells the page, so the page of any other build never shows or calls anything.
@@ -69,43 +63,42 @@ pub fn active() -> bool {
     ACTIVE.load(Ordering::Relaxed)
 }
 
-/// `has_key`: the build carries an update key. Only `build-release.sh` gives the official id one, so the same id built
-/// any other way (cargo, a debug run, the owner build before releases) updates nothing.
+/// `has_key`: the build carries the release update key, which only `build-release.sh` gives. Any other identifier is
+/// the isolated test build (or another copy) and never updates.
 fn build_for(identifier: &str, has_key: bool) -> Option<Build> {
     match identifier {
-        RC_IDENTIFIER => Some(Build::Rc),
         crate::OWNER_IDENTIFIER if has_key => Some(Build::Release),
+        crate::OWNER_IDENTIFIER => Some(Build::Local),
         _ => None,
     }
 }
 
-/// The feed a release follows, by its own version: a prerelease (`0.1.0-pre.<stamp>`) reads the fixed tag `prerelease`,
-/// a release reads GitHub's "latest", which is never a prerelease. A `-` after the `+build` part is not a prerelease.
-fn channel(version: &str) -> &'static str {
-    match version.split('+').next() {
-        Some(v) if v.contains('-') => "download/prerelease",
-        _ => "latest/download",
-    }
-}
-
-/// The feeds a build checks, in order: the plugin takes the first that answers with a manifest.
-fn endpoints(build: Build, version: &str, port: u16) -> Vec<String> {
-    let local = format!("http://127.0.0.1:{port}/{MANIFEST}");
-    match build {
-        Build::Rc => vec![local],
-        Build::Release => vec![format!("{RELEASES}/{}/{MANIFEST}", channel(version)), local],
-    }
+/// The feeds a release checks, in order: the plugin takes the first that answers with a manifest. GitHub's "latest" is
+/// never a prerelease; ticket 1107 removed the prerelease feed (daily builds come from the update folder).
+fn endpoints(port: u16) -> Vec<String> {
+    vec![
+        format!("{RELEASES}/latest/download/{MANIFEST}"),
+        format!("http://127.0.0.1:{port}/{MANIFEST}"),
+    ]
 }
 
 struct Updates {
-    build: Build,
-    port: u16,
     exe: PathBuf,
-    dir: PathBuf,
+    /// This app's own CLI, which reads the update folder; `None` asks only the feed.
+    cli: Option<PathBuf>,
+    /// The official release's signed feed; `None` in a build from main.
+    feed: Option<Feed>,
     /// Held through a check or an install, so the two never overlap.
     ready: Mutex<Option<Ready>>,
     /// The failure last written to core.log: one line per failure, not one per check.
     logged: std::sync::Mutex<Option<String>>,
+}
+
+struct Feed {
+    port: u16,
+    endpoints: Vec<String>,
+    /// The version floor file (`FLOOR`).
+    floor: PathBuf,
 }
 
 /// A build whose signature has passed; these exact bytes are the ones installed.
@@ -114,51 +107,33 @@ struct Ready {
     bytes: Vec<u8>,
 }
 
-/// The folder a running build takes local updates from, which also proves the running bundle may be replaced.
-/// The official app: `<core home>/update`, for a `Nunchiro.app` anywhere but where tauri builds it (`bundle/macos`,
-/// a build and not an install, as `unbundled_owner` has it).
-/// An RC: only `<…>/.scratch/rc/Nunchiro RC.app`, and never anything with an Applications folder in its path, in any
-/// case (macOS volumes ignore case, and `/System/Volumes/Data/Applications` is `/Applications`).
-/// `exe` has its links resolved.
-fn update_dir(build: Build, exe: &Path, home: &Path) -> Result<PathBuf, String> {
-    let bundle = exe.ancestors().nth(3).filter(|b| {
-        b.ends_with(build.bundle()) && exe.parent().is_some_and(|m| m.ends_with("Contents/MacOS"))
-    });
-    if build == Build::Release {
-        return bundle
-            .and_then(Path::parent)
-            .filter(|d| !d.ends_with("bundle/macos"))
-            .map(|_| home.join("update"))
-            .ok_or_else(|| {
-                format!(
-                    "refused: {} is not an installed Nunchiro.app",
-                    exe.display()
-                )
-            });
-    }
-    let applications = exe
-        .components()
-        .any(|c| matches!(c, Component::Normal(n) if n.eq_ignore_ascii_case("applications")));
-    if applications {
-        return Err(format!("refused: {} is under Applications", exe.display()));
-    }
-    let rc = bundle
+/// The local feed folder of an installed `Nunchiro.app` (`<core home>/update`), which also proves the running bundle
+/// may be replaced: anywhere but where tauri builds it (`bundle/macos`, a build and not an install, as
+/// `unbundled_owner` has it). `exe` has its links resolved.
+fn update_dir(exe: &Path, home: &Path) -> Result<PathBuf, String> {
+    exe.ancestors()
+        .nth(3)
+        .filter(|b| {
+            b.ends_with("Nunchiro.app")
+                && exe.parent().is_some_and(|m| m.ends_with("Contents/MacOS"))
+        })
         .and_then(Path::parent)
-        .filter(|rc| rc.ends_with(".scratch/rc"));
-    rc.map(|rc| rc.join("update")).ok_or_else(|| {
-        format!(
-            "refused: {} is not the bundle in .scratch/rc",
-            exe.display()
-        )
-    })
+        .filter(|d| !d.ends_with("bundle/macos"))
+        .map(|_| home.join("update"))
+        .ok_or_else(|| {
+            format!(
+                "refused: {} is not an installed Nunchiro.app",
+                exe.display()
+            )
+        })
 }
 
 /// This executable and its local feed folder, or why this bundle is not one to replace.
-fn located(build: Build) -> Result<(PathBuf, PathBuf), String> {
+fn located() -> Result<(PathBuf, PathBuf), String> {
     let exe = std::env::current_exe()
         .and_then(fs::canonicalize)
         .map_err(|e| format!("cannot resolve this executable: {e}"))?;
-    Ok((update_dir(build, &exe, &crate::home()?)?, exe))
+    Ok((update_dir(&exe, &crate::home()?)?, exe))
 }
 
 /// Everything a self-updating build does and any other build does not; `identifier` is the build's own.
@@ -168,20 +143,39 @@ pub fn start<R: Runtime>(app: &AppHandle<R>, identifier: &str) -> tauri::Result<
     let Some(build) = build_for(identifier, has_key) else {
         return Ok(());
     };
-    let (dir, exe) = match located(build) {
+    let (dir, exe) = match located() {
         Ok(found) => found,
         Err(e) => {
             log_line(&e);
             return Ok(());
         }
     };
-    app.plugin(tauri_plugin_updater::Builder::new().build())?;
-    let port = serve(dir.clone(), build.archive())?;
+    let feed = if build == Build::Release {
+        app.plugin(tauri_plugin_updater::Builder::new().build())?;
+        // `dir` is `<core home>/update`, so this is the floor file in the core home
+        let floor = dir.with_file_name(FLOOR);
+        if let Err(e) = raise_floor(&floor, &app.package_info().version) {
+            log_line(&format!("update floor: {e}"));
+        }
+        let port = serve(dir)?;
+        Some(Feed {
+            port,
+            endpoints: endpoints(port),
+            floor,
+        })
+    } else {
+        None
+    };
+    // Release and folder builds of this app only (`build_for` above); an isolated test build never gets here.
+    if let (Ok(home), Some(user)) = (crate::home(), crate::passwd::passwd_home())
+        && let Err(e) = claim_own(&exe, &home, &crate::update_claims::claims(&user))
+    {
+        log_line(&format!("update claim: {e}"));
+    }
     app.manage(Updates {
-        build,
-        port,
         exe,
-        dir,
+        cli: crate::own_cli(),
+        feed,
         ready: Mutex::new(None),
         logged: std::sync::Mutex::new(None),
     });
@@ -196,7 +190,7 @@ pub fn start<R: Runtime>(app: &AppHandle<R>, identifier: &str) -> tauri::Result<
     Ok(())
 }
 
-/// The version that is ready to install, if any. A failure is logged here and reaches the caller only as an `Err`.
+/// The version or commit that is ready to install, if any. A failure is logged here and reaches the caller only as an `Err`.
 async fn check<R: Runtime>(app: &AppHandle<R>) -> Result<Option<String>, String> {
     let updates = app.state::<Updates>();
     let found = find(app, &updates).await;
@@ -212,26 +206,150 @@ async fn check<R: Runtime>(app: &AppHandle<R>) -> Result<Option<String>, String>
     found
 }
 
+/// How long `update status` may take; it holds the updater lock.
+const STATUS_LIMIT: Duration = Duration::from_secs(30);
+/// Round 6: an outer limit for `update install` too, well past the sum of its own bounded steps (copy and signature
+/// check 300 s each, a busy core 300 s, the new core 120 s, sessions 30 s, a rollback about 60 s); reached only when one
+/// of those broke.
+const INSTALL_LIMIT: Duration = Duration::from_secs(20 * 60);
+
+/// `nunchiro update <what>` from this app's CLI on its core home: its stdout, or its own words for the failure.
+/// `archive`: install the verified feed archive at that path instead of the update folder's build (ticket 1107).
+async fn update_cli(what: &'static str, archive: Option<PathBuf>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let home = crate::home()?;
+        let mut cmd = crate::core_command(Some(&home), |key| std::env::var_os(key));
+        cmd.args(["update", what]);
+        if let Some(archive) = &archive {
+            cmd.arg("--archive").arg(archive);
+        }
+        let limit = if what == "status" {
+            STATUS_LIMIT
+        } else {
+            INSTALL_LIMIT
+        };
+        // The twin of the CLI's subprocess runs: one helper (update_claims.rs), no pipes, group kill at the limit.
+        // status: its one JSON line, no file past 64 KiB (RLIMIT_FSIZE). install: its stderr is the owner's plain
+        // reason; it cannot have a file limit (its ditto writes the bundle) and it is the app's own CLI, not a candidate.
+        let output = if what == "status" {
+            crate::update_claims::Output::KeepBounded
+        } else {
+            crate::update_claims::Output::Keep
+        };
+        let out =
+            crate::update_claims::run_limited(&mut cmd, &home, Some(limit), output, || Ok(()))
+                .map_err(|why| format!("the nunchiro CLI {why}"))?;
+        let text = |b: &[u8]| String::from_utf8_lossy(b).trim().to_string();
+        if out.status.success() {
+            Ok(text(&out.stdout))
+        } else {
+            Err(reason(&text(&out.stderr)).to_string())
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// The CLI's own words for a failure: from its last "nunchiro: " on, so the "waiting for ..." lines it printed before
+/// (ticket 1130 A-D3) are not part of the reason.
+fn reason(stderr: &str) -> &str {
+    stderr
+        .rfind("nunchiro: ")
+        .map_or(stderr, |at| &stderr[at + "nunchiro: ".len()..])
+}
+
+/// Ticket 1130 A-D3: while the CLI waits for a busy core, the window shows how many chats or jobs it waits for. It asks
+/// the core the CLI's question every 2 s until the first 0, when the CLI goes on to the swap.
+/// holder_floor 0: the app does not know the holder floor; the CLI's own count adds old holders, which are rare.
+fn show_waiting<R: Runtime>(app: &AppHandle<R>) -> Waiting {
+    let app = app.clone();
+    poll_waiting(crate::home().ok(), move |count| {
+        let _ = app.emit_to("main", "rc-update-wait", count);
+    })
+}
+
+/// Round 2 (Codex MUST): one progress question's whole reply must be in within `ASK_LIMIT` and `ASK_BYTES`. Aborting
+/// the waiter does not stop a blocking read already running, so this bound is what ends the last read of a finished or
+/// cancelled install.
+const ASK_LIMIT: Duration = Duration::from_secs(2);
+const ASK_BYTES: u64 = 4096;
+
+/// The progress waiter; dropping it (the install done, failed, or its future dropped) stops the questions.
+struct Waiting(tauri::async_runtime::JoinHandle<()>);
+impl Drop for Waiting {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+fn poll_waiting(home: Option<PathBuf>, emit: impl Fn(u64) + Send + 'static) -> Waiting {
+    Waiting(tauri::async_runtime::spawn(async move {
+        let Some(home) = home else { return };
+        loop {
+            let home = home.clone();
+            let ask = move || {
+                let request = serde_json::json!({"op": "exit_blockers", "holder_floor": 0});
+                let bound = (std::time::Instant::now() + ASK_LIMIT, ASK_BYTES);
+                crate::core_reply_at(&home, request, Some(bound))
+            };
+            let count = tauri::async_runtime::spawn_blocking(ask)
+                .await
+                .ok()
+                .flatten()
+                .and_then(|reply| reply["Ok"]["count"].as_u64())
+                .unwrap_or(0);
+            emit(count);
+            if count == 0 {
+                return;
+            }
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        }
+    }))
+}
+
+/// The commit of a new build in the update folder (short, as the page shows it), or why the folder was refused.
+async fn local(updates: &Updates) -> Result<Option<String>, String> {
+    if updates.cli.is_none() {
+        return Ok(None);
+    }
+    let status: serde_json::Value =
+        serde_json::from_str(&update_cli("status", None).await?).map_err(|e| e.to_string())?;
+    match status["state"].as_str() {
+        Some("ready") => Ok(status["commit"]
+            .as_str()
+            .map(|c| c.chars().take(9).collect())),
+        Some("refused") => Err(status["reason"].as_str().unwrap_or("refused").to_string()),
+        _ => Ok(None),
+    }
+}
+
 async fn find<R: Runtime>(app: &AppHandle<R>, updates: &Updates) -> Result<Option<String>, String> {
     let mut ready = updates.ready.lock().await;
-    let held = |r: &Option<Ready>| r.as_ref().map(|r| r.update.version.clone());
-    // Nothing published yet is the normal state of a fresh build, not a failure.
-    if updates.build == Build::Rc && !updates.dir.join(MANIFEST).is_file() {
-        return Ok(held(&ready));
+    if let Some(commit) = local(updates).await? {
+        return Ok(Some(commit));
     }
+    let held = |r: &Option<Ready>| r.as_ref().map(|r| r.update.version.clone());
+    let Some(feed) = &updates.feed else {
+        return Ok(None);
+    };
     let failed = |e: tauri_plugin_updater::Error| format!("update check failed: {e}");
-    let version = app.package_info().version.to_string();
-    let feeds = endpoints(updates.build, &version, updates.port)
+    let feeds = feed
+        .endpoints
         .iter()
         .map(|e| e.parse())
         .collect::<Result<Vec<Url>, _>>()
         .map_err(|e| format!("bad endpoint: {e}"))?;
+    let floor = floor(&feed.floor);
     // shortcut: no proxy, because the loopback feed must never go through one; a user behind a proxy gets no update
     // from GitHub. Upgrade when one asks.
     let checked = app
         .updater_builder()
         .endpoints(feeds)
         .map_err(failed)?
+        // The plugin's own rule (newer than this app), and never older than the floor.
+        .version_comparator(move |current, remote| {
+            remote.version > current && floor.as_ref().is_none_or(|f| remote.version >= *f)
+        })
         .executable_path(&updates.exe)
         .no_proxy()
         .timeout(Duration::from_secs(60))
@@ -252,7 +370,7 @@ async fn find<R: Runtime>(app: &AppHandle<R>, updates: &Updates) -> Result<Optio
     {
         return Ok(held(&ready));
     }
-    if !trusted_archive(updates.build, &update.download_url, updates.port) {
+    if !trusted_archive(&update.download_url, feed.port) {
         return Err(format!("refused: archive at {}", update.download_url));
     }
     // The whole archive has to arrive within this, over the network for a release.
@@ -263,15 +381,15 @@ async fn find<R: Runtime>(app: &AppHandle<R>, updates: &Updates) -> Result<Optio
 }
 
 /// The insecure-transport option is on for the whole plugin; this and the endpoints above are what limit it. An archive
-/// comes from this process (the local feed); the official app also takes one from its own GitHub releases. The signature
-/// is what proves the bytes either way.
-fn trusted_archive(build: Build, url: &Url, port: u16) -> bool {
+/// comes from this process (the local feed) or from the official GitHub releases. The signature is what proves the
+/// bytes either way.
+fn trusted_archive(url: &Url, port: u16) -> bool {
     let local = url.scheme() == "http"
         && url.host_str() == Some("127.0.0.1")
         && url.port() == Some(port)
-        && url.path() == format!("/{}", build.archive());
+        && url.path() == format!("/{ARCHIVE}");
     // `Url` has already resolved any `..`, so the prefix is the real folder.
-    local || (build == Build::Release && url.as_str().starts_with(&format!("{RELEASES}/download/")))
+    local || url.as_str().starts_with(&format!("{RELEASES}/download/"))
 }
 
 fn lock<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -298,14 +416,14 @@ pub fn log_line(line: &str) -> bool {
         .is_ok()
 }
 
-fn serve(dir: PathBuf, archive: &'static str) -> io::Result<u16> {
+fn serve(dir: PathBuf) -> io::Result<u16> {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
     let port = listener.local_addr()?.port();
     thread::spawn(move || {
         for stream in listener.incoming().flatten() {
             let dir = dir.clone();
             thread::spawn(move || {
-                let _ = answer(stream, &dir, port, archive);
+                let _ = answer(stream, &dir, port);
             });
         }
     });
@@ -313,7 +431,7 @@ fn serve(dir: PathBuf, archive: &'static str) -> io::Result<u16> {
 }
 
 /// The two published files by exact name, and nothing else. Neither is secret: the signature is what protects them.
-fn answer(mut stream: TcpStream, dir: &Path, port: u16, archive: &str) -> io::Result<()> {
+fn answer(mut stream: TcpStream, dir: &Path, port: u16) -> io::Result<()> {
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;
     stream.set_write_timeout(Some(Duration::from_secs(60)))?;
     let mut head = [0; 2048];
@@ -323,10 +441,10 @@ fn answer(mut stream: TcpStream, dir: &Path, port: u16, archive: &str) -> io::Re
         .strip_prefix("GET /")
         .and_then(|rest| rest.split(' ').next());
     let body = match path {
-        Some(MANIFEST) => fs::read(dir.join(MANIFEST))
-            .ok()
-            .and_then(|m| local_manifest(&m, &format!("http://127.0.0.1:{port}/{archive}"))),
-        Some(name) if name == archive => fs::read(dir.join(archive)).ok(),
+        // Security round 3: opened first and judged on the descriptor, bounded (no FIFO wait, no huge read).
+        Some(MANIFEST) => crate::update_claims::read_small(&dir.join(MANIFEST), 64 * 1024)
+            .and_then(|m| local_manifest(&m, &format!("http://127.0.0.1:{port}/{ARCHIVE}"))),
+        Some(ARCHIVE) => crate::update_claims::read_small(&dir.join(ARCHIVE), 1 << 30),
         _ => None,
     };
     let (status, body) = match body {
@@ -342,7 +460,7 @@ fn answer(mut stream: TcpStream, dir: &Path, port: u16, archive: &str) -> io::Re
 }
 
 /// The manifest as this process serves it: each platform's archive is the one in this folder, whatever address the
-/// manifest was published with (GitHub's for a release, a placeholder port for an RC).
+/// manifest was published with (GitHub's).
 fn local_manifest(manifest: &[u8], archive: &str) -> Option<Vec<u8>> {
     let mut manifest: serde_json::Value = serde_json::from_slice(manifest).ok()?;
     for platform in manifest["platforms"].as_object_mut()?.values_mut() {
@@ -371,21 +489,98 @@ pub async fn rc_update_check(
     check(&app).await
 }
 
-/// Replaces the running bundle with the verified build and relaunches; the core is its own process and stays up
-/// until the relaunched app's first page load replaces it (F24, `crate::ensure_core`).
+/// Ticket 1082: the update folder (Settings > About). `Some` sets it (empty turns updates off); the answer is the folder now set.
+#[tauri::command]
+pub fn update_source(
+    app: AppHandle,
+    webview: tauri::Webview,
+    folder: Option<String>,
+) -> Result<String, String> {
+    ready_for(&app, &webview)?;
+    let file = crate::home()?.join(SOURCE);
+    if let Some(folder) = folder {
+        let folder = folder.trim();
+        if folder.is_empty() {
+            match fs::remove_file(&file) {
+                Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e.to_string()),
+                _ => {}
+            }
+        } else if !Path::new(folder).is_absolute() || folder.contains('\n') || folder.len() > 4000 {
+            return Err(format!("not a full folder path: {folder}"));
+        } else {
+            save(&file, format!("{folder}\n").as_bytes())?;
+        }
+    }
+    Ok(read_small(&file).unwrap_or_default().trim().to_string())
+}
+
+/// The stored version floor, if any; an unreadable one counts as none and is written again at the next start.
+fn floor(file: &Path) -> Option<semver::Version> {
+    semver::Version::parse(read_small(file)?.trim()).ok()
+}
+
+/// At start: the floor becomes this app's version when that is higher.
+fn raise_floor(file: &Path, running: &semver::Version) -> Result<(), String> {
+    if floor(file).is_some_and(|f| f >= *running) {
+        return Ok(());
+    }
+    save(file, format!("{running}\n").as_bytes())
+}
+
+/// Security round 3: `fs::write` follows a link at `file` and truncates its target. A new file beside it (O_EXCL, so
+/// no link is followed) is renamed over it; a link or a non-file at `file` is refused.
+fn save(file: &Path, bytes: &[u8]) -> Result<(), String> {
+    use std::os::unix::fs::OpenOptionsExt;
+    if fs::symlink_metadata(file).is_ok_and(|m| !m.is_file()) {
+        return Err(format!(
+            "refused: {} is a link or not a file",
+            file.display()
+        ));
+    }
+    let new = file.with_extension("new");
+    let _ = fs::remove_file(&new); // a leftover, or a link: removes the entry itself, never its target
+    let mut f = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&new)
+        .map_err(|e| format!("{}: {e}", new.display()))?;
+    f.write_all(bytes).map_err(|e| e.to_string())?;
+    drop(f);
+    fs::rename(&new, file).map_err(|e| e.to_string())
+}
+
+/// A small regular file's text, opened first and judged on the descriptor (update_claims.rs): a planted link, FIFO or
+/// huge file reads as none.
+fn read_small(path: &Path) -> Option<String> {
+    String::from_utf8(crate::update_claims::read_small(path, 64 * 1024)?).ok()
+}
+
+/// Security round 3: the window claims its own installed bundle for its own home, the first time any home does. Only
+/// this app process writes a claim (never the CLI or a core, which an agent can run under a home of its own); the
+/// CLI's `update install` then accepts this home only.
+fn claim_own(exe: &Path, home: &Path, claims: &Path) -> Result<bool, String> {
+    let bundle = exe.ancestors().nth(3).ok_or("no bundle")?;
+    crate::update_claims::claim(claims, bundle, home)
+}
+
+/// Installs what is ready and relaunches. A build in the update folder goes first, then a verified release from the
+/// feed; either way this app's CLI swaps the bundle and the core and has put everything back when it fails (1082).
 #[tauri::command]
 pub async fn rc_update_install(app: AppHandle, webview: tauri::Webview) -> Result<(), String> {
     let updates = ready_for(&app, &webview)?;
     let ready = updates.ready.lock().await;
-    let result = match ready.as_ref() {
-        None => Err("no verified update is ready".to_string()),
-        // Asked again at the moment of replacing: the plugin swaps whatever bundle holds this executable.
-        Some(r) => located(updates.build).and_then(|_| {
-            r.update
-                .install(&r.bytes)
-                .map_err(|e| format!("install failed: {e}"))
-        }),
+    let waiting = show_waiting(&app);
+    let result = match local(&updates).await {
+        Ok(Some(_)) => update_cli("install", None).await.map(drop),
+        Err(e) => Err(e),
+        Ok(None) => match ready.as_ref() {
+            None => Err("no verified update is ready".to_string()),
+            Some(r) => feed_install(&r.bytes).await,
+        },
     };
+    drop(waiting);
+    let _ = app.emit_to("main", "rc-update-wait", 0);
     if let Err(e) = result {
         note(&updates, &e);
         return Err(e);
@@ -393,36 +588,299 @@ pub async fn rc_update_install(app: AppHandle, webview: tauri::Webview) -> Resul
     app.restart()
 }
 
+/// Ticket 1107: the verified archive goes to this app's CLI as a private file of the core home, which installs it as it
+/// installs a folder build: stamp, Part B, backup, swap, core replace, every session back, or the rollback.
+async fn feed_install(bytes: &[u8]) -> Result<(), String> {
+    located()?; // asked again at the moment of replacing
+    let file = crate::home()?.join(FEED_ARCHIVE);
+    save(&file, bytes)?;
+    let done = update_cli("install", Some(file.clone())).await.map(drop);
+    let _ = fs::remove_file(&file);
+    done
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::Path;
 
-    const RC: &str = "/Users/k/Projects/n/.scratch/rc/Nunchiro RC.app/Contents/MacOS/nunchiro-app";
+    fn scratch(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("nunchiro-app-1082-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Ticket 1130 A-D3 round 2: a stand-in core at a new home that answers every question with `answer`; each
+    /// connection is counted.
+    fn odd_core(
+        name: &str,
+        answer: fn(&mut std::os::unix::net::UnixStream),
+    ) -> (PathBuf, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use std::io::BufRead;
+        let home = scratch(name);
+        fs::write(home.join("core.token"), "test").unwrap();
+        let listener = std::os::unix::net::UnixListener::bind(home.join("core.sock")).unwrap();
+        let asked = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let seen = asked.clone();
+        std::thread::spawn(move || {
+            for mut stream in listener.incoming().flatten() {
+                seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let mut request = String::new();
+                let _ = std::io::BufReader::new(&stream).read_line(&mut request);
+                answer(&mut stream);
+            }
+        });
+        (home, asked)
+    }
+
+    const THREE: &str = "{\"Ok\":{\"type\":\"exit_blockers\",\"count\":3}}\n";
+
+    fn ask(home: &Path, limit: Duration) -> Option<u64> {
+        let bound = (std::time::Instant::now() + limit, ASK_BYTES);
+        let request = serde_json::json!({"op": "exit_blockers", "holder_floor": 0});
+        crate::core_reply_at(home, request, Some(bound)).and_then(|r| r["Ok"]["count"].as_u64())
+    }
+
+    // Ticket 1130 A-D3 round 2 (Codex MUST): the progress reply must be whole, small and in time. Before, the reader took
+    // any size and each dripped byte renewed its 3 s read.
+    #[test]
+    fn a_progress_reply_that_is_too_big_or_too_late_is_not_read() {
+        use std::io::Write;
+        fn whole(stream: &mut std::os::unix::net::UnixStream) {
+            let _ = stream.write_all(THREE.as_bytes());
+        }
+        fn oversized(stream: &mut std::os::unix::net::UnixStream) {
+            let _ = stream.write_all(" ".repeat(ASK_BYTES as usize + 1).as_bytes());
+            let _ = stream.write_all(THREE.as_bytes());
+        }
+        fn drip_then_late(stream: &mut std::os::unix::net::UnixStream) {
+            for _ in 0..6 {
+                let _ = stream.write_all(b" ");
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            let _ = stream.write_all(THREE.as_bytes());
+        }
+        let limit = Duration::from_millis(300);
+        let (home, _) = odd_core("ask-whole", whole);
+        assert_eq!(ask(&home, limit), Some(3));
+        let (home, _) = odd_core("ask-big", oversized);
+        assert_eq!(ask(&home, limit), None, "a reply past ASK_BYTES");
+        let (home, _) = odd_core("ask-late", drip_then_late);
+        let start = std::time::Instant::now();
+        assert_eq!(ask(&home, limit), None, "a reply after the limit");
+        assert!(start.elapsed() < Duration::from_millis(550));
+    }
+
+    // Ticket 1130 A-D3 round 2 (Codex MUST): cancelling the install while a progress read runs ends that read within
+    // ASK_LIMIT and asks nothing more. Before, aborting the waiter left the blocking read running for as long as the core
+    // dripped bytes.
+    #[test]
+    fn cancelling_the_install_ends_a_progress_read_that_is_running() {
+        use std::io::Write;
+        static CLOSED: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+        fn drip(stream: &mut std::os::unix::net::UnixStream) {
+            for _ in 0..100 {
+                if stream.write_all(b" ").is_err() {
+                    *CLOSED.lock().unwrap() = Some(std::time::Instant::now());
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        }
+        let (home, asked) = odd_core("cancel", drip);
+        let waiting = poll_waiting(Some(home), |_| {});
+        std::thread::sleep(Duration::from_millis(300));
+        assert_eq!(asked.load(std::sync::atomic::Ordering::SeqCst), 1);
+        let cancelled = std::time::Instant::now();
+        drop(waiting);
+        let deadline = cancelled + ASK_LIMIT + Duration::from_secs(1);
+        while CLOSED.lock().unwrap().is_none() && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let closed = CLOSED
+            .lock()
+            .unwrap()
+            .expect("the read still runs after the cancel");
+        assert!(closed - cancelled < ASK_LIMIT + Duration::from_secs(1));
+        std::thread::sleep(Duration::from_millis(500));
+        assert_eq!(
+            asked.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "no question after the cancel"
+        );
+    }
+
+    // Ticket 1130 A-D3: the CLI's progress lines before its failure are not the reason shown.
+    #[test]
+    fn the_shown_reason_is_the_cli_failure_without_its_waiting_lines() {
+        let stderr = "waiting for 2 chat(s) or job(s) to finish\nwaiting for 1 chat(s) or job(s) to finish\nnunchiro: refused: 1 chat(s) or job(s) still need the running core after 300 s; nothing was changed";
+        assert_eq!(
+            reason(stderr),
+            "refused: 1 chat(s) or job(s) still need the running core after 300 s; nothing was changed"
+        );
+        assert_eq!(
+            reason("nunchiro: no new build is ready"),
+            "no new build is ready"
+        );
+        assert_eq!(reason("plain words"), "plain words");
+    }
+
+    #[test]
+    fn the_window_claims_its_own_bundle_once() {
+        let dir = scratch("claim");
+        let exe = dir.join("Nunchiro.app/Contents/MacOS/nunchiro-app");
+        fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        let (home, other, claims) = (dir.join("home"), dir.join("other"), dir.join("claims"));
+        fs::create_dir_all(&home).unwrap();
+        fs::create_dir_all(&other).unwrap();
+        assert!(claim_own(&exe, &home, &claims).unwrap());
+        // a later start under another home takes nothing
+        assert!(!claim_own(&exe, &other, &claims).unwrap());
+        assert_eq!(
+            crate::update_claims::claimant(&claims, &dir.join("Nunchiro.app")),
+            Some(home.canonicalize().unwrap())
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn saving_the_folder_never_follows_a_link() {
+        let dir = scratch("save");
+        let (file, target) = (dir.join("update-source"), dir.join("target"));
+        fs::write(&target, "keep").unwrap();
+        std::os::unix::fs::symlink(&target, &file).unwrap();
+        let why = save(&file, b"/x\n").unwrap_err();
+        assert!(why.contains("is a link"), "{why}");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "keep");
+        // a link planted at the new file beside it is removed, not written through
+        fs::remove_file(&file).unwrap();
+        std::os::unix::fs::symlink(&target, file.with_extension("new")).unwrap();
+        save(&file, b"/x\n").unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "keep");
+        assert_eq!(read_small(&file).unwrap(), "/x\n");
+        assert!(
+            !fs::symlink_metadata(&file)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_planted_fifo_or_huge_file_reads_as_none() {
+        let dir = scratch("fifo");
+        let file = dir.join("update-source");
+        let c = std::ffi::CString::new(file.as_os_str().as_encoded_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+        assert!(read_small(&file).is_none()); // returns at once
+        fs::remove_file(&file).unwrap();
+        fs::write(&file, vec![b'/'; 64 * 1024 + 1]).unwrap();
+        assert!(read_small(&file).is_none());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_status_call_that_hangs_is_cut_at_its_limit() {
+        let dir = scratch("limited");
+        let run = |cmd: &mut std::process::Command, limit| {
+            crate::update_claims::run_limited(
+                cmd,
+                &dir,
+                Some(limit),
+                crate::update_claims::Output::KeepBounded,
+                || Ok(()),
+            )
+        };
+        let started = std::time::Instant::now();
+        let why = run(
+            std::process::Command::new("/bin/sleep").arg("30"),
+            Duration::from_millis(300),
+        )
+        .err()
+        .unwrap();
+        assert!(why.contains("did not end within"), "{why}");
+        assert!(started.elapsed() < Duration::from_secs(5));
+        let out = run(
+            std::process::Command::new("/bin/echo").arg("ok"),
+            Duration::from_secs(5),
+        )
+        .ok()
+        .unwrap();
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "ok\n");
+        // round 6: a background process that keeps the output and outlives the CLI does not hold the call
+        let bg = dir.join("bg.pid");
+        let started = std::time::Instant::now();
+        let out = run(
+            std::process::Command::new("/bin/sh")
+                .arg("-c")
+                .arg(format!("sleep 30 & echo $! > {}; echo ready", bg.display())),
+            Duration::from_secs(10),
+        )
+        .ok()
+        .unwrap();
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "ready\n");
+        assert!(started.elapsed() < Duration::from_secs(5));
+        let pid: i32 = fs::read_to_string(&bg).unwrap().trim().parse().unwrap();
+        std::thread::sleep(Duration::from_millis(300));
+        assert_ne!(
+            unsafe { libc::kill(pid, 0) },
+            0,
+            "killed with its group once the CLI ended"
+        );
+        // a flood stops at 64 KiB on disk (RLIMIT_FSIZE), and 64 KiB is read
+        let out = run(
+            std::process::Command::new("/bin/sh")
+                .arg("-c")
+                .arg("head -c 5000000 /dev/zero"),
+            Duration::from_secs(20),
+        )
+        .ok()
+        .unwrap();
+        assert_eq!(out.stdout.len(), 64 * 1024);
+        // no file is left behind in the scratch folder
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1); // bg.pid
+        fs::remove_dir_all(dir).unwrap();
+    }
+
     const HOME: &str = "/Users/k/.nunchiro";
 
     #[test]
-    fn only_the_rc_and_a_keyed_official_build_update() {
-        assert_eq!(build_for("dev.nunchiro.app.rc", true), Some(Build::Rc));
-        assert_eq!(build_for("dev.nunchiro.app.rc", false), Some(Build::Rc));
+    fn only_this_app_updates_and_an_isolated_test_build_never() {
         assert_eq!(
             build_for(crate::OWNER_IDENTIFIER, true),
             Some(Build::Release)
         );
-        // No update key: cargo, a debug run, the owner build made by hand.
-        assert_eq!(build_for(crate::OWNER_IDENTIFIER, false), None);
-        for other in ["dev.nunchiro.app.rc2", ""] {
+        assert_eq!(
+            build_for(crate::OWNER_IDENTIFIER, false),
+            Some(Build::Local)
+        );
+        // the isolated test build keeps its own id and home, key or not
+        for other in ["dev.nunchiro.app.rc", "dev.nunchiro.app.rc2", ""] {
             assert_eq!(build_for(other, true), None, "{other}");
+            assert_eq!(build_for(other, false), None, "{other}");
         }
     }
 
-    // A build without the release key: no plugin, no port, no state, and the page is told nothing.
+    // An isolated test build, and this app run from outside an installed bundle (a cargo test): no plugin, no port, no
+    // state, and the page is told nothing.
     #[test]
-    fn an_owner_build_without_a_key_starts_nothing() {
-        let app = tauri::test::mock_app();
-        start(app.handle(), crate::OWNER_IDENTIFIER).unwrap();
-        assert!(app.try_state::<Updates>().is_none());
-        assert!(!active());
+    fn a_test_build_or_an_uninstalled_app_starts_nothing() {
+        // Ticket 1111: `start` logs its refusal to crate::home(); a test resolving the owner's home wrote to its core.log.
+        let home = crate::home().unwrap();
+        assert!(
+            !home.components().any(|c| c.as_os_str() == ".nunchiro"),
+            "{}",
+            home.display()
+        );
+        for id in ["dev.nunchiro.app.rc", crate::OWNER_IDENTIFIER] {
+            let app = tauri::test::mock_app();
+            start(app.handle(), id).unwrap();
+            assert!(app.try_state::<Updates>().is_none(), "{id}");
+            assert!(!active(), "{id}");
+        }
     }
 
     #[test]
@@ -465,75 +923,27 @@ mod tests {
     }
 
     #[test]
-    fn a_build_follows_the_channel_of_its_own_version() {
-        for release in ["0.1.0", "1.2.3", "0.1.0+build-7"] {
-            assert_eq!(channel(release), "latest/download", "{release}");
-        }
-        for pre in [
-            "0.1.0-pre.20261121083000",
-            "1.0.0-rc.1",
-            "0.1.0-pre.1+build-7",
-        ] {
-            assert_eq!(channel(pre), "download/prerelease", "{pre}");
-        }
-    }
-
-    #[test]
-    fn the_official_app_asks_github_first_and_the_rc_only_this_process() {
+    fn the_official_app_asks_github_first_then_this_process() {
         let local = "http://127.0.0.1:4000/latest.json";
-        assert_eq!(endpoints(Build::Rc, "0.1.0-rc.5", 4000), [local]);
+        // every version, a prerelease too, reads GitHub's "latest" (ticket 1107: no prerelease feed)
         assert_eq!(
-            endpoints(Build::Release, "0.1.0", 4000),
+            endpoints(4000),
             [
                 "https://github.com/develku/nunchiro/releases/latest/download/latest.json",
                 local
             ]
         );
-        assert_eq!(
-            endpoints(Build::Release, "0.1.0-pre.5", 4000),
-            [
-                "https://github.com/develku/nunchiro/releases/download/prerelease/latest.json",
-                local
-            ]
-        );
     }
 
     #[test]
-    fn updates_come_only_from_the_folder_beside_the_rc_bundle() {
-        assert_eq!(
-            update_dir(Build::Rc, Path::new(RC), Path::new(HOME)).unwrap(),
-            Path::new("/Users/k/Projects/n/.scratch/rc/update")
-        );
-    }
-
-    #[test]
-    fn applications_folders_and_other_bundles_are_refused() {
-        for exe in [
-            "/Applications/Nunchiro RC.app/Contents/MacOS/nunchiro-app",
-            "/applications/Nunchiro RC.app/Contents/MacOS/nunchiro-app",
-            "/Users/k/Applications/Nunchiro RC.app/Contents/MacOS/nunchiro-app",
-            "/System/Volumes/Data/Applications/.scratch/rc/Nunchiro RC.app/Contents/MacOS/x",
-            "/Users/k/Applications/.scratch/rc/Nunchiro RC.app/Contents/MacOS/nunchiro-app",
-            "/Applications/Nunchiro.app/Contents/MacOS/nunchiro-app",
-            "/Users/k/.scratch/rc/Nunchiro.app/Contents/MacOS/nunchiro-app",
-            "/tmp/Nunchiro RC.app/Contents/MacOS/nunchiro-app",
-            "/Users/k/.scratch/rc/Nunchiro RC.app/Contents/Resources/nunchiro-app",
-            "/Users/k/.scratch/rc/nunchiro-app",
-        ] {
-            let dir = update_dir(Build::Rc, Path::new(exe), Path::new(HOME));
-            assert!(dir.is_err(), "{exe}");
-        }
-    }
-
-    #[test]
-    fn the_official_app_reads_the_feed_in_its_core_home_wherever_it_is_installed() {
+    fn the_app_reads_the_feed_in_its_core_home_wherever_it_is_installed() {
         for exe in [
             "/Applications/Nunchiro.app/Contents/MacOS/nunchiro-app",
             "/Users/k/Applications/Nunchiro.app/Contents/MacOS/nunchiro-app",
             "/Users/k/n/.scratch/release/prerelease/Nunchiro.app/Contents/MacOS/nunchiro-app",
         ] {
             assert_eq!(
-                update_dir(Build::Release, Path::new(exe), Path::new(HOME)).unwrap(),
+                update_dir(Path::new(exe), Path::new(HOME)).unwrap(),
                 Path::new("/Users/k/.nunchiro/update"),
                 "{exe}"
             );
@@ -545,46 +955,42 @@ mod tests {
             "/Applications/Nunchiro RC.app/Contents/MacOS/nunchiro-app",
             "/Applications/Nunchiro.app/Contents/Resources/nunchiro-app",
         ] {
-            let dir = update_dir(Build::Release, Path::new(exe), Path::new(HOME));
-            assert!(dir.is_err(), "{exe}");
+            assert!(
+                update_dir(Path::new(exe), Path::new(HOME)).is_err(),
+                "{exe}"
+            );
         }
     }
 
     #[test]
     fn an_archive_is_taken_only_from_this_process_or_the_official_releases() {
         let url = |s: &str| s.parse::<Url>().unwrap();
-        let rc = Build::Rc.archive();
-        let good = format!("http://127.0.0.1:4000/{rc}");
-        assert!(trusted_archive(Build::Rc, &url(&good), 4000));
-        assert!(!trusted_archive(Build::Rc, &url(&good), 4001));
-        // each build serves its own archive name
-        assert!(!trusted_archive(Build::Release, &url(&good), 4000));
+        let good = format!("http://127.0.0.1:4000/{ARCHIVE}");
+        assert!(trusted_archive(&url(&good), 4000));
+        assert!(!trusted_archive(&url(&good), 4001));
         let github =
             "https://github.com/develku/nunchiro/releases/download/v0.1.0/Nunchiro.app.tar.gz";
-        assert!(trusted_archive(Build::Release, &url(github), 4000));
-        assert!(trusted_archive(
-            Build::Release,
-            &url("http://127.0.0.1:4000/Nunchiro.app.tar.gz"),
-            4000
-        ));
+        assert!(trusted_archive(&url(github), 4000));
         for bad in [
-            format!("https://127.0.0.1:4000/{rc}"),
-            format!("http://localhost:4000/{rc}"),
-            format!("http://example.com:4000/{rc}"),
+            format!("https://127.0.0.1:4000/{ARCHIVE}"),
+            format!("http://localhost:4000/{ARCHIVE}"),
+            format!("http://example.com:4000/{ARCHIVE}"),
             "http://127.0.0.1:4000/other.tar.gz".to_string(),
-            github.to_string(),
+            "http://127.0.0.1:4000/Nunchiro-RC.app.tar.gz".to_string(),
+            "http://github.com/develku/nunchiro/releases/download/v0.1.0/Nunchiro.app.tar.gz"
+                .into(),
+            "https://github.com/someone/nunchiro/releases/download/v0.1.0/Nunchiro.app.tar.gz"
+                .into(),
+            "https://github.com/develku/nunchiro/releases/download/../../../../someone/x/a.tar.gz"
+                .into(),
+            "https://github.com@example.com/develku/nunchiro/releases/download/v0.1.0/a.tar.gz"
+                .into(),
+            "https://github.com.example.com/develku/nunchiro/releases/download/v0.1.0/a.tar.gz"
+                .into(),
+            "https://example.com/develku/nunchiro/releases/download/v0.1.0/Nunchiro.app.tar.gz"
+                .into(),
         ] {
-            assert!(!trusted_archive(Build::Rc, &url(&bad), 4000), "{bad}");
-        }
-        for bad in [
-            "http://github.com/develku/nunchiro/releases/download/v0.1.0/Nunchiro.app.tar.gz",
-            "https://github.com/someone/nunchiro/releases/download/v0.1.0/Nunchiro.app.tar.gz",
-            "https://github.com/develku/nunchiro/releases/download/../../../../someone/x/a.tar.gz",
-            "https://github.com@example.com/develku/nunchiro/releases/download/v0.1.0/a.tar.gz",
-            "https://github.com.example.com/develku/nunchiro/releases/download/v0.1.0/a.tar.gz",
-            "https://example.com/develku/nunchiro/releases/download/v0.1.0/Nunchiro.app.tar.gz",
-        ] {
-            assert!(!trusted_archive(Build::Release, &url(bad), 4000), "{bad}");
+            assert!(!trusted_archive(&url(&bad), 4000), "{bad}");
         }
     }
 
@@ -598,6 +1004,17 @@ mod tests {
         out
     }
 
+    #[test]
+    fn the_feed_answers_a_planted_fifo_at_once() {
+        let dir = feed("fifo");
+        let c = std::ffi::CString::new(dir.join(ARCHIVE).as_os_str().as_encoded_bytes()).unwrap();
+        let _ = fs::remove_file(dir.join(ARCHIVE));
+        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+        let port = serve(dir.clone()).unwrap();
+        assert!(get(port, &format!("/{ARCHIVE}")).starts_with("HTTP/1.1 404"));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
     fn feed(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("rc-update-{name}-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
@@ -606,7 +1023,7 @@ mod tests {
 
     #[test]
     fn the_server_answers_the_two_names_with_its_own_port() {
-        let archive = Build::Release.archive();
+        let archive = ARCHIVE;
         let dir = feed("serve");
         fs::write(dir.parent().unwrap().join("secret"), "no").unwrap();
         // as build-release.sh publishes it: the archive's GitHub address
@@ -615,55 +1032,153 @@ mod tests {
         );
         fs::write(dir.join(MANIFEST), manifest).unwrap();
         fs::write(dir.join(archive), "bytes").unwrap();
-        let port = serve(dir.clone(), archive).unwrap();
+        let port = serve(dir.clone()).unwrap();
         let reply = get(port, "/latest.json");
         assert!(reply.starts_with("HTTP/1.1 200"), "{reply}");
         assert!(reply.contains(&format!(r#""url":"http://127.0.0.1:{port}/{archive}""#)));
         assert!(!reply.contains("github.com") && reply.contains(r#""signature":"s""#));
         assert!(get(port, &format!("/{archive}")).ends_with("bytes"));
-        let rc = Build::Rc.archive();
         for path in [
             "/",
             "/../secret",
             "/latest.json/",
             "/latest.json?x=1",
-            &format!("/{rc}"),
+            "/Nunchiro-RC.app.tar.gz",
         ] {
             assert!(get(port, path).starts_with("HTTP/1.1 404"), "{path}");
         }
         fs::remove_dir_all(dir).unwrap();
     }
 
-    // A pair made once for this test with `tauri signer`; its private half was deleted. SIGNED is the signature of
-    // ARCHIVE_BYTES, made for version 99.0.0.
-    const TEST_KEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM0Njc4QjUzODczODEzRUMKUldUc0V6aUhVNHRuTktBRUxwRVhzYzd1Q0ZQTiszcHhYVjVuZGtUcVc3b1E5Zm9meHdWQ3hWankK";
-    const SIGNED: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUc0V6aUhVNHRuTlArd2oyQUhQUjMxeTkxTFpnSDczVUpUTldIYTNCczRIZDlFU1hRK2grMlprMXRpMzJHL0dIQ0wxT1NZaXFLZ012cUZMbkVCY3FBNnF3czFrWFZRUXdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MjQ0MTc2CWZpbGU6YS50YXIuZ3oJdmVyc2lvbjo5OS4wLjAKc3NXVUI1M1VKYTdNVERwSW1rYXhUSzdpa2VIK25rcTJUOWFoUjN3Wm5CamtnTVNUeEJlbjJsOXFZV3lwdldaRFROaXZmeUhFNVc1bjZHaXhtZFpVQ1E9PQo=";
-    const ARCHIVE_BYTES: &str = "nunchiro test archive";
+    /// Ticket 1107: a minisign key pair made for this test run; its private half never leaves the process. Legacy "Ed"
+    /// mode, which the plugin accepts; `tauri signer` prehashes, which changes only the bytes the signature covers.
+    struct Signer {
+        key: ring::signature::Ed25519KeyPair,
+        id: [u8; 8],
+    }
 
-    /// One check of a feed holding `version` and `archive`, by an app of version 0.1.0 (the mock's) that trusts TEST_KEY.
-    fn checked(name: &str, version: &str, archive: &str) -> Result<Option<String>, String> {
+    fn b64(bytes: impl AsRef<[u8]>) -> String {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    }
+
+    impl Signer {
+        fn new() -> Self {
+            use ring::rand::SecureRandom as _;
+            let rng = ring::rand::SystemRandom::new();
+            let pkcs8 = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
+            let mut id = [0; 8];
+            rng.fill(&mut id).unwrap();
+            let key = ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).unwrap();
+            Self { key, id }
+        }
+
+        /// The public key as the updater config takes it: base64 of minisign's two-line key file.
+        fn pubkey(&self) -> String {
+            use ring::signature::KeyPair as _;
+            let key = [b"Ed".as_slice(), &self.id, self.key.public_key().as_ref()].concat();
+            b64(format!(
+                "untrusted comment: minisign public key\n{}\n",
+                b64(key)
+            ))
+        }
+
+        /// What `tauri signer sign --app-version <version>` puts in latest.json for `data`.
+        fn sign(&self, data: &[u8], version: &str) -> String {
+            let sig = self.key.sign(data);
+            let trusted = format!("timestamp:1795244176\tfile:{ARCHIVE}\tversion:{version}");
+            let global = self.key.sign(&[sig.as_ref(), trusted.as_bytes()].concat());
+            let line = [b"Ed".as_slice(), &self.id, sig.as_ref()].concat();
+            b64(format!(
+                "untrusted comment: signature from tauri secret key\n{}\ntrusted comment: {trusted}\n{}\n",
+                b64(line),
+                b64(global.as_ref())
+            ))
+        }
+    }
+
+    const ARCHIVE_BYTES: &[u8] = b"nunchiro test archive";
+
+    /// One fixture feed: `latest.json` announces `version` with `signature`, the archive holds `archive`, the stored
+    /// floor is `floor`. `url`: the manifest is served as written by a plain server, so its archive address stays.
+    struct Fixture<'a> {
+        version: &'a str,
+        archive: &'a [u8],
+        signature: String,
+        floor: Option<&'a str>,
+        url: Option<&'a str>,
+    }
+
+    impl<'a> Fixture<'a> {
+        /// The archive signed by `by` for `version`, announced as that version.
+        fn signed(by: &Signer, version: &'a str) -> Self {
+            Fixture {
+                version,
+                archive: ARCHIVE_BYTES,
+                signature: by.sign(ARCHIVE_BYTES, version),
+                floor: None,
+                url: None,
+            }
+        }
+    }
+
+    /// Serves `body` to every request, as GitHub serves a release's latest.json; its port.
+    fn plain_server(body: String) -> u16 {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        thread::spawn(move || {
+            for mut stream in listener.incoming().flatten() {
+                let _ = stream.read(&mut [0; 2048]);
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+            }
+        });
+        port
+    }
+
+    /// One check of `fixture` by an app of version 0.1.0 (the mock's) that trusts `trusted`, with its own folder as the
+    /// core home's stand-in; nothing reads ~/.nunchiro, asks GitHub or runs a CLI.
+    fn checked(name: &str, trusted: &Signer, fixture: Fixture) -> Result<Option<String>, String> {
         let dir = feed(name);
-        let platform = serde_json::json!({"signature": SIGNED, "url": "http://127.0.0.1:0/x"});
+        let platform = serde_json::json!({
+            "signature": fixture.signature,
+            "url": fixture.url.unwrap_or("http://127.0.0.1:0/x"),
+        });
         let manifest = serde_json::json!({
-            "version": version,
+            "version": fixture.version,
             "platforms": {"darwin-aarch64": platform, "darwin-x86_64": platform},
         });
         fs::write(dir.join(MANIFEST), manifest.to_string()).unwrap();
-        fs::write(dir.join(Build::Rc.archive()), archive).unwrap();
+        fs::write(dir.join(ARCHIVE), fixture.archive).unwrap();
+        let floor = dir.join(FLOOR);
+        if let Some(f) = fixture.floor {
+            fs::write(&floor, format!("{f}\n")).unwrap();
+        }
         let mut context = tauri::test::mock_context(tauri::test::noop_assets());
         context.config_mut().plugins.0.insert(
             "updater".into(),
-            serde_json::json!({"pubkey": TEST_KEY, "endpoints": [], "dangerousInsecureTransportProtocol": true, "requireSignedVersion": true}),
+            serde_json::json!({"pubkey": trusted.pubkey(), "endpoints": [], "dangerousInsecureTransportProtocol": true, "requireSignedVersion": true}),
         );
         let app = tauri::test::mock_builder()
             .plugin(tauri_plugin_updater::Builder::new().build())
             .build(context)
             .unwrap();
+        let port = serve(dir.clone()).unwrap();
+        let endpoint = match fixture.url {
+            Some(_) => plain_server(manifest.to_string()),
+            None => port,
+        };
         let updates = Updates {
-            build: Build::Rc,
-            port: serve(dir.clone(), Build::Rc.archive()).unwrap(),
-            exe: RC.into(),
-            dir: dir.clone(),
+            exe: "/Applications/Nunchiro.app/Contents/MacOS/nunchiro-app".into(),
+            cli: None,
+            feed: Some(Feed {
+                port,
+                endpoints: vec![format!("http://127.0.0.1:{endpoint}/{MANIFEST}")],
+                floor,
+            }),
             ready: Mutex::new(None),
             logged: std::sync::Mutex::new(None),
         };
@@ -676,33 +1191,120 @@ mod tests {
                 .as_ref()
                 .ok()
                 .and_then(|v| v.as_ref())
-                .map(|_| ARCHIVE_BYTES.as_bytes())
+                .map(|_| fixture.archive)
         );
         fs::remove_dir_all(dir).unwrap();
         found
     }
 
     #[test]
-    fn only_a_newer_version_is_an_update() {
-        for old in ["0.1.0", "0.0.9", "0.1.0-pre.20261121083000"] {
-            assert_eq!(checked("old", old, ARCHIVE_BYTES), Ok(None), "{old}");
-        }
+    fn a_signed_newer_build_is_ready_with_exactly_its_verified_bytes() {
+        let key = Signer::new();
         assert_eq!(
-            checked("new", "99.0.0", ARCHIVE_BYTES),
+            checked("new", &key, Fixture::signed(&key, "99.0.0")),
             Ok(Some("99.0.0".into()))
         );
     }
 
     #[test]
     fn a_bad_signature_is_refused() {
+        let key = Signer::new();
         // other bytes under the signature of the real archive
-        let tampered = checked("tampered", "99.0.0", "nunchiro test archivE").unwrap_err();
+        let tampered = checked(
+            "tampered",
+            &key,
+            Fixture {
+                archive: b"nunchiro test archivE",
+                ..Fixture::signed(&key, "99.0.0")
+            },
+        )
+        .unwrap_err();
         assert!(
             tampered.contains("signature verification failed"),
             "{tampered}"
         );
+        // a valid signature by a key this app does not trust
+        let other =
+            checked("other-key", &key, Fixture::signed(&Signer::new(), "99.0.0")).unwrap_err();
+        assert!(other.contains("created with a different key"), "{other}");
+    }
+
+    #[test]
+    fn a_version_the_signature_was_not_made_for_is_refused() {
+        let key = Signer::new();
         // the real archive announced as a version its signature was not made for
-        let renamed = checked("renamed", "99.0.1", ARCHIVE_BYTES).unwrap_err();
+        let renamed = checked(
+            "renamed",
+            &key,
+            Fixture {
+                version: "99.0.1",
+                ..Fixture::signed(&key, "99.0.0")
+            },
+        )
+        .unwrap_err();
         assert!(renamed.contains("signed for version 99.0.0"), "{renamed}");
+    }
+
+    #[test]
+    fn an_older_build_or_one_below_the_floor_is_never_offered() {
+        let key = Signer::new();
+        // not newer than this app (0.1.0), each validly signed for its own version
+        for old in ["0.1.0", "0.0.9", "0.1.0-pre.20261121083000"] {
+            assert_eq!(
+                checked("old", &key, Fixture::signed(&key, old)),
+                Ok(None),
+                "{old}"
+            );
+        }
+        // newer than this app, but older than a version this home has already run
+        let below = Fixture {
+            floor: Some("100.0.0"),
+            ..Fixture::signed(&key, "99.0.0")
+        };
+        assert_eq!(checked("below", &key, below), Ok(None));
+        let at = Fixture {
+            floor: Some("99.0.0"),
+            ..Fixture::signed(&key, "99.0.0")
+        };
+        assert_eq!(checked("at-floor", &key, at), Ok(Some("99.0.0".into())));
+    }
+
+    #[test]
+    fn an_archive_from_another_repository_is_refused_before_download() {
+        let key = Signer::new();
+        let foreign = Fixture {
+            url: Some(
+                "https://github.com/someone/nunchiro/releases/download/v99.0.0/Nunchiro.app.tar.gz",
+            ),
+            ..Fixture::signed(&key, "99.0.0")
+        };
+        let why = checked("foreign", &key, foreign).unwrap_err();
+        assert_eq!(
+            why,
+            "refused: archive at https://github.com/someone/nunchiro/releases/download/v99.0.0/Nunchiro.app.tar.gz"
+        );
+    }
+
+    #[test]
+    fn the_floor_rises_to_the_running_version_and_never_falls() {
+        let dir = scratch("floor");
+        let file = dir.join(FLOOR);
+        let v = |s: &str| semver::Version::parse(s).unwrap();
+        raise_floor(&file, &v("0.2.0")).unwrap();
+        assert_eq!(floor(&file), Some(v("0.2.0")));
+        raise_floor(&file, &v("0.1.0")).unwrap();
+        assert_eq!(
+            floor(&file),
+            Some(v("0.2.0")),
+            "an older app keeps the floor"
+        );
+        raise_floor(&file, &v("0.3.0")).unwrap();
+        assert_eq!(floor(&file), Some(v("0.3.0")));
+        // unreadable: counts as none and is written again
+        fs::write(&file, "junk").unwrap();
+        assert_eq!(floor(&file), None);
+        raise_floor(&file, &v("0.3.0")).unwrap();
+        assert_eq!(floor(&file), Some(v("0.3.0")));
+        fs::remove_dir_all(dir).unwrap();
     }
 }

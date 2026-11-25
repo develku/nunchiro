@@ -50,21 +50,18 @@ test('cache_timer_one_hour_setting_and_off_switch: 1 h counts from 60:00; Settin
   await expect(timer(app, id)).toHaveCount(0);
 });
 
-test('cache_timer_tracks_every_project_with_a_scoped_agents_view: an Agents view nested under p takes nothing from q', async ({ app, core }) => {
+test('cache_timer_tracks_every_project_with_a_scoped_files_view: a Files view nested under p takes nothing from q', async ({ app, core }) => {
   // The tracking is the window's (App.tsx): a widget scoped to one project once pruned every other project's sessions.
   const p = core.project('p');
   const a = core.agent(p, 'alpha', 'x');
   const b = core.agent(core.project('q'), 'beta', 'x');
-  const bars = { ...defaultBars(), nest: { [p]: ['agents'] }, open: { [`${p}::agents`]: true } };
+  const bars = { ...defaultBars(), nest: { [p]: ['files'] }, open: { [`${p}::files`]: true } };
   await app.addInitScript((v) => localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ bars: v })), bars);
   await openWindow(app, {}, core);
-  const nested = app.locator(`.sbar .tree .view[data-view="agents"] .ar[data-agent="${a.id}"]`);
-  await expect(nested).toBeVisible();
   for (const s of [a, b]) core.hook(s.id, 'UserPromptSubmit');
   await expect(app.locator(`.row.wt2[data-hint-session="${b.id}"]`)).toBeVisible();
   for (const s of [a, b]) core.hook(s.id, 'Stop');
   await expect(timer(app, b.id)).toHaveText(/^(5:00|4:5\d)$/);
-  await expect(nested.locator('.s .cache')).toHaveText(/^(5:00|4:5\d)$/); // the Agents line carries it too
 });
 
 // Node side: the store on a clock the test sets, and the one interval it starts, captured.

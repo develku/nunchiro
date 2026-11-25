@@ -18,6 +18,7 @@ const TIGHT: Record<string, string> = {
 export const GROUPS: Record<string, string[]> = {
   'err.h.later': [
     'machine is already being forgotten', 'machine channel is still closing; retry removal', 'machine start in progress; retry removal', 'machine is being forgotten',
+    'a new Lead conversation is already being opened', // team.rs: a second New Lead conversation while the first one opens
     'a check is running', '{} is signing in', 'agent commands are busy', 'chat cache busy', 'chat append already pending', 'chat append exceeded hook wait',
     'search canceled', 'already loading that theme', 'request failed', 'could not start the request; try again', 'could not start the sign-in: {}',
     '{}; the agent still runs', '{} already running',
@@ -29,7 +30,7 @@ export const GROUPS: Record<string, string[]> = {
     "no task {}", "no note {}", "no open loop {}", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
     "no teammate {}", // team.rs (ticket 970)
    
-    'ask {} already timed out', 'unknown account "{}" for {}; see nunchiro account list', 'unknown {} account', "this conversation's account is no longer in the account list", 'no agent "{}" in agents.toml',
+    'ask {} already timed out', 'unknown account "{}" for {}; see nunchiro account list', 'unknown account "{}"; the accounts are: {} (or own)', 'unknown {} account', "this conversation's account is no longer in the account list", 'no agent "{}" in agents.toml',
     'the agent no longer reports this sign-in method', 'no update is running', 'board decision not found', 'board session not found', 'linked board session not found', 'manual card not found', 'waits_on card not found: {}', 'attached session not found: {}',
     'board column not found', 'board card not found: {}', 'new board card not found', 'integration source not found', 'integration source card not found', 'fork message unavailable',
     'not a changed file', 'unknown service', 'no such device', 'browser connection revoked or not tracked', 'conversation {} is not in the agents\' folders', 'not a transcript under the agent\'s folder',
@@ -38,13 +39,13 @@ export const GROUPS: Record<string, string[]> = {
   ],
   'err.h.fileBad': [
     'a set-aside sessions.json is kept: its sessions would stay at the old folder', // sessions/locate.rs: Locate (ticket 1040); the Problems row names the folder
-    "ledger.json: {}", "ledger.json has version {}, this build reads 1", "notes.json: {}", "notes.json has version {}, this build reads 1", "loops.json: {}", "loops.json has version {}, this build reads 1", "roles.json: {}", "roles.json has version {}, this build reads 1", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
+    "ledger.json: {}", "ledger.json has version {}, this build reads 1", "notes.json: {}", "notes.json has version {}, this build reads 1", "loops.json: {}", "loops.json has version {}, this build reads 1", "roles.json: {}", "roles.json has version {}, this build reads 1", "{}.json: {}", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
     'schedules.json has no folder', "team.json is too large", "team.json: {}", "team.json has version {}, this build reads 1", "team.json holds an id that is not a teammate id: \"{}\"", "teammate project {}: {}", // team.rs (ticket 970)
    
     'the conversation\'s record could not be copied: {}', 'the other account holds something that is not a record under this conversation\'s name; nothing was copied', '{} must not be a symlink', '{} is not a regular file', 'invalid {}: {}', 'invalid {}: larger than 1 MiB', 'invalid {}: version', 'invalid {}: account entry',
     'agents.toml is too large', 'invalid agents.toml: {}', 'invalid agents.toml: {}: display: that name belongs to another agent', 'invalid agents.toml: bad or repeated name "{}"', 'invalid agents.toml: {}: command must be an absolute path', 'invalid agents.toml: {}: bad args', 'invalid agents.toml: {}: env holds variable names only', 'invalid agents.toml: {}: display: {}',
     '{}; fix agents.toml, then run the check again', '{} command: {}', 'unsupported approvals store version', 'invalid approvals store relationship',
-    'settings.stale_minutes must be 1 to 1440', 'invalid board store: {}', 'unsupported board store version', 'invalid board seen markers', 'invalid board held drag relationship', 'invalid board resolutions', 'invalid board store columns', 'invalid board store column relationship', 'duplicate board store state', 'invalid board manual card relationship', 'invalid board card history', 'invalid board waits_on relationship', 'board.toml disappeared during reload', 'board store exceeds 8 MiB', 'invalid or oversized {}', 'board file exceeds limit',
+    'settings.stale_minutes must be 1 to 1440', 'settings.done_days must be 1, 7 or 30', 'invalid board store: {}', 'unsupported board store version', 'invalid board seen markers', 'invalid board held drag relationship', 'invalid board resolutions', 'invalid board store columns', 'invalid board store column relationship', 'duplicate board store state', 'invalid board manual card relationship', 'invalid board card history', 'invalid board waits_on relationship', 'board.toml disappeared during reload', 'board store exceeds 8 MiB', 'invalid or oversized {}', 'board file exceeds limit',
     'unsupported sources version', 'line 1: {}', 'line 1: integration source must be a regular file', 'line 1: integration source exceeds 1 MiB', 'line {}: {}', 'line 1: at most 4096 cards', 'line 1: invalid or duplicate card id', 'line 1: invalid card text', 'line 1: invalid card URL', 'line 1: URL must use http or https with a host',
     'board.toml: settings is not a table', 'board.toml: {}', 'board.toml would exceed 1 MiB', 'invalid chat cache file', 'invalid legacy metadata', 'legacy extension conflicts with new metadata', 'oversized legacy extension metadata',
     'chat log is not a regular file', 'oversized chat log record', 'invalid chat log event', 'invalid chat log identity', 'invalid empty chat log', 'chat log count overflow', 'incomplete chat log', 'invalid chat append event', 'oversized chat append event', 'invalid chat log range', 'invalid chat data offset', 'invalid chat cursor relation',
@@ -55,7 +56,7 @@ export const GROUPS: Record<string, string[]> = {
     'invalid machines store: {}', 'unsupported machines store version', 'ssh control folder {}: {}', 'ssh control folder {} is not a plain folder; refused', 'ssh control folder {} is owned by another user; refused', 'ssh control folder {} has mode {}, not 0700; refused', 'ssh control path {} is too long', 'invalid machines settings: {}',
     'invalid queue file', 'invalid queue: {}', 'invalid queue: expected an object', 'queue limit exceeded', 'invalid queue session', 'invalid queue relationship', 'invalid event identity', 'invalid owner item', 'queue store exceeds limit', 'invalid resume queue identity', 'prior queue session missing', 'invalid room log',
     '{} is not a regular file or is too large', '{} is too short', '{}: unknown version {}', '{}: entry {} was not written by this core', '{}: duplicate id or relative project in {}', 'export folder is not a private folder', 'data folder must not be a symlink', 'scrollback is not a file',
-    'invalid settings: {}', 'settings.json write failed: {}; machines.json rollback failed: {}; stores diverged', 'invalid worktree store', 'invalid worktree store: {}', 'invalid worktree store relationship/version',
+    'invalid settings: {}', 'invalid worktree store', 'invalid worktree store: {}', 'invalid worktree store relationship/version',
     'invalid metadata: {}', 'invalid metadata: expected an object', 'invalid metadata relationship', 'state file has no name', 'state file is not a regular file', 'state file has no folder', 'no free name to set the state file aside', 'state file changed while it was set aside', '{} would be {} bytes, over its {}-byte limit; nothing was written',
     'tree.toml: {}', 'tree.toml is not a regular file or is too large', 'tree.toml: unsupported version', 'tree.toml is not a regular file', 'tree.toml would exceed its size limit', 'widget cache must not be a symlink', 'widgets folder must not be a symlink',
     'invalid {} name', '{} folder must not be a symlink',
@@ -77,6 +78,7 @@ export const GROUPS: Record<string, string[]> = {
     "a role note names its role", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
     "a teammate runs Claude, Codex or an ACP agent", "a model or effort is 1 to 100 characters", "a teammate's name has 1 to {} characters and no control characters", "a teammate needs a job: one or two lines on what it is for", "a teammate's job has at most {} characters and no control characters", "a teammate's project must be a real folder, not through a symlink", 'a worktree is handed to the lead of its project', // team.rs (tickets 970, 990)
    
+    'a saved machine is already named {}; forget it first or use a link with another label', // machines/share.rs: Add machine from a link
     'invalid resume session id', 'two {} accounts are named "{}"; remove one', 'not an account variable', 'invalid account id', 'env holds variable names only (A-Z, 0-9, _), names only; values stay in your environment', 'the command and its arguments cannot hold control characters',
     'the path names no folder', "the path's folder holds a colon", 'board title must have 1 to 256 bytes; note at most 65536 bytes', 'receipt fields (sha, command, result) need 1 to {} bytes each', 'receipt must be plain text: no control characters', 'board text must be plain: no control characters',
     'the board has no Done column', 'expected 1 to 64 columns', 'integration source path must be absolute', 'invalid or duplicate integration source name', 'search text must be 1 to {} bytes', 'search text needs at least one plain character', 'invalid send text',
@@ -91,7 +93,7 @@ export const GROUPS: Record<string, string[]> = {
   ],
   'err.h.notFor': [
     'not a repository of a PR an agent created or you watch', "no config folder for the agent's own account", 'only Claude and Codex have a command to approve', 'this service has no sign-in command', 'this service has no sign-out command', 'merge is only for a PR an agent made or you pinned', 'a shell session has no model picker', "an ACP agent has no model picker here", "an ACP agent's effort is set in the agent",
-    'only Claude and Codex have a permission setting', 'only Claude sessions have a live permission-mode cycle', 'skip permissions is not in this session\'s mode cycle: {}', 'this session\'s mode cycle has no {}', 'Side chat requires Claude or Codex', 'an account is only for claude or codex sessions',
+    'only Claude and Codex have a permission setting', 'only Claude sessions have a live permission-mode cycle', 'skip permissions is not in this session\'s mode cycle: {}', 'this session\'s mode cycle has no {}', 'Side chat requires Claude or Codex', 'an account is only for claude or codex sessions', 'an account is only for claude or codex seats',
     'an ACP agent has no PTY', 'an ACP session takes its agent name only (acp:<name>)', "an ACP agent's model and effort are set in the agent", 'an ACP agent has no account; it signs in on its own', 'an ACP agent takes a text prompt or Esc', 'this agent does not offer sign-out',
     '{} is not a script widget', '{} is not a web widget', 'shell sessions have no agent transcript',
     'this worktree has no setup script to approve', 'setup scripts are off for this project', 'not a worktree Nunchiro made', // ticket 259
@@ -123,7 +125,7 @@ export const GROUPS: Record<string, string[]> = {
     'room: {}', // sessions/locate.rs: Locate could not move the project's room folder (ticket 1040)
     "the goal was not sent: {}", // sessions.rs: the goal card (Home view)
     "the {} was not recorded: {}", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
-    'account folder: {}', 'could not make {}: {}', 'logout status: {}', 'account trash: {}', 'account remove: {}', 'agents.toml: {}', '{} could not be saved: {}', '{} is unreadable: {}', 'could not save the library: {}', 'worktree start failed: {}', 'worktree metadata failed: {}; inspect {}', 'worktree folder {}: {}',
+    'account folder: {}', 'could not make {}: {}', 'logout status: {}', 'account trash: {}', 'account remove: {}', 'agents.toml: {}', '{} could not be saved: {}', '{} is unreadable: {}', 'could not save the library: {}', 'worktree start failed: {}', 'worktree metadata failed: {}; inspect {}',
     'the home\'s path cannot be named to the keychain', 'secrets not encoded', 'could not run curl: {}',
   ],
   'err.h.changed': [
@@ -147,7 +149,7 @@ export const GROUPS: Record<string, string[]> = {
     'invalid integration source name', 'missing widget.toml', 'widget.toml is not UTF-8', '{} does not declare "{}" permission', 'integration source manifest kind must be integration', 'entry {} is missing', 'entry over {} MiB', 'entry is not UTF-8',
     'cache is a symlink', 'non-UTF-8 sandbox path', 'invalid sandbox path', 'sandbox could not count processes', 'sandbox spawn: {}', 'missing stdout', 'missing stderr', 'sandbox could not stop the run', 'stdout reader failed', 'stderr reader failed', 'sandbox output cap exceeded', 'sandbox command failed: {}', 'cache parent missing', 'sandbox self-check: nc missing', 'sandbox self-check allowed a denied write', 'sandbox self-check failed: {}', 'sandbox environment key {} not allowed', 'runner unavailable',
   ],
-  'err.h.machineFail': ['remote reply exceeds 8 MiB limit', 'machine {}: SSH {}', 'machine {}: SSH {}: {}', 'ssh failed: {}', 'the relay did not start with a valid hello', '{} discovery failed: {}', 'command timed out after {} ms'],
+  'err.h.machineFail': ['remote reply exceeds 8 MiB limit', 'machine {}: SSH {}', '{} sent no ed25519 host key', 'machine {}: SSH {}: {}', 'ssh failed: {}', 'the relay did not start with a valid hello', '{} discovery failed: {}', 'command timed out after {} ms'],
   'err.h.actRefused': [
     'act text contains an invisible, bidi or control character (U+{}); nothing sent', 'act text stacks more than {} combining marks on one character; nothing sent', 'act text has a joiner or variation selector run that follows no visible character; nothing sent', 'the table hides rows past {}; act sends only rows it shows', 'the table hides columns past {}; act needs output it shows whole',
     'invalid [act] template: {}', 'invalid [act] template: `{}`', 'act needs rows that are JSON objects', 'this row has no field {}', 'field {} is a number the table shows differently; print it as a string', 'field {} is not a string, number or boolean', 'field {} contains a newline', 'no session named {}', '{} sessions named {}',

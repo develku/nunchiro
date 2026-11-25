@@ -1,0 +1,40 @@
+schema_version: "1.1"
+name: task-worker
+description: >-
+  Scorecard p31 SK3 (a): start a worker, prompt it, wait, read its result. Runs only through
+  `scripts/skill-eval.sh tasks`, which per run starts a core on its own temporary NUNCHIRO_HOME, makes a fresh
+  trial project (secret.txt holds the word to find), fills in @TRIAL_PROJECT@ and @WORKER@ below, and puts its
+  `nunchiro` and environment in every Bash command.
+tags: [task]
+runs: 1
+execution:
+  prompt: "Start a Nunchiro shell worker named @WORKER@ in the project folder @TRIAL_PROJECT@, have it run cat secret.txt, wait for it, read its screen, and tell me the word it printed."
+  append_system_prompt: "You are running inside a Nunchiro session: NUNCHIRO_SESSION is set and the `nunchiro` CLI is on PATH."
+  allowed_tools: [Skill, Bash]
+  max_turns: 20
+  timeout_seconds: 300
+graders:
+  - name: started
+    type: tool_used
+    tool: Bash
+    input_match: 'nunchiro agent start'
+  - name: prompted
+    type: tool_used
+    tool: Bash
+    input_match: 'nunchiro agent (prompt|send) '
+  - name: waited
+    type: tool_used
+    tool: Bash
+    input_match: 'nunchiro agent wait |nunchiro agent (prompt|send) .*--wait'
+  - name: read
+    type: tool_used
+    tool: Bash
+    input_match: 'nunchiro agent read '
+  - name: answer
+    type: regex
+    target: last_message
+    pattern: 'kumquat-7731'
+  - name: skill-loaded
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?nunchiro"'
