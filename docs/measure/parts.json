@@ -32,27 +32,27 @@
     {
      "id": "RR1",
      "verdict": "pass",
-     "evidence": "scripts/build-release.sh:2-4,111-114 (codesign --options runtime with Developer ID), :117 notarytool submit, :126 notarytool wait, staple/verify | A repo script builds, signs, notarizes and staples the release."
+     "evidence": "scripts/build-release.sh:154-157 (codesign --options runtime, verify), :160,:171-173 (notarytool submit/wait/Accepted), :175-177 (staple, spctl), :209-216 (DMG signed, notarized, stapled) | A repo script makes the signed, notarized build."
     },
     {
      "id": "RR2",
      "verdict": "pass",
-     "evidence": "scripts/publish-scan.sh:2 (personal paths, emails, tokens, tree and history), :30-37 token families; docs/release/public-checklist.md:43 runs it on the export; .githooks/pre-commit:5; tests/scenario/test_publish_scan.py | A scan for personal data and secrets exists, is tested and is a step in the export procedure."
+     "evidence": "scripts/publish-scan.sh (tests/scenario/test_publish_scan.py); scripts/public-sync.sh:7,47-62 runs gitleaks and publish-scan -t on every snapshot and refuses on a hit; docs/release/public-checklist.md:42; .githooks/pre-commit:5 | The export is scanned before it leaves."
     },
     {
      "id": "RR3",
      "verdict": "partial",
-     "evidence": "app/src-tauri/src/rc_update.rs:1-15 (17 #[test]); crates/nunchiro/src/update.rs (21 tests); crates/nunchiro/tests/update_cli.rs; rc_update.rs:13-15 says GitHub returns 404 (private repo); README.md:13 'no automatic update' | A tested self-update exists from a local folder or feed. A public user has no update path yet."
+     "evidence": "app/src-tauri/src/rc_update.rs:6-19 (update folder and GitHub-Releases feed), tests :926,:966,:1008; crates/nunchiro/src/update.rs tests | An update path with tests exists, but README.md:18 says there is no download and no automatic update yet; ticket 1107 not closed (no release)."
     },
     {
      "id": "RR4",
-     "verdict": "partial",
-     "evidence": "docs/first-run.md:5-50 install and first start; first-run.md:124 'It is a manual reinstall; nothing updates itself.' vs rc_update.rs:1-9 (self-update since ticket 1082) | The guide exists, but its Update section no longer matches the app."
+     "verdict": "pass",
+     "evidence": "docs/first-run.md:5-30 install; :122-134 Update describes the update folder, 'New build <version> ready' and 'Install and restart', matching web/src/i18n/areas/self-update.ts:21-23,28 and rc_update.rs:6-9; tests/scenario/test_first_run_update.py guards it | Guide exists and matches the app (was partial: Update section said manual reinstall)."
     },
     {
      "id": "RR5",
-     "verdict": "fail",
-     "evidence": "ROADMAP.md:601-603 Public release open (privacy statement: no file in `git ls-files | grep -i privacy`; no DMG in build-release.sh); ROADMAP.md:766 release licence checks open; docs/goal.md:37 public export pending; public-checklist.md:31-35 needs 83 and contribution policy open | 4 or more open release blockers."
+     "verdict": "partial",
+     "evidence": "ROADMAP.md:601-603 Public release still open (signing, DMG, PRIVACY.md now done; onboarding and accessibility gates unproven); :604 ticket 420 open; :766 owner and release licence checks open; docs/goal.md lists no blockers | 2-3 open blockers (was fail: 4 or more)."
     }
    ]
   },
@@ -66,27 +66,27 @@
     {
      "id": "CT1",
      "verdict": "pass",
-     "evidence": "crates/nunchiro-core/src/usage.rs:68-77 (per-account session/weekly Limit, limits_at); web/tests/account-usage-v4.spec.ts:49, web/tests/account-limit.spec.ts:25 | Accounts & Usage page shows usage plus 5-hour and weekly limits for each account; specs cover it."
+     "evidence": "crates/nunchiro-core/src/usage.rs:68-76 (per-account session and weekly Limit, limits_at); web/tests/account-usage-v4.spec.ts:49; web/tests/account-limit.spec.ts | Usage and limits per account."
     },
     {
      "id": "CT2",
      "verdict": "pass",
-     "evidence": "crates/nunchiro-core/src/team.rs:100-136 (level table per agent: model+effort); crates/nunchiro/src/task.rs:15 (task staff --level/--effort); web/tests/levels-992.spec.ts:24,173 | Each seat or task gets a light/standard/deep level that maps to a model and effort."
+     "evidence": "crates/nunchiro-core/src/team.rs:75,103-114 (light/standard/deep to haiku/sonnet/opus and codex low/medium/high); crates/nunchiro/src/task.rs:14,65-67 (--level, --effort); team.rs:783; web/tests/levels-992.spec.ts | Model and effort per task or seat."
     },
     {
      "id": "CT3",
      "verdict": "partial",
-     "evidence": "find plugin -type f | xargs wc -c => 15,143 B total (nunchiro 9,637; artifacts 3,997; orchestration 1,363); frontmatter only => 1,096 B; lead brief team.rs:727-790 => ~7,026 B source | Always-loaded text is about 1 KB, but a lead seat gets about 7-9 KB of brief, and a skill body adds 4-10 KB when used. Between 4 and 12 KB."
+     "evidence": "plugin/ without evals 15,294 B (nunchiro SKILL.md 9,740; artifacts 4,025; orchestration 1,363; plugin.json 166); always-loaded frontmatter about 1.2 KB; lead brief team.rs:729-837 brief_text 8,923 B source | A lead or skill load adds 4-12 KB, not under 4 KB."
     },
     {
      "id": "CT4",
      "verdict": "partial",
-     "evidence": "crates/nunchiro-core/src/ledger.rs:203-206 (auto default = on); advance.rs:21 (QUIET_MS 20 min nudge), :27 (BEAT_MS 10 min), :937-969 (heartbeat core_line to lead) | Plain sessions send nothing. Auto-advance is on by default and sends a lead a model turn every 10 min while a review or merge waits."
+     "evidence": "crates/nunchiro-core/src/ledger.rs:205-208,221-223,239 (Place.auto defaults to true); advance.rs:21,27 (QUIET 20 min, BEAT 10 min), :955-968 (heartbeat core_line to the lead) | By default auto-advance still sends model turns to a waiting lead."
     },
     {
      "id": "CT5",
      "verdict": "pass",
-     "evidence": "crates/nunchiro-core/src/chat/handoff.rs:7-9 (CAP 8192, requests 300, results 500 chars), :32 build_last_five; team.rs:775 (new conversation reads task ledger); web/tests/handoff-chip.spec.ts:44 | A handoff sends a folded summary capped at 8 KB. A lead's new conversation reads the ledger, not the old log."
+     "evidence": "crates/nunchiro-core/src/chat/handoff.rs:7-9 (CAP 8192, 300/500-char cuts), :32 build_last_five; team.rs:1263-1268 (fresh lead gets a takeover line, not the log); web/tests/handoff-chip.spec.ts | Summary, not the whole log."
     }
    ]
   },
@@ -142,7 +142,7 @@
     {
      "id": "VC1",
      "verdict": "partial",
-     "evidence": "crates/nunchiro-core/src/agent_canary.rs:1-11 (ticket 1100 part 2: on a new Claude Code or Codex version the core watches whether it read the first session's input box and permission footer within 120 s, and reads one fresh start under a temporary HOME; a failure gives one card); agent_canary.rs:446,646 (2.1.331 fixture); ticket 1121 (task t145, 'URGENT: Enter dropped as composer; re-pastes glue copies', in flight 2026-11-25): Claude Code 2.1.331 broke the composer reading and typed messages were dropped; core events 2026-11-25: 2 enter_dropped, 2 resent waiting messages, 2 cards to the owner about 1121 | A new version is detected and its screens are read once, but delivery (a typed message lands and Enter submits) is not checked, so 2.1.331 broke delivery for the owner's seats before a fix. pass needs a delivery check on each new version before seats use it."
+     "evidence": "crates/nunchiro-core/src/agent_canary.rs:1-12 (on a new version it watches the input box and footer and does one fresh start); sessions.rs:6187-6205 (ticket 1121 Enter-drop detection while seats run) | Missing: a per-version delivery check (message lands, Enter submits) that blocks or warns before seats use it."
     }
    ]
   },
@@ -155,28 +155,28 @@
    "checks": [
     {
      "id": "LI1",
-     "verdict": "partial",
-     "evidence": "LICENSE:1 MIT; Cargo.toml:8, app/src-tauri/Cargo.toml:5, crates/*/Cargo.toml:5 (workspace), package.json:4, web/package.json:4, app/package.json:4 MIT; plugin/.claude-plugin/plugin.json has no license field | One package manifest, the plugin's, names no licence."
+     "verdict": "pass",
+     "evidence": "LICENSE:1 MIT; Cargo.toml:8, app/src-tauri/Cargo.toml:5, crates/*/Cargo.toml:5 (workspace), package.json:4, web/package.json:4, app/package.json:4, plugin/.claude-plugin/plugin.json:4 (license MIT, new in ticket 1130 E2-L1) | Every manifest names MIT (was partial: the plugin manifest lacked it)."
     },
     {
      "id": "LI2",
      "verdict": "pass",
-     "evidence": "scripts/gen-notices.sh:2-6 (generated from both Cargo.lock closures and pnpm prod deps; --check diffs them against licenses/); scripts/check-app.sh:28 runs --check | Notices are generated from the lock files and a script checks they are current."
+     "evidence": "scripts/gen-notices.sh:2-6 (both Cargo.lock closures and pnpm prod deps; --check diffs them); scripts/check-app.sh:28 runs --check; .github/workflows/ci.yml:124 | Generated from lock files and checked."
     },
     {
      "id": "LI3",
      "verdict": "pass",
-     "evidence": "docs/reuse-ledger.md:1-20 (table); scripts/check-reuse-ledger.sh:1-4 (fails on an unlisted header, a non-MIT/CC0 source, a missing path, a missing NOTICES line; has a self-test) | The ledger exists and a script checks it. It is not wired into the gate command."
+     "evidence": "docs/reuse-ledger.md; scripts/check-reuse-ledger.sh:2-4 (unlisted header, non-MIT/CC0 source, missing path or NOTICES line; --self-test) | Ledger and checker exist; note: no gate or CI caller found for the checker."
     },
     {
      "id": "LI4",
      "verdict": "pass",
-     "evidence": "scripts/gen-notices.sh:29-30 ALLOWED set (GPL/LGPL/AGPL/SSPL/NC rejected), :87-100 gate()/enforce() over every package, :111-115 self-test cases | Dependency licences are checked against an allow list and copyleft is refused."
+     "evidence": "scripts/gen-notices.sh:29-30 ALLOWED (GPL, LGPL, AGPL, SSPL, NC fail), :65,:111 (OR/AND rule, self-test); deny.toml:14 licence allow list | Allow list enforced."
     },
     {
      "id": "LI5",
-     "verdict": "fail",
-     "evidence": "docs/adr/0001-founding-decisions.md:44 'trademark and domain unchecked'; docs/brand/principles.md:75 'No trademark search has been done' | No trademark search or decision is recorded."
+     "verdict": "pass",
+     "evidence": "docs/brand/trademark-search-2026-11.md:1-50 (USPTO, WIPO, TMview, KIPRIS, IP Australia: 0 records for 'Nunchiro'; similar marks listed); docs/adr/0001-founding-decisions.md:44; tests/scenario/test_trademark_search.py | A recorded search exists (was fail); the decision line at :54 is still blank."
     }
    ]
   },
@@ -190,12 +190,12 @@
     {
      "id": "ST1",
      "verdict": "pass",
-     "evidence": "crates/nunchiro/tests/holder.rs:1543-1548 core_swap_keeps_sessions_and_the_window (serve restart and serve update) | The test covers both swaps: same sessions, holders and agents afterwards, and the window reconnects."
+     "evidence": "crates/nunchiro/tests/holder.rs:1543-1548 core_swap_keeps_sessions_and_the_window (serve restart and serve update: same sessions, holders and agents; window reconnects) | Test exists."
     },
     {
      "id": "ST2",
      "verdict": "pass",
-     "evidence": "web/src/CrashScreen.tsx:1-2; web/tests/crash-screen.spec.ts:22,32,50 | A throw during the first draw or a live draw shows a crash screen with Reload window; specs cover it."
+     "evidence": "web/src/CrashScreen.tsx:1-3; web/tests/crash-screen.spec.ts:22,32,50,59 (throw in first draw, live draw, before draw, browser role: crash screen with Reload window) | Test exists."
     }
    ]
   },
@@ -209,27 +209,27 @@
     {
      "id": "TH1",
      "verdict": "partial",
-     "evidence": "crates/nunchiro/guides/orchestration/brief-template.md:5-6 (Goal), :17-18 (Acceptance), :29-31 (Stop) | Acceptance and stop rules are there. The Goal is a paraphrase ('the outcome, as the user would check it'); no field holds the owner's own words."
+     "evidence": "crates/nunchiro/guides/orchestration/brief-template.md:5-6 (Goal is a paraphrase), :17-18 Acceptance, :29-31 Stop; review.md:8 expects the user's words quoted in the brief | No field for the owner's own words."
     },
     {
      "id": "TH2",
      "verdict": "pass",
-     "evidence": "crates/nunchiro/guides/orchestration/report-template.md:1 (STATUS: done|blocked|failed), :48-49 (## Not proven); crates/nunchiro-core/src/sessions/wake.rs:67-92 reads it | The report starts with STATUS and has a 'Not proven' section; the core reads the STATUS line."
+     "evidence": "crates/nunchiro/guides/orchestration/report-template.md:1 (STATUS: done|blocked|failed), :13 (## Not proven) | Template starts with STATUS and lists what was not checked."
     },
     {
      "id": "TH3",
      "verdict": "pass",
-     "evidence": "crates/nunchiro/src/agent.rs:285 (agent ask --wait [--timeout <s>]); crates/nunchiro/tests/agent_room.rs:123 ask_wait_gets_reply_in_same_call, :167 ask_timeout_exits_2_and_logs_event | The CLI asks the lead and blocks with a timeout; both paths have tests."
+     "evidence": "crates/nunchiro/src/agent.rs:285 (agent ask --wait [--timeout <s>]); crates/nunchiro/tests/agent_room.rs:123,167,246 (reply in the same call; timeout exits 2) | CLI ask with timeout."
     },
     {
      "id": "TH4",
      "verdict": "pass",
-     "evidence": "crates/nunchiro/src/task.rs:16 (task learn); crates/nunchiro-core/src/ledger.rs:847 learn, :1864; sessions.rs:7233 merge_lessons; web/tests/notes.spec.ts | Lessons are proposed per task, kept as notes when accepted at merge, and listed in Settings > Notes."
+     "evidence": "crates/nunchiro/src/task.rs:84 (learn); crates/nunchiro-core/src/ledger.rs:870 learn; sessions.rs:7932 merge_lessons; web/tests/notes.spec.ts | Lessons kept."
     },
     {
      "id": "TH5",
      "verdict": "pass",
-     "evidence": "grep -c ' GREEN ' mainwatch.log => 102; grep culprit => 5 lines, 4 distinct lanes; git log --first-parent origin/main | grep -i revert => 1 (b0d4ebfb3) | 1 of 102 green runs reverted on main (1%); counting every culprit lane, 4/102 = 3.9%. Both are at or under 5%."
+     "evidence": "git log --first-parent origin/main: 2 lane reverts (b0d4ebfb3, 90bcbb4c2), both before d497ae997, 0 among the 62 merges since; ops-2026-11-26.json deploy (2 reverts landed of 140 tested tips = 1.4 %) | Reverts at or under 5 % of tested main tips."
     }
    ]
   },
@@ -243,27 +243,27 @@
     {
      "id": "AC1",
      "verdict": "partial",
-     "evidence": "web/tests/settings-focus-walk-521.spec.ts:22; web/tests/tree-keynav.spec.ts:45,91; web/tests/pane-focus.spec.ts:14; web/tests/palette-focus.spec.ts | Keyboard specs cover Settings, the tree, panes and the palette. No spec walks every main screen (chat, board, Home) keyboard-only."
+     "evidence": "web/tests/settings-focus-walk-521.spec.ts, tree-keynav.spec.ts, pane-focus.spec.ts, palette-focus.spec.ts; no new keyboard-only walk among specs changed d497ae997..HEAD | Missing: a keyboard-only walk of chat, board and Home."
     },
     {
      "id": "AC2",
      "verdict": "pass",
-     "evidence": "web/tests/frame-chrome.spec.ts:96-110 (axe wcag2a/aa on chat, board, settings, light and dark, expects 0 violations); rg -l AxeBuilder web/tests => 39 specs; web/tests/rail-labels-language.spec.ts:47 | axe scans with button-name and label rules run on the main screens, plus 39 axe specs on surfaces. Only nested-interactive is disabled."
+     "evidence": "web/tests/frame-chrome.spec.ts:95-110 (axe wcag2a/aa on chat, board, settings, light and dark, toEqual([])); 39 specs use AxeBuilder | Accessible names scanned."
     },
     {
      "id": "AC3",
      "verdict": "pass",
-     "evidence": "web/tests/frame-chrome.spec.ts:96-104 (axe wcag2aa incl. color-contrast, light+dark, toEqual([])); web/tests/usability.spec.ts:100,104-117; web/tests/contrast.spec.ts:131 | Contrast is scanned with 0 failures asserted in both schemes. Note: the full-page themes-sweep scan is evidence only (SWEEP=1)."
+     "evidence": "web/tests/frame-chrome.spec.ts:95-110 (wcag2aa includes color-contrast, both schemes, 0 violations asserted); web/tests/contrast.spec.ts | AA contrast scanned."
     },
     {
      "id": "AC4",
      "verdict": "pass",
-     "evidence": "web/src/tokens.css:337-342 (motion tokens set to 0s); for each animated CSS file: rg -c prefers-reduced-motion => 9 of 9 files have a reduce block; web/src/board/watch.ts:114, Sidebar.tsx:169 | Every stylesheet with animation has a reduced-motion rule, and the shared motion tokens drop to zero."
+     "evidence": "web/src/tokens.css:337-342 (motion tokens to 0s); every CSS file with @keyframes or animation (9 files) has a prefers-reduced-motion block | Reduce motion followed."
     },
     {
      "id": "AC5",
      "verdict": "partial",
-     "evidence": "scripts/app-click/ax.swift:166-182 (AXPress, falls back to a mouse click); docs/review/quality-1116/ledger.md:1070 (switch press fixed), :1133 (AX press never submits a web-view form) | app-click presses through AX, but some web elements give no AXPress (the code falls back to a click), and a form submit ignored AX press."
+     "evidence": "scripts/app-click/ax.swift:172 (AXPress), :177 ('Some web elements expose no AXPress: click their centre instead') | Some controls do not answer AX press."
     }
    ]
   },
@@ -290,17 +290,17 @@
     {
      "id": "TR1",
      "verdict": "fail",
-     "evidence": ".gate-quarantine: 0 entries (1 comment line); night-1121b-report.json stats => skipped 168; `git grep '#[ignore'` *.rs => 11 | Nothing is quarantined, but a full nightly skipped 168 tests (mostly opt-in shot and live specs) and Rust has 11 ignored tests. Both are over 20."
+     "evidence": ".gate-quarantine 0 entries; git grep '#\\[ignore' -- '*.rs' => 1 (app/src-tauri/tests/dev_load.rs:96); 9 cfg(feature measure/live) gates skip the default run (weekly in extended-tests.sh); git grep -nE '\\.skip\\(|\\.fixme\\(' -- web/tests => 128; last nightly skipped 168 | Over 20 skipped."
     },
     {
      "id": "TR2",
      "verdict": "fail",
-     "evidence": "<main checkout>/.scratch/fable/night-1121b-reds.txt:1 'passed=3973 failed=18 flaky=10'; w76-nightly-REPORT.md: 11-22 04:32 and 07:37 nightlies red (measure-b17); incidents.md:7 | No later nightly with 0 failed and 0 flaky was found. The 11-22 runs were red."
+     "evidence": "Newest nightly found: .scratch/fable/night-1121b-reds.txt:1 (passed=3973 failed=18 flaky=10); scripts/web-nightly.sh:4-6,69 writes only to the MacBook's untracked .scratch | No later full nightly with 0 failed and 0 flaky is recorded."
     },
     {
      "id": "TR3",
      "verdict": "fail",
-     "evidence": "Last 10 done by git log: 1092:13, 1091:14, 1093:27, 1090:27-28, 1085:19-20 say red before; 1089, 1082, 1088, 1087, 1083 do not | 5 of 10 name a test that was red first. The check needs 8."
+     "evidence": "Last 10 done tickets (docs/tickets/v2/issues): 1126, 1128, 1129, 1127, 1121, 1120, 1124, 1119, 1117, 1116; only 1121:27-31 names a test that was red before; 1116:19 and 1119:20 claim red-first without naming the test | At most 3 of 10."
     }
    ]
   },
@@ -340,27 +340,27 @@
     {
      "id": "BT1",
      "verdict": "pass",
-     "evidence": "crates/nunchiro-core/src/team.rs:408 lead_of, :939 open_seat, :1458 one_lead_per_place test; room: sessions/room.rs:1328; web/tests/leader-team-990.spec.ts:21, leader-room-990.spec.ts | Standing lead and teammates per place, with a room for send, ask and reply."
+     "evidence": "crates/nunchiro-core/src/team.rs:419 lead_of, :957 open_seat, :1789 one_lead_per_place test; crates/nunchiro-core/src/sessions/room.rs; web/tests/leader-team-990.spec.ts, leader-room-990.spec.ts | Lead, workers and a room."
     },
     {
      "id": "BT2",
-     "verdict": "partial",
-     "evidence": "crates/nunchiro-core/src/board/mod.rs:1187-1210 session_state (Idle for fresh); web/tests/board-truth-1090.spec.ts:23,44; stall-card-1004.spec.ts:8; docs/tickets/v2/issues/1092-*.md:4 | All four states are coded and specced, but the owner found board untruths on 11-23. Fixes 1090-1092 landed 11-24; their fresh Reviewer and app look are still pending."
+     "verdict": "pass",
+     "evidence": "crates/nunchiro-core/src/board/mod.rs:1187-1214 (Working only during a turn, fresh seat Idle, needs-you = failed or waiting, Done); web/tests/board-truth-1090.spec.ts:23,95; turn-ends-1094.spec.ts:26 (1094 re-landed after its revert); workers-1115-board.spec.ts:63 | States coded and specced, the 1090-1094 fixes are on main (was partial). Caveat: no app look recorded since the owner's 11-23 report."
     },
     {
      "id": "BT3",
      "verdict": "partial",
-     "evidence": "crates/nunchiro-core/src/ledger.rs:1-4 (lead's new conversation reads same tasks); team.rs:775; rg 'budget' over team.rs/advance.rs/ledger.rs => no lead-replacement code | Work survives a lead's new conversation through the ledger. Nothing replaces a lead on a context or token budget."
+     "evidence": "ledger.rs (a lead's new conversation reads the same tasks); team.rs:1263-1268 HANDOVER on a fresh lead; rg budget/context over team.rs, advance.rs, ledger.rs, sessions.rs finds no automatic replacement | Missing: replacement when a lead hits a budget is manual only."
     },
     {
      "id": "BT4",
      "verdict": "pass",
-     "evidence": "crates/nunchiro-core/src/schedule/mod.rs:1-15 (fires, survives restart, teammate task); web/tests/schedules-993.spec.ts:171,249; docs/scorecard.md:67 (L7 seen in RC) | Owner-approved schedules wake seats with no owner present; the run state is shown and tested."
+     "evidence": "crates/nunchiro-core/src/schedule/mod.rs:1-15 (fires; a missed time fires once after a restart; teammate task); web/tests/schedules-993.spec.ts:171 run_now, :330 teammate | Schedules run without the owner."
     },
     {
      "id": "BT5",
-     "verdict": "partial",
-     "evidence": "crates/nunchiro-core/src/team.rs:1084-1099 (live seat is kept; window open resumes old conversation); web/tests/levels-992.spec.ts:252 (seat replaced for another level) | Opening a stuck live seat returns the same seat. A fresh conversation for the same role comes only by closing it or changing level; there is no direct action."
+     "verdict": "pass",
+     "evidence": "crates/nunchiro-core/src/team.rs:1296-1345 fresh_lead (Fresh::Now for any teammate, keeps level, model and parent), Undo :1446; web/tests/seat-new-conversation-1130.spec.ts:38 (stuck lead, one press), :87 (every seat), :118 (Undo); web/src/i18n/areas/leader.ts:157 | Any stuck seat gets a fresh conversation with the same role (was partial: lead only)."
     }
    ]
   },
@@ -374,27 +374,27 @@
     {
      "id": "DA1",
      "verdict": "pass",
-     "evidence": "scripts/check-cli-docs.sh:2-4 (fails either way: --help vs docs/cli.md; builds the binary first, :9-10); gate runs it at .agents/build-loop.toml:472 | A script checks the CLI reference against the CLI in every gate."
+     "evidence": "scripts/check-cli-docs.sh:2-12 (fails either way; builds first); .github/workflows/ci.yml:147; .agents/build-loop.toml:472 | CLI reference checked by a script."
     },
     {
      "id": "DA2",
      "verdict": "pass",
-     "evidence": "README.md:27-37; web/package.json name 'nunchiro-web'; scripts/local-signing.sh:4 'sign <app>'; .cargo/config.toml target-dir=target; crates/nunchiro exists; docs/cli.md:173,176 snapshot/diagnose; main.rs:1072 | Every quick-start command and path exists. The build was not run (read-only rules)."
+     "evidence": "README.md:30-40: every command and path exists (web/package.json:2, app/src-tauri/tauri.conf.json:3, scripts/local-signing.sh:68-69, crates/nunchiro, scripts/setup-worktree.sh) | Quick start commands exist (not run)."
     },
     {
      "id": "DA3",
      "verdict": "partial",
-     "evidence": "Match: Widget library extensions.ts:67; Always shown/Auto-hide settings-base.ts:409,412; Use for light :638; Phone and web access common.ts:129; Side pane v25-sidepane-t.ts:18; Steer followup-default.ts:16; Save as… rest-layout.ts:87. Mismatch: GLOSSARY.md:81 Browse online (no UI string), :93 Project group (none), :63 Agent extensions 'not built' (UI: Skills & hooks) | 7 of 10 match."
+     "evidence": "GLOSSARY.md unchanged since b2d8c0eea; 7 of 10 match; mismatches GLOSSARY.md:81 'Browse online' vs common.ts:178 'Browse themes online'; :93 'Project group' vs tree.ts:161 'New group'; :63 'Agent extension(s)' vs page 'Skills & hooks' | 3 of 10 differ."
     },
     {
      "id": "DA4",
      "verdict": "partial",
-     "evidence": "Match: chat composer refused, delivery.rs:67 + sessions.rs:5272; done on agent end, types.ts:237; worker close, agent_exit_shell.rs:676,699; is_secret, start_secrets.rs:31. Mismatch: board.md Decisions line 1 says Needs you/Working/Next/Done, board-watch.ts:55-57 shows 'To do' and an 'Idle' column | 4 of 5 match. The board record misses the 1092 idle column and the 'To do' title."
+     "evidence": "4 of 5 match; docs/areas/board.md:33 columns Needs you, Working, Next, Done vs web/src/i18n/areas/board-watch.ts:53-57 ('To do', 'Idle'); board.md:44 names another five-column set | 1 of 5 differs."
     },
     {
      "id": "DA5",
      "verdict": "pass",
-     "evidence": "1092/1091 board_model.rs:217, agent_exit_shell.rs:208; 1089 room.rs:944 + room-times-1089.spec.ts; 1090 board_model.rs:198, tests.rs:6249; 1087 chat_projection.rs:34; 1083 worktree_clean.rs:1385,1473; 1085 tests.rs:10227,10265,10330, wake.rs:1267; 1093, 1082, 1088 specs exist | Every named test in the 10 tickets exists."
+     "evidence": "Sample of 10 tickets closed since 11-24 (1094, 1098, 1099, 1105, 1112, 1116, 1117, 1119, 1120, 1121): every named test exists, e.g. update.rs:1103, prompt_enter.rs:801, advance_start_tests.rs:416, cohesion-1099.spec.ts:61, card-question-1105.spec.ts, place-account-1120.spec.ts | Named tests exist."
     }
    ]
   },
@@ -408,12 +408,12 @@
     {
      "id": "IN1",
      "verdict": "partial",
-     "evidence": "docs/scorecard.md:84 (7 native reads; 15/17 high, 237/239 medium fixed); git merge-base --is-ancestor d14954b4e 28b4c42ce b04dfacd0 HEAD => on main | All seven reads were done and the fix lanes landed, but 2 high and 2 medium rows were left. Strings added since 11-21 are English only (ticket 1035)."
+     "evidence": "docs/scorecard.md:84 (7 native reads done, 2 high and 2 medium rows left); ticket 1035 still ready-for-agent; strings since 11-21 English only | Fixes not all landed."
     },
     {
      "id": "IN2",
      "verdict": "partial",
-     "evidence": "web/tests/i18n-translations.spec.ts:7-23 (missing keys only logged, 'Ticket 1035 puts the exact-key-set check back'); web/tests/i18n-key-sets.spec.ts:8 (baseline keys only) | A spec fails only when a baseline key is dropped. A new key missing in any language passes."
+     "evidence": "web/tests/i18n-translations.spec.ts:7-23 only logs missing keys (1035 restores the exact check); web/tests/i18n-key-sets.spec.ts:8 checks baseline keys only | A new key missing in a language still passes."
     }
    ],
    "evidence": [
@@ -430,27 +430,27 @@
     {
      "id": "DS1",
      "verdict": "pass",
-     "evidence": "crates/nunchiro-core/src/store.rs:566-584 (temp file, create_new, fsync, rename, dir fsync); rg -c atomic_write crates/*/src app/src-tauri/src => 59 uses | State files go through one atomic write helper. The plain fs::write calls are in tests."
+     "evidence": "crates/nunchiro-core/src/store.rs:566-577 atomic_write (create_new, sync_all, rename, directory fsync); server.rs:238 | Atomic writes."
     },
     {
      "id": "DS2",
      "verdict": "pass",
-     "evidence": "crates/nunchiro/src/update.rs:10-12, 603-628 (swap keeps backup, puts it back on failure), 412-425 rollback_core; test update.rs:801-828 a_failed_core_replace_puts_the_backup_back | The update keeps the previous bundle and restores it, with its core, when the new build fails. A test covers this."
+     "evidence": "crates/nunchiro/src/update.rs:9-12,439-440,964-988 swap keeps a backup and restores on failure; :718 rollback_core; test :1172 a_failed_core_replace_puts_the_backup_back | Backup and rollback."
     },
     {
      "id": "DS3",
      "verdict": "pass",
-     "evidence": "crates/nunchiro/tests/holder.rs:887 core_kill9_reattach_30x, :1548 core_swap_keeps_sessions_and_the_window, :1679 core_swap_mid_output_loses_no_bytes; web/tests/core-swap-reconnect.spec.ts | Sessions survive a killed core and a core swap. Tested 30 times over, with no lost bytes."
+     "evidence": "crates/nunchiro/tests/holder.rs:887 core_kill9_reattach_30x, :1548 core_swap_keeps_sessions_and_the_window, :1679 core_swap_mid_output_loses_no_bytes; web/tests/core-swap-reconnect.spec.ts | Tests exist."
     },
     {
      "id": "DS4",
      "verdict": "pass",
-     "evidence": "crates/nunchiro/tests/sessions.rs:446 corrupt_metadata_is_rejected_without_overwrite; crates/nunchiro-core/tests/machines_page.rs:929 broken_machine_store_keeps_local_window_connected; tests/schedule.rs:401; tests/approval_state.rs:312 | Many tests show a broken store is refused and left as it was, while the other data keeps working."
+     "evidence": "crates/nunchiro/tests/sessions.rs:446 corrupt_metadata_is_rejected_without_overwrite; crates/nunchiro-core/tests/machines_page.rs:929 broken_machine_store_keeps_local_window_connected | Tests exist."
     },
     {
      "id": "DS5",
      "verdict": "partial",
-     "evidence": "import: crates/nunchiro-core/src/import/tests.rs:86, web/tests/import-sessions.spec.ts:34; export: web/src/chrome/commands.ts:311 (copy chat), app/src-tauri/src/save.rs:1 (closed shell only); docs/areas/system.md:52 (settings export out of scope) | Importing past conversations works. There is no data export, only copying a chat or saving a closed shell's text."
+     "evidence": "Import exists; no export command or request in crates/*/src or web/src; docs/areas/system.md:52 lists settings export as out of scope | No data export."
     }
    ]
   },
@@ -464,27 +464,27 @@
     {
      "id": "OB1",
      "verdict": "pass",
-     "evidence": "crates/nunchiro-core/src/logs.rs:2 (0600, rotated at 10 MB, keeps 5), :20 ROTATE_BYTES, :22 KEEP, :268-272 rotate | The core log is capped by size and rotated, and its contents are redacted."
+     "evidence": "crates/nunchiro-core/src/logs.rs:1-2 (0600, rotated at 10 MB, keeps 5), :20 ROTATE_BYTES, :22 KEEP, :268,285 rotate | Size-limited log."
     },
     {
      "id": "OB2",
      "verdict": "pass",
-     "evidence": "crates/nunchiro/src/main.rs:417-418,675-702 `serve status` (core up, holders, orphaned); crates/nunchiro/src/diagnose.rs:1-40 `nunchiro diagnose` bundle with status.json; tests/diagnose.rs:141-388 | One status command shows the core and its holders; the diagnose bundle adds versions, settings and the log tail."
+     "evidence": "crates/nunchiro/src/main.rs:442 serve status; crates/nunchiro/src/diagnose.rs:1-3 diagnose bundle | Status and diagnostics."
     },
     {
      "id": "OB3",
      "verdict": "partial",
-     "evidence": "crates/nunchiro-core/src/logs.rs:425-436,487-518 (writes logs/panic.log); holder/mod.rs:344-348; tests/logs_redaction.rs:285; web/src/CrashScreen.tsx:2-3 ('the window has no request that writes to the core's log') | Core and holder panics leave a report on disk. A window draw crash leaves nothing on disk, and the app process has no panic hook."
+     "evidence": "Core and holder panics write logs/panic.log (logs.rs:429,517; holder/mod.rs:344); no panic hook in app/src-tauri/src; web/src/CrashScreen.tsx:2-3 'the window has no request that writes to the core's log' | A window or app crash leaves nothing on disk."
     },
     {
      "id": "OB4",
      "verdict": "pass",
-     "evidence": "web/tests/errors-plain.spec.ts:186,387,464 (scan: no UI reads raw error text); web/tests/errors-core-reasons.spec.ts:30,46; web/tests/problem-causes.spec.ts:56 | Every core refusal is mapped to a plain line in 8 languages, and a scan forbids raw error text in the UI."
+     "evidence": "web/tests/errors-plain.spec.ts (raw-error scan), errors-core-reasons.spec.ts (six new refusals got lines, ticket 1136), problem-causes.spec.ts | Errors say what and what to do."
     },
     {
      "id": "OB5",
-     "verdict": "partial",
-     "evidence": "scripts/measure/startup.py:1-14, latency.sh, paint.sh; output goes to untracked .scratch/measure (startup.py:14) and .scratch/perf-baseline (baseline.py:19); kept: docs/research/perf/baseline-2026-10-31.md (git ls-files docs/research/perf => 14 files) | Scripts record startup, latency and paint times. The routine runs write to untracked .scratch; only the 10-31 baseline is committed."
+     "verdict": "pass",
+     "evidence": "scripts/measure/startup.py, latency.sh, paint.sh; scripts/measure/scorecard.py:46,640 writes run results into tracked docs/measure/results-<date>.json (launch_cold_s, launch_warm_s to first drawn snapshot, core_start_s, send_ms); committed results-2026-11-24*.json and this run's results-2026-11-25.json | Timings recorded by scripts and kept in git (was partial: only the 10-31 baseline was committed)."
     }
    ]
   },
@@ -498,27 +498,27 @@
     {
      "id": "CQ1",
      "verdict": "pass",
-     "evidence": ".agents/build-loop.toml:472 [gate] command runs `cargo clippy --workspace --all-targets -- -D warnings` and `(cd web && pnpm typecheck)`; web/package.json:9 typecheck = tsc --noEmit | The merge gate runs both clippy with -D warnings and the web typecheck. scripts/check-app.sh:25 adds clippy for the app crate."
+     "evidence": ".agents/build-loop.toml:472 gate runs cargo clippy --workspace --all-targets -- -D warnings and pnpm typecheck; .github/workflows/ci.yml:44 (typecheck), :68 (clippy -D warnings) | Both in the gate."
     },
     {
      "id": "CQ2",
      "verdict": "partial",
-     "evidence": "`git ls-files ... | xargs wc -l` plus scratchpad rs3.py (cuts #[cfg(test)] mods, skips tests/, *_tests.rs) => 10: sessions.rs 14035, queue/mod.rs 3105, ledger.rs 2446, api.rs 2254, http/mod.rs 2213, browser/agent.rs 2100, server.rs 2041, web/src/styles.css 3643, i18n/areas/settings.ts 3003, settings-base.ts 2884 | 10 files is 10 or fewer, so partial. Still 9 if CSS is not counted."
+     "evidence": "git ls-files, tests/specs/#[cfg(test)] bodies removed: 10 files over 2,000 lines (sessions.rs 15056, styles.css 3839, queue/mod.rs 3280, settings.ts 3003, settings-base.ts 2884, ledger.rs 2724, api.rs 2298, http/mod.rs 2251, browser/agent.rs 2100, server.rs 2086) | 10 or fewer = partial."
     },
     {
      "id": "CQ3",
      "verdict": "pass",
-     "evidence": "python3 -I scratchpad/rs3.py (non-test .rs, cfg(test) mods removed, blank and comment lines dropped) => 92 unwrap()/expect( in 87,047 lines = 1.06 per 1,000; top: crates/nunchiro-core/src/sessions.rs 24 | Under 2 per 1,000. A cruder count that left inline test mods in gave 2.42."
+     "evidence": "99 unwrap()/expect( in 91,434 non-test, non-blank, non-comment Rust lines = 1.08 per 1,000 (top sessions.rs 24, http/mod.rs 12) | Under 2."
     },
     {
      "id": "CQ4",
      "verdict": "pass",
-     "evidence": "python3 -I scratchpad/anyc.py (non-test .ts/.tsx, comments and strings stripped, ': any' / 'as any' / '<any>' / 'any[]') => 0; raw `grep ': any|as any' web/src` => 10 hits, all in comments (e.g. Tooltip.tsx:73) | No `any` types in non-test TypeScript."
+     "evidence": "git ls-files 'web/src/*.ts*' | grep -v spec | xargs grep -nE ': any\\b|as any\\b' => 12 hits, all in comments (Tooltip.tsx:73, settings.ts:160); 0 in code | Under 20."
     },
     {
      "id": "CQ5",
      "verdict": "pass",
-     "evidence": "scripts/web-smoke.sh:175-193 dead-click ratchet (baseline may lose lines, never gain them against origin/main); web/tests/core-set.txt:42 dead-click.spec.ts; scripts/dead-click.baseline 0 lines; noop/overlap ratchets web-smoke.sh:196-214 | The dead-click ratchet is in the gate. Duplicate surfaces is only a generated list, not a gate (duplicate-surfaces.sh:4)."
+     "evidence": "scripts/web-smoke.sh:176-187 dead-click ratchet against origin/main's copy; scripts/dead-click.baseline 0 lines; web/tests/core-set.txt:42 includes dead-click.spec.ts | Ratchet that may only fall."
     }
    ]
   },
@@ -532,27 +532,27 @@
     {
      "id": "EX1",
      "verdict": "pass",
-     "evidence": "crates/nunchiro/src/extensions.rs:1-11 (extensions list|show|new|on|off); web/tests/extensions-view.spec.ts:28,136; extensions-confirm-456.spec.ts:44,134 | Skills can be listed, read, made and switched in the window and the CLI; the page says custom skills reach Claude only."
+     "evidence": "crates/nunchiro/src/extensions.rs:1-4 (extensions list|show|new|on|off); web/tests/extensions-view.spec.ts | App and CLI."
     },
     {
      "id": "EX2",
      "verdict": "pass",
-     "evidence": "crates/nunchiro-core/src/extensions.rs:13-15,722 hook_lines; web/tests/extensions-hooks-580.spec.ts:18,48 (hook_make_and_switch_580, hook_edit_580); extensions-detail.spec.ts:17 | Hook items are shown with their commands and edited and saved in the window. Nunchiro's own hooks are read-only."
+     "evidence": "crates/nunchiro-core/src/extensions.rs:723 hook_lines, test :2146; web/tests/extensions-hooks-580.spec.ts | Hooks seen and edited."
     },
     {
      "id": "EX3",
      "verdict": "partial",
-     "evidence": "crates/nunchiro-core/src/api.rs:1086-1089 ExtensionsMcpAdd {name, command} (no project); extensions.rs:474 mcp_add, :1227 test | Nunchiro's own MCP servers can be added globally only. Per-project servers are read from the agent config and cannot be added."
+     "evidence": "crates/nunchiro-core/src/api.rs:1107-1110 ExtensionsMcpAdd {name, command} has no project field; extensions.rs:474 mcp_add(home, ...); the new composer offer (web/tests/composer-mcp-offer-1130.spec.ts) adds globally too | Per-project add missing."
     },
     {
      "id": "EX4",
      "verdict": "pass",
-     "evidence": "crates/nunchiro/src/widget.rs:1-2 (widget new/allow); crates/nunchiro-core/tests/widgets_web.rs, widgets_run.rs; web/tests/web-widgets.spec.ts, artifacts.spec.ts | Script and web widgets and artifacts are added as files with an approval step; the app is not rebuilt."
+     "evidence": "crates/nunchiro/src/widget.rs:1-2 (widget new / widget allow); crates/nunchiro-core/tests/widgets_web.rs; web/tests/web-widgets.spec.ts | Widgets without app change."
     },
     {
      "id": "EX5",
      "verdict": "pass",
-     "evidence": "crates/nunchiro-core/src/acp/mod.rs:1-4 (ACP v1 over stdio, agents.toml); crates/nunchiro-core/tests/acp.rs; web/tests/rc2c-acp.spec.ts, accounts-acp-card.spec.ts | Any ACP agent declared in agents.toml runs as a session with its approvals."
+     "evidence": "crates/nunchiro-core/src/acp/mod.rs:1-3 (ACP v1 over stdio, agents.toml); crates/nunchiro-core/tests/acp.rs; web/tests/rc2c-acp.spec.ts | ACP."
     }
    ]
   },
@@ -566,27 +566,27 @@
     {
      "id": "DE1",
      "verdict": "partial",
-     "evidence": "sh scripts/raw-literals.sh => 49 literals in 8 rows; scripts/raw-literals.baseline => 55 in 11 rows; scripts/raw-literal-ratchet.sh => ok | The ratchet holds, but the baseline (55) sits above the current count (49), so it is not at its floor. Spacing is not counted."
+     "evidence": "sh scripts/raw-literals.sh => 8 rows / 49 literals; scripts/raw-literals.baseline 11 rows / 55; 3 baseline rows already gone | Ratchet passes but the baseline is not at its floor."
     },
     {
      "id": "DE2",
      "verdict": "partial",
-     "evidence": "docs/design/552-sweep/contact-dark.png, contact-light.png (last commit 2026-11-13); 960-sweep 24 dark/24 light (11-15); web/tests/themes-sweep.spec.ts:1-4 | The full dark and light sweep predates pages added after 11-15 (Home, Team, Assistants, Outbox, browser widget, history); no newer full sweep is kept."
+     "evidence": "git log --since=2026-11-16 --name-only -- docs/design: only 2 dark/light shots (cohesion-1099); web/tests/themes-sweep.spec.ts:1-5 writes to .scratch only | No kept sweep of pages added after 11-15."
     },
     {
      "id": "DE3",
      "verdict": "pass",
-     "evidence": "web/tests/settings-shell.spec.ts:123-138 (every page id: one header.phd with h1 and description); web/tests/inputs-one-style.spec.ts:116,177,317,375 (every field, dark and light, plus a source scan) | Both are walked on every Settings page and every screen by specs."
+     "evidence": "web/tests/settings-shell.spec.ts:125,137 (header.phd on every page id); web/tests/inputs-one-style.spec.ts (Quick setup select fixed in ticket 1136) | Specs exist."
     },
     {
      "id": "DE4",
      "verdict": "pass",
-     "evidence": "web/tests/empty-states-469.spec.ts:23,32,44,57,70; web/tests/empty-states-550.spec.ts:28,36,44,55 | Each empty list offers its filling action, or names the next step where the ticket table allows it."
+     "evidence": "web/tests/empty-states-469.spec.ts, empty-states-550.spec.ts | Spec exists."
     },
     {
      "id": "DE5",
      "verdict": "pass",
-     "evidence": "docs/design/v25-design-shell/index.html:29,68; docs/design/v25-design-tree/index.html:20; docs/design/v25-board/index.html:16; docs/design/polish-1121/index.html:101,120; web/tests/visual-conformance.spec.ts:1-6,24 | Approved mockups for the frame, tree, board, chat and Home are committed, and pixel and fidelity specs compare the app against them."
+     "evidence": "docs/design/v25-design-shell/index.html, polish-1121/index.html, first-use-b-1130/mockup.html; web/tests/visual-conformance.spec.ts | Mockups committed."
     }
    ],
    "evidence": [
@@ -619,27 +619,27 @@
     {
      "id": "SE1",
      "verdict": "pass",
-     "evidence": "crates/nunchiro-core/src/server.rs:199-203 (token written by atomic_write, socket chmod 0600); crates/nunchiro/tests/sessions.rs:409-432 socket_rejects_bad_token (asserts unauthorized, home 0700, core.sock/core.token 0600); crates/nunchiro-core/tests/http_auth.rs:153,163 | A wrong token is refused and the file modes are checked by a test."
+     "evidence": "crates/nunchiro-core/src/server.rs:238 token via atomic_write, :240 socket 0600; crates/nunchiro/tests/sessions.rs:410 socket_rejects_bad_token_and_singleton_preserves_live_core | Token and private files."
     },
     {
      "id": "SE2",
      "verdict": "fail",
-     "evidence": "crates/nunchiro-core/src/agent_permission.rs:2,28-30 (absent means FullAccess); docs/areas/chat.md:355 (default `full-access`); sandbox/mod.rs:1 covers widget/script runs only | Agent sessions start with full access by default. The sandbox profile covers widgets and integrations, not agent sessions. Full access by default is the owner decision of ticket 362 (same default as T3 Code and Orca); the check still fails as written."
+     "evidence": "crates/nunchiro-core/src/agent_permission.rs:30-31: no stored choice means FullAccess | Not sandboxed by default."
     },
     {
      "id": "SE3",
      "verdict": "partial",
-     "evidence": "crates/nunchiro-core/src/outbox.rs:1-21; crates/nunchiro/src/hook.rs:123-170 (Home seat lock fails closed, spends the yes once); crates/nunchiro-core/tests/outbox.rs:140 | Only Home seats are gated, and only through Outbox cards. Project sessions with mail MCP tools in default full access have no approval gate."
+     "evidence": "New: every Claude session gets a PreToolUse hook outward that asks before mail, calendar, post or publish (sessions.rs:10102-10113 onFailure block; crates/nunchiro-core/src/outward.rs:1-7; tests/outward_hook.rs:46; home_lock_tests.rs:100) | Gated on AgentKind::Claude: Codex and ACP sessions have no outward approval; a text matcher (outward.rs:6 shortcut)."
     },
     {
      "id": "SE4",
      "verdict": "pass",
-     "evidence": "scripts/publish-scan.sh:54-62 (personal-path, email, token scans); .githooks/pre-commit:30-32; tests/scenario/test_publish_scan.py:174 run by scripts/scenario-tests.sh:2 (gate stage 6); docs/release/publish-check.md:51 | The scan runs at commit and in the gate. Any hit without a verdict row fails. The only 'to fix' row is the untracked-file glob."
+     "evidence": "scripts/publish-scan.sh:1-3; .githooks/pre-commit:5-6; tests/scenario/test_publish_scan.py:174 via scripts/scenario-tests.sh (gate stage 6, ci.yml:148) | Scan before publish and in the gate."
     },
     {
      "id": "SE5",
-     "verdict": "fail",
-     "evidence": "rg -il 'cargo audit|cargo-audit|rustsec|pnpm audit|npm audit|vulnerab' (repo, no node_modules) => 3 files: README.md, docs/release/public-checklist.md, docs/measure/rubric.md (none is an audit); no deny.toml | No script or gate stage audits dependencies for known vulnerabilities."
+     "verdict": "pass",
+     "evidence": "scripts/supply-chain.sh:11,15,144-179 runs cargo audit (RustSec) and pnpm audit, exits 1 on a high or critical shipped vulnerability (:25-26); weekly LaunchAgent scripts/launchd/com.me.nunchiro-supply-chain.plist; runs logged docs/release/supply-chain-log.md:16-17; deny.toml | A script audits (was fail). Not run by this judge (owner rule: no network audit). GitHub Dependabot shows 3 open alerts (data only)."
     }
    ]
   },
@@ -652,28 +652,28 @@
    "checks": [
     {
      "id": "MD1",
-     "verdict": "fail",
-     "evidence": "crates/nunchiro-core/src/peer.rs:200 under_holder (walks the parent processes); round 4 of 2026-11-24 (this part's evidence below): 29 of 2984 Rust tests fail when cargo runs inside a Nunchiro session, whatever the environment; the only way around is a detached run with launchd as its parent, in scripts/measure/scorecard.py:248 (outside_holder) and docs/measure/README.md:41; AGENTS.md (20 lines) and scripts/cargo-test-gate.sh name neither the failing set nor the way around | A Builder seat that runs the gate's Rust stage in its session gets 29 red tests that are not its own and no instruction where it reads. App changes need scripts/check-app.sh by hand (AGENTS.md:3), outside the workspace gate (scripts/gate-scope.sh:13-14)."
+     "verdict": "partial",
+     "evidence": "AGENTS.md:3 names scripts/cargo-test-gate.sh; scripts/cargo-test-gate.sh:12 re-runs itself through scripts/test.sh when NUNCHIRO_SESSION is set; scripts/test.sh:2-11 names the holder tests that fail in a session (peer.rs) and runs the command outside the session's process tree | Was fail. Not pass: no recorded run where every gate stage passes from inside a session."
     },
     {
      "id": "MD2",
-     "verdict": "partial",
-     "evidence": "scripts/setup-worktree.sh:8-9 (one command: pnpm install --frozen-lockfile --prefer-offline, web build; Nunchiro runs it as the worktree setup script, orca.yaml); .cargo/config.toml:2-3 (target-dir = \"target\" per worktree, jobs = 2), so the first targeted cargo test in a fresh worktree builds the workspace cold; web specs ran in place in a worktree (2026-11-24: crash-screen.spec.ts 5 passed, 2.3 min); briefs add env rules (unset NUNCHIRO_*, an own NUNCHIRO_HOME for any target/ binary) | Steps: 2 (setup script, then the test). Time to the first green targeted Rust test: not measured (estimate: minutes, a clean-clone release build of one binary took 2.5 min in docs/measure/ops-2026-11-24.json; a debug test build at jobs = 2 is not shorter). Partial until it is measured under 5 min."
+     "verdict": "pass",
+     "evidence": "scorecard.py dev (dev-2026-11-26.json md2): `sh scripts/test.sh cargo test -p nunchiro --test version` in a fresh detached worktree, 44.7 s cold build included, exit 0, 1 step, no copy (scripts/measure/scorecard.py:281-299) | One command, no copy, under 5 min (was partial: no figure)."
     },
     {
      "id": "MD3",
      "verdict": "partial",
-     "evidence": "AGENTS.md is 20 lines and CLAUDE.md only imports it (@AGENTS.md); AGENTS.md:16,17,19 still route work to the build-loop skill, .agents/build-loop.toml and .scratch/build-loop/handoff.md, which the owner retired on 2026-11-25 (the lead's record; this lane's brief: merging moves to Nunchiro); AGENTS.md:14 points at docs/goal.md, which has no Next: line | Short, but 3 of its 9 routing rows are stale and contradict the current way of working. The 11-25 prompt audit the lead named was not found in the repo or the main checkout's .scratch: estimate from AGENTS.md only."
+     "evidence": "AGENTS.md:1-21 current (build-loop routes gone; :20 handoff.md kept because team.rs:1263 reads it); scripts/check-guidance.sh rc 0 (123 documented commands; 8 guides and 3 instruction files); surface = AGENTS.md 21 + CLAUDE.md 1 + brief-template.md 35 = 57 lines | No stale line found, but the surface is over 40 lines."
     },
     {
      "id": "MD4",
      "verdict": "partial",
-     "evidence": "<main checkout>/.scratch/build-loop/events.jsonl, 2026-11-18 to 11-25: 30 set_aside events with rule candidate-conflict for 308 lane tries (282 landed, 26 rejected) = 9.7 %; git log origin/main: 48 merges of origin/main into lane branches in 7 days (6 into lead/self-update-1082 alone); docs/measure/dev-2026-11-24.json: sessions.rs (14,132 lines) and sessions/tests.rs changed by 2 of 5 open lanes; Builder REPORT.md files since 11-18 in the lead's worktrees: 1 of 8 made an edit outside its Own list (first-use-1123 REPORT.md:42) | Conflicts hit about one lane try in ten. The outside-Own count is a small sample (8 reports), an estimate."
+     "evidence": "dev-2026-11-26.json: shared_files_open_lanes 0 (first run: open lanes ci-reds-1142b 3 files, cli-parity-1125 3, staff-account-1120 1, none shared; second run: no open lane); .scratch/build-loop/events.jsonl, 7 days: 31 set_aside candidate-conflict of about 349 lane tries = 8.9 % | No shared file, but conflicts over 5 % (under 15 %)."
     },
     {
      "id": "MD5",
      "verdict": "fail",
-     "evidence": "mainwatch log (scripts/measure-dev-speed.py, docs/measure/devspeed-2026-11-25.json): main red 610 min in 5 episodes since 2026-11-20 13:49, about 8.5 % of the time the log covers; events.jsonl, 7 days: 131 of 312 gate results red (42 %) and 199 marked contaminated by load (64 %); .gate-quarantine: 0 entries while the nightlies report flaky tests (p12 TR2) | An agent meets a red or contaminated gate on most tries and must tell its own failures from others'."
+     "evidence": "mainwatch log: main red 610 min in 5 episodes over about 7,350 min covered = 8.3 %; .scratch/build-loop/events.jsonl, 7 days: 138 of 335 gate_results red (41 %), 203 contaminated, 267 red or contaminated (80 %) | Main red under 10 % but gate results red or contaminated far over 30 %."
     }
    ],
    "evidence": [
@@ -693,22 +693,22 @@
    "checks": [
     {
      "id": "DP1",
-     "verdict": "pass",
-     "evidence": "<main checkout>/.scratch/fable/mainwatch.log: a \"testing <sha>\" line for each new main tip, 117 since 2026-11-20 (the log's start, gen 8) | Every main tip is tested after it lands."
+     "verdict": "partial",
+     "evidence": "<main checkout>/.scratch/fable/mainwatch.log: last 'testing' line :565 (16:06, c7baf6365); log and state stop at 16:22 and no mainwatch process runs; 26 first-parent merges since 16:15 untested, including the tip e288baf07; .github/workflows/ci.yml:9-14 push-on-main runs only on the public repo | Was pass. Most tips tested, not every one since the watcher stopped."
     },
     {
      "id": "DP2",
      "verdict": "partial",
-     "evidence": "<main checkout>/.scratch/fable/mainwatch.log: 5 culprit lanes (e55a887ff, 91a8c4094, fc9be5fd2, 76f33cf50, 5c1482c8e); revert lane queued by mainwatch once, 5 \"HOLD: ... the revert of ... was not queued\" lines (a Codex look needed on risk paths, or a revert conflict); <main checkout>/.scratch/fable/landloop.log:786 landed fable-revert-lead-turnends1094 at 15:33:57 | 2 reverts landed (w79loops, 1094); the 1094 revert took 1 h 49 min from red to landing because its automatic revert was held for a second-model look."
+     "evidence": "mainwatch.log culprits 76f33cf50, 5c1482c8e, d497ae997; reverts held :439-440, :460-461 (second-model look needed); revert for 1095 queued :475, :483 but not on main; 2 reverts landed (fable-revert-fable-w79loops 11-22, fable-revert-lead-turnends1094 11-24) | Some culprits reverted, not all."
     },
     {
      "id": "DP3",
      "verdict": "pass",
-     "evidence": "<main checkout>/.scratch/fable/mainwatch.log: 189 \"owner install\" or \"owner build\" lines, each after a GREEN line of the same commit (checked line by line) | A red build never reached the owner's app."
+     "evidence": "mainwatch.log: 225 owner install/build lines (73 installed), each after a GREEN of the same sha, 0 exceptions by script; the 16:06 install of a green tip was refused/rolled back (:564) | No red build reached the owner's app."
     }
    ],
    "evidence": [
-    "Added 2026-11-24 by the owner. Source: the mainwatch and landloop logs, read only, by scorecard.py ops (docs/measure/ops-2026-11-24.json).",
+    "Added 2026-11-24 by the owner. Source: the mainwatch and landloop logs, read only, by scorecard.py ops (docs/measure/ops-2026-11-26.json).",
     "Window: 2026-11-20 to 2026-11-24, 117 tested main tips. Change failures: 5 culprit lanes (4.3 %). Red episodes: 11-22 10:59-11:48 (49 min), 11-23 14:43-18:52 (250 min, two culprit lanes), 11-24 02:28-04:58 (150 min), 11-24 13:44-15:44 (120 min, 1094). Median 135 min.",
     "The lead's note said the 1094 revert landed 14:33; the landloop log shows 15:33:57 (line 786), and main tested green at 15:44:18.",
     "A tested tip can hold several lanes; per landed lane the failure rate would be lower."
@@ -724,27 +724,27 @@
     {
      "id": "PD1",
      "verdict": "partial",
-     "evidence": "README.md:3-7 (a Mac app for working with coding agents; your own claude and codex installs and sign-ins); README.md:17-21 (macOS on Apple silicon) | Who it is for can be read from what it does; no line names the target user or who it is not for."
+     "evidence": "README.md:6-10, :21-24 (what it is, platform); git grep finds no target-user or 'not for' statement | Who it is not for is missing."
     },
     {
      "id": "PD2",
      "verdict": "partial",
-     "evidence": "docs/research/landscape.md:7-27 (16 tools incl. T3 Code, Orca, herdr: strengths and gaps); docs/peers/inventory-1115.md (feature rows vs Orca and T3 Code); docs/v2/spec.md:173,831 (memory below Orca 1,091 MB) | Orca, T3 Code and herdr are compared; Claude Desktop and ChatGPT are not, though their apps now run coding agents too."
+     "evidence": "docs/research/landscape.md and docs/peers/inventory-1115.md cover Orca, T3 Code, herdr; Claude Desktop only in docs/research/browser/agent-browser-1119.md:32 and docs/research/notes/runtime_memory.md:19 | No written difference from Claude Desktop."
     },
     {
      "id": "PD3",
      "verdict": "partial",
-     "evidence": "this scorecard: agent compatibility 100, interface 90 (peer rows); memory 376 MiB idle vs Orca 1,091 MB (docs/v2/spec.md:173); peer task mean 56, 4th of 8 (tasks.json); bot and team operation 70 (BT1-BT5) | The measured edge is memory, the CLI and MCP surface and agent breadth; on the 12 common tasks Nunchiro is behind Claude Code, Codex and T3 Code, and its own idea (standing seats, T12) is partial."
+     "evidence": "Measured edges: memory (docs/v2/spec.md:173; results-2026-11-25.json idle memory); peer tasks in tasks.json | Difference shows in some measured results, not broadly."
     },
     {
      "id": "PD4",
      "verdict": "partial",
-     "evidence": "docs/goal.md:7-33 (goal and judge, 2026-11-18; deadline none); docs/goal.md:35-39 (Next: tickets 991, 992, public export, all from 11-18); AGENTS.md:14 says goal.md has no Next line; ROADMAP.md:28-78 open rows from the V2.5 phase (for example V2.5-34, \"unticked until the user's 좋다\") | The goal is clear; the order of the next work is stale and two documents disagree."
+     "evidence": "docs/goal.md:5-7, :36-39 current (11-25 goal; Next: 1130, then 1131); ROADMAP.md:5 still says 'KF goal G10', open rows V2.5-era (ROADMAP.md:30) | Roadmap not current; order lives in the lead's plans."
     },
     {
      "id": "PD5",
      "verdict": "pass",
-     "evidence": "docs/decisions.toml (29 [[decision]] entries with rule and enforcement); docs/areas/*.md \"## Decisions\"; AGENTS.md:19 (record a decision in the area record) | Decisions are recorded where builders read them (decisions.toml notes its runner was archived 11-06; enforcement is by reviewers)."
+     "evidence": "docs/decisions.toml; docs/areas/*.md '## Decisions' sections (accounts.md +25 lines 11-25); AGENTS.md:19 (record a decision) | Decisions where builders read them."
     }
    ],
    "evidence": [
@@ -761,27 +761,27 @@
     {
      "id": "SC1",
      "verdict": "pass",
-     "evidence": "git ls-files: Cargo.lock, app/src-tauri/Cargo.lock, pnpm-lock.yaml; scripts/setup-worktree.sh:8 (pnpm install --frozen-lockfile); scripts/measure/startup.py (cargo build --release --locked); the clean-clone builds used --locked --offline | Lockfiles are tracked and used."
+     "evidence": "ops-2026-11-26.json lockfiles: Cargo.lock, app/src-tauri/Cargo.lock, pnpm-lock.yaml; scripts/measure/build.sh:5 pnpm install --frozen-lockfile; repro-check.sh and update-clone builds use --locked --offline | Committed and used."
     },
     {
      "id": "SC2",
-     "verdict": "fail",
-     "evidence": "scorecard.py ops: cargo audit, cargo deny not installed; no script or gate stage runs pnpm audit (rubric SE5) | Not run this round: pnpm audit would send the package list to the npm registry, and cargo audit needs the RustSec database from the network (offline-safe rule). Vulnerable-package count: unknown."
+     "verdict": "pass",
+     "evidence": "scripts/supply-chain.sh:11,15,144-179 cargo audit and pnpm audit, exit 1 on a shipped high or critical; weekly LaunchAgent scripts/launchd/com.me.nunchiro-supply-chain.plist; docs/release/supply-chain-log.md:16-17 two runs (Rust 0/0/1/0/1, npm 0/0/0/1/0); ops: cargo audit, cargo deny installed | Audited by a script (was fail). Not run by this judge (owner rule: no network audit); GitHub Dependabot alerts used as data: 1 open, medium (glib)."
     },
     {
      "id": "SC3",
-     "verdict": "fail",
-     "evidence": "scorecard.py ops: cargo outdated not installed; no .github/dependabot.yml or renovate.json | Outdated-package count: unknown (pnpm outdated needs the registry; not run)."
+     "verdict": "pass",
+     "evidence": "scripts/supply-chain.sh:16-17 pnpm outdated -r and cargo outdated, counts in the weekly log; docs/release/supply-chain-log.md:17 (npm outdated 15, Rust outdated 8); ops: cargo outdated installed; no dependabot.yml | Outdated dependencies tracked (was fail)."
     },
     {
      "id": "SC4",
-     "verdict": "partial",
-     "evidence": "licenses/THIRD_PARTY_LICENSES_RUST.md:5-13 (298 crates of the shipped closure, generated by scripts/gen-notices.sh), licenses/THIRD_PARTY_LICENSES_NPM.md; no CycloneDX or SPDX file (git ls-files) | A generated package and licence inventory exists; no standard machine-readable SBOM."
+     "verdict": "pass",
+     "evidence": "scripts/build-release.sh:5-6,135 (a release carries CycloneDX SBOMs sbom-*.cdx.json from supply-chain.sh --sbom, sandboxed :54-72), :10 uploaded with the DMG | Made per release by script (was partial). No release has been built yet, so no SBOM file exists (ops sbom_files [])."
     },
     {
      "id": "SC5",
      "verdict": "partial",
-     "evidence": "scorecard.py ops --clones: scripts/update-clone.sh (from origin/main) cloned origin/main d497ae997 twice from a local bare copy; cargo build --release --locked --offline -p nunchiro in each: 2.54 and 2.53 min, sha256 5bf5bc15...e26d in both | The CLI builds byte-identical from two clean clones. The app bundle (Tauri and the web build) was not built from the clones."
+     "evidence": "scorecard.py ops --clones: two clean clones of origin/main 9bc3a637e via scripts/update-clone.sh, cargo build --release --locked --offline -p nunchiro: 5.91 and 5.96 min, sha256 c1510e42...0f05 in both (same binary) | The CLI is byte-identical; the app bundle and web build were not shown identical (scripts/repro-check.sh covers them, no recorded result)."
     }
    ],
    "evidence": [
@@ -798,47 +798,47 @@
     {
      "id": "DV1",
      "verdict": "pass",
-     "evidence": "scripts/measure-dev-speed.py (docs/measure/devspeed-2026-11-25.json): git log origin/main --first-parent \"Merge lane\" commits, 282 lanes in 182 landings since 2026-11-18 13:10 (40.3 lanes a day), a landing on 8 of 8 calendar days; mainwatch \"owner install ...: installed\" lines: 73 installs, on 5 of the 6 calendar days the log covers (none on 11-24: skipped while sessions ran, or refused) | DORA elite: lanes land on demand, many a day, and the owner's app takes a green main most days."
+     "evidence": "scripts/measure-dev-speed.py --days 7 (run 23:27, e288baf07): landings on 8 of 8 days, 321 lanes; owner installs 73 on 5 of the 6 days mainwatch covers | Pass."
     },
     {
      "id": "DV2",
      "verdict": "pass",
-     "evidence": "measure-dev-speed.py: first lane commit (author date of <merge>^1..<merge>^2) to the merge on main, median 1.5 h, p90 6.1 h over 282 lanes; task created (ledger) to the merge, median 2.4 h, p90 4.1 h over 73 lanes | DORA elite (under a day)."
+     "evidence": "devspeed: first lane commit to main median 1.5 h, p90 5.5 h (n 321) | Pass."
     },
     {
      "id": "DV3",
      "verdict": "pass",
-     "evidence": "measure-dev-speed.py: 6 of 282 landed lanes reverted (fable-revert-<lane> merges) or named culprit by mainwatch (fable-w79loops, lead-boarddone1066, lead-boardtruth1090, lead-contextwidget1048, lead-turnends1094, lead-workpackage1095): 2.1 %; gate rejects (eject or kick events, never on main): 26 lanes, 8.4 % of tries; review rounds (distinct reviewed patches per lane) median 1, max 7 over 75 lanes | DORA elite to medium band (0-15 %)."
+     "evidence": "devspeed: 6 of 321 lanes reverted or culprit = 1.9 %; gate rejects 8.0 % shown only | Pass."
     },
     {
      "id": "DV4",
      "verdict": "partial",
-     "evidence": "measure-dev-speed.py (the p27 parser, scorecard.py parse_deploys, cut to the window): 5 red episodes on main, median 120 min, max 250 min (11-22 10:59 49 min, 11-23 14:43 250 min, 11-24 02:28 150 min, 11-24 13:44 120 min, 11-24 16:17 41 min) | DORA high (under a day), not elite (under an hour): a culprit's revert waits for the gate and, on risk paths, a second-model look (p27 DP2)."
+     "evidence": "devspeed time_to_restore: 5 episodes, median 120 min, max 250 min | Under 24 h, not under 60 min."
     },
     {
      "id": "DV5",
      "verdict": "partial",
-     "evidence": "measure-dev-speed.py flow split: build (task created to the Reviewer seat) median 31 min (n 71), review (Reviewer seat to pass) 30 min, p90 133 min (n 66), review to enqueue 4 min (n 52), gate queue 7 min, p90 96 min, gate run 7 min, p90 32 min (n 282) | The waits are short, but review times are known for 66 of 282 lanes (23 %): the task ledger starts 2026-11-23 08:51, and self-checked lanes have no Reviewer seat. Pass needs 80 %."
+     "evidence": "devspeed: gate queue median 8 min (p90 94), gate run median 8 min (n 321); review times known for 68 of 284 lanes (24 %, committed 13:26 run with the ledger) | Review times known for under 80 %."
     },
     {
      "id": "DV6",
      "verdict": "partial",
-     "evidence": "measure-dev-speed.py (devspeed-2026-11-25.json cost): Claude project folders named after each landed lane's worktree (Builder, Reviewers and rework seats in it; messages counted once by id) and Codex rollouts whose cwd is the worktree, priced with crates/nunchiro-core/src/usage.rs PRICES (read from the file): median 4.37 USD, p90 13.26 USD per landed lane over 75 of 284 lanes; total 440.79 USD, 1214 M tokens; 125 M Codex tokens unpriced (gpt-6.1-sol is not in the core's table) | Under the 20 USD budget, but known for 26 % of lanes (pass needs 80 %). A lower bound: seats on added accounts (their folders are in the core's home, not read), reviews in copies outside the worktree and the lead's own share are not counted."
+     "evidence": "devspeed cost: median 3.77 USD, p90 13.74 USD, known for 109 of 321 lanes (34 %) | Known for under 80 %."
     },
     {
      "id": "DV7",
      "verdict": "partial",
-     "evidence": "measure-dev-speed.py (owner): 3 owner touches over 75 landed lanes with a task (median 0, max 1): accept conditions that need the owner, a task waiting for the merge yes, permission waits, asks to the person and the core's cards to the user; core events from 2026-11-25 11:19 only: 2 core cards to the owner (both about ticket 1121), 1 permission wait (2 min), 0 asks to the person | An estimate and a lower bound: the owner's own messages to the lead (the main way the owner is asked) are not in any source this script reads, and the core keeps events only since its last start. Pass needs the whole window measured."
+     "evidence": "committed devspeed-2026-11-25.json (13:26): 3 touches over 75 lanes, median 0; core events only from 11:19 | Measured in part."
     },
     {
      "id": "DV8",
      "verdict": "partial",
-     "evidence": "measure-dev-speed.py (rework): first pass 69.7 % (lanes whose first reviewed patch was the one that landed, bin/land review receipts, 76 lanes); rework 9.8 % of 286 landings: 23 lanes rejected by the gate then landed, 3 second landings of a branch, 2 reverts | DORA 2024 rework rate under 10 % is within its high band; the first-pass rate is under the 80 % that pass needs."
+     "evidence": "devspeed: first pass 70.5 % of 88 reviewed lanes; rework 10.5 % (26 rejected then landed, 6 repeat landings, 2 reverts) | First pass under 80 %, rework over 10 %."
     },
     {
      "id": "DV9",
      "verdict": "partial",
-     "evidence": "measure-dev-speed.py (seat_use): the core's attention states since 2026-11-25 11:19: 7.4 live seat hours over 43 seats, working 60.5 %, waiting 39.1 %, permission 0.5 %; the core's auto-advance lines (advance.rs room_line): 0 nudges (0 quiet min), 2 \"moves again\", 2 resent waiting messages; 2 enter_dropped events | An estimate from about 2 hours of one day. \"Waiting\" includes seats that finished and wait on purpose for a review or a close."
+     "evidence": "committed devspeed (13:26): 43 seats, 7.4 h, working 60.5 %, stalled 0, about 2 hours of one day | Working under 70 %."
     }
    ],
    "evidence": [
@@ -858,27 +858,27 @@
     {
      "id": "SK1",
      "verdict": "pass",
-     "evidence": "python3 -I <scratchpad>/skillcheck.py . (2026-11-25): every 'nunchiro <command>' in plugin/skills/{nunchiro,orchestration,artifacts}/SKILL.md matched against the docs/cli.md '### nunchiro ...' headings, every --flag against crates/nunchiro/src and docs/cli.md: 13 commands and 15 flags, 0 missing (2 hits were checked by hand and are right: a bare 'nunchiro browser' before its verbs, nunchiro/SKILL.md:153; '--add-dir' is Claude Code's flag, artifacts/SKILL.md:15) | Every command and flag the skills name exists. Not checked: the full orchestration guide that 'nunchiro skill get orchestration' serves from the app (orchestration/SKILL.md:3-6)."
+     "evidence": "scripts/check-guidance.sh rc 0 (skill and guide commands and flags against docs/cli.md); in the gate via scripts/check-cli-docs.sh:45 | None missing."
     },
     {
      "id": "SK2",
      "verdict": "partial",
-     "evidence": "Descriptions (frontmatter): nunchiro/SKILL.md:3 (use when the user mentions Nunchiro or asks for work in other agents; needs NUNCHIRO_SESSION), orchestration/SKILL.md:3 (parallel lanes; 'for a quick lookup or a small edit, prefer your own built-in subagents'), artifacts/SKILL.md:3 ('required before you write any file the user will look at') | Each says when to load it, and two say when not to. No trigger test exists (no eval set of prompts that should and should not load each skill), so trigger accuracy is not measured. The Builder seat commands (task learn, task pass, agent ask) are taught by the seat prompt (crates/nunchiro-core/src/sessions.rs:7733), not by a skill."
+     "evidence": "All 3 SKILL.md descriptions say when and when not; trigger sets plugin/evals/trigger-{nunchiro,artifacts,orchestration}/load-01..08, skip-01..08; scripts/skill-eval.sh trigger mode | No recorded trigger-test result (docs/measure/evidence has only the tasks run)."
     },
     {
      "id": "SK3",
-     "verdict": "fail",
-     "evidence": "No run found where an agent did a task with a skill alone (no eval, no recorded trial) | Not measured; a check without evidence is fail (rubric). An estimate is not given."
+     "verdict": "pass",
+     "evidence": "docs/measure/evidence/skill-eval-2026-11-25-tasks.json:12-45 (sonnet, Claude Code 2.1.332): 2 of 2 cases pass; task-worker 1.0 (started, prompted, waited, read) vs 0.2 baseline; task-artifact 1.0 (published, titled) vs 0.5 | A recorded trial passes (was fail). One run per arm."
     },
     {
      "id": "SK4",
      "verdict": "pass",
-     "evidence": "wc -c plugin/skills/*/SKILL.md: nunchiro 9,637 chars (about 2,400 tokens at 4 chars a token), artifacts 3,997 (about 1,000), orchestration 1,363 (about 340, a stub: the guide is fetched on demand); descriptions 42, 71 and 48 words | Each SKILL.md is under 3,000 tokens and each always-loaded description under 80 words. Token counts are estimates (characters / 4), not a tokenizer."
+     "evidence": "SKILL.md: nunchiro 9,740 chars (~2,435 tokens), artifacts 4,025, orchestration 1,363; descriptions 58, 77, 48 words | All under."
     },
     {
      "id": "SK5",
-     "verdict": "fail",
-     "evidence": "AGENTS.md:16,17,19 route work to the build-loop skill and .scratch/build-loop/handoff.md, retired by the owner 2026-11-25 (p26 MD3); this lane's brief says never to use the core's home while a later request asked for usage records whose added-account folders are in it (DV6 left them out); the lead's own restart note (core events 2026-11-25 11:2x, room m1810-m1814) says a resumed seat 'is no longer linked to its task' | 3 stale lines and 1 contradiction found by this lane's reading; the 11-25 prompt audit the lead named was not found, so no audit result could be checked. pass needs a dated audit with no open finding."
+     "verdict": "pass",
+     "evidence": "docs/measure/evidence/prompt-audit-2026-11-25.md:1-38 (dated 11-25, next due 12-09; AGENTS.md, CLAUDE.md, 3 skills, orchestration guides, brief-template.md, task-staff seat prompt; 8 findings all closed, 'Open findings: 0'); lead and Home prompts not read (:36) | Audit within 14 days, no open finding (was fail)."
     }
    ],
    "evidence": [
@@ -895,27 +895,27 @@
     {
      "id": "UO1",
      "verdict": "pass",
-     "evidence": "crates/nunchiro-core/src/advance.rs:1-3,17-27 (ticket 1081 auto-advance: a seat quiet 20 min with its task open is nudged once, the owner gets a card 5 min later, the lead hears what waits every 10 min; Reviewers start on a done report and their changes go back to the Builder); core events 2026-11-25 from 2026-11-25 11:19: Reviewers started 9 times, review changes forwarded 2, Reviewers closed 2, lead told what waits 7 times, 0 nudges | Stalled and finished seats move on without the person."
+     "evidence": "crates/nunchiro-core/src/advance.rs:1-5 (nudge, Reviewer start, forward, lead heartbeat); seen working in committed devspeed seat_use (moved_again 2, resends 2) | In place and seen."
     },
     {
      "id": "UO2",
      "verdict": "fail",
-     "evidence": "ticket 1121 (task t145, 'URGENT: Enter dropped as composer; re-pastes glue copies', in flight): Claude Code 2.1.331 broke the composer reading; core events 2026-11-25: 2 enter_dropped, 2 resent waiting messages, 2 cards to the owner about the 1121 Builder | Typed messages to seats were dropped or stuck in the composer today; the person had to step in."
+     "evidence": "docs/tickets/v2/issues/1121-enter-dropped-composer.md:7-9: the lead pressed Enter by hand on 11-25; fix landed 13:44 (sessions.rs:6187-6205) | No measured day after the fix without a step-in."
     },
     {
      "id": "UO3",
      "verdict": "partial",
-     "evidence": "nunchiro permission-answers on|off [--project DIR] (nunchiro --help); core events from 2026-11-25 11:19: 1 permission wait, 2 min | Short today, but the sample is about 2 hours and seats in permission state before the core's last start are not seen (estimate)."
+     "evidence": "committed devspeed 13:26: 2-hour core-events sample, 1 permission wait of 2 min | Shorter sample than a day."
     },
     {
      "id": "UO4",
      "verdict": "fail",
-     "evidence": "core events 2026-11-25: the core started 11:19 with 9 sessions 'lost' and 2 'exited' (Builders 1107 slice 1, 1121, 1122 A, 1122 B, 1123; Reviewer 1099 panel 4; the Lead; rev-1094-r2; 1 unlabeled); the lead re-prompted 5 seats by hand (room m1810-m1814: 'the app restarted and stopped your session ... the seat is no longer linked to its task'); task ledger: t143, t145, t151, t155 marked stale | A restart lost the running seats and their task links. crates/nunchiro/tests/holder.rs:1543-1548 covers serve restart and serve update, not this restart."
+     "evidence": "mainwatch.log:564 (16:06): update install refused or rolled back because '17 session(s) did not come back within 30 s'; earlier 11:19 restart lost 9 seats (re-prompted by hand) | Seats lost on the last restart."
     },
     {
      "id": "UO5",
      "verdict": "pass",
-     "evidence": "git log origin/main --first-parent --merges, landings between 00:00 and 07:00 local: 11-19 2, 11-20 9, 11-21 28, 11-22 11, 11-23 13, 11-24 9, 11-25 5 | Lanes land every night of the window while the person sleeps (the merge queue and mainwatch run alone)."
+     "evidence": "git log origin/main --first-parent --merges, landings 00:00-07:00: 11-19 2, 11-20 9, 11-21 28, 11-22 11, 11-23 13, 11-24 9, 11-25 5 | 7 of 7 nights."
     }
    ],
    "evidence": [
@@ -933,6 +933,13 @@
   "The host was busy during the run (1-min load in the header); idle CPU and the slowest launches rise with load. Each figure is the median over all repeats (20 in 4 runs) with its range.",
   "Peer shots are from the timed GUI run of 2026-11-02 (Orca 1.4.245, T3 Code 0.1.6, Herdr.app 0.1.11), older than the versions whose docs and code were read.",
   "Rubric verdicts were applied by reading agents with file:line evidence; specs named as evidence were not run in this round.",
-  "Isolation: run 4 gave every started process a fresh temp HOME and NUNCHIRO_HOME and checked both (ps) and the open files of the window, its helpers and the core tree under ~/.nunchiro, ~/.claude and ~/.codex (lsof, at one moment per phase). Runs 1-3 gave the window phase the real HOME and checked only ~/.nunchiro on the core and window."
+  "Isolation: run 4 gave every started process a fresh temp HOME and NUNCHIRO_HOME and checked both (ps) and the open files of the window, its helpers and the core tree under ~/.nunchiro, ~/.claude and ~/.codex (lsof, at one moment per phase). Runs 1-3 gave the window phase the real HOME and checked only ~/.nunchiro on the core and window.",
+  "Run of 2026-11-25/26 (outside judge, worktree measure-1125c): run, dev and page on origin/main e288baf07; ops cloned origin/main as it was 30 min later (9bc3a637e, one more lane: 1137 shell first prompt). Load average 5-7 during the run.",
+  "This round's rubric verdicts were applied by four fresh reading agents and the judge, with file:line evidence at e288baf07; specs and Rust tests named as evidence were not run, except the gate's Rust test stage inside scorecard.py dev.",
+  "dev test stage: the first dev run put the cargo target outside the worktree, and 771 Rust tests failed because tests/fixtures/cli.rs:7 looks for the CLI at <worktree>/target/debug/nunchiro (it ignores CARGO_TARGET_DIR). The figures are from a second run with the worktree's target/ linked to that folder: the gate's Rust test stage exited 0 in 9.1 min (dev-2026-11-26.json). The fixture's fixed path is a trap for any lane that builds outside target/.",
+  "mainwatch stopped at 16:22 on 11-25 (last test of c7baf6365); 26 later main tips, including the measured e288baf07, have no mainwatch test. DP1 went to partial for this; DV1, DP2, DP3, MD5 and p27's figures read the log up to 16:22.",
+  "Not measured by this judge: pnpm audit, cargo audit (owner rule: no network audit; GitHub Dependabot alerts read as data: 1 open, medium), core events and the task ledger (DV7, DV9, UO1-UO3 keep the committed 13:26 devspeed figures), the MacBook's nightly web run (TR2), the app bundle repro (SC5).",
+  "Peer tasks re-counted where Nunchiro's path changed (T1, T2, T5, T6, T8, T10, T12) by reading code; no key chord was pressed in a real app. T10 counted 3, not the lane's 2 (the composer is not focused by default).",
+  "Rubric doubts, not applied: TR1 counts opt-in shot and live specs as skipped; TR3 counts tickets with nothing to prove red first; TR2 names no place where the nightly result is kept; SE5 and SC2 pass on a weekly script without asking that it is current; MD3 'under 40 lines' may mean per file (each is) or the whole surface (57); DP1 has no partial wording; SC5's text names the CLI build only, while the 11-24 verdict also asked for the app bundle (kept for comparability); CT3 does not say whether on-demand skill bodies count."
  ]
 }

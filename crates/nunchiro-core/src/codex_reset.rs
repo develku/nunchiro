@@ -197,7 +197,7 @@ fn decide(p: &Policy, r: &Limits, auto_this_week: u64, now: i64) -> Verdict {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Fail {
+pub(crate) enum Fail {
     NoCodex,
     NotSignedIn,
     TooOld,
@@ -254,7 +254,21 @@ fn rpc(
         .arg0(name) // argv[0] stays the bare name the child saw before
         .args(ARGV)
         .env_clear()
-        .envs(env)
+        .envs(env);
+    app_server(command, INIT_WAIT, method, params, wait, still)
+}
+/// `rpc`'s exchange with the `codex app-server` that `command` starts (its program, arguments and environment), for
+/// the reset reader and for the start check of ticket 1150 (`outward::codex_runs_hook`). `init_wait`: how long its
+/// answer to `initialize` may take.
+pub(crate) fn app_server(
+    mut command: std::process::Command,
+    init_wait: Duration,
+    method: &str,
+    params: Value,
+    wait: Duration,
+    still: &dyn Fn() -> bool,
+) -> Result<Value, (Fail, bool)> {
+    command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -267,10 +281,8 @@ fn rpc(
         };
         (f, false)
     })?;
-    let pid = child.id() as i32;
     let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
-        unsafe { libc::killpg(pid, libc::SIGKILL) };
-        let _ = child.wait();
+        end(child);
         return Err((Fail::Gone, false));
     };
     let (tx, rx) = mpsc::channel::<Vec<u8>>();
@@ -300,7 +312,7 @@ fn rpc(
             "clientInfo": {"name": "nunchiro", "title": null, "version": env!("CARGO_PKG_VERSION")},
             "capabilities": null}});
         line(&mut stdin, &init)?;
-        answer(&rx, 1, INIT_WAIT)?;
+        answer(&rx, 1, init_wait)?;
         line(&mut stdin, &json!({"method": "initialized"}))?;
         if !still() {
             return Err(Fail::Withdrawn);
@@ -312,10 +324,25 @@ fn rpc(
         sent = true;
         answer(&rx, 2, wait)
     })();
-    // The group: codex and anything it started.
-    unsafe { libc::killpg(pid, libc::SIGKILL) };
-    let _ = child.wait();
+    end(child);
     result.map_err(|f| (f, sent))
+}
+/// How long `end` waits for the killed codex to be reaped.
+const REAP_WAIT: Duration = Duration::from_secs(2);
+/// Ends codex and anything it started: its group, and the child itself, which may have left that group (Codex look on
+/// ticket 1150: the group's kill then misses it and a plain wait never returned). The wait is bounded, so no caller
+/// hangs on a codex that does not die; one still there after `REAP_WAIT` is reaped by a thread of its own.
+fn end(mut child: std::process::Child) {
+    unsafe { libc::killpg(child.id() as i32, libc::SIGKILL) };
+    let _ = child.kill();
+    let until = Instant::now() + REAP_WAIT;
+    while matches!(child.try_wait(), Ok(None)) {
+        if Instant::now() >= until {
+            thread::spawn(move || child.wait());
+            return;
+        }
+        thread::sleep(Duration::from_millis(2));
+    }
 }
 fn line(stdin: &mut impl Write, v: &Value) -> Result<(), Fail> {
     stdin
@@ -1198,6 +1225,54 @@ read -r l
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
         path
+    }
+    /// Ticket 1150 round 2 (Codex look P2): a codex that leaves its process group is not reached by the group's
+    /// kill, and waiting for it without a bound never returned (under the registry lock, at a Codex start). The
+    /// exchange ends the child itself too and its wait is bounded: it returns, and the child is gone.
+    #[test]
+    fn app_server_ends_a_codex_that_left_its_process_group() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.scratch")
+            .join(format!("cxgroup-{}", store::new_id().unwrap()));
+        fs::create_dir_all(&dir).unwrap();
+        let program = dir.join("codex");
+        // Joins the test's own group (same session), says where it is, then answers nothing for 30 s.
+        let script = "#!/usr/bin/env python3\nimport os, sys, time\nos.setpgid(0, os.getpgid(os.getppid()))\nopen(os.path.join(os.path.dirname(sys.argv[0]), 'pid'), 'w').write(str(os.getpid()))\ntime.sleep(30)\n";
+        fs::write(&program, script).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
+        let (tx, rx) = mpsc::channel();
+        let command = crate::process::command(&program);
+        thread::spawn(move || {
+            // Longer than the fake takes to start and leave the group, under load too.
+            let wait = Duration::from_secs(3);
+            let _ = tx.send(app_server(
+                command,
+                wait,
+                "hooks/list",
+                json!({}),
+                wait,
+                &|| true,
+            ));
+        });
+        let answer = rx.recv_timeout(Duration::from_secs(20));
+        let pid: i32 = fs::read_to_string(dir.join("pid"))
+            .unwrap()
+            .parse()
+            .unwrap();
+        let alive = || unsafe { libc::kill(pid, 0) } == 0;
+        let returned = answer.is_ok();
+        if !returned {
+            unsafe { libc::kill(pid, libc::SIGKILL) }; // the old code's leftover
+        }
+        assert!(returned, "the exchange never returned");
+        assert_eq!(answer.unwrap(), Err((Fail::Slow, false)));
+        let until = Instant::now() + Duration::from_secs(5);
+        while alive() && Instant::now() < until {
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!alive(), "the codex that left its group still runs");
+        let _ = fs::remove_dir_all(dir);
     }
     fn settings(home: &Path, features: Value) {
         fs::write(

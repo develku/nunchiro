@@ -14,14 +14,13 @@ import { expectMatchesMockup, koRows, measureMockup, patchSnapshots, repo, workt
 import { mockup as mockupPath } from './visual/mockups';
 
 test.use({ deviceScaleFactor: 2, viewport: { width: 1440, height: 900 } });
-test.skip(({ browserName }) => browserName !== 'chromium', 'pixel gate is Chromium only');
 test.beforeEach(({ app }) => koRows(app)); // the ko/ mockups' 30 px rows (ticket 1041 lane 1)
 
 for (const scheme of ['light', 'dark'] as const) {
   // Ticket 1041 lane 4: the session row, project head, decision line and folded group head follow the approved
   // docs/design/polish-1121 mockup now (no rail, state light and word, 32 px heads, one-row decision line); their ko/
   // crops are retired and tree-polish-1041.spec.ts measures the rows against the polish mockup.
-  test(`visual_conformance whole tree pane (${scheme}, measured for the side-by-side page)`, async ({ app, core }) => {
+  test(`visual_conformance whole tree pane (${scheme}, measured for the side-by-side page)`, { tag: '@chromium' }, async ({ app, core }) => {
     const p = repo(core, 'lumen');
     worktree(core, p, 'feature-x');
     worktree(core, p, 'build-fix');
@@ -63,7 +62,7 @@ const english = (open: boolean) => async (m: Page) => {
 };
 for (const scheme of ['light', 'dark'] as const) {
   for (const open of [false, true]) {
-    test(`subview_matches_mockup ${open ? 'open' : 'closed'} (${scheme})`, async ({ app, core }) => {
+    test(`subview_matches_mockup ${open ? 'open' : 'closed'} (${scheme})`, { tag: '@chromium' }, async ({ app, core }) => {
       const p = repo(core, 'nunchiro');
       core.shell(p, 'one');
       openQuiet(core, 'nunchiro');

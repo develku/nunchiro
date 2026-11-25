@@ -8,7 +8,7 @@ use std::{
 };
 
 fn bin() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/nunchiro")
+    PathBuf::from(env!("CARGO_BIN_EXE_nunchiro"))
 }
 fn guides() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("guides/orchestration")

@@ -357,6 +357,10 @@ test('new_shell_and_split_from_palette: a shell and a split are still one palett
   await expect(app.locator('[data-side-pane]')).toBeVisible();
   await palette(app, 'New shell in the side pane');
   await expect(app.locator('[data-side-pane] .term')).toHaveCount(2); // the agent's PTY and the new shell
+  // Ticket 1130 C4: the new shell takes the focus, and Split right there splits the pane's terminal area (SPLITKEYS);
+  // from the chat it is a split beside the chat.
+  await expect(app.locator('[data-side-pane] .term textarea:focus')).toHaveCount(1);
+  await app.getByRole('combobox', { name: 'Message x' }).focus();
   await palette(app, 'Split right');
   await expect(app.locator('[data-split-id]')).toHaveCount(1);
 });

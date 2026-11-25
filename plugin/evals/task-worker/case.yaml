@@ -3,8 +3,8 @@ name: task-worker
 description: >-
   Scorecard p31 SK3 (a): start a worker, prompt it, wait, read its result. Runs only through
   `scripts/skill-eval.sh tasks`, which per run starts a core on its own temporary NUNCHIRO_HOME, makes a fresh
-  trial project (secret.txt holds the word to find), fills in @TRIAL_PROJECT@ and @WORKER@ below, and puts its
-  `nunchiro` and environment in every Bash command.
+  trial project (secret.txt holds the word to find), fills in @TRIAL_PROJECT@ and @WORKER@ below, and runs `claude -p`
+  with its `nunchiro` on PATH and its session variables set.
 tags: [task]
 runs: 1
 execution:

@@ -2,8 +2,6 @@
 // with its stage; a card that waits for the person has Answer; a press on a card peeks at that seat's terminal in the drawer
 // and opens no tab; a reviewer is the Review stage of its task's card, not a card. The socket answers `task list` with the
 // spec's tasks (as leader-tasks-990); the seats are real shell sessions.
-import fs from 'node:fs';
-import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { type Core, expect, openWindow, test } from './fixtures';
 import { mates, openSeat, openTeam, repo, tokenClaude } from './leader-990';
@@ -143,8 +141,6 @@ test('team_board (1115 step 2): one card per task with its stage; a waiting card
 
 test('team_board_peek_leaves_tab (1115 step 2, review 2): with GPU rendering on, a peek at a seat that is also a tab leaves the tab\'s xterm and its WebGL renderer as they were', async ({ app, core }) => {
   const { ids, view } = await boardScene(app, core);
-  const gl2 = await app.evaluate(() => !!document.createElement('canvas').getContext('webgl2'));
-  test.skip(!gl2, 'this browser build has no WebGL 2');
   await app.keyboard.press('Meta+Comma');
   await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name: 'Terminal', exact: true }).click();
   const closed = app.locator('details.term-more:not([open]) > summary');
@@ -173,23 +169,4 @@ test('team_board_peek_leaves_tab (1115 step 2, review 2): with GPU rendering on,
   await app.waitForTimeout(300);
   expect(await canvases()).toBe(before);
   await expect(tabTerm.locator('.xterm-rows')).toHaveCount(0); // no DOM renderer took over in the tab
-});
-
-// Before and after shots (docs/design/workers-1115/step2): only with SHOTS set to the folder. Also runs on the code before
-// this step (rows in the tab) for the before shot.
-test('team_board_shots (1115 step 2)', async ({ app, core }) => {
-  test.skip(!process.env.SHOTS, 'SHOTS names the folder for the shots');
-  const { view } = await boardScene(app, core);
-  const dir = process.env.SHOTS!;
-  fs.mkdirSync(dir, { recursive: true });
-  const name = process.env.SHOTS_NAME ?? 'after';
-  await app.waitForTimeout(500);
-  await app.screenshot({ path: path.join(dir, `${name}-board.png`) });
-  const go = view.locator('.tcard[data-task="t3"] .tcard-go');
-  if (await go.count()) {
-    await go.click();
-    await expect(view.locator('.tdrawer .term')).toBeVisible();
-    await app.waitForTimeout(500);
-    await app.screenshot({ path: path.join(dir, `${name}-drawer.png`) });
-  }
 });

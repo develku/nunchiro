@@ -38,6 +38,14 @@ class RustNoIgnored(unittest.TestCase):
                    if not any(re.search(rf"\b{n}\b", l) and f"--features {feat}" in l for l in lines)]
         self.assertEqual(missing, [], dry.stdout)
 
+    def test_the_cli_is_built_before_the_tests_that_start_it(self):
+        # search_sessions_perf_500mb runs cli::path(), the release nunchiro next to the test binary (ticket 1152 r2).
+        lines = subprocess.run(["sh", "scripts/extended-tests.sh"], cwd=ROOT, capture_output=True, text=True,
+                               env=dict(os.environ, EXTENDED_DRY="1")).stdout.splitlines()
+        build = [i for i, l in enumerate(lines) if "cargo build --release --locked -p nunchiro" in l]
+        user = [i for i, l in enumerate(lines) if "search_sessions_perf_500mb" in l]
+        self.assertTrue(build and user and build[0] < user[0], lines)
+
 
 if __name__ == "__main__":
     unittest.main()

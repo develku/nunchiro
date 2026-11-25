@@ -7,7 +7,7 @@ import type { Session } from '../src/types';
 import { openRow } from './accounts-rows';
 import { publishFeatures } from '../src/settings/useFeatureSetting';
 import { parse } from '../src/webwidgets/bridge';
-import { expect, openWindow, test, type Core } from './fixtures';
+import { expect, openWindow, test, type Core, codexFake } from './fixtures';
 import { closeSettings, openSettings } from './settings-modal';
 import { openWidget } from './schedules-seed';
 import { openQuiet } from './tree-seed';
@@ -19,7 +19,7 @@ if [ "$1 $2" = "${status}" ]; then exit 3; fi
 exec /bin/cat
 `;
 function setup(core: Core) {
-  for (const [name, status] of [['claude', 'auth status'], ['codex', 'login status']]) fs.writeFileSync(path.join(core.home, 'bin', name), fake(status), { mode: 0o700 });
+  for (const [name, status] of [['claude', 'auth status'], ['codex', 'login status']]) fs.writeFileSync(path.join(core.home, 'bin', name), codexFake(fake(status)), { mode: 0o700 });
 }
 const snap = (core: Core) => core.cli('snapshot', '--json').sessions as Session[];
 async function openAccounts(app: Page) {

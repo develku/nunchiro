@@ -162,8 +162,7 @@ function repo(core: Core) {
 }
 
 for (const pick of THEMES) {
-  test(`raw_colours_contrast_in_each_theme: diff, ${pick.name}: the +/- sign reads on its tinted line`, async ({ app, core }, info) => {
-    test.skip(info.project.name !== 'chromium', 'one browser is enough for computed colours');
+  test(`raw_colours_contrast_in_each_theme: diff, ${pick.name}: the +/- sign reads on its tinted line`, { tag: '@chromium' }, async ({ app, core }) => {
     core.shell(repo(core), 'diff-shell');
     await useTheme(app, pick);
     await openWindow(app);
@@ -175,8 +174,7 @@ for (const pick of THEMES) {
     await shot(app, 'diff', pick.name);
   });
 
-  test(`raw_colours_contrast_in_each_theme: terminal search, ${pick.name}: the find field reads on its bar`, async ({ app, core }, info) => {
-    test.skip(info.project.name !== 'chromium', 'one browser is enough for computed colours');
+  test(`raw_colours_contrast_in_each_theme: terminal search, ${pick.name}: the find field reads on its bar`, { tag: '@chromium' }, async ({ app, core }) => {
     const s = core.shell(core.project('demo'), 'numbers', '/bin/sh', '-c', "/usr/bin/seq -f 'line %g' 1 50; exec cat");
     await useTheme(app, pick);
     await openWindow(app);
@@ -209,8 +207,7 @@ for (const pick of THEMES) {
     expect(deltaE(outline, fill), `current outline ${outline} vs other match ${fill}`).toBeGreaterThan(30);
   });
 
-  test(`raw_colours_contrast_in_each_theme: first run, ${pick.name}: the Landing's key hints read on the centre`, async ({ app }, info) => {
-    test.skip(info.project.name !== 'chromium', 'one browser is enough for computed colours');
+  test(`raw_colours_contrast_in_each_theme: first run, ${pick.name}: the Landing's key hints read on the centre`, { tag: '@chromium' }, async ({ app }) => {
     await useTheme(app, pick);
     await openWindow(app);
     const keys = app.locator('.pane .empty .landing-keys');
@@ -230,8 +227,7 @@ const VIEW = {
 };
 
 for (const pick of THEMES) {
-  chatTest(`raw_colours_contrast_in_each_theme: image viewer, ${pick.name}: the file name reads on the dialog`, async ({ page, chatCore }, info) => {
-    test.skip(info.project.name !== 'chromium', 'one browser is enough for computed colours');
+  chatTest(`raw_colours_contrast_in_each_theme: image viewer, ${pick.name}: the file name reads on the dialog`, { tag: '@chromium' }, async ({ page, chatCore }) => {
     const s = chatCore.chat();
     const user = { type: 'user', uuid: crypto.randomUUID(), message: { role: 'user', content: [{ type: 'text', text: 'see this' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: RED_PNG } }] } };
     append(s.file, user, rec.assistant('ok'));
@@ -244,8 +240,7 @@ for (const pick of THEMES) {
     await shot(page, 'image-viewer', pick.name);
   });
 
-  chatTest(`raw_colours_contrast_in_each_theme: PR view, ${pick.name}: the title reads on the dialog`, async ({ page, chatCore }, info) => {
-    test.skip(info.project.name !== 'chromium', 'one browser is enough for computed colours');
+  chatTest(`raw_colours_contrast_in_each_theme: PR view, ${pick.name}: the title reads on the dialog`, { tag: '@chromium' }, async ({ page, chatCore }) => {
     fs.writeFileSync(path.join(chatCore.home, 'gh-view'), JSON.stringify(VIEW));
     fs.writeFileSync(path.join(chatCore.home, 'bin/gh'), `#!/bin/sh\ncase "$2" in\n  view) /bin/cat '${chatCore.home}/gh-view' ;;\n  diff) printf '+a\\n-b\\n' ;;\n  list) echo '[]' ;;\nesac\n`, { mode: 0o700 });
     const s = chatCore.chat('alpha');

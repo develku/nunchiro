@@ -9,8 +9,7 @@ import { frames, give, helpers, ptyWrites } from './fixtures/images/helpers';
 type Live = { home: string; session: string; agent: string; png: string; prompt: string; out: string };
 const live = process.env.IMAGES_LIVE ? (JSON.parse(process.env.IMAGES_LIVE) as Live) : null;
 
-test('scenario: a pasted image is sent as a saved path and comes back as a chat thumbnail from the transcript', async ({ page }, info) => {
-  test.skip(!live || info.project.name !== 'chromium', 'run through scripts/scenario/v1b-images.sh');
+test('scenario: a pasted image is sent as a saved path and comes back as a chat thumbnail from the transcript', { tag: '@live' }, async ({ page }) => {
   test.setTimeout(240_000);
   const L = live!;
   const boot = windowAuth(L.home);

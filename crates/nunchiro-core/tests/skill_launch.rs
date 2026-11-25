@@ -38,7 +38,7 @@ impl Core {
             let script = format!(
                 "#!/bin/sh\nif [ \"$1\" = --version ]; then echo '{version}'; exit; fi\nprintf '%s\\n' \"$@\" > argv-{name}.txt\nsleep 30\n"
             );
-            fs::write(home.join(name), script).unwrap();
+            fs::write(home.join(name), home::codex_fake(&script)).unwrap();
             fs::set_permissions(home.join(name), fs::Permissions::from_mode(0o700)).unwrap();
         }
         let bin = cli::path();

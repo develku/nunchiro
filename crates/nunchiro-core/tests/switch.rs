@@ -54,7 +54,7 @@ impl Core {
         fs::create_dir_all(home.join("codex-home")).unwrap();
         fs::create_dir_all(home.join("project")).unwrap();
         for name in ["claude", "codex"] {
-            fs::write(home.join("bin").join(name), FAKE).unwrap();
+            fs::write(home.join("bin").join(name), home::codex_fake(FAKE)).unwrap();
             fs::set_permissions(
                 home.join("bin").join(name),
                 fs::Permissions::from_mode(0o700),

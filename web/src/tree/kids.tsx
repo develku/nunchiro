@@ -39,7 +39,10 @@ export function useKids(core: CoreClient, connected: boolean, sessions: Session[
       void Promise.all(
         ids.map((id) =>
           core.request({ op: 'subagents', id }).then(
-            (r): readonly [string, Kid[]] => [id, (r as { kids?: Kid[] }).kids ?? []],
+            (r): readonly [string, Kid[]] => {
+              const got = (r as { kids?: unknown }).kids;
+              return [id, Array.isArray(got) ? (got as Kid[]) : []]; // a reply that is not a list says "none" (the board card's read does the same)
+            },
             (): readonly [string, Kid[]] => [id, []],
           ),
         ),

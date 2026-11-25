@@ -44,10 +44,10 @@
   "T1": {
    "Nunchiro": {
     "result": "yes",
-    "steps": 6,
-    "path": "Onboarding opens by itself on first launch; click Quick setup; Browse folder; pick the folder in the macOS dialog; click Open; the agent starts on its own; type the prompt; Enter",
-    "evidence": "web/src/App.tsx:378-388; web/src/settings/onboarding/OnboardingPage.tsx:212-221; web/src/firstrun/added.ts:57; web/src/tree/ProjectTools.tsx:112,156",
-    "stuck": "A folder on an external disk shows 'Permission needed' until macOS grants access (docs/first-run.md). Whether the new session's composer is focused for typing was not verified.",
+    "steps": 2,
+    "path": "Onboarding opens by itself on first launch; Quick setup shows the Folder box already set (the newest folder Claude or Codex worked in, or Assistants' own folder when there is no agent history) and the First prompt field focused; type the prompt; Enter (the session starts and gets the prompt)",
+    "evidence": "web/src/App.tsx:378-390; web/src/settings/onboarding/OnboardingPage.tsx:229-268,421-469; web/src/settings/onboarding/state.ts:35-38; web/tests/firstuse-1130.spec.ts:40-47 (re-counted 2026-11-25 at e288baf07)",
+    "stuck": "A startup question from the agent (folder trust) holds the prompt until answered. Another folder costs 2 more. Quick setup shows only once an agent is found and no project exists. A folder on an external disk may need macOS Removable Volumes access.",
     "shots": []
    },
    "Orca": {
@@ -110,10 +110,10 @@
   "T2": {
    "Nunchiro": {
     "result": "yes",
-    "steps": 2,
-    "path": "Ctrl+digit selects the project; Shift+Cmd+C starts Claude in it (Shift+Cmd+O starts Codex). Fallback: Cmd+T, type the project name, Enter = 3",
-    "evidence": "web/src/keys.ts:85,53 (session.new.claude); web/src/chrome/commands.ts:207-211; web/src/NewSession.tsx:331-358",
-    "stuck": "A folder not yet in the tree needs Choose folder (the native dialog). The key does nothing when the agent is turned off in Settings.",
+    "steps": 1,
+    "path": "Click the + on the project row (shown on hover); it starts the default agent in that project",
+    "evidence": "web/src/Sidebar.tsx:697-698,739; web/src/App.tsx:499; web/src/settings/agents/newDefaults.ts:108-109; web/src/tree/tree.css:261,271 (re-counted 2026-11-25)",
+    "stuck": "A remote project or no agent turned on opens New tab instead (+1 or more). A folder not yet in the tree needs Choose folder (the native dialog).",
     "shots": []
    },
    "Orca": {
@@ -315,10 +315,10 @@
   "T5": {
    "Nunchiro": {
     "result": "yes",
-    "steps": 6,
-    "path": "Cmd+K; type 'search sessions'; Enter; type the word; ArrowDown; Enter",
-    "evidence": "web/src/chrome/commands.ts:308; web/src/search/Sessions.tsx:236-262; web/src/search/Search.tsx:80",
-    "stuck": "Searches only chats of sessions Nunchiro started, not sessions made in a plain terminal. A closed session opens read-only with Resume. The 300 ms pause before results was not counted as a step.",
+    "steps": 3,
+    "path": "Option+Cmd+F (Search sessions, field focused); type the word; Enter opens the first hit",
+    "evidence": "web/src/keys.ts:118; web/src/chrome/commands.ts:311; web/src/search/Search.tsx:221-226; web/src/search/Sessions.tsx:239-244 (re-counted 2026-11-25)",
+    "stuck": "Enter opens a hit only once results for that exact text are shown (300 ms pause); sooner, Enter only searches and a second Enter is needed. Searches only chats of sessions Nunchiro started. A closed session opens read-only with Resume.",
     "shots": []
    },
    "Orca": {
@@ -387,10 +387,10 @@
   "T6": {
    "Nunchiro": {
     "result": "yes",
-    "steps": 6,
-    "path": "Per agent: Cmd+T; click the Worktree place choice; Enter (default agent). Repeat for the second. Prompts not counted",
-    "evidence": "web/src/NewSession.tsx:161-166,206-208,475; web/src/tree/worktrees.tsx:421-424 (Cmd+N: name + Enter makes a worktree only)",
-    "stuck": "The Worktree choice resets to 'here' every time the popover opens. The project's setup-script gate can delay the start (NewSession.tsx:316-325).",
+    "steps": 2,
+    "path": "Shift+Cmd+N (a new worktree with the default agent started in it); Shift+Cmd+N again for the second. Prompts not counted",
+    "evidence": "web/src/keys.ts:55; web/src/tree/worktrees.tsx:401-413,959,970,979; web/src/chrome/commands.ts:415 (re-counted 2026-11-25)",
+    "stuck": "The project is the selected worktree row's, else the current session's, else the first project. With no Claude or Codex default it opens the New worktree dialog. The project's setup-script gate can stop the start. Off on another machine and outside a repository.",
     "shots": []
    },
    "Orca": {
@@ -533,10 +533,10 @@
   "T8": {
    "Nunchiro": {
     "result": "yes",
-    "steps": 3,
-    "path": "Cmd+K; type 'new shell'; Enter (opens a shell in the side pane, in the session's folder)",
-    "evidence": "web/src/chrome/commands.ts:392 (pane.shell.new); web/src/pane/SidePane.tsx:31-33",
-    "stuck": "Cmd+J only shows the agent's own terminal, not a new shell. The 'new shell' palette wording was not checked.",
+    "steps": 1,
+    "path": "Ctrl+` (the side pane opens on a new shell in the session's folder, focused; a running shell of that pane is shown instead)",
+    "evidence": "web/src/keys.ts:109; web/src/chrome/commands.ts:395-401; web/src/App.tsx:307; web/src/chrome/useGlobalKeys.ts:170; web/src/pane/SidePane.tsx:74-90 (re-counted 2026-11-25)",
+    "stuck": "Only when the current session is a running agent with a transcript (paneSession); otherwise the command is off.",
     "shots": []
    },
    "Orca": {
@@ -665,10 +665,10 @@
   "T10": {
    "Nunchiro": {
     "result": "yes",
-    "steps": 8,
-    "path": "Cmd+,; click Agent extensions; click the name field; type the name; click the command field; type the command; click Add; start a new session (Shift+Cmd+C)",
-    "evidence": "web/src/features/extensions.tsx:4-5,536-541; crates/nunchiro-core/src/extensions.rs:474,1042,1100,1117",
-    "stuck": "Only new sessions get the server. Own servers are sealed on add and cannot be edited outside Nunchiro. Agent-configured servers are listed read-only. Skills are added by 'New skill' (a folder), not from a registry.",
+    "steps": 3,
+    "path": "Click the composer of the open agent session; Cmd+V a `claude mcp add NAME -- COMMAND` line; click 'Add and restart' on the offer row (an idle session restarts on its conversation with the server)",
+    "evidence": "web/src/chat/ComposerWidget.tsx:181-221,274-288,370-373; web/src/features/pasted-server.ts:52-60; web/src/features/restart-keeping.ts:9-15 (re-counted 2026-11-25; the lane claimed 2, but the composer is not focused by default)",
+    "stuck": "Only a pasted stdio `claude mcp add` line shows the offer; typing it, a bare command, or an http/sse add does not. A busy session gets 'for new sessions' and needs a new session (+1). -e/--env values are dropped. Settings path: Cmd+,; Skills & hooks; paste; Enter; Restart = 5. Skills are still added as a folder.",
     "shots": []
    },
    "Orca": {
@@ -796,11 +796,11 @@
   },
   "T12": {
    "Nunchiro": {
-    "result": "partial",
-    "steps": 5,
-    "path": "Click Stop on the stuck seat; confirm Stop; click the teammate in Home/Team to open the seat; type the prompt; Enter",
-    "evidence": "crates/nunchiro-core/src/team.rs:931-933,1030-1075; web/src/lead/HomeGroup.tsx:80; web/src/room/RoomView.tsx:182-184",
-    "stuck": "No 'new conversation' button for a seat. An open seat is reused as it is, so the user must close it first and may not know to. /clear exists, but not on a stuck turn.",
+    "result": "yes",
+    "steps": 3,
+    "path": "Click 'New conversation' in the stuck seat's header (the running turn is stopped, no confirm; the new conversation opens with the same role and folder and the composer focused); type the prompt; Enter",
+    "evidence": "web/src/chrome/CentreView.tsx:165-168,584; web/src/lead/LeaderDialog.tsx:55-87,96-105; crates/nunchiro-core/src/team.rs:1296-1345; web/tests/seat-new-conversation-1130.spec.ts:38,87,118 (re-counted 2026-11-25)",
+    "stuck": "An ACP seat with no conversation id has the button greyed out and keeps the 1096 handover. Starts from the stuck seat's tab. A 10 s Undo puts the old conversation back.",
     "shots": []
    },
    "Orca": {

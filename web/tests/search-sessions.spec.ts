@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page, WebSocketRoute } from '@playwright/test';
-import { REPO } from './fixtures';
+import { REPO, codexFake } from './fixtures';
 import { append, ChatCore, chat, expect, rec, test } from './fixtures/chat/harness';
 
 const BIN = path.join(REPO, 'target/debug/nunchiro');
@@ -24,7 +24,7 @@ function codexSession(core: ChatCore, label: string) {
   const file = path.join(dir, `rollout-2026-10-27T10-00-00-${id}.jsonl`);
   fs.writeFileSync(file, '');
   fs.writeFileSync(path.join(core.home, 'codex-next.json'), JSON.stringify({ thread_id: id, transcript_path: file }));
-  fs.writeFileSync(path.join(core.home, 'bin/codex'), fakeCodex(core.home), { mode: 0o700 });
+  fs.writeFileSync(path.join(core.home, 'bin/codex'), codexFake(fakeCodex(core.home)), { mode: 0o700 });
   const s = core.cli('session', 'start', '--kind', 'codex', '--project', core.project(label), '--label', label).session as { id: string; cwd: string };
   // A real rollout starts with its session_meta, which the core's locate checks.
   append(file, { type: 'session_meta', payload: { id, cwd: s.cwd } });

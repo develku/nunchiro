@@ -5,7 +5,7 @@
 import type { Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { type Core, expect, openWindow, REPO, test } from './fixtures';
+import { type Core, expect, openWindow, REPO, test, codexFake } from './fixtures';
 import { icon, sidebar } from './d5b';
 import { openRow } from './accounts-rows';
 
@@ -29,7 +29,7 @@ done
 function seed(core: Core, available = 2) {
   const d = path.join(core.home, 'codex-home');
   fs.mkdirSync(d, { recursive: true });
-  fs.writeFileSync(path.join(core.home, 'bin/codex'), FAKE, { mode: 0o700 });
+  fs.writeFileSync(path.join(core.home, 'bin/codex'), codexFake(FAKE), { mode: 0o700 });
   const credits = Array.from({ length: available }, (_, i) => ({ id: `c${i}`, resetType: 'codexRateLimits', status: 'available', grantedAt: 1, expiresAt: now() + (7 + i) * DAY, title: null, description: null }));
   const read = { id: 2, result: { ordinaryUsageAllowed: true, rateLimits: { primary: null, secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: now() + DAY } }, rateLimitsByLimitId: null, rateLimitResetCredits: { availableCount: available, credits }, accountId: null, rateLimitUpsell: null } };
   fs.writeFileSync(path.join(d, 'read.json'), JSON.stringify(read) + '\n');
@@ -160,7 +160,7 @@ test('codex_reset_agent_ask_is_a_decisions_card_allow_spends_one', async ({ app,
   // An agent in a Codex session asks through the Nunchiro CLI (its own session token).
   const bin = path.join(REPO, 'target/debug/nunchiro');
   const asks = () => `[ "$last" = app-server ] || { [ -n "$NUNCHIRO_SESSION" ] || exit 1; "${bin}" account codex-reset --reason "tests need more runs"; exec cat; }`;
-  fs.writeFileSync(path.join(core.home, 'bin/codex'), FAKE.replace('[ "$last" = app-server ] || exit 1', asks), { mode: 0o700 });
+  fs.writeFileSync(path.join(core.home, 'bin/codex'), codexFake(FAKE.replace('[ "$last" = app-server ] || exit 1', asks)), { mode: 0o700 });
   core.cli('session', 'start', '--kind', 'codex', '--project', core.project('demo'), '--label', 'add tests');
   const log = path.join(core.home, 'codex-resets.json');
   await expect.poll(() => fs.existsSync(log) && fs.readFileSync(log, 'utf8').includes('"asked"'), { timeout: 15_000 }).toBe(true);

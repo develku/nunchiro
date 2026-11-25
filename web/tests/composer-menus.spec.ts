@@ -7,7 +7,6 @@ import path from 'node:path';
 import { type Core, expect, openWindow, REPO, test, showComposer } from './fixtures';
 
 const FIXTURES = path.join(REPO, 'crates/nunchiro/tests/fixtures');
-const OUT = path.join(REPO, '.scratch/composer-menus');
 
 const put = (dir: string, rel: string, text: string) => {
   fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
@@ -286,45 +285,6 @@ test('reads_agent_folders_read_only', async ({ app, core }) => {
   expect(sent.filter((r) => /write|delete|save|mkdir/.test(r.op))).toEqual([]);
   expect(fs.existsSync(path.join(core.home, 'sentinel-home', '.claude'))).toBe(false); // nothing under ~/.claude
 });
-
-const MOCKUP = path.join(REPO, '.scratch/review-1028/claude-feel-2.html');
-test('side_by_side_page', async ({ app, core, browser, browserName }) => {
-  test.skip(browserName !== 'chromium', 'one page of screenshots is enough');
-  test.skip(!fs.existsSync(MOCKUP), `mockup frame absent: ${MOCKUP}`);
-  setup(core);
-  fs.mkdirSync(OUT, { recursive: true });
-  await openWindow(app);
-  await ta(app).click();
-  await ta(app).pressSequentially('/');
-  await expect(opt(slash(app), /^\/btw/)).toBeVisible();
-  await box(app).evaluate((e) => e.scrollIntoView());
-  await app.screenshot({ path: path.join(OUT, 'app-slash.png'), clip: await menuClip(app) });
-  await ta(app).fill('@tree');
-  await expect(opt(files(app), 'src/tree/tree.css')).toBeVisible();
-  await app.screenshot({ path: path.join(OUT, 'app-at.png'), clip: await menuClip(app) });
-  const mock = await browser.newPage({ viewport: { width: 1000, height: 800 } });
-  await mock.goto(`file://${MOCKUP}`);
-  for (const s of ['slash', 'at']) {
-    await mock.click(`[data-s="${s}"]`);
-    const d = (await mock.locator('.dock').boundingBox())!;
-    await mock.screenshot({ path: path.join(OUT, `mock-${s}.png`), clip: { x: d.x, y: Math.max(0, d.y - 200), width: d.width, height: Math.min(d.y, 200) + d.height } }); // the popup opens above the dock
-  }
-  await mock.close();
-  const row = (s: string, label: string) => `<h2>${label}</h2><div class="r"><figure><figcaption>mockup (claude-feel-2.html, state ${s})</figcaption><img src="mock-${s}.png"></figure><figure><figcaption>app</figcaption><img src="app-${s}.png"></figure></div>`;
-  fs.writeFileSync(
-    path.join(OUT, 'side-by-side.html'),
-    `<!doctype html><meta charset="utf-8"><title>composer-menus side by side</title><style>body{font:14px system-ui;margin:20px}.r{display:flex;gap:20px;align-items:flex-start}img{max-width:560px;border:1px solid #ccc}figcaption{color:#666;margin-bottom:4px}</style>${row('slash', '/ menu')}${row('at', '@ menu')}`,
-  );
-  expect(fs.existsSync(path.join(OUT, 'side-by-side.html'))).toBe(true);
-});
-
-/** The composer box plus the menu above it. */
-async function menuClip(app: Page) {
-  const b = (await box(app).boundingBox())!;
-  const m = (await app.locator('[role=listbox]').first().boundingBox())!;
-  const y = Math.min(b.y, m.y) - 8;
-  return { x: Math.max(0, Math.min(b.x, m.x) - 8), y: Math.max(0, y), width: Math.max(b.width, m.width) + 16, height: b.y + b.height - y + 8 };
-}
 
 // Ticket 98: user-level commands from the user's own ~/.claude, listed read only by the core.
 test('menu_shows_user_rows', async ({ app, core }) => {

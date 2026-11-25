@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { agentsToml, fakeAcp, ownerOk, tomlEntry } from './acp-fakes';
-import { expect, openWindow, test, type Core } from './fixtures';
+import { expect, openWindow, test, type Core, codexFake } from './fixtures';
 
 const plus = (app: Page) => app.getByRole('button', { name: 'New session', exact: true });
 const pop = (app: Page) => app.getByRole('dialog', { name: 'New tab' });
@@ -148,7 +148,7 @@ test('plus_popover_keyboard: arrows move, Enter picks, Esc closes and gives the 
 
 test('plus_agent_within_two_clicks: from the main view, "+" then the Codex row starts a Codex session', async ({ app, core }) => {
   const alpha = await open(app, core);
-  fs.writeFileSync(path.join(core.home, 'bin/codex'), '#!/bin/sh\ncase "$1" in --version) echo "codex-cli 0.161.0"; exit 0;; esac\nexec /bin/cat\n', { mode: 0o700 });
+  fs.writeFileSync(path.join(core.home, 'bin/codex'), codexFake('#!/bin/sh\ncase "$1" in --version) echo "codex-cli 0.161.0"; exit 0;; esac\nexec /bin/cat\n'), { mode: 0o700 });
   await plus(app).click(); // click 1
   await row(app, 'Codex').click(); // click 2
   await expect.poll(() => snap(core).filter((s) => s.kind === 'codex').map((s) => s.project)).toEqual([alpha]);

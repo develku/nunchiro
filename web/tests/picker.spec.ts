@@ -237,7 +237,7 @@ test('picker: Hangul composition survives opening the menu; prefix keys still wo
 // Codex's list is the core's alone (ticket 1100): agent_models.rs `fallback_equals_the_recorded_cache` keeps its fixed list
 // equal to Codex's own file, and the next test shows the window lists what the core serves.
 test('picker: the window catalog equals the core allowlist', async () => {
-  const rust = fs.readFileSync(path.join(REPO, 'crates/nunchiro-core/src/sessions.rs'), 'utf8');
+  const rust = fs.readFileSync(path.join(REPO, 'crates/nunchiro-core/src/sessions/model_mode.rs'), 'utf8');
   const claude = [...rust.slice(rust.indexOf('const CLAUDE_MODELS'), rust.indexOf('const CLAUDE_EFFORTS')).matchAll(/\("([^"]+)", "[^"]+"\)/g)].map((m) => m[1]);
   expect(claude).toEqual(CLAUDE_MODELS.map((m) => m.value));
   expect(claude.length).toBeGreaterThan(0);

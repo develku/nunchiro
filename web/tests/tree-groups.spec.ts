@@ -291,8 +291,10 @@ test('group_commands_map_to_palette_ids: every menu item and button of the tree 
   const ids = await app.locator('.palette [data-command]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.command));
   for (const surface of ['project', 'project-loose', 'group'] as const) {
     expect(SURFACES[surface].length, surface).toBeGreaterThan(0);
-    for (const id of SURFACES[surface]) if (!MENU_ONLY.has(id)) expect(ids, `${surface}: ${id}`).toContain(id); // ticket 991 A10: row-only items are not in the palette
+    for (const id of SURFACES[surface]) if (!MENU_ONLY.has(id) && id !== 'lead.fresh') expect(ids, `${surface}: ${id}`).toContain(id); // ticket 991 A10: row-only items are not in the palette
   }
+  // Ticket 1096: New Lead conversation is listed only while the project has a lead; this one has none, so Add a leader… is.
+  expect(ids).not.toContain('lead.fresh');
   for (const id of ['group.create', 'group.rename', 'group.dissolve', 'group.move', 'group.remove', 'project.pin', 'tree.expand-all', 'projects.pick']) expect(ids, id).toContain(id);
   // The head button is the command: running the command presses it.
   await app.keyboard.press('Escape');

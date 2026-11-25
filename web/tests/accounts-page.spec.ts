@@ -6,7 +6,7 @@ import type { Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, openWindow, test, type Core } from './fixtures';
+import { expect, openWindow, test, type Core, codexFake } from './fixtures';
 import { more, openAdd, openRow, recordStatusRuns } from './accounts-rows';
 import { closeSettings, openSettings } from './settings-modal';
 
@@ -28,7 +28,7 @@ function fakes(core: Core) {
     ['claude', 'CLAUDE_CONFIG_DIR', 'auth status', 'auth login'],
     ['codex', 'CODEX_HOME', 'login status', 'login'],
   ])
-    fs.writeFileSync(path.join(core.home, 'bin', name), fake(name, variable, status, login), { mode: 0o700 });
+    fs.writeFileSync(path.join(core.home, 'bin', name), codexFake(fake(name, variable, status, login)), { mode: 0o700 });
 }
 async function openAccounts(app: Page) {
   await openSettings(app);

@@ -37,7 +37,10 @@ group() { # name, then one command per argument (each a whole shell command)
 }
 
 core='cargo test --release -p nunchiro-core --features measure'
+# search_sessions_perf_500mb starts the nunchiro CLI (tests/fixtures/cli.rs: next to the test binary, so the release
+# one); `cargo test -p nunchiro-core` never builds another package's binary, so a fresh checkout needs it built first.
 group measure \
+  'cargo build --release --locked -p nunchiro' \
   'cargo test --release -p nunchiro --features measure --test idle_cpu -- --nocapture --test-threads=1' \
   "$core --test chat_performance -- --nocapture" \
   "$core --test search_sessions search_sessions_perf_500mb -- --nocapture" \

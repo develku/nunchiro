@@ -29,7 +29,6 @@ const visible = (raw: string) => raw.replace(ESC, ' ').replace(/[ \t\r\x00-\x08\
 const guard = (script: string) => execFileSync('python3', ['-I', '-B', '-c', `import json,sys; sys.path.insert(0, ${JSON.stringify(path.join(REPO, 'scripts/scenario'))}); from lib import snapshot, guard_check; ${script}`], { encoding: 'utf8' });
 
 // Run with --workers 1: one real agent at a time.
-test.skip(() => !process.env.NUNCHIRO_REAL, 'real agents: run with NUNCHIRO_REAL=1');
 
 const results: Record<string, unknown>[] = [];
 test.beforeAll(({ browserName }) => {
@@ -83,8 +82,7 @@ async function firstCardAt(page: Page) {
 
 for (const row of (process.env.ROWS ?? 'C1,C2,X1').split(',') as Row[])
   for (let n = 0; n < RUNS; n++)
-    test(`${row} run ${n}: strip within 1 s, answer resolves it`, async ({ page, browserName }) => {
-      test.skip(browserName !== 'chromium', 'one browser is enough for real agents');
+    test(`${row} run ${n}: strip within 1 s, answer resolves it`, { tag: '@live' }, async ({ page }) => {
       test.setTimeout(400_000);
       // As in matrix.sh: a run where the model never asked is retried (up to 3), never counted as a miss.
       for (let k = 0; k < 3; k++) if (await trial(page, row, n, k)) return;

@@ -4,7 +4,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, openWindow, test, type Core } from './fixtures';
+import { expect, openWindow, test, type Core, codexFake } from './fixtures';
 import { clickRemove, openRow } from './accounts-rows';
 
 // Status says signed out; login stays open like one waiting for its pasted code; logout waits for `logout-go`.
@@ -23,7 +23,7 @@ s.on('connect', () => s.write(JSON.stringify({ token: fs.readFileSync(path.join(
 s.on('data', (d) => { b += d; if (b.includes('\\n')) { process.stdout.write(b); s.destroy(); } });`;
 function setup(core: Core) {
   fs.writeFileSync(path.join(core.home, 'bin', 'claude'), FAKE('auth status --json', 'auth login', 'auth logout'), { mode: 0o700 });
-  fs.writeFileSync(path.join(core.home, 'bin', 'codex'), FAKE('login status', 'login', 'logout'), { mode: 0o700 });
+  fs.writeFileSync(path.join(core.home, 'bin', 'codex'), codexFake(FAKE('login status', 'login', 'logout')), { mode: 0o700 });
 }
 function add(core: Core, agent: string, label: string): { id: string; folder: string } {
   const r = JSON.parse(execFileSync(process.execPath, ['-e', ADD, core.home, agent, label], { encoding: 'utf8', timeout: 20_000 }));

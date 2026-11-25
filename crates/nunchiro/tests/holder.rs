@@ -1220,6 +1220,45 @@ fn a_session_caller_cannot_make_the_core_exit() {
     assert_eq!(h.session(&s.id).state, SessionState::Running);
 }
 
+// Ticket 1154 (11-25 16:06: an update install put the old build back, "17 session(s) did not come back within 30 s").
+// After the owner's core exit (an update, a restart) whichever CLI call comes first starts the next core, and with
+// agents at work that is often one from inside a session. That core kept the session's id, so every holder
+// refused it as "inside session" for as long as it ran: no session came back. Bounded as the install's own check is.
+#[test]
+fn a_core_a_session_started_gets_every_session_back() {
+    let mut h = Harness::new();
+    let cats: Vec<Session> = (0..3).map(|_| h.start(&["/bin/cat"])).collect();
+    // An agent's CLI call that stays (`events` follows until its reader goes away): the one that starts the next core
+    // still runs inside its session while that core looks for its holders, so the core must be no child of it either.
+    // Nothing else here starts a core (`call` only connects).
+    let script = r#"while :; do "$1" events > /dev/null 2>&1; sleep 0.2; done"#;
+    let caller = h.start(&[
+        "/bin/sh",
+        "-c",
+        script,
+        "inside",
+        env!("CARGO_BIN_EXE_nunchiro"),
+    ]);
+    owner_exit(&mut h);
+    let read = |s: &Session| {
+        let id = s.id.clone();
+        call(&h.home, Request::Read { id, after: 0 }).is_ok()
+    };
+    let until = Instant::now() + Duration::from_secs(30);
+    while !cats.iter().chain([&caller]).all(read) {
+        let log = |s: &Session| {
+            fs::read_to_string(h.home.join("logs/sessions").join(format!("{}.log", s.id)))
+                .unwrap_or_default()
+        };
+        assert!(
+            Instant::now() < until,
+            "the sessions did not come back within 30 s; a holder's log:\n{}",
+            log(&cats[0])
+        );
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
 // V2-1b r3 (S1a): two holders from different executable paths in one data folder, both without a core. An agent in a
 // session held from path Y connects to the path-X holder of session B and asks to attach as its core: refused, and
 // nothing reaches B's agent.

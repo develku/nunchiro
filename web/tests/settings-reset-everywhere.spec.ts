@@ -3,7 +3,6 @@
 // default back and the arrow gone. Real core.
 import type { Locator, Page } from '@playwright/test';
 import fs from 'node:fs';
-import path from 'node:path';
 import { expect, openWindow, test } from './fixtures';
 import { openSettings } from './settings-modal';
 
@@ -282,47 +281,6 @@ test('reset_every_row: every switch, select, stepper and choice on every Setting
   expect(driven.length, 'the walk reached the rows').toBeGreaterThanOrEqual(40);
   expect([...new Set(bad)], 'rows without a working reset').toEqual([]);
   expect(stale, 'exempt entries that match no row').toEqual([]);
-});
-
-// SHOTS=<dir> SHOTS_TAG=before|after, chromium only: Lifetime (General), Git and Accounts (Codex card, add form) in light with a
-// few values changed, for the lane report's before/after. The same steps run on main, where the reset marks are missing.
-test('reset_shots', async ({ app, core }) => {
-  const shots = process.env.SHOTS;
-  test.skip(!shots || test.info().project.name !== 'chromium', 'SHOTS=<dir> on chromium only');
-  const tag = process.env.SHOTS_TAG ?? 'after';
-  // A signed-out codex on the PATH, so its card shows the new-session defaults (permission, model, effort).
-  fs.writeFileSync(path.join(core.home, 'bin', 'codex'), `#!/bin/sh\n[ "$1" = --version ] && { echo 'codex 1.0.0'; exit 0; }\n[ "$1 $2" = 'login status' ] && { echo 'Not logged in' >&2; exit 1; }\nexec /bin/cat\n`, { mode: 0o700 });
-  await app.emulateMedia({ colorScheme: 'light' });
-  const shot = (l: Locator, name: string) => l.screenshot({ path: `${shots}/543-${tag}-${name}.png` });
-  await go(app, 'general');
-  await expect(body(app).locator('[data-setting="keepAwake"]')).toBeVisible();
-  await body(app).locator('label:has(input[name="lifetime"][value="end_with_app"])').click();
-  for (const setting of ['keepAwake', 'startAtLogin']) {
-    await body(app).locator(`[data-setting="${setting}"]`).click();
-    await expect(body(app).locator(`[data-setting="${setting}"]`)).toBeChecked();
-  }
-  await shot(body(app).locator('#s-lifetime'), 'lifetime');
-  await app.locator('.settings > nav button[data-page="git"]').click();
-  // The core answers, then the box follows: click and wait for the switch to read On.
-  for (const setting of ['autoPull', 'autoCleanWorktrees']) {
-    await body(app).locator(`[data-setting="${setting}"]`).click();
-    await expect(body(app).locator(`[data-setting="${setting}"]`)).toBeChecked();
-  }
-  await shot(body(app), 'git');
-  await app.locator('.settings > nav button[data-page="providers"]').click();
-  const row = body(app).locator('#s-accounts [data-row="codex"] .prv-chv');
-  await row.waitFor();
-  await expect(body(app).locator('#s-accounts [data-row="codex"] .prv-chips')).not.toHaveText('Checking…', { timeout: 25_000 });
-  if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click();
-  const card = body(app).locator('#s-accounts .acct-agent[data-agent="codex"]');
-  await card.locator('[data-field="permission"] select').selectOption('ask');
-  await card.locator('[data-row="newDefaultEffort"] select').selectOption({ index: 1 });
-  await card.getByRole('button', { name: 'Add account', exact: true }).click();
-  await card.getByRole('textbox', { name: 'Name' }).fill('a​b');
-  await app.waitForTimeout(400);
-  await shot(card.locator('.acct-add'), 'accounts-add');
-  await card.locator('[data-row="newDefaultEffort"]').scrollIntoViewIfNeeded();
-  await shot(body(app), 'accounts-defaults');
 });
 
 // Ticket 543: the walk above drives switches, selects, steppers and choices; the two typed values it cannot drive blindly.

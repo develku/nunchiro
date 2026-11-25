@@ -152,10 +152,9 @@ test.describe('web widgets review (v1b-23)', () => {
     expect(sendLog(core, t.s.id).map((e) => e.sender)).toEqual(['widget:w']);
   });
 
-  test('review-23: an approved host cannot redirect the widget to another host', async ({ app, core, browserName }) => {
+  test('review-23: an approved host cannot redirect the widget to another host', { tag: '@chromium' }, async ({ app, core }) => {
     // The 302 can only come from a route (the hosts are *.nunchiro.test), and Playwright's WebKit refuses
     // route.fulfill with a redirect status ("Cannot fulfill with redirect status: 302").
-    test.skip(browserName === 'webkit', 'Playwright WebKit cannot fulfill a route with a redirect status');
     await installWidgetHost(app, core.home);
     const seen: string[] = [];
     await app.route(/nunchiro\.test/, (r) => {

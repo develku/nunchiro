@@ -8,7 +8,7 @@ import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import fs from 'node:fs';
 import path from 'node:path';
-import { type Core, expect, openWindow, REPO, test } from './fixtures';
+import { type Core, expect, openWindow, REPO, test, codexFake } from './fixtures';
 
 const DAY = 86_400;
 const now = () => Math.floor(Date.now() / 1000);
@@ -46,7 +46,7 @@ done
 function fakeCodex(core: Core) {
   const d = path.join(core.home, 'codex-home');
   fs.mkdirSync(d, { recursive: true });
-  fs.writeFileSync(path.join(core.home, 'bin/codex'), FAKE, { mode: 0o700 });
+  fs.writeFileSync(path.join(core.home, 'bin/codex'), codexFake(FAKE), { mode: 0o700 });
   const credits = [0, 1].map((i) => ({ id: `c${i}`, resetType: 'codexRateLimits', status: 'available', grantedAt: 1, expiresAt: now() + (7 + i) * DAY, title: null, description: null }));
   const read = { id: 2, result: { ordinaryUsageAllowed: true, rateLimits: { primary: null, secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: now() + DAY } }, rateLimitsByLimitId: null, rateLimitResetCredits: { availableCount: 2, credits }, accountId: null, rateLimitUpsell: null } };
   fs.writeFileSync(path.join(d, 'read.json'), JSON.stringify(read) + '\n');

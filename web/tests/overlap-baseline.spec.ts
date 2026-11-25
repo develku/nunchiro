@@ -4,101 +4,11 @@
 //    that takes clicks only on hover (commit 0ebb7a73).
 // `scan` below is a copy of the one in overlap-check.spec.ts: a spec file cannot be imported from another spec (the reason
 // ux-states.ts copies the dead-click test the same way). Keep the two in step.
-import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
-import type { Page } from '@playwright/test';
-import { REPO } from './fixtures';
 import { expect, seed, STATES, test, type Ctx } from './ux-states';
 
 const WIDTHS = [900, 1440];
 
-/** Runs in the page. Returns the offender lines of the current screen (same rules as overlap-check.spec.ts). */
-const scan = (page: Page, state: string, width: number) =>
-  page.evaluate(
-    ([state, width]) => {
-      const ux = (window as unknown as { __ux: { css(e: Element): string; NATIVE: string } }).__ux;
-      const ALLOW = ['.xterm, canvas', '[role="tooltip"], .tip', '.toast', 'svg', '.sr, .sr-only'].join(', ');
-      const LAYERS = '[role="menu"], [role="dialog"], [role="listbox"], [role="alertdialog"], .cmenu';
-      const CONTROL = `${ux.NATIVE}, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="link"], [role="checkbox"], [role="switch"], [role="treeitem"]`;
-      type Item = { el: Element; r: DOMRect };
-      const clipped = (el: Element, r: DOMRect) => {
-        let x0 = r.left, y0 = r.top, x1 = r.right, y1 = r.bottom;
-        for (let a: Element | null = el; a; a = a.parentElement) {
-          const st = getComputedStyle(a);
-          if (st.overflowX === 'visible' && st.overflowY === 'visible') continue;
-          const b = a.getBoundingClientRect();
-          x0 = Math.max(x0, b.left); y0 = Math.max(y0, b.top); x1 = Math.min(x1, b.right); y1 = Math.min(y1, b.bottom);
-        }
-        x0 = Math.max(x0, 0); y0 = Math.max(y0, 0); x1 = Math.min(x1, innerWidth); y1 = Math.min(y1, innerHeight);
-        return x1 > x0 && y1 > y0 ? new DOMRect(x0, y0, x1 - x0, y1 - y0) : null;
-      };
-      const items: Item[] = [];
-      const add = (el: Element, r: DOMRect) => {
-        const st = getComputedStyle(el);
-        if (st.visibility === 'hidden' || st.display === 'none' || st.opacity === '0' || el.closest(ALLOW)) return;
-        const c = clipped(el, r);
-        if (c) items.push({ el, r: c });
-      };
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-        if (!n.textContent?.trim() || !n.parentElement || /^(SCRIPT|STYLE)$/.test(n.parentElement.tagName)) continue;
-        const range = document.createRange();
-        range.selectNodeContents(n);
-        const r = range.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0 && getComputedStyle(n.parentElement).visibility !== 'hidden') add(n.parentElement, r);
-      }
-      for (const el of Array.from(document.body.querySelectorAll(CONTROL))) {
-        const r = el.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0) add(el, r);
-      }
-      const out = new Set<string>();
-      for (let i = 0; i < items.length; i++)
-        for (let j = i + 1; j < items.length; j++) {
-          const a = items[i], b = items[j];
-          if (a.el === b.el || a.el.contains(b.el) || b.el.contains(a.el)) continue;
-          if (a.el.closest(LAYERS) !== b.el.closest(LAYERS)) continue;
-          const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left);
-          const h = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
-          if (w < 3 || h < 3 || w * h < 0.1 * Math.min(a.r.width * a.r.height, b.r.width * b.r.height)) continue;
-          const top = document.elementFromPoint(Math.max(a.r.left, b.r.left) + w / 2, Math.max(a.r.top, b.r.top) + h / 2);
-          if (!top || !(a.el.contains(top) || b.el.contains(top))) continue;
-          out.add([ux.css(a.el), ux.css(b.el)].sort().join('|'));
-        }
-      return [...out].map((l) => `${state}|${width}|${l}`);
-    },
-    [state, width] as const,
-  );
-
 const state = (name: string) => STATES.find((s) => s.name === name)!;
-
-test('overlap_baseline_has_no_stale_lines: every line of scripts/overlap.baseline still offends', async ({ page, chatCore }) => {
-  // V2.5-34: the baseline is empty, so nothing can be stale; the 240 s walk of every state would only re-prove the other tests.
-  test.skip(fs.readFileSync(path.join(REPO, 'scripts/overlap.baseline'), 'utf8').split('\n').every((l) => !l.trim()), 'scripts/overlap.baseline is empty: no line can be stale');
-  test.setTimeout(240_000);
-  const c = await seed(page, chatCore, true);
-  const found: string[] = [];
-  for (const width of WIDTHS) {
-    await page.setViewportSize({ width, height: 800 });
-    for (const s of STATES) {
-      await s.enter(c).catch((e) => { throw new Error(`state ${s.name} at ${width}px: ${String(e).slice(0, 400)}`); });
-      found.push(...(await scan(page, s.name, width)));
-    }
-  }
-  // Every found line is "new" against an empty baseline, so overlap-check.sh prints exactly the found list.
-  const dir = path.join(REPO, '.scratch');
-  fs.mkdirSync(dir, { recursive: true });
-  const empty = path.join(dir, `overlap-empty-${process.pid}.baseline`);
-  const list = path.join(dir, `overlap-baseline-found-${process.pid}.txt`);
-  fs.writeFileSync(empty, '');
-  fs.writeFileSync(list, [...new Set(found)].map((l) => `${l}\n`).join(''));
-  const r = spawnSync('sh', [path.join(REPO, 'scripts/overlap-check.sh'), empty, list], { encoding: 'utf8' });
-  fs.rmSync(empty, { force: true });
-  fs.rmSync(list, { force: true });
-  const offending = new Set(r.stderr.split('\n').filter((l) => l.startsWith('overlap: ') && l.includes('|')).map((l) => l.slice('overlap: '.length)));
-  const baseline = fs.readFileSync(path.join(REPO, 'scripts/overlap.baseline'), 'utf8').split('\n').filter(Boolean);
-  expect(baseline.filter((l) => !offending.has(l)), 'baseline lines that no longer offend: delete them').toEqual([]);
-});
 
 /** The seeded chat of `session-decision` (two messages), at `width`, with the live line under them. The state's pending
  *  decision keeps the real line away (ChatView `working` is false while a decision waits, ticket 212), so the line's markup

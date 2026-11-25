@@ -4,6 +4,12 @@ import json, os, socket, sys, termios, tty, pathlib
 if '--version' in sys.argv:
     print('99.0.0 fixture')
     sys.exit()
+if sys.argv[1:2] == ['app-server']:
+    # Ticket 1150: the core's question before a Codex start (which hooks would run); the yes that
+    # nunchiro-core/tests/fixtures/codex-app-server gives, for a fixture that is copied and cannot run that file.
+    print('{"id":1,"result":{}}\n{"id":2,"result":{"data":[{"hooks":[{"key":"/<session-flags>/config.toml:pre_tool_use:0:0","enabled":true,"trustStatus":"trusted"}]}]}}', flush=True)
+    sys.stdin.read()
+    raise SystemExit
 if '--fixture-fail' in sys.argv:  # w73: Claude ends with exit code 3 and leaves its shell
     print('fixture failure', flush=True)
     sys.exit(3)

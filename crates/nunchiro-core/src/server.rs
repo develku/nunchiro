@@ -1708,6 +1708,9 @@ fn connection(
                     if long || !sessions.queue.long_held(&event) {
                         sessions.queue.end_hook(&event);
                         if let Some(id) = &hook_session {
+                            if hold {
+                                sessions.unanswered_hold(id, &event); // ticket 1149
+                            }
                             sessions.reread_screen(id);
                         }
                     }

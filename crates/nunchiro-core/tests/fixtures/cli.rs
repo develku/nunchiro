@@ -4,7 +4,14 @@
 use std::path::PathBuf;
 
 pub fn path() -> PathBuf {
-    let bin = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/nunchiro");
+    // Ticket 1147: next to this test binary (<target>/<profile>/deps/), so CARGO_TARGET_DIR, --target-dir and
+    // build.target-dir all hold; with none set it is <workspace>/target/debug/nunchiro as before.
+    let exe = std::env::current_exe().expect("test binary path");
+    let bin = exe
+        .parent()
+        .and_then(|deps| deps.parent())
+        .expect("<target>/<profile>/deps")
+        .join("nunchiro");
     assert!(
         bin.is_file(),
         "{} is missing: run `cargo build -p nunchiro` before `cargo test -p nunchiro-core` (the whole-workspace `cargo test` builds it)",

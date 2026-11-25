@@ -26,8 +26,15 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 120_000,
   },
+  // Ticket 1144: a test leaves a run by its tag, never by an inline skip. @chromium and @webkit run in that browser only;
+  // @shots (pictures, sweeps, measures, walks on request) and @live (real agents, started by scripts/scenario) run only in
+  // their own Chromium project, which exists only when PW_OPT_IN names it (PW_OPT_IN=live ... --project live), so a plain
+  // run never starts one.
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'], viewport: { width: 1440, height: 900 } } },
+    { name: 'chromium', grepInvert: /@shots|@live|@webkit/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+    { name: 'webkit', grepInvert: /@shots|@live|@chromium/, use: { ...devices['Desktop Safari'], viewport: { width: 1440, height: 900 } } },
+    ...['shots', 'live']
+      .filter((name) => (process.env.PW_OPT_IN ?? '').split(',').includes(name))
+      .map((name) => ({ name, grep: new RegExp(`@${name}`), use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } })),
   ],
 });

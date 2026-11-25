@@ -50,7 +50,7 @@ impl Core {
                 "#!/bin/sh\nif [ \"$1\" = --version ]; then echo '{version}'; exit; fi\nn=$(ls {home}/run-*.txt 2>/dev/null | wc -l | tr -d ' ')\n{{ printf 'ENV=%s\\n' \"${{NUNCHIRO_ARTIFACTS-unset}}\"; printf '%s\\n' \"$@\"; }} > {home}/tmp-$$ && mv {home}/tmp-$$ {home}/run-$n.txt\nsleep 1\n",
                 home = home.display()
             );
-            fs::write(home.join(name), script).unwrap();
+            fs::write(home.join(name), home::codex_fake(&script)).unwrap();
             fs::set_permissions(home.join(name), fs::Permissions::from_mode(0o700)).unwrap();
         }
         let bin = cli::path();
@@ -423,7 +423,14 @@ fn artifact_skill_hook_injection_off_keeps_folder_and_rule() {
         value_after(&argv, "--add-dir"),
         [core.folder(&s.id).display().to_string()]
     );
-    assert!(!argv.iter().any(|a| a.starts_with("hooks.")), "{argv:?}");
+    // Ticket 1149: only the outward hook and its trust, as for Claude above.
+    let hooks: Vec<&String> = argv.iter().filter(|a| a.starts_with("hooks.")).collect();
+    assert!(
+        hooks.len() == 2
+            && hooks[0].contains("hook outward --codex")
+            && hooks[1].starts_with("hooks.state="),
+        "{argv:?}"
+    );
 }
 
 #[test]

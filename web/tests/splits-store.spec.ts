@@ -1,8 +1,6 @@
 // SPLITS review SHOULDs (ticket 94): windows on one origin keep their own splits, and 📌 puts the widget in the zone the split was in.
-import fs from 'node:fs';
-import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { expect, openWindow, REPO, test, type Core } from './fixtures';
+import { expect, openWindow, test, type Core } from './fixtures';
 import { drag, icon, readLayout, zone } from './d5b';
 
 const STORE = 'nunchiro.splits.v1';
@@ -81,22 +79,4 @@ test('pin_lands_where_the_split_was', async ({ app, core }) => {
   // Right of the session view, touching it; not beside the pinned terminal on the far left.
   expect(Math.abs(diff.x - (main.x + main.width))).toBeLessThan(2);
   expect(diff.x).toBeGreaterThan(first.x + first.width);
-});
-
-// Side-by-side for the owner (ticket 94): SPLITS_PIN_SHOTS=before|after writes ../.scratch/splits-pin/<name>-<tag>.png; skipped by default.
-test('pin_before_after_shots', async ({ app, core }) => {
-  const tag = process.env.SPLITS_PIN_SHOTS;
-  test.skip(!tag, 'set SPLITS_PIN_SHOTS=before|after');
-  const a = agent(core, 'a');
-  await openWindow(app, {}, core);
-  core.cli('layout', 'edge', 'left', 'terminal', '--pin', 'elsewhere');
-  await expect(zone(app, 'terminal-2')).toBeVisible();
-  await open(app, a.id);
-  await splitRight(app);
-  const dir = path.join(REPO, '.scratch/splits-pin');
-  fs.mkdirSync(dir, { recursive: true });
-  await app.screenshot({ path: path.join(dir, 'split.png') });
-  await splits(app).getByRole('button', { name: 'Keep in layout' }).click();
-  await app.waitForTimeout(800);
-  await app.screenshot({ path: path.join(dir, `pinned-${tag}.png`) });
 });

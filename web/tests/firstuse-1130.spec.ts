@@ -6,6 +6,9 @@ import path from 'node:path';
 import { expect, test, type Core } from './fixtures';
 import { ownerOk } from './acp-fakes';
 
+// The Folder list shows the home folder as ~ (settings/shell/Row.tsx `tilde`); a checkout under /Users/<name> shows it so.
+const tilde = (p: string) => p.replace(/^\/(Users|home)\/[^/]+/, '~');
+
 const SHOTS = path.resolve(import.meta.dirname, '../../.scratch/firstuse-1130');
 const shot = (app: Page, name: string) => app.screenshot({ path: path.join(SHOTS, name + '.png') });
 type Snap = { id: string; project: string; state: string; kind: string; cwd: string; agent_session_id: string; pending: { id: string }[] };
@@ -32,7 +35,7 @@ test.describe('first run, no agent history', () => {
     await expect.poll(() => fs.existsSync(path.join(core.home, 'team/home')), { timeout: 15_000 }).toBe(true);
     const home = fs.realpathSync(path.join(core.home, 'team/home'));
     await expect(folder).toHaveValue(home, { timeout: 15_000 });
-    await expect(folder.locator('option')).toHaveText([`Assistants (${home})`, 'Choose folder…']);
+    await expect(folder.locator('option')).toHaveText([`Assistants (${tilde(home)})`, 'Choose folder…']);
     await expect(quick(app).locator('.ob-sel b')).toHaveText('Assistants');
     await expect(quick(app).locator('[data-field="home-line"]')).toHaveText('No project yet: this runs in Assistants. Choose folder… to work on code.');
     await expect(quick(app).locator('[data-field="home-line"]').getByRole('button', { name: 'Choose folder…' })).toBeVisible();
@@ -79,7 +82,7 @@ test.describe('first run, no agent history', () => {
     const folder = quick(app).getByRole('combobox', { name: 'Folder' });
     await quick(app).locator('[data-field="home-line"]').getByRole('button', { name: 'Choose folder…' }).click({ timeout: 15_000 });
     await expect(folder).toHaveValue(picked);
-    await expect(folder.locator('option')).toHaveText([`picked (${picked})`, /^Assistants \(/, 'Choose folder…']);
+    await expect(folder.locator('option')).toHaveText([`picked (${tilde(picked)})`, /^Assistants \(/, 'Choose folder…']);
     await expect(quick(app).locator('[data-field="home-line"]')).toHaveCount(0);
   });
 });
@@ -95,7 +98,7 @@ test.describe('first run, with agent history', () => {
     await app.goto('/');
     const folder = quick(app).getByRole('combobox', { name: 'Folder' });
     await expect(folder).toHaveValue(project, { timeout: 15_000 });
-    await expect(folder.locator('option')).toHaveText([`my-app (${project})`, 'Choose folder…']);
+    await expect(folder.locator('option')).toHaveText([`my-app (${tilde(project)})`, 'Choose folder…']);
     await expect(quick(app).locator('[data-field="home-line"]')).toHaveCount(0);
   });
 });

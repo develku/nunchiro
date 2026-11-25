@@ -477,11 +477,16 @@ mod agent_command {
     fn cli(home: &Path, name: &str, body: &str) -> String {
         let path = home.join(name);
         let log = format!("{}.log", path.display());
-        fs::write(
-            &path,
-            format!("#!/bin/sh\n{{ pwd; echo \"args=$*\"; /usr/bin/env; }} > '{log}'\n{body}\n"),
-        )
-        .unwrap();
+        // Ticket 1150: the core's question before a Codex start (`fixtures/home.rs` `codex_fake`, which this file
+        // does not load) is answered before the log line, so the log still holds the session's own run.
+        let fixture = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/codex-app-server"
+        );
+        let script = format!(
+            "#!/bin/sh\n[ \"$1\" != app-server ] || exec '{fixture}'\n{{ pwd; echo \"args=$*\"; /usr/bin/env; }} > '{log}'\n{body}\n"
+        );
+        fs::write(&path, script).unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
         path.display().to_string()
     }

@@ -526,8 +526,9 @@ fn picker_codex_restarts_into_the_same_conversation() {
         core.switch_lines()[0]
             .contains("agent=codex model=gpt-5.6-luna effort=low result=restarted")
     );
-    // A restart that cannot spawn says the agent stopped, rather than looking unchanged. (The fixture is a
-    // script: let the running one load before its file goes.)
+    // Ticket 1150 round 2: the restart's Codex is asked first whether it runs the outward hook. One that cannot be
+    // asked (here its program is gone) refuses the switch before the running agent is touched: the error says why
+    // and the session runs on. (The fixture is a script: let the running one load before its file goes.)
     core.wait("the restarted Codex", || {
         core.screen(&session.id).contains('\u{203a}')
     });
@@ -535,7 +536,12 @@ fn picker_codex_restarts_into_the_same_conversation() {
     let err = core
         .switch(&session.id, Some("gpt-6-luna"), None)
         .unwrap_err();
-    assert!(err.contains("Codex stopped and did not restart"), "{err}");
+    assert!(err.contains("Codex was not found"), "{err}");
+    assert!(err.contains("not started"), "{err}");
+    let row = core
+        .session(&session.id)
+        .expect("the session is still listed");
+    assert_eq!(row.state, SessionState::Running, "{err}");
 }
 
 #[test]

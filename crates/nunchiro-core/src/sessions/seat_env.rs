@@ -20,7 +20,7 @@ impl Sessions {
     /// core's own. S-m1: a locked seat (`home_mode`, the Home seat and what it started) gets neither: the owner's
     /// shell, or the terminal a core was started from (CLI auto-start, `serve restart`, `serve update`), may export
     /// tokens and secrets the seat's lock does not cover. It starts from a cleared environment and `SEAT_KEEP`.
-    pub(super) fn seat_env(&self, cmd: &mut CommandBuilder, locked: bool) {
+    pub(super) fn seat_env(settings: &Settings, cmd: &mut CommandBuilder, locked: bool) {
         if locked {
             // From `cmd`, not the core: it already holds portable-pty's SHELL fallback when the core has none.
             let keep: Vec<(std::ffi::OsString, std::ffi::OsString)> = std::env::vars_os()
@@ -35,12 +35,10 @@ impl Sessions {
             }
             return;
         }
-        let names = self
-            .settings
+        let names = settings
             .feature::<Vec<String>>(crate::user_env::NAMES_KEY)
             .unwrap_or_default();
-        let inherit = self
-            .settings
+        let inherit = settings
             .feature(crate::user_env::INHERIT_KEY)
             .unwrap_or(true);
         for (key, value) in crate::user_env::for_session(inherit, &names) {
@@ -51,16 +49,14 @@ impl Sessions {
     /// Ticket 1008: an agent session (Claude, Codex; ACP already starts from its approved names only), or a shell the
     /// owner did not open, starts without the variables `user_env::secret_var` names, wherever they came from (the
     /// core's environment or the login shell's), unless the owner lists the exact name or turned the setting off.
-    pub(super) fn strip_secret_env(&self, cmd: &mut CommandBuilder, kind: AgentKind) {
-        if !self
-            .settings
+    pub(super) fn strip_secret_env(settings: &Settings, cmd: &mut CommandBuilder, kind: AgentKind) {
+        if !settings
             .feature(crate::user_env::STRIP_SECRETS_KEY)
             .unwrap_or(true)
         {
             return;
         }
-        let keep = self
-            .settings
+        let keep = settings
             .feature::<Vec<String>>(crate::user_env::KEEP_SECRETS_KEY)
             .unwrap_or_default();
         // Round 2 (Codex MUST): from the OS-string names, never a UTF-8 view of `cmd` (portable-pty's skips an entry

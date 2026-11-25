@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Session } from '../src/types';
-import { expect, openWindow, test, type Core } from './fixtures';
+import { expect, openWindow, test, type Core, codexFake } from './fixtures';
 import { more, openRow } from './accounts-rows';
 
 const LABEL = 'work';
@@ -26,7 +26,7 @@ function setup(core: Core) {
     ['claude', 'CLAUDE_CONFIG_DIR', 'auth status --json', 'auth login', 'auth logout'],
     ['codex', 'CODEX_HOME', 'login status', 'login', 'logout'],
   ])
-    fs.writeFileSync(path.join(core.home, 'bin', name), fake(name, variable, status, login, logout), { mode: 0o700 });
+    fs.writeFileSync(path.join(core.home, 'bin', name), codexFake(fake(name, variable, status, login, logout)), { mode: 0o700 });
   fs.mkdirSync(path.join(core.home, 'accounts/claude', ID), { recursive: true, mode: 0o700 });
   fs.writeFileSync(path.join(core.home, 'accounts.toml'), `version = 1\n\n[[accounts]]\nagent = "claude"\nid = "${ID}"\nlabel = "${LABEL}"\n`);
 }

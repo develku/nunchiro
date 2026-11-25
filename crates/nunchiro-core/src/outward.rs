@@ -241,6 +241,185 @@ fn dry_run(command: &str) -> bool {
         && !w.contains(&"--")
 }
 
+/// The tools the hook is run for, in Claude's settings and in Codex's `hooks.PreToolUse` alike (probe 2026-11-26, Codex
+/// 0.161.0: a shell command arrives as `Bash` with `tool_input.command`, an MCP tool as `mcp__<server>__<tool>`).
+pub const MATCHER: &str = "Bash|mcp__.*";
+/// Where Codex keeps a `-c` hook's trust: the session-flags layer, PreToolUse, first group, first handler.
+const CODEX_KEY: &str = "/<session-flags>/config.toml:pre_tool_use:0:0";
+
+/// Ticket 1149: the arguments that give every Codex start the outward hook `command` (`nunchiro hook outward
+/// --codex`), with or without Nunchiro's other hooks; `general` is Nunchiro's own PreToolUse hook when this start
+/// passes it (a second `-c hooks.PreToolUse` would replace the first, so both ride in one list, the outward hook
+/// first). Codex runs an untrusted hook only under `--dangerously-bypass-hook-trust`, which would also run a
+/// project's unreviewed hooks, so this one hook is trusted by its own hash instead (`hooks.state`, as Orca's
+/// `computeCodexTrustedHash`); `enabled=true` and `features.hooks=true` keep a config layer from turning it off
+/// (session flags outrank the user's and the project's config). All are `-c` values, which a Codex that does not know
+/// a key ignores (`--enable` of an unknown feature ends the start), so the hook-less start still starts. Probe
+/// 2026-11-26: Codex has no "ask", and a hook that fails or times out lets the tool run, so the hook holds for the
+/// card itself and its timeout is longer than its own wait.
+/// shortcut: the hash is Codex 0.161's rule (sha256 of the hook's identity as sorted JSON); a Codex that changes it
+/// leaves the hook untrusted and off. Upgrade to asking `codex app-server` (`hooks/list`) when a release changes it;
+/// `t1149_codex_args_trust_only_the_outward_hook` pins the value the real 0.161.0 reports.
+pub fn codex_args(command: &str, general: Option<&str>) -> Vec<String> {
+    use sha2::{Digest, Sha256};
+    let text = |s: &str| serde_json::to_string(s).unwrap();
+    let timeout = crate::queue::HOLD_MS / 1000 + 10;
+    let identity = format!(
+        r#"{{"event_name":"pre_tool_use","hooks":[{{"async":false,"command":{},"timeout":{timeout},"type":"command"}}],"matcher":{}}}"#,
+        text(command),
+        text(MATCHER)
+    );
+    let hash: String = Sha256::digest(identity.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    let general = general
+        .map(|g| {
+            format!(
+                ",{{hooks=[{{type=\"command\",command={},timeout=2}}]}}",
+                text(g)
+            )
+        })
+        .unwrap_or_default();
+    vec![
+        "-c".into(),
+        "features.hooks=true".into(),
+        "-c".into(),
+        format!(
+            "hooks.PreToolUse=[{{matcher={},hooks=[{{type=\"command\",command={},timeout={timeout}}}]}}{general}]",
+            text(MATCHER),
+            text(command)
+        ),
+        "-c".into(),
+        format!(
+            "hooks.state={{{}={{trusted_hash=\"sha256:{hash}\",enabled=true}}}}",
+            text(CODEX_KEY)
+        ),
+    ]
+}
+
+/// Ticket 1150: `codex app-server`'s `hooks/list` answer says the outward hook will run: it is listed under the
+/// session-flags key, on, and trusted (its hash is the one `codex_args` named). Probe 2026-11-26, Codex 0.161.0: under
+/// a managed policy that allows managed hooks only (`allow_managed_hooks_only` in `/etc/codex/requirements.toml`, a
+/// device profile or the workspace's cloud requirements) the list is empty, the hook never runs and a shell command
+/// and an MCP tool run with no card; with another hash the hook is listed as "modified" and does not run either.
+fn codex_hook_listed(list: &Value) -> bool {
+    let hooks = |cwd: &Value| cwd["hooks"].as_array().cloned().unwrap_or_default();
+    let mut all = list["data"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(hooks);
+    all.any(|h| h["key"] == CODEX_KEY && h["enabled"] == true && h["trustStatus"] == "trusted")
+}
+
+/// How long the asked Codex may take to answer `initialize`, then `hooks/list`. Live 0.161.0 answers both in 24 to
+/// 176 ms (60 runs, median 38; the slowest while the whole test gate ran beside it). 5 s each is about thirty times
+/// the slowest seen, for a cold start, a busy Mac or a cloud-managed account's policy read, before a start is
+/// refused as unanswered. The wait is off the registry lock (`Launch::ask_codex`), so it holds that one start only.
+const CODEX_INIT_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+const CODEX_LIST_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Ticket 1150: what a Codex start asks its Codex with: the session's program, folder and environment (before its own
+/// identity) and the outward hook's command (`sessions::spawn::codex_ask`). Two that are equal are the same start:
+/// `Sessions::spawn` starts a Codex only when the one it is about to run equals one that answered yes off the lock.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CodexAsk {
+    pub(crate) program: String,
+    pub(crate) cwd: std::path::PathBuf,
+    pub(crate) env: std::collections::BTreeMap<String, String>,
+    pub(crate) command: String,
+}
+
+impl CodexAsk {
+    /// Ticket 1150: a Codex that will not run the outward hook is not started (nothing silent: its outward actions
+    /// would run with no card). No config file is read for this, since the policy can come from a file, a device
+    /// profile or the account's workspace: the Codex about to start is asked itself, with the same hook arguments,
+    /// which hooks it would run. Plugins are off for the question (as the reset reader's, `codex_reset::ARGV`): they
+    /// are not what is asked, and Codex then skips their network reads. Round 2 (Codex look P1): only a yes starts
+    /// it. No answer, a slow one, a program that is no app-server and any error refuse the start, as a no does;
+    /// `Err` is the reason, for the person who started it. Never called under the registry lock (P2).
+    /// shortcut: the answer is read once, at the start; a policy that reaches a running session later is not seen
+    /// until its next start. Upgrade to asking again on Codex's own config-change notice if it ever sends one.
+    pub(crate) fn runs_hook(&self) -> Result<(), String> {
+        // A unit test that forgot its fake would run the installed codex on the owner's own Codex folder.
+        #[cfg(test)]
+        assert!(
+            self.program.contains('/'),
+            "a unit test asked the real codex"
+        );
+        let ask = |method: &str, params: Value| {
+            let mut codex = crate::process::command(&self.program);
+            codex
+                .env_clear()
+                .envs(&self.env)
+                .current_dir(&self.cwd)
+                .args(["app-server", "-c", "features.plugins=false"])
+                .args(codex_args(&self.command, None));
+            let (init, wait) = (CODEX_INIT_WAIT, CODEX_LIST_WAIT);
+            crate::codex_reset::app_server(codex, init, method, params, wait, &|| true)
+        };
+        let cwds = serde_json::json!({"cwds": [self.cwd.to_string_lossy()]});
+        Err(match ask("hooks/list", cwds) {
+            Ok(list) if codex_hook_listed(&list) => return Ok(()),
+            Ok(_) => match ask("configRequirements/read", Value::Null)
+                .is_ok_and(|r| r["requirements"]["allowManagedHooksOnly"] == true)
+            {
+                true => "This Codex is under a managed policy that allows managed hooks only, so it would not run Nunchiro's outward-action check and the session was not started. Its administrator sets that policy",
+                false => "This Codex would not run Nunchiro's outward-action check (its hook is missing, off or not trusted), so the session was not started",
+            },
+            Err((crate::codex_reset::Fail::NoCodex, _)) => "Codex was not found, so it could not be asked whether it runs Nunchiro's outward-action check and the session was not started",
+            Err(_) => "Codex did not say whether it runs Nunchiro's outward-action check (`codex app-server` gave no answer in time), so the session was not started. Try again; a Codex too old to answer needs an update",
+        }
+        .into())
+    }
+}
+
+/// Ticket 1149: a Codex argument that could displace the outward hook: a later `-c` wins in Codex, so a typed or
+/// approved config or feature flag that names hooks is refused (as ticket 692's `check_for_update_on_startup`), and so
+/// is one with a TOML unicode escape, the only way to spell a key without its letters (`"ho\u006fks"`).
+pub fn codex_arg_names_hooks(args: &[&String]) -> bool {
+    let flag = |a: &str| {
+        ["-c", "--config", "--enable", "--disable"]
+            .iter()
+            .any(|f| a.starts_with(f))
+    };
+    args.iter().enumerate().any(|(n, a)| {
+        (a.contains("hooks") || a.contains("\\u") || a.contains("\\U"))
+            && (flag(a) || n.checked_sub(1).is_some_and(|p| flag(args[p])))
+    })
+}
+
+/// Ticket 1149: an ACP agent's `terminal/create` as the one command line the matcher reads.
+pub fn acp_command(params: &Value) -> String {
+    let args = params["args"].as_array().into_iter().flatten();
+    std::iter::once(params["command"].as_str().unwrap_or_default())
+        .chain(args.map(|a| a.as_str().unwrap_or_default()))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Ticket 1149 round 2: everything of an ACP `terminal/create` that decides what runs, as its card shows it: the
+/// command line, then the folder and the variables the agent set, when it set any. Never cut: a request whose text
+/// does not fit the card is refused (`Acp::pump`), so the owner never allows what the card does not show.
+pub fn acp_card(params: &Value) -> String {
+    let mut text = acp_command(params);
+    if let Some(cwd) = params["cwd"].as_str() {
+        text.push_str(&format!("\nin {cwd}"));
+    }
+    let text_of = |e: &Value, key: &str| e[key].as_str().unwrap_or_default().to_string();
+    let env: Vec<String> = params["env"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|e| format!("{}={}", text_of(e, "name"), text_of(e, "value")))
+        .collect();
+    if !env.is_empty() {
+        text.push_str(&format!("\nwith {}", env.join(" ")));
+    }
+    text
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -432,5 +611,130 @@ mod tests {
         assert_eq!(mcp("mcp__x__list_posts"), Some(Kind::Post));
         assert_eq!(mcp("mcp__gmail__get_thread"), None);
         assert_eq!(mcp("mcp__calendar__list_events"), None);
+    }
+
+    /// Ticket 1149: the Codex arguments trust the outward hook alone, by the hash the real codex-cli 0.161.0 reports
+    /// for this hook (`codex app-server` `hooks/list` with these same arguments, probe 2026-11-26), and keep it on.
+    #[test]
+    fn t1149_codex_args_trust_only_the_outward_hook() {
+        let args = codex_args("/opt/n/nunchiro hook outward --codex", None);
+        assert_eq!(args[..3], ["-c", "features.hooks=true", "-c"]);
+        assert_eq!(
+            args[3],
+            r#"hooks.PreToolUse=[{matcher="Bash|mcp__.*",hooks=[{type="command",command="/opt/n/nunchiro hook outward --codex",timeout=1810}]}]"#
+        );
+        assert_eq!(
+            args[4..],
+            [
+                "-c",
+                r#"hooks.state={"/<session-flags>/config.toml:pre_tool_use:0:0"={trusted_hash="sha256:67a388217042691eac7af4d870fbd5612d3a1a4eaa514dd7b057a8af505908b2",enabled=true}}"#
+            ]
+        );
+        assert!(!args.iter().any(|a| a.contains("bypass")));
+        // Nunchiro's own PreToolUse hook rides in the same list, after it: the trusted key stays group 0.
+        let both = codex_args(
+            "/opt/n/nunchiro hook outward --codex",
+            Some("n hook PreToolUse"),
+        );
+        assert!(
+            both[3].ends_with(r#"timeout=1810}]},{hooks=[{type="command",command="n hook PreToolUse",timeout=2}]}]"#),
+            "{}",
+            both[3]
+        );
+        assert_eq!(both[5], args[5]);
+    }
+
+    /// Ticket 1150: the hook runs only when Codex lists it under the session-flags key, on and trusted. The answers
+    /// are the real codex-cli 0.161.0's (`hooks/list`, probe 2026-11-26): as Nunchiro starts it, under a managed
+    /// policy that allows managed hooks only (an empty list), and with another trust hash ("modified").
+    #[test]
+    fn t1150_codex_hook_runs_only_when_listed_on_and_trusted() {
+        let listed = |hooks: Value| json!({"data": [{"cwd": "/p", "hooks": hooks, "warnings": [], "errors": []}]});
+        let hook = |key: &str, enabled: bool, trust: &str| {
+            json!({"key": key, "eventName": "preToolUse", "handlerType": "command",
+                "command": "'/opt/n/nunchiro' hook outward --codex || exit 2", "async": false,
+                "matcher": "Bash|mcp__.*", "timeoutSec": 1810, "statusMessage": null,
+                "additionalContextLimit": null, "sourcePath": "/<session-flags>/config.toml",
+                "source": "sessionFlags", "pluginId": null, "displayOrder": 0, "enabled": enabled,
+                "isManaged": false, "currentHash": "sha256:5ab8", "trustStatus": trust})
+        };
+        assert!(codex_hook_listed(&listed(json!([hook(
+            CODEX_KEY, true, "trusted"
+        )]))));
+        let user = "/Users/u/.codex/config.toml:pre_tool_use:0:0";
+        for not_running in [
+            listed(json!([])),
+            listed(json!([hook(CODEX_KEY, true, "modified")])),
+            listed(json!([hook(CODEX_KEY, true, "untrusted")])),
+            listed(json!([hook(CODEX_KEY, false, "trusted")])),
+            // The person's own trusted hook is not Nunchiro's.
+            listed(json!([hook(user, true, "trusted")])),
+            json!({"data": []}),
+            json!({}),
+            Value::Null,
+        ] {
+            assert!(!codex_hook_listed(&not_running), "{not_running}");
+        }
+    }
+
+    /// Ticket 1149: a config or feature argument that names hooks could displace the hook; other arguments pass.
+    #[test]
+    fn t1149_codex_arguments_naming_hooks_are_found() {
+        let named = |args: &[&str]| {
+            let owned: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+            codex_arg_names_hooks(&owned.iter().collect::<Vec<_>>())
+        };
+        for args in [
+            &["-c", "hooks.PreToolUse=[]"][..],
+            &["-c", "hooks.state={}"],
+            &["-c", "hooks={}"],
+            &["-c", "features.hooks=false"],
+            &["-c", "features={hooks=false}"],
+            &["-chooks.state={}"],
+            &["--config=hooks.state={}"],
+            &["--config", "\"hooks\".state={}"],
+            &["--disable", "hooks"],
+            &["--disable=hooks"],
+            &["-m", "x", "--disable", "hooks"],
+            &["-c", r#""ho\u006fks".state={}"#],
+            &["-c", r#"features={"ho\U0000006fks"=false}"#],
+        ] {
+            assert!(named(args), "{args:?}");
+        }
+        for args in [
+            &["-c", "plugins.fixture.enabled=true"][..],
+            &["-m", "gpt-5"],
+            &["fix the git hooks"],
+            &["-c", r#"developer_instructions="one\ntwo""#],
+            &[r"say \u0041"],
+            &["--cd", "hooks"],
+            &[],
+        ] {
+            assert!(!named(args), "{args:?}");
+        }
+    }
+
+    #[test]
+    fn t1149_acp_terminal_command_is_read_as_one_line() {
+        let publish = json!({"command": "/bin/sh", "args": ["-c", "npm publish"]});
+        assert_eq!(acp_command(&publish), "/bin/sh -c npm publish");
+        // Round 2: the card's text is the line itself, plus the folder and the variables the agent set.
+        assert_eq!(acp_card(&publish), "/bin/sh -c npm publish");
+        let set = json!({"command": "npm", "args": ["publish"], "cwd": "/p/pkg",
+            "env": [{"name": "A", "value": "1"}, {"name": "B", "value": "x y"}]});
+        assert_eq!(acp_card(&set), "npm publish\nin /p/pkg\nwith A=1 B=x y");
+        assert_eq!(bash(&acp_command(&publish)), Some(Kind::Publish));
+        assert_eq!(
+            bash(&acp_command(
+                &json!({"command": "npm", "args": ["publish"]})
+            )),
+            Some(Kind::Publish)
+        );
+        assert_eq!(
+            bash(&acp_command(
+                &json!({"command": "/bin/echo", "args": ["hi"]})
+            )),
+            None
+        );
     }
 }

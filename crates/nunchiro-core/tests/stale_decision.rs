@@ -43,7 +43,7 @@ fn core(tag: &str) -> home::ServeGuard {
 }
 fn install(home: &Path) {
     for (name, body) in [("claude", CLAUDE), ("codex", CODEX)] {
-        fs::write(home.join(name), body).unwrap();
+        fs::write(home.join(name), home::codex_fake(body)).unwrap();
         fs::set_permissions(home.join(name), fs::Permissions::from_mode(0o700)).unwrap();
     }
 }

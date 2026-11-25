@@ -10,7 +10,6 @@ import { measureMockup, outDir } from './compare';
 import { MOCKUPS } from './mockups';
 import { r8Map } from './r8-map';
 
-test.skip(({ browserName }) => !process.env.ACP_SETUP_SHOTS || browserName !== 'chromium', 'measured side-by-side page: ACP_SETUP_SHOTS=1, chromium only');
 test.use({ deviceScaleFactor: 2, viewport: { width: 1440, height: 900 } });
 test.describe.configure({ mode: 'serial' });
 
@@ -19,7 +18,7 @@ const MOCK = '03-acp-setup.html';
 const results: { name: string; scheme: string; ratio: number }[] = [];
 
 for (const scheme of ['light', 'dark'] as const) {
-  test(`acp setup shots (${scheme})`, async ({ app, core }) => {
+  test(`acp setup shots (${scheme})`, { tag: '@shots' }, async ({ app, core }) => {
     outDir('acp-setup-shots');
     fakeAcp(core, 'gemini', '0.11.2');
     core.shell(core.project('nunchiro'), 'core-serve');
@@ -50,7 +49,7 @@ for (const scheme of ['light', 'dark'] as const) {
   });
 }
 
-test('acp setup shots: the side-by-side page', () => {
+test('acp setup shots: the side-by-side page', { tag: '@shots' }, () => {
   fs.writeFileSync(path.join(OUT, 'diff.json'), JSON.stringify(results, null, 2));
   const img = (f: string) => `<img src="${f}" style="max-width:100%;border:1px solid #888">`;
   const pct = (name: string, scheme: string) => `${(results.find((r) => r.name === name && r.scheme === scheme)!.ratio * 100).toFixed(2)}%`;

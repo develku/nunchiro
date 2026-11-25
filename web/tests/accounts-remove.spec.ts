@@ -5,7 +5,7 @@ import type { Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, openWindow, test, type Core } from './fixtures';
+import { expect, openWindow, test, type Core, codexFake } from './fixtures';
 import { clickRemove, openRow } from './accounts-rows';
 
 // \`--model quit\` makes an agent end at once (a resumable session). Status says signed out, login exits at once (stays open like a stale one while `login-hold` exists), logout prints its folder and after a second (its tab is seen running) exits with `logout-code` (0 when absent);
@@ -26,7 +26,7 @@ function fakes(core: Core) {
     ['claude', 'CLAUDE_CONFIG_DIR', 'auth status --json', 'auth login', 'auth logout'],
     ['codex', 'CODEX_HOME', 'login status', 'login', 'logout'],
   ])
-    fs.writeFileSync(path.join(core.home, 'bin', name), fake(name, variable, status, login, logout), { mode: 0o700 });
+    fs.writeFileSync(path.join(core.home, 'bin', name), codexFake(fake(name, variable, status, login, logout)), { mode: 0o700 });
 }
 // The owner socket's account_add, as a script outside the window (the CLI has no add command).
 const ADD = `const net = require('net'), fs = require('fs'), path = require('path'); const [h, agent, label] = process.argv.slice(1);

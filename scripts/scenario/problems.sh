@@ -32,6 +32,10 @@ f="$PWD/screen"; [ -f "$f" ] || f="$NUNCHIRO_HOME/screen-$k"
 while [ -e "$PWD/hold" ]; do sleep 0.05; done
 exit "$(cat "$PWD/code" 2>/dev/null || echo 0)"
 '''
+# Ticket 1150: before a Codex start the core asks that Codex (`codex app-server ...`) which hooks it would run, and a
+# fake that says nothing is not started; the tests' shared answer says yes (as `home::codex_fake` does for them).
+YES = root / "crates/nunchiro-core/tests/fixtures/codex-app-server"
+FAKE = FAKE.replace("#!/bin/sh\n", f"#!/bin/sh\n[ \"$1\" != app-server ] || exec '{YES}'\n", 1)
 # v1a-06 fake transport: "down" refuses like ssh does, "old" answers a version mismatch, else the local relay.
 SSH = '''#!/bin/sh
 [ -e "$NUNCHIRO_FAKE_REMOTE_HOME/down" ] && { echo "ssh: connect to host fake port 22: Connection refused" >&2; exit 255; }

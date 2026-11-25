@@ -1,0 +1,55 @@
+{
+ "date": "2026-11-26 00:19",
+ "commit": "e288baf07",
+ "load": [
+  4.62,
+  7.37
+ ],
+ "figures": {
+  "build_cold_min": 0.87,
+  "build_warm_s": 3.7,
+  "web_build_s": 2.5,
+  "test_stage_min": 9.1,
+  "largest_file_lines": 15055,
+  "files_over_2000": 16,
+  "shared_files_open_lanes": 0
+ },
+ "test_stage": {
+  "exit": 0,
+  "summary": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+  "run": "detached: launchd is its parent, no Nunchiro holder above it"
+ },
+ "largest_files": [
+  [
+   "crates/nunchiro-core/src/sessions.rs",
+   15055
+  ],
+  [
+   "crates/nunchiro-core/src/queue/mod.rs",
+   4573
+  ],
+  [
+   "web/src/styles.css",
+   3839
+  ],
+  [
+   "crates/nunchiro-core/src/team.rs",
+   3654
+  ],
+  [
+   "crates/nunchiro-core/src/ledger.rs",
+   3419
+  ]
+ ],
+ "open_lanes": {},
+ "shared": {},
+ "warm_touch": "crates/nunchiro-core/src/lib.rs",
+ "md2": {
+  "seconds": 44.7,
+  "exit": 0,
+  "steps": 1,
+  "copy": false,
+  "command": "sh scripts/test.sh cargo test -p nunchiro --test version",
+  "tail": ""
+ }
+}

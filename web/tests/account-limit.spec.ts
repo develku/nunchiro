@@ -3,7 +3,7 @@
 // Screenshots with and without the mark go to .scratch/limit-shots for REPORT.md.
 import fs from 'node:fs';
 import path from 'node:path';
-import { REPO, expect, openWindow, test } from './fixtures';
+import { REPO, expect, openWindow, test, codexFake } from './fixtures';
 import { openRow } from './accounts-rows';
 
 const ID = 'aaaaaaaa-0000-4000-8000-000000000031';
@@ -25,7 +25,7 @@ function resetAhead() {
 test('limit_mark_shows_on_accounts_page: only the marked account row shows the reset time', async ({ app, core }, info) => {
   const out = path.join(REPO, '.scratch/limit-shots');
   fs.mkdirSync(out, { recursive: true });
-  for (const name of ['claude', 'codex']) fs.writeFileSync(path.join(core.home, 'bin', name), FAKE, { mode: 0o700 });
+  for (const name of ['claude', 'codex']) fs.writeFileSync(path.join(core.home, 'bin', name), codexFake(FAKE), { mode: 0o700 });
   fs.mkdirSync(path.join(core.home, 'accounts/claude', ID), { recursive: true });
   fs.writeFileSync(path.join(core.home, 'accounts.toml'), `version = 1\n\n[[accounts]]\nagent = "claude"\nid = "${ID}"\nlabel = "Work"\n`);
   const project = core.project('demo');

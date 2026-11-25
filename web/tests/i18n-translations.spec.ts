@@ -1,13 +1,17 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { LANGUAGES, resolveLanguage, type Key } from '../src/i18n';
 import { EN, TABLES, htmlLang, makeT } from './i18n-tables';
 
 const placeholders = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 
 // owner 11-21 (ticket 1035): new strings are English only until the one pass before the release; a missing line shows
-// English. So a language may lack keys (counted in the log), but holds no key English lacks, and the lines it has are
-// whole with English's placeholders. Ticket 1035 puts the exact-key-set check back.
-test('all_keys_all_languages: no key outside English, and placeholders match', () => {
+// English. So a language may lack only the keys named in i18n-pending.json (ticket 1146), holds no key English lacks,
+// and the lines it has are whole with English's placeholders. The pending list only shrinks: a key translated since
+// leaves it. Ticket 1035 empties it.
+const PENDING: Record<string, string[]> = JSON.parse(readFileSync(new URL('./i18n-pending.json', import.meta.url), 'utf8'));
+
+test('all_keys_all_languages: every key in every language or pending, none outside English, placeholders match', () => {
   const keys = Object.keys(EN).sort() as Key[];
   for (const { id } of LANGUAGES) {
     if (id === 'system') continue;
@@ -19,7 +23,8 @@ test('all_keys_all_languages: no key outside English, and placeholders match', (
       expect(placeholders(table[key]!), `${id}: ${key}`).toEqual(placeholders(EN[key]));
     }
     expect(htmlLang(id, 'en')).toBe(id);
-    console.log(`${id}: ${have.length} of ${keys.length} keys (${keys.length - have.length} wait for ticket 1035); placeholders match`);
+    if (id === 'en') continue;
+    expect(keys.filter((k) => !(k in table)), `${id}: missing keys not in tests/i18n-pending.json`).toEqual(PENDING[id] ?? []);
   }
 });
 

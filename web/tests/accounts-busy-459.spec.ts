@@ -3,7 +3,7 @@
 // show an empty list or "Couldn't check" for a busy moment.
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, openWindow, test } from './fixtures';
+import { expect, openWindow, test, codexFake } from './fixtures';
 import { openRow } from './accounts-rows';
 import { openSettings } from './settings-modal';
 
@@ -18,7 +18,7 @@ exec /bin/cat
 
 test('account_readers_retry_a_busy_core: the list and the own checks are refused once each, then shown', async ({ app, core }) => {
   fs.writeFileSync(path.join(core.home, 'bin/claude'), fake('claude', 'auth status', `echo '{"loggedIn": true}'`), { mode: 0o700 });
-  fs.writeFileSync(path.join(core.home, 'bin/codex'), fake('codex', 'login status', `echo 'Logged in using ChatGPT' >&2`), { mode: 0o700 });
+  fs.writeFileSync(path.join(core.home, 'bin/codex'), codexFake(fake('codex', 'login status', `echo 'Logged in using ChatGPT' >&2`)), { mode: 0o700 });
   fs.mkdirSync(path.join(core.home, 'accounts/claude', ID), { recursive: true, mode: 0o700 });
   fs.writeFileSync(path.join(core.home, 'accounts.toml'), `version = 1\n\n[[accounts]]\nagent = "claude"\nid = "${ID}"\nlabel = "Work"\n`);
   const refused: Record<string, number> = {};

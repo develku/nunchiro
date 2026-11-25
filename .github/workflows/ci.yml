@@ -1,7 +1,9 @@
 # The merge gate (ticket 1134): pull requests run it, the merge queue runs it on the merged tree, and the one required
-# check is the `gate` job. A push to main runs only the jobs that save build caches: caches written on main can be read
-# by every pull request and merge-queue run, caches written there cannot (GitHub cache scoping; Orca warms main the same
-# way, .github/workflows/ci-cache-warmup.yml:89 at stablyai/orca 2fbb071e).
+# check is the `gate` job. A push to main runs the whole gate again (ticket 1148): with no merge queue it is the run that
+# tests every main tip after it lands, and scripts/measure/ci-log.py reads these runs for the scorecard. It is also the
+# only run that saves build caches: caches written on main can be read by every pull request and merge-queue run, caches
+# written there cannot (GitHub cache scoping; Orca warms main the same way, .github/workflows/ci-cache-warmup.yml:89 at
+# stablyai/orca 2fbb071e).
 # Rust runs on macOS only: nunchiro-core uses macOS APIs (libproc, LOCAL_PEERTOKEN, renameatx_np) and does not build for
 # Linux, so the tests are split over macOS runners from one nextest archive instead of over Linux runners.
 name: CI
@@ -17,8 +19,10 @@ permissions:
   contents: read
 
 # A new push to a pull request cancels its older run; merge-queue and main runs are never cancelled (T3 Code ci.yml:12-14).
+# The group of a main run is its commit: in one group per branch GitHub keeps one waiting run and cancels the one that
+# waited before it, so two landings during a run would leave a main tip untested.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -68,8 +72,7 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo nextest archive --workspace --config-file scripts/nextest.toml --archive-file nextest-archive.tar.zst
       - run: cargo test --workspace --doc
-      - if: github.event_name != 'push'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nextest-archive
           path: nextest-archive.tar.zst
@@ -77,7 +80,6 @@ jobs:
           compression-level: 0 # already zstd
 
   rust-test:
-    if: github.event_name != 'push'
     needs: rust-build
     runs-on: macos-latest
     timeout-minutes: 45
@@ -95,6 +97,9 @@ jobs:
         with:
           name: nextest-archive
       - run: git config --global user.name ci && git config --global user.email ci@localhost
+      # holder.rs core_swap_keeps_sessions_and_the_window builds a stamped core with `cargo build --offline --locked`;
+      # the archive carries no crate sources, so the registry is filled here (ticket 1142).
+      - run: cargo fetch --locked
       # Extracted over the checkout, so target/debug/nunchiro sits where the core tests look for it (tests/fixtures/cli.rs).
       - name: cargo nextest run (partition ${{ matrix.partition }}/${{ strategy.job-total }})
         run: >-
@@ -118,11 +123,12 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: scripts/setup-worktree.sh
+      # gen-notices reads `cargo metadata --offline`, which needs every locked crate, other platforms' included, on disk.
+      - run: cargo fetch --locked && cargo fetch --locked --manifest-path app/src-tauri/Cargo.toml
       - run: scripts/check-app.sh
 
   # cli docs, the Python scenario suite and the Playwright core set: all three need the core binary.
   web:
-    if: github.event_name != 'push'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -156,7 +162,7 @@ jobs:
   # The one required check of the merge queue. `always()`: a skipped or cancelled job must still fail it (T3 Code
   # ci.yml:660-696; Orca pr.yml:1279). Add every new job to `needs`.
   gate:
-    if: always() && github.event_name != 'push'
+    if: always()
     needs: [lint, rust-build, rust-test, app, web]
     runs-on: ubuntu-latest
     timeout-minutes: 5

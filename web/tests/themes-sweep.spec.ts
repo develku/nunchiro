@@ -23,7 +23,6 @@ import { lowContrast } from './contrast-scan';
 
 const outDir = (browser: string) => path.join(REPO, '.scratch', `${process.env.SWEEP_OUT ?? 'sweep'}${browser === 'webkit' ? '-webkit' : ''}`);
 const SCHEMES = ['dark', 'light'] as const;
-test.skip(() => process.env.SWEEP !== '1', 'SWEEP=1');
 test.use({ viewport: { width: 1440, height: 900 } });
 test.beforeAll(({ browserName }) => {
   for (const s of [...SCHEMES, 'catalogue']) fs.rmSync(path.join(outDir(browserName), `contrast-${s}.txt`), { force: true });
@@ -89,7 +88,7 @@ function usageRecords(home: string) {
   }
 }
 
-test('settings: every page', async ({ app, core }) => {
+test('settings: every page', { tag: '@shots' }, async ({ app, core }) => {
   test.setTimeout(420_000);
   const p = core.project('nunchiro');
   core.shell(p, 'core-serve');
@@ -110,7 +109,7 @@ test('settings: every page', async ({ app, core }) => {
 
 // The Permissions page exists only inside the app (web/src/features/macos-perms.tsx registers it when
 // __TAURI_INTERNALS__ is there): a fake shell answers `permission_status`, as macos-perms.spec.ts does.
-test('settings: permissions (app only)', async ({ app, core }) => {
+test('settings: permissions (app only)', { tag: '@shots' }, async ({ app, core }) => {
   core.shell(core.project('demo'), 'alpha');
   await app.addInitScript(() => {
     (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {
@@ -127,7 +126,7 @@ test('settings: permissions (app only)', async ({ app, core }) => {
 });
 
 // Ticket 993: Schedules is a widget, no Settings page: its form, then its list with one schedule (as schedules-993.spec.ts).
-test('schedules: the widget, its form and one schedule', async ({ app, core }) => {
+test('schedules: the widget, its form and one schedule', { tag: '@shots' }, async ({ app, core }) => {
   core.shell(core.project('nunchiro'), 'core-serve');
   await openWindow(app);
   await app.locator('#icon-schedules').click();
@@ -141,14 +140,14 @@ test('schedules: the widget, its form and one schedule', async ({ app, core }) =
   await both(app, 'schedules-widget');
 });
 
-test('landing: a project and no session', async ({ app, core }) => {
+test('landing: a project and no session', { tag: '@shots' }, async ({ app, core }) => {
   treeSeed(core, { op: 'add', project: core.project('beta'), added: true });
   await openWindow(app);
   await expect(app.locator('.pane .empty .landing')).toBeVisible();
   await both(app, 'landing');
 });
 
-test('files: tree and a highlighted file', async ({ app, core }) => {
+test('files: tree and a highlighted file', { tag: '@shots' }, async ({ app, core }) => {
   // Ticket 482: a markup file in the code viewer, so tag punctuation, names and attributes are scanned too (an .html file
   // opens rendered in the sandbox, not as code).
   const markup = '<?xml version="1.0"?>\n<!-- sample markup -->\n<page lang="en">\n  <title id="t">Hello &amp; welcome</title>\n  <item n="1"/>\n</page>\n';
@@ -170,7 +169,7 @@ test('files: tree and a highlighted file', async ({ app, core }) => {
   await both(app, 'files-html');
 });
 
-test('board: cards in every column', async ({ app, core }) => {
+test('board: cards in every column', { tag: '@shots' }, async ({ app, core }) => {
   const p = core.project('nunchiro');
   core.shell(p, 'core-serve');
   boardSeed(core, [
@@ -184,7 +183,7 @@ test('board: cards in every column', async ({ app, core }) => {
   await both(app, 'board');
 });
 
-chatTest('main: tree, tabs, long chat, composer, artifacts, diff, palette', async ({ page: app, chatCore: core }) => {
+chatTest('main: tree, tabs, long chat, composer, artifacts, diff, palette', { tag: '@shots' }, async ({ page: app, chatCore: core }) => {
   test.setTimeout(180_000);
   const art = await artifactServer({});
   try {
@@ -293,7 +292,7 @@ const gitRepo = (p: string) => (git(p, 'init', '-q', '-b', 'main'), git(p, 'comm
 
 // Ticket 499: hover, keyboard focus and an open menu driven for real (pointer, keys, right-click), then the three
 // worktree dialogs: New worktree, Tidy and the discard sheet.
-test('states and dialogs: hover, focus, menus, new worktree, tidy, discard', async ({ app, core }) => {
+test('states and dialogs: hover, focus, menus, new worktree, tidy, discard', { tag: '@shots' }, async ({ app, core }) => {
   test.setTimeout(240_000);
   const p = gitRepo(core.project('nunchiro'));
   const w = (core.cli('worktree', 'create', '--project', p, '--branch', 'dirty', '--no-focus').worktrees as { path: string; branch: string }[]).find((x) => x.branch === 'dirty')!;
@@ -351,7 +350,7 @@ test('states and dialogs: hover, focus, menus, new worktree, tidy, discard', asy
 });
 
 // Ticket 499: the permission sheet, opened as a user opens it: a script widget's "Needs approval" badge in the library.
-test('permission sheet: from the widget library', async ({ app, core }) => {
+test('permission sheet: from the widget library', { tag: '@shots' }, async ({ app, core }) => {
   const file = path.join(core.home, 'settings.json');
   fs.writeFileSync(file, JSON.stringify({ ...JSON.parse(fs.readFileSync(file, 'utf8')), script_widgets: true }));
   core.run(['serve', 'stop'], 10_000);
@@ -375,7 +374,7 @@ test('permission sheet: from the widget library', async ({ app, core }) => {
 // Ticket 499: a terminal tab with coloured output, the side pane's Terminal and its Browser. The native browser view
 // needs the app, so its bridge answers nothing (as browser-view.spec.ts); the pane's own chrome is what is measured.
 // The terminal's text is drawn by xterm and is not scanned (its colours are the theme's ANSI palette); the shot shows it.
-test('panes: terminal tab, side terminal, side browser', async ({ app, core }) => {
+test('panes: terminal tab, side terminal, side browser', { tag: '@shots' }, async ({ app, core }) => {
   await app.addInitScript(() => {
     (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = { transformCallback: () => 0, invoke: () => Promise.resolve(null), metadata: {} };
   });
@@ -397,7 +396,7 @@ test('panes: terminal tab, side terminal, side browser', async ({ app, core }) =
 });
 
 // Ticket 499: the Search sidebar with hits, a hit under the pointer, and no matches.
-test('search panel: hits, hover, no matches', async ({ app, core }) => {
+test('search panel: hits, hover, no matches', { tag: '@shots' }, async ({ app, core }) => {
   await searchSetup(app, core, { direct: true });
   await findText(app, 'needle');
   await expect(hits(app).first()).toBeVisible();
@@ -409,7 +408,7 @@ test('search panel: hits, hover, no matches', async ({ app, core }) => {
 });
 
 // Ticket 499: onboarding, every step opened (477 shot only the page as it opens).
-test('onboarding: every step', async ({ app, core }) => {
+test('onboarding: every step', { tag: '@shots' }, async ({ app, core }) => {
   core.shell(core.project('demo'), 'alpha');
   await openWindow(app);
   await app.getByRole('navigation', { name: 'Left bar' }).getByRole('button', { name: 'Settings' }).click();
@@ -427,7 +426,7 @@ test('onboarding: every step', async ({ app, core }) => {
 
 // Ticket 499: two real catalogue themes (iTerm2-Color-Schemes, one dark, one light), imported as a user imports them:
 // Appearance, Show all, search, Enter on the card. The real core fetches them, so this needs the network.
-test('catalogue themes: Dracula and iTerm2 Solarized Light', async ({ app, core }) => {
+test('catalogue themes: Dracula and iTerm2 Solarized Light', { tag: '@shots' }, async ({ app, core }) => {
   test.setTimeout(240_000);
   const p = gitRepo(core.project('nunchiro'));
   core.shell(p, 'main-shell', '/bin/sh', '-c', "printf '\\033[32mok\\033[0m 408 passed; \\033[31mFAILED\\033[0m 2\\n'; exec cat");
@@ -462,7 +461,7 @@ test('catalogue themes: Dracula and iTerm2 Solarized Light', async ({ app, core 
 
 // Ticket 552: the screens 499 never shot. Dialogs and menus are opened as a user opens them (palette, right-click, a
 // button); each shot name is listed in docs/tickets/v2/issues/552-theme-sweep-all.md.
-test('552 dialogs: add project, new project, clone, new session, decision card, deny, quit, close notice', async ({ app, core }) => {
+test('552 dialogs: add project, new project, clone, new session, decision card, deny, quit, close notice', { tag: '@shots' }, async ({ app, core }) => {
   test.setTimeout(180_000);
   fakes(core);
   const repo = decisionRepo(core, 'repo');
@@ -517,7 +516,7 @@ test('552 dialogs: add project, new project, clone, new session, decision card, 
   await both(app, 'dialog-close-notice');
 });
 
-test('552 board: card editor and widget editor', async ({ app, core }) => {
+test('552 board: card editor and widget editor', { tag: '@shots' }, async ({ app, core }) => {
   core.shell(core.project('nunchiro'), 'core-serve');
   boardSeed(core, [{ id: 'c1', title: 'Write the release notes', column: 'todo' }]);
   await openBoard(app, core);
@@ -534,7 +533,7 @@ test('552 board: card editor and widget editor', async ({ app, core }) => {
   await both(app, 'board-widget-editor');
 });
 
-test('552 composer menus: model, effort, permission mode, slash, file mention', async ({ app, core }) => {
+test('552 composer menus: model, effort, permission mode, slash, file mention', { tag: '@shots' }, async ({ app, core }) => {
   const p = core.project('demo-claude');
   git(p, 'init', '-q');
   fs.mkdirSync(path.join(p, '.claude/commands'), { recursive: true });
@@ -563,7 +562,7 @@ test('552 composer menus: model, effort, permission mode, slash, file mention', 
 });
 
 // Ticket 552: the first-run import step with its results (499 shot the step closed), as import-open.spec.ts drives it.
-test.describe('552 first run', () => {
+test.describe('552 first run', { tag: '@shots' }, () => {
   test.use({ firstRun: true });
   test('import step: found conversations, imported, search hits', async ({ app, core }) => {
     const rec = (o: object) => JSON.stringify(o) + '\n';
@@ -590,7 +589,7 @@ test.describe('552 first run', () => {
 
 // Ticket 552: the pairing page a browser sees before it is paired (as inputs-one-style.spec.ts opens it), and the crash
 // screen (as crash-screen.spec.ts). Both are drawn outside the app's theme code, so they follow prefers-color-scheme.
-test('552 pairing page', async ({ app, core, browser }) => {
+test('552 pairing page', { tag: '@shots' }, async ({ app, core, browser }) => {
   core.shell(core.project('demo'), 'alpha');
   await openWindow(app);
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -614,7 +613,7 @@ test('552 pairing page', async ({ app, core, browser }) => {
   await ctx.close();
 });
 
-test('552 crash screen', async ({ app }) => {
+test('552 crash screen', { tag: '@shots' }, async ({ app }) => {
   await app.addInitScript(() => ((window as unknown as { __testCrash?: string }).__testCrash = 'render'));
   await app.goto('/');
   await expect(app.getByRole('alert').filter({ hasText: 'This window hit a problem' })).toBeVisible();

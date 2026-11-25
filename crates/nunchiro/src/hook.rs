@@ -74,6 +74,26 @@ fn forward(
     let path = journal::write(home, &event)
         .inspect_err(|e| eprintln!("nunchiro hook: journal write failed: {e}"))
         .ok();
+    let decision = exchange(home, event, started_ms, extra)?;
+    let decision = decision.filter(|d| match name.as_str() {
+        "UserPromptSubmit" => nunchiro_core::board::nudge::is_context(d),
+        "PreToolUse" | "PostToolUse" => nunchiro_core::room::is_hook_output(&name, d),
+        _ => true,
+    });
+    if let Some(path) = path
+        && let Err(error) = fs::remove_file(path)
+    {
+        eprintln!("nunchiro hook: journal cleanup failed: {error}");
+    }
+    Ok(decision)
+}
+/// One hook event to the core and the core's answer to it, if it gave one; the read waits `extra` longer for a hold.
+fn exchange(
+    home: &Path,
+    event: Event,
+    started_ms: u64,
+    extra: Duration,
+) -> Result<Option<serde_json::Value>, String> {
     // A missing/rotated session token never falls back to owner authority.
     let token = env::var("NUNCHIRO_TOKEN").map_err(|e| e.to_string())?;
     let mut stream = UnixStream::connect(home.join("core.sock")).map_err(|e| e.to_string())?;
@@ -101,23 +121,11 @@ fn forward(
         .read_line(&mut line)
         .map_err(|e| e.to_string())?;
     let response: Response = serde_json::from_str(&line).map_err(|e| e.to_string())?;
-    let reply = response?;
-    let decision = match reply {
-        Reply::HookDecision { decision } => decision,
-        Reply::Ack => None,
-        _ => return Err("unexpected hook reply".into()),
-    };
-    let decision = decision.filter(|d| match name.as_str() {
-        "UserPromptSubmit" => nunchiro_core::board::nudge::is_context(d),
-        "PreToolUse" | "PostToolUse" => nunchiro_core::room::is_hook_output(&name, d),
-        _ => true,
-    });
-    if let Some(path) = path
-        && let Err(error) = fs::remove_file(path)
-    {
-        eprintln!("nunchiro hook: journal cleanup failed: {error}");
+    match response? {
+        Reply::HookDecision { decision } => Ok(decision),
+        Reply::Ack => Ok(None),
+        _ => Err("unexpected hook reply".into()),
     }
-    Ok(decision)
 }
 
 /// Ticket 1002 lane 1, layer 2: the Home seat lock's PreToolUse hook (`nunchiro_core::home_lock::decide`). `args`:
@@ -176,10 +184,13 @@ pub fn home_lock(home: &Path, args: &[String]) -> ! {
 /// Ticket 1130 S1: every Claude session's own PreToolUse hook (`nunchiro_core::outward`): an outward call asks, in
 /// every permission mode, decided here without the core (a core that is down never opens it). `--home-lock`: a locked
 /// Home seat, whose lock hook gates its connector calls by the Outbox card; only shell publish commands ask here. A
-/// payload it cannot read asks too.
-pub fn outward(args: &[String]) -> ! {
+/// payload it cannot read asks too. Ticket 1149, `--codex`: every Codex session's, where the same call waits for the
+/// owner's card (`codex_card`) and a payload it cannot read is refused. Ticket 1151: an outward call the card would
+/// not show whole (`shown_whole`) is refused for Claude too, not asked; a call that is not outward is not looked at.
+pub fn outward(home: &Path, args: &[String]) -> ! {
     use nunchiro_core::{home_lock::hook_output, outward::kind};
     let locked = args.iter().any(|a| a == "--home-lock");
+    let codex = args.iter().any(|a| a == "--codex");
     let mut payload = vec![];
     let call = std::io::stdin()
         .take(PAYLOAD_MAX + 1)
@@ -191,6 +202,10 @@ pub fn outward(args: &[String]) -> ! {
         .as_ref()
         .and_then(|v| Some((v.get("tool_name")?.as_str()?, v)))
     {
+        None if codex => Some(hook_output(
+            "deny",
+            "Nunchiro could not read this tool call, so it is refused",
+        )),
         None => Some(hook_output(
             "ask",
             "Nunchiro could not read this tool call, so it asks",
@@ -200,12 +215,83 @@ pub fn outward(args: &[String]) -> ! {
             v.get("tool_input").unwrap_or(&serde_json::Value::Null),
         )
         .filter(|k| !(locked && k.mcp()))
-        .map(|k| hook_output("ask", k.reason())),
+        .and_then(|k| match codex {
+            true => codex_card(home, v, k),
+            false if shown_whole(v) => Some(hook_output("ask", k.reason())),
+            false => Some(hook_output(
+                "deny",
+                &not_shown(k, "it has a field named like a secret"),
+            )),
+        }),
     };
     if let Some(out) = out {
         println!("{out}");
     }
     std::process::exit(0);
+}
+
+/// Tickets 1149 round 2 and 1151: the owner never allows what the card does not show. The card's text is the call's
+/// input as the hook event carries it, and `Event::new` leaves out every field named like a secret (at any depth),
+/// while the agent would run the call with them. False too when no event can be made of the call.
+fn shown_whole(call: &serde_json::Value) -> bool {
+    Event::new(String::new(), String::new(), call.clone())
+        .is_ok_and(|e| e.payload["tool_input"] == call["tool_input"])
+}
+/// What the agent is told when its outward call is refused for that (`why`); a field's name and value are not repeated.
+fn not_shown(kind: nunchiro_core::outward::Kind, why: &str) -> String {
+    format!(
+        "{}: this call cannot be shown whole on Nunchiro's card ({why}), so the user was not asked and it did not run",
+        kind.reason().split(':').next().unwrap_or_default()
+    )
+}
+
+/// Ticket 1149: Codex 0.161 has no "ask" for a PreToolUse hook: only "deny" (or exit 2) stops the tool, and a hook that
+/// answers anything else, fails or times out lets it run (probe 2026-11-26, docs/cli.md). So the hook asks itself: the
+/// call goes to the core as a held permission request (`--hold`'s path), the owner answers its card, and everything
+/// but the owner's allow is a deny: a deny, no window to ask, no answer in `HOLD_MS`, no core, no token, any error.
+/// `None` (no output): the owner allowed it and Codex runs the tool.
+fn codex_card(
+    home: &Path,
+    call: &serde_json::Value,
+    kind: nunchiro_core::outward::Kind,
+) -> Option<serde_json::Value> {
+    use nunchiro_core::{home_lock::hook_output, queue};
+    let head = kind.reason().split(':').next().unwrap_or_default();
+    let mut payload = call.clone();
+    payload["nunchiro_hold"] = true.into();
+    let large = payload.to_string().len() > 65536;
+    let event = env::var("NUNCHIRO_SESSION")
+        .map_err(|e| e.to_string())
+        .and_then(|id| Event::new(id, "PermissionRequest".into(), payload));
+    // Round 2: a call too large for a card, or with a field the event drops (`shown_whole`), is refused, not asked.
+    if large || !shown_whole(call) {
+        let why = "it is over 64 KiB, or has a field named like a secret";
+        return Some(hook_output("deny", &not_shown(kind, why)));
+    }
+    let asked = event.and_then(|event| {
+        let extra = Duration::from_millis(queue::HOLD_MS);
+        exchange(home, event, queue::now_ms(), extra)
+    });
+    let decision = match &asked {
+        Ok(Some(d)) => &d["hookSpecificOutput"]["decision"],
+        Ok(None) => &serde_json::Value::Null,
+        Err(e) => {
+            eprintln!("nunchiro hook: {e}");
+            &serde_json::Value::Null
+        }
+    };
+    if decision["behavior"] == "allow" {
+        return None;
+    }
+    // The owner's own deny carries their words (or the plain "do not retry"); anything else names why nothing ran.
+    let unanswered = format!(
+        "{head}: Nunchiro asks the user before every outward action and got no yes, so this did not run. Tell the user; they answer in Nunchiro"
+    );
+    let why = match decision["behavior"] == "deny" {
+        true => decision["message"].as_str().unwrap_or(queue::DENY_PLAIN),
+        false => &unanswered,
+    };
+    Some(hook_output("deny", why))
 }
 
 /// Ticket 1036: Claude Code's status line command in a Nunchiro session. Claude pipes it JSON with `rate_limits`

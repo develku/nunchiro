@@ -120,8 +120,7 @@ test('dialog_size_and_place', async ({ app, core }) => {
 });
 
 for (const scheme of ['light', 'dark'] as const) {
-  test(`same_data_side_by_side ${scheme}`, async ({ app, core, browserName }) => {
-    test.skip(browserName !== 'chromium', 'The existing pixel gate uses Chromium.');
+  test(`same_data_side_by_side ${scheme}`, { tag: '@chromium' }, async ({ app, core }) => {
     const d = await open(app, core);
     await app.emulateMedia({ colorScheme: scheme });
     outDir('fid-wtdialog');

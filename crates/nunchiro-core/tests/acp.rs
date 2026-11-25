@@ -918,6 +918,83 @@ fn acp_process_groups_end_after_their_leader() {
     gone(&orphan);
 }
 
+/// Ticket 1149 round 2 (Codex look): the owner never allows what the card does not show. A command whose publish
+/// sits past the card's 4096 characters (`echo <4100 a>; ... npm publish`) used to get a card cut before it, and Allow
+/// ran the hidden rest. It is refused instead: no card, an error to the agent, nothing runs.
+#[test]
+fn t1149_acp_outward_command_too_long_for_its_card_is_refused() {
+    let core = Core::new("acpl", FAKE);
+    let id = started(&core);
+    let ran = core.home.join("published");
+    core.prompt(&id, &format!("outward-long:{}", ran.display()));
+    let refused = core.wait_responses(1);
+    assert!(
+        refused[0]["error"]["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("too long")),
+        "{refused:?}"
+    );
+    wait_completion(&core, &id, 1);
+    assert_eq!(core.session(&id)["pending"], json!([]));
+    assert!(!ran.exists());
+}
+
+/// Ticket 1149: an ACP agent that asks the client to run an outward command (`terminal/create`) gets it only after the
+/// owner's yes on a card. The card names the kind, is never one an "always" covers, and a deny runs nothing.
+#[test]
+fn t1149_acp_outward_terminal_asks_and_is_never_remembered() {
+    let core = Core::new("acpo", FAKE);
+    let id = started(&core);
+    let ran = core.home.join("published");
+    core.prompt(&id, &format!("outward:{}", ran.display()));
+    let (item, _) = core.next_item(&id, &[]);
+    assert_eq!(item["kind"], "permission", "{item}");
+    assert!(
+        item["text"].as_str().unwrap().contains("npm publish"),
+        "{item}"
+    );
+    // Round 2: the card shows everything that decides what runs, the variables the agent set too.
+    assert!(
+        item["text"]
+            .as_str()
+            .unwrap()
+            .contains("NPM_CONFIG_REGISTRY=https://registry.invalid"),
+        "{item}"
+    );
+    assert_eq!(item["outward"], "publish", "{item}");
+    assert!(item["allow_always"].is_null(), "{item}");
+    assert!(
+        !ran.exists(),
+        "the command ran before its card was answered"
+    );
+    assert!(core.responses().is_empty(), "{:?}", core.responses());
+    // Never remembered: an "always" is refused and the request stays open.
+    let always = core.raw(
+        json!({"op":"answer","item":item["id"],"answer":{"type":"allow_always"},"confirmed":true}),
+    );
+    assert!(always["Err"].is_string(), "{always}");
+    assert!(core.responses().is_empty());
+    // A deny: the agent gets an error, nothing ran.
+    core.answer(&item, "deny");
+    let refused = core.wait_responses(1);
+    assert!(refused[0]["error"]["message"].is_string(), "{refused:?}");
+    wait_completion(&core, &id, 1);
+    assert!(!ran.exists());
+    // The owner's allow: the terminal is made and the command runs.
+    core.prompt(&id, &format!("outward:{}", ran.display()));
+    let (again, _) = core.next_item(&id, &[item["id"].as_str().unwrap().to_string()]);
+    core.answer(&again, "allow_once");
+    let made = core.wait_responses(2);
+    assert!(made[1]["result"]["terminalId"].is_string(), "{made:?}");
+    wait_until("the allowed command to run", STALL, || {
+        (ran.exists().then_some(()), String::new())
+    });
+    // A command that is not outward asks nothing (as before).
+    core.prompt(&id, "term");
+    wait_completion(&core, &id, 3);
+    assert_eq!(core.session(&id)["pending"], json!([]));
+}
+
 #[test]
 fn acp_forged_response_does_not_end_the_turn() {
     let core = Core::new("acpo", FAKE);

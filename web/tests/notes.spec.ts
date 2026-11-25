@@ -3,7 +3,7 @@
 // proxied socket: the merge item and the note and task replies are the proxy's (the core's shapes from notes.rs,
 // ledger.rs and queue/mod.rs `OwnerAsk::Merge`), and every request the window sends is recorded.
 import type { Page } from '@playwright/test';
-import { expect, openWindow, REPO, test, type Core } from './fixtures';
+import { expect, openWindow, test, type Core } from './fixtures';
 import { icon, sidebar } from './d5b';
 import { openSettings } from './settings-modal';
 
@@ -177,37 +177,6 @@ test('notes_empty: the palette opens Notes, and no notes says what a note is', a
   await app.locator('#palette-list [data-command="settings.notes.notes"]').click();
   await expect(app.locator('.settings > nav button[data-page="notes"]')).toHaveAttribute('aria-current', 'page');
   await expect(app.locator('.sbody')).toContainText('A note is a lesson you accepted on a merge card; agents never add one by themselves.');
-});
-
-// Shots for the comparison with team-j.html views ③ and ④ (not part of the gate): NOTES_SHOTS=1.
-test('notes_shots', async ({ app, core }) => {
-  test.skip(!process.env.NOTES_SHOTS, 'NOTES_SHOTS=1');
-  const out = `${REPO}/.scratch/notes-shots`;
-  const place = core.project('demo-shop');
-  const notes = [
-    { id: 'n3', text: 'Discount codes are stored lower-case: compare lower-case.', scope: { kind: 'project', project: place, area: 'shop' }, source: 'Builder · discount, task t1: discount', cites: 'shop/codes.py', at: Date.now() },
-    { id: 'n2', text: 'Use the legacy tax table in tax/old.py.', scope: { kind: 'project', project: place, area: 'tax' }, source: 'Builder · tax, task t0: tax', cites: 'tax/old.py', at: Date.now(), missing: true },
-    { id: 'n5', text: 'A test must fail without the fix before it counts as proof.', scope: { kind: 'role', role: 'reviewer' }, source: 'Reviewer · discount, task t1: discount', at: Date.now() },
-    { id: 'n1', text: 'Reports are short; ask before a push.', scope: { kind: 'me' }, source: 'the user', at: Date.now() },
-  ];
-  await mock(app, (r) => (r.op === 'note' ? { type: 'notes', notes } : r.op === 'task' ? { type: 'tasks', tasks: [{ id: 't1', review: { revision: '9c1e04abcdef', pass: true, name: 'Reviewer · discount' } }] } : 'Ack'), () => [MERGE(place)]);
-  const c = await openCard(app);
-  await app.mouse.move(700, 600); // the bar icon's tooltip off the card
-  for (const scheme of ['light', 'dark'] as const) {
-    await app.emulateMedia({ colorScheme: scheme });
-    await app.waitForTimeout(300);
-    await sidebar(app, 'right').screenshot({ path: `${out}/card-${scheme}.png` });
-  }
-  await c.locator('.mc-lesson').nth(0).getByRole('radio', { name: 'Reviewer everywhere' }).check();
-  await app.screenshot({ path: `${out}/card-window-dark.png` });
-  await openSettings(app);
-  await app.locator('.settings > nav button[data-page="notes"]').click();
-  await expect(app.locator('[data-row="note:n1"]')).toBeVisible();
-  for (const scheme of ['light', 'dark'] as const) {
-    await app.emulateMedia({ colorScheme: scheme });
-    await app.waitForTimeout(300);
-    await app.screenshot({ path: `${out}/list-${scheme}.png` });
-  }
 });
 
 // N25 (look 1117 v3 B): the tree's merge rows read "boa…" ("board: board decision…"): the lead's task card waits in the

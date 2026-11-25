@@ -3139,9 +3139,17 @@ mod tests {
             "codex-start",
             |hook| crate::codex_sandbox::IN_READ.set(Some(hook)),
             |home| {
-                // An approved fake `codex` that answers --version and then reads stdin.
+                // An approved fake `codex` that answers --version and then reads stdin. Ticket 1150: and says yes
+                // when the core asks it, before the start, whether it runs the outward hook.
                 let codex = home.join("codex");
-                std::fs::write(&codex, "#!/bin/sh\n[ \"$1\" = --version ] && { echo 'codex-cli 0.161.0'; exit 0; }\nexec cat >/dev/null\n").unwrap();
+                let fixture = concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/tests/fixtures/codex-app-server"
+                );
+                let script = format!(
+                    "#!/bin/sh\n[ \"$1\" != app-server ] || exec '{fixture}'\n[ \"$1\" = --version ] && {{ echo 'codex-cli 0.161.0'; exit 0; }}\nexec cat >/dev/null\n"
+                );
+                std::fs::write(&codex, script).unwrap();
                 std::fs::set_permissions(&codex, std::fs::Permissions::from_mode(0o700)).unwrap();
                 let path = codex.to_str().unwrap().to_string();
                 let check =

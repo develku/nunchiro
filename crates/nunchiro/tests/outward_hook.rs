@@ -90,3 +90,64 @@ fn t1130_outward_calls_ask_in_every_session() {
     assert_eq!(hook(&["--home-lock"], &publish).unwrap().0, "ask");
     assert_eq!(hook(&[], b"not json").unwrap().0, "ask");
 }
+
+/// Ticket 1149: as Codex runs it (`--codex`). Codex 0.161 has no "ask" and lets a tool run when its hook fails, so the
+/// hook holds for the owner's card and denies unless the owner allowed: with no core to raise a card (no token, no
+/// socket) an outward call is denied, and so is a payload it cannot read. Other calls get no answer. The card itself
+/// is in nunchiro-core's tests/waiting_core.rs.
+#[test]
+fn t1149_codex_outward_calls_are_denied_without_a_card() {
+    let publish = call("Bash", json!({"command": "npm publish"}));
+    let (decision, reason) = hook(&["--codex"], &publish).expect("a publish is decided");
+    assert_eq!(decision, "deny");
+    assert!(reason.starts_with("Publish:"), "{reason}");
+    let mail = call("mcp__gmail__send_message", json!({"body": "b"}));
+    assert_eq!(hook(&["--codex"], &mail).unwrap().0, "deny");
+    let push = call("Bash", json!({"command": "git push origin main"}));
+    assert_eq!(hook(&["--codex"], &push), None);
+    assert_eq!(hook(&["--codex"], b"not json").unwrap().0, "deny");
+}
+
+/// Ticket 1151: the owner never allows what the card does not show. The card's text is the call's input as the hook
+/// event carries it, and the event leaves out fields named like a secret, at any depth; Claude would run the call with
+/// them. So an outward Claude call with such a field is refused, as a Codex one is (ticket 1149), and its reason never
+/// repeats the value. A call that is not outward is still not answered, with or without such a field.
+#[test]
+fn t1151_claude_outward_call_with_a_field_the_card_hides_is_refused() {
+    for input in [
+        json!({"text": "t", "token": "s3cr3t-value"}),
+        json!({"text": "t", "headers": {"Authorization": "s3cr3t-value"}}),
+        json!({"text": "t", "to": [{"name": "a", "Password": "s3cr3t-value"}]}),
+    ] {
+        let post = call("mcp__slack__post_message", input.clone());
+        let (decision, reason) = hook(&[], &post).expect("decided");
+        assert_eq!(decision, "deny", "{input}");
+        assert!(reason.starts_with("Send or post:"), "{reason}");
+        assert!(reason.contains("named like a secret"), "{reason}");
+        assert!(!reason.contains("s3cr3t-value"), "{reason}");
+        // Codex's refusal (ticket 1149 round 2) is the same rule.
+        let (decision, codex) = hook(&["--codex"], &post).expect("decided");
+        assert_eq!(decision, "deny");
+        assert!(codex.contains("named like a secret"), "{codex}");
+    }
+    let publish = call(
+        "Bash",
+        json!({"command": "npm publish", "auth": "s3cr3t-value"}),
+    );
+    assert_eq!(hook(&[], &publish).unwrap().0, "deny");
+    // Unchanged: the same call without the field asks; a call that is not outward gets no answer; a locked Home seat's
+    // connector call is the Outbox card's.
+    let plain = call(
+        "mcp__slack__post_message",
+        json!({"text": "t", "author": "a"}),
+    );
+    assert_eq!(hook(&[], &plain).unwrap().0, "ask");
+    for (tool, input) in [
+        ("mcp__vault__get_item", json!({"token": "s3cr3t-value"})),
+        ("Bash", json!({"command": "ls", "password": "s3cr3t-value"})),
+    ] {
+        assert_eq!(hook(&[], &call(tool, input)), None, "{tool}");
+    }
+    let locked = call("mcp__slack__post_message", json!({"token": "s3cr3t-value"}));
+    assert_eq!(hook(&["--home-lock"], &locked), None);
+}

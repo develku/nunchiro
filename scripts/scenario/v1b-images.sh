@@ -111,8 +111,8 @@ def one(agent, n):
         live = {'home': str(home), 'session': s['id'], 'agent': agent, 'png': base64.b64encode(FIXTURE).decode(),
                 'prompt': 'describe this image in one word', 'out': str(result)}
         board_before = pasteboard()
-        p = subprocess.run(['pnpm', 'exec', 'playwright', 'test', 'thumbnails-live', '--project', 'chromium', '--reporter', 'line'],
-                           cwd=root / 'web', env={**os.environ, 'IMAGES_LIVE': json.dumps(live)}, capture_output=True, text=True, timeout=400)
+        p = subprocess.run(['pnpm', 'exec', 'playwright', 'test', 'thumbnails-live', '--project', 'live', '--reporter', 'line'],
+                           cwd=root / 'web', env={**os.environ, 'PW_OPT_IN': 'live', 'IMAGES_LIVE': json.dumps(live)}, capture_output=True, text=True, timeout=400)
         board_after = pasteboard()
         row['clipboard'] = {'same': board_before == board_after, 'changeCount': [board_before['changeCount'], board_after['changeCount']],
                             'types': len(board_before['types'])}

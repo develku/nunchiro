@@ -42,6 +42,7 @@ import { RoomView } from '../room/RoomView'; // ticket 571
 import { isRoomTab, roomOfTab, roomTabId, useRoom } from '../room/room';
 import { leadOf, leadSeatMate, placeOfMate, seatOf, useTeam, workingFor } from '../lead/lead'; // ticket 990
 import { TeamChip, TeamLine } from '../lead/LeadHead';
+import { FreshButton, FreshToast } from '../lead/LeaderDialog';
 import { useDigest } from '../lead/HomeParts';
 import { useTasks, withMerges } from '../lead/tasks';
 import { closeTeamTab, focusTeam, onShowTeamTab, showTeamTab, useTeamAt } from '../lead/team'; // owner 11-17
@@ -152,6 +153,10 @@ type Props = { pin?: string } & Pick<ReturnType<typeof useTabs>, 'renaming' | 's
     pinned: (pin: string) => Session | null;
   };
 
+/** Ticket 1145 round 3: focus a shown chat may take: on nothing, or still on what opened it (a tree row, a tab, the chat). */
+const openerHolds = (el: Element | null) =>
+  !el || el === document.body || (!!el.closest('.tree, [role="tablist"], .chat, .cbox') && !el.closest('.peek, .kidpeek, [role="menu"], [role="dialog"], [role="listbox"], input, [contenteditable="true"], [contenteditable=""]'));
+
 /** The terminal widget: the session tab strip, the session head and the session's panes (chat, terminal,
  *  file and imported tabs, splits, side pane); with a pin, that one session's terminal. */
 export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, byId, sessions, deciding, active, setActive, renaming, setRenaming, focusTab, closeTab, dragTab, moveTab, rename, moved, jumps, current, core, placeText, openSideChat, headStat, bars, notify, sideChats, connected, setTabs, open, windowCtx, boot, composerView, pickSplit, pinSplit, closeSplit, splitState, settings, bindings, run, termTheme, paneSession, composer, pinned }: Props) {
@@ -161,6 +166,38 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
   const team = useTeam(core, connected);
   const wtc = windowCtx().wt;
   const leadMate = leadSeatMate(current, team);
+  const seatMate = current?.teammate ? team.teammates.find((m) => m.id === current.teammate) : undefined;
+  const seatLive = seatMate ? seatOf(sessions, seatMate.id) : null;
+  // Ticket 1145 (after T3 Code ChatView.tsx, focus on thread show and on window focus): a chat session that shows (tree,
+  // tab, start, a new conversation) takes its composer, and so does the window coming back with one in front. Arrow travel
+  // in the strip keeps the strip; a shell keeps its terminal; nothing moves while an IME composition runs.
+  const composing = useRef(false);
+  const stay = useRef<string | null>(null);
+  const chatShown = !pin && hasTranscript(current) ? current!.id : null;
+  useEffect(() => {
+    const on = (e: Event) => void (composing.current = e.type === 'compositionstart');
+    document.addEventListener('compositionstart', on, true);
+    document.addEventListener('compositionend', on, true);
+    return () => (document.removeEventListener('compositionstart', on, true), document.removeEventListener('compositionend', on, true));
+  }, []);
+  useEffect(() => {
+    const kept = stay.current === chatShown;
+    stay.current = null;
+    if (!chatShown || kept) return;
+    // A frame later, after the opener's own focus moves (the waiting strip's Open focuses its card, a peek its box): only
+    // focus still on an opener (a tree row, a tab, the chat) or on nothing moves to the composer.
+    const frame = requestAnimationFrame(() => void (composing.current || (openerHolds(document.activeElement) && composer.current?.focus())));
+    return () => cancelAnimationFrame(frame);
+  }, [chatShown, composer]);
+  useEffect(() => {
+    if (!chatShown) return;
+    let frame = 0;
+    // The window gives focus back to its last element after this event: two frames, then only from nowhere (body). Narrower
+    // than T3 Code's rule: a Tab walk out of the page and back fires this too, and the element it reached keeps its focus.
+    const on = () => (cancelAnimationFrame(frame), (frame = requestAnimationFrame(() => (frame = requestAnimationFrame(() => void (composing.current || (document.activeElement && document.activeElement !== document.body) || composer.current?.focus()))))));
+    window.addEventListener('focus', on);
+    return () => (window.removeEventListener('focus', on), cancelAnimationFrame(frame));
+  }, [chatShown, composer]);
   const forLead = current && !leadMate && wtc ? workingFor(current, team, sessions, wtc.list) : null;
   // Owner 11-17: in a place with a lead the project's last tab is the Team view, drawn only while it lives there (else it is in
   // the right sidebar); a place with no lead keeps its Room tab as before.
@@ -310,6 +347,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
     const to = { ArrowRight: (at + 1) % walk.length, ArrowLeft: (at - 1 + walk.length) % walk.length, Home: 0, End: walk.length - 1 }[e.key];
     if (to === undefined) return;
     e.preventDefault();
+    stay.current = walk[to]; // ticket 1145: arrow travel keeps focus on the strip
     setActive(walk[to]);
     if (!strip.includes(walk[to])) setTimeout(() => stripEl.current?.querySelector<HTMLElement>(`[role="tab"][data-tab="${CSS.escape(walk[to])}"]`)?.focus(), 0); // a view tab (browser, Schedules, Room)
     else focusTab(walk[to]);
@@ -576,6 +614,8 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
           {leadMate && <TeamChip t={t} mate={leadMate} tasks={tasks} sessions={sessions} onOpen={openTeam} digest={digest} waiting={needsYou} />}
           {/* Ticket 1031: the PR chip, moved here from the status bar (a shell has no chat to carry it). */}
           <SessionFacts t={t} core={core} boot={boot} session={current} />
+          {/* Ticket 1130 B-L3 (C5): "New conversation" on a teammate's seat (not on an older conversation of one whose seat runs elsewhere). */}
+          {seatMate && !current.side_chat && (seatLive ?? current).id === current.id && <FreshButton t={t} mate={seatMate} seat={current} live={seatLive} />}
           {/* needs 130: the mockup's +a −b, then its Diff button, at the header's right. No change, no pill. */}
           {headStat && (
             // Q6 B18: the pill's scope (since the session's start commit) on hover too, as the Diff pane's scope radios and base line say theirs.
@@ -658,6 +698,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
       {paneSession && <SidePane core={core} session={paneSession} all={sessions} term={paneTerm} insert={insertQuote(composer)} t={t} />}
       </div>
       </SplitHost>
+      <FreshToast t={t} />
       {tabHitNow && createPortal(<Preview box={tabHitNow.box} side={tabHitNow.side} refused={tabHitNow.refused} />, document.body)}
     </div>
   );

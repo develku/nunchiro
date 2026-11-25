@@ -200,7 +200,15 @@ fn idle_core_cpu_diff_dock_and_codex() {
         use std::os::unix::fs::PermissionsExt;
         let bin = home.join("bin");
         fs::create_dir_all(&bin).unwrap();
-        let codex = "#!/bin/sh\ncase \"$1\" in --version) echo 'codex-cli 0.50.0'; exit 0;; esac\nexec sleep 100000\n";
+        // Ticket 1150: asked before its start whether it runs the outward hook, the fake says yes, as every fake
+        // `codex` of the tests does (nunchiro-core/tests/fixtures/codex-app-server).
+        let fixture = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../nunchiro-core/tests/fixtures/codex-app-server"
+        );
+        let codex = format!(
+            "#!/bin/sh\n[ \"$1\" != app-server ] || exec '{fixture}'\ncase \"$1\" in --version) echo 'codex-cli 0.50.0'; exit 0;; esac\nexec sleep 100000\n"
+        );
         fs::write(bin.join("codex"), codex).unwrap();
         fs::set_permissions(bin.join("codex"), fs::Permissions::from_mode(0o700)).unwrap();
         for day in 0..365 {

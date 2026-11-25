@@ -348,6 +348,9 @@ test('team_words_at_rest (993 rule 8): at most 40 fixed words, in the page head 
   const count = (rows: number) =>
     app.locator('.spage').evaluate((page, rows) => {
       const copy = page.cloneNode(true) as HTMLElement;
+      // A closed select shows its chosen option only (a clone keeps no selection, so read it from the page).
+      const shown = [...page.querySelectorAll('select')].map((s) => s.selectedOptions[0]?.text ?? '');
+      copy.querySelectorAll('select').forEach((s, i) => s.replaceWith(shown[i]));
       // The user's own words and data: a teammate's name, its job, its project and agent.
       copy.querySelectorAll('.team-go, .team-row .sds, .team-where').forEach((e) => e.remove());
       // Ticket 1099: How this place works (owner-approved mockup cohesion-1099 panel 1, one sentence per row) is not the teammates' words.
@@ -357,7 +360,8 @@ test('team_words_at_rest (993 rule 8): at most 40 fixed words, in the page head 
       const out: string[] = [];
       const walk = (n: Node) => (n.nodeType === 3 ? out.push(n.textContent ?? '') : n.childNodes.forEach(walk));
       walk(copy);
-      return out.join(' ').split(/\s+/).filter((w) => /\p{L}/u.test(w));
+      // The page head names the project a lead works in (ticket 1099 summary): the user's word, like a teammate's project.
+      return out.join(' ').split(/\s+/).filter((w) => /\p{L}/u.test(w) && w !== 'demo');
     }, rows);
   const one = await count(1);
   expect(one.length, one.join(' ')).toBeLessThanOrEqual(30);
