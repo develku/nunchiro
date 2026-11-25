@@ -35,7 +35,7 @@ export function UndoLine() {
     document.addEventListener('pointermove', move);
     return () => document.removeEventListener('pointermove', move);
   }, [shown]);
-  if (!shown) return null;
+  if (!shown || entry?.toast) return null; // ticket 1130 B-L3: a toast entry is drawn by its own toast
   return (
     <span
       ref={el}

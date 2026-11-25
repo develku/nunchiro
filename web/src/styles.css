@@ -794,7 +794,9 @@ button:disabled {
   flex: 1000 1 0;
   max-width: max-content;
 }
-.shead > .lead-room {
+/* Ticket 1130 B-L3: "New conversation" gives way with the chip (it is cut, never pushed out of a narrow header). */
+.shead > .lead-room,
+.shead > .hbtn.fresh-seat {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -818,6 +820,13 @@ button:disabled {
 .shead .qlevel-btn:hover {
   background: var(--control-quiet-hover);
   color: var(--text);
+}
+/* Ticket 1130 B-L3 round 6: "New conversation" where it is not offered: focusable, reads as unavailable (as N065). */
+.shead .hbtn[aria-disabled='true'],
+.shead .hbtn[aria-disabled='true']:hover {
+  background: var(--control-quiet-bg);
+  color: var(--faint);
+  cursor: not-allowed;
 }
 /* needs 130: the session's +a −b before Diff, as plain numbers in their colours (no box). */
 .shead .hstat {

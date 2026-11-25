@@ -372,6 +372,15 @@ pub struct Sessions {
     /// when that turn ends). A session not in the map (all of them after a core restart) is never known empty. Only
     /// a seat past its mark is idle (`seat_idle`).
     touched: std::collections::HashMap<String, u64>,
+    /// Ticket 1130 B-L3 round 3: by resumed ACP session, the rows it continues. An ACP agent loads a conversation
+    /// after its start (`session/load`), so those rows stay, with the conversation id, until the load succeeded
+    /// (`refresh`): a load that fails leaves the conversation in History; nothing ever drops them on a failure. In
+    /// memory only: after a core restart they stay as well.
+    acp_loading: BTreeMap<String, Vec<String>>,
+    /// Ticket 1130 B-L3 round 5: the rows an Undo is about to continue, while that op runs (`hold_row`). With the rows
+    /// in `acp_loading` they are out of the Closed-row bound (`drop_closed`): each is the only place its conversation
+    /// id lives until the resume has succeeded.
+    held_rows: std::collections::BTreeSet<String>,
     /// Ticket 1003 (Codex note on w79): each spent Outbox mail (with when it was spent), whose waiting-for row waits
     /// for that very call's PostToolUse; a failed call fires no PostToolUse, so its row is never made.
     outbox_sending: Vec<(u64, queue::Approved)>,
@@ -777,6 +786,8 @@ impl Sessions {
             held_enter: Default::default(),
             submitted: Default::default(),
             touched: Default::default(),
+            acp_loading: BTreeMap::new(),
+            held_rows: Default::default(),
             outbox_sending: Default::default(),
             closed_views: Default::default(), // v1a-68
             closing: None,                    // V2-6d
@@ -2359,6 +2370,7 @@ impl Sessions {
         let mut changed = false;
         let mut saves = vec![];
         let mut finished_workers = vec![];
+        let mut acp_settled = vec![]; // ticket 1130 round 3: resumed ACP sessions whose load ended, and how
         for entry in self.entries.values_mut() {
             // V1A-89: a probe that outlived Start's wait; a failed or hung one reads as a failed `--version` does.
             let answer = entry
@@ -2456,6 +2468,9 @@ impl Sessions {
                 );
                 let state = match acp.pump(&mut entry.meta, &mut self.queue)? {
                     Ok(true) => {
+                        if acp.handshaken() && self.acp_loading.contains_key(&entry.meta.id) {
+                            acp_settled.push((entry.meta.id.clone(), true));
+                        }
                         changed |= before
                             != (
                                 entry.meta.agent_session_id.clone(),
@@ -2480,6 +2495,7 @@ impl Sessions {
                         SessionState::Failed
                     }
                 };
+                acp_settled.push((entry.meta.id.clone(), false));
                 acp.stop();
                 entry.acp = None;
                 entry.meta.state = state;
@@ -2584,6 +2600,18 @@ impl Sessions {
         }
         for (id, bytes) in saves {
             self.queue_save(id, bytes);
+        }
+        // Ticket 1130 round 3: the rows a resumed ACP session continues leave only now, once its load succeeded (as
+        // `spawn_acp` dropped them at once before); a session that ended before that leaves them where they are.
+        for (id, loaded) in acp_settled {
+            if let Some(prior) = self.acp_loading.remove(&id)
+                && loaded
+            {
+                for old in prior {
+                    self.entries.remove(&old);
+                }
+                changed = true;
+            }
         }
         for id in finished_workers {
             if let Err(e) = self.close_unsaved(&id, true) {
@@ -7020,6 +7048,7 @@ impl Sessions {
         self.held_enter.remove(id);
         self.composed.remove(id); // ticket 990: typed and never entered; nothing keeps it after the close
         self.touched.remove(id);
+        self.acp_loading.remove(id); // a resume closed before its load ended: the rows it continued stay
         let project = self.entry(id)?.meta.project.clone();
         // An account's Login or Logout tab runs in the account's config folder, which is no project (nightly 11-19:
         // closing the login filed that folder in the tree, accounts-login-filing).
@@ -7494,24 +7523,30 @@ impl Sessions {
     /// transcript at the first finished turn, so before that there is nothing to resume (as `handoff_target`).
     /// Ticket 992: only a seat that ran at `level`, the level this open uses, so the model never changes inside a
     /// conversation.
+    /// Ticket 1130 B-L3: `undo` names the seat instead (the window's Undo of a new conversation): any seat of this
+    /// teammate that no longer runs, a closed one too.
     pub(crate) fn seat_to_resume(
         &self,
         teammate: &str,
         start: &StartSession,
         level: Option<crate::team::Level>,
+        undo: Option<&str>,
     ) -> Option<String> {
         let project = fs::canonicalize(&start.project).ok();
         let newest = |e: &&Entry| {
             let a = self.queue.attention(&e.meta.id);
             (a.last_activity, a.completion_seq)
         };
-        let last = self
+        let mut seats = self
             .entries
             .values()
-            .filter(|e| e.meta.teammate.as_deref() == Some(teammate))
-            .max_by_key(newest)?;
+            .filter(|e| e.meta.teammate.as_deref() == Some(teammate));
+        let last = match undo {
+            Some(old) => seats.find(|e| e.meta.id == old && !e.agent_live())?,
+            None => seats.max_by_key(newest)?,
+        };
         let meta = &last.meta;
-        (meta.state == SessionState::Resumable
+        ((meta.state == SessionState::Resumable || undo.is_some())
             && meta.kind == start.kind
             && (meta.level.is_none() || meta.level == level) // a seat from before levels has none
             && Some(&meta.project) == project.as_ref()
@@ -7545,6 +7580,43 @@ impl Sessions {
                 .entries
                 .get(id)
                 .is_some_and(|e| e.meta.send_queue.is_empty() && !e.input.pending())
+    }
+    /// Ticket 1130 B-L3: a turn runs or waits at a question: "New conversation" stops such a seat at once. One between
+    /// turns is not busy (a Lead then hands over first).
+    pub(crate) fn seat_busy(&self, id: &str) -> bool {
+        let a = self.queue.attention(id);
+        a.working || a.waiting
+    }
+    /// Ticket 1130 B-L3 round 2: ends a seat for a new conversation; its row always stays (History). A seat whose run
+    /// ended a moment ago is left as it is: `close` takes the two-phase path for such a row (`close_later`), and the
+    /// row with its conversation id would be gone ten seconds later.
+    /// Round 5: otherwise it is the ordinary close, as the window's Close and ticket 1096 make it. An ACP seat's chat
+    /// feed ends with its run there too (`acp_chat`'s shortcut: kept in memory only), and an agent without
+    /// `loadSession` leaves no conversation id; neither is changed here.
+    pub(crate) fn end_seat(&mut self, id: &str) -> Result<(), String> {
+        if self.entry(id)?.meta.state != SessionState::Running {
+            return Ok(());
+        }
+        self.close(id, true, false).map(|_| ())
+    }
+    /// Ticket 1130 B-L3 round 5: holds row `id` out of the Closed-row bound while an Undo that continues it runs.
+    pub(crate) fn hold_row(&mut self, id: &str, on: bool) {
+        if on {
+            self.held_rows.insert(id.into());
+        } else {
+            self.held_rows.remove(id);
+        }
+    }
+    /// Ticket 1130 B-L3 round 2: a teammate's new conversation keeps the session that started its old seat (its Lead),
+    /// as a resumed run does (V2.5-30), so its wake lines and questions still reach that Lead.
+    pub(crate) fn seat_parent(&mut self, id: &str, parent: &str) -> Result<Session, String> {
+        self.entry(id)?.meta.parent = Some(parent.into());
+        self.grants.parents.insert(id.into(), parent.into());
+        if let Err(e) = self.save() {
+            eprintln!("parent link not saved yet: {e}");
+        }
+        let meta = self.entry(id)?.meta.clone();
+        Ok(self.snapshot_session(&meta))
     }
     /// Ticket 1081 (security look 4): a seat the core started that nothing went into since: no text or key ever reached
     /// its input box, nothing composed, queued or on its way, no turn and no question. Only such a seat is closed when
@@ -12419,10 +12491,14 @@ impl Sessions {
             .filter_map(|e| Some((e.meta.id.clone(), self.token_origin(&e.meta)?)))
             .collect();
         let room = self.token_conversations.len() + origins.len() <= store::TOKEN_CONVERSATIONS;
-        let kept: std::collections::BTreeSet<String> = match room {
+        let mut kept: std::collections::BTreeSet<String> = match room {
             true => Default::default(),
             false => origins.keys().cloned().collect(),
         };
+        // Ticket 1130 B-L3 round 5: nor a row a resume still loads from or an Undo is about to continue (neither
+        // dropped nor counted, as the token rows above): a load that fails must find it in History.
+        kept.extend(self.acp_loading.values().flatten().cloned());
+        kept.extend(self.held_rows.iter().cloned());
         let gone: std::collections::BTreeSet<String> =
             droppable(&self.entries, &self.closed_views, filed.as_ref(), &kept)
                 .into_iter()

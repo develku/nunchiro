@@ -70,6 +70,19 @@ declare module '../index' {
     'lead.freshClose': true;
     'lead.freshKeep': true;
     'lead.freshHide': true;
+    // Ticket 1130 B-L3: "New conversation" on any seat's header, one press (English only until ticket 1035).
+    'lead.newConv': true;
+    'lead.newConvStops': true;
+    'lead.newConvHands': true;
+    'lead.newConvOpens': true;
+    'lead.newConvWith': true;
+    'lead.newConvSame': true;
+    'lead.newConvOld': true;
+    'lead.newConvSecs': true;
+    'lead.newConvNoUndo': true;
+    'lead.newConvNoContinue': true;
+    'lead.newConvUndoStale': true;
+    'lead.newConvUndoKept': true;
   }
 }
 
@@ -132,15 +145,27 @@ export const en = {
   'lead.mates': "Assistants: {n}",
   'lead.inTeamNote': "what you say here reaches the lead as one line",
   'lead.fresh': 'New Lead conversation',
-  'lead.freshHint': 'a new conversation; a running Lead hands over first',
+  'lead.freshHint': 'a new conversation; a running turn stops, a Lead between turns hands over first',
   'lead.freshTitle': 'New Lead conversation for {project}',
-  'lead.freshWait': 'If {name} is running, it first writes what is unfinished. The new conversation opens when that turn ends; if it does not end in time, this says so.',
+  'lead.freshWait': '{name} first writes what is unfinished. The new conversation opens when that turn ends; if it does not end in time, this says so.',
   'lead.freshStuck': '{name} did not finish its turn within {minutes} minutes. It is still open, no new conversation started, and the handover message was withdrawn.',
   'lead.freshStuckHanded': '{name} did not finish its turn within {minutes} minutes. It is still open and already has the handover message, so it stops after its current turn. Choose New Lead conversation again then; no second message is sent.',
   'lead.freshLost': 'The window lost the core while the new Lead conversation was opening. It may still open; it shows in the tree when it does.',
   'lead.freshClose': 'Close the old Lead and open a new one',
   'lead.freshKeep': 'Keep it open',
   'lead.freshHide': 'Hide',
+  'lead.newConv': 'New conversation',
+  'lead.newConvStops': 'Stops this turn · opens a new conversation with {name}',
+  'lead.newConvHands': '{name} writes what is unfinished · then a new conversation opens',
+  'lead.newConvOpens': 'Opens a new conversation with {name}',
+  'lead.newConvWith': 'New conversation with {name}',
+  'lead.newConvSame': 'New conversation with {name}. Same role, folder, model, effort and mode.',
+  'lead.newConvOld': 'The old conversation is in History.',
+  'lead.newConvSecs': '{n} s',
+  'lead.newConvNoUndo': 'The old conversation has no finished turn to continue. It is still in History.',
+  'lead.newConvNoContinue': 'This agent cannot continue an old conversation, so a new one would lose this one.',
+  'lead.newConvUndoStale': 'This seat changed since the new conversation opened, so nothing was undone. Both conversations are in History.',
+  'lead.newConvUndoKept': '{error}. Nothing was deleted: both conversations are in History.',
 };
 export const ko = {
   'lead.tag': '리더',
