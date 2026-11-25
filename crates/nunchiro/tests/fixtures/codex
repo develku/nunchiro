@@ -5,6 +5,30 @@ if '--version' in sys.argv:
     print('codex-cli 99.0.0')
     raise SystemExit
 args = sys.argv[1:]
+if args[:1] == ['app-server']:
+    # Ticket 1150: before a Codex start the core asks that Codex which hooks it would run, and starts it only when
+    # Nunchiro's outward hook is listed, on and trusted. This one says so (the answers of
+    # nunchiro-core/tests/fixtures/codex-app-server), unless the test's `codex-app-server.json` says otherwise: a
+    # result per method (a method left out is not answered), and `behave` for a Codex that cannot be asked: "exit",
+    # "garbage", or seconds to wait before it answers.
+    results = {'initialize': {}, 'hooks/list': {'data': [{'hooks': [{
+        'key': '/<session-flags>/config.toml:pre_tool_use:0:0', 'enabled': True, 'trustStatus': 'trusted'}]}]}}
+    answers = os.path.join(os.environ['NUNCHIRO_HOME'], 'codex-app-server.json')
+    if os.path.exists(answers):
+        results = json.load(open(answers))
+    behave = results.pop('behave', None)
+    if behave == 'exit':
+        raise SystemExit
+    if behave == 'garbage':
+        print('Welcome to Codex', flush=True)
+    elif behave:
+        import time
+        time.sleep(behave)
+    for line in sys.stdin:
+        request = json.loads(line)
+        if 'id' in request and request['method'] in results:
+            print(json.dumps({'id': request['id'], 'result': results[request['method']]}), flush=True)
+    raise SystemExit
 print('LAUNCH:' + json.dumps(args), flush=True)
 for arg in args:
     if arg.startswith('hooks.SessionStart='):

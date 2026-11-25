@@ -8,7 +8,6 @@ import { openQuiet } from './tree-seed';
 import { repo, show } from './visual/compare';
 
 test.use({ viewport: { width: 1440, height: 900 } });
-test.skip(({ browserName }) => browserName !== 'chromium', 'row geometry is measured in Chromium');
 
 const NAME = 'nightly-backtest-runner-for-lumen'; // 33 characters
 
@@ -42,7 +41,7 @@ async function setup(app: import('@playwright/test').Page, core: import('./fixtu
   return line;
 }
 
-test('tree_row_name_full: a 250px tree shows at least 20 characters of a long name; Caution is a text label; actions only on hover or focus', async ({ app, core }) => {
+test('tree_row_name_full: a 250px tree shows at least 20 characters of a long name; Caution is a text label; actions only on hover or focus', { tag: '@chromium' }, async ({ app, core }) => {
   const line = await setup(app, core);
   const who = line.locator('.who');
   await expect(who).toHaveText(NAME);
@@ -90,7 +89,7 @@ test('tree_row_name_full: a 250px tree shows at least 20 characters of a long na
 });
 
 // The worktree row stays the approved ko/ mockup's 30px (needs 102): fidelity-tree.spec.ts pins it, this finding is the line.
-test('tree_row_28px: the decision line under a project head is 28px tall', async ({ app, core }) => {
+test('tree_row_28px: the decision line under a project head is 28px tall', { tag: '@chromium' }, async ({ app, core }) => {
   const line = await setup(app, core);
   expect(Math.round((await line.boundingBox())!.height)).toBe(28);
 });

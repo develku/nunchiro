@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { agentsToml, entryHash, fakeAcp, fakeTerminalCli, ownerOk, tomlEntry } from './acp-fakes';
 import { openAdd, openRow } from './accounts-rows';
-import { expect, openWindow, test, type Core } from './fixtures';
+import { expect, openWindow, test, type Core, codexFake } from './fixtures';
 import { openSettings } from './settings-modal';
 
 async function accounts(app: Page) {
@@ -203,7 +203,7 @@ test('tiles_route_by_what_each_tool_can_do', async ({ app, core }) => {
 });
 
 test('terminal_login_that_ends_unsigned_says_so_on_its_row', async ({ app, core }) => {
-  fs.writeFileSync(path.join(core.home, 'bin/codex'), `#!/bin/sh\ncase "$1" in --version) echo "codex 0.161.0"; exit 0;; login) [ "$2" = status ] && { echo 'Not logged in' >&2; exit 1; }; exit 0;; esac\nexec /bin/cat\n`, { mode: 0o700 });
+  fs.writeFileSync(path.join(core.home, 'bin/codex'), codexFake(`#!/bin/sh\ncase "$1" in --version) echo "codex 0.161.0"; exit 0;; login) [ "$2" = status ] && { echo 'Not logged in' >&2; exit 1; }; exit 0;; esac\nexec /bin/cat\n`), { mode: 0o700 });
   core.shell(core.project('demo'), 'alpha');
   await accounts(app);
   await openRow(app, 'Codex');

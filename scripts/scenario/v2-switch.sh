@@ -46,6 +46,10 @@ while True:
     log.write('READ ' + data.hex() + '\n')
     log.flush()
 '''
+# Ticket 1150: before a Codex start the core asks that Codex (`codex app-server ...`) which hooks it would run, and a
+# fake that says nothing is not started; the tests' shared answer says yes (as `home::codex_fake` does for them).
+YES = str(root / "crates/nunchiro-core/tests/fixtures/codex-app-server")
+FAKE = FAKE.replace("\n", f"\nimport os, sys\nif sys.argv[1:2] == ['app-server']: os.execv({YES!r}, [{YES!r}])\n", 1)
 
 
 def sent(text):

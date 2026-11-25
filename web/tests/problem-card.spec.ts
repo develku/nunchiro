@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Session } from '../src/types';
-import { expect, openWindow, test, type Core, stripOnTop } from './fixtures';
+import { expect, openWindow, test, type Core, stripOnTop, codexFake } from './fixtures';
 
 test.beforeEach(({ core }) => stripOnTop(core));
 
@@ -12,7 +12,7 @@ const snapshot = (core: Core) => core.cli('snapshot', '--json').sessions as Sess
 function fake(core: Core, name: 'claude' | 'codex', text: string, code: number, wait = false) {
   const go = wait ? 'while [ ! -f "$PWD/go" ]; do sleep 0.02; done\n' : '';
   const script = `#!/bin/sh\nif [ "$1" = --version ]; then echo '${name === 'codex' ? 'codex-cli 0.161.0' : '2.1.310 (Claude Code)'}'; exit; fi\nprintf '%s\\r\\n' '${text.replaceAll("'", "'\\''")}'\n${go}sleep 0.2\nexit ${code}\n`;
-  fs.writeFileSync(path.join(core.home, 'bin', name), script, { mode: 0o700 });
+  fs.writeFileSync(path.join(core.home, 'bin', name), codexFake(script), { mode: 0o700 });
 }
 const start = (core: Core, kind: 'claude' | 'codex', project: string, label: string) =>
   core.cli('session', 'start', '--kind', kind, '--project', project, '--label', label).session as Session;

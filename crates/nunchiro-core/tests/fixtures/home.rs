@@ -19,6 +19,27 @@ use std::{
 #[allow(dead_code)]
 pub const FAKE_INPUT_RAW: &str = "stty -icrnl -echo -icanon";
 
+/// Ticket 1150: a fake `codex` script (sh or python3) for a test, made to answer the core's question too. Before every
+/// Codex start the core runs that Codex as `codex app-server ...` and asks which hooks it would run; only a Codex that
+/// lists Nunchiro's outward hook, on and trusted, is started. A fake that says nothing is refused like a real one
+/// ("Codex did not say whether it runs Nunchiro's outward-action check"), so every fake `codex` a test starts goes
+/// through here: its first line after `#!` hands that run to `fixtures/codex-app-server`, which says yes.
+#[allow(dead_code)]
+pub fn codex_fake(script: &str) -> String {
+    let yes = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../nunchiro-core/tests/fixtures/codex-app-server"
+    );
+    let (first, rest) = script.split_once('\n').expect("a script");
+    let asked = match first.contains("python") {
+        true => format!(
+            "import os, sys\nif sys.argv[1:2] == ['app-server']: os.execv('{yes}', ['{yes}'])\n"
+        ),
+        false => format!("[ \"$1\" != app-server ] || exec '{yes}'\n"),
+    };
+    format!("{first}\n{asked}{rest}")
+}
+
 /// A fresh, canonical `ns-<tag>-<pid>-<n>` folder under the system temp dir. Panics when its `core.sock` would not
 /// fit, so a long tag fails here instead of as a core that never becomes ready.
 pub fn short(tag: &str) -> PathBuf {

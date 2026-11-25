@@ -7,12 +7,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { ownerOk, owner } from './acp-fakes';
 import { openRow } from './accounts-rows';
-import { expect, openWindow, test, type Core } from './fixtures';
+import { expect, openWindow, test, type Core, codexFake } from './fixtures';
 import { openSettings } from './settings-modal';
 
 /** A fake agent: answers `--version`, and logs `<path> <args>` to `<path>.log` when run as a session. */
 function fake(file: string, version: string) {
-  fs.writeFileSync(file, `#!/bin/sh\n[ "$1" = --version ] && { echo '${version}'; exit 0; }\necho "$0 $*" > "$0.log"\nexec /bin/cat\n`, { mode: 0o700 });
+  fs.writeFileSync(file, codexFake(`#!/bin/sh\n[ "$1" = --version ] && { echo '${version}'; exit 0; }\necho "$0 $*" > "$0.log"\nexec /bin/cat\n`), { mode: 0o700 });
   return file;
 }
 function agents(core: Core) {
@@ -173,12 +173,14 @@ test('accounts_command: Codex with an argument has no hooks and says so; a path 
   expect(above, 'a Codex config above the temp folder withholds the hooks').toEqual([]);
   approve(core, 'codex', codex, []);
   await openWindow(app);
-  expect(await launched(app, core, 'codex', codex, project)).toContain('hooks.');
+  expect(await launched(app, core, 'codex', codex, project)).toContain('hooks.SessionStart');
 
   approve(core, 'codex', codex, ['--verbose']);
   const log = await launched(app, core, 'codex', codex, project);
   expect(log).toContain('--verbose');
-  expect(log).not.toContain('hooks.');
+  // Ticket 1149: Nunchiro's own hooks are gone; the outward-action hook rides on every Codex start.
+  expect(log).not.toContain('hooks.SessionStart');
+  expect(log).toContain('hook outward --codex');
   await openAccounts(app);
   await openRow(app, 'Codex');
   await expect(row(app, 'codex').locator('[data-field="codex-args-note"]')).toContainText('cannot see when the agent waits');

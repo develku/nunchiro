@@ -64,8 +64,7 @@ for (const [agent, bytes, rowsBelow] of [
   ['hidden cursor parked two rows down (synthetic: follows the buffer cursor, V1A-36 no window fix)', CLAUDE + '\x1b[2B\x1b[?25l', 2],
 ] as const) {
   const where = rowsBelow ? 'sits at the buffer cursor' : 'sits at its caret';
-  test(`terminal: composing Hangul at the ${agent} input ${where} and sends nothing`, async ({ app, core, browserName }) => {
-    test.skip(browserName !== 'chromium', 'composition needs the CDP IME driver');
+  test(`terminal: composing Hangul at the ${agent} input ${where} and sends nothing`, { tag: '@chromium' }, async ({ app, core }) => {
     const a = core.replay(core.project('demo'), 'alpha', bytes);
     await openWindow(app);
     // The tty adds CR before each LF (onlcr), so the log is compared with itself, not with `bytes`.

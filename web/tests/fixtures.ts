@@ -7,6 +7,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const REPO = path.resolve(import.meta.dirname, '../..');
+/** Ticket 1150: a fake `codex` script (sh or python3) for a test, made to answer the core's question too. Before every
+ *  Codex start the core runs that Codex as `codex app-server ...` and asks which hooks it would run; only a Codex that
+ *  lists Nunchiro's outward hook, on and trusted, is started, and a fake that says nothing is refused like a real one
+ *  ("Codex did not say whether it runs Nunchiro's outward-action check"). So every fake `codex` a spec starts as a
+ *  session goes through here: its first line after `#!` hands that run to the shared answer script, which says yes.
+ *  (The Rust tests' twin is `home::codex_fake`; the copied fixtures `codex`, `codex-picker` and `claude-mode` answer
+ *  on their own.) */
+export function codexFake(script: string) {
+  const yes = path.join(REPO, 'crates/nunchiro-core/tests/fixtures/codex-app-server');
+  const cut = script.indexOf('\n');
+  if (!script.startsWith('#!') || cut < 0) return script;
+  const asked = script.slice(0, cut).includes('python')
+    ? `import os, sys\nif sys.argv[1:2] == ['app-server']: os.execv('${yes}', ['${yes}'])\n`
+    : `[ "$1" != app-server ] || exec '${yes}'\n`;
+  return script.slice(0, cut + 1) + asked + script.slice(cut + 1);
+}
 const BIN = path.join(REPO, 'target/debug/nunchiro');
 const SCRATCH = path.join(REPO, '.scratch') + path.sep;
 export const ORIGIN = `http://127.0.0.1:${process.env.NUNCHIRO_WEB_PORT ?? '4173'}`;

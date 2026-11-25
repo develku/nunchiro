@@ -92,7 +92,7 @@ impl Core {
         fs::create_dir_all(&codex).unwrap();
         fs::create_dir_all(home.join("u")).unwrap();
         if real.is_none() {
-            fs::write(bin.join("codex"), FAKE).unwrap();
+            fs::write(bin.join("codex"), home::codex_fake(FAKE)).unwrap();
             fs::set_permissions(bin.join("codex"), fs::Permissions::from_mode(0o700)).unwrap();
         }
         fs::write(

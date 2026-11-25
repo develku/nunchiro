@@ -8,7 +8,7 @@ import path from 'node:path';
 import { restartStart } from '../src/PermissionNeeded';
 import type { Session } from '../src/types';
 import { openRow } from './accounts-rows';
-import { expect, openWindow, test, type Core, stripOnTop } from './fixtures';
+import { expect, openWindow, test, type Core, stripOnTop, codexFake } from './fixtures';
 import { closeSettings, openSettings } from './settings-modal';
 
 test.beforeEach(({ core }) => stripOnTop(core));
@@ -28,7 +28,7 @@ function setup(core: Core, account: boolean) {
     ['claude', 'auth status'],
     ['codex', 'login status'],
   ])
-    fs.writeFileSync(path.join(core.home, 'bin', name), fake(name, status), { mode: 0o700 });
+    fs.writeFileSync(path.join(core.home, 'bin', name), codexFake(fake(name, status)), { mode: 0o700 });
   if (!account) return;
   fs.mkdirSync(path.join(core.home, 'accounts/claude', ID), { recursive: true, mode: 0o700 });
   fs.writeFileSync(path.join(core.home, 'accounts.toml'), `version = 1\n\n[[accounts]]\nagent = "claude"\nid = "${ID}"\nlabel = "${LABEL}"\n`);

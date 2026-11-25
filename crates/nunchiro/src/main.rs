@@ -170,11 +170,12 @@ fn run() -> Result<(), String> {
     {
         hook::home_lock(&home, &args[2..]);
     }
-    // Ticket 1130 S1: every Claude session's outward hook, decided here without the core.
+    // Ticket 1130 S1: every Claude session's outward hook, decided here without the core. Ticket 1149: Codex's
+    // (`--codex`) asks the core for the owner's card.
     if args.first().map(String::as_str) == Some("hook")
         && args.get(1).map(String::as_str) == Some("outward")
     {
-        hook::outward(&args[2..]);
+        hook::outward(&home, &args[2..]);
     }
     // Ticket 1036: Claude's status line command (the per-session settings name it); never fails the line.
     if args.first().map(String::as_str) == Some("hook")
@@ -968,22 +969,16 @@ fn ensure_core_from(home: &Path, start: Option<&Start>) -> Result<(), String> {
         // v2-13a: the core writes its own redacted, rotated logs/core.log; a pre-v2 core.log is left alone. Its
         // stderr is ours only while it starts, so a core that cannot open its logs still says why.
         .stderr(Stdio::piped());
-    // Detach the core from the invoking terminal without a second daemon binary.
-    use std::os::unix::process::CommandExt;
-    cmd.process_group(0);
-    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
-    let startup = child.stderr.take();
+    // Detach the core from the invoking terminal without a second daemon binary. Ticket 1154: and from the caller.
+    let (core, startup) = spawn_detached(&mut cmd)?;
     let until = Instant::now() + Duration::from_secs(5);
     while Instant::now() < until {
         if std::os::unix::net::UnixStream::connect(home.join("core.sock")).is_ok() {
-            // Closed now: the core's later mirror writes fail (EPIPE) instead of filling a pipe nobody reads.
-            drop(startup);
-            thread::spawn(move || {
-                let _ = child.wait();
-            });
+            // Closed now (as `startup` goes): the core's later mirror writes fail (EPIPE) instead of filling a pipe
+            // nobody reads.
             return Ok(());
         }
-        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+        if core.gone() {
             let mut reason = vec![];
             if let Some(err) = startup {
                 use std::io::Read;
@@ -996,15 +991,64 @@ fn ensure_core_from(home: &Path, start: Option<&Start>) -> Result<(), String> {
                 ""
             };
             return Err(format!(
-                "core startup failed ({status}): {}{hint}",
+                "core startup failed: {}{hint}",
                 nunchiro_core::logs::excerpt(String::from_utf8_lossy(&reason).trim())
             ));
         }
         thread::sleep(Duration::from_millis(20));
     }
-    let _ = child.kill();
-    let _ = child.wait();
+    core.kill();
     Err("core startup timed out".into())
+}
+/// Ticket 1154: a process started by `spawn_detached`, known to this one by the process group its middle process led
+/// (it is not this process's child). Round 2 (Codex P2): the middle process stays unreaped while this lives. Its pid
+/// is the group's id, and a zombie keeps that number from going to another process, so the group asked or stopped
+/// here is never someone else's. Dropping this reaps it, on every way out.
+struct Detached(std::process::Child);
+impl Detached {
+    fn group(&self) -> libc::pid_t {
+        -(self.0.id() as libc::pid_t)
+    }
+    /// No live process is left in the group. The unreaped middle process keeps the group itself, so the answer is
+    /// then EPERM (nothing there to signal), not ESRCH: any refusal means gone, since the program runs as this user.
+    fn gone(&self) -> bool {
+        // Safety: kill has no memory effects; a negative pid names a group.
+        unsafe { libc::kill(self.group(), 0) != 0 }
+    }
+    fn kill(&self) {
+        // Safety: as in `gone`.
+        unsafe { libc::kill(self.group(), libc::SIGKILL) };
+    }
+}
+impl Drop for Detached {
+    fn drop(&mut self) {
+        let _ = self.0.wait();
+    }
+}
+/// Ticket 1154: starts `cmd` outside the caller's session and process tree; returns it with its stderr when piped. A
+/// session's CLI call may be the one that starts the next core (in the gap of an update's or a restart's core swap),
+/// and every holder refuses a peer inside a session: by its session id, or as a child of a process inside one. Such
+/// a core got no session back for as long as it ran. So the program starts in a session of its own and is forked
+/// once more by a middle process that exits at once: launchd's child from its first moment.
+fn spawn_detached(
+    cmd: &mut Command,
+) -> Result<(Detached, Option<std::process::ChildStderr>), String> {
+    use std::os::unix::process::CommandExt;
+    // Safety: setsid, fork and _exit are async-signal-safe.
+    unsafe {
+        cmd.pre_exec(|| {
+            nunchiro_core::process::setsid()?;
+            match libc::fork() {
+                -1 => Err(std::io::Error::last_os_error()),
+                0 => Ok(()),
+                _ => libc::_exit(0),
+            }
+        })
+    };
+    // `spawn` returns once the program itself runs (or with the reason it could not).
+    let mut middle = cmd.spawn().map_err(|e| e.to_string())?;
+    let startup = middle.stderr.take();
+    Ok((Detached(middle), startup))
 }
 // v1a-23: `nunchiro permission-answers on|off [--project DIR]`; from inside a session `on` waits for the owner.
 fn permission_answers(home: &Path, args: &[String]) -> Result<(), String> {
@@ -1260,6 +1304,55 @@ fn parse(args: &[String]) -> Result<Request, String> {
 
 #[cfg(test)]
 mod tests {
+    // Ticket 1154 round 2 (Codex P2): the group a detached start is asked and stopped by stays this start's own. The
+    // middle process is kept as a zombie (its pid, the group's id, cannot go to another process) while the program
+    // is not this process's child; it reads as gone only once the program ended, and is reaped when the handle goes.
+    #[test]
+    fn a_detached_start_holds_its_group_id_until_it_is_dropped() {
+        // An exited child that is not reaped yet (WNOWAIT leaves it so); false once reaped (ECHILD).
+        let unreaped = |pid: u32| {
+            let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+            let flags = libc::WEXITED | libc::WNOHANG | libc::WNOWAIT;
+            // Safety: info is a valid, zeroed siginfo_t that waitid fills.
+            let answer = unsafe { libc::waitid(libc::P_PID, pid as libc::id_t, &mut info, flags) };
+            answer == 0 && info.si_pid == pid as libc::pid_t
+        };
+        let wait = |what: &str, ok: &dyn Fn() -> bool| {
+            let until = Instant::now() + Duration::from_secs(10);
+            while !ok() {
+                assert!(Instant::now() < until, "timed out: {what}");
+                thread::sleep(Duration::from_millis(10));
+            }
+        };
+        let mut cmd = Command::new("/bin/sleep");
+        cmd.arg("30").stderr(Stdio::piped());
+        let (sleep, startup) = spawn_detached(&mut cmd).unwrap();
+        assert!(startup.is_some());
+        let middle = sleep.0.id();
+        wait("the middle process exits", &|| unreaped(middle));
+        // The program runs in the middle's group, as launchd's child: `pgrep -g` lists it, `ps` names its parent.
+        let members = || {
+            let out = Command::new("/usr/bin/pgrep")
+                .args(["-g", &middle.to_string()])
+                .output()
+                .unwrap();
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        let program = members();
+        assert!(!program.is_empty() && !program.contains('\n'), "{program}");
+        let parent = Command::new("/bin/ps")
+            .args(["-o", "ppid=", "-p", &program])
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&parent.stdout).trim(), "1");
+        assert!(!sleep.gone());
+        sleep.kill();
+        wait("the program is gone", &|| sleep.gone());
+        // Still held: the id is not free for another group while the handle lives.
+        assert!(unreaped(middle));
+        drop(sleep);
+        assert!(!unreaped(middle), "the middle process is reaped");
+    }
     #[test]
     fn the_default_home_is_the_user_one_for_release_and_beside_the_binary_for_debug() {
         let exe = Path::new("/w/target/debug/nunchiro");

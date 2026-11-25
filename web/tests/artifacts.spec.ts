@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { REPO, stripOnTop } from './fixtures';
+import { stripOnTop } from './fixtures';
 import { installHost, showFrame } from './fixtures/artifacts/cards/host';
 import { append, chat, expect, openChat, rec, test as chatTest } from './fixtures/chat/harness';
 import { artifactServer } from './sandbox-server';
@@ -501,29 +501,4 @@ test('artifacts Preview opens in the side pane and leaves the Diff sidebar alone
   await expect(page.locator('[data-side-pane] .preview .pv-frame')).toBeVisible();
   await expect(side).toHaveText('Diff'); // Diff stays; Preview has no bar slot
   await expect(page.getByRole('button', { name: 'Preview', exact: true })).toHaveCount(0);
-});
-
-test('artifacts screens', async ({ page, chatCore }, info) => {
-  test.skip(info.project.name !== 'chromium' || !process.env.SHOTS, 'run with SHOTS=1');
-  const out = path.join(REPO, '.scratch/shots');
-  fs.mkdirSync(out, { recursive: true });
-  const s = chatCore.chat('core-serve');
-  append(
-    s.file,
-    rec.user('세션 종료 순서를 그림으로 정리해줘'),
-    rec.assistant('정리한 페이지를 만들었습니다.'),
-    written(s, 'w1', 'docs/reap-order.html', page1('Reap order', '<h2 style="font:600 15px system-ui">reap 순서</h2><ol style="font:13px system-ui"><li>retire group</li><li>reap pid</li><li>close PTY</li></ol>')),
-    written(s, 'w2', 'docs/reap-order.md', '# 프로세스 그룹 정리 순서\n\n1. retire\n2. reap\n'),
-    rec.assistant('완료.'),
-  );
-  await openChat(page, s.id);
-  await expect(card(page, s.id, 'docs/reap-order.html')).toHaveAttribute('data-state', 'ready');
-  await page.screenshot({ path: path.join(out, 'artifacts-1-cards.png') });
-  await card(page, s.id, 'docs/reap-order.html').getByRole('button', { name: 'Open' }).click();
-  await expect(page.locator('.preview .pv-frame iframe')).toBeVisible();
-  await page.waitForTimeout(300);
-  await page.screenshot({ path: path.join(out, 'artifacts-2-preview.png') });
-  await card(page, s.id, 'docs/reap-order.md').getByRole('button', { name: 'Open' }).click();
-  await expect(page.locator('.preview .pv-body h1')).toBeVisible();
-  await page.screenshot({ path: path.join(out, 'artifacts-3-preview-md.png') });
 });

@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { agentsToml, entryHash, fakeAcp, ownerOk, tomlEntry } from './acp-fakes';
 import { openAdd, openRow } from './accounts-rows';
-import { expect, openWindow, test, type Core } from './fixtures';
+import { expect, openWindow, test, type Core, codexFake } from './fixtures';
 import { openSettings } from './settings-modal';
 
 // Inherited by the fixture's core (fixtures.ts keeps every variable but its own prefixes).
@@ -79,7 +79,7 @@ test('failed_row_recheck: the cause fixed outside the app, Check again returns t
 });
 
 test('failed_login_row: Codex after a login tab ended unsigned has the same actions', async ({ app, core }) => {
-  fs.writeFileSync(path.join(core.home, 'bin/codex'), `#!/bin/sh\ncase "$1" in --version) echo "codex 0.161.0"; exit 0;; login) [ "$2" = status ] && { [ -e "$CODEX_HOME/.in" ] && { echo 'Logged in using ChatGPT' >&2; exit 0; }; echo 'Not logged in' >&2; exit 1; }; exit 0;; esac\nexec /bin/cat\n`, { mode: 0o700 });
+  fs.writeFileSync(path.join(core.home, 'bin/codex'), codexFake(`#!/bin/sh\ncase "$1" in --version) echo "codex 0.161.0"; exit 0;; login) [ "$2" = status ] && { [ -e "$CODEX_HOME/.in" ] && { echo 'Logged in using ChatGPT' >&2; exit 0; }; echo 'Not logged in' >&2; exit 1; }; exit 0;; esac\nexec /bin/cat\n`), { mode: 0o700 });
   core.shell(core.project('demo'), 'alpha');
   await accounts(app);
   await openRow(app, 'Codex');

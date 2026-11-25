@@ -2,7 +2,7 @@
 // talk in the room; the panel shows their thread; the person writes to the lead, and the lead's `agent check` gets it as the person's.
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, nunchiro, openWindow, REPO, test, type Core } from './fixtures';
+import { expect, nunchiro, openWindow, test, type Core } from './fixtures';
 import { seatNames, seatsOf } from '../src/room/room';
 import type { Session } from '../src/types';
 import type { TaskView } from '../src/lead/tasks';
@@ -164,27 +164,6 @@ test('room: a log moved aside starts again; the old pins and the old log are gon
   await expect(app.locator('.room-thread[data-thread="fresh"]')).toBeVisible();
   await expect(app.locator('.room-thread[data-thread="old"]')).toHaveCount(0);
   await expect(app.locator('.room-pinned')).toHaveCount(0); // m1 of the new log is not the pinned message
-});
-
-// Screenshots for the report, next to the mockup: ROOM_SHOTS=1 (not part of a normal run).
-test('room: shots', async ({ app, core }, info) => {
-  test.skip(!process.env.ROOM_SHOTS || info.project.name !== 'chromium', 'ROOM_SHOTS=1');
-  const { lead, worker, rev } = await room(core);
-  as(core, lead, 'send', '--to', worker.id, '--thread', 'keychain', 'Move the account token to the keychain. Brief in brief-571.md');
-  as(core, worker, 'ask', '--to', lead.id, '--thread', 'keychain', 'Delete the old file token or keep it?');
-  as(core, rev, 'send', '--to', worker.id, '--thread', 'review', 'The path check follows symlinks (store.rs:88). Please check.');
-  as(core, worker, 'send', '--to', rev.id, '--thread', 'review', 'A link cannot come from a keychain path. The check is too much.');
-  as(core, worker, 'ask', '--to', 'person', '--thread', 'review', 'Reviewer wants a symlink test. Add it?');
-  await openWindow(app, {}, core);
-  await app.locator('[data-room-tab]').click();
-  await app.locator('.room-msg').last().getByRole('button', { name: /^Pin/ }).click();
-  const dir = path.join(REPO, '.scratch/room-shots-571c');
-  fs.mkdirSync(dir, { recursive: true });
-  for (const scheme of ['light', 'dark'] as const) {
-    await app.emulateMedia({ colorScheme: scheme });
-    await app.waitForTimeout(300);
-    await app.screenshot({ path: path.join(dir, `room-${scheme}.png`) });
-  }
 });
 
 test('room: a seat that ends with an ask open leaves a lost event in the thread', async ({ app, core }) => {

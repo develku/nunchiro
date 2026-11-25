@@ -73,7 +73,7 @@ impl Core {
             ("codex", "codex-cli 0.161.0"),
         ] {
             let body = FAKE.replace("$VERSION_TEXT", version);
-            fs::write(bin.join(name), body).unwrap();
+            fs::write(bin.join(name), home::codex_fake(&body)).unwrap();
             fs::set_permissions(bin.join(name), fs::Permissions::from_mode(0o700)).unwrap();
         }
         let project = home.join("proj");

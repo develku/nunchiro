@@ -30,9 +30,19 @@ impl Shim {
             dylib: dir.join("hold.dylib"),
             dir,
         };
+        // Ticket 1142: only the core loads the shim. Without this its sessions inherit DYLD_INSERT_LIBRARIES, and on a
+        // host without SIP (GitHub's macOS runners) even /bin/sh and /bin/cat load it and die: "incompatible
+        // architecture" (they are arm64e, the shim arm64).
+        let own = shim.dir.join("only-this-process.c");
+        fs::write(
+            &own,
+            "#include <stdlib.h>\n__attribute__((constructor)) static void only_this_process(void) { unsetenv(\"DYLD_INSERT_LIBRARIES\"); }\n",
+        )
+        .unwrap();
         let compile = std::process::Command::new("cc")
             .args(["-dynamiclib", "-Wall", "-Wextra", "-Werror"])
             .arg(source)
+            .arg(&own)
             .arg("-o")
             .arg(&shim.dylib)
             .env("TMPDIR", &shim.dir)

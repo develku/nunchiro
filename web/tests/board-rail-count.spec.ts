@@ -64,8 +64,7 @@ test('board_rail_count_updates_live_and_caps', async ({ app, core }: { app: Page
 // The number reads on the orange in every theme: a canvas turns the computed colours (oklch included) into sRGB, then WCAG contrast.
 const catalog = (name: string) => ({ id: `catalog:${name}`, name, colors: parseGhostty(THEMES[name]) });
 for (const pick of [LIGHT_PICK, DARK_PICK, catalog('Catppuccin Latte'), catalog('Catppuccin Mocha')])
-  test(`board_rail_count_number_reads_on_orange: ${pick.name}`, async ({ app, core }, info) => {
-    test.skip(info.project.name !== 'chromium', 'one browser is enough for computed colours');
+  test(`board_rail_count_number_reads_on_orange: ${pick.name}`, { tag: '@chromium' }, async ({ app, core }) => {
     seed(core, asking(2));
     await app.addInitScript((p) => localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ themeMode: 'fixed', themeFixed: p })), pick);
     await openWindow(app, {}, core);
@@ -131,8 +130,7 @@ palette = 15=#fdf6e3
 const imported = (name: string, ghostty: string) => ({ id: `imported:${name}`, name, colors: parseGhostty(ghostty), source: `https://example.invalid/${encodeURIComponent(name)}` });
 const shotsDir = process.env.SHOTS_DIR;
 for (const pick of [imported('Dracula', DRACULA), imported('Solarized Light', SOLARIZED_LIGHT), DARK_PICK])
-  test(`board_rail_badge_three_themes: ${pick.name}`, async ({ app, core }, info) => {
-    test.skip(info.project.name !== 'chromium', 'one browser is enough for shots');
+  test(`board_rail_badge_three_themes: ${pick.name}`, { tag: '@chromium' }, async ({ app, core }) => {
     seed(core, asking(3));
     await app.addInitScript((p) => localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ themeMode: 'fixed', themeFixed: p })), pick);
     await openWindow(app, {}, core);

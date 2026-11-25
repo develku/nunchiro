@@ -6,7 +6,7 @@ import type { Problem, ProblemCase, Session } from '../src/types';
 import { causeText } from '../src/chat/problemCause';
 import { agentsToml, fakeAcp, ownerOk, owner, tomlEntry } from './acp-fakes';
 import { makeT } from './i18n-tables';
-import { stripOnTop, expect, test, type Core } from './fixtures';
+import { stripOnTop, expect, test, type Core, codexFake } from './fixtures';
 
 // What the core writes (crates/nunchiro-core/src/problems.rs) and who the session names, one row per sentence.
 type Row = { p: Problem; who: Parameters<typeof causeText>[2]; en: string };
@@ -67,7 +67,7 @@ test.describe('ko-KR window', () => {
   const snapshot = (core: Core) => core.cli('snapshot', '--json').sessions as Session[];
   function fake(core: Core, name: 'claude' | 'codex', text: string, code: number) {
     const script = `#!/bin/sh\nif [ "$1" = --version ]; then echo '${name === 'codex' ? 'codex-cli 0.161.0' : '2.1.310 (Claude Code)'}'; exit; fi\nprintf '%s\\r\\n' '${text.replaceAll("'", "'\\''")}'\nsleep 0.2\nexit ${code}\n`;
-    fs.writeFileSync(path.join(core.home, 'bin', name), script, { mode: 0o700 });
+    fs.writeFileSync(path.join(core.home, 'bin', name), codexFake(script), { mode: 0o700 });
   }
   const band = (app: import('@playwright/test').Page) => app.locator('.problem-band');
   // fixtures.openWindow waits for the English "Connected"; this window reads Korean.

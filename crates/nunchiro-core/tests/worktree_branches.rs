@@ -26,6 +26,12 @@ fn git_in(dir: &Path, args: &[&str], stdin: Option<&str>) -> String {
             "user.name=Fixture",
             "-c",
             "user.email=f@example.invalid",
+            // Ticket 1142: no detached auto-maintenance from the fixture's commit; on CI its objects/maintenance.lock
+            // was still there when the "nothing was created" snapshot was taken.
+            "-c",
+            "gc.auto=0",
+            "-c",
+            "maintenance.auto=false",
         ])
         .args(args)
         .stdin(Stdio::piped())

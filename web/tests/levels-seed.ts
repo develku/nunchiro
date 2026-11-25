@@ -3,10 +3,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { agentsToml, fakeAcp, ownerOk, tomlEntry } from './acp-fakes';
-import { type Core, expect } from './fixtures';
+import { type Core, expect, codexFake } from './fixtures';
 
 /** A Codex that answers `--version` and then idles at a prompt, as the fake Claude does. */
-export const fakeCodex = (core: Core) => fs.writeFileSync(path.join(core.home, 'bin', 'codex'), "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'codex-cli 0.161.0'; exit; fi\nprintf '\\342\\200\\272 \\n'\nexec cat\n", { mode: 0o700 });
+export const fakeCodex = (core: Core) => fs.writeFileSync(path.join(core.home, 'bin', 'codex'), codexFake("#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'codex-cli 0.161.0'; exit; fi\nprintf '\\342\\200\\272 \\n'\nexec cat\n"), { mode: 0o700 });
 
 /** An approved ACP agent `name` (the core's fake: models Fast and Smart, thinking levels Low and High). It runs once in
  *  a project of its own and is closed, so the core has its lists on record, as after a user's first session with it. */

@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { openRow } from './accounts-rows';
 import { agentsToml, fakeAcp, ownerOk, tomlEntry } from './acp-fakes';
-import { stripOnTop, expect, openWindow, test, type Core } from './fixtures';
+import { stripOnTop, expect, openWindow, test, type Core, codexFake } from './fixtures';
 import { openSettings } from './settings-modal';
 
 test.beforeEach(({ core }) => stripOnTop(core));
@@ -31,7 +31,7 @@ exec /bin/cat
 `;
 function setup(core: Core) {
   fs.writeFileSync(path.join(core.home, 'bin/claude'), CLAUDE, { mode: 0o700 });
-  fs.writeFileSync(path.join(core.home, 'bin/codex'), CODEX, { mode: 0o700 });
+  fs.writeFileSync(path.join(core.home, 'bin/codex'), codexFake(CODEX), { mode: 0o700 });
   fs.mkdirSync(path.join(core.home, 'accounts/claude', ID), { recursive: true, mode: 0o700 });
   fs.writeFileSync(path.join(core.home, 'accounts.toml'), `version = 1\n\n[[accounts]]\nagent = "claude"\nid = "${ID}"\nlabel = "work"\n`);
 }

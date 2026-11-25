@@ -2,7 +2,7 @@
 import type { Locator, Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, type Core } from './fixtures';
+import { expect, type Core, codexFake } from './fixtures';
 
 /** Accounts probe 11-10 round 2: wraps the fake `claude` and `codex` in the test's bin so each status run records, in
  *  `status-runs.log` under the core home, the folder it was pointed at, its exit code and the first 200 bytes of what it
@@ -14,7 +14,7 @@ export function recordStatusRuns(core: Core) {
     fs.renameSync(bin, `${bin}.real`);
     fs.writeFileSync(
       bin,
-      `#!/bin/sh
+      codexFake(`#!/bin/sh
 case "$1 $2" in
   "auth status"|"login status")
     t=$(mktemp -d /tmp/nsr.XXXXXX)
@@ -23,7 +23,7 @@ case "$1 $2" in
     cat "$t/o"; cat "$t/e" >&2; rm -rf "$t"; exit "$c";;
 esac
 exec '${bin}.real' "$@"
-`,
+`),
       { mode: 0o700 },
     );
   }

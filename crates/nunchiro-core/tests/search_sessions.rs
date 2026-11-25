@@ -35,7 +35,7 @@ impl Core {
             fs::create_dir_all(home.join("bin")).unwrap();
             fs::write(
                 &path,
-                format!("#!/bin/sh\nif [ \"$1\" = --version ]; then echo '{version}'; exit; fi\nexec sleep 600\n"),
+                home::codex_fake(&format!("#!/bin/sh\nif [ \"$1\" = --version ]; then echo '{version}'; exit; fi\nexec sleep 600\n")),
             )
             .unwrap();
             fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();

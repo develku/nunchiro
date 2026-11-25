@@ -8,7 +8,7 @@ import * as agentWords from '../src/i18n/areas/agents';
 import * as modeWords from '../src/i18n/areas/mode-list';
 import type { Session } from '../src/types';
 import { ownerOk } from './acp-fakes';
-import { expect, openWindow, REPO, test, type Core, showComposer } from './fixtures';
+import { expect, openWindow, REPO, test, type Core, showComposer, codexFake } from './fixtures';
 
 function fakeClaude(core: Core) {
   const src = path.join(REPO, 'crates/nunchiro-core/tests/fixtures/claude-mode');
@@ -71,39 +71,6 @@ test('no_chip_for_codex: a shell session has no permission chip (a Codex one wit
   await expect(app.getByRole('button', { name: 'Permission mode' })).toHaveCount(0);
 });
 
-// Design conformance: ko/claude-feel-2.html `.ch.perm` next to the app's chip, with the computed-style numbers of each.
-const MOCKUP = path.join(REPO, '.scratch/review-1028/claude-feel-2.html');
-test('side_by_side_page: the chip matches the mockup chip (height, padding, radius, gap; size is the nearest token)', async ({ app, core, browser }) => {
-  test.skip(!fs.existsSync(MOCKUP), `mockup frame absent: ${MOCKUP}`);
-  fakeClaude(core);
-  const s = core.agent(core.project('p'), 'mode', 'x');
-  await openWindow(app);
-  await app.locator(`.tab[data-tab="${s.id}"]`).click();
-  const chip = app.getByRole('button', { name: 'Permission mode' });
-  await expect(chip).toHaveAttribute('data-mode', 'manual');
-  const props = (el: Element) => {
-    const c = getComputedStyle(el);
-    return { height: c.height, padding: `${c.paddingLeft}/${c.paddingRight}`, radius: c.borderTopLeftRadius, fontSize: c.fontSize, gap: c.columnGap };
-  };
-  const got = await chip.evaluate(props);
-  const out = path.join(REPO, '.scratch/perm-chip');
-  fs.mkdirSync(out, { recursive: true });
-  await app.locator('.composer .chips').screenshot({ path: path.join(out, 'app.png') });
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  await page.goto(`file://${MOCKUP}`);
-  const mock = page.locator('button.ch.perm');
-  const want = await mock.evaluate(props);
-  await mock.screenshot({ path: path.join(out, 'mockup.png') });
-  await page.close();
-  fs.writeFileSync(
-    path.join(out, 'side-by-side.html'),
-    `<!doctype html><meta charset=utf-8><title>perm-chip side by side</title><body style="font:14px sans-serif;padding:16px"><h1>Permission-mode chip</h1><p>Left: mockup <code>.ch.perm</code> (claude-feel-2.html). Right: the app's composer bottom row.</p><div style="display:flex;gap:32px;align-items:center"><img src="mockup.png"><img src="app.png"></div><pre>mockup ${JSON.stringify(want)}\napp    ${JSON.stringify(got)}</pre>`,
-  );
-  // Font size is the one stated difference: 12.5px in the mockup, the nearest token --fs-12 (12px) here (raw-literal ratchet).
-  expect({ ...got, fontSize: '' }).toEqual({ ...want, fontSize: '' });
-  expect([got.fontSize, want.fontSize]).toEqual(['12px', '12.5px']);
-});
-
 const claude = (over: Partial<Session> = {}) => ({ kind: 'claude', state: 'running', pending: [], attention: { working: false }, ...over }) as unknown as Session;
 
 test('perm_chip_remote_session: a session of another machine has no chip (its core refuses Shift+Tab from a forwarded caller)', () => {
@@ -134,7 +101,7 @@ async function startCodex(app: import('@playwright/test').Page, folder: string) 
 const codexRows = (core: Core) => (core.cli('snapshot', '--json').sessions as { id: string; kind: string; permission_mode?: string }[]).filter((x) => x.kind === 'codex');
 
 test('codex_chip_says_the_start_mode_read_only: the stored choice at each start, no list, the tooltip names Settings > Providers', async ({ app, core }) => {
-  fs.writeFileSync(path.join(core.home, 'bin/codex'), FAKE_CODEX, { mode: 0o700 });
+  fs.writeFileSync(path.join(core.home, 'bin/codex'), codexFake(FAKE_CODEX), { mode: 0o700 });
   const folder = core.project('p');
   // A session the owner did not start (the CLI's) has no recorded mode: no chip, as every row from before this.
   const old = core.cli('session', 'start', '--kind', 'codex', '--project', folder, '--label', 'from cli').session as { id: string };

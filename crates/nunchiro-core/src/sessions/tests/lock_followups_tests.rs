@@ -79,7 +79,7 @@ fn a_locked_seat_gets_no_login_shell_or_core_variable() {
     cmd.env("CLAUDE_CONFIG_DIR", "/own/claude");
     cmd.env("CODEX_HOME", "/own/codex");
     cmd.env("W35_DROPPED", "1");
-    core.seat_env(&mut cmd, true);
+    Sessions::seat_env(&core.settings, &mut cmd, true);
     assert_eq!(
         cmd.get_env("CLAUDE_CONFIG_DIR"),
         Some("/own/claude".as_ref())
@@ -129,6 +129,7 @@ fn codex_hooks_check_is_read_with_the_launch_not_under_the_lock() {
     // The start under the lock: a check there would panic.
     let mut launch = plain(&core);
     (launch.codex_read_only, launch.codex_hooks_clear) = (Some(false), Some(true));
+    launch.ask_codex().unwrap(); // ticket 1150: asked off the lock too, as `prepare` does
     IN_HOOKS_CHECK.set(Some(Box::new(|| {
         panic!("the hook check ran under the registry lock")
     })));
@@ -144,6 +145,7 @@ fn codex_hooks_check_is_read_with_the_launch_not_under_the_lock() {
 // behind for a later switch.
 #[test]
 fn codex_switch_reads_the_hooks_check_off_the_lock() {
+    fake_agents(); // ticket 1150: the switch asks its Codex before the restart; never the installed one
     let home = scratch("codexswitch");
     let mut core = Sessions::open(&home).unwrap();
     let id = cat_as(&mut core, &home, AgentKind::Codex);

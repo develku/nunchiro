@@ -149,8 +149,8 @@ test('tree_menu_new_worktree_uses_clicked_project: a stale selected worktree of 
 test('session_worktree_row_has_actions: a `session start --worktree` row: labelled, ⋯ reaches Rename and Remove (dirty: Cancel, Discard; ignored files listed)', async ({ app, core }) => {
   const p = repo(core);
   core.shell(p, 'main-shell');
+  // Ticket 1063: a worktree row whose sessions are all closed leaves the tree, so its session stays open here.
   const a = core.agent(p, 'fix login', 'go', true);
-  core.cli('session', 'close', a.id);
   fs.writeFileSync(path.join(p, '.git/info/exclude'), '.env\n');
   fs.writeFileSync(path.join(a.cwd, 'lost.txt'), 'x');
   fs.writeFileSync(path.join(a.cwd, '.env'), 'SECRET=1');
@@ -169,6 +169,9 @@ test('session_worktree_row_has_actions: a `session start --worktree` row: labell
   await more.click();
   await menu.getByRole('menuitem', { name: /^Remove worktree/ }).click();
   const sheet = app.getByRole('alertdialog');
+  // Its session runs, so the first sheet stops it; the files it would lose are asked about next.
+  await expect(sheet.getByRole('button')).toHaveText(['Cancel', 'Stop 1 session and remove']);
+  await sheet.getByRole('button', { name: 'Stop 1 session and remove' }).click();
   await expect(sheet.getByRole('button')).toHaveText(['Cancel', 'Discard and remove']);
   await expect(sheet.getByRole('region', { name: 'Git-ignored, deleted too' })).toContainText('!! .env');
   await expect(sheet.getByRole('region', { name: 'Lost if discarded' })).toContainText('?? lost.txt');
@@ -248,33 +251,4 @@ test('remove_refused_while_session_runs: Backspace and the menu ask to stop the 
   expect(fs.existsSync(a.cwd)).toBe(true);
   expect(git(p, 'worktree', 'list')).toContain(a.cwd);
   expect(core.cli('snapshot', '--json').sessions as { id: string; state: string }[]).toContainEqual(expect.objectContaining({ id: a.id, state: 'running' }));
-});
-
-test('shots: per-row crops, mockup and app, for the REPORT side-by-side page', async ({ app, core, browserName }) => {
-  test.skip(browserName !== 'chromium' || !process.env.WT_SHOTS, 'screenshots only on request');
-  const p = repo(core);
-  core.shell(p, 'main-shell');
-  const a = core.agent(p, 'fix login', 'go', true);
-  core.cli('session', 'close', a.id);
-  managed(core, p, 'feature-x');
-  await openWindow(app);
-  const out = path.resolve(import.meta.dirname, '../../.scratch/cf3');
-  fs.mkdirSync(out, { recursive: true });
-  const grp = app.locator('.grp[data-project="repo"]');
-  await grp.locator('.row.head').hover();
-  await grp.screenshot({ path: path.join(out, 'app-rows.png') });
-  await wtRows(app).filter({ hasText: 'feature-x' }).hover();
-  await grp.screenshot({ path: path.join(out, 'app-row-more.png') });
-  await wtRows(app).filter({ hasText: 'feature-x' }).click({ button: 'right' });
-  await expect(app.getByRole('menu', { name: 'Actions' })).toBeVisible();
-  await app.locator('.cmenu').screenshot({ path: path.join(out, 'app-menu.png') });
-  const m = await app.context().newPage();
-  await m.setViewportSize({ width: 1440, height: 1000 });
-  const drafts = path.resolve(import.meta.dirname, '../../.scratch/v2-drafts');
-  test.skip(!fs.existsSync(drafts), `mockup frames absent: ${drafts}`);
-  await m.goto(`file://${drafts}/07-worktrees-pr.html`);
-  const f7 = (await m.locator('#o7a .frame').first().boundingBox())!;
-  await m.screenshot({ path: path.join(out, 'mock-rows.png'), clip: { x: f7.x, y: f7.y + 36, width: 300, height: 300 }, fullPage: true });
-  await m.goto(`file://${drafts}/05-context-undo.html`);
-  await m.locator('#o5a .menu').first().screenshot({ path: path.join(out, 'mock-menu.png') });
 });

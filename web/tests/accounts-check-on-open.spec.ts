@@ -5,7 +5,7 @@
 import type { Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, openWindow, test, type Core } from './fixtures';
+import { expect, openWindow, test, type Core, codexFake } from './fixtures';
 import { closeSettings, openSettings } from './settings-modal';
 
 const ID = '0123456789abcdef0123456789abcdef';
@@ -25,7 +25,7 @@ exec /bin/cat
 function setup(core: Core) {
   const bin = path.join(core.home, 'bin');
   fs.writeFileSync(path.join(bin, 'claude'), fake(core.home, 'claude', 'CLAUDE_CONFIG_DIR', 'auth status', `echo '{"loggedIn": true}'`, `echo '{"loggedIn": false}'`), { mode: 0o700 });
-  fs.writeFileSync(path.join(bin, 'codex'), fake(core.home, 'codex', 'CODEX_HOME', 'login status', `echo 'Logged in using ChatGPT' >&2`, `echo 'Not logged in' >&2`), { mode: 0o700 });
+  fs.writeFileSync(path.join(bin, 'codex'), codexFake(fake(core.home, 'codex', 'CODEX_HOME', 'login status', `echo 'Logged in using ChatGPT' >&2`, `echo 'Not logged in' >&2`)), { mode: 0o700 });
   // Claude's own login is signed in, Codex's is not; one added Claude account, signed out.
   for (const dir of ['claude-home', 'codex-home', `accounts/claude/${ID}`]) fs.mkdirSync(path.join(core.home, dir), { recursive: true, mode: 0o700 });
   fs.writeFileSync(path.join(core.home, 'claude-home', '.logged-in'), '');

@@ -32,8 +32,7 @@ function proxy(from: number, to: number) {
   return server;
 }
 
-test('browser-insecure-context-loads', async ({ app, browser, browserName }) => {
-  test.skip(browserName !== 'chromium', 'host-resolver-rules is a Chromium switch');
+test('browser-insecure-context-loads', { tag: '@chromium' }, async ({ app, browser }) => {
   const port = await freePort();
   const front = await freePort();
   const server = proxy(front, port);

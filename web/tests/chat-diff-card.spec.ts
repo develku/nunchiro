@@ -456,8 +456,7 @@ test2('chat diff card: a just-shown card ignores an immediate click, then answer
   expect((await answers(page)).length).toBe(1);
 });
 
-test2('chat diff card: a Hangul IME composition keydown never answers', async ({ page, cc, browserName }) => {
-  test.skip(browserName !== 'chromium', 'IME composition through CDP');
+test2('chat diff card: a Hangul IME composition keydown never answers', { tag: '@chromium' }, async ({ page, cc }) => {
   const s = cc.card();
   await openChat(page, s.id);
   const card = chat(page, s.id).locator('.dcard');

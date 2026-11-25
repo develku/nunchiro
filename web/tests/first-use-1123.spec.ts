@@ -6,6 +6,9 @@ import path from 'node:path';
 import { expect, openWindow, test, type Core } from './fixtures';
 import { ownerOk } from './acp-fakes';
 
+// The Folder list shows the home folder as ~ (settings/shell/Row.tsx `tilde`); a checkout under /Users/<name> shows it so.
+const tilde = (p: string) => p.replace(/^\/(Users|home)\/[^/]+/, '~');
+
 const SHOTS = path.resolve(import.meta.dirname, '../../.scratch/first-use-1123');
 // The copy's own folders are masked: the shots are committed, and a test home's path names this machine.
 const shot = (app: Page, name: string) => app.screenshot({ path: path.join(SHOTS, name + '.png'), mask: [app.locator('.ext-dir')] });
@@ -56,7 +59,7 @@ test.describe('first run', () => {
     await app.goto('/');
     const folder = quick(app).getByRole('combobox', { name: 'Folder' });
     await expect(folder).toHaveValue(newer, { timeout: 15_000 });
-    await expect(folder.locator('option')).toHaveText(['my-app (' + newer + ')', 'api-server (' + older + ')', 'Choose folder…']);
+    await expect(folder.locator('option')).toHaveText([`my-app (${tilde(newer)})`, `api-server (${tilde(older)})`, 'Choose folder…']);
     await expect(quick(app).locator('.ob-sel')).toContainText('last used with Claude, 2 days ago');
     const prompt = quick(app).getByRole('textbox', { name: 'First prompt' });
     await expect(prompt).toBeFocused();
@@ -174,6 +177,7 @@ test.describe('existing', () => {
     await expect(own.locator('[data-field="mcp-problem"]')).toContainText('remote (http or sse)');
     await command.fill('claude mcp add my-server -e API_KEY=s3cret-value -- /bin/echo hi');
     await expect(own.locator('[data-field="mcp-env"]')).toHaveText('Not added: the values of API_KEY. Servers added here get no environment values.');
+    await expect(own.getByRole('button', { name: 'Add for Nunchiro sessions' })).toBeEnabled(); // off while the first read is busy
     await command.press('Enter');
     await expect(own.getByRole('status').filter({ hasText: 'Added my-server' })).toBeVisible({ timeout: 15_000 });
     expect(ownerOk(core, { op: 'extensions_list' }).own).toEqual([expect.objectContaining({ name: 'my-server', command: ['/bin/echo', 'hi'] })]);
@@ -189,6 +193,8 @@ test.describe('existing', () => {
     await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name: 'Skills & hooks' }).click();
     const own = app.locator('[data-mcp="own"]');
     await own.getByRole('textbox', { name: 'Command' }).fill('/bin/echo hi');
+    // Enter submits only once Add is pressable (it is off while the page's first read is busy).
+    await expect(own.getByRole('button', { name: 'Add for Nunchiro sessions' })).toBeEnabled();
     await own.getByRole('textbox', { name: 'Command' }).press('Enter');
     const restart = own.getByRole('button', { name: /^Restart .* with it$/ });
     await expect(restart).toBeDisabled();

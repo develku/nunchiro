@@ -1,0 +1,10 @@
+#!/bin/sh
+# What a fake `codex` of the tests runs when the core starts it as `codex app-server ...` (ticket 1150). Before every
+# Codex start the core asks that same Codex which hooks it would run (`initialize`, then `hooks/list`) and starts it
+# only when Nunchiro's outward hook is listed, on and trusted; a fake that says nothing is refused like a real Codex.
+# These are the two answers of codex-cli 0.161.0 for that case, cut to what the core reads; it numbers its requests 1
+# and 2 itself. Then it reads until the core ends it.
+# A fake script carries one line for this (Rust: `home::CODEX_ASKED`; web: `CODEX_ASKED` of tests/fixtures.ts):
+#   [ "$1" != app-server ] || exec '<this file>'
+printf '%s\n' '{"id":1,"result":{}}' '{"id":2,"result":{"data":[{"hooks":[{"key":"/<session-flags>/config.toml:pre_tool_use:0:0","enabled":true,"trustStatus":"trusted"}]}]}}'
+exec cat >/dev/null

@@ -40,7 +40,7 @@ impl Core {
                 "cat screen.txt",
                 "printf '%s\\n' \"$@\" > argv.txt\ncat screen.txt",
             );
-        fs::write(home.join("codex"), codex).unwrap();
+        fs::write(home.join("codex"), home::codex_fake(&codex)).unwrap();
         fs::write(
             home.join("settings.json"),
             serde_json::json!({"disable_hook_injection":disable}).to_string(),
@@ -446,6 +446,174 @@ fn bad_transcript_does_not_disable_screen_or_shutdown() {
     assert!(item.sources.contains("screen"));
     core.request(Request::Stop).unwrap();
 }
+/// Ticket 1149: a Codex start with its own arguments (so none of Nunchiro's other hooks) still gets the outward hook,
+/// and the hook itself (`nunchiro hook outward --codex`, as Codex runs it before a tool) holds for the card. Codex has
+/// no "ask" and lets a tool run when a hook fails, so everything but the owner's allow is a deny: no window to ask,
+/// a deny on the card. An outward card is never one "allow always" covers, and another call asks nothing.
+#[test]
+fn t1149_codex_outward_hook_asks_on_a_card_and_fails_closed() {
+    let core = Core::new();
+    std::os::unix::fs::symlink(
+        cli::path().canonicalize().unwrap(),
+        core.home.join("bridge-cli"),
+    )
+    .unwrap();
+    // Runs the hook once per `call-N.json`, as Codex does before each tool call; what it printed is `out-N.txt`.
+    fs::write(
+        core.home.join("codex"),
+        home::codex_fake("#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'codex-cli 0.161.0'; exit; fi\nprintf '%s\\n' \"$@\" > argv.txt\nn=0\nwhile :; do\n  if [ -f call-$n.json ]; then\n    \"$NUNCHIRO_HOME/bridge-cli\" hook outward --codex < call-$n.json > out-$n.tmp 2>> err.txt\n    mv out-$n.tmp out-$n.txt\n    n=$((n+1))\n  fi\n  sleep 0.05\ndone\n"),
+    )
+    .unwrap();
+    let Reply::Started { session: s } = core
+        .request(Request::Start {
+            receipt: None,
+            env: Default::default(),
+            folder: None,
+            session: StartSession {
+                account: None,
+                kind: AgentKind::Codex,
+                project: core.home.clone(),
+                worktree: false,
+                label: "test".into(),
+                args: vec!["-m".into(), "fixture".into()],
+                model: None,
+                effort: None,
+                resume: None,
+            },
+        })
+        .unwrap()
+    else {
+        panic!()
+    };
+    let wait_file = |name: &str| {
+        let end = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Ok(text) = fs::read_to_string(core.home.join(name)) {
+                break text;
+            }
+            assert!(Instant::now() < end, "{name} never appeared");
+            thread::sleep(Duration::from_millis(20));
+        }
+    };
+    let args = wait_file("argv.txt");
+    // `|| exit 2`: a hook that cannot run refuses the call (Codex lets a tool run when its hook only fails).
+    assert!(args.contains("hook outward --codex || exit 2"), "{args}");
+    assert!(args.contains("trusted_hash="), "{args}");
+    assert!(!args.contains("--dangerously-bypass-hook-trust"), "{args}");
+    assert!(!args.contains("hook PermissionRequest"), "{args}");
+    let call = |n: u32, tool: &str, input: serde_json::Value| {
+        fs::write(
+            core.home.join(format!("call-{n}.json")),
+            serde_json::json!({"hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": input})
+                .to_string(),
+        )
+        .unwrap();
+    };
+    let decision = |out: &str| -> (String, String) {
+        let v: serde_json::Value = serde_json::from_str(out).unwrap();
+        let inner = &v["hookSpecificOutput"];
+        assert_eq!(inner["hookEventName"], "PreToolUse");
+        (
+            inner["permissionDecision"].as_str().unwrap().into(),
+            inner["permissionDecisionReason"].as_str().unwrap().into(),
+        )
+    };
+    let card = || {
+        let end = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(item) = pending_now(&core, &s)
+                .into_iter()
+                .find(|i| i.hook_event_id.is_some())
+            {
+                break item;
+            }
+            assert!(Instant::now() < end, "no card");
+            core.request(Request::QueueConnect).unwrap();
+            thread::sleep(Duration::from_millis(20));
+        }
+    };
+    let answer = |item: &str, answer| {
+        core.request(Request::Answer {
+            item: item.into(),
+            answer,
+            confirmed: true,
+        })
+    };
+    // No window to ask: the publish is refused at once, and no card is left that nothing could answer.
+    call(0, "Bash", serde_json::json!({"command": "npm publish"}));
+    let (verdict, why) = decision(&wait_file("out-0.txt"));
+    assert_eq!(verdict, "deny");
+    assert!(why.starts_with("Publish:"), "{why}");
+    assert!(
+        pending_now(&core, &s)
+            .iter()
+            .all(|i| i.hook_event_id.is_none())
+    );
+    // A window is there: the send waits on its card, which names the kind and offers no "allow always".
+    core.request(Request::QueueConnect).unwrap();
+    call(
+        1,
+        "mcp__fake__send_message",
+        serde_json::json!({"body": "b"}),
+    );
+    let item = card();
+    assert_eq!(item.kind, nunchiro_core::queue::Kind::Permission);
+    assert_eq!(item.outward.as_deref(), Some("post"));
+    assert!(item.risky);
+    assert_eq!(item.allow_always, None);
+    assert!(answer(&item.id, nunchiro_core::queue::Answer::AllowAlways).is_err());
+    assert!(
+        !core.home.join("out-1.txt").exists(),
+        "the hook answered before its card"
+    );
+    // The owner's allow: the hook says nothing and Codex runs the tool.
+    answer(&item.id, nunchiro_core::queue::Answer::AllowOnce).unwrap();
+    assert_eq!(wait_file("out-1.txt"), "");
+    // The owner's deny refuses the call.
+    core.request(Request::QueueConnect).unwrap();
+    call(
+        2,
+        "Bash",
+        serde_json::json!({"command": "gh release create v1"}),
+    );
+    let item = card();
+    assert_eq!(item.outward.as_deref(), Some("publish"));
+    answer(&item.id, nunchiro_core::queue::Answer::Deny).unwrap();
+    assert_eq!(decision(&wait_file("out-2.txt")).0, "deny");
+    // Any other call asks nothing, and a call the hook cannot read is refused.
+    call(
+        3,
+        "Bash",
+        serde_json::json!({"command": "git push origin main"}),
+    );
+    assert_eq!(wait_file("out-3.txt"), "");
+    fs::write(core.home.join("call-4.json"), "not json").unwrap();
+    assert_eq!(decision(&wait_file("out-4.txt")).0, "deny");
+    // Round 2: the owner never allows what the card does not show. A field the card would leave out (the journal
+    // drops fields named like a secret) or a call too large for a card is refused, not asked.
+    core.request(Request::QueueConnect).unwrap();
+    call(
+        5,
+        "mcp__fake__send_message",
+        serde_json::json!({"body": "b", "token": "hidden words"}),
+    );
+    let (verdict, why) = decision(&wait_file("out-5.txt"));
+    assert_eq!(verdict, "deny");
+    assert!(why.contains("cannot be shown whole"), "{why}");
+    call(
+        6,
+        "Bash",
+        serde_json::json!({"command": format!("echo {}; npm publish", "a".repeat(70_000))}),
+    );
+    let (verdict, why) = decision(&wait_file("out-6.txt"));
+    assert_eq!(verdict, "deny");
+    assert!(why.contains("cannot be shown whole"), "{why}");
+    assert!(
+        pending_now(&core, &s)
+            .iter()
+            .all(|i| i.hook_event_id.is_none())
+    );
+}
 #[test]
 fn codex_waiting_works_with_injected_hooks_enabled_and_disabled() {
     for disabled in [false, true] {
@@ -459,6 +627,7 @@ fn codex_waiting_works_with_injected_hooks_enabled_and_disabled() {
         let args = fs::read_to_string(core.home.join("argv.txt")).unwrap();
         assert_eq!(args.contains("--dangerously-bypass-hook-trust"), !disabled);
         assert_eq!(args.contains("hook PermissionRequest"), !disabled);
+        assert!(args.contains("hook outward --codex"), "{args}"); // ticket 1149: with or without the others
         core.request(Request::Answer {
             item: item.id,
             answer: nunchiro_core::queue::Answer::Deny,
@@ -1397,7 +1566,7 @@ fn a_different_codex_approval_prompt_is_refused() {
     .unwrap();
     fs::write(
         core.home.join("codex"),
-        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'codex-cli 0.161.0'; exit; fi\ncat screen.txt\nwhile [ ! -f swap ]; do sleep 0.01; done\ncat swap.txt\nread x\nprintf 'TYPED %s' \"$x\"\nsleep 30\n",
+        home::codex_fake("#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'codex-cli 0.161.0'; exit; fi\ncat screen.txt\nwhile [ ! -f swap ]; do sleep 0.01; done\ncat swap.txt\nread x\nprintf 'TYPED %s' \"$x\"\nsleep 30\n"),
     )
     .unwrap();
     let s = core.start_kind(AgentKind::Codex);

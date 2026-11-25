@@ -277,20 +277,3 @@ test('long_write_card_bounds: 200 lines at first in a 180 px scroller, Show all 
   await diff.getByRole('button', { name: 'Show first 200 lines' }).click();
   await expect(diff.locator('.dl > div')).toHaveCount(200);
 });
-
-test('look_shot_front_card', async ({ app, core }) => {
-  test.skip(!process.env.LOOK_1030, 'look only');
-  const { wt, px } = await setup(app, core);
-  await openTab(app, wt.a);
-  await ask(app, wt.a, 'a', PERMISSION('npm test'));
-  await expect(docked(app)).toBeVisible();
-  await app.waitForTimeout(500);
-  await app.screenshot({ path: '../.scratch/look-1030/pw-A.png' });
-  px.risky.add('wt-b');
-  await openDecisions(app);
-  await openTab(app, wt.b);
-  await ask(app, wt.b, 'b', PERMISSION('rm -rf ~/build'));
-  await expect(docked(app).locator('.dc-item.risky')).toBeVisible();
-  await app.waitForTimeout(500);
-  await app.screenshot({ path: '../.scratch/look-1030/pw-C.png' });
-});

@@ -29,7 +29,7 @@ Output the core does not control is to be quoted only through `logs::excerpt` (r
 holder and ACP are their first real users. A failed rename in the rotation chain stops rotation until the core
 restarts, so the moved files are never shifted twice.
 While a CLI starts the core it reads the core's stderr, so a core that cannot open `logs/` says why
-(`core startup failed (…): data folder must not be a symlink`); it closes that pipe once the core answers. Nothing
+(`core startup failed: data folder must not be a symlink`); it closes that pipe once the core answers. Nothing
 leaves the machine. A pre-v2 `core.log` in the data folder is left in place and no longer written.
 
 `settings.json` in that folder accepts:

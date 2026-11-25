@@ -68,8 +68,7 @@ test('the browser role has the same screen', async ({ app, browser }) => {
   await context.close();
 });
 
-test('crash screen shots, light and dark', async ({ app, browserName }) => {
-  test.skip(browserName !== 'chromium', 'shots are chromium only');
+test('crash screen shots, light and dark', { tag: '@chromium' }, async ({ app }) => {
   const dir = path.join(REPO, '.scratch/shots');
   fs.mkdirSync(dir, { recursive: true });
   await crashing(app, 'render');

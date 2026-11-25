@@ -17,7 +17,7 @@
   not built.
 - **Group** (board lane, swimlane; needs 154): the free-text `group` field of a card; the board draws one swimlane per
   group with a progress bar, falling back to the project. Nunchiro gives it no meaning (a coordinator may write
-  milestone ids there); the lane key is switchable in the widget settings. Not a Project group, and not a worker lane
+  milestone ids there); the lane key is switchable in the widget settings. Not a project tree group, and not a worker lane
   (one agent's worktree session in a coordinated run).
 - **Receipt** (proof; needs 154): the sha, command and result a coordinator gives to move a card into a column with
   `proof = true` (Done by default); without one the card stops in Review. Moves by the user need none. Shown under the
@@ -60,7 +60,7 @@
 - **Agent CLI**: the `nunchiro` command that agents inside Nunchiro sessions use to start, message,
   read and wait on other sessions (plus worktrees, widgets, browser and layout; board cards once ticket 183 lands); every send is logged and shown on the target session.
 - **Nunchiro skill**: the shipped instructions that teach an agent the agent CLI.
-- **Agent extension**: a skill or hook that Nunchiro adds to one Nunchiro session at launch (skills by `--plugin-dir`, Claude hooks in the per-session `--settings` file, Codex by `-c` overrides); default (shipped) or custom (from Nunchiro's own folder), toggled per item on an Agent extensions page (needs 65; not built yet, V1B-39, so the page is not among today's nine Settings pages). Never written into `~/.claude` or `~/.codex`; the user's own skills and hooks there are not agent extensions (needs 65, ticket V1B-39).
+- **Skills & hooks** (스킬·훅; agent extension in code and older records): a skill or hook that Nunchiro adds to one Nunchiro session at launch (skills by `--plugin-dir`, Claude hooks in the per-session `--settings` file, Codex by `-c` overrides); default (shipped) or custom (from Nunchiro's own folder), toggled per item on Settings > Skills & hooks (needs 65; ticket 391 renamed the page from Agent extensions). Never written into `~/.claude` or `~/.codex`; the user's own skills and hooks there are not agent extensions (needs 65, ticket V1B-39).
 - **Artifact**: HTML, SVG, Markdown or image output from an agent (not the Claude.ai feature of the same name; a claude.ai artifact link an agent prints shows as a Claude link card, never loaded inside Nunchiro), a file it wrote or a `nunchiro-artifact` block, shown inside the conversation: HTML and SVG in a sandboxed frame, Markdown and images as one-line cards opened in Preview (v1b spec B2, ticket 06).
 - **Chat event**: one rendered unit of the chat view (user message, assistant text, tool row, diff card, image, artifact card), projected by the core from an agent's transcript (v1b spec).
 - **Slot** (icon bar slot, ICONBAR A, needs 116): one icon-size place in an icon bar (ten a side, `web/src/layout/bars.ts:10`); an icon sits in any slot, empty slots stay empty, an occupied slot swaps on a drop, slots a short window cuts off go behind a ⋯ button.
@@ -78,7 +78,7 @@
 - **Imported theme**: a theme the owner added in the app, by paste, file, or applying an online theme in the gallery;
   it keeps its colours, an optional source and its licence; it can be removed. A dropped built-in still in use
   becomes one on upgrade (needs 55, 70, V1A-47, V1A-62).
-- **Browse online**: the theme gallery's online part (Settings > Appearance, which took in the Theme page): iTerm2-Color-Schemes themes of that same upstream version,
+- **Browse themes online**: the theme gallery's online part (Settings > Appearance, which took in the Theme page): iTerm2-Color-Schemes themes of that same upstream version,
   shown with installed themes in one grid; the index loads when the gallery opens and theme files only for cards
   on screen; off with the "Browse themes online" setting (needs 55, 70, V1A-47, V1A-62; ADR 0001 records the
   request).
@@ -90,10 +90,10 @@
   **quarantine** (`hook-journal-quarantine/`, rejected hook events of any kind, capped and pruned oldest first), a
   set-aside file is whole state and is never pruned.
 
-- **Project group** (프로젝트 그룹): a user-made, named, folding row in the project tree that holds projects; one group
+- **Group** (project tree; 프로젝트 그룹, called project group in older records; menus say New group, Move to group): a user-made, named, folding row in the project tree that holds projects; one group
   per project, ungrouped projects sit at the top with no header, never a layout, mode or switcher; stored in the
   core-owned `tree.toml` per machine (needs 81, spec V2-9, ticket V2-9a).
-- **Space**: retired. Needs 22 proposed it and needs 81 replaced it with **Project group**; do not use the word for
+- **Space**: retired. Needs 22 proposed it and needs 81 replaced it with the project tree **Group**; do not use the word for
   anything in the tree.
 
 - **Holder** (홀더): the per-session `nunchiro hold` process (same binary) that owns one agent PTY, its child process group

@@ -520,6 +520,10 @@ fn codex_hook_policy_and_injection_opt_out_preserve_user_config() {
                 !disabled && !repo_hooks
             );
             assert!(output.contains("fixture-model"));
+            // Ticket 1149: the outward hook rides on every Codex start, trusted by its own hash, with Nunchiro's other
+            // hooks or without them.
+            assert!(output.contains("hook outward --codex"), "{output}");
+            assert!(output.contains("trusted_hash="), "{output}");
             // Ticket 692: never the update screen, whose preselected Enter runs `brew upgrade`.
             assert!(
                 output.contains(r#""-c", "check_for_update_on_startup=false""#),
@@ -663,7 +667,11 @@ fn codex_identity_survives_restart_with_hook_injection_disabled() {
         _ => panic!(),
     };
     h.wait_text(&s.id, "READY");
-    assert!(!h.read(&s.id).contains("hooks."));
+    // None of Nunchiro's own hooks (the SessionStart one would report the id); ticket 1149: the outward hook, which
+    // every Codex start gets, is the only one.
+    let output = h.read(&s.id);
+    assert!(!output.contains("hooks.SessionStart"), "{output}");
+    assert_eq!(output.matches("hooks.").count(), 2, "{output}"); // hooks.PreToolUse, hooks.state
     let until = Instant::now() + Duration::from_secs(5);
     loop {
         let sessions = match h.request(Request::Snapshot) {
@@ -1737,10 +1745,194 @@ fn codex_unapproved_sources_disable_injected_hooks_and_bypass() {
             !output.contains("default_mode_request_user_input"),
             "{source}: {output}"
         );
+        // Ticket 1149: a start that gets none of Nunchiro's other hooks (its own arguments, the person's own hooks
+        // or config) still gets the outward hook, and no unreviewed hook of theirs is run for it.
+        assert!(
+            output.contains("hook outward --codex") && output.contains("trusted_hash="),
+            "{source}: {output}"
+        );
         if source == "unreadable" {
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
         }
     }
+}
+
+/// Ticket 1149: a later `-c` wins in Codex, so a start whose arguments name hooks in a config or feature flag is
+/// refused: it could take the outward hook away.
+#[test]
+fn t1149_codex_arguments_that_name_hooks_are_refused() {
+    let h = Harness::new();
+    for args in [
+        vec!["-c", "hooks.state={}"],
+        vec!["--disable", "hooks"],
+        vec!["-c", "features.hooks=false"],
+    ] {
+        let refused = call(
+            &h.home,
+            Request::Start {
+                receipt: None,
+                env: Default::default(),
+                folder: None,
+                session: StartSession {
+                    account: None,
+                    kind: AgentKind::Codex,
+                    project: h.home.clone(),
+                    worktree: false,
+                    label: String::new(),
+                    args: args.iter().map(|a| a.to_string()).collect(),
+                    model: None,
+                    effort: None,
+                    resume: None,
+                },
+            },
+        )
+        .unwrap_err();
+        assert!(refused.contains("outward"), "{args:?}: {refused}");
+    }
+}
+
+fn start_codex(h: &Harness) -> Result<Reply, String> {
+    call(
+        &h.home,
+        Request::Start {
+            receipt: None,
+            env: Default::default(),
+            folder: None,
+            session: StartSession {
+                account: None,
+                kind: AgentKind::Codex,
+                project: h.home.clone(),
+                worktree: false,
+                label: String::new(),
+                args: vec![],
+                model: None,
+                effort: None,
+                resume: None,
+            },
+        },
+    )
+}
+/// What the `codex` fixture answers the core's question before a start (its `codex-app-server.json`).
+fn codex_answers(h: &Harness, answers: serde_json::Value) {
+    std::fs::write(h.home.join("codex-app-server.json"), answers.to_string()).unwrap();
+}
+
+/// Ticket 1150: before a Codex start the core asks that Codex which hooks it would run (`codex app-server`,
+/// `hooks/list`). A Codex whose managed policy allows managed hooks only leaves Nunchiro's outward hook out (live Codex
+/// 0.161.0: an empty list, `allowManagedHooksOnly` in its requirements) and would run outward actions with no card, so
+/// its start is refused and the error names the policy; so is a hook that is listed but not trusted or off. Only the
+/// hook listed, on and trusted starts.
+#[test]
+fn t1150_codex_that_will_not_run_the_outward_hook_is_not_started() {
+    let h = Harness::new();
+    let answers = |list: serde_json::Value, requirements: serde_json::Value| {
+        let all = serde_json::json!({"initialize": {}, "hooks/list": list,
+            "configRequirements/read": {"requirements": requirements}});
+        codex_answers(&h, all);
+    };
+    let listed = |trust: &str, enabled: bool| {
+        serde_json::json!({"data": [{"cwd": h.home, "warnings": [], "errors": [], "hooks": [{
+            "key": "/<session-flags>/config.toml:pre_tool_use:0:0", "eventName": "preToolUse",
+            "source": "sessionFlags", "enabled": enabled, "isManaged": false, "trustStatus": trust}]}]})
+    };
+    let none =
+        serde_json::json!({"data": [{"cwd": h.home, "hooks": [], "warnings": [], "errors": []}]});
+    // The managed policy, as live Codex 0.161.0 answers under it.
+    answers(
+        none.clone(),
+        serde_json::json!({"allowManagedHooksOnly": true}),
+    );
+    let refused = start_codex(&h).unwrap_err();
+    assert!(refused.contains("managed hooks only"), "{refused}");
+    assert!(refused.contains("not started"), "{refused}");
+    // No policy named, but the hook is not there, not trusted (a changed hash reads "modified") or off.
+    for list in [none, listed("modified", true), listed("trusted", false)] {
+        answers(list.clone(), serde_json::Value::Null);
+        let refused = start_codex(&h).unwrap_err();
+        assert!(
+            refused.contains("outward-action check"),
+            "{list}: {refused}"
+        );
+        assert!(!refused.contains("managed hooks only"), "{refused}");
+    }
+    let Reply::Snapshot { sessions, .. } = h.request(Request::Snapshot) else {
+        panic!("no snapshot");
+    };
+    assert!(sessions.is_empty(), "a refused start left a session");
+    // Listed, on and trusted: it starts, with the hook.
+    answers(listed("trusted", true), serde_json::Value::Null);
+    let Ok(Reply::Started { session }) = start_codex(&h) else {
+        panic!("a Codex that runs the hook did not start");
+    };
+    h.wait_text(&session.id, "READY");
+    assert!(h.read(&session.id).contains("hook outward --codex"));
+    h.request(Request::Close { id: session.id });
+}
+
+/// Ticket 1150 round 2 (Codex look P1): a start needs Codex's yes. A Codex that cannot be asked is refused like one
+/// that says no: a program that ends, one that prints something else, one that answers `initialize` but not the
+/// question, and one that is slower than the bound (a real Codex under a managed policy that took over a second to
+/// answer started unchecked before). Nothing is left behind, and the same Codex answering in time starts.
+#[test]
+fn t1150_codex_that_does_not_answer_is_not_started() {
+    let h = Harness::new();
+    for answers in [
+        serde_json::json!({"behave": "exit"}),
+        serde_json::json!({"behave": "garbage"}),
+        serde_json::json!({"initialize": {}}),
+        serde_json::json!({"behave": 8}), // past the 5 s it has to answer `initialize`
+    ] {
+        codex_answers(&h, answers.clone());
+        let refused = start_codex(&h)
+            .err()
+            .unwrap_or_else(|| panic!("{answers}: a Codex that was not heard started"));
+        assert!(refused.contains("did not say"), "{answers}: {refused}");
+        assert!(refused.contains("not started"), "{answers}: {refused}");
+    }
+    let Reply::Snapshot { sessions, .. } = h.request(Request::Snapshot) else {
+        panic!("no snapshot");
+    };
+    assert!(sessions.is_empty(), "a refused start left a session");
+    std::fs::remove_file(h.home.join("codex-app-server.json")).unwrap();
+    let Ok(Reply::Started { session }) = start_codex(&h) else {
+        panic!("a Codex that answers did not start");
+    };
+    h.request(Request::Close { id: session.id });
+}
+
+/// Ticket 1150 round 2 (Codex look P2): Codex is asked off the registry lock. While a Codex that takes 3 s to answer
+/// is being asked, every other request is served at once (before, the question ran under the lock and held all
+/// sessions for as long as that Codex took); the start then goes through.
+#[test]
+fn t1150_asking_codex_does_not_hold_the_registry_lock() {
+    let h = Harness::new();
+    let all = serde_json::json!({"behave": 3, "initialize": {}, "hooks/list": {"data": [{"hooks": [{
+        "key": "/<session-flags>/config.toml:pre_tool_use:0:0", "enabled": true, "trustStatus": "trusted"}]}]}});
+    codex_answers(&h, all);
+    let began = Instant::now();
+    let slowest = thread::scope(|scope| {
+        let start = scope.spawn(|| start_codex(&h));
+        let mut slowest = Duration::ZERO;
+        while !start.is_finished() {
+            let asked = Instant::now();
+            h.request(Request::Snapshot);
+            slowest = slowest.max(asked.elapsed());
+            thread::sleep(Duration::from_millis(20));
+        }
+        let Ok(Ok(Reply::Started { session })) = start.join() else {
+            panic!("the slow Codex did not start");
+        };
+        h.request(Request::Close { id: session.id });
+        slowest
+    });
+    assert!(
+        slowest < Duration::from_millis(500),
+        "a snapshot waited {slowest:?} while Codex was asked"
+    );
+    assert!(
+        began.elapsed() >= Duration::from_secs(3),
+        "the fixture did not wait"
+    );
 }
 
 #[test]

@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect as pwExpect, test as pwTest, type Page } from '@playwright/test';
-import { REPO } from './fixtures';
+import { REPO, codexFake } from './fixtures';
 import { append, chat, expect, openChat, rec, test, type ChatCore } from './fixtures/chat/harness';
 import { mockupTurn } from './fixtures/fidelity-chat/turn';
 import { pathRef, toolPath } from '../src/chat/paths';
@@ -89,7 +89,7 @@ function codex(core: ChatCore) {
   const file = path.join(dir, `rollout-2026-11-01T11-00-00-${id}.jsonl`);
   fs.writeFileSync(file, '');
   fs.writeFileSync(path.join(core.home, 'codex-next.json'), JSON.stringify({ thread_id: id, transcript_path: file }));
-  fs.writeFileSync(path.join(core.home, 'bin/codex'), fakeCodex(core.home), { mode: 0o700 });
+  fs.writeFileSync(path.join(core.home, 'bin/codex'), codexFake(fakeCodex(core.home)), { mode: 0o700 });
   const s = core.cli('session', 'start', '--kind', 'codex', '--project', core.project('dcard'), '--label', 'codex-del').session as { id: string; cwd: string };
   append(file, { type: 'session_meta', payload: { id, cwd: s.cwd } });
   return { ...s, file };

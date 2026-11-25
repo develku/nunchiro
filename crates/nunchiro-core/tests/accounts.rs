@@ -83,7 +83,7 @@ impl Core {
         let bin = home.join("bin");
         fs::create_dir_all(&bin).unwrap();
         for (name, body) in [("claude", FAKE_CLAUDE), ("codex", FAKE_CODEX)] {
-            fs::write(bin.join(name), body).unwrap();
+            fs::write(bin.join(name), home::codex_fake(body)).unwrap();
             fs::set_permissions(bin.join(name), fs::Permissions::from_mode(0o700)).unwrap();
         }
         // The user's own trees, with an unreadable credential file holding a sentinel.

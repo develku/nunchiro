@@ -165,8 +165,7 @@ test('strip_limited_tone: a usage-limited session is one yellow-clock bar after 
 
 // The mock's data shape (final/388.html section 1, This Mac only: a second machine needs a remote core). SHOTS_DIR=<dir> saves
 // each scene for the side-by-side with the mock's render; without it the test still checks every strip against its sessions.
-test('strip_mock_shape: every strip counts its sessions per colour, as the mock draws them', async ({ app, core }, info) => {
-  test.skip(info.project.name !== 'chromium', 'one browser draws the scenes');
+test('strip_mock_shape: every strip counts its sessions per colour, as the mock draws them', { tag: '@chromium' }, async ({ app, core }) => {
   const add = (name: string, ...labels: string[]) => shells(core, core.project(name), ...labels);
   add('mini-01', 'claude 3a964f', 'shell 747cf3', 'st-1', 'st-2', 'more-1', 'done-1', 'done-2');
   add('nunchiro', 'claude a5b463', 'acp 452d64', 'done-3', 'done-4', 'done-5');

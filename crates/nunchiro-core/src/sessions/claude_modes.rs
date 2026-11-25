@@ -756,10 +756,30 @@ impl Sessions {
             committed: false,
             codex_read_only: None,
             codex_hooks_clear: None,
+            codex_asked: None,
             ultracode: None,
             // v1b-11 merge: the same conversation keeps its start commit (spawn prefers the prior's too).
             start_commit: meta.start_commit.clone(),
         };
+        // Q9 en-b-J7-2 (main, merged here): a Codex switch's off-lock hooks answer, only for the exact folders it read.
+        // Ticket 1150 round 2: and its Codex's yes to the outward hook, asked off the lock too (`switch_model`); a
+        // restart that was not asked is refused here, before the agent stops (`spawn` compares the whole question).
+        if meta.kind == AgentKind::Codex {
+            let read = (
+                launch.cwd.clone(),
+                meta.project.clone(),
+                meta.config_dir.clone(),
+            );
+            let (clear, asked) = (self.switch_hooks.take())
+                .filter(|(k, ..)| *k == read)
+                .map(|(_, clear, asked)| (clear, asked))
+                .unzip();
+            launch.codex_hooks_clear = clear;
+            launch.codex_asked = asked;
+            if launch.codex_asked.is_none() {
+                return Err("Codex was not asked whether it runs Nunchiro's outward-action check before this restart; switch again".into());
+            }
+        }
         // Fable re-review SHOULD b: everything `start` refuses is checked before the agent stops.
         self.start_checks(&launch)?;
         let entry = self.entry(id)?;
@@ -775,16 +795,6 @@ impl Sessions {
         self.queue.close(id, false)?;
         self.save()?;
         launch.version_probe.set(version_probe);
-        // Q9 en-b-J7-2 (main, merged here): a Codex switch's off-lock hooks answer, only for the exact folders it read.
-        if meta.kind == AgentKind::Codex {
-            let read = (
-                launch.cwd.clone(),
-                meta.project.clone(),
-                meta.config_dir.clone(),
-            );
-            launch.codex_hooks_clear =
-                (self.switch_hooks.take()).and_then(|(k, c)| (k == read).then_some(c));
-        }
         self.start_modes = modes;
         let result = self.start(&launch);
         self.start_modes = None;
