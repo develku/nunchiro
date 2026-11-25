@@ -237,8 +237,16 @@ pub enum Op {
     TeamOpen {
         id: String,
         /// Ticket 1096: a new conversation for a lead (never `--resume`), with the old seat's handover first.
+        /// Ticket 1130 B-L3: `now` for any teammate.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         fresh: Option<Fresh>,
+        /// Ticket 1130 B-L3: Undo of `fresh`: this ended session of the teammate is its seat again (`undo_fresh`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        undo: Option<String>,
+        /// With `undo`: the seat the new conversation opened, as the window knows it. The Undo is refused, and nothing
+        /// changes, when the teammate's seat is another session by now (or none).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        seat: Option<String>,
     },
     /// Ticket 992 rule 6: the user picked a level on a seat's row. The running seat does not change; the level is
     /// kept for the teammate's next task (`None` takes the pick back). The window then offers the lesson as a note
@@ -836,7 +844,11 @@ fn task_note(task: &str) -> String {
 pub(crate) enum Opener<'a> {
     Window,
     /// Ticket 1096: the window's "New Lead conversation": a new session, never the old conversation resumed.
-    Fresh,
+    /// Ticket 1130 B-L3 round 2: with the session that started the old seat (a worker's Lead), which the new seat keeps.
+    Fresh(Option<String>),
+    /// Ticket 1130 B-L3: the window's Undo of a new conversation: this ended seat's conversation is continued, in
+    /// place of the seat the new conversation opened (the second id), which must still be the teammate's seat.
+    Undo(&'a str, &'a str),
     /// A scheduled run, with its schedule's id: the seat is marked before its task reaches it.
     Schedule(&'a str),
     Lead(&'a crate::grants::Caller),
@@ -960,7 +972,8 @@ pub(crate) fn open_seat(
     let memory = team.check_memory(id);
     let (mate, project, prompt) = team.brief(id, task)?;
     let prompt = match opener {
-        Opener::Fresh => format!("{prompt}\n\n{TAKEOVER}"),
+        // Ticket 1130 B-L3: only a lead takes over a handover; another teammate's new conversation gets its brief alone.
+        Opener::Fresh(_) if mate.lead => format!("{prompt}\n\n{TAKEOVER}"),
         _ => prompt,
     };
     memory_found(&mut *lock()?, &mate, &project, &memory);
@@ -1054,7 +1067,7 @@ pub(crate) fn open_seat(
         // Ticket 1002 lane 1 (Fable review R5): a seat the owner left open in "Full access, shell included" takes no
         // work it did not open itself: a brief read with nobody present never runs where the shell asks nothing. The
         // schedule's row shows this line.
-        if !matches!(opener, Opener::Window | Opener::Fresh)
+        if !matches!(opener, Opener::Window | Opener::Fresh(_) | Opener::Undo(..))
             && session.home_mode.as_deref() == Some("full-access-shell")
         {
             return Err(format!(
@@ -1086,12 +1099,34 @@ pub(crate) fn open_seat(
             why,
         }))
     };
+    let undo = matches!(opener, Opener::Undo(..));
+    let mut parent = match &opener {
+        Opener::Fresh(parent) => parent.clone(),
+        _ => None,
+    };
     let launch = {
         let mut sessions = lock()?;
+        // Ticket 1130 B-L3: Undo. Refused here, before anything is prepared, when the seat is no longer the one the
+        // new conversation opened or the old conversation cannot be continued. Nothing ends yet (see below).
+        if let Opener::Undo(old, seat) = &opener {
+            if sessions.seat_of(&mate.id).as_deref() != Some(*seat) {
+                return Err(UNDO_STALE.into());
+            }
+            start.resume = Some(
+                sessions
+                    .seat_to_resume(&mate.id, &start, level, Some(old))
+                    .ok_or(
+                        "the old conversation cannot be continued here; it is still in History",
+                    )?,
+            );
+            // An ACP resume is a new row with no parent: the old seat's Lead is carried as for a new conversation.
+            parent = sessions.session_of(old)?.parent;
+        }
         // The seat is the session the core itself marked at an earlier open, never a session that only carries the
         // teammate's name (after one Codex look: an agent can start or rename a session to any name, and the lead's
         // seat may open its place's teammates).
-        if let Some(seat) = sessions.seat_of(&mate.id)
+        if !undo
+            && let Some(seat) = sessions.seat_of(&mate.id)
             && let Some(opened) = kept(&mut sessions, &seat, asked.is_some())?
         {
             return Ok(opened);
@@ -1103,13 +1138,13 @@ pub(crate) fn open_seat(
         let resumes = match &opener {
             Opener::Window => task.is_none(),
             Opener::Schedule(_) => mate.lead,
-            Opener::Lead(_) | Opener::Fresh => false,
+            Opener::Lead(_) | Opener::Fresh(_) | Opener::Undo(..) => false,
         };
         if resumes {
-            start.resume = sessions.seat_to_resume(&mate.id, &start, level);
+            start.resume = sessions.seat_to_resume(&mate.id, &start, level, None);
         }
         match &opener {
-            Opener::Window | Opener::Fresh => sessions
+            Opener::Window | Opener::Fresh(_) | Opener::Undo(..) => sessions
                 .launch_as(None, start.clone(), false)?
                 .owner_start(),
             Opener::Schedule(_) => sessions.launch_as(None, start.clone(), false)?,
@@ -1120,6 +1155,10 @@ pub(crate) fn open_seat(
     let mut launch = match launch.prepare() {
         Ok(launch) => launch,
         Err(e) => {
+            // An Undo that cannot start changed nothing and leaves no failed tab: the window says why.
+            if undo {
+                return Err(undo_kept(e));
+            }
             lock()?.start_failed_at(&start, None, e.clone())?;
             return Err(e);
         }
@@ -1137,29 +1176,45 @@ pub(crate) fn open_seat(
     }
     // Still idle and at another level: the old seat ends, but only once the new one runs (a start can still fail
     // here: an approval taken back, an account, the spawn), and in this same lock.
-    let old = match sessions.seat_of(&mate.id) {
-        Some(seat) => match kept(&mut sessions, &seat, asked.is_some())? {
+    let old = match (sessions.seat_of(&mate.id), &opener) {
+        // Ticket 1130 B-L3 round 4: Undo replaces the seat the new conversation opened, as a level change replaces a
+        // seat (below): the old conversation starts and that seat ends in this one lock, with no wait in between and
+        // nothing deleted. The seat is checked again here, where the state is decided: another seat by now (the owner
+        // or the Lead opened one, or it ended) refuses the Undo and nothing changes.
+        (seat, Opener::Undo(_, named)) if seat.as_deref() != Some(*named) => {
+            return Err(UNDO_STALE.into());
+        }
+        (seat, Opener::Undo(..)) => seat,
+        (Some(seat), _) => match kept(&mut sessions, &seat, asked.is_some())? {
             Some(opened) => return Ok(opened),
             None => Some(seat),
         },
-        None => None,
+        (None, _) => None,
     };
-    let session = match &opener {
-        Opener::Lead(caller) => sessions.start_granted(caller, &launch, false)?,
-        _ => sessions.start(&launch)?,
+    // A start that fails has closed nothing: the seat stays live.
+    let started = match &opener {
+        Opener::Lead(caller) => sessions.start_granted(caller, &launch, false),
+        _ => sessions.start(&launch),
     };
+    let session = started.map_err(|e| if undo { undo_kept(e) } else { e })?;
     launch.committed = true;
-    if let Some(old) = old
-        && let Err(e) = sessions.close(&old, true, false)
+    if let Some(old) = &old
+        && let Err(e) = sessions.end_seat(old)
     {
-        // The old seat stays the seat: the new session goes instead.
+        // The old seat stays the seat: the new session goes instead (after an Undo: the conversation it resumed is
+        // closed again and stays in History).
         let _ = sessions.close(&session.id, true, false);
-        return Err(e);
+        return Err(if undo { undo_kept(e) } else { e });
     }
     if let Some((model, effort)) = wants {
         sessions.seat_wants(&session.id, model, effort);
     }
-    let session = sessions.seat_session(&session.id, &mate.id, level)?;
+    // Marks the seat, and hands it the running workers of the seat that just ended (`adopt_workers`), whose row
+    // stays (an Undo never removes a row).
+    let mut session = sessions.seat_session(&session.id, &mate.id, level)?;
+    if let Some(parent) = &parent {
+        session = sessions.seat_parent(&session.id, parent)?;
+    }
     // Before the task is sent (Codex look on wave 14): a scheduled run proposes and changes no schedule
     // (`schedule_proposer`), from its first moment.
     if let Opener::Schedule(schedule) = &opener {
@@ -1194,6 +1249,11 @@ pub enum Fresh {
     Handover,
     /// The owner's own click after a handover ran out of time: the old seat is closed now, even mid-turn.
     Close,
+    /// Ticket 1130 B-L3 (owner 11-25, option A): one press on "New conversation", for any teammate. A running turn
+    /// (or a question it waits at) is stopped at once, as `Close`; a Lead between turns hands over first, as
+    /// `Handover`. A teammate that leads nothing has no handover: its seat is closed and the new one opens.
+    /// Round 6: refused for a seat with no conversation id (its agent could not continue the conversation).
+    Now,
 }
 
 /// Ticket 1096: how long a running Lead has for its handover turn. The report is one file write and one room send
@@ -1244,7 +1304,7 @@ pub(crate) fn fresh_lead(
         .map_err(|_| "session registry unavailable".to_string())?
         .insert(id.to_string())
     {
-        return Err("a new Lead conversation is already being opened".into());
+        return Err("a new conversation is already being opened".into());
     }
     let _one = Handing(id.to_string());
     let lock = || {
@@ -1258,7 +1318,7 @@ pub(crate) fn fresh_lead(
         .into_iter()
         .find(|t| t.id == id)
         .ok_or_else(|| format!("no teammate {id}"))?;
-    if !mate.lead {
+    if !mate.lead && how != Fresh::Now {
         return Err(format!("{} does not lead a place", mate.name));
     }
     let handed = |seat: &str, on: bool| {
@@ -1270,13 +1330,46 @@ pub(crate) fn fresh_lead(
             };
         }
     };
-    let old = lock()?.seat_of(id);
+    // The new seat opens at the old one's level (a teammate's seat a task opened at Deep stays Deep; a lead keeps
+    // its own, `open_seat`) and keeps the session that started the old one (a worker's Lead).
+    let (old, how, level, parent) = {
+        let mut sessions = lock()?;
+        let old = sessions.seat_of(id);
+        let asked = how;
+        let how = match how {
+            Fresh::Now if mate.lead && old.as_ref().is_some_and(|o| !sessions.seat_busy(o)) => {
+                Fresh::Handover
+            }
+            Fresh::Now => Fresh::Close,
+            how => how,
+        };
+        let (level, parent) = match &old {
+            Some(old) => {
+                let seat = sessions.session_of(old)?;
+                // Round 6: no one-press for a seat whose conversation could not be continued afterwards (an ACP
+                // agent without `loadSession` keeps no conversation id, and an ended ACP run's chat is not kept
+                // either): the press would lose it, with no Undo. Ticket 1096's own handover and close are as
+                // they were.
+                if asked == Fresh::Now && seat.agent_session_id.is_none() {
+                    return Err("this agent cannot continue an old conversation, so a new one would lose this one".into());
+                }
+                (seat.level, seat.parent)
+            }
+            None => (sessions.last_seat_level(id), None),
+        };
+        // Round 2: the choice and the close in this one lock, and by `end_seat`. In two locks an agent that exited
+        // in between was closed as an ended session, and its row left History ten seconds later.
+        if how == Fresh::Close
+            && let Some(old) = &old
+        {
+            sessions.end_seat(old)?;
+            handed(old, false);
+        }
+        (old, how, level, parent)
+    };
     if let Some(old) = old {
         match how {
-            Fresh::Close => {
-                lock()?.close(&old, true, false)?;
-                handed(&old, false);
-            }
+            Fresh::Close | Fresh::Now => {}
             Fresh::Handover => {
                 // One handover prompt per old seat: one it already took is not sent again.
                 if !HANDED_OVER.lock().is_ok_and(|set| set.contains(&old)) {
@@ -1292,7 +1385,7 @@ pub(crate) fn fresh_lead(
                             break;
                         }
                         if sessions.seat_idle(&old) {
-                            sessions.close(&old, true, false)?;
+                            sessions.end_seat(&old)?;
                             handed(&old, false);
                             break;
                         }
@@ -1334,7 +1427,51 @@ pub(crate) fn fresh_lead(
             }
         }
     }
-    open_seat(registry, id, None, None, Opener::Fresh)
+    open_seat(registry, id, None, level, Opener::Fresh(parent))
+}
+
+/// Ticket 1130 B-L3 round 4: the refusals of an Undo. Each one says that nothing was lost.
+const UNDO_STALE: &str = "this seat changed since the new conversation opened, so nothing was undone; both conversations are in History";
+fn undo_kept(e: String) -> String {
+    format!("{e}; nothing was deleted, and both conversations are in History")
+}
+
+/// Ticket 1130 B-L3: Undo of "New conversation" (the window offers it for 10 seconds). `old`, an ended seat of this
+/// teammate, is continued as its seat in place of `seat`, the one the new conversation opened.
+/// Round 4, after three looks: an Undo never deletes a row and never waits. The new conversation is closed as any
+/// seat and stays in History, also when nothing went into it. `open_seat` prepares the resume off the lock and then,
+/// in one lock, checks that `seat` is still the teammate's seat, starts the old conversation and ends `seat`. An Undo
+/// that cannot start changes nothing. An ACP agent loads the conversation after its start: a load that fails leaves a
+/// failed run, with both conversations still in History (`Sessions::acp_loading`). Not while a handover waits.
+pub(crate) fn undo_fresh(
+    registry: &std::sync::Mutex<crate::sessions::Sessions>,
+    id: &str,
+    old: &str,
+    seat: &str,
+) -> Result<Opened, String> {
+    let unavailable = "session registry unavailable";
+    if !HANDING.lock().map_err(|_| unavailable)?.insert(id.into()) {
+        return Err("a new conversation is already being opened".into());
+    }
+    let _one = Handing(id.into());
+    // Round 5: while this runs, the Closed-row bound leaves the old conversation's row alone (another close could
+    // push it out between the steps below); once the resume started, an ACP one is held by `acp_loading`.
+    struct Held<'a>(&'a std::sync::Mutex<crate::sessions::Sessions>, &'a str);
+    impl Drop for Held<'_> {
+        fn drop(&mut self) {
+            if let Ok(mut sessions) = self.0.lock() {
+                sessions.hold_row(self.1, false);
+            }
+        }
+    }
+    let level = {
+        let mut sessions = registry.lock().map_err(|_| unavailable)?;
+        let level = sessions.session_of(old)?.level;
+        sessions.hold_row(old, true);
+        level
+    };
+    let _held = Held(registry, old);
+    open_seat(registry, id, None, level, Opener::Undo(old, seat))
 }
 
 /// Home view change 4: each goal the user sent reaches its lead: the seat is opened when it is not running (as the
@@ -1444,12 +1581,21 @@ pub fn window(
             Ok(listed(left))
         }
         Op::TeamLevel { id, level } => team.set_next_level(&id, level).map(listed),
-        Op::TeamOpen { id, fresh: None } => {
-            open_seat(registry, &id, None, None, Opener::Window).map(Opened::reply)
+        Op::TeamOpen {
+            id,
+            undo: Some(old),
+            seat,
+            ..
+        } => {
+            undo_fresh(registry, &id, &old, seat.as_deref().unwrap_or_default()).map(Opened::reply)
         }
+        Op::TeamOpen {
+            id, fresh: None, ..
+        } => open_seat(registry, &id, None, None, Opener::Window).map(Opened::reply),
         Op::TeamOpen {
             id,
             fresh: Some(how),
+            ..
         } => fresh_lead(registry, &id, how, HANDOVER_WAIT).map(Opened::reply),
         Op::TeamBrief { id } => {
             team.brief(&id, None)
@@ -2896,6 +3042,578 @@ mod tests {
         let _ = fs::remove_dir_all(proj);
     }
 
+    /// Ticket 1130 B-L3: the window's own op, as web/src/lead/lead.ts sends it.
+    fn asked(
+        reg: &std::sync::Mutex<crate::sessions::Sessions>,
+        home: &Path,
+        op: &str,
+    ) -> Result<crate::api::Session, String> {
+        let op = serde_json::from_str::<Op>(op).map_err(|e| e.to_string())?;
+        match window(reg, home, op)? {
+            Reply::TeamOpened {
+                session, started, ..
+            } => {
+                assert!(started, "a new run");
+                Ok(session)
+            }
+            _ => Err("not a team_opened reply".into()),
+        }
+    }
+    /// A Lead and a Helper on the fake ACP agent (it loads a conversation again), a registry, and the window's ops.
+    struct Seats {
+        home: PathBuf,
+        proj: PathBuf,
+        lead: String,
+        helper: String,
+        log: PathBuf,
+        reg: std::sync::Mutex<crate::sessions::Sessions>,
+    }
+    impl Seats {
+        fn new() -> Self {
+            Self::with(", \"load\"")
+        }
+        /// `modes`: the fake agent's (without `load` it cannot load a conversation again, and keeps no id of one).
+        fn with(modes: &str) -> Self {
+            let (home, proj) = (home(), self::home());
+            let (lead, log) = fake_lead(&home, &proj, modes);
+            let helper = Teammate {
+                kind: AgentKind::Acp,
+                agent: Some("fake".into()),
+                ..mate("Helper", Some(proj.clone()))
+            };
+            let all = Team::open(&home).save(None, helper).unwrap();
+            let helper = all.iter().find(|m| m.name == "Helper").unwrap().id.clone();
+            let reg = std::sync::Mutex::new(crate::sessions::Sessions::open(&home).unwrap());
+            Seats {
+                home,
+                proj,
+                lead,
+                helper,
+                log,
+                reg,
+            }
+        }
+        fn logged(&self) -> String {
+            fs::read_to_string(&self.log).unwrap_or_default()
+        }
+        fn row(&self, id: &str) -> Result<crate::api::Session, String> {
+            self.reg.lock().unwrap().session_of(id)
+        }
+        fn state(&self, id: &str) -> Result<crate::api::SessionState, String> {
+            self.row(id).map(|r| r.state)
+        }
+        fn seat(&self, mate: &str) -> Option<String> {
+            self.reg.lock().unwrap().seat_of(mate)
+        }
+        fn open(&self, mate: &str) -> crate::api::Session {
+            let seat = open_seat(&self.reg, mate, None, None, Opener::Window)
+                .unwrap()
+                .session;
+            self.idle(&seat.id);
+            seat
+        }
+        fn idle(&self, id: &str) {
+            until("the seat is between turns", || {
+                self.reg.lock().unwrap().seat_idle(id)
+            });
+        }
+        fn say(&self, id: &str, text: &str) {
+            self.reg
+                .lock()
+                .unwrap()
+                .prompt_as_user(id, text.into())
+                .unwrap();
+        }
+        /// A turn that holds (a permission it waits on).
+        fn hold(&self, id: &str) {
+            let before = self.logged().matches("cancel-me").count();
+            self.say(id, "cancel-me");
+            until("the turn holds", || {
+                self.logged().matches("cancel-me").count() > before
+            });
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
+        fn now(&self, mate: &str) -> Result<crate::api::Session, String> {
+            let op = format!(r#"{{"op":"team_open","id":"{mate}","fresh":"now"}}"#);
+            asked(&self.reg, &self.home, &op)
+        }
+        /// Undo: `old` is the seat again, in place of `seat`, the one the new conversation opened.
+        fn undo(&self, mate: &str, old: &str, seat: &str) -> Result<crate::api::Session, String> {
+            let op =
+                format!(r#"{{"op":"team_open","id":"{mate}","undo":"{old}","seat":"{seat}"}}"#);
+            asked(&self.reg, &self.home, &op)
+        }
+        fn end(self) {
+            let _ = self.reg.lock().unwrap().stop();
+            drop(self.reg);
+            let _ = fs::remove_dir_all(self.home);
+            let _ = fs::remove_dir_all(self.proj);
+        }
+    }
+    use crate::api::SessionState::{Closed, Failed, Running};
+
+    /// Ticket 1130 B-L3 (C5, owner 11-25 option A): "New conversation" on a teammate that leads nothing. One press
+    /// stops its running turn and opens a new seat at once, with the same name, folder, agent and level and no
+    /// handover; the old conversation keeps its row (History). Undo ends the new seat, whose row stays in History as
+    /// well, and the old conversation is the seat again and takes a prompt.
+    #[test]
+    fn a_fresh_seat_for_any_teammate_keeps_role_folder_level() {
+        let s = Seats::new();
+        ticking(&s.reg, || {
+            let old = open_seat(
+                &s.reg,
+                &s.helper,
+                Some("first"),
+                Some(Level::Deep),
+                Opener::Window,
+            )
+            .unwrap()
+            .session;
+            assert_eq!(old.level, Some(Level::Deep));
+            s.idle(&old.id);
+            s.hold(&old.id);
+            let at = std::time::Instant::now();
+            let new = s.now(&s.helper).unwrap();
+            assert!(
+                at.elapsed() < std::time::Duration::from_secs(10),
+                "one press, no wait"
+            );
+            assert_ne!(new.id, old.id);
+            assert_eq!(s.seat(&s.helper), Some(new.id.clone()));
+            assert_eq!(
+                (
+                    &new.label,
+                    &new.project,
+                    new.kind,
+                    new.level,
+                    &new.model,
+                    &new.effort
+                ),
+                (
+                    &old.label,
+                    &old.project,
+                    old.kind,
+                    old.level,
+                    &old.model,
+                    &old.effort
+                ),
+                "the same teammate: name, folder, agent, level"
+            );
+            let was = s.row(&old.id).unwrap();
+            assert_eq!(was.state, Closed, "the turn was stopped");
+            assert!(
+                was.agent_session_id.is_some(),
+                "its row and conversation stay"
+            );
+            s.idle(&new.id);
+            assert!(
+                !s.logged().contains(HANDED) && !s.logged().contains("You take over"),
+                "a teammate that leads nothing hands over nothing"
+            );
+            // Undo names the old seat: any other session is refused, and the new seat stays.
+            assert!(s.undo(&s.helper, "nope", &new.id).is_err());
+            assert!(
+                s.undo(&s.helper, &new.id, &new.id).is_err(),
+                "a running seat is no old conversation"
+            );
+            assert_eq!(s.seat(&s.helper), Some(new.id.clone()));
+            let back = s.undo(&s.helper, &old.id, &new.id).unwrap();
+            assert_eq!(
+                (s.seat(&s.helper), back.level),
+                (Some(back.id.clone()), old.level)
+            );
+            assert_eq!(s.state(&new.id), Ok(Closed), "in History, nothing deleted");
+            // An ACP resume is a new row for the same conversation (`session/load`); the old row is replaced by it
+            // once that load succeeded.
+            until("the old conversation is loaded", || {
+                s.row(&back.id).unwrap().agent_session_id == was.agent_session_id
+                    && s.row(&old.id).is_err()
+            });
+            // And it takes a prompt: the permission its stopped turn waited at died with that run.
+            s.say(&back.id, "say:back");
+            until("the restored seat answers", || {
+                s.logged().contains("say:back")
+            });
+        });
+        s.end();
+    }
+
+    /// Ticket 1130 B-L3: the same press on a Lead. Between turns it hands over first, as ticket 1096; a running turn
+    /// is stopped at once with no handover prompt. Undo opens the old conversation again.
+    #[test]
+    fn one_press_stops_a_leads_running_turn_and_undo_reopens_the_old_one() {
+        let s = Seats::new();
+        ticking(&s.reg, || {
+            let first = s.open(&s.lead);
+            // Between turns: the handover first.
+            let second = s.now(&s.lead).unwrap();
+            assert_eq!(s.logged().matches(HANDED).count(), 1, "handed over");
+            assert_eq!(s.state(&first.id), Ok(Closed));
+            until("the second seat took over", || {
+                s.logged().contains("You take over")
+            });
+            s.idle(&second.id);
+            // A turn that holds: stopped at once, and nothing more is asked of it.
+            s.hold(&second.id);
+            let at = std::time::Instant::now();
+            let third = s.now(&s.lead).unwrap();
+            assert!(
+                at.elapsed() < std::time::Duration::from_secs(10),
+                "one press, no wait"
+            );
+            assert_eq!(s.state(&second.id), Ok(Closed), "stopped mid-turn");
+            assert_eq!(s.logged().matches(HANDED).count(), 1, "no second handover");
+            assert_eq!(
+                (&third.label, &third.project, third.level),
+                (&second.label, &second.project, second.level)
+            );
+            until("the third seat took over", || {
+                s.logged().matches("You take over").count() == 2
+            });
+            s.idle(&third.id);
+            let conversation = s.row(&second.id).unwrap().agent_session_id;
+            let back = s.undo(&s.lead, &second.id, &third.id).unwrap();
+            assert_eq!(s.state(&third.id), Ok(Closed));
+            assert_eq!(s.seat(&s.lead), Some(back.id.clone()));
+            until("the old conversation is loaded", || {
+                s.row(&back.id).unwrap().agent_session_id == conversation
+            });
+            assert_eq!(s.logged().matches(HANDED).count(), 1);
+        });
+        s.end();
+    }
+
+    /// Round 6: a seat whose agent cannot continue a conversation (an ACP agent without `loadSession` keeps no
+    /// conversation id, and its chat ends with its run) gets no one-press new conversation: that press would lose the
+    /// conversation, with no Undo. The core refuses `now` for it, whoever asks, and nothing changes. Ticket 1096's
+    /// handover for a Lead is as it was.
+    #[test]
+    fn no_one_press_for_a_seat_that_cannot_continue_its_conversation() {
+        let s = Seats::with("");
+        ticking(&s.reg, || {
+            for mate in [&s.helper, &s.lead] {
+                let seat = s.open(mate);
+                assert_eq!(s.row(&seat.id).unwrap().agent_session_id, None);
+                for held in [false, true] {
+                    if held {
+                        s.hold(&seat.id);
+                    }
+                    let refused = s.now(mate);
+                    assert!(
+                        refused.as_ref().is_err_and(|e| e
+                            == "this agent cannot continue an old conversation, so a new one would lose this one"),
+                        "{refused:?}"
+                    );
+                    assert_eq!(s.seat(mate), Some(seat.id.clone()));
+                    assert_eq!(s.state(&seat.id), Ok(Running), "nothing changed");
+                }
+            }
+            assert!(!s.logged().contains(HANDED), "and nothing was asked of it");
+            // The Lead's handover of ticket 1096 still works for it (the owner's own, slower way).
+            let lead = s.seat(&s.lead).unwrap();
+            let fresh = fresh_lead(
+                &s.reg,
+                &s.lead,
+                Fresh::Close,
+                std::time::Duration::from_secs(3),
+            )
+            .unwrap();
+            assert_ne!(fresh.session.id, lead);
+        });
+        s.end();
+    }
+
+    /// Round 4: an Undo never removes a row. A new conversation nothing went into stays in History, closed, and so
+    /// does the old conversation when the Undo is undone the other way: every conversation id is still on a row.
+    #[test]
+    fn undo_never_removes_a_row() {
+        let s = Seats::new();
+        ticking(&s.reg, || {
+            let first = s.open(&s.helper);
+            s.hold(&first.id);
+            let second = s.now(&s.helper).unwrap();
+            s.idle(&second.id);
+            let ids = |row: &str| s.row(row).unwrap().agent_session_id;
+            let (one, two) = (ids(&first.id), ids(&second.id));
+            assert!(one.is_some() && two.is_some() && one != two);
+            let back = s.undo(&s.helper, &first.id, &second.id).unwrap();
+            assert_eq!(
+                (s.state(&second.id), ids(&second.id)),
+                (Ok(Closed), two.clone()),
+                "the untouched new conversation is in History"
+            );
+            until("the first conversation is loaded", || ids(&back.id) == one);
+            // The other way: the first conversation ends, and stays as well.
+            let again = s.undo(&s.helper, &second.id, &back.id).unwrap();
+            assert_eq!((s.state(&back.id), ids(&back.id)), (Ok(Closed), one));
+            until("the second conversation is loaded", || {
+                ids(&again.id) == two
+            });
+            assert_eq!(s.seat(&s.helper), Some(again.id));
+        });
+        s.end();
+    }
+
+    /// Round 4: the Undo names the seat the new conversation opened. When the teammate's seat is another session by
+    /// now (the owner closed that one and opened a third), or none, the Undo is refused and nothing changes.
+    #[test]
+    fn undo_with_a_changed_seat_is_refused_and_changes_nothing() {
+        let s = Seats::new();
+        ticking(&s.reg, || {
+            let first = s.open(&s.helper);
+            s.hold(&first.id);
+            let second = s.now(&s.helper).unwrap();
+            s.idle(&second.id);
+            s.reg.lock().unwrap().end_seat(&second.id).unwrap();
+            let none = s.undo(&s.helper, &first.id, &second.id);
+            assert!(
+                none.as_ref()
+                    .is_err_and(|e| e.contains("this seat changed")),
+                "no seat: {none:?}"
+            );
+            let third = s.open(&s.helper);
+            let other = s.undo(&s.helper, &first.id, &second.id);
+            assert!(
+                other
+                    .as_ref()
+                    .is_err_and(|e| e.contains("both conversations are in History")),
+                "another seat: {other:?}"
+            );
+            assert_eq!(s.seat(&s.helper), Some(third.id.clone()));
+            assert_eq!(
+                (s.state(&first.id), s.state(&second.id), s.state(&third.id)),
+                (Ok(Closed), Ok(Closed), Ok(Running)),
+                "nothing changed"
+            );
+            assert!(!s.logged().contains("session/load"), "nothing was started");
+        });
+        s.end();
+    }
+
+    /// Round 2, finding 2, as round 4 keeps it: an Undo whose resume cannot start closes nothing and says so. The
+    /// seat the new conversation opened stays live and the seat, both rows are still there, and a later Undo works.
+    #[test]
+    fn a_failed_resume_leaves_both_rows() {
+        let s = Seats::new();
+        ticking(&s.reg, || {
+            let first = s.open(&s.helper);
+            s.hold(&first.id);
+            let second = s.now(&s.helper).unwrap();
+            s.idle(&second.id);
+            // The agent's command changed since it was approved: nothing of it starts.
+            let agents = s.home.join("agents.toml");
+            let approved = fs::read_to_string(&agents).unwrap();
+            fs::write(&agents, approved.replace("env = []", "env = [\"X\"]")).unwrap();
+            let failed = s.undo(&s.helper, &first.id, &second.id);
+            assert!(
+                failed
+                    .as_ref()
+                    .is_err_and(|e| e
+                        .ends_with("nothing was deleted, and both conversations are in History")),
+                "{failed:?}"
+            );
+            assert_eq!(s.seat(&s.helper), Some(second.id.clone()));
+            assert_eq!(
+                (s.state(&first.id), s.state(&second.id)),
+                (Ok(Closed), Ok(Running))
+            );
+            fs::write(&agents, approved).unwrap();
+            let back = s.undo(&s.helper, &first.id, &second.id).unwrap();
+            assert_eq!(s.seat(&s.helper), Some(back.id));
+            assert_eq!(s.state(&second.id), Ok(Closed));
+        });
+        s.end();
+    }
+
+    /// Round 3, as round 4 keeps it: an ACP agent loads a resumed conversation after its start. An Undo whose load
+    /// then fails leaves a failed run, and both conversations still in History with their ids: the old row is
+    /// dropped only by a load that succeeded.
+    #[test]
+    fn an_undo_whose_load_fails_leaves_both_conversations_in_history() {
+        let s = Seats::new();
+        ticking(&s.reg, || {
+            let first = s.open(&s.helper);
+            s.hold(&first.id);
+            let second = s.now(&s.helper).unwrap();
+            s.idle(&second.id);
+            let ids = |row: &str| s.row(row).unwrap().agent_session_id;
+            let (one, two) = (ids(&first.id), ids(&second.id));
+            assert!(one.is_some() && two.is_some());
+            let noload = PathBuf::from(format!("{}.noload", s.log.display()));
+            fs::write(&noload, "").unwrap();
+            let run = s.undo(&s.helper, &first.id, &second.id).unwrap();
+            until("the load failed", || s.state(&run.id) == Ok(Failed));
+            assert_eq!((s.state(&first.id), ids(&first.id)), (Ok(Closed), one));
+            assert_eq!((s.state(&second.id), ids(&second.id)), (Ok(Closed), two));
+            fs::remove_file(&noload).unwrap();
+        });
+        s.end();
+    }
+
+    /// Round 5: History keeps the newest 50 closed rows (ticket 621). The row an ACP resume still loads from is the
+    /// only place its conversation id lives until the load succeeded, so that bound never takes it. Here the Undo's
+    /// source is the oldest of 50 closed rows, ending the named seat makes 51, and the load then fails: the source is
+    /// still in History with its id.
+    #[test]
+    fn the_closed_row_bound_spares_the_row_a_resume_loads_from() {
+        use crate::api::StartSession;
+        let s = Seats::new();
+        ticking(&s.reg, || {
+            let first = s.open(&s.helper);
+            s.hold(&first.id);
+            let second = s.now(&s.helper).unwrap();
+            s.idle(&second.id);
+            let conversation = s.row(&first.id).unwrap().agent_session_id;
+            assert!(conversation.is_some());
+            // 49 more closed rows, all newer than the first conversation's.
+            for n in 0..49 {
+                let mut sessions = s.reg.lock().unwrap();
+                let mut launch = sessions
+                    .launch_as(
+                        None,
+                        StartSession {
+                            account: None,
+                            kind: AgentKind::Acp,
+                            project: s.proj.clone(),
+                            worktree: false,
+                            label: format!("filler {n}"),
+                            args: vec!["fake".into()],
+                            model: None,
+                            effort: None,
+                            resume: None,
+                        },
+                        false,
+                    )
+                    .unwrap()
+                    .owner_start()
+                    .prepare()
+                    .unwrap();
+                let id = sessions.start(&launch).unwrap().id;
+                launch.committed = true;
+                sessions.close(&id, true, false).unwrap();
+            }
+            assert_eq!(
+                s.state(&first.id),
+                Ok(Closed),
+                "50 closed rows, it is the oldest"
+            );
+            let noload = PathBuf::from(format!("{}.noload", s.log.display()));
+            fs::write(&noload, "").unwrap();
+            let run = s.undo(&s.helper, &first.id, &second.id).unwrap();
+            assert_eq!(s.state(&second.id), Ok(Closed), "the 51st closed row");
+            until("the load failed", || s.state(&run.id) == Ok(Failed));
+            let old = s
+                .row(&first.id)
+                .expect("the row the failed load came from is still in History");
+            assert_eq!(old.agent_session_id, conversation);
+            fs::remove_file(&noload).unwrap();
+        });
+        s.end();
+    }
+
+    /// Round 3, the same for any ACP resume (History's Continue): the prior row leaves only once the load succeeded.
+    /// A load that fails ends the new run as failed, and the conversation is still in History under its id.
+    #[test]
+    fn a_resume_whose_load_fails_keeps_the_prior_row() {
+        use crate::api::StartSession;
+        let s = Seats::new();
+        ticking(&s.reg, || {
+            let first = s.open(&s.helper);
+            s.reg.lock().unwrap().end_seat(&first.id).unwrap();
+            let conversation = s.row(&first.id).unwrap().agent_session_id;
+            let resume = |s: &Seats| {
+                let mut sessions = s.reg.lock().unwrap();
+                let mut launch = sessions
+                    .launch_as(
+                        None,
+                        StartSession {
+                            account: None,
+                            kind: AgentKind::Acp,
+                            project: s.proj.clone(),
+                            worktree: false,
+                            label: "Helper".into(),
+                            args: vec!["fake".into()],
+                            model: None,
+                            effort: None,
+                            resume: conversation.clone(),
+                        },
+                        false,
+                    )
+                    .unwrap()
+                    .owner_start()
+                    .prepare()
+                    .unwrap();
+                let session = sessions.start(&launch).unwrap();
+                launch.committed = true;
+                session.id
+            };
+            let noload = PathBuf::from(format!("{}.noload", s.log.display()));
+            fs::write(&noload, "").unwrap();
+            let failed = resume(&s);
+            until("the load failed", || s.state(&failed) == Ok(Failed));
+            let old = s.row(&first.id).expect("the prior row is still in History");
+            assert_eq!(old.agent_session_id, conversation);
+            fs::remove_file(&noload).unwrap();
+            let loaded = resume(&s);
+            until("the load succeeded", || {
+                s.row(&loaded).unwrap().agent_session_id == conversation
+            });
+            assert!(s.row(&first.id).is_err(), "replaced once it is loaded");
+        });
+        s.end();
+    }
+
+    /// A Lead's seat and a worker seat that Lead opened (its parent).
+    fn lead_and_worker(s: &Seats) -> (crate::api::Session, crate::api::Session) {
+        let lead = s.open(&s.lead);
+        let caller = crate::grants::Caller {
+            id: lead.id.clone(),
+            project: s.proj.clone(),
+        };
+        let worker = open_seat(&s.reg, &s.helper, Some("task"), None, Opener::Lead(&caller))
+            .unwrap()
+            .session;
+        assert_eq!(worker.parent.as_deref(), Some(lead.id.as_str()));
+        s.idle(&worker.id);
+        (lead, worker)
+    }
+
+    /// Ticket 1130 B-L3 round 2, finding 3: a worker its Lead opened keeps that Lead as its parent through "New
+    /// conversation" and through its Undo, so its wake lines still reach the Lead.
+    #[test]
+    fn a_workers_new_conversation_keeps_its_lead() {
+        let s = Seats::new();
+        ticking(&s.reg, || {
+            let (lead, worker) = lead_and_worker(&s);
+            s.hold(&worker.id);
+            let fresh = s.now(&s.helper).unwrap();
+            assert_eq!(fresh.parent.as_deref(), Some(lead.id.as_str()));
+            assert_eq!(s.row(&fresh.id).unwrap().parent, Some(lead.id.clone()));
+            s.idle(&fresh.id);
+            let back = s.undo(&s.helper, &worker.id, &fresh.id).unwrap();
+            assert_eq!(back.parent.as_deref(), Some(lead.id.as_str()));
+        });
+        s.end();
+    }
+
+    /// Ticket 1130 B-L3 round 2, finding 4: a Lead's new conversation adopts its running workers, and its Undo hands
+    /// them to the restored Lead: no worker is left with the ended seat as its parent.
+    #[test]
+    fn undo_gives_a_leads_workers_back_to_the_restored_lead() {
+        let s = Seats::new();
+        ticking(&s.reg, || {
+            let (lead, worker) = lead_and_worker(&s);
+            s.hold(&lead.id);
+            let second = s.now(&s.lead).unwrap();
+            let parent = || s.row(&worker.id).unwrap().parent;
+            assert_eq!(parent(), Some(second.id.clone()), "adopted by the new Lead");
+            let restored = s.undo(&s.lead, &lead.id, &second.id).unwrap();
+            assert_eq!(s.state(&second.id), Ok(Closed));
+            assert_eq!(parent(), Some(restored.id.clone()), "back with its Lead");
+        });
+        s.end();
+    }
+
     #[test]
     fn window_ops_parse_and_agents_cannot_send_them() {
         let op: Op =
@@ -2915,6 +3633,21 @@ mod tests {
                 ..
             }
         ));
+        // Ticket 1130 B-L3: one press for any teammate, and its Undo.
+        let op: Op = serde_json::from_str(r#"{"op":"team_open","id":"a","fresh":"now"}"#).unwrap();
+        assert!(matches!(
+            op,
+            Op::TeamOpen {
+                fresh: Some(Fresh::Now),
+                undo: None,
+                ..
+            }
+        ));
+        let op: Op =
+            serde_json::from_str(r#"{"op":"team_open","id":"a","undo":"s1","seat":"s2"}"#).unwrap();
+        assert!(
+            matches!(op, Op::TeamOpen { undo: Some(old), seat: Some(seat), .. } if old == "s1" && seat == "s2")
+        );
         // Not an `api::Request`: the owner socket, the CLI and a session's token cannot express a team op.
         assert!(serde_json::from_str::<crate::api::Request>(r#"{"op":"team_list"}"#).is_err());
     }

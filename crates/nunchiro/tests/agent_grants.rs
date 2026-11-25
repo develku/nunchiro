@@ -121,8 +121,11 @@ impl Harness {
             let r = self.owner(json!({"op":"read","id":id})).unwrap();
             let data: Vec<u8> = serde_json::from_value(r["data"].clone()).unwrap();
             let text = String::from_utf8_lossy(&data);
+            // Ticket 1142: only a finished line; the screen can hold the token's first bytes before its last (a PTY
+            // read split under load), and that prefix was presented as the token: "unauthorized" on CI.
             if let Some(line) = text
-                .lines()
+                .split_inclusive('\n')
+                .filter(|l| l.ends_with('\n'))
                 .find_map(|l| l.split_once("TOKEN:").map(|(_, t)| t))
             {
                 return line.trim().into();
@@ -264,7 +267,43 @@ impl Harness {
             token,
             json!({"op":"start","session":{"kind":"claude","project":self.home,"args":args}}),
         )
-        .unwrap()["session"]["id"]
+        .unwrap_or_else(|e| {
+            // Ticket 1142: a refusal names what the token was read as, which sessions still run and, for each, why it
+            // ended and its screen (the token blanked): CI round 2 showed the token's shell had already exited.
+            let states = self.owner(json!({"op":"snapshot"})).map(|s| {
+                s["sessions"].as_array().map_or(vec![], |all| {
+                    all.iter()
+                        .map(|s| {
+                            let screen = self
+                                .owner(json!({"op":"read","id":s["id"]}))
+                                .ok()
+                                .and_then(|r| {
+                                    serde_json::from_value::<Vec<u8>>(r["data"].clone()).ok()
+                                })
+                                // Every session's token, not only this caller's: CI logs are public.
+                                .map(|d| {
+                                    String::from_utf8_lossy(&d)
+                                        .lines()
+                                        .map(|l| match l.find("TOKEN:") {
+                                            Some(i) => format!("{}TOKEN:[token]", &l[..i]),
+                                            None => l.to_string(),
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .join("\n")
+                                });
+                            format!(
+                                "{} {} problem {} screen {screen:?}",
+                                s["kind"], s["state"], s["problem"]
+                            )
+                        })
+                        .collect()
+                })
+            });
+            panic!(
+                "start as a {}-character token: {e}; sessions: {states:?}",
+                token.len()
+            )
+        })["session"]["id"]
             .as_str()
             .unwrap()
             .into()

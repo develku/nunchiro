@@ -31,6 +31,7 @@ import { RowIcon } from '../tree/RowIcon'; // v25-design-chat: the tree's workin
 import './chat.css';
 import './handoff.css'; // v2-3b
 import { keyText } from '../keys';
+import { freshSeats } from '../lead/lead';
 
 interface State {
   generation: number | null;
@@ -408,7 +409,8 @@ function ChatList({ boot, feed, session, shown, readOnly, head, main, t }: { t: 
                   it should do, not what to build in its folder. */}
               <h3>{stateOf(session) === 'waiting' ? t('chat.empty.waitTitle', { name: session.label || t('chat.theAgent') }) : session.teammate ? t('chat.empty.seatTitle', { name: session.label || t('chat.theAgent') }) : t('chat.empty.title', { project: baseName(session.project) })}</h3>
               {/* Ticket 1097: the terminal at the side opens only for what the card above the composer cannot answer (pane/store.ts blocked). */}
-              <p>{t(stateOf(session) !== 'waiting' ? 'chat.empty.hint' : session.pending.some((d) => d.kind === 'question' || d.kind === 'permission') && !blocked(session) ? 'chat.empty.waitCard' : 'chat.empty.waitHint')}</p>
+              {/* Ticket 1130 B-L3: a conversation "New conversation" just opened says what it keeps (the mockup's quiet line). */}
+              <p>{stateOf(session) !== 'waiting' && freshSeats.has(session.id) ? t('lead.newConvSame', { name: session.label || t('chat.theAgent') }) : t(stateOf(session) !== 'waiting' ? 'chat.empty.hint' : session.pending.some((d) => d.kind === 'question' || d.kind === 'permission') && !blocked(session) ? 'chat.empty.waitCard' : 'chat.empty.waitHint')}</p>
             </div>
           </div>
         )}

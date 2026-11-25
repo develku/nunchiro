@@ -42,6 +42,7 @@ import { RoomView } from '../room/RoomView'; // ticket 571
 import { isRoomTab, roomOfTab, roomTabId, useRoom } from '../room/room';
 import { leadOf, leadSeatMate, placeOfMate, seatOf, useTeam, workingFor } from '../lead/lead'; // ticket 990
 import { TeamChip, TeamLine } from '../lead/LeadHead';
+import { FreshButton, FreshToast, takeFocus } from '../lead/LeaderDialog';
 import { useDigest } from '../lead/HomeParts';
 import { useTasks, withMerges } from '../lead/tasks';
 import { closeTeamTab, focusTeam, onShowTeamTab, showTeamTab, useTeamAt } from '../lead/team'; // owner 11-17
@@ -161,6 +162,10 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
   const team = useTeam(core, connected);
   const wtc = windowCtx().wt;
   const leadMate = leadSeatMate(current, team);
+  const seatMate = current?.teammate ? team.teammates.find((m) => m.id === current.teammate) : undefined;
+  const seatLive = seatMate ? seatOf(sessions, seatMate.id) : null;
+  // Ticket 1130 B-L3: a new conversation (and its Undo) opens with the composer focused, as the mockup's second frame.
+  useEffect(() => void (current && takeFocus(current.id) && composer.current?.focus()), [current?.id, composer]); // eslint-disable-line react-hooks/exhaustive-deps
   const forLead = current && !leadMate && wtc ? workingFor(current, team, sessions, wtc.list) : null;
   // Owner 11-17: in a place with a lead the project's last tab is the Team view, drawn only while it lives there (else it is in
   // the right sidebar); a place with no lead keeps its Room tab as before.
@@ -576,6 +581,8 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
           {leadMate && <TeamChip t={t} mate={leadMate} tasks={tasks} sessions={sessions} onOpen={openTeam} digest={digest} waiting={needsYou} />}
           {/* Ticket 1031: the PR chip, moved here from the status bar (a shell has no chat to carry it). */}
           <SessionFacts t={t} core={core} boot={boot} session={current} />
+          {/* Ticket 1130 B-L3 (C5): "New conversation" on a teammate's seat (not on an older conversation of one whose seat runs elsewhere). */}
+          {seatMate && !current.side_chat && (seatLive ?? current).id === current.id && <FreshButton t={t} mate={seatMate} seat={current} live={seatLive} />}
           {/* needs 130: the mockup's +a −b, then its Diff button, at the header's right. No change, no pill. */}
           {headStat && (
             // Q6 B18: the pill's scope (since the session's start commit) on hover too, as the Diff pane's scope radios and base line say theirs.
@@ -658,6 +665,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
       {paneSession && <SidePane core={core} session={paneSession} all={sessions} term={paneTerm} insert={insertQuote(composer)} t={t} />}
       </div>
       </SplitHost>
+      <FreshToast t={t} />
       {tabHitNow && createPortal(<Preview box={tabHitNow.box} side={tabHitNow.side} refused={tabHitNow.refused} />, document.body)}
     </div>
   );
