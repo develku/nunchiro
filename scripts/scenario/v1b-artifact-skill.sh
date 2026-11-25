@@ -167,8 +167,8 @@ def one(agent):
         row['html'] = html
         result = out / f'{agent}.json'
         live = {'home': str(home), 'session': s['id'], 'paths': [f'artifacts/{s["id"]}/{h}' for h in html], 'out': str(result)}
-        p = subprocess.run(['pnpm', 'exec', 'playwright', 'test', 'artifacts-live', '--project', 'chromium', '--reporter', 'line'],
-                           cwd=root / 'web', env={**os.environ, 'NUNCHIRO_WEB_PORT': port, 'ARTIFACT_LIVE': json.dumps(live)},
+        p = subprocess.run(['pnpm', 'exec', 'playwright', 'test', 'artifacts-live', '--project', 'live', '--reporter', 'line'],
+                           cwd=root / 'web', env={**os.environ, 'PW_OPT_IN': 'live', 'NUNCHIRO_WEB_PORT': port, 'ARTIFACT_LIVE': json.dumps(live)},
                            capture_output=True, text=True, timeout=300)
         (out / f'{agent}.playwright.log').write_text(p.stdout + p.stderr)
         if result.exists():

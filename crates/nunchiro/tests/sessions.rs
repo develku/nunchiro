@@ -520,6 +520,10 @@ fn codex_hook_policy_and_injection_opt_out_preserve_user_config() {
                 !disabled && !repo_hooks
             );
             assert!(output.contains("fixture-model"));
+            // Ticket 1149: the outward hook rides on every Codex start, trusted by its own hash, with Nunchiro's other
+            // hooks or without them.
+            assert!(output.contains("hook outward --codex"), "{output}");
+            assert!(output.contains("trusted_hash="), "{output}");
             // Ticket 692: never the update screen, whose preselected Enter runs `brew upgrade`.
             assert!(
                 output.contains(r#""-c", "check_for_update_on_startup=false""#),
@@ -663,7 +667,11 @@ fn codex_identity_survives_restart_with_hook_injection_disabled() {
         _ => panic!(),
     };
     h.wait_text(&s.id, "READY");
-    assert!(!h.read(&s.id).contains("hooks."));
+    // None of Nunchiro's own hooks (the SessionStart one would report the id); ticket 1149: the outward hook, which
+    // every Codex start gets, is the only one.
+    let output = h.read(&s.id);
+    assert!(!output.contains("hooks.SessionStart"), "{output}");
+    assert_eq!(output.matches("hooks.").count(), 2, "{output}"); // hooks.PreToolUse, hooks.state
     let until = Instant::now() + Duration::from_secs(5);
     loop {
         let sessions = match h.request(Request::Snapshot) {
@@ -1737,9 +1745,49 @@ fn codex_unapproved_sources_disable_injected_hooks_and_bypass() {
             !output.contains("default_mode_request_user_input"),
             "{source}: {output}"
         );
+        // Ticket 1149: a start that gets none of Nunchiro's other hooks (its own arguments, the person's own hooks
+        // or config) still gets the outward hook, and no unreviewed hook of theirs is run for it.
+        assert!(
+            output.contains("hook outward --codex") && output.contains("trusted_hash="),
+            "{source}: {output}"
+        );
         if source == "unreadable" {
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
         }
+    }
+}
+
+/// Ticket 1149: a later `-c` wins in Codex, so a start whose arguments name hooks in a config or feature flag is
+/// refused: it could take the outward hook away.
+#[test]
+fn t1149_codex_arguments_that_name_hooks_are_refused() {
+    let h = Harness::new();
+    for args in [
+        vec!["-c", "hooks.state={}"],
+        vec!["--disable", "hooks"],
+        vec!["-c", "features.hooks=false"],
+    ] {
+        let refused = call(
+            &h.home,
+            Request::Start {
+                receipt: None,
+                env: Default::default(),
+                folder: None,
+                session: StartSession {
+                    account: None,
+                    kind: AgentKind::Codex,
+                    project: h.home.clone(),
+                    worktree: false,
+                    label: String::new(),
+                    args: args.iter().map(|a| a.to_string()).collect(),
+                    model: None,
+                    effort: None,
+                    resume: None,
+                },
+            },
+        )
+        .unwrap_err();
+        assert!(refused.contains("outward"), "{args:?}: {refused}");
     }
 }
 

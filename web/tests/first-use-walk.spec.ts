@@ -75,12 +75,10 @@ async function openSettings(app: Page) {
   await expect(app.getByRole('dialog').first()).toBeVisible();
 }
 
-test.skip(({ browserName }) => browserName !== 'chromium', 'chromium only');
 test.use({ firstRun: true, actionTimeout: 8000 });
 test.setTimeout(400_000);
 
-test('first_use_walk: ten first-use jobs, by visible text and roles only', async ({ app, core }) => {
-  test.skip(process.env.WALK !== '1', 'opt-in walk: WALK=1');
+test('first_use_walk: ten first-use jobs, by visible text and roles only', { tag: '@shots' }, async ({ app, core }) => {
   fs.rmSync(OUT, { recursive: true, force: true });
   fs.mkdirSync(OUT, { recursive: true });
   fs.writeFileSync(path.join(core.home, 'bin/claude'), WALK_CLAUDE(), { mode: 0o700 });
@@ -257,7 +255,7 @@ test('first_use_walk: ten first-use jobs, by visible text and roles only', async
 
 // Ticket 579 (scorecard F1, F10): the walk of a new user on main with project tabs, the Room tab and plain palette names.
 // Not opt-in: each step asserts what a new user needs to see next, and leaves a shot in .scratch/walk-579/.
-test('first_use_walk_579: onboarding to a first session, the Room tab, settings by palette, close and reopen', async ({ app, core }) => {
+test('first_use_walk_579: onboarding to a first session, the Room tab, settings by palette, close and reopen', { tag: '@chromium' }, async ({ app, core }) => {
   const dir = path.join(REPO, '.scratch/walk-579');
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
@@ -405,7 +403,7 @@ const WALK2 = {
 for (const lang of ['en', 'ko'] as const) {
   test.describe(`walk 603 ${lang}`, () => {
     test.use({ locale: lang === 'ko' ? 'ko-KR' : 'en-US' });
-    test(`first_use_walk_603_${lang}: onboarding, first session, Room, held keys, palette, three errors, reopen`, async ({ app, core }) => {
+    test(`first_use_walk_603_${lang}: onboarding, first session, Room, held keys, palette, three errors, reopen`, { tag: '@chromium' }, async ({ app, core }) => {
       const L = WALK2[lang];
       const dir = path.join(REPO, `.scratch/walk-603/${lang}`);
       fs.rmSync(dir, { recursive: true, force: true });

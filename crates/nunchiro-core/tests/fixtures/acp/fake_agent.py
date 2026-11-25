@@ -7,6 +7,7 @@ appended to LOG as received, so a test reads the answers the core gave. `load` d
 `fsask` asks for a file and a terminal before answering `session/new`; `child-writes` leaves a child that keeps sending
 updates on the shared stdout and exits after its first prompt. Ticket 358: `nomodels` reports no model option;
 `set-fails` answers session/set_config_option with an error; `many:N` adds N long model ids after the two short ones.
+Ticket 1130: while a file LOG.noload exists, `session/load` answers an error (a resume whose load fails).
 A prompt's first text block picks the behaviour:
   later          end the turn, then ask permission with no prompt in flight
   elicit         ask a URL elicitation, end the turn once it is answered
@@ -25,6 +26,9 @@ A prompt's first text block picks the behaviour:
                  writes PATH with the answers once all came, then releases it and ends the turn
   orphan:PATH    starts `sleep 300` (same process group), writes its pid to PATH and exits
   term-orphan:PATH  a terminal whose shell leaves `sleep 300` (ignoring SIGHUP) behind, pid in PATH; release, end turn
+  outward:PATH   terminal/create of `/bin/sh -c "touch PATH # npm publish"` (a publish, as the client reads it) with one
+                 variable of its own; ends the turn once the client answered (a terminal or an error)
+  outward-long:PATH  the same behind 4100 harmless characters, so the publish is past what a card shows
   forge:PATH     answers ids the client never asked for (1, the next prompt id, a string); ends the turn once PATH exists
   hostile        a broken JSON line, a non-JSON line, an unknown method, a permission for another session, end turn
   longline       one 17 MiB line
@@ -222,6 +226,16 @@ def on_prompt(message):
                                        lambda m3: end_turn()))
         request("terminal/create", {"sessionId": session, "command": "/bin/sh", "args": ["-c", script, "sh", path]},
                 created)
+    elif text.startswith("outward:"):
+        request("terminal/create",
+                {"sessionId": session, "command": "/bin/sh", "args": ["-c", 'touch "$1" # npm publish', "sh", text[8:]],
+                 "env": [{"name": "NPM_CONFIG_REGISTRY", "value": "https://registry.invalid"}]},
+                lambda m: end_turn())
+    elif text.startswith("outward-long:"):
+        script = "echo " + "a" * 4100 + '; touch "$1" # npm publish'
+        request("terminal/create",
+                {"sessionId": session, "command": "/bin/sh", "args": ["-c", script, "sh", text[13:]]},
+                lambda m: end_turn())
     elif text.startswith("forge:"):
         pid, gate = prompt["id"], text[6:]
         for forged in [1, pid + 1 if isinstance(pid, int) else 999, "forged"]:
@@ -286,6 +300,8 @@ for line in sys.stdin:
         send({"jsonrpc": "2.0", "id": rid, "result": {"sessionId": "fake-%d" % os.getpid(), "configOptions": CONFIG}})
     elif method == "session/new":
         send({"jsonrpc": "2.0", "id": rid, "result": {"sessionId": "fake-%d" % os.getpid(), "configOptions": CONFIG}})
+    elif method == "session/load" and os.path.exists(LOG + ".noload"):
+        send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32000, "message": "session not found"}})
     elif method == "session/load":
         session = message["params"]["sessionId"]
         update(session, {"sessionUpdate": "user_message_chunk", "content": {"type": "text", "text": "replayed"}})

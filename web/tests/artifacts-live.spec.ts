@@ -11,8 +11,7 @@ import { artifactServer } from './sandbox-server';
 type Live = { home: string; session: string; paths: string[]; out: string };
 const live = process.env.ARTIFACT_LIVE ? (JSON.parse(process.env.ARTIFACT_LIVE) as Live) : null;
 
-test('scenario: an HTML chart the agent wrote into its artifact folder renders inline from a data-root event', async ({ page }, info) => {
-  test.skip(!live || info.project.name !== 'chromium', 'run through scripts/scenario/v1b-artifact-skill.sh');
+test('scenario: an HTML chart the agent wrote into its artifact folder renders inline from a data-root event', { tag: '@live' }, async ({ page }) => {
   test.setTimeout(120_000);
   const L = live!;
   expect(L.paths.length).toBeGreaterThan(0);

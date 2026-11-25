@@ -70,8 +70,7 @@ const rail = (row: Locator) =>
 
 for (const pick of PICKS)
   for (const scheme of ['light', 'dark'] as const)
-    test(`themes_real_app_as_written: ${pick.name} in ${scheme} OS mode paints text, tree marks, board, buttons and status from its own fields`, async ({ app, core }, info) => {
-      test.skip(info.project.name !== 'chromium', 'one browser is enough for computed colours');
+    test(`themes_real_app_as_written: ${pick.name} in ${scheme} OS mode paints text, tree marks, board, buttons and status from its own fields`, { tag: '@chromium' }, async ({ app, core }) => {
       const c = pick.colors;
       const shot = (what: string) => app.screenshot({ path: path.join(shotsDir!, `${pick.name.replace(/\W+/g, '-')}-${scheme}-${what}.png`) });
       fill(core);
@@ -112,8 +111,7 @@ for (const pick of PICKS)
 
 // Selection, the board legend and a button come from the theme too, as written, in the real window.
 for (const pick of PICKS)
-  test(`selection_and_legend_mapped: ${pick.name} paints the window selection, the board key and a primary button from its own colours`, async ({ app, core }, info) => {
-    test.skip(info.project.name !== 'chromium', 'one browser is enough for computed colours');
+  test(`selection_and_legend_mapped: ${pick.name} paints the window selection, the board key and a primary button from its own colours`, { tag: '@chromium' }, async ({ app, core }) => {
     const c = pick.colors;
     fill(core);
     await app.emulateMedia({ colorScheme: 'light' });
@@ -160,8 +158,7 @@ test('themes_basic_interactions: Settings, Appearance, hovering a card shows the
 // own value (the file parsed in window-tokens.ts, not a copy of its numbers).
 const ROLE_TOKENS = ['--page', '--panel', '--raised', '--text', '--muted', '--faint', '--line', '--hover', '--you', '--you-bg', '--bad', '--run', '--ok', '--done', '--idle', '--on-status'];
 for (const [name, pick, head] of [['Nunchiro Light', LIGHT_PICK, LIGHT_CSS], ['Nunchiro Dark', DARK_PICK, DARK_CSS]] as const)
-  test(`bundled_themes_unchanged: ${name} sets no inline token and every role is the tokens.css value`, async ({ app, core }, info) => {
-    test.skip(info.project.name !== 'chromium', 'one browser is enough for computed colours');
+  test(`bundled_themes_unchanged: ${name} sets no inline token and every role is the tokens.css value`, { tag: '@chromium' }, async ({ app, core }) => {
     fill(core);
     await app.addInitScript((p) => localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ themeMode: 'fixed', themeFixed: p })), pick);
     await openWindow(app, {}, core);

@@ -10,8 +10,7 @@ test.use({ viewport: data.viewport, deviceScaleFactor: 2 });
 const out = path.join(REPO, '.scratch/v2-8f');
 
 for (const scheme of ['light', 'dark'] as const) {
-  test(`same_data_side_by_side ${scheme}`, async ({ app, core, browserName }) => {
-    test.skip(browserName !== 'chromium', 'The existing pixel gate uses Chromium.');
+  test(`same_data_side_by_side ${scheme}`, { tag: '@chromium' }, async ({ app, core }) => {
     core.shell(repo(core, data.project), 'main');
     openQuiet(core);
     await show(app, scheme);

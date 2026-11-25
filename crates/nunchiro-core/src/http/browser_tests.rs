@@ -1156,7 +1156,7 @@ fn web_smoke_lists_specs() {
 /// caller, a browser). The agent half runs over the socket too: `bundle_358_ops_are_refused_to_a_session` in tests/acp.rs.
 #[test]
 fn bundle_358_ops_are_in_every_owner_only_list() {
-    let sessions = include_str!("../sessions.rs");
+    let sessions = include_str!("../sessions/agent_calls.rs");
     let agent = &sessions[sessions.find("pub(crate) fn check_agent").unwrap()..];
     let agent = &agent[..agent.find("Request::Close { id }").unwrap()];
     // Only the `matches!` that refuses forwarding: from the Remote arm to its refusal.

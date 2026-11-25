@@ -11,6 +11,17 @@ The scorecard scores 29 parts of Nunchiro 0 to 100, each on its own (parts 26 to
 - results-<date>.json: the figures of one measure run (median, range and every value).
 - shots/: Nunchiro pictures from the run, and peer pictures from the 2026-11-02 timed run.
 
+## Weekly full run (TR2)
+
+.github/workflows/full.yml runs every web spec on Chromium and WebKit and the `measure` Rust set each week. Read the newest
+result with `gh run list --workflow full.yml --limit 1` and `gh run download <run id> -n full-run-result`, which gives
+full-run.json: `sha` and `date` (UTC) of the tested commit, `run_id`, `clean` (true only when every field below is
+clean), `jobs` (`web` and `rust_extended` job results: success, failure or cancelled), `web.chromium` and `web.webkit`
+each with `passed`, `failed`, `flaky` (passed on its retry) and `skipped` test counts and `errors` (report-level errors,
+such as a global teardown failing after every test passed), `web_shards` (`expected` and `reported` shard reports;
+fewer reported means a shard died and the counts are incomplete), and `rust_extended` (each scripts/extended-tests.sh
+group: `pass`, `FAIL` or `skipped(...)`; null when that job did not finish). The run's summary page shows the same table.
+
 ## Run it again (after each phase)
 
 1. `MEASURE_TARGET=<a cargo target folder on a roomy disk> python3 -B scripts/measure/scorecard.py run` builds the

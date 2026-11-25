@@ -212,8 +212,7 @@ const look = (l: Locator) =>
     return { accent: c.accentColor, bg: c.backgroundColor, scheme: c.colorScheme, border: `${c.borderTopWidth} ${c.borderTopStyle} ${c.borderTopColor}`, outline: c.outlineStyle, width: e.getBoundingClientRect().width };
   });
 
-test.describe('dark_tidy_matches_mockup_computed', () => {
-  test.skip(({ browserName }) => browserName !== 'chromium', 'pixel gate is Chromium only');
+test.describe('dark_tidy_matches_mockup_computed', { tag: '@chromium' }, () => {
 
   test('dark_tidy_checkbox_colour / dark_tidy_all_projects_border / dark_tidy_resolve_width', async ({ app, core }) => {
     const d = await tidyPanel(app, core, 'dark');
@@ -287,8 +286,7 @@ test.describe('dark_tidy_matches_mockup_computed', () => {
 });
 
 for (const scheme of SCHEMES) {
-  test.describe(`worktree_dialogs_match_mockup (${scheme})`, () => {
-    test.skip(({ browserName }) => browserName !== 'chromium', 'pixel gate is Chromium only');
+  test.describe(`worktree_dialogs_match_mockup (${scheme})`, { tag: '@chromium' }, () => {
 
     test('mockup_copied_and_hashed', async () => {
       const readme = fs.readFileSync(path.join(MOCKUPS, 'README.md'), 'utf8');

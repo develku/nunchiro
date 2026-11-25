@@ -2562,9 +2562,12 @@ impl Queue {
         // else may make one safe. Without the lock the name proves nothing: a project's own server may carry it.
         let read = home_lock && tool.is_some_and(|t| crate::home_lock::reads(t));
         let input = serde_json::from_str::<Value>(&item.text).unwrap_or_default();
-        item.outward = tool
-            .and_then(|t| crate::outward::kind(t, &input))
-            .map(|k| k.name().to_string());
+        // Ticket 1149: an ACP card's text is the command it asks to run (`terminal/create`) or the agent's own title.
+        item.outward = match acp {
+            true => crate::outward::kind("Bash", &json!({"command": item.text})),
+            false => tool.and_then(|t| crate::outward::kind(t, &input)),
+        }
+        .map(|k| k.name().to_string());
         // Ticket 1130 S1: an outward call is never one "allow always" may cover.
         item.risky = item.outward.is_some()
             || (!read && risk::risky(tool.map(String::as_str), &item.text, cwd));

@@ -35,8 +35,7 @@ async function rows(app: Page, core: Core, scheme: Scheme) {
 }
 
 for (const scheme of SCHEMES) {
-  test.describe(`tree_rows_match_mockup (${scheme})`, () => {
-    test.skip(({ browserName }) => browserName !== 'chromium', 'pixel gate is Chromium only');
+  test.describe(`tree_rows_match_mockup (${scheme})`, { tag: '@chromium' }, () => {
 
     test('mockup_copied_and_hashed', async () => {
       const readme = fs.readFileSync(path.join(MOCKUPS, 'README.md'), 'utf8');
@@ -55,8 +54,7 @@ for (const scheme of SCHEMES) {
 // FIDELITY BAR (needs 130): the five elements the coordinator found below the mockup. Each renders the mockup's own data
 // (fixtures/fid-tree.ts) and asserts the mockup's own shape: mockup ② lumen's bar, ③ Trading's head and rows, ①'s
 // clean-up line. Chromium only where a crop is compared; shapes are checked on both.
-test.describe('fidelity bar: tree rows equal or better than the mockup', () => {
-  test.skip(({ browserName }) => browserName !== 'chromium', 'the tree is measured at the mockup’s 1440x900 Chromium width');
+test.describe('fidelity bar: tree rows equal or better than the mockup', { tag: '@chromium' }, () => {
 
   // ② "내가 접은 프로젝트: 색 바 + 결정 대기 줄은 그대로 보임": one 3x12 segment per session, never one wide bar.
   test('folded_project_colour_strip', async ({ app, core }) => {
@@ -162,8 +160,7 @@ test('same_data_side_by_side', async ({ app, core, page }) => {
 
 // Gap 1 and gap 4 are the same row at the sidebar's real width: the button must stay one line, and the name must not be
 // cut while the row still has room for it.
-test.describe('fidelity bar: waiting rows at the real sidebar width', () => {
-  test.skip(({ browserName }) => browserName !== 'chromium', 'layout is measured in Chromium at the app’s width');
+test.describe('fidelity bar: waiting rows at the real sidebar width', { tag: '@chromium' }, () => {
 
   // ① "Open in panel" wraps onto three lines and pushes the row: one line, never wider than the row allows.
   test('open_in_panel_one_line', async ({ app, core }) => {

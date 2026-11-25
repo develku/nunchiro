@@ -5,7 +5,6 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { REPO } from './fixtures';
 import { installHost } from './fixtures/artifacts/cards/host';
 import { gitChat, page1, PNG, savedImage, write, written } from './fixtures/artifacts-widget/helpers';
 import { append, chat, expect, openChat, rec, test as chatTest } from './fixtures/chat/harness';
@@ -327,20 +326,6 @@ test('artifacts widget: Diff list states (not_git, no_commits, truncated) show D
   await openWidget(page);
   await expect(dock(page).getByRole('note')).toHaveText('Showing the first 2000 files; more changed.', { timeout: 15_000 });
   await expect((await diffWords()).getByRole('note')).toHaveText('Showing the first 2000 files; more changed.', { timeout: 15_000 });
-});
-
-test('artifacts widget screens', async ({ page, chatCore }, info) => {
-  test.skip(info.project.name !== 'chromium' || !process.env.SHOTS, 'run with SHOTS=1');
-  const { s } = threeRows(chatCore);
-  append(s.file, written(s, 'w2', 'docs/reap-order.md', '# reap-order\n\n1. retire\n2. reap\n'));
-  await openChat(page, s.id);
-  await openWidget(page);
-  await expect(rows(page)).toHaveCount(3);
-  await expect(changed(page)).toHaveCount(3);
-  await page.waitForTimeout(300);
-  fs.mkdirSync(path.join(REPO, '.scratch/shots'), { recursive: true });
-  await page.screenshot({ path: path.join(REPO, '.scratch/shots/artifacts-widget-dock.png') });
-  await dock(page).screenshot({ path: path.join(REPO, '.scratch/shots/artifacts-widget-dock-crop.png') });
 });
 
 // v1b-28: the V1B-13 review follow-ups.

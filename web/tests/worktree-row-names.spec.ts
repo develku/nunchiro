@@ -249,32 +249,3 @@ test('remove_refused_while_session_runs: Backspace and the menu ask to stop the 
   expect(git(p, 'worktree', 'list')).toContain(a.cwd);
   expect(core.cli('snapshot', '--json').sessions as { id: string; state: string }[]).toContainEqual(expect.objectContaining({ id: a.id, state: 'running' }));
 });
-
-test('shots: per-row crops, mockup and app, for the REPORT side-by-side page', async ({ app, core, browserName }) => {
-  test.skip(browserName !== 'chromium' || !process.env.WT_SHOTS, 'screenshots only on request');
-  const p = repo(core);
-  core.shell(p, 'main-shell');
-  const a = core.agent(p, 'fix login', 'go', true);
-  core.cli('session', 'close', a.id);
-  managed(core, p, 'feature-x');
-  await openWindow(app);
-  const out = path.resolve(import.meta.dirname, '../../.scratch/cf3');
-  fs.mkdirSync(out, { recursive: true });
-  const grp = app.locator('.grp[data-project="repo"]');
-  await grp.locator('.row.head').hover();
-  await grp.screenshot({ path: path.join(out, 'app-rows.png') });
-  await wtRows(app).filter({ hasText: 'feature-x' }).hover();
-  await grp.screenshot({ path: path.join(out, 'app-row-more.png') });
-  await wtRows(app).filter({ hasText: 'feature-x' }).click({ button: 'right' });
-  await expect(app.getByRole('menu', { name: 'Actions' })).toBeVisible();
-  await app.locator('.cmenu').screenshot({ path: path.join(out, 'app-menu.png') });
-  const m = await app.context().newPage();
-  await m.setViewportSize({ width: 1440, height: 1000 });
-  const drafts = path.resolve(import.meta.dirname, '../../.scratch/v2-drafts');
-  test.skip(!fs.existsSync(drafts), `mockup frames absent: ${drafts}`);
-  await m.goto(`file://${drafts}/07-worktrees-pr.html`);
-  const f7 = (await m.locator('#o7a .frame').first().boundingBox())!;
-  await m.screenshot({ path: path.join(out, 'mock-rows.png'), clip: { x: f7.x, y: f7.y + 36, width: 300, height: 300 }, fullPage: true });
-  await m.goto(`file://${drafts}/05-context-undo.html`);
-  await m.locator('#o5a .menu').first().screenshot({ path: path.join(out, 'mock-menu.png') });
-});

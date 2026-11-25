@@ -1,0 +1,514 @@
+{
+ "mode": "trigger",
+ "model": "haiku",
+ "claudeVersion": "2.1.332",
+ "startedAt": "2026-11-25T14:51:53.884Z",
+ "evals": 1,
+ "durationSeconds": 399,
+ "costUsd": 0.125166,
+ "partial": false,
+ "partialReason": null,
+ "aggregates": {
+  "casesTotal": 48,
+  "casesPassed": 47,
+  "overallScore": 0.979
+ },
+ "cases": [
+  {
+   "name": "trigger-artifacts-load-01",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-artifacts-load-02",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-artifacts-load-03",
+   "with_skill": 0.0,
+   "graders": [
+    {
+     "skill-loaded": false
+    }
+   ],
+   "errors": [
+    "with: exit 1: Reached maximum number of turns (4)"
+   ]
+  },
+  {
+   "name": "trigger-artifacts-load-04",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-artifacts-load-05",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-artifacts-load-06",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-artifacts-load-07",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": [
+    "with: exit 1: Reached maximum number of turns (4)"
+   ]
+  },
+  {
+   "name": "trigger-artifacts-load-08",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-artifacts-skip-01",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-artifacts-skip-02",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-artifacts-skip-03",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": [
+    "with: exit 1: Reached maximum number of turns (4)"
+   ]
+  },
+  {
+   "name": "trigger-artifacts-skip-04",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-artifacts-skip-05",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-artifacts-skip-06",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-artifacts-skip-07",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-artifacts-skip-08",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": [
+    "with: exit 1: Reached maximum number of turns (4)"
+   ]
+  },
+  {
+   "name": "trigger-nunchiro-load-01",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-nunchiro-load-02",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-nunchiro-load-03",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-nunchiro-load-04",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-nunchiro-load-05",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": [
+    "with: exit 1: Reached maximum number of turns (4)"
+   ]
+  },
+  {
+   "name": "trigger-nunchiro-load-06",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-nunchiro-load-07",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-nunchiro-load-08",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-nunchiro-skip-01",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-nunchiro-skip-02",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-nunchiro-skip-03",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-nunchiro-skip-04",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-nunchiro-skip-05",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-nunchiro-skip-06",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-nunchiro-skip-07",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": [
+    "with: exit 1: Reached maximum number of turns (4)"
+   ]
+  },
+  {
+   "name": "trigger-nunchiro-skip-08",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-orchestration-load-01",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-orchestration-load-02",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": [
+    "with: exit 1: Reached maximum number of turns (4)"
+   ]
+  },
+  {
+   "name": "trigger-orchestration-load-03",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-orchestration-load-04",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-orchestration-load-05",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-orchestration-load-06",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-orchestration-load-07",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-orchestration-load-08",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-orchestration-skip-01",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": [
+    "with: exit 1: Reached maximum number of turns (4)"
+   ]
+  },
+  {
+   "name": "trigger-orchestration-skip-02",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-orchestration-skip-03",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-orchestration-skip-04",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-orchestration-skip-05",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-orchestration-skip-06",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-orchestration-skip-07",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "trigger-orchestration-skip-08",
+   "with_skill": 1.0,
+   "graders": [
+    {
+     "skill-not-loaded": true
+    }
+   ],
+   "errors": []
+  }
+ ]
+}

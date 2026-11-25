@@ -27,4 +27,4 @@ print(f"codex: {'applicable, not run (edits ask under this config)' if asks else
       f'(approval_policy={policy}, sandbox_mode={sandbox}; Nunchiro passes no approval flags)')
 PY
 cd web
-NUNCHIRO_REAL=1 NUNCHIRO_WEB_PORT="${NUNCHIRO_WEB_PORT:-4192}" exec pnpm exec playwright test chat-diff-card.real.spec.ts --project chromium --workers 1
+PW_OPT_IN=live NUNCHIRO_REAL=1 NUNCHIRO_WEB_PORT="${NUNCHIRO_WEB_PORT:-4192}" exec pnpm exec playwright test chat-diff-card.real.spec.ts --project live --workers 1

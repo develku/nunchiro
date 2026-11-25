@@ -90,3 +90,20 @@ fn t1130_outward_calls_ask_in_every_session() {
     assert_eq!(hook(&["--home-lock"], &publish).unwrap().0, "ask");
     assert_eq!(hook(&[], b"not json").unwrap().0, "ask");
 }
+
+/// Ticket 1149: as Codex runs it (`--codex`). Codex 0.161 has no "ask" and lets a tool run when its hook fails, so the
+/// hook holds for the owner's card and denies unless the owner allowed: with no core to raise a card (no token, no
+/// socket) an outward call is denied, and so is a payload it cannot read. Other calls get no answer. The card itself
+/// is in nunchiro-core's tests/waiting_core.rs.
+#[test]
+fn t1149_codex_outward_calls_are_denied_without_a_card() {
+    let publish = call("Bash", json!({"command": "npm publish"}));
+    let (decision, reason) = hook(&["--codex"], &publish).expect("a publish is decided");
+    assert_eq!(decision, "deny");
+    assert!(reason.starts_with("Publish:"), "{reason}");
+    let mail = call("mcp__gmail__send_message", json!({"body": "b"}));
+    assert_eq!(hook(&["--codex"], &mail).unwrap().0, "deny");
+    let push = call("Bash", json!({"command": "git push origin main"}));
+    assert_eq!(hook(&["--codex"], &push), None);
+    assert_eq!(hook(&["--codex"], b"not json").unwrap().0, "deny");
+}

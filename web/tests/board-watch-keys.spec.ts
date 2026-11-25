@@ -76,25 +76,3 @@ test('watch_subs_toggle_name_matches_text_8_languages: on the rendered card the 
     expect(seen.sort(), language).toEqual([one, two].sort());
   }
 });
-
-// Shots for the REPORT (Korean and English, dark, the aria-label printed beside each) only when BOARD_WATCH_KEYS_SHOTS=<dir> names a folder.
-test('shots', async ({ app, core }) => {
-  const OUT = process.env.BOARD_WATCH_KEYS_SHOTS;
-  test.skip(!OUT, 'shots only on request');
-  fs.mkdirSync(OUT!, { recursive: true });
-  core.agent(core.project('demo'), 'lead', 'x');
-  await overlay(app, { ops: { subagents: () => ({ kids: [{ id: 'k1', label: 'Explore: find ssh -G callers', state: 'working' }, { id: 'k2', label: 'Plan: page layout', state: 'done' }] }) } });
-  await app.emulateMedia({ colorScheme: 'dark' });
-  await openBoard(app, core);
-  await expect(app.locator('.board .wsub').first()).toBeVisible({ timeout: 15_000 }); // the board has settled before the language reload
-  const labels: Record<string, string> = {};
-  for (const language of ['en', 'ko']) {
-    await setLanguage(app, language);
-    await app.reload();
-    const toggle = app.locator('.board .wsub').first();
-    await expect(toggle).toBeVisible({ timeout: 15_000 });
-    labels[language] = (await toggle.getAttribute('aria-label'))!;
-    await app.locator('.board .wcell:has(.wsub)').first().screenshot({ path: path.join(OUT!, `toggle-${language}-dark.png`) });
-  }
-  fs.writeFileSync(path.join(OUT!, 'labels.json'), JSON.stringify(labels, null, 2));
-});

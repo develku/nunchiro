@@ -72,8 +72,8 @@ def one(n):
         transcript = pathlib.Path.home() / '.claude/projects' / enc / (s['agent_session_id'] + '.jsonl')
         result = out / f'run-{n}.json'
         live = {'home': str(home), 'bin': binary, 'session': s['id'], 'transcript': str(transcript), 'out': str(result)}
-        p = subprocess.run(['pnpm', 'exec', 'playwright', 'test', 'chat-live', '--project', 'chromium', '--reporter', 'line'],
-                           cwd=root / 'web', env={**os.environ, 'CHAT_LIVE': json.dumps(live)}, capture_output=True, text=True, timeout=400)
+        p = subprocess.run(['pnpm', 'exec', 'playwright', 'test', 'chat-live', '--project', 'live', '--reporter', 'line'],
+                           cwd=root / 'web', env={**os.environ, 'PW_OPT_IN': 'live', 'CHAT_LIVE': json.dumps(live)}, capture_output=True, text=True, timeout=400)
         (out / f'run-{n}.playwright.log').write_text(p.stdout + p.stderr)
         if result.exists():
             row.update(json.loads(result.read_text()))

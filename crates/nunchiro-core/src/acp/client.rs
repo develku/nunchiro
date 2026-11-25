@@ -276,6 +276,27 @@ impl Client {
     pub fn respond(&self, rpc: &Value, result: Value) -> Result<(), String> {
         self.send(json!({"jsonrpc":"2.0","id":rpc,"result":result}))
     }
+    /// Ticket 1149: answers the request behind `rpc` with an error the agent can show.
+    pub fn refuse(&self, rpc: &Value, message: &str) -> Result<(), String> {
+        self.send(json!({"jsonrpc":"2.0","id":rpc,"error":{"code":-32000,"message":message}}))
+    }
+    /// Ticket 1149: the owner allowed the outward `terminal/create` behind `rpc`. Made and answered on its own thread,
+    /// as the reader would have: `cwd` is read from disk, and the caller holds the registry lock.
+    pub fn create_terminal(&self, rpc: Value, params: Value) -> Result<(), String> {
+        let (terminals, out) = (self.terminals.clone(), self.out.clone());
+        std::thread::Builder::new()
+            .name("acp-term-ask".into())
+            .spawn(move || {
+                let _ = out.send(match terminals.create(&params) {
+                    Ok(result) => json!({"jsonrpc":"2.0","id":rpc,"result":result}),
+                    Err(message) => {
+                        json!({"jsonrpc":"2.0","id":rpc,"error":{"code":-32602,"message":message}})
+                    }
+                });
+            })
+            .map(drop)
+            .map_err(|e| e.to_string())
+    }
     /// Ends the agent's whole process group (it and everything it started, also after the agent itself exited) and
     /// its terminals. The group id stays reserved while any member lives, so it never names another process's group.
     pub fn stop(&mut self) {
@@ -493,6 +514,25 @@ impl Reader {
             "fs/read_text_file" => reply(read(&self.root, &self.denied, &params)),
             "fs/write_text_file" => {
                 reply(write(&self.root, &self.denied, &params).map(|()| Value::Null))
+            }
+            // Ticket 1149: a command that acts outward (a publish, a release) waits for the owner's card
+            // (`Acp::answer` makes the terminal on a yes); any other runs as before.
+            "terminal/create"
+                if crate::outward::kind(
+                    "Bash",
+                    &json!({"command": crate::outward::acp_command(&params)}),
+                )
+                .is_some() =>
+            {
+                let mut shown = params.clone();
+                if !fit(&mut shown) || shown != params {
+                    return reply(Err("this command is too large to ask the user about".into()));
+                }
+                let _ = self.tell.send(Event::Ask {
+                    rpc: rpc.clone(),
+                    method: method.into(),
+                    params,
+                });
             }
             "terminal/create" => reply(self.terminals.create(&params)),
             "terminal/output" => reply(self.terminals.output(&params)),

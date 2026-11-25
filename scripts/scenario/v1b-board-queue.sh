@@ -121,8 +121,8 @@ class Window:
         self.done = out / f'{row}.done'
         live = {'home': str(core.home), 'seen': str(self.seen_path), 'done': str(self.done), 'ready': str(out / f'{row}.ready')}
         self.log = open(out / f'{row}.playwright.log', 'w')
-        self.proc = subprocess.Popen(['pnpm', 'exec', 'playwright', 'test', 'board-queue-live', '--project', 'chromium', '--reporter', 'line'],
-                                     cwd=root / 'web', env={**os.environ, 'NUNCHIRO_WEB_PORT': port, 'BOARD_LIVE': json.dumps(live)},
+        self.proc = subprocess.Popen(['pnpm', 'exec', 'playwright', 'test', 'board-queue-live', '--project', 'live', '--reporter', 'line'],
+                                     cwd=root / 'web', env={**os.environ, 'PW_OPT_IN': 'live', 'NUNCHIRO_WEB_PORT': port, 'BOARD_LIVE': json.dumps(live)},
                                      stdout=self.log, stderr=subprocess.STDOUT)
         until = time.monotonic() + 240
         while not pathlib.Path(live['ready']).exists():

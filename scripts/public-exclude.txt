@@ -60,6 +60,7 @@ scripts/web-smoke.sh      # merge-gate web smoke (load wait, ratchets against or
                           # spec pickers); in the export run `pnpm --filter nunchiro-web test` instead
 scripts/publish-scan.sh   # internal publish scan; its verdicts live in docs/release/publish-check.md, which leaves
 scripts/scrub-owner.py    # export --scrub step; it lists the private names it replaces
+scripts/public-sync.sh    # owner sync to the public repo; runs publish-scan.sh and scrub-owner.py, which leave
 tests/scenario/test_build_loop_optin.py   # tests .agents/build-loop.toml and .strict-paths
 tests/scenario/test_gen_gate_paths.py     # tests scripts/gen-gate-paths.py
 tests/scenario/test_gate_failures.py      # tests scripts/gate-failures.sh
@@ -69,6 +70,7 @@ tests/scenario/test_nightly_reds.py       # tests scripts/nightly-reds.py
 tests/scenario/test_nextest_trial.py      # tests scripts/nextest-trial.py
 tests/scenario/test_githooks.py           # tests .githooks/
 tests/scenario/test_publish_scan.py       # tests scripts/publish-scan.sh against docs/release/publish-check.md
+tests/scenario/test_public_sync.py        # tests scripts/public-sync.sh (needs publish-scan.sh and scrub-owner.py)
 tests/scenario/test_no_owner_names.py     # tests export --scrub; it lists the private names it looks for
 tests/scenario/test_gate_quarantine.py    # tests scripts/gate-quarantine.sh and the gate line in .agents/build-loop.toml
 tests/scenario/test_area_specs.py         # tests scripts/area-specs.sh against docs/areas/
@@ -83,19 +85,11 @@ tests/scenario/fixtures/tier_check_default_strict.txt  # fixture of test_build_l
 # Web specs that compare the window with a private mockup or write screenshots into docs/design.
 web/tests/accounts-head-414.spec.ts       # reads docs/design/providers-391
 web/tests/board-polish.spec.ts            # reads docs/design/v25-board
-web/tests/board-shots.spec.ts             # writes docs/design/v25-board
 web/tests/cf5-fork.spec.ts                # reads docs/v2/owner-packets
 web/tests/cf5-side-chat.spec.ts           # reads docs/v2/owner-packets
-web/tests/chat-calm-shots.spec.ts         # writes docs/design/v25-chat-calm
 web/tests/conformance-2.spec.ts           # writes docs/design/v25-bug-sweep
-web/tests/design-chat-shots.spec.ts       # writes docs/design/v25-design-chat
-web/tests/design-shell-shots.spec.ts      # writes docs/design/v25-design-shell
 web/tests/design-tree.spec.ts             # writes docs/design/v25-design-tree
 web/tests/fidelity-board.spec.ts          # reads docs/design/v25-board
-web/tests/leader-shots-990.spec.ts        # writes docs/design/leader-room
-web/tests/p5-sweep-870-shots.spec.ts      # writes docs/design/870-sweep
-web/tests/p5-sweep-960-shots.spec.ts      # writes docs/design/960-sweep
-web/tests/reshoot-1029-shots.spec.ts      # reads docs/v2/owner-packets
 web/tests/settings-git-providers.spec.ts  # reads docs/design/settings-1103
 web/tests/settings-git.spec.ts            # reads docs/design/settings-1103
 web/tests/settings-ia-copy.spec.ts        # reads docs/design/v25-bug-sweep

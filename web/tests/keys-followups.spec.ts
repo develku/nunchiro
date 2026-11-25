@@ -1,10 +1,8 @@
 // Keys page follow-ups (ticket 71): a key jump onto a row a filter hides clears the filters and says why, the area sections
 // share one left edge at 1440x900 (needs 166: the two-column cards became one list), and the (e) "Sessions and startup" screenshot is retaken after load (KEYS_FU_SHOTS=1).
 import AxeBuilder from '@axe-core/playwright';
-import fs from 'node:fs';
-import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { expect, openWindow, REPO, test } from './fixtures';
+import { expect, openWindow, test } from './fixtures';
 
 const TITLE = 'Open Diff (changes since the session started)';
 const settings = (app: Page) => app.getByRole('navigation', { name: 'Settings pages' });
@@ -67,26 +65,4 @@ test('keys_one_column_list_confirmed: at 1440x900 every area section starts at o
   await expect(keys.locator('section.karea').first()).toBeVisible();
   const boxes = await keys.locator('section.karea').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
   expect(new Set(boxes.map((b) => Math.round(b.x))).size, `boxes: ${JSON.stringify(boxes.map((b) => [Math.round(b.x), Math.round(b.width)]))}`).toBe(1);
-});
-
-test.describe('startup screenshot', () => {
-  test('startup_screenshot_retaken: the (e) Sessions and startup page after load, light, 1440x900', async ({ app, core, browserName }, info) => {
-    test.skip(!process.env.KEYS_FU_SHOTS || browserName !== 'chromium', 'screenshot: KEYS_FU_SHOTS=1, chromium only');
-    void info;
-    core.shell(core.project('demo'), 'alpha');
-    await app.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
-    await openWindow(app);
-    await app.setViewportSize({ width: 1440, height: 900 });
-    await app.getByRole('button', { name: 'Settings', exact: true }).click();
-    await settings(app).getByRole('button', { name: 'General' }).click();
-    await expect(app.getByRole('region', { name: 'Worktrees and Git' })).toBeVisible();
-    await app.waitForLoadState('networkidle');
-    await app.waitForTimeout(800);
-    const out = path.join(REPO, '.scratch/keys-fu');
-    fs.mkdirSync(out, { recursive: true });
-    await app.screenshot({ path: path.join(out, 'startup-e.png') });
-    const png = fs.readFileSync(path.join(out, 'startup-e.png'));
-    expect(png.readUInt32BE(16)).toBe(1440);
-    expect(png.length).toBeGreaterThan(10_000);
-  });
 });

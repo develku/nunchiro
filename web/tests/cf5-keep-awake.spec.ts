@@ -2,10 +2,8 @@
 // startup. Off by default, stored by the core, reachable in two clicks and by keyboard, and it never writes to a PTY.
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, openWindow, REPO, test } from './fixtures';
+import { expect, openWindow, test } from './fixtures';
 import { openSettings } from './settings-modal';
-
-const SHOTS = path.join(REPO, '.scratch/keep-awake');
 
 const LABEL = 'Keep this Mac awake while a session is working';
 const HINT = 'The display can still sleep. This ends 2 minutes after the agent’s last reply. A cup icon shows in the menu bar while it is on.';
@@ -79,34 +77,4 @@ test('nothing_auto_sends (window half): toggling writes no byte to a PTY', async
   await box.uncheck();
   await expect.poll(() => settingsFile(core.home).keep_awake).toBe(false);
   expect(core.read(s.id)).toBe(before);
-});
-
-// Design conformance page for the approved mockup's section 2 option A (run with SHOTS=1): the mockup card and the
-// real pane side by side, light and dark. Not an assertion.
-test('cf5 side-by-side page', async ({ app, core, browser }, info) => {
-  test.skip(info.project.name !== 'chromium' || !process.env.SHOTS, 'run with SHOTS=1');
-  fs.mkdirSync(SHOTS, { recursive: true });
-  core.shell(core.project('demo'), 'alpha');
-  await openWindow(app);
-  await openLifetime(app);
-  const section = app.locator('#s-lifetime');
-  await expect(app.getByRole('switch', { name: LABEL })).toBeVisible();
-  const mock = await (await browser.newContext({ viewport: { width: 1100, height: 900 } })).newPage();
-  const card = mock.locator('.sec').nth(1).locator('.card').first();
-  for (const scheme of ['light', 'dark'] as const) {
-    await app.emulateMedia({ colorScheme: scheme });
-    await app.waitForTimeout(300);
-    await section.screenshot({ path: path.join(SHOTS, `app-${scheme}.png`) });
-    await mock.emulateMedia({ colorScheme: scheme });
-    await mock.goto(`file://${path.join(SHOTS, 'cf5-draft.html')}`);
-    await mock.evaluate((s) => (document.documentElement.dataset.theme = s), scheme);
-    await card.screenshot({ path: path.join(SHOTS, `mock-${scheme}.png`) });
-  }
-  const cell = (f: string) => `<a href="${f}.png"><img src="${f}.png" loading="lazy"></a>`;
-  fs.writeFileSync(
-    path.join(SHOTS, 'side-by-side.html'),
-    `<!doctype html><meta charset="utf-8"><title>cf5-keep-awake: mockup vs app</title><style>body{font:14px system-ui;margin:16px;background:#f6f6f4;color:#1f2328}table{border-collapse:collapse;width:100%}td,th{border:1px solid #d1d9e0;padding:6px;vertical-align:top;width:50%}img{width:100%;display:block}h2{margin:18px 0 4px}small{color:#59636e}</style>
-<h1>cf5-keep-awake: Settings &gt; Sessions and startup, approved mockup section 2 option A (left) next to the app (right)</h1>
-${(['light', 'dark'] as const).map((s) => `<h2>${s}</h2><small>The mockup card shows only the new row; the app pane is the whole section at 1440x900.</small><table><tr><th>Mockup (cf5-draft.html, section 2 A)</th><th>App</th></tr><tr><td>${cell(`mock-${s}`)}</td><td>${cell(`app-${s}`)}</td></tr></table>`).join('')}`,
-  );
 });

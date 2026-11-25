@@ -1312,3 +1312,30 @@ button.lead-go {
   font: inherit;
   cursor: pointer;
 }
+
+/* Ticket 1130 B-L3 (mockup docs/design/first-use-b-1130/mockup.html `.toast`): "The old conversation is in History. Undo 10 s",
+   at the session view's lower right, just above the composer. The anchor is the centre column's last, empty flex item. */
+.fresh-toast-at {
+  position: relative;
+  height: 0;
+  flex: none;
+}
+.fresh-toast {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-8);
+  background: var(--panel);
+  box-shadow: var(--shadow-float);
+  font-size: var(--fs-2);
+  white-space: nowrap;
+}
+.fresh-toast .dim {
+  color: var(--muted);
+}

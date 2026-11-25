@@ -43,8 +43,7 @@ async function shot(app: Page, pick: (typeof PICKS)[number] | undefined, place: 
 
 for (const pick of [undefined, ...PICKS]) {
   const tag = pick ? ` (${pick.name})` : '';
-  test(`second_cue_tab_dot: your turn is a hand, broken an x-circle, others stay a plain dot${tag}`, async ({ app, core }, info) => {
-    test.skip(info.project.name !== 'chromium', 'one browser is enough');
+  test(`second_cue_tab_dot: your turn is a hand, broken an x-circle, others stay a plain dot${tag}`, { tag: '@chromium' }, async ({ app, core }) => {
     await setup(app, core, pick);
     const dot = (s: string) => app.locator(`.tab .tdot[data-s="${s}"]`).first();
     await expect(dot('waiting')).toBeVisible({ timeout: 15_000 });
@@ -67,8 +66,7 @@ for (const pick of [undefined, ...PICKS]) {
 
   // Ticket 462 (owner 11-12): no notch on the failed bar, the approved mockup's shape. The second cue for a broken session is
   // its row's x-circle (tree_broken_row_red); on the strip both urgent bars are 14px and solid.
-  test(`second_cue_head_strip: on the head's colour strip (ticket 388, which took the pills out) a broken bar and a your-turn bar are both solid and the same size${tag}`, async ({ app, core }, info) => {
-    test.skip(info.project.name !== 'chromium', 'one browser is enough');
+  test(`second_cue_head_strip: on the head's colour strip (ticket 388, which took the pills out) a broken bar and a your-turn bar are both solid and the same size${tag}`, { tag: '@chromium' }, async ({ app, core }) => {
     await setup(app, core, pick);
     const head = app.locator('.tree .grp[data-project] .row.head').first(); // ticket 1032: the Assistants group comes first
     const you = head.locator('.cstrip > .sg[data-tone="o"]');
@@ -86,8 +84,7 @@ for (const pick of [undefined, ...PICKS]) {
     expect(r.h).toBe(y.h);
   });
 
-  test(`second_cue_board_card: a your-turn task card shows a hand and a solid edge bar, a broken one an x-circle and a dashed edge bar (ticket 1041: the bar, not a border)${tag}`, async ({ app, core }, info) => {
-    test.skip(info.project.name !== 'chromium', 'one browser is enough');
+  test(`second_cue_board_card: a your-turn task card shows a hand and a solid edge bar, a broken one an x-circle and a dashed edge bar (ticket 1041: the bar, not a border)${tag}`, { tag: '@chromium' }, async ({ app, core }) => {
     await setup(app, core, pick);
     await app.locator('.ib.r').getByRole('button', { name: /^Board( · |$)/ }).click();
     const board = app.locator('.board');

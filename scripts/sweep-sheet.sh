@@ -4,12 +4,11 @@
 # Ticket 499: the catalogue themes follow, one shot per row. With a before folder (a SWEEP_OUT run before a fix), a
 # screen whose shot changed gets a second row with the before shots, so each fix shows before and after.
 # Usage: scripts/sweep-sheet.sh [folder] [before-folder]   (default .scratch/sweep; writes <folder>/index.html)
-# WebKit: scripts/sweep-sheet.sh .scratch/sweep-webkit
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 dir=${1:-$root/.scratch/sweep}
 before=${2:-}
-[ -d "$dir/dark" ] || { echo "sweep-sheet: no $dir/dark; run (in web/) SWEEP=1 pnpm exec playwright test tests/themes-sweep.spec.ts --project=chromium" >&2; exit 2; }
+[ -d "$dir/dark" ] || { echo "sweep-sheet: no $dir/dark; run (in web/) PW_OPT_IN=shots pnpm exec playwright test tests/themes-sweep.spec.ts --project=shots" >&2; exit 2; }
 # The before shots are copied next to the sheet, so its links stay relative.
 if [ -n "$before" ]; then
   rm -rf "$dir/before"

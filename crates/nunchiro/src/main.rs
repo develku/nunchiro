@@ -170,11 +170,12 @@ fn run() -> Result<(), String> {
     {
         hook::home_lock(&home, &args[2..]);
     }
-    // Ticket 1130 S1: every Claude session's outward hook, decided here without the core.
+    // Ticket 1130 S1: every Claude session's outward hook, decided here without the core. Ticket 1149: Codex's
+    // (`--codex`) asks the core for the owner's card.
     if args.first().map(String::as_str) == Some("hook")
         && args.get(1).map(String::as_str) == Some("outward")
     {
-        hook::outward(&args[2..]);
+        hook::outward(&home, &args[2..]);
     }
     // Ticket 1036: Claude's status line command (the per-session settings name it); never fails the line.
     if args.first().map(String::as_str) == Some("hook")

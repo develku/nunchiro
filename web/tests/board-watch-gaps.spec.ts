@@ -139,34 +139,3 @@ test('board_watch_toggle_basics: the toggle is a native labelled button: Enter a
   await expect(toggle).toHaveAttribute('title', '2 subagents');
 });
 
-const OUT = process.env.BOARD_WATCH_GAPS_SHOTS;
-for (const scheme of ['light', 'dark'] as const) {
-  test(`shots ${scheme}`, async ({ app, core }) => {
-    test.skip(!OUT, 'shots only on request');
-    test.setTimeout(120_000);
-    await app.setViewportSize({ width: 1440, height: 900 });
-    const p = core.project('alpha');
-    const lead = core.agent(p, 'parser-lane', 'x');
-    seed(core, [
-      { id: 'n1', title: 'Ship the parser tests for the whole workspace', column: 'todo' },
-      { id: 'n2', title: 'alphabetical-parser-lane', column: 'working' },
-      { id: 'n3', title: 'Pick the product name', column: 'needs-decision' },
-    ]);
-    await overlay(app, { ops: { subagents: (r) => ({ kids: r.id === lead.id ? KIDS : [] }) } });
-    await app.emulateMedia({ colorScheme: scheme });
-    await openBoard(app, core);
-    await expect(app.locator('.board .wcard').first()).toBeVisible({ timeout: 20_000 });
-    const snap = async (name: string) => {
-      await app.mouse.move(2, 2);
-      await app.waitForTimeout(500);
-      fs.mkdirSync(OUT!, { recursive: true });
-      await app.screenshot({ path: path.join(OUT!, `${name}-${scheme}.png`) });
-    };
-    await snap('card');
-    await card(app, 'Pick the product name').click();
-    await expect(detail(app)).toBeVisible();
-    await app.waitForTimeout(500);
-    await toFloor(app);
-    await snap('detail-at-floor');
-  });
-}

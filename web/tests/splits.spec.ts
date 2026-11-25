@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { ENTRIES } from '../src/layout/registry';
-import { expect, openWindow, REPO, test, type Core } from './fixtures';
+import { expect, openWindow, test, type Core } from './fixtures';
 import { drag, icon, names, pageErrors, readLayout, startEdit, stored, unapproved } from './d5b';
 
 /** Every request this window sends over the core socket, in order. */
@@ -367,69 +367,6 @@ test('reach_two_clicks', async ({ app, core }) => {
   await icon(app, 'left', 'Settings').click(); // click 1
   await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name: 'Layout' }).click(); // click 2
   await expect(app.getByRole('radiogroup', { name: /Open in a new split/ })).toBeVisible();
-});
-
-// REPORT page: the approved mockup (frame-ko-e.html, its "목업 컨트롤" buttons) and this app at the same 1440x900, light and
-// dark. Run with SHOTS=1 (chromium only); writes .scratch/splits/ and side-by-side.html.
-const MOCKUP = path.join(REPO, '.scratch/v2-drafts/ko/frame-ko-e.html');
-const OUT = path.join(REPO, '.scratch/splits');
-const STATES = ['overlay', 'diff', 'shell', 'grid-h', 'grid-v'] as const;
-const MOCK: Record<(typeof STATES)[number], string[]> = { overlay: ['[data-mk2="drag"]'], diff: ['[data-mk2="diff"]'], shell: ['[data-mk2="shell"]'], 'grid-h': ['[data-mk2="none"]', '[data-mk3="h"]'], 'grid-v': ['[data-mk3="v"]'] };
-
-test('frame_side_by_side', async ({ app, core, browser }, info) => {
-  test.skip(info.project.name !== 'chromium' || !process.env.SHOTS, 'run with SHOTS=1');
-  test.skip(!fs.existsSync(MOCKUP), `mockup frame absent: ${MOCKUP}`);
-  test.setTimeout(240_000);
-  fs.mkdirSync(OUT, { recursive: true });
-  const a = agent(core, 'ux-fix-2');
-  await openWindow(app, {}, core);
-  await open(app, a.id);
-  const mock = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  await mock.goto(`file://${MOCKUP}`);
-  const shot = async (name: (typeof STATES)[number], scheme: string) => {
-    await app.screenshot({ path: path.join(OUT, `app-${name}-${scheme}.png`) });
-    await mock.evaluate((c) => (document.documentElement.dataset.theme = c), scheme);
-    for (const b of MOCK[name]) await mock.locator(b).click();
-    await mock.screenshot({ path: path.join(OUT, `mock-${name}-${scheme}.png`) });
-  };
-  const term = `${SIDE} .term[data-session="${a.id}"] .xterm-helper-textarea`;
-  for (const scheme of ['light', 'dark'] as const) {
-    await app.emulateMedia({ colorScheme: scheme });
-    await drag(app, icon(app, 'right', 'Diff'), await near(app, 'right'), { release: false });
-    await shot('overlay', scheme);
-    await app.keyboard.press('Escape');
-    await app.mouse.up();
-    await dropOn(app, 'Diff', 'right');
-    await shot('diff', scheme);
-    await splits(app).getByRole('button', { name: 'Close split' }).click();
-    await app.keyboard.press('Meta+KeyD');
-    await chooser(app).getByRole('option', { name: /^Terminal new shell/ }).click();
-    await splits(app).locator('.xterm-screen').waitFor();
-    await shot('shell', scheme);
-    await splits(app).getByRole('button', { name: 'Close split' }).click();
-    await app.keyboard.press('Meta+KeyJ');
-    await app.locator(term).focus();
-    await app.keyboard.press('Meta+KeyD');
-    await expect(app.locator(`${SIDE} .tgrid .term`)).toHaveCount(2);
-    await app.locator(`${SIDE} .tgrid .xterm-screen`).nth(1).waitFor();
-    await shot('grid-h', scheme);
-    await app.locator(term).focus();
-    await app.keyboard.press('Shift+Meta+KeyD');
-    await expect(app.locator(`${SIDE} .tgrid`)).toHaveAttribute('data-grid', 'v');
-    await shot('grid-v', scheme);
-    await mock.locator('[data-mk3="v"]').click(); // back to one terminal
-    await app.locator(SIDE).getByRole('button', { name: /^Close shell/ }).click();
-    await app.keyboard.press('Meta+KeyJ');
-  }
-  await mock.close();
-  const cell = (n: string, sc: string) => `<td><img src="mock-${n}-${sc}.png" alt="mockup ${n} ${sc}"></td><td><img src="app-${n}-${sc}.png" alt="app ${n} ${sc}"></td>`;
-  fs.writeFileSync(
-    path.join(OUT, 'side-by-side.html'),
-    `<!doctype html><meta charset="utf-8"><title>SPLITS side by side</title><style>body{font:14px system-ui;margin:16px}table{border-collapse:collapse}td,th{border:1px solid #888;padding:4px;vertical-align:top}img{width:700px;display:block}</style>` +
-      `<h1>SPLITS: frame-ko-e mockup | app, 1440x900</h1><table><tr><th>state</th><th>mockup</th><th>app</th></tr>` +
-      STATES.flatMap((n) => ['light', 'dark'].map((sc) => `<tr><th>${n}<br>${sc}</th>${cell(n, sc)}</tr>`)).join('') +
-      `</table>`,
-  );
 });
 
 test('split_agent_chat_accepts_input', async ({ app, core }) => {

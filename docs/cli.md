@@ -413,6 +413,34 @@ publish; `nunchiro hook outward`), whatever its permission mode, and so always r
 `disableAllHooks: false`, which overrides a `true` in the user's, the project's or the local settings, because a
 project must not be able to turn the outward ask off. Your other hooks run too. Managed (enterprise) settings still
 win over `--settings`; a managed `disableAllHooks: true` turns the outward ask off as well.
+Ticket 1149: Codex and ACP sessions ask too.
+- Codex: every Codex start (with or without your arguments, your own hooks or Nunchiro's other hooks) gets one
+  PreToolUse hook, `nunchiro hook outward --codex`, as `-c` values: `features.hooks=true`, `hooks.PreToolUse` and a
+  `hooks.state` entry that trusts this one hook by its hash and keeps it enabled. Your own hooks keep their own trust;
+  Nunchiro's hook is never a reason to run them unreviewed. Codex has no "ask" answer for a hook (live Codex 0.161.0:
+  only `deny` or exit 2 stops a tool; `ask`, `allow`, a failed hook and a timed-out hook all let it run), so the hook
+  holds the call, Nunchiro shows its own card ("Publish", "Send or post"), and the call runs only on your Allow. A
+  deny, no window to ask, no answer in 30 minutes, a core that is down or any error refuses the call. The card has no
+  "always allow". The card shows the call's whole input; a call too large for a card (64 KiB) or with a field the
+  card would leave out (one named like a secret: `token`, `password`, `auth`) is refused, not asked. A start whose
+  Codex arguments name hooks in a config or feature flag (`-c hooks...`,
+  `-c features.hooks=...`, `--disable hooks`) is refused, since a later `-c` would win; keep your own hooks in
+  Codex's config.
+  Limits: the hook sees a shell command and an MCP tool call. Codex runs no hook for text typed into a command that
+  is already running (`write_stdin`), so a publish typed into an open shell is not asked about. The trust hash is
+  Codex 0.161's rule; if a later Codex changes it, the hook reads as untrusted and does not run until Nunchiro follows.
+  Managed Codex settings that allow managed hooks only turn it off. When Codex's own approval mode also asks for the
+  same call, you are asked twice. Codex has no fail-closed setting for a hook, so the hook command ends with
+  `|| exit 2`: if Nunchiro's program cannot run (it was replaced by an update while the session runs), shell commands
+  and MCP calls of that session are refused until you restart it. A hook Codex itself stops at its time limit (30
+  minutes and 10 seconds; the hook gives up and refuses before that) would let the call run.
+- ACP agents: a command the agent asks Nunchiro to run (`terminal/create`) waits for your card when it is outward (a
+  publish, a release, a repository made public); other commands run as before. The card shows the whole command
+  line, and the folder and variables the agent set; a command too long to show whole (4096 characters) is refused,
+  not cut. Every `session/request_permission`
+  was already a card. No ACP card has an "always allow". Limit of the protocol: ACP gives the client no hook on a
+  tool the agent runs inside itself, so an agent that publishes or sends with its own built-in tool without asking
+  permission is not seen by Nunchiro. Use an agent's own approval mode for that.
 
 When a seat ends (exited or failed; a closed tab says nothing) with an ask open, one it sent or one sent to it, the core
 adds one `lost` event to that ask's thread: from the ended seat to the ask's other party, `reply_to` the ask, body

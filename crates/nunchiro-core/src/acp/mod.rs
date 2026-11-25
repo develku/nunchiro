@@ -498,7 +498,15 @@ struct Ask {
     rpc: Value,
     /// The permission options offered, or `None` for an elicitation.
     options: Option<Vec<Value>>,
+    /// Ticket 1149: the `terminal/create` this asks about (an outward command), run only on the owner's allow.
+    terminal: Option<Value>,
 }
+/// What the agent reads when the owner did not allow its outward command.
+const NOT_ALLOWED: &str = "The user did not allow this command. Do not retry it.";
+/// The most a card's text holds; a longer request is cut to it, except a terminal's, which is refused.
+const CARD_MAX: usize = 4096;
+/// Round 2: what the agent reads when its outward command does not fit a card.
+const TOO_LONG: &str = "This command is too long to show the user whole, so the user was not asked and it did not run. Shorten it.";
 
 /// The registry's side of one ACP session.
 pub(crate) struct Acp {
@@ -675,7 +683,11 @@ impl Acp {
                 } => {
                     // An elicitation is answered like a permission (allow once or reject once), under the same rule
                     // for session callers (`grants::check_answer`).
-                    let (kind, text, options) = if method == "elicitation/create" {
+                    let terminal = (method == "terminal/create").then(|| params.clone());
+                    let (kind, text, options) = if let Some(params) = &terminal {
+                        let command = crate::outward::acp_card(params);
+                        (queue::Kind::Permission, format!("Allow: {command}"), None)
+                    } else if method == "elicitation/create" {
                         let url = params["url"]
                             .as_str()
                             .map(|u| format!(" ({u})"))
@@ -695,15 +707,34 @@ impl Acp {
                             Some(options),
                         )
                     };
-                    let text: String = text.chars().take(4096).collect();
+                    // Round 2 (Codex look): the owner never allows what the card does not show. A cut card of
+                    // `echo <4100 characters>; npm publish` hid the publish that Allow then ran, so a terminal
+                    // request that does not fit is refused, never cut. (Another request's text is the agent's own
+                    // title of a tool it runs itself; the client runs nothing for it.)
+                    if terminal.is_some() && text.chars().count() > CARD_MAX {
+                        let _ = self.client.refuse(&rpc, TOO_LONG);
+                        continue;
+                    }
+                    let text: String = text.chars().take(CARD_MAX).collect();
                     match queue.acp_ask(&id, kind, text) {
                         Ok(item) => {
-                            self.asks.insert(item, Ask { rpc, options });
+                            self.asks.insert(
+                                item,
+                                Ask {
+                                    rpc,
+                                    options,
+                                    terminal,
+                                },
+                            );
                         }
                         // Never left unanswered where nobody sees it: the agent gets a refusal it can show.
                         Err(error) => {
                             eprintln!("acp request of {id} not queued: {error}");
-                            let _ = self.client.respond(&rpc, refusal(options.is_some()));
+                            let _ = self.refuse(&Ask {
+                                rpc,
+                                options,
+                                terminal,
+                            });
                         }
                     }
                 }
@@ -955,10 +986,18 @@ impl Acp {
         for (item, ask) in std::mem::take(&mut self.asks) {
             // Removed durably before answering: a crash can lose an answer, never replay one.
             queue.remove(&item)?;
-            self.client
-                .respond(&ask.rpc, refusal(ask.options.is_some()))?;
+            self.refuse(&ask)?;
         }
         self.client.cancel(&session)
+    }
+    /// What an unanswerable, cancelled or denied request gets: `refusal`, or (ticket 1149) an error for a terminal.
+    fn refuse(&self, ask: &Ask) -> Result<(), String> {
+        match ask.terminal {
+            Some(_) => self.client.refuse(&ask.rpc, NOT_ALLOWED),
+            None => self
+                .client
+                .respond(&ask.rpc, refusal(ask.options.is_some())),
+        }
     }
 
     /// Answers the agent's request behind queue item `item`: allow once or reject once only, never an always.
@@ -1007,7 +1046,14 @@ impl Acp {
         };
         let ask = self.asks.remove(&item.id).expect("checked above");
         queue.remove(&item.id)?;
-        self.client.respond(&ask.rpc, result)?;
+        // Ticket 1149: an outward `terminal/create` runs on the owner's allow only; a deny is an error to the agent.
+        match &ask.terminal {
+            Some(params) if matches!(answer, queue::Answer::AllowOnce) => self
+                .client
+                .create_terminal(ask.rpc.clone(), params.clone())?,
+            Some(_) => self.refuse(&ask)?,
+            None => self.client.respond(&ask.rpc, result)?,
+        }
         if self.ended && self.asks.is_empty() {
             self.ended = false;
             queue.acp_turn(&meta.id, false)?;

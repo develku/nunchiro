@@ -423,7 +423,14 @@ fn artifact_skill_hook_injection_off_keeps_folder_and_rule() {
         value_after(&argv, "--add-dir"),
         [core.folder(&s.id).display().to_string()]
     );
-    assert!(!argv.iter().any(|a| a.starts_with("hooks.")), "{argv:?}");
+    // Ticket 1149: only the outward hook and its trust, as for Claude above.
+    let hooks: Vec<&String> = argv.iter().filter(|a| a.starts_with("hooks.")).collect();
+    assert!(
+        hooks.len() == 2
+            && hooks[0].contains("hook outward --codex")
+            && hooks[1].starts_with("hooks.state="),
+        "{argv:?}"
+    );
 }
 
 #[test]

@@ -5,7 +5,6 @@ import { append, expect, openChat, rec, test, type ChatCore } from './fixtures/c
 import { EN } from './i18n-tables';
 import type { Session } from '../src/types';
 const ROOT = path.resolve(import.meta.dirname, '../..');
-const MOCKUP = path.join(ROOT, '.scratch/review-1028/claude-feel-2.html');
 const component = () => fs.readFileSync(path.join(ROOT, 'web/src/chat/ContextRing.tsx'), 'utf8');
 const ring = (p: Page) => p.locator('.composer .context-ring');
 async function fake(page: Page, counts: { used: number; window: number; model?: string; effort?: string } = { used: 124000, window: 200000 }) {
@@ -140,38 +139,6 @@ test('ring_no_new_control', async ({ page, chatCore }) => {
   expect(f.sends).toEqual([]);
 });
 
-for (const scheme of ['light', 'dark'] as const) {
-  test(`ring_design_${scheme}`, async ({ page, chatCore, browser, browserName }) => {
-    test.skip(!fs.existsSync(MOCKUP), `mockup frame absent: ${MOCKUP}`);
-    const [a,b] = sessions(chatCore);
-    const f = await fake(page);
-    await page.emulateMedia({ colorScheme: scheme });
-    await openChat(page, a.id); // one visible labelled session tab reaches the informational ring
-    await expect(ring(page)).toBeVisible();
-    const mock = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: scheme });
-    await mock.goto(`file://${MOCKUP}`);
-    await mock.locator('.ring').evaluate((e) => { e.setAttribute('title','Context 124k / 200k'); e.setAttribute('aria-label','Context 124k / 200k'); });
-    const props = (e: Element) => { const c = getComputedStyle(e); return { width: c.width, height: c.height, radius: c.borderRadius, margin: c.margin, mask: c.maskImage.replace(/rgb\([^)]*\)/g,'opaque'), background: c.backgroundImage.replace(/rgb\([^)]*\)/g,'opaque') }; };
-    const want = await mock.locator('.ring').evaluate(props);
-    const got = await ring(page).evaluate(props);
-    expect(got).toEqual(want);
-    const dir = path.join(ROOT,'.scratch/ring-97'); fs.mkdirSync(dir,{ recursive:true });
-    fs.writeFileSync(path.join(dir,`${browserName}-${scheme}-styles.json`),JSON.stringify({want,got,geometryDifferences:0},null,2));
-    for (const state of ['known','hidden'] as const) {
-      if (state === 'hidden') {
-        f.unknown(); await page.locator(`.tab[data-tab="${b.id}"]`).click();
-        await expect.poll(() => f.requests.includes(b.id)).toBe(true); await expect(ring(page)).toHaveCount(0);
-        await mock.locator('.ring').evaluate((e) => { (e as HTMLElement).style.display='none'; });
-      }
-      await page.locator('.composer .chips').screenshot({ path:path.join(dir,`${browserName}-${scheme}-${state}-app.png`) });
-      await mock.locator('#cmp > .row').screenshot({ path:path.join(dir,`${browserName}-${scheme}-${state}-mock.png`) });
-    }
-    await mock.close();
-    const rows = ['chromium','webkit'].flatMap((engine) => ['light','dark'].flatMap((mode) => ['known','hidden'].map((state) => `<h2>${engine} / ${mode} / ${state}</h2><div><figure><figcaption>Approved composer row (tooltip updated by CHAT-USAGE)</figcaption><img src="ring-97/${engine}-${mode}-${state}-mock.png"></figure><figure><figcaption>App composer row</figcaption><img src="ring-97/${engine}-${mode}-${state}-app.png"></figure></div>`))).join('');
-    fs.writeFileSync(path.join(ROOT,'.scratch/side-by-side-97.html'),`<!doctype html><html lang="en"><meta charset="utf-8"><title>CHAT-USAGE ticket 97</title><style>body{font:14px system-ui;margin:24px}div{display:flex;gap:20px;align-items:start}figure{margin:0;max-width:48%}img{max-width:100%;border:1px solid #888}figcaption{margin-bottom:8px}</style><h1>Context ring: approved mockup and app</h1><p>124000 / 200000 (62%) and Unknown (hidden). Ring width/height 18px, radius 50%, horizontal margins 4px and 6px mask radius: zero computed geometry differences. Colours use the app theme. Existing row controls and positions outside this ring remain those of the merged app.</p>${rows}</html>`);
-  });
-}
-
 test('ring_refresh_cadence_many_sessions_keeps_the_30_second_bound', async ({ page, chatCore }) => {
   test.setTimeout(120000);
   const a = chatCore.chat('many');
@@ -192,7 +159,6 @@ test('ring_refresh_cadence_many_sessions_keeps_the_30_second_bound', async ({ pa
   await expect(ring(page)).toBeVisible();
   expect(f.requests.filter((id) => id === a.id)).toHaveLength(1);
 });
-
 
 test('ring_nonactive_pinned_chat_does_not_request', async ({ page, chatCore }) => {
   const [a,b] = sessions(chatCore);
@@ -228,7 +194,6 @@ widgets = ["composer@${b.id}"]
   await expect(pinned.locator('.context-ring')).toBeVisible();
   expect(f.requests.filter((id) => id === b.id)).toHaveLength(1); // both mounted composers share one request
 });
-
 
 test('ring_formats_one_million_from_the_reply', async ({ page, chatCore }) => {
   const a = chatCore.chat('million');

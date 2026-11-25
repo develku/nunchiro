@@ -1,7 +1,7 @@
 """Every https host literal in shipped source is named in PRIVACY.md (scorecard p02 RR5 privacy statement, ticket 1130
 P2). A new host then fails the gate until the statement names it.
 
-Shipped source: crates/ (not tests/ folders, files named *_tests.rs, or the body of a Rust #[cfg(test)] mod block),
+Shipped source: crates/ (not tests/ folders, files named *_tests.rs or tests.rs (a #[cfg(test)] mod tests; file), or the body of a Rust #[cfg(test)] mod block),
 app/src-tauri/src, web/src and plugin, without spec, test and fixture files, and without Python (dev scripts only).
 Comment lines are skipped: a link in a comment is a reference, not a connection.
 shortcut: only "https://host" literals are found; a host kept as a bare string (the library hosts in libs/grammar.rs) is
@@ -47,7 +47,7 @@ def shipped_hosts(root=ROOT):
         for d, dirs, files in os.walk(os.path.join(root, top)):
             dirs[:] = [x for x in dirs if x not in SKIP_DIRS]
             for name in files:
-                if not name.endswith(EXTS) or re.search(r"\.(test|spec)\.", name) or name.endswith("_tests.rs"):
+                if not name.endswith(EXTS) or re.search(r"\.(test|spec)\.", name) or name.endswith("_tests.rs") or name == "tests.rs":
                     continue
                 path = os.path.join(d, name)
                 with open(path, encoding="utf-8", errors="ignore") as f:

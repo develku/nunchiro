@@ -271,7 +271,15 @@ fn problem_start_without_hooks_runs_hookless() {
         !args(&next).is_empty(),
         "the hook-less start never launched"
     );
-    assert!(!args(&next).contains("hook"), "{}", args(&next));
+    // None of Nunchiro's own hooks and no trust bypass. Ticket 1149: the outward hook stays (as Claude's does), in `-c`
+    // values that no Codex refuses.
+    let hookless = args(&next);
+    assert!(
+        !hookless.contains("--dangerously-bypass-hook-trust")
+            && !hookless.contains("hook PermissionRequest")
+            && hookless.contains("hook outward --codex"),
+        "{hookless}"
+    );
     fs::remove_file(core.home.join("hold")).unwrap();
 }
 

@@ -6,8 +6,7 @@ import { nunchiro, windowAuth } from './fixtures';
 
 const live = process.env.CHAT_LIVE ? (JSON.parse(process.env.CHAT_LIVE) as { home: string; bin: string; session: string; transcript: string; out: string }) : null;
 
-test('scenario: a real turn reading 3 files and editing one shows within 1 s of each transcript write', async ({ page }, info) => {
-  test.skip(!live || info.project.name !== 'chromium', 'run through scripts/scenario/v1b-chat.sh');
+test('scenario: a real turn reading 3 files and editing one shows within 1 s of each transcript write', { tag: '@live' }, async ({ page }) => {
   test.setTimeout(240_000);
   const L = live!;
   // The scenario's core keeps the real HOME for the agent; this spec's CLI calls get a sentinel one.

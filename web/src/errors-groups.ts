@@ -18,7 +18,7 @@ const TIGHT: Record<string, string> = {
 export const GROUPS: Record<string, string[]> = {
   'err.h.later': [
     'machine is already being forgotten', 'machine channel is still closing; retry removal', 'machine start in progress; retry removal', 'machine is being forgotten',
-    'a new Lead conversation is already being opened', // team.rs: a second New Lead conversation while the first one opens
+    'a new conversation is already being opened', // team.rs: a second New conversation (or its Undo) while the first one opens
     'a check is running', '{} is signing in', 'agent commands are busy', 'chat cache busy', 'chat append already pending', 'chat append exceeded hook wait',
     'search canceled', 'already loading that theme', 'request failed', 'could not start the request; try again', 'could not start the sign-in: {}',
     '{}; the agent still runs', '{} already running',

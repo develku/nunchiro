@@ -2,7 +2,7 @@
 // density) set from the pencil's edit panel, kept with the widget's zone in window storage (web/src/board/views.ts).
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, openWindow, REPO, test } from './fixtures';
+import { expect, openWindow, test } from './fixtures';
 import { cardOf, openBoard, overlay, seed } from './fixtures/board/coord';
 import { closeModal } from './settings-modal';
 import { defaultView, parseView, RIGHT } from '../src/board/views';
@@ -153,93 +153,6 @@ test('board_two_views_independent: views are kept per zone; the right bar defaul
   expect(parseView(null, RIGHT)).toEqual(defaultView(RIGHT));
   const mixed = parseView('{"lane":"role","density":"bogus","filters":{"you":"yes","role":["build",3]},"fields":{"ref":false,"pr":"no"}}', RIGHT);
   expect(mixed).toEqual({ mode: 'columns', watchLanes: 'auto', showIdle: false, lane: 'role', density: 'list', filters: { you: true, role: ['build'], stale: false, missing: false, hideIdle: false }, fields: { ...defaultView(RIGHT).fields, ref: false }});
-});
-
-// Side by side (needs 155 draft B): the edit panel band and the right-bar list band next to the app, light and dark, with
-// the computed styles of each promise's element. Output: docs/design/v25-board/ (make-page.py). Run with SHOTS=1.
-const EDIT_PAIRS = [
-  ['pencil (on)', '.sh .lx.on', '.bhead .bpen[aria-pressed="true"]'],
-  ['panel', '.ep', '.bep'],
-  ['panel header', '.eph', '.beph'],
-  ['panel Done', '.eph .eb', '.beph .bepb'],
-  ['group title', '.eg h4', '.beg h4'],
-  ['column row', '.erow', '.bepcols li'],
-  ['drag handle', '.erow .g', '.bgrip'],
-  ['column mark', '.erow .s', '.bsw'],
-  ['segment on', '.ep .seg span.on', '.bep .bseg [aria-pressed="true"]'],
-  ['filter chip on', '.ep .fc.on', '.bep .bfc[aria-pressed="true"]'],
-  ['toggle', '.tg', '.bep .btg:checked'],
-  ['minutes', '.num', '.bnum'],
-  ['footer', '.ep .foot', '.bep .bepfoot'],
-] as const;
-const LIST_PAIRS = [
-  ['list header', '.wbar .eph', '.sbar .bnarrow .bhead'],
-  ['active filter', '.wbar .eph .fc.on', '.bnarrow .bhead .bfc'],
-  ['row your turn', '.wc.you', '.bli[data-you]'],
-  ['row broken', '.wc.bad', '.bli[data-bad]'],
-  ['row', '.wc:not(.you):not(.bad)', '.bli:not([data-you]):not([data-bad])'],
-  ['row title', '.wc .wt', '.bltt'],
-  ['row column', '.wcol', '.blcol'],
-  ['saved view footer', '.wbar .foot', '.bnarrow > .bepfoot'],
-] as const;
-const PROPS = ['color', 'background-color', 'border-top-color', 'border-top-width', 'border-left-color', 'border-left-width', 'border-radius', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left', 'font-size', 'font-weight', 'height', 'width'];
-
-test('board edit draft B side by side', async ({ app, core }, info) => {
-  test.skip(info.project.name !== 'chromium' || !process.env.SHOTS, 'run with SHOTS=1');
-  test.setTimeout(120_000);
-  const DESIGN = path.join(REPO, 'docs/design/v25-board');
-  const p = core.project('nunchiro');
-  const [opus, sonnet] = ['Opus', 'Sonnet'].map((l) => core.shell(p, l));
-  seed(core, [
-    { id: '15', title: 'Lane key default group?', column: 'needs-decision', group: 'V2.5-35 board', attachments: [{ session_id: opus.id, role: 'build' }] },
-    { id: '18', title: 'Theme token cleanup · fail', column: 'review', receipt: { sha: 'a1b2c3d', command: 'pnpm typecheck', result: 'fail' } },
-    { id: '11', title: 'receipt missing', column: 'review', attachments: [{ session_id: sonnet.id, role: 'review' }] },
-    { id: '12', title: 'board.toml fields', column: 'working', group: 'V2.5-35 board', ref: 'tickets/183' },
-  ]);
-  await overlay(app, { board: (b) => withState(b, opus.id, 'needs_decision') });
-  await app.setViewportSize({ width: 1580, height: 920 });
-  const board = await openBoard(app, core);
-  await board.getByRole('button', { name: 'Edit board widget' }).click();
-  await app.mouse.move(2, 2);
-  const draft = await app.context().newPage();
-  await draft.setViewportSize({ width: 1620, height: 1300 });
-  await draft.goto(`file://${path.join(DESIGN, 'draft-b.html')}`);
-  const read = (el: Element, props: string[]) => Object.fromEntries(props.map((q) => [q, getComputedStyle(el).getPropertyValue(q)]));
-  const rows: Record<string, unknown>[] = [];
-  const measure = async (band: string, scheme: string, gold: ReturnType<Page['locator']>, pairs: readonly (readonly [string, string, string])[]) => {
-    for (const [name, g, m] of pairs) {
-      const gl = gold.locator(g).first();
-      const ml = app.locator(m).first();
-      rows.push({ band, scheme, name, gold: g, mine: m, expected: (await gl.count()) ? await gl.evaluate(read, PROPS) : null, observed: (await ml.count()) ? await ml.evaluate(read, PROPS) : null });
-    }
-  };
-  for (const scheme of ['light', 'dark'] as const) {
-    await app.emulateMedia({ colorScheme: scheme });
-    await draft.evaluate((s) => (document.documentElement.dataset.theme = s), scheme);
-    await app.waitForTimeout(300);
-    await app.locator('.bep').screenshot({ path: path.join(DESIGN, `app-edit-${scheme}.png`) });
-    await draft.locator('.mw').first().locator('.ep').screenshot({ path: path.join(DESIGN, `draft-edit-${scheme}.png`) });
-    await measure('edit', scheme, draft.locator('.mw').first(), EDIT_PAIRS);
-  }
-  // The right-bar band: the Board icon placed on the right bar (Layout), its sidebar at the bar's default view.
-  await app.getByRole('dialog', { name: 'Edit board widget' }).getByRole('button', { name: 'Done', exact: true }).click();
-  await startEdit(app);
-  await drag(app, icon(app, 'right', 'Board'), await barEnd(app, 'right'));
-  await endEdit(app);
-  const rightBoard = sidebar(app, 'right').locator('.board');
-  await expect(rightBoard.locator('.bepfoot')).toHaveText('Saved view: Your turn only · one-line list · no lanes');
-  await app.mouse.move(2, 2);
-  for (const scheme of ['light', 'dark'] as const) {
-    await app.emulateMedia({ colorScheme: scheme });
-    await draft.evaluate((s) => (document.documentElement.dataset.theme = s), scheme);
-    await app.waitForTimeout(300);
-    const box = (await rightBoard.boundingBox())!;
-    await app.screenshot({ path: path.join(DESIGN, `app-rightbar-${scheme}.png`), clip: { x: box.x, y: box.y, width: box.width, height: Math.min(box.height, 300) } });
-    await draft.locator('.mw').nth(1).locator('.wbar').screenshot({ path: path.join(DESIGN, `draft-rightbar-${scheme}.png`) });
-    await measure('rightbar', scheme, draft.locator('.mw').nth(1), LIST_PAIRS);
-  }
-  fs.writeFileSync(path.join(DESIGN, 'styles-edit.json'), JSON.stringify(rows, null, 1));
-  await draft.close();
 });
 
 // V2.5-38 (draft B second band): the board placed on the right bar is a narrow widget with its own saved view.

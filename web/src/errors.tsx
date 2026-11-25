@@ -170,6 +170,13 @@ export const KNOWN: [RegExp, Key, Key?][] = [
   [/^(?<name>.+) did not finish its turn within (?<minutes>\d+) minutes, so it is still open and no new conversation started; the handover message was withdrawn$/, 'lead.freshStuck'],
   // The core's only other ending is LATE_HANDED ("it already has the handover message ...").
   [/^(?<name>.+) did not finish its turn within (?<minutes>\d+) minutes, so it is still open and no new conversation started; /, 'lead.freshStuckHanded'],
+  // Ticket 1130 B-L3, team.rs open_seat: Undo of a new conversation whose old one has no finished turn to continue.
+  [/^the old conversation cannot be continued here; it is still in History$/, 'lead.newConvNoUndo'],
+  // Round 6, team.rs fresh_lead: no one-press new conversation on a seat whose conversation could not be continued.
+  [/^this agent cannot continue an old conversation, so a new one would lose this one$/, 'lead.newConvNoContinue'],
+  // Round 4, team.rs UNDO_STALE and undo_kept: an Undo that was refused or could not start changed and deleted nothing.
+  [/^this seat changed since the new conversation opened, so nothing was undone; both conversations are in History$/, 'lead.newConvUndoStale'],
+  [/^(?<error>[\s\S]+); nothing was deleted, and both conversations are in History$/, 'lead.newConvUndoKept'],
   // Ticket 601 r2: the reasons that share a next step (src/errors-groups.ts).
   ...GROUP_ROWS,
 ];

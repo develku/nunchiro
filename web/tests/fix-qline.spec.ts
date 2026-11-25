@@ -8,7 +8,6 @@ import { openQuiet } from './tree-seed';
 import { repo, show, worktree } from './visual/compare';
 
 test.use({ viewport: { width: 1440, height: 900 } });
-test.skip(({ browserName }) => browserName !== 'chromium', 'the tree’s width is measured in Chromium at the app’s width');
 
 const QUESTION = 'npm test 실행 허용?';
 
@@ -37,7 +36,7 @@ const korean = async (app: Page) => {
 // scrollWidth does not reveal a cut on an `overflow: hidden` box, so the text's own range width is measured against the
 // box it is clipped to. Before the fix the box was 92px for 104px of text (the row lost 14px to the project wrapper's
 // dead rail gutter), which is the "npm test 실행 …" of the owner-check shot.
-test('question_fits', async ({ app, core }) => {
+test('question_fits', { tag: '@chromium' }, async ({ app, core }) => {
   await simple(app, core);
   const [text, box, side] = await app.locator('.sess .q .qt').evaluate((e) => {
     const r = document.createRange();
@@ -49,7 +48,7 @@ test('question_fits', async ({ app, core }) => {
   await expect(app.locator('.sess .q .qt')).toHaveText(QUESTION);
 });
 
-test('time_localized', async ({ app, core }) => {
+test('time_localized', { tag: '@chromium' }, async ({ app, core }) => {
   await simple(app, core);
   // Ticket 1041: a your-turn row's age moved into its tip (the row shows "needs you"); it is still localized there.
   const tm = app.locator('.sess .row.wt2 .tip');

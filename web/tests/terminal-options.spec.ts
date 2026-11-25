@@ -328,8 +328,6 @@ test('terminal_webgl_toggle_falls_back_to_dom_on_context_loss', async ({ app, co
   await openWindow(app);
   await show(app, a.id);
   await expect(term(app, a.id)).toHaveAttribute('data-renderer', 'dom');
-  const gl2 = await app.evaluate(() => !!document.createElement('canvas').getContext('webgl2'));
-  test.skip(!gl2, 'this browser build has no WebGL 2');
 
   await terminalPage(app);
   await app.getByRole('switch', { name: 'GPU rendering' }).check();

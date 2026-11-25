@@ -7,8 +7,7 @@ import { windowAuth } from './fixtures';
 
 const live = process.env.BOARD_LIVE ? (JSON.parse(process.env.BOARD_LIVE) as { home: string; seen: string; done: string; ready: string }) : null;
 
-test('scenario: board decisions reach the strip and the tree row', async ({ page }, info) => {
-  test.skip(!live || info.project.name !== 'chromium', 'run through scripts/scenario/v1b-board-queue.sh');
+test('scenario: board decisions reach the strip and the tree row', { tag: '@live' }, async ({ page }) => {
   test.setTimeout(3_600_000);
   const L = live!;
   const boot = windowAuth(L.home);

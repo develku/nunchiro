@@ -19,7 +19,6 @@ const ESC = /\x1b\[[0-9;?<>=!]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1
 const visible = (raw: string) => raw.replace(ESC, ' ').replace(/[ \t\r\x00-\x08\x0b-\x1f]+/g, ' ');
 const guard = (script: string) => execFileSync('python3', ['-I', '-B', '-c', `import json,sys; sys.path.insert(0, ${JSON.stringify(path.join(REPO, 'scripts/scenario'))}); from lib import snapshot, guard_check; ${script}`], { encoding: 'utf8' });
 
-test.skip(() => !process.env.NUNCHIRO_REAL, 'real agents: run with NUNCHIRO_REAL=1');
 
 const results: Record<string, unknown>[] = [];
 test.beforeAll(({ browserName }) => {
@@ -79,8 +78,7 @@ class RealCore {
 
 for (const row of (process.env.ROWS ?? 'accept,reject').split(',') as ('accept' | 'reject')[])
   for (let n = 0; n < RUNS; n++)
-    test(`${row} run ${n}: the card answers the pending edit`, async ({ page, browserName }) => {
-      test.skip(browserName !== 'chromium', 'one browser is enough for real agents');
+    test(`${row} run ${n}: the card answers the pending edit`, { tag: '@live' }, async ({ page }) => {
       test.setTimeout(400_000);
       // As in queue.real: a run where the model never asked is retried (up to 3), never counted as a miss.
       for (let k = 0; k < 3; k++) if (await trial(page, row, n, k)) return;

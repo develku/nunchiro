@@ -45,12 +45,24 @@ export async function openSeat(core: CoreClient, id: string) {
   return (await core.request({ op: 'team_open', id })) as { session: Session; started: boolean };
 }
 
-/** Ticket 1096: a new conversation as the lead's seat (never the old one resumed). `handover`: a running old seat writes
- *  what is unfinished first and is closed once that turn ends; `close`: the owner closes it now. Uses the window's core. */
-export async function openFresh(id: string, how: 'handover' | 'close') {
+/** Ticket 1096, ticket 1130 B-L3: a new conversation as a teammate's seat (never the old one resumed). `now` (owner 11-25,
+ *  option A): one press; a running turn is stopped at once, a Lead between turns writes what is unfinished first and is
+ *  closed once that turn ends. `close`: the owner closes a Lead whose handover ran out of time. `handover` is ticket 1096's
+ *  own way (never mid-turn), still used for a Lead whose seat gets no one-press. Uses the window's core. */
+export async function openFresh(id: string, how: 'now' | 'handover' | 'close') {
   if (!client) throw new Error('core disconnected');
   return (await client.request({ op: 'team_open', id, fresh: how })) as { session: Session; started: boolean };
 }
+/** Ticket 1130 B-L3: Undo of a new conversation: session `old` is the teammate's seat again, in place of `seat`, the one
+ *  the new conversation opened. That one is closed as any seat and stays in History (round 4: an Undo deletes nothing);
+ *  when the teammate's seat is another session by now the core refuses and changes nothing. */
+export async function undoFresh(id: string, old: string, seat: string) {
+  if (!client) throw new Error('core disconnected');
+  return (await client.request({ op: 'team_open', id, undo: old, seat })) as { session: Session; started: boolean };
+}
+
+/** Ticket 1130 B-L3: the conversations "New conversation" opened in this window; an empty one says what it keeps (ChatView). */
+export const freshSeats = new Set<string>();
 
 export const placeOfMate = (m: Teammate) => m.project ?? '';
 /** A session's place: Home for the Home folder, else its project (a worktree session's project is its main checkout). */
@@ -61,6 +73,9 @@ export const leadOf = (team: Team, place: string) => team.teammates.find((m) => 
 const live = (s: Session) => agentState(s) === 'running' && !s.side_chat && !s.account_tab;
 /** A teammate's seat while it runs. */
 export const seatOf = (sessions: Session[], id: string) => sessions.find((s) => s.teammate === id && live(s)) ?? null;
+/** The window's last snapshot (`useSeatFollow`), for an ask that comes with no session list (the palette's New Lead conversation). */
+let known: Session[] = [];
+export const liveSeat = (id: string) => seatOf(known, id);
 /** Sixth look (Home S3): the word of a teammate with no running seat. One whose seat can be resumed (its run ended with
  *  the core) reads "resumable", as that seat's header, tab and status bar do; "not running" is one with no seat to continue. */
 export const restKey = (sessions: Session[], id: string) => (sessions.some((s) => s.teammate === id && s.state === 'resumable') ? 'mw.status.resumable' : 'lead.notRunning');
@@ -76,7 +91,7 @@ export function useSeatFollow(sessions: Session[], tabs: string[], follow: (old:
       const next = seatOf(sessions, old.teammate);
       if (next && next.id !== old.id && !sessions.some((s) => s.id === old.id && live(s))) follow(old.id, next.id);
     }
-    before.current = sessions;
+    before.current = known = sessions;
   }, [sessions]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 /** The teammate whose seat this session is, when that teammate leads its place. */
