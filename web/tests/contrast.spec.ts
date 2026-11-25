@@ -200,7 +200,6 @@ async function keyFocus(page: Page, loc: Locator) {
     await page.keyboard.press('Tab');
     await loc.focus();
   }
-  test.skip(!(await visible()) && test.info().project.name === 'webkit', 'WebKit gives this button no :focus-visible from script');
   await expect(loc).toBeFocused();
   expect(await visible()).toBe(true);
 }
@@ -253,7 +252,7 @@ test('primary_button_focus_ring_visible_all_themes: a focused .btn.p draws a 2px
   expect(low).toEqual([]);
 });
 
-test('estrip_primary_focus_ring: in layout edit the focused Done button rings at 3:1 against the edit bar', async ({ app, core }) => {
+test('estrip_primary_focus_ring: in layout edit the focused Done button rings at 3:1 against the edit bar', { tag: '@chromium' }, async ({ app, core }) => {
   core.shell(core.project('demo'), 'a');
   await openWindow(app, {}, core);
   await app.locator('nav[data-bar="right"] .lay').click();

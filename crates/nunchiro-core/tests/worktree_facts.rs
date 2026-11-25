@@ -903,7 +903,7 @@ fn worktree_counts_use_fixed_argv() {
     let clean = src("src/worktree_clean.rs");
     // The shipped code only: the test module runs `git -c user.name=...` to build its fixtures.
     let clean = gh_pin::shipped(&clean).to_string();
-    let sessions = src("src/sessions.rs");
+    let sessions = src("src/sessions/worktrees.rs");
     let plan = &sessions[sessions.find("pub(crate) struct WorktreePlan").unwrap()..];
     // To the end of the file since handoff_send moved to sessions/handoff_acp.rs (11-20): more code, never less.
     let plan = &plan[..plan.find("\n/// v2-3b").unwrap_or(plan.len())];

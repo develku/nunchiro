@@ -1,11 +1,8 @@
 hex approval/sheet.css 3
 sh approval/sheet.css 1
-sh pane/pane.css 2
 hex sandbox/sandbox.css 1
 hex settings/theme/ImportTheme.tsx 2
-sh styles.css 3
 hex themes/catalog/catalog.gen.ts 12
 hex themes/derive.ts 2
 hex themes/ghostty.ts 18
 hex themes/nunchiro.ts 10
-sh tree/tree.css 1

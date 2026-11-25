@@ -215,8 +215,7 @@ const verdicts = [
   '같음: blog·main, 작업 중·유휴 두 색 막대, 새 항목 배지. 배지 문구는 지속 live region에 주입한 시각 fixture이며 실제 도착 수명주기 검증이 아니다.',
 ];
 
-for (const section of [1, 2, 3, 5]) test(`same_data_side_by_side  section ${section}`, async ({ app, core, browserName }) => {
-  test.skip(browserName !== 'chromium', 'Visual receipts are captured once in Chromium.');
+for (const section of [1, 2, 3, 5]) test(`same_data_side_by_side  section ${section}`, { tag: '@chromium' }, async ({ app, core }) => {
   const patches = foldingFrame(core, section);
   await treeObservations(app, patches);
   fs.mkdirSync(evidence, { recursive: true });

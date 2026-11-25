@@ -110,8 +110,7 @@ async function refuses(app: Page, core: Core, osc52: string, slowPage = false) {
 for (const osc52 of ['ask', 'allow', 'deny'])
   test(`osc52 ${osc52}: reads (?) get no reply; broken base64 and oversize writes are refused`, ({ app, core }) => refuses(app, core, osc52));
 
-test('osc52_refuse_waits_on_state: a window with its CPU slowed 6x still sees every refusal', async ({ app, core, browserName }) => {
-  test.skip(browserName !== 'chromium', 'CPU throttling is a Chromium (CDP) tool');
+test('osc52_refuse_waits_on_state: a window with its CPU slowed 6x still sees every refusal', { tag: '@chromium' }, async ({ app, core }) => {
   await refuses(app, core, 'ask', true);
 });
 

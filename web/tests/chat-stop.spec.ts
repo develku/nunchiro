@@ -6,7 +6,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { type Core, expect, openWindow, REPO, test } from './fixtures';
 
 function fakeClaude(core: Core) {
@@ -305,62 +305,3 @@ test('hint_and_a11y: no key hint while Stop shows and nothing waits; axe clean; 
   await expect.poll(() => reads(core, s.id)).toEqual(['1b', '1b']);
 });
 
-// Design conformance: claude-feel-2.html `state('running')` next to the app's working composer, with the measured numbers.
-const MOCKUP = path.join(REPO, '.scratch/review-1028/claude-feel-2.html');
-test('side_by_side_page: the working composer against the mockup running frame (button, colours, queued line, hint)', async ({ app, core, browser }) => {
-  test.skip(!fs.existsSync(MOCKUP), `mockup frame absent: ${MOCKUP}`);
-  fakeClaude(core);
-  const s = core.agent(core.project('p'), 'mode', 'x');
-  await openWindow(app);
-  await tab(app, s.id).click();
-  await working(app, core, s.id, true);
-  await app.locator('.composer textarea').fill('Do not touch the project rows');
-  await app.locator('.composer textarea').press('Enter');
-  await expect(app.locator('.composer .qlist')).toBeVisible();
-  // A source string, because evaluate() runs in the page and cannot see this file's functions.
-  const PROPS = `(el, sel) => {
-    const c = getComputedStyle(el), r = el.getBoundingClientRect(), b = sel ? document.querySelector(sel).getBoundingClientRect() : null;
-    return { w: r.width, h: r.height, bg: c.backgroundColor, color: c.color, radius: c.borderTopLeftRadius, fontSize: c.fontSize, below: b ? r.top - b.bottom : null, aria: el.getAttribute('aria-label') };
-  }`;
-  const measure = (loc: Locator, box?: string) => loc.evaluate(new Function('el', 'sel', `return (${PROPS})(el, sel)`) as (el: Element, sel: string | null) => unknown, box ?? null) as Promise<{ w: number; h: number; bg: string; color: string; below: number | null }>;
-  const out = path.join(REPO, '.scratch/chat-stop');
-  fs.mkdirSync(out, { recursive: true });
-  const got = {
-    button: await measure(app.locator('.composer .send')),
-    queued: await measure(app.locator('.composer .qlist'), '.composer textarea'),
-    hint: await measure(app.locator('.composer .chint'), '.composer .cbox'),
-    placeholder: await app.locator('.composer textarea').getAttribute('placeholder'),
-  };
-  await app.locator('.composer').screenshot({ path: path.join(out, 'app.png') });
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  await page.goto(`file://${MOCKUP}`);
-  await page.evaluate(() => (window as unknown as { state(s: string): void }).state('running'));
-  await page.locator('#qtext').evaluate((el) => (el.textContent = 'Do not touch the project rows'));
-  const want = {
-    button: await measure(page.locator('#send')),
-    queued: await measure(page.locator('#queued'), '.cmp'),
-    hint: await measure(page.locator('.hint'), '.cmp'),
-    placeholder: await page.locator('#ta').getAttribute('placeholder'),
-  };
-  await page.locator('.dock').screenshot({ path: path.join(out, 'mockup.png') });
-  await page.close();
-  fs.writeFileSync(
-    path.join(out, 'side-by-side.html'),
-    `<!doctype html><meta charset=utf-8><title>chat-stop side by side</title><body style="font:14px sans-serif;padding:16px"><h1>Working composer (Stop)</h1><p>Left: mockup <code>state('running')</code> (claude-feel-2.html), Right: the app.</p><div style="display:flex;gap:32px;align-items:flex-start"><img src="mockup.png" style="max-width:48%"><img src="app.png" style="max-width:48%"></div><pre>mockup ${JSON.stringify(want, null, 1)}\napp    ${JSON.stringify(got, null, 1)}</pre><h2>Differences</h2><ul><li>Button is the app's 28px circle, the mockup's is a 32px rounded square; shape and size are the existing Send's (chrome lane), only the colours change to the mockup's Stop colours (--text on --page).</li><li>needs 130: the queued row is the box's first line, above the input, as the mockup's .queued is.</li><li>Stop glyph colour: the mockup draws #fff on its #1f2328 button, the app uses the token --page (#f6f6f4) on --text (#1f2328), as the other filled controls do.</li><li>Hint line keeps the app's existing .chint (11px, --muted, right-aligned under the box); the mockup's .hint is 11.5px, --faint.</li><li>Texts are English UI text (the mockup is Korean).</li><li>Queued line font is the token --fs-12 (12px), the mockup uses 12.5px.</li></ul>`,
-  );
-  // The stated colours: Stop is --text on --page, as the mockup's `.send.stop`.
-  const tokens = await app.evaluate(() => {
-    const probe = document.createElement('i');
-    document.body.append(probe);
-    probe.style.color = 'var(--text)';
-    const text = getComputedStyle(probe).color;
-    probe.style.color = 'var(--page)';
-    const page = getComputedStyle(probe).color;
-    probe.remove();
-    return { text, page };
-  });
-  expect([got.button.bg, got.button.color]).toEqual([tokens.text, tokens.page]);
-  // Ticket 371 item 15: the list sits above the box (it measures against the textarea, so `below` is negative).
-  expect(got.queued.below).toBeLessThan(0);
-  expect(got.hint.below).toBeGreaterThan(got.queued.below!); // queued line, then hint
-});

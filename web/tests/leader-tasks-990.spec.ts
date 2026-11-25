@@ -2,13 +2,12 @@
 // lists the core's tasks by state. The
 // socket is proxied so the ledger's reply and two seats' states are the spec's own; the seats are real sessions.
 import fs from 'node:fs';
-import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { test as plain } from '@playwright/test';
 import { nowState, type TaskView } from '../src/lead/tasks';
 import { withoutFront } from '../src/tree/decisions';
 import { status, type Session } from '../src/types';
-import { type Core, REPO, expect, openWindow, test } from './fixtures';
+import { type Core, expect, openWindow, test } from './fixtures';
 import { mates, openSeat, openTeam, repo, tokenClaude } from './leader-990';
 
 const min = (n: number) => Date.now() - n * 60_000;
@@ -408,34 +407,4 @@ test('lead_tasks_home (990 g): a Home lead\'s Team view lists Home\'s tasks abov
   // Home view change 1: the Home lead's chip counts projects from the digest (this stand-in core gives none). Ticket 993
   // (seventh look, Home S2): its second part is the Decisions pane's count, here the one question that waits.
   await expect(app.locator('.shead [data-team-chip]')).toHaveAccessibleName('0 projects · 1 needs you');
-});
-
-test('lead_day_one_shots (990 i): the way card and the role card in light and dark', async ({ app, core }) => {
-  test.skip(!process.env.BAND_SHOTS, 'screenshots for the side-by-side look: BAND_SHOTS=1');
-  const out = path.join(REPO, '.scratch/band-shots');
-  fs.mkdirSync(out, { recursive: true });
-  await taskScene(app, core, false, { none: true, role: true });
-  await app.locator('nav[data-bar] [data-icon="decisions"]').first().click();
-  await expect(app.locator('.rcard')).toBeVisible();
-  for (const scheme of ['light', 'dark'] as const) {
-    await app.emulateMedia({ colorScheme: scheme });
-    await app.waitForTimeout(300);
-    await app.screenshot({ path: path.join(out, `day-one-${scheme}.png`) });
-    await app.locator('.rcard').screenshot({ path: path.join(out, `role-card-${scheme}.png`) });
-  }
-});
-
-test('lead_tasks_shots (990 g): the band in light and dark for the look beside mockup J', async ({ app, core }) => {
-  test.skip(!process.env.BAND_SHOTS, 'screenshots for the side-by-side look: BAND_SHOTS=1');
-  const out = path.join(REPO, '.scratch/band-shots');
-  fs.mkdirSync(out, { recursive: true });
-  await taskScene(app, core);
-  await app.locator('.teamv .lead-closed .lead-go').click();
-  for (const scheme of ['light', 'dark'] as const) {
-    await app.emulateMedia({ colorScheme: scheme });
-    await app.waitForTimeout(300);
-    await app.screenshot({ path: path.join(out, `band-${scheme}.png`) });
-    await app.locator('.teamv').screenshot({ path: path.join(out, `band-strip-${scheme}.png`) });
-    await app.locator('.shead').screenshot({ path: path.join(out, `band-head-${scheme}.png`), scale: 'device' });
-  }
 });

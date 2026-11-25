@@ -340,9 +340,14 @@ impl Sessions {
                 if prior.is_empty() {
                     return Err("no resumable session of this agent".into());
                 }
+                // Also while an earlier resume of it still loads (its prior rows stay until then, below).
                 if prior
                     .iter()
                     .any(|id| self.entries[id].meta.state == SessionState::Running)
+                    || self
+                        .acp_loading
+                        .values()
+                        .any(|rows| rows.iter().any(|row| prior.contains(row)))
                 {
                     return Err("conversation is already running".into());
                 }
@@ -352,7 +357,17 @@ impl Sessions {
         let acp = crate::acp::Acp::spawn(&proof, &launch.cwd, &self.home, start.resume.clone())?;
         let id = launch.id.clone();
         match prior.first() {
-            Some(old) => self.queue.prepare_resume(old, &id)?,
+            Some(old) => {
+                self.queue.prepare_resume(old, &id)?;
+                // Ticket 1130 B-L3 round 3: an ACP agent's asks die with its process (an answer is a reply to that
+                // run's own request). Carried over, the permission a stopped turn waited at blocked every prompt to
+                // the resumed run (`delivery::blocked`), and nothing could answer it.
+                for item in self.queue.items_of(&id) {
+                    if item.scope == "acp" {
+                        self.queue.remove(&item.id)?;
+                    }
+                }
+            }
             None => self.queue.register(&id, AgentKind::Acp, queue::now_ms())?,
         }
         // In memory only: the agent never sees it (its env is the allowed names); an inside peer's owner token is
@@ -420,10 +435,12 @@ impl Sessions {
             ended_ask: None,    // look 1117 v10 N10-S3-3: set per snapshot
             modes: None,
         };
-        let removed: Vec<_> = prior
-            .iter()
-            .filter_map(|old| self.entries.remove(old).map(|e| (old.clone(), e)))
-            .collect();
+        // Ticket 1130 B-L3 round 3: the rows this run continues stay until `session/load` has succeeded (`refresh`
+        // drops them then): the agent loads after this start, and a load that fails must leave the conversation, with
+        // its id, in History.
+        if !prior.is_empty() {
+            self.acp_loading.insert(id.clone(), prior);
+        }
         self.entries.insert(
             id.clone(),
             Entry {
@@ -458,7 +475,7 @@ impl Sessions {
             {
                 acp.stop();
             }
-            self.entries.extend(removed);
+            self.acp_loading.remove(&id);
             return Err(e);
         }
         Ok(self.snapshot_session(&meta))

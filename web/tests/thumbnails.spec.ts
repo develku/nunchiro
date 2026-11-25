@@ -207,8 +207,7 @@ async function ime(app: Page): Promise<CDPSession> {
   return app.context().newCDPSession(app);
 }
 
-test('Hangul composition in progress when an image is pasted keeps the composition', async ({ app, core, browserName }) => {
-  test.skip(browserName !== 'chromium', 'Playwright drives an IME only in Chromium');
+test('Hangul composition in progress when an image is pasted keeps the composition', { tag: '@chromium' }, async ({ app, core }) => {
   const a = await start(app, core);
   const cdp = await ime(app);
   await cdp.send('Input.insertText', { text: '사진 ' });

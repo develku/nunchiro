@@ -7,6 +7,7 @@ appended to LOG as received, so a test reads the answers the core gave. `load` d
 `fsask` asks for a file and a terminal before answering `session/new`; `child-writes` leaves a child that keeps sending
 updates on the shared stdout and exits after its first prompt. Ticket 358: `nomodels` reports no model option;
 `set-fails` answers session/set_config_option with an error; `many:N` adds N long model ids after the two short ones.
+Ticket 1130: while a file LOG.noload exists, `session/load` answers an error (a resume whose load fails).
 A prompt's first text block picks the behaviour:
   later          end the turn, then ask permission with no prompt in flight
   elicit         ask a URL elicitation, end the turn once it is answered
@@ -286,6 +287,8 @@ for line in sys.stdin:
         send({"jsonrpc": "2.0", "id": rid, "result": {"sessionId": "fake-%d" % os.getpid(), "configOptions": CONFIG}})
     elif method == "session/new":
         send({"jsonrpc": "2.0", "id": rid, "result": {"sessionId": "fake-%d" % os.getpid(), "configOptions": CONFIG}})
+    elif method == "session/load" and os.path.exists(LOG + ".noload"):
+        send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32000, "message": "session not found"}})
     elif method == "session/load":
         session = message["params"]["sessionId"]
         update(session, {"sessionUpdate": "user_message_chunk", "content": {"type": "text", "text": "replayed"}})

@@ -1,30 +1,39 @@
 #!/usr/bin/env python3
 """Development speed for the scorecard (ticket 1127, part p30): the DORA four keys, adapted to this repo.
 
-  python3 -B scripts/measure-dev-speed.py [--days 7] [--out FILE] [--tasks FILE] [--events FILE] [--mainwatch FILE]
+  python3 -B scripts/measure-dev-speed.py [--days 7] [--out FILE] [--tasks FILE] [--prs FILE] [--events FILE] [--mainwatch FILE]
   python3 -B scripts/measure-dev-speed.py --selftest
 
 Read only. Sources:
 - git log of origin/main: "Merge lane <lane> (<branch> <sha>)" commits are the landings (the ground truth; merging moves
   from bin/land into Nunchiro, so the bin/land events are optional). The lane's own commits are <merge>^1..<merge>^2.
+- merged pull requests (ticket 1148, the PR flow): one GitHub search of MEASURE_REPO (default develku/nunchiro) through
+  "gh api graphql", read only, or --prs FILE with the JSON of "gh pr list --state merged --json ...". A merged pull
+  request is a landing like a "Merge lane" commit; both are counted.
 - the bin/land events (<main checkout>/.scratch/build-loop/events.jsonl): enqueue, gate_result, landed, eject, kick,
   receipt. Default: the main checkout of this repo's git common dir; --events or MEASURE_EVENTS.
 - the mainwatch log (<main checkout>/.scratch/fable/mainwatch.log, as in scorecard.py; --mainwatch or MEASURE_MAINWATCH):
   red episodes, culprit lanes, owner installs.
 - the task ledger: --tasks FILE (the JSON of "nunchiro task list --all --json"); without it the script runs that command
   when NUNCHIRO_SESSION is set (it only lists), else it skips the ledger.
+- the core's event journal ("nunchiro events --history", read from the day files; the owner's shell only) and the agents'
+  own transcripts: ~/.claude, the folders in MEASURE_CLAUDE_DIRS (other accounts, ':' between them) and
+  MEASURE_CODEX_SESSIONS (default ~/.codex/sessions).
 
 The four keys:
 1. Deployment frequency: lanes landed on main per day (and landings, a landing being one merge time that can carry
    several lanes), and owner installs per day ("owner install ...: installed" in the mainwatch log).
 2. Lead time for changes: first lane commit (author date) to the merge on main, median and p90 (the DORA definition);
    also task created (ledger) to the merge, for lanes whose branch matches a task's worktree folder.
-3. Change failure rate: landed lanes later reverted (a "fable-revert-<lane>" merge) or named culprit by mainwatch, over
+3. Change failure rate: landed lanes later reverted (a "fable-revert-<lane>" merge, or a merged pull request from a
+   "revert-<number>-<branch>" branch, GitHub's Revert button) or named culprit by mainwatch, over
    lanes landed. Gate rejects (eject and kick events) are shown beside it: they never reached main.
 4. Time to restore: main red to green again (mainwatch), median.
 Flow split, where data exists: task created to the Reviewer seat, the Reviewer seat to its pass, the pass to the enqueue,
 the gate queue (last enqueue to landed, less the gate runs) and the gate runs (gate_result durations of the landed
-candidate). Review rounds per lane: distinct reviewed patches (receipt events of kind review).
+candidate). Review rounds per lane: distinct reviewed patches (receipt events of kind review). For a pull request the
+enqueue is its opening, the gate run its last CI run (first job start to the end of `gate`) and the gate queue the rest
+of the time to the merge.
 """
 import argparse, datetime, json, os, re, statistics, subprocess, sys, time
 from pathlib import Path
@@ -35,6 +44,7 @@ import scorecard  # noqa: E402  (MAINWATCH, LANDLOOP and the red-episode parser 
 
 EVENTS = Path(os.environ.get("MEASURE_EVENTS") or scorecard.MAINWATCH.parent.parent / "build-loop/events.jsonl")
 MERGE = re.compile(r"^Merge lane (\S+) \((\S+) [0-9a-f]+\)$")
+REVERT = re.compile(r"^(?:fable-revert-|revert-\d+-)(.+)$")  # a bin/land revert lane; GitHub's revert branch of a pull request
 DAY = 86400
 
 
@@ -63,7 +73,7 @@ def minutes(values):
 
 
 def iso(ts):
-    return datetime.datetime.fromisoformat(ts).timestamp()
+    return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
 
 
 def merges(since):
@@ -77,6 +87,57 @@ def merges(since):
         own = git("log", "--no-merges", "--format=%at", f"{sha}^1..{sha}^2").split()
         out.append(dict(lane=m[1], branch=m[2], sha=sha, at=int(at), first_commit=min(map(int, own)) if own else None))
     return out
+
+
+def pr_merges(prs, since):
+    """The rows of merges() for merged pull requests (the JSON of "gh pr list --state merged"): the lane and the branch
+    are the head branch, the sha is the commit on main. 'opened' and 'gate_run_s' (the last CI run, from the first job's
+    start to the end of the `gate` job) feed the flow split.
+    shortcut: the opening stands for the enqueue; read the auto-merge time from the PR timeline when PRs are opened
+    long before they are ready."""
+    out = []
+    for p in prs:
+        at = iso(p["mergedAt"])
+        if at < since:
+            continue
+        own = [iso(c["authoredDate"]) for c in p.get("commits") or []]
+        checks = [c for c in p.get("statusCheckRollup") or [] if c.get("workflowName") == "CI" and c.get("startedAt")]
+        gate = next((c for c in checks if c.get("name") == "gate" and c.get("completedAt")), None)
+        out.append(dict(lane=p["headRefName"], branch=p["headRefName"], sha=(p.get("mergeCommit") or {}).get("oid"), at=int(at),
+                        first_commit=int(min(own)) if own else None, opened=iso(p["createdAt"]),
+                        gate_run_s=gate and iso(gate["completedAt"]) - min(iso(c["startedAt"]) for c in checks)))
+    return out
+
+
+# One page is 50 pull requests with their first commit and the checks of their last one. "gh pr list --json commits"
+# asks for every commit and its authors, which GitHub refuses from 50 pull requests up (500,000 nodes).
+PR_QUERY = """query($q: String!, $endCursor: String) { search(query: $q, type: ISSUE, first: 50, after: $endCursor) {
+  pageInfo { hasNextPage endCursor }
+  nodes { ... on PullRequest { number headRefName createdAt mergedAt mergeCommit { oid }
+    first: commits(first: 1) { nodes { commit { authoredDate } } }
+    last: commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 50) { nodes {
+      ... on CheckRun { name startedAt completedAt checkSuite { workflowRun { workflow { name } } } } } } } } } } } } } }"""
+
+
+def gh_prs(q):
+    """Merged pull requests for a search, in the field names of "gh pr list --json" (read only), and where they came from."""
+    r = subprocess.run(["gh", "api", "graphql", "--paginate", "--slurp", "-f", "query=" + PR_QUERY, "-f", "q=" + q], capture_output=True, text=True)
+    if r.returncode:
+        return [], f"not read ({r.stderr.strip()[:80]})"
+    dig = lambda v, *keys: dig((v or {}).get(keys[0]), *keys[1:]) if keys else v  # noqa: E731
+    out = []
+    for n in (n for page in json.loads(r.stdout) for n in page["data"]["search"]["nodes"] if n):
+        checks = dig((n.pop("last")["nodes"] or [None])[0], "commit", "statusCheckRollup", "contexts", "nodes") or []
+        out.append(dict(n, commits=[c["commit"] for c in n.pop("first")["nodes"]],
+                        statusCheckRollup=[dict(c, workflowName=dig(c, "checkSuite", "workflowRun", "workflow", "name")) for c in checks if c]))
+    return out, "gh api graphql"
+
+
+def read_prs(path, since):
+    if path:
+        return json.loads(Path(path).read_text()), f"file {Path(path).name}"
+    return gh_prs(f"repo:{os.environ.get('MEASURE_REPO') or 'develku/nunchiro'} is:pr is:merged base:main "
+                  f"merged:>={datetime.date.fromtimestamp(since - DAY)}")
 
 
 def stamped(text, start):
@@ -204,26 +265,18 @@ def lane_costs(tails, claude_dirs, codex_dir, since):
     return {t: dict(o, usd=round(o["usd"], 2), sessions=len(o["sessions"])) for t, o in out.items()}
 
 
-def core_events(project, quiet=3.0, cap=60.0, first=15.0):
-    """The core's event history for a project ("nunchiro events --since 0"; it replays what the core kept since its last
-    start, then streams): read until no line came for 'quiet' seconds, then stop the command this script started."""
+def core_events(project, days):
+    """The core's event journal for a project ("nunchiro events --history": read from the day files, no running core
+    needed, the owner's shell only). A room event's data is not in the journal."""
     try:
-        p = subprocess.Popen(["nunchiro", "events", "--project", str(project), "--since", "0"], stdout=subprocess.PIPE,
-                             stderr=subprocess.DEVNULL, text=True)
-    except OSError:
+        r = subprocess.run(["nunchiro", "events", "--history", str(max(1, min(days + 1, 14))), "--project", str(project)],
+                           capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
         return []
-    import selectors
-    sel, lines, end = selectors.DefaultSelector(), [], time.time() + cap
-    sel.register(p.stdout, selectors.EVENT_READ)
-    while time.time() < end and sel.select(timeout=quiet if lines else first):  # the replay takes seconds to start
-        line = p.stdout.readline()
-        if not line:
-            break
-        lines.append(line)
-    p.terminate()
-    p.wait(5)
+    if r.returncode:
+        print(f"core events not read: {r.stderr.strip()}", file=sys.stderr)
     out = []
-    for line in lines:
+    for line in r.stdout.splitlines():
         try:
             out.append(json.loads(line))
         except ValueError:
@@ -265,11 +318,12 @@ def seat_time(events, now):
 
 
 def measure(days, tasks_file=None, events_path=EVENTS, mainwatch_path=scorecard.MAINWATCH, now=None, project=None,
-            claude_dirs=(), codex_dir=None, core=None):
+            claude_dirs=(), codex_dir=None, core=None, prs_file=None, prs=None):
     now = now or time.time()
     start = now - days * DAY
-    ms = merges(start)
-    landed = [m for m in ms if not m["lane"].startswith("fable-revert-")]
+    prs, prs_src = (prs, "given") if prs is not None else read_prs(prs_file, start)
+    ms = merges(start) + pr_merges(prs, start)
+    landed = [m for m in ms if not REVERT.match(m["lane"])]
     events = [e for e in read_events(events_path) if e.get("ts") and iso(e["ts"]) >= start - 2 * DAY]
     tasks, tasks_src = read_tasks(tasks_file)
 
@@ -304,12 +358,16 @@ def measure(days, tasks_file=None, events_path=EVENTS, mainwatch_path=scorecard.
             rev = sorted(s["at"] / 1000 for s in task.get("seats", []) if s.get("role") == "reviewer")
             passed = (task.get("review") or {}).get("pass") and task["review"]["at"] / 1000
             row.update(reviewer_seat=rev[0] if rev else None, review_pass=passed or None, created=task["created"] / 1000)
+        if m.get("opened"):  # a pull request
+            row.update(enqueued=m["opened"], first_enqueue=m["opened"])
+            if m["gate_run_s"] is not None:
+                row.update(gate_run_s=m["gate_run_s"], gate_queue_s=max(0, m["at"] - m["opened"] - m["gate_run_s"]))
         rows.append(row)
     lead = dict(commit_to_main=hours(r["commit_lead_s"] for r in rows), task_to_main=hours(r["task_lead_s"] for r in rows),
-                lanes_with_task=sum(1 for r in rows if r["task"]), tasks_source=tasks_src)
+                lanes_with_task=sum(1 for r in rows if r["task"]), tasks_source=tasks_src, pull_requests_source=prs_src)
 
     # 3. Change failure rate
-    reverted = {m["lane"][len("fable-revert-"):] for m in ms if m["lane"].startswith("fable-revert-")}
+    reverted = {r[1] for r in (REVERT.match(m["lane"]) for m in ms) if r}
     culprit_shas = set(re.findall(r"^\d\d:\d\d:\d\d culprit ([0-9a-f]{40})", mw, re.M))
     failed = sorted({m["lane"] for m in landed if m["lane"] in reverted or m["sha"] in culprit_shas})
     win = [e for e in events if iso(e["ts"]) >= start]
@@ -335,7 +393,8 @@ def measure(days, tasks_file=None, events_path=EVENTS, mainwatch_path=scorecard.
 
     # What each source covers: a figure counts only the part of the window its source has.
     stamp = lambda t: t and datetime.datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M")  # noqa: E731
-    coverage = dict(git_merges_from=stamp(min((m["at"] for m in ms), default=None)),
+    coverage = dict(git_merges_from=stamp(min((m["at"] for m in ms if "opened" not in m), default=None)),
+                    pull_requests_from=stamp(min((m["at"] for m in ms if "opened" in m), default=None)),
                     mainwatch_from=stamp(lines[0][0]) if lines else None,
                     events_from=stamp(min((iso(e["ts"]) for e in win), default=None)),
                     task_ledger_from=stamp(min((t["created"] / 1000 for t in tasks), default=None)))
@@ -358,7 +417,8 @@ def measure(days, tasks_file=None, events_path=EVENTS, mainwatch_path=scorecard.
                 r.update(enqueued=before[-1], first_enqueue=min(t for t in before if t >= before[-1] - 3 * DAY),
                          gate_run_s=gate_s.get(cand, 0), gate_queue_s=max(0, at - before[-1] - gate_s.get(cand, 0)))
     # 5. Cost per landed lane: every session whose folder is the lane's worktree (Builder, Reviewers, rework)
-    tail_of = lambda m: m["branch"].split("/", 1)[-1]  # noqa: E731
+    # the worktree folder; GitHub's revert branch ends with the branch it reverts and is not a second landing of it
+    tail_of = lambda m: m["lane"] if REVERT.match(m["lane"]) else m["branch"].split("/", 1)[-1]  # noqa: E731
     merged = {}
     for m in ms:
         merged.setdefault(tail_of(m), []).append(m)
@@ -374,9 +434,11 @@ def measure(days, tasks_file=None, events_path=EVENTS, mainwatch_path=scorecard.
                 sources=[str(Path(d).name) for d in claude_dirs] + ([Path(codex_dir).name] if codex_dir else []),
                 price_source="crates/nunchiro-core/src/usage.rs PRICES (public list prices, an estimate)")
 
-    # 6. Owner touches: ledger accept conditions that need the owner and merge waits; the core's events (asks to the
-    # person, permission waits), which reach back only to the core's last start.
-    core = core if core is not None else (core_events(project) if project else [])
+    # 6. Owner touches: ledger accept conditions that need the owner and merge waits; the core's event journal
+    # (permission waits; asks to the person only when the events carry room data, which the journal does not keep).
+    core = core if core is not None else (core_events(project, days) if project else [])
+    if core and not any(e.get("type") == "room_message" and e.get("data") for e in core):
+        coverage["room_messages"] = "not in the journal: asks to the owner, core cards and stall nudges read 0"
     states, stalls = seat_time(core, now)
     seat_task = {s["session"]: t for t in tasks for s in t.get("seats", [])}
     task_of = {r["lane"]: next((t for t in tasks if t["id"] == r["task"]), None) for r in rows if r["task"]}
@@ -477,6 +539,14 @@ def selftest():
     assert got == [base + 23 * 3600, base + DAY + 3600, base + DAY + 3600], got
     assert MERGE.match("Merge lane lead-x1 (lead/x-1 8f4cac357467)")[2] == "lead/x-1"
     assert not MERGE.match("Merge remote-tracking branch 'origin/main' into lead/x-1")
+    assert REVERT.match("fable-revert-lead-x1")[1] == "lead-x1" and REVERT.match("revert-12-lead/x-1")[1] == "lead/x-1"
+    assert not REVERT.match("lead/revert-button-3")
+    pr = dict(headRefName="lead/x-1", createdAt="2026-11-26T01:00:00Z", mergedAt="2026-11-26T02:00:00Z", mergeCommit=dict(oid="ab"),
+              commits=[dict(authoredDate="2026-11-25T23:00:00Z")],
+              statusCheckRollup=[dict(workflowName="CI", name="lint", startedAt="2026-11-26T01:30:00Z", completedAt="2026-11-26T01:31:00Z"),
+                                 dict(workflowName="CI", name="gate", startedAt="2026-11-26T01:49:55Z", completedAt="2026-11-26T01:50:00Z")])
+    got = pr_merges([pr, dict(pr, mergedAt="2026-11-20T00:00:00Z")], iso("2026-11-25T00:00:00Z"))
+    assert len(got) == 1 and got[0]["gate_run_s"] == 1200 and got[0]["at"] - got[0]["first_commit"] == 3 * 3600, got
     assert hours([3600, 7200, None]) == dict(n=2, median_h=1.5, p90_h=2.0)
     assert minutes([60, 180]) == dict(n=2, median_min=2, p90_min=3)
     prices = price_table()
@@ -495,6 +565,7 @@ def main():
     ap.add_argument("--days", type=int, default=7)
     ap.add_argument("--out", help="JSON file (default docs/measure/devspeed-<today>.json)")
     ap.add_argument("--tasks", help='the JSON of "nunchiro task list --all --json"')
+    ap.add_argument("--prs", help='the JSON of "gh pr list --state merged --json headRefName,createdAt,mergedAt,mergeCommit,commits,statusCheckRollup" (default: ask GitHub through gh)')
     ap.add_argument("--events", default=str(EVENTS))
     ap.add_argument("--mainwatch", default=str(scorecard.MAINWATCH))
     ap.add_argument("--project", default=str(Path(scorecard._COMMON).parent) if scorecard._COMMON else None,
@@ -503,10 +574,10 @@ def main():
     a = ap.parse_args()
     if a.selftest:
         return selftest()
-    claude = [p for p in (os.environ.get("MEASURE_CLAUDE_DIRS") or str(Path.home() / ".claude")).split(os.pathsep) if p]
+    claude = list(dict.fromkeys([str(Path.home() / ".claude")] + [p for p in (os.environ.get("MEASURE_CLAUDE_DIRS") or "").split(os.pathsep) if p]))
     codex = os.environ.get("MEASURE_CODEX_SESSIONS") or str(Path.home() / ".codex/sessions")
     d = measure(a.days, a.tasks, Path(a.events), Path(a.mainwatch), project=a.project, claude_dirs=claude,
-                codex_dir=codex if Path(codex).is_dir() else None)
+                codex_dir=codex if Path(codex).is_dir() else None, prs_file=a.prs)
     out = Path(a.out) if a.out else ROOT / f"docs/measure/devspeed-{time.strftime('%Y-%m-%d')}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(d, indent=1) + "\n")

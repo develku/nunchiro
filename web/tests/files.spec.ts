@@ -612,8 +612,7 @@ test('files expanded folders are kept per session in window settings; a broken s
 // V1A-63 frame-time figure, not an assertion: scrolls the 10,000-entry folder top to bottom in fixed 220 px steps, one
 // per animation frame, and prints rAF deltas (median, p95) and long tasks. Run with MEASURE=1 on Chromium, headed
 // (headless Chromium throttles rAF), on this branch and on main; compare the printed lines.
-test('files measure: scroll 10,000 entries', async ({ app, core }, info) => {
-  test.skip(info.project.name !== 'chromium' || !process.env.MEASURE, 'run with MEASURE=1');
+test('files measure: scroll 10,000 entries', { tag: '@shots' }, async ({ app, core }) => {
   test.setTimeout(120_000);
   await setup(app, core, {
     extra: (d) => {

@@ -92,8 +92,7 @@ test('handoff-chip: counts from the preview, Esc and ✕ cancel, nothing typed b
   expect(sessions(core)).toHaveLength(1);
 });
 
-test('handoff-chip: editable, Hangul composes, Enter while composing does not send, Enter sends one message', async ({ app, core, browserName }) => {
-  test.skip(browserName !== 'chromium', 'composition is driven over CDP');
+test('handoff-chip: editable, Hangul composes, Enter while composing does not send, Enter sends one message', { tag: '@chromium' }, async ({ app, core }) => {
   fakeAgents(core);
   const s = start(core, 'claude');
   const w = watch(app);

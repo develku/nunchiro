@@ -93,9 +93,8 @@ for (const scheme of ['light', 'dark'] as const) {
   });
 }
 
-test.describe('pixels', () => {
+test.describe('pixels', { tag: '@chromium' }, () => {
   test.use({ deviceScaleFactor: 2, viewport: { width: 1440, height: 900 }, colorScheme: 'light' });
-  test.skip(({ browserName }) => browserName !== 'chromium', 'pixel gate is Chromium only');
 
   // Ticket 1041 lane 6: draft 05's look (24 px rows, a 1 px border, rules between groups) is replaced by the approved
   // polish-1121 A+B+C, which draws no menu: menus are glass (light-glass.css), rows sit on the 32 px grid at 13 px, groups
@@ -191,9 +190,8 @@ for (const scheme of ['light', 'dark'] as const) {
   });
 }
 
-test.describe('picker pixels', () => {
+test.describe('picker pixels', { tag: '@chromium' }, () => {
   test.use({ deviceScaleFactor: 2, viewport: { width: 1440, height: 900 }, colorScheme: 'light' });
-  test.skip(({ browserName }) => browserName !== 'chromium', 'pixel gate is Chromium only');
 
   /** The app menu's rows as plain data, so a draft can be given the app's own text (the draft's is Korean or other agents). */
   const rowsOf = (pop: ReturnType<Page['locator']>) =>
@@ -245,9 +243,8 @@ test('menus_reference picker (02 Option B, .pop)', async ({ app, core }) => {
 // ---- the Sessions search hit list (06 Option A): four sessions, five hits for "retire", filter chips
 type Group = { name: string; kind: string; count: string; state: string; project: string; hits: { who: string; html: string; selected: boolean }[] };
 
-test.describe('search pixels', () => {
+test.describe('search pixels', { tag: '@chromium' }, () => {
   test.use({ deviceScaleFactor: 2, viewport: { width: 1440, height: 900 }, colorScheme: 'light' });
-  test.skip(({ browserName }) => browserName !== 'chromium', 'pixel gate is Chromium only');
 
   async function openHits(page: Page, core: Core & { chat: (label: string) => { id: string; file: string } }) {
     const seedSession = (label: string, texts: string[], close = false) => {

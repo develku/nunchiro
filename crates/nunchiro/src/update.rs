@@ -2256,15 +2256,18 @@ mod tests {
         fs::remove_dir_all(work).unwrap();
     }
 
-    /// Ticket 1112: a dumb-HTTP copy of `main_repo` on 127.0.0.1 that answers 401 to any request without the
+    /// Ticket 1112: a smart-HTTP copy of `main_repo` on 127.0.0.1 that answers 401 to any request without the
     /// `x-access-token:tok1112` Basic sign-in, as a private GitHub repository does. Its URL. One per test process.
+    /// Ticket 1142: smart HTTP (`git http-backend`), as GitHub serves, so `main_line`'s `--filter=tree:0` is honoured;
+    /// over dumb HTTP the filter was ignored and git made hundreds of lazy promisor fetches (over 60 s on CI).
     fn private_repo() -> &'static str {
         static URL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
         URL.get_or_init(|| {
             let (origin, _) = main_repo();
-            let bare =
+            let root =
                 std::env::temp_dir().join(format!("nunchiro-1112-bare-{}", std::process::id()));
-            let _ = fs::remove_dir_all(&bare);
+            let _ = fs::remove_dir_all(&root);
+            let bare = root.join("private.git");
             for args in [
                 &[
                     "clone",
@@ -2287,8 +2290,8 @@ mod tests {
             let url = format!("http://{}/private.git", server.local_addr().unwrap());
             std::thread::spawn(move || {
                 for stream in server.incoming().flatten() {
-                    let bare = bare.clone();
-                    std::thread::spawn(move || private_repo_request(stream, &bare));
+                    let root = root.clone();
+                    std::thread::spawn(move || private_repo_request(stream, &root));
                 }
             });
             url
@@ -2296,8 +2299,9 @@ mod tests {
     }
 
     /// Each connection gets its own worker: an idle connection must not prevent git opening another one.
-    /// Only authenticated GETs below the bare repository root can read files.
-    fn private_repo_request(mut stream: std::net::TcpStream, bare: &Path) {
+    /// Only authenticated GETs and POSTs below the bare repository root reach `git http-backend` (`root` holds the
+    /// one repository, private.git).
+    fn private_repo_request(mut stream: std::net::TcpStream, root: &Path) {
         use std::io::{Read, Write};
         use std::time::{Duration, Instant};
         let until = Instant::now() + Duration::from_secs(2);
@@ -2325,39 +2329,101 @@ mod tests {
         let signed = header.lines().skip(1).any(|line| {
             line.eq_ignore_ascii_case("authorization: Basic eC1hY2Nlc3MtdG9rZW46dG9rMTExMg==")
         });
-        let (status, body) = if !signed {
-            (
-                "401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"t\"",
-                Vec::new(),
-            )
-        } else {
-            let mut request = header.lines().next().unwrap_or("").split_whitespace();
-            let method = request.next();
-            let path = request.next().unwrap_or("").split('?').next().unwrap_or("");
-            let relative = path.strip_prefix("/private.git/").filter(|path| {
-                !path.is_empty()
-                    && path
-                        .split('/')
-                        .all(|part| !part.is_empty() && part != "." && part != "..")
-                    && Path::new(path)
-                        .components()
-                        .all(|c| matches!(c, std::path::Component::Normal(_)))
-            });
-            // Check authorization and the complete path before any file read.
-            match relative
-                .filter(|_| method == Some("GET"))
-                .and_then(|p| fs::read(bare.join(p)).ok())
-            {
-                Some(body) => ("200 OK", body),
-                None => ("404 Not Found", Vec::new()),
-            }
+        if !signed {
+            let _ = write!(
+                stream,
+                "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"t\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            );
+            return;
+        }
+        let mut request = header.lines().next().unwrap_or("").split_whitespace();
+        let method = request.next();
+        let target = request.next().unwrap_or("");
+        let (path, query) = target.split_once('?').unwrap_or((target, ""));
+        let relative = path.strip_prefix("/private.git/").filter(|path| {
+            !path.is_empty()
+                && path
+                    .split('/')
+                    .all(|part| !part.is_empty() && part != "." && part != "..")
+                && Path::new(path)
+                    .components()
+                    .all(|c| matches!(c, std::path::Component::Normal(_)))
+        });
+        // Check authorization and the complete path before git reads anything.
+        let Some(relative) = relative.filter(|_| matches!(method, Some("GET" | "POST"))) else {
+            let _ = write!(
+                stream,
+                "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            );
+            return;
         };
+        let field = |name: &str| {
+            header.lines().skip(1).find_map(|line| {
+                let (key, value) = line.split_once(':')?;
+                key.eq_ignore_ascii_case(name).then(|| value.trim())
+            })
+        };
+        // shortcut: a request body only by Content-Length (git's small fetch requests); a chunked one is not read.
+        let length = field("Content-Length")
+            .and_then(|n| n.parse::<usize>().ok())
+            .unwrap_or(0);
+        let mut body = vec![0; length.min(1 << 20)];
+        if stream.read_exact(&mut body).is_err() {
+            return;
+        }
+        let mut cgi = Command::new("/usr/bin/git");
+        cgi.env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .args(["-c", "uploadpack.allowFilter=true", "http-backend"])
+            .env("GIT_PROJECT_ROOT", root)
+            .env("GIT_HTTP_EXPORT_ALL", "1")
+            .env("REQUEST_METHOD", method.unwrap())
+            .env("PATH_INFO", format!("/private.git/{relative}"))
+            .env("QUERY_STRING", query)
+            .env("CONTENT_LENGTH", body.len().to_string())
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null());
+        for (name, variable) in [
+            ("Content-Type", "CONTENT_TYPE"),
+            ("Content-Encoding", "HTTP_CONTENT_ENCODING"),
+            ("Git-Protocol", "GIT_PROTOCOL"),
+        ] {
+            if let Some(value) = field(name) {
+                cgi.env(variable, value);
+            }
+        }
+        let Ok(mut child) = cgi.spawn() else { return };
+        let mut input = child.stdin.take().unwrap();
+        let feed = std::thread::spawn(move || input.write_all(&body));
+        let Ok(out) = child.wait_with_output() else {
+            return;
+        };
+        let _ = feed.join();
+        // CGI output: header lines, a blank line, the body; "Status:" becomes the status line.
+        let Some(at) = out.stdout.windows(4).position(|w| w == b"\r\n\r\n") else {
+            return;
+        };
+        let head = String::from_utf8_lossy(&out.stdout[..at]).into_owned();
+        let mut status = "200 OK".to_string();
+        let mut fields = String::new();
+        for line in head.split("\r\n") {
+            match line.split_once(':') {
+                Some((key, value)) if key.eq_ignore_ascii_case("Status") => {
+                    status = value.trim().to_string()
+                }
+                _ => fields.push_str(&format!("{line}\r\n")),
+            }
+        }
+        let body = &out.stdout[at + 4..];
         let _ = write!(
             stream,
-            "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            "HTTP/1.1 {status}\r\n{fields}Content-Length: {}\r\nConnection: close\r\n\r\n",
             body.len()
         );
-        let _ = stream.write_all(&body);
+        let _ = stream.write_all(body);
     }
 
     #[test]

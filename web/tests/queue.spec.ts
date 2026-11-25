@@ -650,38 +650,6 @@ test('stale: a quiet session is flagged in the tree row and strip; "waiting only
   expect((await notes(app))[0].title).toContain('loud');
 });
 
-// Screens for the comparison with R8 frame 2 (not assertions): SHOTS=1, Chromium.
-test('screens: the empty strip, three items as one line and +2, a focused card, the strip-off card', async ({ app, core }, info) => {
-  test.skip(info.project.name !== 'chromium' || !process.env.SHOTS, 'run with SHOTS=1');
-  fakes(core);
-  const out = path.join(REPO, '.scratch/shots');
-  fs.mkdirSync(out, { recursive: true });
-  const p = core.project('nunchiro');
-  const m = core.project('relay');
-  core.shell(p, 'core-serve', '/bin/zsh');
-  core.agent(p, 'v1a-04', 'go-a');
-  core.agent(p, 'v1a-03', 'go-b');
-  core.agent(m, 'relay-check', 'go-c');
-  await openWindow(app);
-  await app.screenshot({ path: path.join(out, 'q0-strip-empty.png') });
-  show(p, 'go-a', PERMISSION('rm -rf target/hints-cache'));
-  show(p, 'go-b', 'Retry the queue three times?\r\n> 1. Yes, three\r\n  2. No, once\r\nEnter to select · Esc to cancel\r\n');
-  show(m, 'go-c', 'Is this a project you created or one you trust?\r\n> 1. Yes, I trust this folder\r\n  2. No, exit\r\nEnter to confirm · Esc to cancel\r\n');
-  await expect(app.locator('#waiting-strip .qmore')).toHaveText('+2', { timeout: 5000 });
-  await expect(app.locator('#waiting-strip .qcard')).toHaveCount(1);
-  await app.locator('.cbox textarea').fill('reap 순서는 좋아요. 다음으로 retire_group 실패 시 로그를 남기');
-  await app.mouse.move(200, 300);
-  await app.screenshot({ path: path.join(out, 'q1-strip-3.png') });
-  await app.locator('#waiting-strip').screenshot({ path: path.join(out, 'q1-strip-3-crop.png') });
-  await app.locator('.tree .q').filter({ hasText: 'v1a-03' }).click();
-  await expect(card(app, 'v1a-03')).toBeFocused();
-  await app.locator('#waiting-strip').screenshot({ path: path.join(out, 'q2-focused-crop.png') });
-  await app.evaluate(() => localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ ...JSON.parse(localStorage.getItem('nunchiro.settings.v1') ?? '{}'), strip: 'off' })));
-  await app.reload();
-  await app.locator('.tree .q').first().click();
-  await app.screenshot({ path: path.join(out, 'q3-strip-off-card.png') });
-});
-
 // v1a-23 (needs 47): a session asks for one of the two human actions; the strip shows the waiting item and the owner
 // answers it with one click (a widget through the permission sheet, at the hash the sheet shows).
 test('owner items: a session asks to approve a widget and turn on verified yes; one click each', async ({ app, core }) => {

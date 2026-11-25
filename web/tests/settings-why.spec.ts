@@ -254,24 +254,3 @@ test('why_every_page_failed: a provider that failed to start and a machine whose
   await app.locator('.settings > nav button[data-page="machines"]').click();
   await expect(app.locator('[data-machine="down"]')).toBeVisible();
 });
-
-// SHOTS=<dir>: the three changed pages (Git, Notifications, In-app browser) in light and dark, gh signed out and
-// notifications blocked, for the lane report's before/after.
-test('why_shots', async ({ app, core }) => {
-  const shots = process.env.SHOTS;
-  test.skip(!shots || test.info().project.name !== 'chromium', 'SHOTS=<dir> on chromium only');
-  stub(core, 'gh', ghOut);
-  await app.addInitScript(() => Object.defineProperty(Notification, 'permission', { get: () => 'denied' }));
-  for (const scheme of ['light', 'dark'] as const) {
-    await app.emulateMedia({ colorScheme: scheme });
-    for (const [id, at] of [
-      ['git', 'section[aria-labelledby="h-git"]'],
-      ['alerts', 'section[aria-labelledby="h-system-notes"]'],
-      ['inapp-browser', 'section[aria-labelledby="h-bprofiles"]'],
-    ]) {
-      await go(app, id);
-      await app.waitForTimeout(600);
-      await body(app).locator(at).screenshot({ path: path.join(shots!, `${process.env.SHOTS_TAG ?? 'after'}-${id}-${scheme}.png`) });
-    }
-  }
-});

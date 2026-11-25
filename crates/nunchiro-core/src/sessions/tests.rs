@@ -4624,12 +4624,13 @@ fn w14_a_prompt_on_a_still_screen_gets_its_card_back_mid_turn() {
 /// queue, is not typed into the question, and goes once the input box is back.
 #[test]
 fn v5_c_a_goal_waits_behind_a_question_and_goes_after_it() {
+    // Ticket 1142: the question is the fixture's `burst`, written before the session starts; written after it, a
+    // loaded host ran `cat q` first and the question was never drawn ("no card"). `p` is read only after `go`.
     let mut f = flood_script(
         "v5-goal",
-        b"",
-        "cat > got <&0 &\ncat q\nwhile [ ! -f go ]; do sleep 0.05; done; cat p\n",
+        V5_TRUST.as_bytes(),
+        "cat > got <&0 &\ncat burst\nwhile [ ! -f go ]; do sleep 0.05; done; cat p\n",
     );
-    fs::write(f.home.join("q"), V5_TRUST).unwrap();
     fs::write(f.home.join("p"), PROMPT).unwrap();
     let until = std::time::Instant::now() + std::time::Duration::from_secs(30);
     while f.core.queue.items_of(&f.id).is_empty() {
@@ -5357,6 +5358,59 @@ fn plain_shell_starts_on_the_first_window_size(name: &str, cols: u16, rows: u16,
     let _ = core.handle(Request::Stop);
     fs::remove_dir_all(home).unwrap();
 }
+/// Ticket 1137: a prompt sent to a shell just started (still waiting for the window's size) runs once the shell starts,
+/// with no second Enter, and runs once.
+#[test]
+fn t1137_a_shell_prompted_at_once_runs_the_line_once() {
+    let home = scratch("t1137-shell-first-prompt");
+    let mut core = Sessions::open(&home).unwrap();
+    assert_eq!(
+        core.window_size, None,
+        "a new home has no stored size: the shell waits for one"
+    );
+    let mut launch = core
+        .launch(StartSession {
+            account: None,
+            kind: AgentKind::Shell,
+            project: home.clone(),
+            worktree: false,
+            label: String::new(),
+            args: vec![],
+            model: None,
+            effort: None,
+            resume: None,
+        })
+        .prepare()
+        .unwrap();
+    launch.env.insert("HOME".into(), home.display().to_string()); // past `--env`'s allow list: a test seam
+    let id = core.start(&launch).unwrap().id;
+    launch.committed = true;
+    core.handle(Request::AgentPrompt {
+        id: id.clone(),
+        text: "echo x >> ran.log".into(),
+    })
+    .unwrap();
+    // No window opens: the prompt ends the size wait, so the line runs well before its 8 s fallback.
+    let ran = home.join("ran.log");
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(6);
+    while !ran.exists() {
+        assert!(
+            std::time::Instant::now() < until,
+            "the prompt waited for the 8 s size fallback"
+        );
+        let _ = core.handle(Request::List);
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    let _ = core.handle(Request::List);
+    assert_eq!(
+        fs::read_to_string(&ran).unwrap(),
+        "x\n",
+        "the line ran exactly once"
+    );
+    let _ = core.handle(Request::Stop);
+    fs::remove_dir_all(home).unwrap();
+}
 #[test]
 fn steer_ctrl_enter_no_interrupt_kind_stays_queued() {
     // A shell has no turn to break: the refusal says so and nothing is written or queued.
@@ -5831,8 +5885,19 @@ fn t1094_typed_words_past_the_send_limit_prove_nothing() {
     let id = f.id.clone();
     f.core.copy_left.insert(id.clone(), "row".into());
     f.core.hand_typed.insert(id.clone(), Some(String::new()));
-    let chunk = "a".repeat(crate::delivery::SEND_LIMIT / 2);
-    let raw = |f: &mut Flood, text: &str| {
+    // Ticket 1142 (CI "uncertain"): the first write could beat the fixture's `stty raw` and reader (`got` is made by
+    // the reader's own redirect), and a plain 32 KiB write must pass the 1 KiB terminal queue within the holder's
+    // 100 ms bound. So each write waits until the reader has every earlier byte, and a chunk goes as a bracketed paste
+    // (1.5 s, then the background writer); the markers are stripped before counting, so the typed length is the same.
+    let chunk = format!(
+        "\x1b[200~{}\x1b[201~",
+        "a".repeat(crate::delivery::SEND_LIMIT / 2)
+    );
+    let mut sent = 0;
+    let mut raw = |f: &mut Flood, text: &str| {
+        wait_for("the agent read every earlier byte", &mut || {
+            fs::metadata(f.home.join("got")).is_ok_and(|m| m.len() as usize >= sent)
+        });
         f.core
             .handle(Request::SendText {
                 id: f.id.clone(),
@@ -5841,6 +5906,7 @@ fn t1094_typed_words_past_the_send_limit_prove_nothing() {
                 composer: false,
             })
             .unwrap();
+        sent += text.len();
     };
     raw(&mut f, &chunk);
     raw(&mut f, &chunk);
@@ -11609,4 +11675,114 @@ fn t1121_box_proof_waits_for_unread_output() {
     );
     assert!(!got(&f).contains(&b'\r'), "no Enter past unread output");
     assert_ne!(send_row(&f, &send.id).status, "delivered");
+}
+
+/// Ticket 1130 B-L3 round 2: a home with one session on a raw `cat`, read as a Claude seat (as the room tests do).
+fn seat_1130(tag: &str) -> (PathBuf, Sessions, String) {
+    let home = std::env::temp_dir().join(format!("ns-1130-{tag}-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&home);
+    fs::create_dir_all(home.join("p")).unwrap();
+    let home = fs::canonicalize(home).unwrap();
+    let script = home.join("echo.sh");
+    fs::write(&script, "#!/bin/sh\nstty raw -echo\nexec cat\n").unwrap();
+    fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
+    let mut core = Sessions::open(&home).unwrap();
+    let mut launch = core
+        .launch(StartSession {
+            account: None,
+            kind: AgentKind::Shell,
+            project: home.join("p"),
+            worktree: false,
+            label: "seat".into(),
+            args: vec![script.to_str().unwrap().into()],
+            model: None,
+            effort: None,
+            resume: None,
+        })
+        .prepare()
+        .unwrap();
+    let id = core.start(&launch).unwrap().id;
+    launch.committed = true;
+    core.entries.get_mut(&id).unwrap().meta.kind = AgentKind::Claude;
+    (home, core, id)
+}
+
+/// Ticket 1130 B-L3 round 2 (finding 5): the close a new conversation makes keeps the old seat's row, also when its
+/// agent exited a moment before (the exit race): `close` would take the two-phase path for such a row and it would be
+/// gone from History ten seconds later.
+#[test]
+fn end_seat_keeps_the_row_of_a_seat_whose_run_just_ended() {
+    let (home, mut core, id) = seat_1130("endseat");
+    // As the tick records an agent's exit.
+    core.entries.get_mut(&id).unwrap().meta.state = SessionState::Exited;
+    core.end_seat(&id).unwrap();
+    core.finish_close(u64::MAX);
+    assert!(core.entries.contains_key(&id), "its row stays in History");
+    assert!(core.closing.is_none());
+    // A running seat is closed, and its row stays as well.
+    core.entries.get_mut(&id).unwrap().meta.state = SessionState::Running;
+    core.end_seat(&id).unwrap();
+    core.finish_close(u64::MAX);
+    assert_eq!(core.entries[&id].meta.state, SessionState::Closed);
+    core.stop().unwrap();
+    fs::remove_dir_all(home).unwrap();
+}
+
+/// Ticket 1130 B-L3 round 5: History keeps the newest 50 closed rows. A row an Undo holds (`hold_row`) or a resumed
+/// ACP run still loads from (`acp_loading`) is neither dropped nor counted, however old it is; let go, it is an
+/// ordinary closed row again and the next close past the bound takes it.
+#[test]
+fn the_closed_row_bound_spares_held_and_loading_rows() {
+    let (home, mut core, held) = seat_1130("held");
+    let start = |core: &mut Sessions, label: &str| {
+        let mut launch = core
+            .launch(StartSession {
+                account: None,
+                kind: AgentKind::Shell,
+                project: home.join("p"),
+                worktree: false,
+                label: label.into(),
+                args: vec!["/bin/sh".into(), "-c".into(), "exec cat".into()],
+                model: None,
+                effort: None,
+                resume: None,
+            })
+            .prepare()
+            .unwrap();
+        let id = core.start(&launch).unwrap().id;
+        launch.committed = true;
+        id
+    };
+    let close = |core: &mut Sessions, id: &str| core.close(id, true, false).unwrap();
+    let loading = start(&mut core, "loading");
+    // The two oldest closed rows, then 60 newer ones.
+    close(&mut core, &held);
+    close(&mut core, &loading);
+    core.hold_row(&held, true);
+    core.acp_loading
+        .insert("a-resumed-run".into(), vec![loading.clone()]);
+    for n in 0..60 {
+        let id = start(&mut core, &format!("s{n}"));
+        close(&mut core, &id);
+    }
+    assert!(core.entries.contains_key(&held), "held for an Undo");
+    assert!(
+        core.entries.contains_key(&loading),
+        "a resume loads from it"
+    );
+    let closed = |core: &Sessions| {
+        core.entries
+            .values()
+            .filter(|e| e.meta.state == SessionState::Closed)
+            .count()
+    };
+    assert_eq!(closed(&core), CLOSED_KEEP + 2, "and neither is counted");
+    core.hold_row(&held, false);
+    core.acp_loading.clear();
+    let id = start(&mut core, "last");
+    close(&mut core, &id);
+    assert!(!core.entries.contains_key(&held) && !core.entries.contains_key(&loading));
+    assert_eq!(closed(&core), CLOSED_KEEP);
+    core.stop().unwrap();
+    fs::remove_dir_all(home).unwrap();
 }
