@@ -4,8 +4,9 @@ import { docT, errorNote, notePlain, type Note } from '../errors';
 import { useSyncExternalStore } from 'react';
 
 export const UNDO_MS = 10_000;
-/** `deadline` (absolute ms, Date.now()) is a hard end: a pause never holds the offer past it (a source whose own window is fixed). */
-export type Entry = { label: string; undo: () => unknown; deadline?: number };
+/** `deadline` (absolute ms, Date.now()) is a hard end: a pause never holds the offer past it (a source whose own window is fixed).
+ *  `toast` (ticket 1130 B-L3): the offer is drawn by its own toast (lead/LeaderDialog.tsx), not in the status line. */
+export type Entry = { label: string; undo: () => unknown; deadline?: number; toast?: boolean };
 type State = { entry: Entry | null; failed: Note; n: number; paused: boolean };
 
 let state: State = { entry: null, failed: '', n: 0, paused: false };

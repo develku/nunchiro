@@ -95,6 +95,9 @@ jobs:
         with:
           name: nextest-archive
       - run: git config --global user.name ci && git config --global user.email ci@localhost
+      # holder.rs core_swap_keeps_sessions_and_the_window builds a stamped core with `cargo build --offline --locked`;
+      # the archive carries no crate sources, so the registry is filled here (ticket 1142).
+      - run: cargo fetch --locked
       # Extracted over the checkout, so target/debug/nunchiro sits where the core tests look for it (tests/fixtures/cli.rs).
       - name: cargo nextest run (partition ${{ matrix.partition }}/${{ strategy.job-total }})
         run: >-
@@ -118,6 +121,8 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: scripts/setup-worktree.sh
+      # gen-notices reads `cargo metadata --offline`, which needs every locked crate, other platforms' included, on disk.
+      - run: cargo fetch --locked && cargo fetch --locked --manifest-path app/src-tauri/Cargo.toml
       - run: scripts/check-app.sh
 
   # cli docs, the Python scenario suite and the Playwright core set: all three need the core binary.

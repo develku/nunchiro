@@ -45,7 +45,7 @@ test('new_lead_from_the_palette (1096): "lead" finds New Lead conversation; it s
   await expect(item).toHaveText(/New Lead conversation/);
   await shot(app, 'palette');
   await item.click();
-  await expect.poll(() => asked).toEqual([{ id: 'lead-demo', fresh: 'handover' }]);
+  await expect.poll(() => asked).toEqual([{ id: 'lead-demo', fresh: 'now' }]);
   await expect(app.locator(`.tab[data-tab="${alpha.id}"]`)).toHaveAttribute('aria-selected', 'true');
   await expect(app.getByRole('dialog')).toHaveCount(0);
 });
@@ -57,7 +57,7 @@ test('new_lead_from_the_plus_menu (1096): the tab + menu has the row; it sends o
   await expect(row).toHaveCount(1);
   await shot(app, 'plus');
   await row.click();
-  await expect.poll(() => asked).toEqual([{ id: 'lead-demo', fresh: 'handover' }]);
+  await expect.poll(() => asked).toEqual([{ id: 'lead-demo', fresh: 'now' }]);
 });
 
 test('new_lead_from_the_row_menu (1096): the project row menu has it, for that row; it sends one fresh team_open', async ({ app, core }) => {
@@ -67,7 +67,7 @@ test('new_lead_from_the_row_menu (1096): the project row menu has it, for that r
   await expect(item).toHaveCount(1);
   await shot(app, 'row');
   await item.click();
-  await expect.poll(() => asked).toEqual([{ id: 'lead-demo', fresh: 'handover' }]);
+  await expect.poll(() => asked).toEqual([{ id: 'lead-demo', fresh: 'now' }]);
 });
 
 // The core's two time-limit lines, word for word (team.rs fresh_lead, LATE_WITHDRAWN and LATE_HANDED).
@@ -79,7 +79,7 @@ test('new_lead_stuck_old_lead (1096): past the limit one sheet says so; only the
   const sheet = app.getByRole('dialog', { name: 'New Lead conversation for demo' });
   await expect(sheet).toContainText('Lead did not finish its turn within 5 minutes. It is still open, no new conversation started, and the handover message was withdrawn.');
   await shot(app, 'stuck');
-  expect(asked).toEqual([{ id: 'lead-demo', fresh: 'handover' }]);
+  expect(asked).toEqual([{ id: 'lead-demo', fresh: 'now' }]);
   await sheet.getByRole('button', { name: 'Close the old Lead and open a new one' }).click();
   await expect.poll(() => asked.length).toBe(2);
   expect(asked[1]).toEqual({ id: 'lead-demo', fresh: 'close' });
@@ -95,7 +95,7 @@ test('new_lead_stuck_handed (1096 review): a Lead that already has the handover 
   await expect(sheet).toContainText('already has the handover message, so it stops after its current turn');
   await sheet.getByRole('button', { name: 'Keep it open' }).click();
   await expect(sheet).toHaveCount(0);
-  expect(asked).toEqual([{ id: 'lead-demo', fresh: 'handover' }]);
+  expect(asked).toEqual([{ id: 'lead-demo', fresh: 'now' }]);
 });
 
 test('new_lead_lost_core (1096 review): a reconnect during the wait says the seat may still open, not that it failed', async ({ app, core }) => {
