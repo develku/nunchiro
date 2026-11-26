@@ -1458,10 +1458,13 @@ fn stamped_build() -> PathBuf {
 struct Window(tungstenite::WebSocket<std::net::TcpStream>);
 impl Window {
     fn connect(home: &std::path::Path) -> Result<Self, String> {
-        use tungstenite::{client::IntoClientRequest, http::HeaderValue};
         let Reply::WindowAuth { port, token } = call(home, Request::WindowAuth)? else {
             return Err("not a window_auth reply".into());
         };
+        Self::dial(port, &token)
+    }
+    fn dial(port: u16, token: &str) -> Result<Self, String> {
+        use tungstenite::{client::IntoClientRequest, http::HeaderValue};
         let mut req = format!("ws://127.0.0.1:{port}/ws")
             .into_client_request()
             .unwrap();
@@ -1584,6 +1587,26 @@ fn listed(h: &Harness) -> Vec<String> {
         }
         r => panic!("wrong reply {r:?}"),
     }
+}
+
+// The window client waits out a core that answers its handshake late, as a loaded CI runner does (the swap test's
+// first connect once failed with "Interrupted handshake (WouldBlock)" after 100 ms). The core is stopped between
+// `window_auth` and the dial, so the request sits unanswered for 300 ms.
+#[test]
+fn window_waits_out_a_late_handshake() {
+    let h = Harness::new();
+    let Reply::WindowAuth { port, token } = call(&h.home, Request::WindowAuth).unwrap() else {
+        panic!("not a window_auth reply");
+    };
+    let core = h.core.id() as libc::pid_t;
+    assert_eq!(unsafe { libc::kill(core, libc::SIGSTOP) }, 0);
+    let resume = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(300));
+        unsafe { libc::kill(core, libc::SIGCONT) };
+    });
+    let dialed = Window::dial(port, &token);
+    resume.join().unwrap();
+    assert_eq!(dialed.unwrap().running_sessions(), Vec::<String>::new());
 }
 
 // S6 (scorecard stability): the owner's two core swaps with a shell, a Codex fixture agent and a window connected:
