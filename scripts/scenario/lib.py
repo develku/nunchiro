@@ -3,7 +3,7 @@
 Drives the user's real `claude` / `codex` in a PTY, keeps a timestamped output log,
 and exposes a crude screen-text view (escape sequences stripped) for screen-state matching.
 """
-import difflib, fcntl, hashlib, json, os, pty, re, select, signal, struct, subprocess, sys, termios, threading, time, uuid
+import difflib, fcntl, hashlib, json, os, pathlib, pty, re, select, signal, struct, subprocess, sys, tempfile, termios, threading, time, uuid
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
@@ -19,6 +19,19 @@ REQUIRED = (".claude/settings.json", CLAUDE_JSON, ".codex/config.toml")  # missi
 OPTIONAL = (".claude/settings.local.json", ".codex/hooks.json")  # absent is fine if it was absent before
 GUARDED = [os.path.join(HOME, p) for p in REQUIRED + OPTIONAL]
 RETRY_WAIT = 0.5  # another process may be mid-write; one retry rides that out
+
+
+# Throwaway NUNCHIRO_HOMEs for real-agent scenarios. Outside any git repository: the core hands <home>/artifacts to
+# Claude with --add-dir, and Claude asks whether to trust a new directory that sits inside a repo (never answered).
+SCENARIO_HOMES = os.path.join(HOME, "Library/Caches/nunchiro-scenario-homes")
+
+
+def scenario_home(prefix):
+    """A fresh mode-700 home under SCENARIO_HOMES; the caller removes it when the run ends."""
+    os.makedirs(SCENARIO_HOMES, mode=0o700, exist_ok=True)
+    home = pathlib.Path(tempfile.mkdtemp(prefix=prefix, dir=SCENARIO_HOMES))
+    assert len(str(home / "core.sock").encode()) < 104, "socket path too long"
+    return home
 
 
 def sock_path(prefix="nv1a"):
