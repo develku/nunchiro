@@ -196,7 +196,8 @@ test('update_all_shared_installer: two npm tools run one after the other, and th
   await expect(row(app, 'opencode').locator('.pchip.upd-run')).toBeVisible({ timeout: 20_000 });
   await expect(row(app, 'gemini').locator('.pchip.upd-run')).toHaveCount(0);
   await expect(app.locator('#s-accounts .upd-err')).toHaveCount(0);
-  expect(log(core).split('\n').filter((l) => l.startsWith('npm'))).toEqual(['npm install -g @google/gemini-cli@latest', 'npm i -g @opencode/cli@latest']);
+  // The chip shows once the core starts the run; the fake npm writes its line a moment later.
+  await expect.poll(() => log(core).split('\n').filter((l) => l.startsWith('npm'))).toEqual(['npm install -g @google/gemini-cli@latest', 'npm i -g @opencode/cli@latest']);
 });
 
 test('update_ui_screen: the popover and the header in Korean (REPORT capture)', async ({ app, core }, info) => {
