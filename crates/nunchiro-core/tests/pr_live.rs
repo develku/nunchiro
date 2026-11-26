@@ -912,9 +912,12 @@ impl Core {
         // Ticket 484: a short read timeout only paces the deadline loop below; a fixed 5 s timeout on the socket was
         // the wait, and it ran out before a reply the core may take up to its own bound to send.
         stream
-            .set_read_timeout(Some(Duration::from_millis(500)))
+            .set_read_timeout(Some(Duration::from_secs(5)))
             .unwrap();
         let mut ws = tungstenite::client(req, stream).unwrap().0;
+        ws.get_ref()
+            .set_read_timeout(Some(Duration::from_millis(500)))
+            .unwrap();
         let mut out = vec![];
         for (i, request) in requests.iter().enumerate() {
             let id = 100 + i as u64;

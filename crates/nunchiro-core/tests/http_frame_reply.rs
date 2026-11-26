@@ -62,10 +62,15 @@ impl Core {
             HeaderValue::from_str(&format!("nunchiro.v1, nunchiro.token.{token}")).unwrap(),
         );
         let stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        // A 200 ms read timeout polls later reads only; the handshake gets the core's own bound.
         stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let ws = tungstenite::client(req, stream).expect("authorized dial").0;
+        ws.get_ref()
             .set_read_timeout(Some(Duration::from_millis(200)))
             .unwrap();
-        tungstenite::client(req, stream).expect("authorized dial").0
+        ws
     }
 }
 impl Drop for Core {
