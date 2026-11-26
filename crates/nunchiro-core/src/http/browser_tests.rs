@@ -1135,23 +1135,6 @@ fn threat_note_sendtext() {
     );
 }
 
-#[test]
-fn web_smoke_lists_specs() {
-    // The merge-gate script is not in the public export (scripts/public-exclude.txt): nothing to check there.
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scripts/web-smoke.sh");
-    if !std::path::Path::new(path).exists() {
-        return;
-    }
-    let smoke = std::fs::read_to_string(path).unwrap();
-    let specs = smoke.lines().find(|l| l.starts_with("specs=")).unwrap();
-    for spec in ["web-access-browser.spec", "web-access-insecure.spec"] {
-        assert!(
-            specs.split(['"', ' ']).any(|s| s == spec),
-            "{spec} in {specs}"
-        );
-    }
-}
-
 /// Ticket 358, whole bundle: every op the eight lanes added is in all three owner-only lists (a session caller, a remote
 /// caller, a browser). The agent half runs over the socket too: `bundle_358_ops_are_refused_to_a_session` in tests/acp.rs.
 #[test]

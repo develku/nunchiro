@@ -1,7 +1,6 @@
 #!/bin/sh
-# CI web stage: the Playwright core set (web/tests/core-set.txt) on Chromium, as `scripts/web-smoke.sh --core` runs it in
-# the owner's gate (same --grep, workers and retries). web-smoke.sh is not in the public export: it also reads the gate
-# quarantine, the area spec picker and origin/main, which stay private. Run from the repository root.
+# CI web stage: the Playwright core set (web/tests/core-set.txt) on Chromium, one --grep over its titles. Run from the
+# repository root.
 # shortcut: no quarantine list, a quarantined web test runs here; add one if a flaky test blocks the queue.
 set -eu
 esc() { printf '%s' "$1" | sed 's/[][(){}+*?^$|.\\]/\\&/g'; }

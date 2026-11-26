@@ -1,6 +1,0 @@
-# Append-only records: every lane adds rows at the end, so a plain merge conflicts whenever two lanes land in one wave.
-# union keeps both sides' rows (the coordinator's ledger_union.py did the same by hand). bin/land reads this through
-# `git config attr.tree refs/heads/main` (the root checkout is a stale detached HEAD). Experiment 11-20: metric =
-# set-asides caused only by these files; kill if a union merge ever breaks a table row; review 11-22.
-docs/review/quality-1116/ledger.md merge=union
-docs/tickets/v2/issues/995-quality-s3-backlog.md merge=union
