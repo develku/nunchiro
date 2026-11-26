@@ -1072,6 +1072,14 @@ pub(crate) fn in_core(
         Request::Start {
             session, folder, ..
         } => {
+            // Held under memory pressure as "skipped": a later pass plans it again, and no try is counted.
+            crate::pressure::check_start(
+                &session,
+                crate::pressure::Who::Session,
+                false,
+                "reviewer",
+            )
+            .map_err(|e| format!("skipped: {e}"))?;
             let (caller, launch) = {
                 let mut sessions = lock()?;
                 recheck(&sessions, task, lead, &Step::Start)?;

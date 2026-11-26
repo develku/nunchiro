@@ -1297,13 +1297,11 @@ fn connection(
             }
             // A new agent seat waits while the Mac is low on memory; a plain terminal is no seat, and a saved
             // conversation resumed is never held.
-            if session.kind != AgentKind::Shell && session.resume.is_none() {
-                let who = match caller {
-                    None => crate::pressure::Who::Owner,
-                    Some(_) => crate::pressure::Who::Session,
-                };
-                crate::pressure::check(who, anyway, "start")?;
-            }
+            let who = match caller {
+                None => crate::pressure::Who::Owner,
+                Some(_) => crate::pressure::Who::Session,
+            };
+            crate::pressure::check_start(&session, who, anyway, "start")?;
             let mut launch = sessions
                 .launch_as(caller.as_ref(), session.clone(), false)?
                 .with_folder(folder.clone())

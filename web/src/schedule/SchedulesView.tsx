@@ -21,7 +21,7 @@ import './schedule.css';
 /** At this width of its own a row is one line in columns. */
 const WIDE = 720;
 type Dot = 'working' | 'done' | 'waiting' | 'failed' | 'idle';
-const dotOf = (s: Schedule): Dot | null => (!s.last ? null : !s.last.result ? 'working' : s.last.result === 'finished' ? 'done' : s.last.result === 'needs_you' ? 'waiting' : s.last.result === 'skipped' ? 'idle' : 'failed');
+const dotOf = (s: Schedule): Dot | null => (!s.last ? null : !s.last.result ? 'working' : s.last.result === 'finished' ? 'done' : s.last.result === 'needs_you' ? 'waiting' : s.last.result === 'skipped' || s.last.result === 'held' ? 'idle' : 'failed');
 
 export function SchedulesView({ core, t, sessions, open, where }: { core: CoreClient; t: T; sessions: Session[]; open: (id: string) => void; where: 'side' | 'tab' }) {
   const list = useScheduleList();
@@ -110,7 +110,7 @@ export function SchedulesView({ core, t, sessions, open, where }: { core: CoreCl
     const ran = last ? dayWords(t, last.at) : '';
     const reason = last?.reason ? knownOrRaw(t, last.reason) : '';
     const result = !last ? t('schedule.never') : !last.result ? t('schedule.running') : t(`schedule.result.${last.result}` as Key);
-    const said = !last ? '' : !last.result ? `${t('schedule.lastRun')}: ${result}` : last.result === 'failed' ? `${t('schedule.lastRun')} ${result}: ${reason || ran}` : `${t('schedule.lastRun')} ${result} · ${ran}`;
+    const said = !last ? '' : !last.result ? `${t('schedule.lastRun')}: ${result}` : last.result === 'failed' || last.result === 'held' ? `${t('schedule.lastRun')} ${result}: ${reason || ran}` : `${t('schedule.lastRun')} ${result} · ${ran}`;
     const session = live(last?.session) ? last!.session! : null;
     const glyph = dot && (
       <i className="tdot" data-s={dot} aria-hidden>

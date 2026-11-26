@@ -86,6 +86,24 @@ pub(crate) fn check(who: Who, anyway: bool, path: &str) -> Result<(), String> {
     })
 }
 
+/// The check for a start that may be a new seat: a plain terminal and a resumed conversation are never held.
+pub(crate) fn check_start(
+    start: &crate::api::StartSession,
+    who: Who,
+    anyway: bool,
+    path: &str,
+) -> Result<(), String> {
+    if start.kind == crate::api::AgentKind::Shell || start.resume.is_some() {
+        return Ok(());
+    }
+    check(who, anyway, path)
+}
+
+/// Whether a start's refusal is a memory-pressure hold (a schedule's run reads "held", not failed).
+pub(crate) fn is_held(error: &str) -> bool {
+    [HELD, HELD_WINDOW, HELD_SESSION].contains(&error)
+}
+
 /// Where macOS writes its JetsamEvent reports.
 const REPORTS: &str = "/Library/Logs/DiagnosticReports";
 

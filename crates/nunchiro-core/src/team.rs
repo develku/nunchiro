@@ -949,9 +949,24 @@ pub(crate) enum Opener<'a> {
     /// Ticket 1130 B-L3: the window's Undo of a new conversation: this ended seat's conversation is continued, in
     /// place of the seat the new conversation opened (the second id), which must still be the teammate's seat.
     Undo(&'a str, &'a str),
-    /// A scheduled run, with its schedule's id: the seat is marked before its task reaches it.
-    Schedule(&'a str),
+    /// A scheduled run, with its schedule's id: the seat is marked before its task reaches it. `Who` holds it under
+    /// memory pressure: the timer as a session's start, the owner's Run now as the window's.
+    Schedule(&'a str, crate::pressure::Who),
     Lead(&'a crate::grants::Caller),
+}
+
+impl Opener<'_> {
+    /// How a seat this opener starts is held under memory pressure, and its name in the hold's log line. A new
+    /// conversation is checked before its handover (`fresh_lead`), and an Undo resumes, so neither is held here.
+    fn pressure(&self) -> Option<(crate::pressure::Who, &'static str)> {
+        use crate::pressure::Who;
+        match self {
+            Opener::Window => Some((Who::Window, "team seat")),
+            Opener::Schedule(_, who) => Some((*who, "schedule")),
+            Opener::Lead(_) => Some((Who::Session, "team open")),
+            Opener::Fresh(_) | Opener::Undo(..) => None,
+        }
+    }
 }
 
 /// What `open_seat` did: the seat, whether it started now, and (ticket 992) why its level is not the asked one.
@@ -1080,7 +1095,7 @@ pub(crate) fn open_seat(
     // Look 11-17 v8 (Home S2-A): a scheduled run never replaces a lead's seat. Its level is not used: the task goes
     // into the lead's open seat as it is (no level asked never replaces), and with no open seat the seat opens by the
     // lead's own level rule. Run now on a Light schedule had ended the lead's Standard conversation with the user.
-    let asked = asked.filter(|_| !(mate.lead && matches!(opener, Opener::Schedule(_))));
+    let asked = asked.filter(|_| !(mate.lead && matches!(opener, Opener::Schedule(..))));
     // As at save (`check`): a project folder replaced by a symlink since then starts nothing.
     if let Some(p) = &mate.project
         && fs::canonicalize(p).ok().as_ref() != Some(p)
@@ -1180,7 +1195,7 @@ pub(crate) fn open_seat(
         }
         if let Some(task) = task {
             // A scheduled task to an open seat: marked first, as a new seat is (below).
-            if let Opener::Schedule(schedule) = &opener {
+            if let Opener::Schedule(schedule, _) = &opener {
                 sessions.scheduled_run(seat, schedule);
             }
             sessions.prompt_as_user(seat, task_note(task))?;
@@ -1237,22 +1252,22 @@ pub(crate) fn open_seat(
         // the task: a new session lost the chat with the user after a relaunch.
         let resumes = match &opener {
             Opener::Window => task.is_none(),
-            Opener::Schedule(_) => mate.lead,
+            Opener::Schedule(..) => mate.lead,
             Opener::Lead(_) | Opener::Fresh(_) | Opener::Undo(..) => false,
         };
         if resumes {
             start.resume = sessions.seat_to_resume(&mate.id, &start, level, None);
         }
+        // Only a seat that starts now is held (an open seat took the task above, a resumed one never is).
+        if let Some((who, path)) = opener.pressure() {
+            crate::pressure::check_start(&start, who, false, path)?;
+        }
         match &opener {
             Opener::Window | Opener::Fresh(_) | Opener::Undo(..) => sessions
                 .launch_as(None, start.clone(), false)?
                 .owner_start(),
-            Opener::Schedule(_) => sessions.launch_as(None, start.clone(), false)?,
-            Opener::Lead(caller) => {
-                // Only a seat that would start now is held; an open seat took the task above.
-                crate::pressure::check(crate::pressure::Who::Session, false, "team open")?;
-                sessions.launch_as(Some(caller), start.clone(), false)?
-            }
+            Opener::Schedule(..) => sessions.launch_as(None, start.clone(), false)?,
+            Opener::Lead(caller) => sessions.launch_as(Some(caller), start.clone(), false)?,
         }
     };
     // As the owner's Start: a missing agent still opens a tab, with its card.
@@ -1321,7 +1336,7 @@ pub(crate) fn open_seat(
     }
     // Before the task is sent (Codex look on wave 14): a scheduled run proposes and changes no schedule
     // (`schedule_proposer`), from its first moment.
-    if let Opener::Schedule(schedule) = &opener {
+    if let Opener::Schedule(schedule, _) = &opener {
         sessions.scheduled_run(&session.id, schedule);
     }
     // As the window's start-then-prompt: the core holds the text until the agent takes input. A resumed seat was
@@ -1416,6 +1431,8 @@ pub(crate) fn fresh_lead(
         return Err("a new conversation is already being opened".into());
     }
     let _one = Handing(id.to_string());
+    // Before the handover: a held new conversation must leave the old seat running.
+    crate::pressure::check(crate::pressure::Who::Window, false, "new conversation")?;
     let lock = || {
         registry
             .lock()

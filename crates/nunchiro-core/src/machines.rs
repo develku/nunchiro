@@ -282,7 +282,7 @@ pub(crate) fn dispatch(
                 .or_default()
                 .insert(item.id.clone(), channel::Mark::Sending);
         }
-        if matches!(request, Request::Start { .. }) {
+        if matches!(request, Request::Start { .. } | Request::StartAnyway { .. }) {
             *sessions.remote.starting.entry(alias.clone()).or_default() += 1;
         }
         (caller, delegated, master, taken)
@@ -302,7 +302,8 @@ pub(crate) fn dispatch(
             }
         }
     }
-    let _starting = Starting(registry, &alias, matches!(request, Request::Start { .. }));
+    let starts = matches!(request, Request::Start { .. } | Request::StartAnyway { .. });
+    let _starting = Starting(registry, &alias, starts);
     // Outside the registry lock: the folder check touches the disk.
     let master = master.and_then(|slot| control_path(home, slot).ok());
     let sent = if stopping.load(Ordering::SeqCst) {
@@ -438,6 +439,9 @@ pub(crate) fn forwarded(
         receipt: _, // ticket 573: receipts are kept by the core that is asked, not across machines
     } = request
     {
+        // A session's start from another Mac is held as one from this Mac.
+        let who = crate::pressure::Who::Session;
+        crate::pressure::check_start(&session, who, false, "forwarded start")?;
         let launch = sessions
             .launch_as(Some(&caller), session, true)?
             .with_folder(folder)

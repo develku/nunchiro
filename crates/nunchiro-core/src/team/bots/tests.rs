@@ -664,7 +664,7 @@ fn an_older_build_that_never_heard_of_a_bot_fails_its_schedule_and_loses_its_lea
         &nuni,
         Some("Watch the peers."),
         None,
-        Opener::Schedule("s1"),
+        Opener::Schedule("s1", crate::pressure::Who::Session),
     )
     .map(drop)
     .unwrap_err();

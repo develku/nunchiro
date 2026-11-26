@@ -2040,3 +2040,22 @@ fn window_ops_parse_and_agents_cannot_send_them() {
 }
 
 mod one_minute;
+
+/// Under memory pressure a seat that starts now is held by who opens it: the owner's window (Settings Open, a goal, a
+/// bot hand-over) at critical only, a lead or a due schedule from warning, the owner's Run now as the window. A new
+/// conversation is checked before its handover, and an Undo resumes, so neither is held when the seat starts.
+#[test]
+fn openers_hold_a_new_seat_by_who_opens_it() {
+    use crate::pressure::Who;
+    let lead = crate::grants::Caller {
+        id: "lead".into(),
+        project: PathBuf::from("/p"),
+    };
+    let who = |o: Opener| o.pressure().map(|(who, _)| who);
+    assert_eq!(who(Opener::Window), Some(Who::Window));
+    assert_eq!(who(Opener::Lead(&lead)), Some(Who::Session));
+    assert_eq!(who(Opener::Schedule("s", Who::Session)), Some(Who::Session));
+    assert_eq!(who(Opener::Schedule("s", Who::Window)), Some(Who::Window));
+    assert_eq!(who(Opener::Fresh(None)), None);
+    assert_eq!(who(Opener::Undo("old", "seat")), None);
+}

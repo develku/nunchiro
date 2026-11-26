@@ -27,7 +27,12 @@ pub(crate) fn handoff_send(
     let target = lock()?.handoff_target(from, to, acp_agent)?.1;
     let prepared = match target {
         Ok(_) => None,
-        Err(launch) => Some(launch.prepare()?),
+        Err(launch) => {
+            // A new seat for the handoff waits under memory pressure as the window's start (a resume never does).
+            let who = crate::pressure::Who::Window;
+            crate::pressure::check_start(&launch.start, who, false, "handoff")?;
+            Some(launch.prepare()?)
+        }
     };
     #[cfg(test)]
     if let Some(hook) = BEFORE_DECIDE.take() {

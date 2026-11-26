@@ -333,6 +333,9 @@ pub(crate) fn handle(
     let (id, submit) = match target {
         Some(id) => (id, false),
         None => {
+            if kind != AgentKind::Shell {
+                crate::pressure::check(crate::pressure::Who::Window, false, "widget action")?;
+            }
             let launch = lock()?.launch(StartSession {
                 account: None,
                 kind,
@@ -500,6 +503,9 @@ fn web_act(
     let (id, submit) = match id {
         Some(id) => (id, false),
         None => {
+            if kind != AgentKind::Shell {
+                crate::pressure::check(crate::pressure::Who::Window, false, "widget action")?;
+            }
             let launch = lock()?.launch(StartSession {
                 account: None,
                 kind,

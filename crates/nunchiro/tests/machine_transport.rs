@@ -18,6 +18,14 @@ impl Harness {
         Self::configured(shim, None, None)
     }
     fn configured(shim: &str, settings: Option<Value>, remote: Option<&PathBuf>) -> Self {
+        Self::with_env(shim, settings, remote, &[])
+    }
+    fn with_env(
+        shim: &str,
+        settings: Option<Value>,
+        remote: Option<&PathBuf>,
+        env: &[(&str, &str)],
+    ) -> Self {
         use std::os::unix::fs::PermissionsExt;
         let home = home::short("machine");
         let ssh = home.join("ssh");
@@ -44,6 +52,7 @@ impl Harness {
                     std::env::var("PATH").unwrap()
                 ),
             );
+        command.envs(env.iter().copied());
         let core = command
             .arg("serve")
             .env("NUNCHIRO_HOME", &home)
@@ -159,7 +168,11 @@ struct Pair {
 }
 impl Pair {
     fn new() -> Self {
-        let remote = Harness::new("exit 255");
+        Self::remote_env(&[])
+    }
+    /// A pair whose other Mac's core runs with `env`.
+    fn remote_env(env: &[(&str, &str)]) -> Self {
+        let remote = Harness::with_env("exit 255", None, None, env);
         let project = remote.home.join("한국 프로젝트");
         fs::create_dir(&project).unwrap();
         let local_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -425,6 +438,34 @@ fn relay_checks_actual_version_before_executing() {
     assert!(h.cli(&["snapshot", "--json"]).status.success());
 }
 
+/// The owner's `--anyway` reaches another Mac: a start held there for low memory starts with it.
+#[test]
+fn start_anyway_reaches_another_mac() {
+    let p = Pair::remote_env(&[("NUNCHIRO_TEST_MEMORY_PRESSURE", "4")]);
+    let project = p.project.to_str().unwrap();
+    let start = |anyway: bool| {
+        let mut args = vec!["--machine", "other", "session", "start", "--kind", "claude"];
+        args.extend(["--project", project, "--label", "held"]);
+        if anyway {
+            args.push("--anyway");
+        }
+        p.local.cli(&args)
+    };
+    let held = start(false);
+    assert!(!held.status.success());
+    assert!(
+        String::from_utf8_lossy(&held.stderr).contains("memory"),
+        "{held:?}"
+    );
+    let out = start(true);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(value["session"]["machine"], "other");
+}
 #[test]
 fn remote_claude_and_codex_start_prompt_wait_and_read_through_cli() {
     let p = Pair::new();

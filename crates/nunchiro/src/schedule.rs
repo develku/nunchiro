@@ -43,6 +43,7 @@ fn lines(e: &Entry) -> String {
             (Some(Outcome::Failed), Some(why)) => format!("last run: failed ({why})"),
             (Some(Outcome::Failed), None) => "last run: failed".into(),
             (Some(Outcome::Skipped), _) => "last run: skipped (more than 2 h late)".into(),
+            (Some(Outcome::Held), _) => "last run: held (the Mac was low on memory)".into(),
         },
     };
     format!("{}  {head}\n  {next} · {last}\n", e.id)

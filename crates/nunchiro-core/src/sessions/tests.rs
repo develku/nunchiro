@@ -9145,7 +9145,7 @@ fn w11_a_plain_open_resumes_the_teammates_last_seat() {
             &mate.id,
             Some("sort the mail"),
             None,
-            Opener::Schedule("sched1"),
+            Opener::Schedule("sched1", crate::pressure::Who::Session),
         )
         .unwrap()
         .session;
