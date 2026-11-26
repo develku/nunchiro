@@ -1,33 +1,33 @@
 {
- "date": "2026-11-26 06:48",
- "commit": "a04c8ec8f",
+ "date": "2026-11-26 11:44",
+ "commit": "c5cd98879",
  "days": 7,
- "since": "2026-11-19 06:48",
+ "since": "2026-11-19 11:44",
  "coverage": {
-  "git_merges_from": "2026-11-19 07:33",
-  "pull_requests_from": null,
+  "git_merges_from": "2026-11-19 12:05",
+  "pull_requests_from": "2026-11-26 09:19",
   "mainwatch_from": "2026-11-20 13:49",
-  "events_from": "2026-11-19 06:52",
+  "events_from": "2026-11-19 11:49",
   "task_ledger_from": null
  },
  "deployment_frequency": {
-  "lanes": 336,
-  "lanes_per_day": 48.0,
-  "landings": 211,
-  "landings_per_day": 30.1,
+  "lanes": 338,
+  "lanes_per_day": 48.3,
+  "landings": 214,
+  "landings_per_day": 30.6,
   "days_with_a_landing": 8,
   "lanes_by_day": {
-   "2026-11-19": 37,
+   "2026-11-19": 30,
    "2026-11-20": 51,
    "2026-11-21": 58,
    "2026-11-22": 44,
    "2026-11-23": 51,
    "2026-11-24": 24,
    "2026-11-25": 55,
-   "2026-11-26": 16
+   "2026-11-26": 25
   },
-  "owner_installs": 74,
-  "owner_installs_per_day": 10.6,
+  "owner_installs": 75,
+  "owner_installs_per_day": 10.7,
   "days_with_an_install": 6,
   "installs_by_day": {
    "2026-11-19": 0,
@@ -37,19 +37,18 @@
    "2026-11-23": 10,
    "2026-11-24": 0,
    "2026-11-25": 2,
-   "2026-11-26": 1
+   "2026-11-26": 2
   }
  },
  "cost": {
-  "lanes_with_cost": 120,
-  "median_usd": 2.97,
-  "p90_usd": 13.19,
-  "total_usd": 598.25,
-  "total_tokens": 1577641383,
-  "unpriced_tokens": 180491672,
+  "lanes_with_cost": 0,
+  "median_usd": null,
+  "p90_usd": null,
+  "total_usd": 0,
+  "total_tokens": 0,
+  "unpriced_tokens": 0,
   "sources": [
-   ".claude",
-   "sessions"
+   ".claude"
   ],
   "price_source": "crates/nunchiro-core/src/usage.rs PRICES (public list prices, an estimate)"
  },
@@ -82,10 +81,10 @@
    "fable-w88tree",
    "fable-w94settings",
    "fable-w96reds",
-   "fable-wave19",
    "lead-actionsci1134",
    "lead-agentswidget1070",
    "lead-autoupdate1107s1",
+   "lead-bots1168",
    "lead-chatcards1057",
    "lead-chatrender1065",
    "lead-composer1044",
@@ -93,6 +92,7 @@
    "lead-history1073",
    "lead-installfetch1112",
    "lead-outward1150",
+   "lead-product1164",
    "lead-scac1-1130",
    "lead-scad3b-1130",
    "lead-selfupdate1082",
@@ -100,8 +100,8 @@
    "lead-testsout1147"
   ],
   "repeat_landings": 6,
-  "revert_landings": 2,
-  "rework_pct": 10.7
+  "revert_landings": 3,
+  "rework_pct": 11.1
  },
  "seat_use": {
   "seats": 0,
@@ -115,7 +115,7 @@
  },
  "lead_time": {
   "commit_to_main": {
-   "n": 336,
+   "n": 338,
    "median_h": 1.3,
    "p90_h": 5.4
   },
@@ -133,11 +133,12 @@
    "fable-w79loops",
    "lead-boarddone1066",
    "lead-boardtruth1090",
+   "lead-composerfocus1145",
    "lead-contextwidget1048",
    "lead-turnends1094",
    "lead-workpackage1095"
   ],
-  "change_failure_pct": 1.8,
+  "change_failure_pct": 2.1,
   "gate_rejected_lanes": [
    "fable-w27attrs",
    "fable-w27b26",
@@ -152,10 +153,10 @@
    "fable-w88tree",
    "fable-w94settings",
    "fable-w96reds",
-   "fable-wave19",
    "lead-actionsci1134",
    "lead-agentswidget1070",
    "lead-autoupdate1107s1",
+   "lead-bots1168",
    "lead-chatcards1057",
    "lead-chatrender1065",
    "lead-composer1044",
@@ -164,13 +165,14 @@
    "lead-installfetch1112",
    "lead-outward1150",
    "lead-papercuts1109",
+   "lead-product1164",
    "lead-scac1-1130",
    "lead-scad3b-1130",
    "lead-selfupdate1082",
    "lead-staffaccount1120",
    "lead-testsout1147"
   ],
-  "gate_reject_pct": 8.2,
+  "gate_reject_pct": 8.4,
   "review_rounds": {
    "lanes": 88,
    "median": 1.0,
@@ -231,18 +233,144 @@
    "p90_min": null
   },
   "gate_queue": {
-   "n": 336,
+   "n": 338,
    "median_min": 8,
-   "p90_min": 91
+   "p90_min": 94
   },
   "gate_run": {
-   "n": 336,
+   "n": 338,
    "median_min": 13,
-   "p90_min": 27
+   "p90_min": 26
   },
-  "lanes_with_gate_events": 336
+  "lanes_with_gate_events": 338
  },
  "lanes": [
+  {
+   "lane": "lead-scorecardv21171",
+   "landed": "11-26 11:19",
+   "first_commit": 1795655307,
+   "task": null,
+   "commit_lead_s": 692,
+   "task_lead_s": null,
+   "enqueued": 1795655500.0,
+   "first_enqueue": 1795655500.0,
+   "gate_run_s": 962.831,
+   "gate_queue_s": 502.169,
+   "commit_lead_h": 0.2,
+   "task_lead_h": null
+  },
+  {
+   "lane": "lead-bots1168",
+   "landed": "11-26 11:03",
+   "first_commit": 1795651006,
+   "task": null,
+   "commit_lead_s": 3998,
+   "task_lead_s": null,
+   "enqueued": 1795655004.0,
+   "first_enqueue": 1795652902.0,
+   "gate_run_s": 981.657,
+   "gate_queue_s": 4.342999999999961,
+   "commit_lead_h": 1.1,
+   "task_lead_h": null
+  },
+  {
+   "lane": "lead-product1164",
+   "landed": "11-26 09:20",
+   "first_commit": 1795646281,
+   "task": null,
+   "commit_lead_s": 2569,
+   "task_lead_s": null,
+   "enqueued": 1795648849.0,
+   "first_enqueue": 1795646307.0,
+   "gate_run_s": 987.938,
+   "gate_queue_s": 4.062000000000012,
+   "commit_lead_h": 0.7,
+   "task_lead_h": null
+  },
+  {
+   "lane": "lead-splits1162",
+   "landed": "11-26 08:33",
+   "first_commit": 1795644630,
+   "task": null,
+   "commit_lead_s": 1375,
+   "task_lead_s": null,
+   "enqueued": 1795646004.0,
+   "first_enqueue": 1795646004.0,
+   "gate_run_s": 986.047,
+   "gate_queue_s": 4.9529999999999745,
+   "commit_lead_h": 0.4,
+   "task_lead_h": null
+  },
+  {
+   "lane": "lead-guidance1160",
+   "landed": "11-26 08:06",
+   "first_commit": 1795642447,
+   "task": null,
+   "commit_lead_s": 1956,
+   "task_lead_s": null,
+   "enqueued": 1795643799.0,
+   "first_enqueue": 1795643799.0,
+   "gate_run_s": 1032.416,
+   "gate_queue_s": 608.5840000000001,
+   "commit_lead_h": 0.5,
+   "task_lead_h": null
+  },
+  {
+   "lane": "lead-shotsweekly1161",
+   "landed": "11-26 08:06",
+   "first_commit": 1795643148,
+   "task": null,
+   "commit_lead_s": 1255,
+   "task_lead_s": null,
+   "enqueued": 1795643312.0,
+   "first_enqueue": 1795643312.0,
+   "gate_run_s": 1032.416,
+   "gate_queue_s": 1095.584,
+   "commit_lead_h": 0.3,
+   "task_lead_h": null
+  },
+  {
+   "lane": "lead-tickets1159",
+   "landed": "11-26 07:37",
+   "first_commit": 1795642532,
+   "task": null,
+   "commit_lead_s": 120,
+   "task_lead_s": null,
+   "enqueued": 1795642651.0,
+   "first_enqueue": 1795642651.0,
+   "gate_run_s": 1740.211,
+   "gate_queue_s": 8.788999999999987,
+   "commit_lead_h": 0.0,
+   "task_lead_h": null
+  },
+  {
+   "lane": "lead-hygiene1155",
+   "landed": "11-26 07:14",
+   "first_commit": 1795640622,
+   "task": null,
+   "commit_lead_s": 659,
+   "task_lead_s": null,
+   "enqueued": 1795641238.0,
+   "first_enqueue": 1795641238.0,
+   "gate_run_s": 968.998,
+   "gate_queue_s": 47.00199999999995,
+   "commit_lead_h": 0.2,
+   "task_lead_h": null
+  },
+  {
+   "lane": "lead-scorecard1126",
+   "landed": "11-26 06:58",
+   "first_commit": 1795640256,
+   "task": null,
+   "commit_lead_s": 26,
+   "task_lead_s": null,
+   "enqueued": 1795640281.0,
+   "first_enqueue": 1795640281.0,
+   "gate_run_s": 983.869,
+   "gate_queue_s": 5.130999999999972,
+   "commit_lead_h": 0.0,
+   "task_lead_h": null
+  },
   {
    "lane": "lead-outward1150",
    "landed": "11-26 05:54",
@@ -254,8 +382,6 @@
    "first_enqueue": 1795632813.0,
    "gate_run_s": 969.263,
    "gate_queue_s": 1515.737,
-   "usd": 0.0,
-   "tokens": 711255,
    "commit_lead_h": 2.1,
    "task_lead_h": null
   },
@@ -270,8 +396,6 @@
    "first_enqueue": 1795634710.0,
    "gate_run_s": 1710.364,
    "gate_queue_s": 7.635999999999967,
-   "usd": 0.0,
-   "tokens": 1386870,
    "commit_lead_h": 0.4,
    "task_lead_h": null
   },
@@ -314,22 +438,6 @@
    "first_enqueue": 1795625768.0,
    "gate_run_s": 966.322,
    "gate_queue_s": 474.678,
-   "usd": 0.0,
-   "tokens": 526697,
-   "commit_lead_h": 0.2,
-   "task_lead_h": null
-  },
-  {
-   "lane": "lead-revert1145",
-   "landed": "11-26 03:03",
-   "first_commit": 1795625571,
-   "task": null,
-   "commit_lead_s": 667,
-   "task_lead_s": null,
-   "enqueued": 1795625633.0,
-   "first_enqueue": 1795625633.0,
-   "gate_run_s": 966.322,
-   "gate_queue_s": 609.678,
    "commit_lead_h": 0.2,
    "task_lead_h": null
   },
@@ -344,8 +452,6 @@
    "first_enqueue": 1795625250.0,
    "gate_run_s": 967.681,
    "gate_queue_s": 4.31899999999996,
-   "usd": 0.0,
-   "tokens": 617795,
    "commit_lead_h": 0.2,
    "task_lead_h": null
   },
@@ -360,8 +466,6 @@
    "first_enqueue": 1795624343.0,
    "gate_run_s": 967.681,
    "gate_queue_s": 911.319,
-   "usd": 0.0,
-   "tokens": 2777379,
    "commit_lead_h": 0.7,
    "task_lead_h": null
   },
@@ -376,8 +480,6 @@
    "first_enqueue": 1795620326.0,
    "gate_run_s": 961.665,
    "gate_queue_s": 4.335000000000036,
-   "usd": 0.0,
-   "tokens": 1144700,
    "commit_lead_h": 1.2,
    "task_lead_h": null
   },
@@ -392,8 +494,6 @@
    "first_enqueue": 1795620822.0,
    "gate_run_s": 958.232,
    "gate_queue_s": 1986.768,
-   "usd": 0.0,
-   "tokens": 1438456,
    "commit_lead_h": 0.7,
    "task_lead_h": null
   },
@@ -408,8 +508,6 @@
    "first_enqueue": 1795619236.0,
    "gate_run_s": 962.594,
    "gate_queue_s": 898.406,
-   "usd": 0.0,
-   "tokens": 1601451,
    "commit_lead_h": 0.4,
    "task_lead_h": null
   },
@@ -452,8 +550,6 @@
    "first_enqueue": 1795618577.0,
    "gate_run_s": 962.813,
    "gate_queue_s": 564.187,
-   "usd": 0.0,
-   "tokens": 1324033,
    "commit_lead_h": 0.2,
    "task_lead_h": null
   },
@@ -496,8 +592,6 @@
    "first_enqueue": 1795614756.0,
    "gate_run_s": 958.9,
    "gate_queue_s": 5.100000000000023,
-   "usd": 0.0,
-   "tokens": 736045,
    "commit_lead_h": 0.2,
    "task_lead_h": null
   },
@@ -512,8 +606,6 @@
    "first_enqueue": 1795613276.0,
    "gate_run_s": 960.229,
    "gate_queue_s": 4.770999999999958,
-   "usd": 0.0,
-   "tokens": 444618,
    "commit_lead_h": 2.5,
    "task_lead_h": null
   },
@@ -528,8 +620,6 @@
    "first_enqueue": 1795611021.0,
    "gate_run_s": 1040.076,
    "gate_queue_s": 7.923999999999978,
-   "usd": 0.0,
-   "tokens": 1463107,
    "commit_lead_h": 0.2,
    "task_lead_h": null
   },
@@ -572,8 +662,6 @@
    "first_enqueue": 1795605937.0,
    "gate_run_s": 1055.778,
    "gate_queue_s": 78.22199999999998,
-   "usd": 0.0,
-   "tokens": 5321483,
    "commit_lead_h": 2.3,
    "task_lead_h": null
   },
@@ -588,8 +676,6 @@
    "first_enqueue": 1795605526.0,
    "gate_run_s": 1055.778,
    "gate_queue_s": 489.222,
-   "usd": 0.0,
-   "tokens": 251390,
    "commit_lead_h": 0.2,
    "task_lead_h": null
   },
@@ -604,8 +690,6 @@
    "first_enqueue": 1795603699.0,
    "gate_run_s": 1044.585,
    "gate_queue_s": 1034.415,
-   "usd": 0.0,
-   "tokens": 1460085,
    "commit_lead_h": 1.6,
    "task_lead_h": null
   },
@@ -620,8 +704,6 @@
    "first_enqueue": 1795598411.0,
    "gate_run_s": 1041.146,
    "gate_queue_s": 1069.854,
-   "usd": 0.0,
-   "tokens": 819594,
    "commit_lead_h": 1.8,
    "task_lead_h": null
   },
@@ -650,8 +732,6 @@
    "first_enqueue": 1795594593.0,
    "gate_run_s": 1041.146,
    "gate_queue_s": 2955.8540000000003,
-   "usd": 0.0,
-   "tokens": 272182,
    "commit_lead_h": 2.7,
    "task_lead_h": null
   },
@@ -680,8 +760,6 @@
    "first_enqueue": 1795596113.0,
    "gate_run_s": 1014.277,
    "gate_queue_s": 3507.723,
-   "usd": 0.0,
-   "tokens": 1673101,
    "commit_lead_h": 1.2,
    "task_lead_h": null
   },
@@ -696,8 +774,6 @@
    "first_enqueue": 1795596079.0,
    "gate_run_s": 1014.277,
    "gate_queue_s": 3541.723,
-   "usd": 0.0,
-   "tokens": 603087,
    "commit_lead_h": 1.2,
    "task_lead_h": null
   },
@@ -712,8 +788,6 @@
    "first_enqueue": 1795592573.0,
    "gate_run_s": 1014.277,
    "gate_queue_s": 3731.723,
-   "usd": 2.97,
-   "tokens": 10436194,
    "commit_lead_h": 3.5,
    "task_lead_h": null
   },
@@ -728,8 +802,6 @@
    "first_enqueue": 1795592272.0,
    "gate_run_s": 1014.277,
    "gate_queue_s": 3756.723,
-   "usd": 6.81,
-   "tokens": 18184385,
    "commit_lead_h": 3.8,
    "task_lead_h": null
   },
@@ -758,8 +830,6 @@
    "first_enqueue": 1795595074.0,
    "gate_run_s": 1027.384,
    "gate_queue_s": 826.616,
-   "usd": 17.72,
-   "tokens": 9355175,
    "commit_lead_h": 0.2,
    "task_lead_h": null
   },
@@ -774,8 +844,6 @@
    "first_enqueue": 1795594512.0,
    "gate_run_s": 1027.384,
    "gate_queue_s": 1388.616,
-   "usd": 19.02,
-   "tokens": 46004853,
    "commit_lead_h": 6.0,
    "task_lead_h": null
   },
@@ -790,8 +858,6 @@
    "first_enqueue": 1795585599.0,
    "gate_run_s": 1027.384,
    "gate_queue_s": 2362.616,
-   "usd": 5.24,
-   "tokens": 9591985,
    "commit_lead_h": 3.8,
    "task_lead_h": null
   },
@@ -806,8 +872,6 @@
    "first_enqueue": 1795591420.0,
    "gate_run_s": 990.632,
    "gate_queue_s": 86.36800000000005,
-   "usd": 4.39,
-   "tokens": 8158027,
    "commit_lead_h": 1.5,
    "task_lead_h": null
   },
@@ -822,8 +886,6 @@
    "first_enqueue": 1795589368.0,
    "gate_run_s": 947.327,
    "gate_queue_s": 745.673,
-   "usd": 0.0,
-   "tokens": 473070,
    "commit_lead_h": 0.5,
    "task_lead_h": null
   },
@@ -838,8 +900,6 @@
    "first_enqueue": 1795584600.0,
    "gate_run_s": 872.203,
    "gate_queue_s": 23.797000000000025,
-   "usd": 3.85,
-   "tokens": 8098846,
    "commit_lead_h": 1.9,
    "task_lead_h": null
   },
@@ -854,8 +914,6 @@
    "first_enqueue": 1795587892.0,
    "gate_run_s": 872.203,
    "gate_queue_s": 1320.797,
-   "usd": 3.03,
-   "tokens": 5609167,
    "commit_lead_h": 1.6,
    "task_lead_h": null
   },
@@ -870,8 +928,6 @@
    "first_enqueue": 1795587467.0,
    "gate_run_s": 872.203,
    "gate_queue_s": 1745.797,
-   "usd": 4.15,
-   "tokens": 9085010,
    "commit_lead_h": 0.8,
    "task_lead_h": null
   },
@@ -886,8 +942,6 @@
    "first_enqueue": 1795586119.0,
    "gate_run_s": 872.203,
    "gate_queue_s": 3093.797,
-   "usd": 3.01,
-   "tokens": 5143174,
    "commit_lead_h": 1.2,
    "task_lead_h": null
   },
@@ -902,8 +956,6 @@
    "first_enqueue": 1795585747.0,
    "gate_run_s": 872.203,
    "gate_queue_s": 3465.797,
-   "usd": 3.06,
-   "tokens": 5984768,
    "commit_lead_h": 1.3,
    "task_lead_h": null
   },
@@ -918,8 +970,6 @@
    "first_enqueue": 1795584994.0,
    "gate_run_s": 872.203,
    "gate_queue_s": 4218.7970000000005,
-   "usd": 3.98,
-   "tokens": 6873739,
    "commit_lead_h": 1.9,
    "task_lead_h": null
   },
@@ -934,8 +984,6 @@
    "first_enqueue": 1795584452.0,
    "gate_run_s": 901.86,
    "gate_queue_s": 25.139999999999986,
-   "usd": 2.68,
-   "tokens": 4721727,
    "commit_lead_h": 0.6,
    "task_lead_h": null
   },
@@ -950,8 +998,6 @@
    "first_enqueue": 1795583898.0,
    "gate_run_s": 901.86,
    "gate_queue_s": 579.14,
-   "usd": 2.29,
-   "tokens": 4208327,
    "commit_lead_h": 0.3,
    "task_lead_h": null
   },
@@ -966,8 +1012,6 @@
    "first_enqueue": 1795583030.0,
    "gate_run_s": 912.792,
    "gate_queue_s": 505.20799999999997,
-   "usd": 0.48,
-   "tokens": 872993,
    "commit_lead_h": 0.4,
    "task_lead_h": null
   },
@@ -982,8 +1026,6 @@
    "first_enqueue": 1795582022.0,
    "gate_run_s": 912.792,
    "gate_queue_s": 1513.208,
-   "usd": 2.45,
-   "tokens": 9576447,
    "commit_lead_h": 1.6,
    "task_lead_h": null
   },
@@ -998,8 +1040,6 @@
    "first_enqueue": 1795574098.0,
    "gate_run_s": 929.752,
    "gate_queue_s": 515.248,
-   "usd": 8.5,
-   "tokens": 23142245,
    "commit_lead_h": 2.1,
    "task_lead_h": null
   },
@@ -1014,8 +1054,6 @@
    "first_enqueue": 1795577465.0,
    "gate_run_s": 929.752,
    "gate_queue_s": 956.248,
-   "usd": 3.85,
-   "tokens": 8248559,
    "commit_lead_h": 1.2,
    "task_lead_h": null
   },
@@ -1030,8 +1068,6 @@
    "first_enqueue": 1795577538.0,
    "gate_run_s": 931.733,
    "gate_queue_s": 21.267000000000053,
-   "usd": 1.24,
-   "tokens": 1871717,
    "commit_lead_h": 0.9,
    "task_lead_h": null
   },
@@ -1046,8 +1082,6 @@
    "first_enqueue": 1795577538.0,
    "gate_run_s": 931.733,
    "gate_queue_s": 21.267000000000053,
-   "usd": 1.24,
-   "tokens": 1871717,
    "commit_lead_h": 0.3,
    "task_lead_h": null
   },
@@ -1062,8 +1096,6 @@
    "first_enqueue": 1795577465.0,
    "gate_run_s": 929.752,
    "gate_queue_s": 956.248,
-   "usd": 3.85,
-   "tokens": 8248559,
    "commit_lead_h": 0.5,
    "task_lead_h": null
   },
@@ -1078,8 +1110,6 @@
    "first_enqueue": 1795577306.0,
    "gate_run_s": 927.544,
    "gate_queue_s": 956.456,
-   "usd": 13.74,
-   "tokens": 40126963,
    "commit_lead_h": 2.0,
    "task_lead_h": null
   },
@@ -1094,8 +1124,6 @@
    "first_enqueue": 1795572871.0,
    "gate_run_s": 924.052,
    "gate_queue_s": 24.94799999999998,
-   "usd": 9.67,
-   "tokens": 15413458,
    "commit_lead_h": 1.9,
    "task_lead_h": null
   },
@@ -1110,8 +1138,6 @@
    "first_enqueue": 1795574264.0,
    "gate_run_s": 924.052,
    "gate_queue_s": 2456.948,
-   "usd": 21.74,
-   "tokens": 54830231,
    "commit_lead_h": 3.9,
    "task_lead_h": null
   },
@@ -1126,8 +1152,6 @@
    "first_enqueue": 1795574098.0,
    "gate_run_s": 929.752,
    "gate_queue_s": 515.248,
-   "usd": 8.5,
-   "tokens": 23142245,
    "commit_lead_h": 2.3,
    "task_lead_h": null
   },
@@ -1142,8 +1166,6 @@
    "first_enqueue": 1795574031.0,
    "gate_run_s": 904.13,
    "gate_queue_s": 1758.87,
-   "usd": 8.25,
-   "tokens": 23889793,
    "commit_lead_h": 0.6,
    "task_lead_h": null
   },
@@ -1158,8 +1180,6 @@
    "first_enqueue": 1795568105.0,
    "gate_run_s": 904.13,
    "gate_queue_s": 1958.87,
-   "usd": 7.26,
-   "tokens": 20363614,
    "commit_lead_h": 2.6,
    "task_lead_h": null
   },
@@ -1174,8 +1194,6 @@
    "first_enqueue": 1795568292.0,
    "gate_run_s": 965.576,
    "gate_queue_s": 3912.424,
-   "usd": 2.38,
-   "tokens": 3999213,
    "commit_lead_h": 1.1,
    "task_lead_h": null
   },
@@ -1190,8 +1208,6 @@
    "first_enqueue": 1795568222.0,
    "gate_run_s": 965.576,
    "gate_queue_s": 3982.424,
-   "usd": 10.53,
-   "tokens": 21874530,
    "commit_lead_h": 3.3,
    "task_lead_h": null
   },
@@ -1206,8 +1222,6 @@
    "first_enqueue": 1795567979.0,
    "gate_run_s": 858.813,
    "gate_queue_s": 46.18700000000001,
-   "usd": 10.28,
-   "tokens": 25165660,
    "commit_lead_h": 2.1,
    "task_lead_h": null
   },
@@ -1222,8 +1236,6 @@
    "first_enqueue": 1795560525.0,
    "gate_run_s": 782.958,
    "gate_queue_s": 1262.042,
-   "usd": 1.8,
-   "tokens": 6576845,
    "commit_lead_h": 0.7,
    "task_lead_h": null
   },
@@ -1238,8 +1250,6 @@
    "first_enqueue": 1795559996.0,
    "gate_run_s": 818.582,
    "gate_queue_s": 369.418,
-   "usd": 1.25,
-   "tokens": 1845234,
    "commit_lead_h": 0.3,
    "task_lead_h": null
   },
@@ -1254,8 +1264,6 @@
    "first_enqueue": 1795559753.0,
    "gate_run_s": 818.582,
    "gate_queue_s": 612.418,
-   "usd": 0.97,
-   "tokens": 1314468,
    "commit_lead_h": 0.3,
    "task_lead_h": null
   },
@@ -1270,8 +1278,6 @@
    "first_enqueue": 1795558848.0,
    "gate_run_s": 821.945,
    "gate_queue_s": 62.05499999999995,
-   "usd": 1.8,
-   "tokens": 6576845,
    "commit_lead_h": 6.8,
    "task_lead_h": null
   },
@@ -1286,8 +1292,6 @@
    "first_enqueue": 1795550740.0,
    "gate_run_s": 850.617,
    "gate_queue_s": 23.383000000000038,
-   "usd": 0.27,
-   "tokens": 12686380,
    "commit_lead_h": 0.6,
    "task_lead_h": null
   },
@@ -1302,8 +1306,6 @@
    "first_enqueue": 1795546841.0,
    "gate_run_s": 877.588,
    "gate_queue_s": 7.412000000000035,
-   "usd": 0.22,
-   "tokens": 32526885,
    "commit_lead_h": 2.1,
    "task_lead_h": null
   },
@@ -1318,8 +1320,6 @@
    "first_enqueue": 1795534051.0,
    "gate_run_s": 862.907,
    "gate_queue_s": 674.093,
-   "usd": 10.53,
-   "tokens": 23143213,
    "commit_lead_h": 3.6,
    "task_lead_h": null
   },
@@ -1334,8 +1334,6 @@
    "first_enqueue": 1795527957.0,
    "gate_run_s": 744.467,
    "gate_queue_s": 7.5330000000000155,
-   "usd": 2.15,
-   "tokens": 8545722,
    "commit_lead_h": 2.9,
    "task_lead_h": null
   },
@@ -1350,8 +1348,6 @@
    "first_enqueue": 1795528023.0,
    "gate_run_s": 840.371,
    "gate_queue_s": 49.62900000000002,
-   "usd": 0.0,
-   "tokens": 15537308,
    "commit_lead_h": 1.3,
    "task_lead_h": null
   },
@@ -1380,8 +1376,6 @@
    "first_enqueue": 1795520096.0,
    "gate_run_s": 219.712,
    "gate_queue_s": 25.28800000000001,
-   "usd": 7.67,
-   "tokens": 15325416,
    "commit_lead_h": 2.6,
    "task_lead_h": null
   },
@@ -1396,8 +1390,6 @@
    "first_enqueue": 1795510236.0,
    "gate_run_s": 339.231,
    "gate_queue_s": 205.769,
-   "usd": 5.07,
-   "tokens": 11992359,
    "commit_lead_h": 3.3,
    "task_lead_h": null
   },
@@ -1412,8 +1404,6 @@
    "first_enqueue": 1795509214.0,
    "gate_run_s": 339.231,
    "gate_queue_s": 1227.769,
-   "usd": 20.59,
-   "tokens": 61559228,
    "commit_lead_h": 2.5,
    "task_lead_h": null
   },
@@ -1428,8 +1418,6 @@
    "first_enqueue": 1795503237.0,
    "gate_run_s": 373.924,
    "gate_queue_s": 287.076,
-   "usd": 2.09,
-   "tokens": 3311317,
    "commit_lead_h": 0.5,
    "task_lead_h": null
   },
@@ -1444,8 +1432,6 @@
    "first_enqueue": 1795502152.0,
    "gate_run_s": 373.924,
    "gate_queue_s": 1372.076,
-   "usd": 14.16,
-   "tokens": 35508854,
    "commit_lead_h": 0.4,
    "task_lead_h": null
   },
@@ -1460,8 +1446,6 @@
    "first_enqueue": 1795501643.0,
    "gate_run_s": 226.202,
    "gate_queue_s": 46.798,
-   "usd": 0.58,
-   "tokens": 721095,
    "commit_lead_h": 0.1,
    "task_lead_h": null
   },
@@ -1476,8 +1460,6 @@
    "first_enqueue": 1795501105.0,
    "gate_run_s": 359.294,
    "gate_queue_s": 193.70600000000002,
-   "usd": 14.16,
-   "tokens": 35508854,
    "commit_lead_h": 2.2,
    "task_lead_h": null
   },
@@ -1492,8 +1474,6 @@
    "first_enqueue": 1795500013.0,
    "gate_run_s": 359.294,
    "gate_queue_s": 1285.7060000000001,
-   "usd": 13.19,
-   "tokens": 36951872,
    "commit_lead_h": 2.4,
    "task_lead_h": null
   },
@@ -1508,8 +1488,6 @@
    "first_enqueue": 1795499809.0,
    "gate_run_s": 410.294,
    "gate_queue_s": 183.70600000000002,
-   "usd": 9.52,
-   "tokens": 20720911,
    "commit_lead_h": 1.8,
    "task_lead_h": null
   },
@@ -1524,8 +1502,6 @@
    "first_enqueue": 1795498864.0,
    "gate_run_s": 261.873,
    "gate_queue_s": 213.127,
-   "usd": 13.86,
-   "tokens": 55196566,
    "commit_lead_h": 2.3,
    "task_lead_h": null
   },
@@ -1540,8 +1516,6 @@
    "first_enqueue": 1795497274.0,
    "gate_run_s": 383.402,
    "gate_queue_s": 766.598,
-   "usd": 8.08,
-   "tokens": 17840094,
    "commit_lead_h": 2.0,
    "task_lead_h": null
   },
@@ -1556,8 +1530,6 @@
    "first_enqueue": 1795497220.0,
    "gate_run_s": 383.402,
    "gate_queue_s": 820.598,
-   "usd": 6.54,
-   "tokens": 12685103,
    "commit_lead_h": 2.0,
    "task_lead_h": null
   },
@@ -1572,8 +1544,6 @@
    "first_enqueue": 1795490762.0,
    "gate_run_s": 423.547,
    "gate_queue_s": 40.452999999999975,
-   "usd": 24.96,
-   "tokens": 64656704,
    "commit_lead_h": 4.6,
    "task_lead_h": null
   },
@@ -1588,8 +1558,6 @@
    "first_enqueue": 1795472117.0,
    "gate_run_s": 442.713,
    "gate_queue_s": 10.286999999999978,
-   "usd": 25.76,
-   "tokens": 61921139,
    "commit_lead_h": 10.3,
    "task_lead_h": null
   },
@@ -1604,8 +1572,6 @@
    "first_enqueue": 1795463437.0,
    "gate_run_s": 328.297,
    "gate_queue_s": 24.702999999999975,
-   "usd": 1.63,
-   "tokens": 3750033,
    "commit_lead_h": 0.7,
    "task_lead_h": null
   },
@@ -1620,8 +1586,6 @@
    "first_enqueue": 1795460218.0,
    "gate_run_s": 357.314,
    "gate_queue_s": 90.68599999999998,
-   "usd": 5.64,
-   "tokens": 11776298,
    "commit_lead_h": 1.0,
    "task_lead_h": null
   },
@@ -1636,8 +1600,6 @@
    "first_enqueue": 1795454139.0,
    "gate_run_s": 352.001,
    "gate_queue_s": 5195.999,
-   "usd": 8.33,
-   "tokens": 18846935,
    "commit_lead_h": 2.9,
    "task_lead_h": null
   },
@@ -1652,8 +1614,6 @@
    "first_enqueue": 1795454030.0,
    "gate_run_s": 352.001,
    "gate_queue_s": 5304.999,
-   "usd": 2.3,
-   "tokens": 6879058,
    "commit_lead_h": 1.9,
    "task_lead_h": null
   },
@@ -1668,8 +1628,6 @@
    "first_enqueue": 1795450288.0,
    "gate_run_s": 344.373,
    "gate_queue_s": 67.62700000000001,
-   "usd": 7.97,
-   "tokens": 22230938,
    "commit_lead_h": 0.7,
    "task_lead_h": null
   },
@@ -1684,8 +1642,6 @@
    "first_enqueue": 1795449329.0,
    "gate_run_s": 343.65,
    "gate_queue_s": 54.35000000000002,
-   "usd": 5.18,
-   "tokens": 10909701,
    "commit_lead_h": 0.6,
    "task_lead_h": null
   },
@@ -1700,8 +1656,6 @@
    "first_enqueue": 1795441965.0,
    "gate_run_s": 349.466,
    "gate_queue_s": 272.534,
-   "usd": 15.86,
-   "tokens": 49533244,
    "commit_lead_h": 2.9,
    "task_lead_h": null
   },
@@ -1716,8 +1670,6 @@
    "first_enqueue": 1795444180.0,
    "gate_run_s": 350.576,
    "gate_queue_s": 32.42399999999998,
-   "usd": 5.66,
-   "tokens": 15055025,
    "commit_lead_h": 0.8,
    "task_lead_h": null
   },
@@ -1732,8 +1684,6 @@
    "first_enqueue": 1795443163.0,
    "gate_run_s": 337.859,
    "gate_queue_s": 57.14100000000002,
-   "usd": 3.84,
-   "tokens": 17057021,
    "commit_lead_h": 0.5,
    "task_lead_h": null
   },
@@ -1748,8 +1698,6 @@
    "first_enqueue": 1795440380.0,
    "gate_run_s": 371.548,
    "gate_queue_s": 497.452,
-   "usd": 6.58,
-   "tokens": 15013644,
    "commit_lead_h": 1.2,
    "task_lead_h": null
   },
@@ -1764,8 +1712,6 @@
    "first_enqueue": 1795439816.0,
    "gate_run_s": 406.343,
    "gate_queue_s": 21.656999999999982,
-   "usd": 2.49,
-   "tokens": 6079082,
    "commit_lead_h": 1.1,
    "task_lead_h": null
   },
@@ -1780,8 +1726,6 @@
    "first_enqueue": 1795438627.0,
    "gate_run_s": 389.593,
    "gate_queue_s": 18.406999999999982,
-   "usd": 2.59,
-   "tokens": 4698498,
    "commit_lead_h": 0.7,
    "task_lead_h": null
   },
@@ -1796,8 +1740,6 @@
    "first_enqueue": 1795434781.0,
    "gate_run_s": 410.036,
    "gate_queue_s": 907.9639999999999,
-   "usd": 13.26,
-   "tokens": 32178338,
    "commit_lead_h": 2.1,
    "task_lead_h": null
   },
@@ -1812,8 +1754,6 @@
    "first_enqueue": 1795434271.0,
    "gate_run_s": 407.909,
    "gate_queue_s": 32.09100000000001,
-   "usd": 6.05,
-   "tokens": 9956876,
    "commit_lead_h": 1.4,
    "task_lead_h": null
   },
@@ -1828,8 +1768,6 @@
    "first_enqueue": 1795421269.0,
    "gate_run_s": 350.448,
    "gate_queue_s": 790.552,
-   "usd": 10.36,
-   "tokens": 50779131,
    "commit_lead_h": 3.5,
    "task_lead_h": null
   },
@@ -1844,8 +1782,6 @@
    "first_enqueue": 1795426206.0,
    "gate_run_s": 345.47,
    "gate_queue_s": 497.53,
-   "usd": 11.03,
-   "tokens": 27914966,
    "commit_lead_h": 0.7,
    "task_lead_h": null
   },
@@ -1860,8 +1796,6 @@
    "first_enqueue": 1795422472.0,
    "gate_run_s": 351.691,
    "gate_queue_s": 1398.309,
-   "usd": 3.77,
-   "tokens": 12492053,
    "commit_lead_h": 2.8,
    "task_lead_h": null
   },
@@ -1876,8 +1810,6 @@
    "first_enqueue": 1795421545.0,
    "gate_run_s": 372.693,
    "gate_queue_s": 122.30700000000002,
-   "usd": 5.29,
-   "tokens": 9328265,
    "commit_lead_h": 1.9,
    "task_lead_h": null
   },
@@ -1892,8 +1824,6 @@
    "first_enqueue": 1795422180.0,
    "gate_run_s": 352.502,
    "gate_queue_s": 474.498,
-   "usd": 2.59,
-   "tokens": 7938296,
    "commit_lead_h": 2.0,
    "task_lead_h": null
   },
@@ -1908,8 +1838,6 @@
    "first_enqueue": 1795422140.0,
    "gate_run_s": 352.502,
    "gate_queue_s": 514.498,
-   "usd": 1.42,
-   "tokens": 2179112,
    "commit_lead_h": 0.4,
    "task_lead_h": null
   },
@@ -1924,8 +1852,6 @@
    "first_enqueue": 1795422108.0,
    "gate_run_s": 352.502,
    "gate_queue_s": 546.498,
-   "usd": 2.01,
-   "tokens": 5303563,
    "commit_lead_h": 2.0,
    "task_lead_h": null
   },
@@ -1940,8 +1866,6 @@
    "first_enqueue": 1795421981.0,
    "gate_run_s": 352.502,
    "gate_queue_s": 673.498,
-   "usd": 1.64,
-   "tokens": 4531101,
    "commit_lead_h": 2.0,
    "task_lead_h": null
   },
@@ -1956,8 +1880,6 @@
    "first_enqueue": 1795411546.0,
    "gate_run_s": 375.806,
    "gate_queue_s": 2057.194,
-   "usd": 11.19,
-   "tokens": 22961379,
    "commit_lead_h": 6.5,
    "task_lead_h": null
   },
@@ -1972,8 +1894,6 @@
    "first_enqueue": 1795410078.0,
    "gate_run_s": 375.806,
    "gate_queue_s": 3525.194,
-   "usd": 1.57,
-   "tokens": 4579052,
    "commit_lead_h": 1.5,
    "task_lead_h": null
   },
@@ -1988,8 +1908,6 @@
    "first_enqueue": 1795410046.0,
    "gate_run_s": 375.806,
    "gate_queue_s": 3557.194,
-   "usd": 0.42,
-   "tokens": 659447,
    "commit_lead_h": 1.2,
    "task_lead_h": null
   },
@@ -2004,8 +1922,6 @@
    "first_enqueue": 1795408989.0,
    "gate_run_s": 375.806,
    "gate_queue_s": 3592.194,
-   "usd": 7.88,
-   "tokens": 16845951,
    "commit_lead_h": 2.4,
    "task_lead_h": null
   },
@@ -2020,8 +1936,6 @@
    "first_enqueue": 1795406039.0,
    "gate_run_s": 375.806,
    "gate_queue_s": 5146.194,
-   "usd": 2.92,
-   "tokens": 9758386,
    "commit_lead_h": 3.6,
    "task_lead_h": null
   },
@@ -2036,8 +1950,6 @@
    "first_enqueue": 1795407289.0,
    "gate_run_s": 411.427,
    "gate_queue_s": 5882.573,
-   "usd": 4.37,
-   "tokens": 10214849,
    "commit_lead_h": 1.8,
    "task_lead_h": null
   },
@@ -2052,8 +1964,6 @@
    "first_enqueue": 1795407072.0,
    "gate_run_s": 411.74,
    "gate_queue_s": 5668.26,
-   "usd": 10.91,
-   "tokens": 28430996,
    "commit_lead_h": 3.3,
    "task_lead_h": null
   },
@@ -2068,8 +1978,6 @@
    "first_enqueue": 1795404022.0,
    "gate_run_s": 390.859,
    "gate_queue_s": 5800.141,
-   "usd": 1.73,
-   "tokens": 5096349,
    "commit_lead_h": 2.6,
    "task_lead_h": null
   },
@@ -2084,8 +1992,6 @@
    "first_enqueue": 1795406450.0,
    "gate_run_s": 385.969,
    "gate_queue_s": 5467.031,
-   "usd": 2.94,
-   "tokens": 11272829,
    "commit_lead_h": 2.0,
    "task_lead_h": null
   },
@@ -2100,8 +2006,6 @@
    "first_enqueue": 1795406093.0,
    "gate_run_s": 400.534,
    "gate_queue_s": 5392.466,
-   "usd": 1.76,
-   "tokens": 5125209,
    "commit_lead_h": 2.3,
    "task_lead_h": null
   },
@@ -2116,8 +2020,6 @@
    "first_enqueue": 1795406067.0,
    "gate_run_s": 404.63,
    "gate_queue_s": 4252.37,
-   "usd": 4.72,
-   "tokens": 11427485,
    "commit_lead_h": 2.0,
    "task_lead_h": null
   },
@@ -2132,8 +2034,6 @@
    "first_enqueue": 1795405729.0,
    "gate_run_s": 394.472,
    "gate_queue_s": 53.52800000000002,
-   "usd": 6.6,
-   "tokens": 16986520,
    "commit_lead_h": 0.7,
    "task_lead_h": null
   },
@@ -2148,8 +2048,6 @@
    "first_enqueue": 1795403137.0,
    "gate_run_s": 408.349,
    "gate_queue_s": 60.65100000000001,
-   "usd": 4.55,
-   "tokens": 11337787,
    "commit_lead_h": 0.7,
    "task_lead_h": null
   },
@@ -2164,8 +2062,6 @@
    "first_enqueue": 1795402119.0,
    "gate_run_s": 447.314,
    "gate_queue_s": 6.685999999999979,
-   "usd": 1.19,
-   "tokens": 2871616,
    "commit_lead_h": 0.5,
    "task_lead_h": null
   },
@@ -2180,8 +2076,6 @@
    "first_enqueue": 1795399811.0,
    "gate_run_s": 426.766,
    "gate_queue_s": 140.23399999999998,
-   "usd": 1.99,
-   "tokens": 7186182,
    "commit_lead_h": 0.4,
    "task_lead_h": null
   },
@@ -2196,8 +2090,6 @@
    "first_enqueue": 1795400071.0,
    "gate_run_s": 450.36,
    "gate_queue_s": 50.639999999999986,
-   "usd": 1.31,
-   "tokens": 3901051,
    "commit_lead_h": 0.3,
    "task_lead_h": null
   },
@@ -2212,8 +2104,6 @@
    "first_enqueue": 1795399137.0,
    "gate_run_s": 478.149,
    "gate_queue_s": 261.851,
-   "usd": 3.07,
-   "tokens": 6213228,
    "commit_lead_h": 0.2,
    "task_lead_h": null
   },
@@ -2228,8 +2118,6 @@
    "first_enqueue": 1795398677.0,
    "gate_run_s": 478.149,
    "gate_queue_s": 721.851,
-   "usd": 0.78,
-   "tokens": 1547693,
    "commit_lead_h": 0.2,
    "task_lead_h": null
   },
@@ -2244,8 +2132,6 @@
    "first_enqueue": 1795398416.0,
    "gate_run_s": 907.2860000000001,
    "gate_queue_s": 45.71399999999994,
-   "usd": 5.42,
-   "tokens": 11439424,
    "commit_lead_h": 0.6,
    "task_lead_h": null
   },
@@ -2260,8 +2146,6 @@
    "first_enqueue": 1795397662.0,
    "gate_run_s": 272.79,
    "gate_queue_s": 414.21,
-   "usd": 2.06,
-   "tokens": 4492863,
    "commit_lead_h": 2.6,
    "task_lead_h": null
   },
@@ -2276,8 +2160,6 @@
    "first_enqueue": 1795388821.0,
    "gate_run_s": 441.231,
    "gate_queue_s": 483.769,
-   "usd": 3.0,
-   "tokens": 7513591,
    "commit_lead_h": 2.6,
    "task_lead_h": null
   },
@@ -2292,8 +2174,6 @@
    "first_enqueue": 1795396203.0,
    "gate_run_s": 441.231,
    "gate_queue_s": 1401.769,
-   "usd": 5.83,
-   "tokens": 15644993,
    "commit_lead_h": 2.1,
    "task_lead_h": null
   },
@@ -2308,8 +2188,6 @@
    "first_enqueue": 1795390596.0,
    "gate_run_s": 441.231,
    "gate_queue_s": 7008.769,
-   "usd": 1.51,
-   "tokens": 4425729,
    "commit_lead_h": 2.3,
    "task_lead_h": null
   },
@@ -2324,8 +2202,6 @@
    "first_enqueue": 1795390412.0,
    "gate_run_s": 441.231,
    "gate_queue_s": 7192.769,
-   "usd": 2.15,
-   "tokens": 6631554,
    "commit_lead_h": 2.5,
    "task_lead_h": null
   },
@@ -2340,8 +2216,6 @@
    "first_enqueue": 1795388935.0,
    "gate_run_s": 469.924,
    "gate_queue_s": 8178.076,
-   "usd": 1.51,
-   "tokens": 4853911,
    "commit_lead_h": 2.4,
    "task_lead_h": null
   },
@@ -5090,101 +4964,17 @@
    "task_lead_h": null
   },
   {
-   "lane": "fable-w25a",
-   "landed": "11-19 11:32",
-   "first_commit": 1795049704,
+   "lane": "sync/20261126-a04c8ec8f",
+   "landed": "11-26 09:19",
+   "first_commit": 1795637467,
    "task": null,
-   "commit_lead_s": 2271,
+   "commit_lead_s": 11329,
    "task_lead_s": null,
-   "enqueued": 1795050150.0,
-   "first_enqueue": 1795050150.0,
-   "gate_run_s": 1710.283,
-   "gate_queue_s": 2003.717,
-   "commit_lead_h": 0.6,
-   "task_lead_h": null
-  },
-  {
-   "lane": "fable-wave24",
-   "landed": "11-19 11:32",
-   "first_commit": 1795047687,
-   "task": null,
-   "commit_lead_s": 4288,
-   "task_lead_s": null,
-   "enqueued": 1795050136.0,
-   "first_enqueue": 1795050136.0,
-   "gate_run_s": 1710.283,
-   "gate_queue_s": 2017.717,
-   "commit_lead_h": 1.2,
-   "task_lead_h": null
-  },
-  {
-   "lane": "fable-wave23",
-   "landed": "11-19 10:35",
-   "first_commit": 1795046386,
-   "task": null,
-   "commit_lead_s": 2127,
-   "task_lead_s": null,
-   "enqueued": 1795048513.0,
-   "first_enqueue": 1795048513.0,
-   "gate_run_s": 1215.52,
-   "gate_queue_s": 4.480000000000018,
-   "commit_lead_h": 0.6,
-   "task_lead_h": null
-  },
-  {
-   "lane": "fable-wave22",
-   "landed": "11-19 10:05",
-   "first_commit": 1795044790,
-   "task": null,
-   "commit_lead_s": 1964,
-   "task_lead_s": null,
-   "enqueued": 1795046437.0,
-   "first_enqueue": 1795046437.0,
-   "gate_run_s": 1190.711,
-   "gate_queue_s": 321.289,
-   "commit_lead_h": 0.5,
-   "task_lead_h": null
-  },
-  {
-   "lane": "fable-wave21",
-   "landed": "11-19 09:46",
-   "first_commit": 1795043257,
-   "task": null,
-   "commit_lead_s": 2345,
-   "task_lead_s": null,
-   "enqueued": 1795045601.0,
-   "first_enqueue": 1795044557.0,
-   "gate_run_s": 1136.023,
-   "gate_queue_s": 3.977000000000089,
-   "commit_lead_h": 0.7,
-   "task_lead_h": null
-  },
-  {
-   "lane": "fable-wave20",
-   "landed": "11-19 08:33",
-   "first_commit": 1795034036,
-   "task": null,
-   "commit_lead_s": 7164,
-   "task_lead_s": null,
-   "enqueued": 1795040987.0,
-   "first_enqueue": 1795040987.0,
-   "gate_run_s": 1528.469,
-   "gate_queue_s": 217.53099999999995,
-   "commit_lead_h": 2.0,
-   "task_lead_h": null
-  },
-  {
-   "lane": "fable-wave19",
-   "landed": "11-19 07:33",
-   "first_commit": 1795029496,
-   "task": null,
-   "commit_lead_s": 8139,
-   "task_lead_s": null,
-   "enqueued": 1795037631.0,
-   "first_enqueue": 1795033403.0,
-   "gate_run_s": 1166.735,
-   "gate_queue_s": 8.2650000000001,
-   "commit_lead_h": 2.3,
+   "enqueued": 1795637472.0,
+   "first_enqueue": 1795637472.0,
+   "gate_run_s": 1010.0,
+   "gate_queue_s": 10314.0,
+   "commit_lead_h": 3.1,
    "task_lead_h": null
   }
  ]

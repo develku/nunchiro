@@ -1,51 +1,53 @@
 {
- "date": "2026-11-26 06:48",
- "commit": "a04c8ec8f",
+ "date": "2026-11-26 12:19",
+ "commit": "c5cd98879",
  "load": [
-  2.2,
-  6.03
+  6.89,
+  12.15
  ],
  "figures": {
-  "build_cold_min": 0.76,
-  "build_warm_s": 3.9,
+  "build_cold_min": 0.81,
+  "build_warm_s": 4.0,
   "web_build_s": 2.5,
-  "test_stage_min": 9.23,
-  "largest_file_lines": 4576,
-  "files_over_2000": 7,
+  "test_stage_min": 7.89,
+  "largest_file_lines": 4563,
+  "files_over_2000": 2,
   "shared_files_open_lanes": 0
  },
  "test_stage": {
-  "exit": 100,
-  "summary": "Summary [ 394.604s] 3134 tests run: 3133 passed (1 slow), 1 failed, 0 skipped",
+  "exit": 0,
+  "summary": "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
   "run": "detached: launchd is its parent, no Nunchiro holder above it"
  },
  "largest_files": [
   [
    "crates/nunchiro-core/src/queue/mod.rs",
-   4576
+   4563
   ],
   [
    "web/src/styles.css",
    3839
   ],
   [
-   "crates/nunchiro-core/src/ledger.rs",
-   3419
+   "crates/nunchiro-core/src/process.rs",
+   1904
   ],
   [
-   "crates/nunchiro-core/src/http/mod.rs",
-   3201
+   "web/src/tree/tree.css",
+   1899
   ],
   [
-   "app/src-tauri/src/browser/agent.rs",
-   3007
+   "crates/nunchiro-core/src/advance.rs",
+   1895
   ]
  ],
- "open_lanes": {},
+ "open_lanes": {
+  "cutover/changelog-1167": 1
+ },
  "shared": {},
  "warm_touch": "crates/nunchiro-core/src/lib.rs",
  "md2": {
-  "seconds": 46.1,
+  "seconds": 56.4,
   "exit": 0,
   "steps": 1,
   "copy": false,
