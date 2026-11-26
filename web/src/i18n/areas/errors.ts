@@ -69,6 +69,8 @@ declare module '../index' {
     'err.note.undo': true;
     'err.lowMemory': true;
     'err.lowMemory.todo': true;
+    'err.lowMemorySchedule': true;
+    'err.lowMemorySchedule.todo': true;
   }
 }
 
@@ -142,6 +144,8 @@ export const en = {
   // English only until release; other languages fall back to these.
   'err.lowMemory': 'Your Mac is low on memory, so the new session was not started.',
   'err.lowMemory.todo': 'Close something and try again, or run nunchiro agent start --anyway.',
+  'err.lowMemorySchedule': 'Your Mac is low on memory, so the scheduled run was not started.',
+  'err.lowMemorySchedule.todo': 'Close something, then run it again.',
 };
 
 export const ko = {

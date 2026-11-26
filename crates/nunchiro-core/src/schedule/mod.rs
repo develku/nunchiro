@@ -104,6 +104,13 @@ pub enum Outcome {
     /// Not run: the Mac was low on memory when it was due (`pressure`); `reason` says so.
     Held,
 }
+impl Outcome {
+    /// A slot that was no run: too late, or held for low memory. It neither ends a failed run's card nor breaks a
+    /// streak of failures.
+    pub(crate) fn no_run(self) -> bool {
+        matches!(self, Outcome::Skipped | Outcome::Held)
+    }
+}
 
 /// Ticket 993: when an entry runs. `at` and `daily` as on `Entry`; `days` only on a repeating one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -966,6 +973,11 @@ fn run_entry(
         start(registry, stopping, entry, who)
     };
     let held = result.as_ref().is_err_and(|e| crate::pressure::is_held(e));
+    // A schedule's own words: the start's sentence names `agent start --anyway`, which runs no schedule.
+    let result = match held {
+        true => Err(crate::pressure::HELD_SCHEDULE.to_string()),
+        false => result,
+    };
     if let Err(e) = &result {
         eprintln!("schedule {}: {e}", entry.id);
     }

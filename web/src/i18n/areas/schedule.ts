@@ -153,7 +153,7 @@ export const en = {
   'schedule.card.onCard': "Answer it on its card in Decisions",
   'schedule.result.skipped': "skipped",
   // English only until release; other languages fall back to it.
-  'schedule.result.held': "held: low memory",
+  'schedule.result.held': "held",
   'schedule.runLog': "Run log",
   'schedule.turnOn': "Turn on",
   'home.brief.label': "Brief from {name}, {time}",

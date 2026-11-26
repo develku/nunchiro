@@ -911,7 +911,13 @@ pub(crate) fn pass(
                     note(home, &task.place, &lead, act, None);
                 }
                 Err(e) => {
-                    eprintln!("auto-advance: task {}: {e}", task.id);
+                    // A memory hold has its own once-per-task line (`pressure::check_once`).
+                    if !e
+                        .strip_prefix("skipped: ")
+                        .is_some_and(crate::pressure::is_held)
+                    {
+                        eprintln!("auto-advance: task {}: {e}", task.id);
+                    }
                     if !e.starts_with("skipped") {
                         note(home, &task.place, &lead, act, Some(&e));
                     }
@@ -1073,13 +1079,10 @@ pub(crate) fn in_core(
             session, folder, ..
         } => {
             // Held under memory pressure as "skipped": a later pass plans it again, and no try is counted.
-            crate::pressure::check_start(
-                &session,
-                crate::pressure::Who::Session,
-                false,
-                "reviewer",
-            )
-            .map_err(|e| format!("skipped: {e}"))?;
+            // Logged once per task until it starts or the level changes: a pass retries it every 30 s.
+            let who = crate::pressure::Who::Session;
+            crate::pressure::check_once(&session, who, "reviewer", &task.id)
+                .map_err(|e| format!("skipped: {e}"))?;
             let (caller, launch) = {
                 let mut sessions = lock()?;
                 recheck(&sessions, task, lead, &Step::Start)?;
