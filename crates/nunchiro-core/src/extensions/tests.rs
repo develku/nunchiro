@@ -1282,8 +1282,18 @@ fn a_project_given_through_a_link_is_stored_as_its_real_folder() {
     assert_eq!(claude_names(&home, real.to_str().unwrap()), ["mine"]);
     assert_eq!(codex_names(&home, real.to_str().unwrap()), ["mine"]);
     // A folder that is not there is kept as given (no session can be in it).
-    mcp_add(&home, "gone", &["gone-mcp".into()], Some(Path::new("/no/such/folder"))).unwrap();
-    assert!(own_servers(&home).iter().any(|s| s.project.as_deref() == Some("/no/such/folder")));
+    mcp_add(
+        &home,
+        "gone",
+        &["gone-mcp".into()],
+        Some(Path::new("/no/such/folder")),
+    )
+    .unwrap();
+    assert!(
+        own_servers(&home)
+            .iter()
+            .any(|s| s.project.as_deref() == Some("/no/such/folder"))
+    );
     let _ = std::fs::remove_dir_all(home);
     let _ = std::fs::remove_dir_all(real);
 }

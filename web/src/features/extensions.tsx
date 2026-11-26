@@ -465,21 +465,24 @@ function ExtensionsPage({ core, t, commands, closeSettings, current, focus, proj
   const noCommand = tried && !argv?.length;
   const mcpProblem = commandProblem || (noName || noCommand ? t('settings.extensions.mcpNeed') : '');
 
+  // A server for one project reaches only that project's sessions: Restart only when the open session is in it.
+  const addedFor = list?.own.find((s) => s.name === added)?.project;
+  const restartable = live && (!addedFor || live.project === addedFor);
   // Owner 11-25 Q3: under the server just added, before the empty field (mockup T10).
   const addedLine = (
     <div className="srow ext-added">
       <p className="ok-line" role="status">
-        {t('firstUse.mcp.added', { name: added })}
+        {addedFor ? t('settings.extensions.mcpAddedFor', { name: added, project: projectName(addedFor) }) : t('firstUse.mcp.added', { name: added })}
       </p>
       <div className="ob-acts">
-        {live && (
+        {restartable && (
           <button type="button" className="btn p" data-go="restart" disabled={notIdle} aria-describedby={notIdle ? 'why-restart' : undefined} onClick={() => void restartWith(live)}>
             {t('firstUse.mcp.restart', { name: sessionName(live) })}
           </button>
         )}
-        {live && notIdle && <Why id="why-restart" reason={t('firstUse.mcp.working', { name: sessionName(live) })} />}
-        {live && !notIdle && resumes && <span className="ext-keeps">{t('firstUse.mcp.keeps')}</span>}
-        <button type="button" className={live ? 'btn' : 'btn p'} data-go="new" onClick={() => (flushSync(closeSettings), askNew(live?.project))}>
+        {restartable && notIdle && <Why id="why-restart" reason={t('firstUse.mcp.working', { name: sessionName(live) })} />}
+        {restartable && !notIdle && resumes && <span className="ext-keeps">{t('firstUse.mcp.keeps')}</span>}
+        <button type="button" className={restartable ? 'btn' : 'btn p'} data-go="new" onClick={() => (flushSync(closeSettings), askNew(addedFor ?? live?.project))}>
           {t('firstUse.mcp.new')}
         </button>
       </div>
@@ -602,7 +605,7 @@ function ExtensionsPage({ core, t, commands, closeSettings, current, focus, proj
               e.preventDefault();
               if (!name.trim() || !argv?.length || commandProblem) return setTried(true);
               const added = name.trim();
-              void act({ op: 'extensions_mcp_add', name: added, command: argv, ...(only && { project: only }) }).then((ok) => ok && (setName(''), setNamed(false), setCommand(''), setTried(false), setAdded(added)));
+              void act({ op: 'extensions_mcp_add', name: added, command: argv, ...(only && { project: only }) }).then((ok) => ok && (setName(''), setNamed(false), setCommand(''), setOnly(''), setTried(false), setAdded(added)));
             }}
           >
             <div className="ext-paste">

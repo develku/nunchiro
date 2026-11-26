@@ -47,6 +47,7 @@ test('mcp_added_line_for_one_project: names the project, offers Restart only for
   core.shell(web, 'term');
   core.cli('session', 'start', '--kind', 'claude', '--project', api, '--label', 'api-server');
   await openWindow(app, {}, core);
+  await app.getByRole('button', { name: /^api-server, / }).click(); // the open session is the agent in api-server
   await openExtensions(app);
   const own = app.locator('[data-mcp="own"]');
   const pick = own.getByRole('combobox', { name: 'Sessions that get the server' });

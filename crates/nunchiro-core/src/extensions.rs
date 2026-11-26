@@ -517,7 +517,10 @@ pub fn mcp_add(
     {
         return Err("command: one to 64 non-empty arguments".into());
     }
-    let project = match project {
+    // Through a link the folder is stored as itself, the path its sessions carry (`Launch` canonicalizes theirs); a
+    // folder that is not there is kept as given.
+    let real = project.map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()));
+    let project = match &real {
         None => None,
         Some(p) => Some(
             p.to_str()

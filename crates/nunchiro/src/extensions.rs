@@ -32,14 +32,8 @@ pub fn run(
         let Reply::Extensions { own, .. } = super::call(home, request)? else {
             return Err("unexpected reply".into());
         };
-        for s in own {
-            let changed = if s.changed {
-                "\t(changed outside Nunchiro: no session gets it)"
-            } else {
-                ""
-            };
-            let only = s.project.as_deref().unwrap_or("all projects");
-            println!("{}\t{only}\t{}{changed}", s.name, s.command.join(" "));
+        for s in &own {
+            println!("{}", mcp_line(s));
         }
         return Ok(());
     }
@@ -197,18 +191,7 @@ pub fn run(
             else {
                 return Err("unexpected reply".into());
             };
-            // A file's text goes to a terminal: control characters other than line ends and tabs are shown as a mark.
-            let plain: String = text
-                .chars()
-                .map(|c| {
-                    if c.is_control() && c != '\n' && c != '\t' {
-                        '\u{FFFD}'
-                    } else {
-                        c
-                    }
-                })
-                .collect();
-            print!("{plain}");
+            print!("{}", marked(&text, &['\n', '\t']));
         }
         ["on", id, rest @ ..] => {
             let item = find(&items, id)?;
@@ -255,6 +238,35 @@ pub fn run(
         _ => return Err(USAGE.into()),
     }
     Ok(())
+}
+
+/// Text for a terminal: control characters other than `keep` are shown as a mark, so stored text cannot move the cursor.
+fn marked(text: &str, keep: &[char]) -> String {
+    text.chars()
+        .map(|c| {
+            if c.is_control() && !keep.contains(&c) {
+                '\u{FFFD}'
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
+/// One own server as a list line: name, scope, command, and the changed mark. Stored text may be hand-written, so it
+/// keeps no control character (a tab or line end would split the columns).
+fn mcp_line(s: &nunchiro_core::extensions::McpServer) -> String {
+    let changed = if s.changed {
+        "\t(changed outside Nunchiro: no session gets it)"
+    } else {
+        ""
+    };
+    format!(
+        "{}\t{}\t{}{changed}",
+        marked(&s.name, &[]),
+        marked(s.project.as_deref().unwrap_or("all projects"), &[]),
+        marked(&s.command.join(" "), &[])
+    )
 }
 
 /// `mcp`, `mcp add <name> [--project <dir>] -- <command>...` or `mcp remove <name>`; a relative project is from here.
@@ -419,12 +431,20 @@ mod tests {
             project: Some("/w\r\u{1b}[1A".into()),
         };
         let line = mcp_line(&s);
-        assert!(!line.chars().any(|c| c.is_control() && c != '\t'), "{line:?}");
+        assert!(
+            !line.chars().any(|c| c.is_control() && c != '\t'),
+            "{line:?}"
+        );
         assert_eq!(
             line,
             "x\t/w\u{FFFD}\u{FFFD}[1A\tevil\u{FFFD}\u{FFFD}[2K a\u{FFFD}b\u{FFFD}c\t(changed outside Nunchiro: no session gets it)"
         );
-        let plain = McpServer { changed: false, project: None, command: vec!["db-mcp".into()], ..s };
+        let plain = McpServer {
+            changed: false,
+            project: None,
+            command: vec!["db-mcp".into()],
+            ..s
+        };
         assert_eq!(mcp_line(&plain), "x\tall projects\tdb-mcp");
     }
 
