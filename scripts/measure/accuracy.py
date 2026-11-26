@@ -17,6 +17,13 @@ scripts/scenario/v1b-full.sh (lib.snapshot/guard_check and the ~/.claude, ~/.cod
    call to trial-mail.jsonl in the seat's folder), 4 per seat; a send in that log without an allow on its card counts.
    Even tries are allowed, odd ones denied.
 
+5. Startup waits: 10 start dialogs, each on a new session that is never answered and then closed: folder trust (a
+   new folder outside every trusted one, 3 here and 2 on the second Mac) and sign-in missing (5 on a second core here
+   whose agents get empty config folders: CLAUDE_CONFIG_DIR, CODEX_HOME). Each must be one card within 5 s of the
+   dialog showing on the agent's screen. An update prompt is in the self-test only: no real seat can show one
+   (Nunchiro keeps Codex's update screen off and refuses an argument that turns it on, crates/nunchiro-core/src/
+   sessions/spawn.rs:217; Claude Code shows no update dialog at start).
+
 The figures are given for all seats, for the second Mac's seat and for this Mac's seats. A run is counted only when it
 ran real agents (none is the fixture, versions recorded), the full sizes, the seat on the second Mac (the core says
 the session runs on the alias) and the config guard found nothing; otherwise it says why it is not counted.
@@ -24,8 +31,14 @@ the session runs on the alias) and the config guard found nothing; otherwise it 
 sides (a second core on its own home behind scripts/scenario/fake-ssh), at small sizes: "self-test, not counted".
 Stdlib only; `figures` and `verdict` are tested by tests/scenario/test_measure_accuracy.py.
 
+The field figure beside the trial, "minutes per day a session waited with no card" (`waits`, 7 days on the owner's
+own app, read only): every --every seconds each Claude or Codex session's own screen is read (`agent read`); a screen
+showing a dialog or a start question while the core's snapshot holds no card for that session adds --every seconds.
+Each sample is appended to the raw file, so `--report FILE` gives the figure of a stopped run.
+
 Usage: scorecard.py accuracy --machine ALIAS --remote-project DIR [--project-root DIR] [--nunchiro BIN] [--out FILE]
-       scorecard.py accuracy --self-test [--nunchiro BIN]"""
+       scorecard.py accuracy --self-test [--nunchiro BIN]
+       scorecard.py waits [--days 7] [--every 30] [--nunchiro BIN] | --report FILE"""
 import argparse, base64, hashlib, json, os, random, re, shutil, socket, subprocess, sys, tempfile, threading, time
 from pathlib import Path
 
@@ -36,8 +49,16 @@ FAKE_MARK = b"The accuracy trial's agent"
 # (label, kind, where): the rubric's 3 Claude and 2 Codex; one Claude on the second Mac.
 SEATS = [("c1", "claude", "local"), ("c2", "claude", "local"), ("r1", "claude", "remote"),
          ("x1", "codex", "local"), ("x2", "codex", "local")]
-FULL = dict(sends=500, readings=100, cards=50, outward=20)
-SELF_TEST = dict(sends=20, readings=20, cards=6, outward=5)
+FULL = dict(sends=500, readings=100, cards=50, outward=20, startup=10)
+SELF_TEST = dict(sends=20, readings=20, cards=6, outward=5, startup=10)
+# Step 5 (dialog, agent, where): the real run's 10 and the self-test's 10 (with the update prompt only a fixture shows).
+STARTUP_PLAN = ([("trust", "claude", "local")] * 2 + [("trust", "codex", "local"), ("trust", "claude", "remote"),
+                 ("trust", "claude", "remote")] + [("signin", "claude", "local")] * 3 + [("signin", "codex", "local")] * 2)
+STARTUP_SELF_TEST = ([("trust", "claude", "local"), ("trust", "codex", "local"), ("trust", "claude", "remote"),
+                      ("signin", "claude", "local"), ("signin", "claude", "local"), ("signin", "codex", "local")]
+                     + [("update", "codex", "local")] * 4)
+START_SCREEN = re.compile(r"trust this folder|one you trust|trust the contents of this directory|Select login method|"
+                          r"Sign in with ChatGPT|Choose the text style|Update available|Press enter to continue", re.I)
 SHOWN = {"working": "working", "blocked": "needs_you", "done": "done", "idle": "idle"}
 CLAUDE_MODEL = "haiku"
 DIALOG = re.compile(r"Do you want to proceed\?|Enter to select|Would you like to (run|make|allow)|Allow command\?")
@@ -70,6 +91,7 @@ BOOT = "import base64;exec(base64.b64decode('%s'))" % base64.b64encode(MAIL_SERV
 
 def _figures(rec):
     sends, reads, cards, outs = rec["sends"], rec["readings"], rec["cards"], rec["outward"]
+    starts = [r for r in rec.get("startup", []) if r["raised"]]
     missed = sum(1 for s in sends if not s["submitted"])
     return dict(missed_with_draft=sum(1 for s in sends if not s["submitted"] and s["draft"]),
         delivery_missed_per_1000=round(1000 * missed / len(sends), 1) if sends else None,
@@ -77,7 +99,10 @@ def _figures(rec):
         cards_shown_pct=round(100 * sum(1 for c in cards if c["latency_s"] is not None and c["latency_s"] <= 5 and c["ids"] == 1)
                               / len(cards), 1) if cards else None,
         outward_unapproved=sum(1 for o in outs if o["sent"] and not o["allowed"]) if outs else None,
-        counts=dict(sends=len(sends), readings=len(reads), cards=len(cards), outward=len(outs)),
+        startup_cards_pct=round(100 * sum(1 for c in starts if c["latency_s"] is not None and c["latency_s"] <= 5
+                                          and c["ids"] == 1) / len(starts), 1) if starts else None,
+        counts=dict(sends=len(sends), readings=len(reads), cards=len(cards), outward=len(outs), startup=len(starts)),
+        startup_not_raised=sum(1 for r in rec.get("startup", []) if not r["raised"]),
     )
 
 
@@ -102,6 +127,8 @@ def verdict(res):
         why.append("the second Mac was not used (no seat ran through --machine)")
     elif not res["figures"]["remote"]["counts"]["sends"]:
         why.append("no prompt reached the second Mac's seat")
+    if res["figures"]["total"].get("startup_not_raised"):
+        why.append(f"start dialogs not raised: {res['figures']['total']['startup_not_raised']}")
     short = [k for k, n in FULL.items() if res["figures"]["total"]["counts"][k] < n]
     if short:
         why.append("below the rubric's sizes: " + ", ".join(f"{k} {res['figures']['total']['counts'][k]} of {FULL[k]}" for k in short))
@@ -168,7 +195,7 @@ class Trial:
             self.env = dict(base, HOME=str(self.home), NUNCHIRO_HOME=str(self.home), CODEX_HOME=str(self.home / "codex-data"),
                             CLAUDE_CONFIG_DIR=str(self.home / "claude-data"), NUNCHIRO_SSH=str(ROOT / "scripts/scenario/fake-ssh"),
                             NUNCHIRO_FAKE_REMOTE_HOME=str(self.rhome), NUNCHIRO_BIN=self.n)
-            self.extra.append(self.serve(self.renv, self.rhome))
+            self.extra.append((self.serve(self.renv, self.rhome), self.renv))
         else:
             import lib
             self.remote_project = Path(remote_project)
@@ -178,6 +205,23 @@ class Trial:
         (self.home / "settings.json").write_text(json.dumps(
             {"machines": {machine: {"projects": {str(self.project): str(self.remote_project)}}}}))
         self.core = self.serve(self.env, self.home)
+        # Step 5's second core here: its agents get empty config folders, so they start signed out.
+        self.ohome = self.work / "o"
+        self.ohome.mkdir(mode=0o700)
+        for d in ("claude-empty", "codex-empty"):
+            (self.ohome / d).mkdir()
+            if self_test:
+                (self.ohome / d / "trial-signed-out").touch()
+        self.oenv = dict(self.env, NUNCHIRO_HOME=str(self.ohome), CLAUDE_CONFIG_DIR=str(self.ohome / "claude-empty"),
+                         CODEX_HOME=str(self.ohome / "codex-empty"))
+        self.extra.append((self.serve(self.oenv, self.ohome), self.oenv))
+        if self_test:  # the update screen, a fixture's only
+            self.uhome = self.work / "u"
+            self.uhome.mkdir(mode=0o700)
+            (self.uhome / "codex-up").mkdir()
+            (self.uhome / "codex-up" / "trial-update").touch()
+            self.uenv = dict(self.env, NUNCHIRO_HOME=str(self.uhome), CODEX_HOME=str(self.uhome / "codex-up"))
+            self.extra.append((self.serve(self.uenv, self.uhome), self.uenv))
         self.token = (self.home / "core.token").read_text().strip()
         self.seats, self.helper, self.lock = {}, None, threading.Lock()
 
@@ -187,21 +231,23 @@ class Trial:
         until(lambda: (home / "core.token").exists() and (home / "core.sock").exists(), 20, "core start")
         return p
 
-    def cli(self, *args, remote=False, timeout=60):
+    def cli(self, *args, remote=False, timeout=60, env=None):
         argv = [self.n, *(["--machine", self.machine] if remote else []), *args]
         try:
-            r = subprocess.run(argv, env=self.env, capture_output=True, text=True, timeout=timeout)
+            r = subprocess.run(argv, env=env or self.env, capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired:
             return -1, "", f"no answer in {timeout} s"
         return r.returncode, r.stdout, r.stderr
 
-    def sock(self, request, remote=False):
+    def sock(self, request, remote=False, home=None):
         if remote:
             request = {"op": "remote", "machine": self.machine, "request": request}
+        home = home or self.home
+        token = self.token if home == self.home else (home / "core.token").read_text().strip()
         with socket.socket(socket.AF_UNIX) as s:
             s.settimeout(20)
-            s.connect(str(self.home / "core.sock"))
-            s.sendall((json.dumps({"token": self.token, "request": request}) + "\n").encode())
+            s.connect(str(home / "core.sock"))
+            s.sendall((json.dumps({"token": token, "request": request}) + "\n").encode())
             return json.loads(s.makefile().readline())
 
     def screen(self, label):
@@ -276,6 +322,15 @@ class Trial:
                 return re.search(r"for shortcuts|mode on|Ask Codex to do anything|context left|^❯ ", text, re.M | re.I)
             until(ready, 120, f"seat {label} ready")
 
+    def remote_sh(self, script):
+        """One short shell command on the second Mac (a shell session, closed after a second)."""
+        rc, out, err = self.cli("session", "start", "--kind", "shell", "--project", str(self.remote_project), "--label",
+                                "trial-sh", "--", "/bin/sh", "-c", script + "; exec cat", remote=True)
+        if rc:
+            raise SystemExit(f"shell on {self.machine}: {err or out}")
+        time.sleep(1)
+        self.cli("session", "close", json.loads(out.splitlines()[-1])["session"]["id"], remote=True)
+
     def agents(self):
         """Which agents ran, with versions: this Mac's from PATH, the second Mac's from the helper."""
         out = []
@@ -314,7 +369,7 @@ class Trial:
         for sid in [s["id"] for s in self.seats.values() if s["where"] == "remote"] + [self.helper]:
             if sid and not self.self_test:
                 self.cli("session", "close", sid, remote=True, timeout=30)  # the second Mac's core is not ours
-        homes = [(self.core, self.env)] + [(p, self.renv) for p in self.extra]
+        homes = [(self.core, self.env)] + self.extra
         for p, env in homes:
             try:
                 subprocess.run([self.n, "serve", "stop", "--yes"], env=env, capture_output=True, timeout=30)
@@ -368,9 +423,9 @@ def window(t, stop):
     requests held for their cards; with none, Codex's outward hook refuses at once and Claude falls back to its own
     dialog. Both cores, every second (the core counts a window gone after 3 s)."""
     while not stop.wait(1):
-        for remote in (False, True):
+        for remote, home in [(False, None), (True, None)] + [(False, h) for h in (t.ohome, getattr(t, "uhome", None)) if h]:
             try:
-                t.sock({"op": "queue_connect"}, remote=remote)
+                t.sock({"op": "queue_connect"}, remote=remote, home=home)
             except OSError:
                 pass
 
@@ -415,9 +470,10 @@ def cards(t, label, ks, rec):
         start = raised if raised is not None and (first is None or raised <= first) else t0 if raised is None else first
         row = dict(seat=label, where=seat["where"], k=k, kind=kind, ids=len(ids), raised_on_screen=raised is not None,
                    latency_s=round(first - start, 3) if first else None)
-        if seen:
+        if seen:  # the card live now: a doubled request's first card may be gone (counted above as ids 2)
+            live = [i for i in t.pending(label) if i["kind"] == kind] or [seen]
             answer = {"type": "choose", "index": 0} if kind == "question" else {"type": "allow_once" if k % 4 == 0 else "deny"}
-            row["answer_error"] = t.answer(label, seen["id"], answer)
+            row["answer_error"] = t.answer(label, live[-1]["id"], answer)
         with t.lock:
             rec["cards"].append(row)
         t.wait_done(label)
@@ -439,6 +495,7 @@ def outward(t, label, ks, rec):
             card = mailcard()
             time.sleep(0.2)
         before_answer = subject in t.mails(label)
+        card = (mailcard() or card) if card else None  # the card live now, as in cards()
         err = t.answer(label, card["id"], {"type": "allow_once" if allow else "deny"}) if card else None
         extra, end = 0, time.monotonic() + 60  # a retry asks again: refused, counted
         while time.monotonic() < end and screen_state(t.screen(label)) != {"idle", "done"}:
@@ -455,6 +512,112 @@ def outward(t, label, ks, rec):
                                        allowed=bool(card) and allow and not err and not before_answer))
 
 
+def startup(t, plan, rec):
+    """Step 5, one dialog at a time: start a session that shows it, time its card, close it unanswered."""
+    tag = t.work.name[-6:]
+    for k, (dialog, kind, where) in enumerate(plan):
+        remote, env, home = where == "remote", None, None
+        project = t.project
+        if dialog == "trust":  # a new folder no trusted folder holds
+            if remote:
+                project = Path(f"/tmp/acc-untrusted-{tag}-{k}")
+                t.remote_sh(f"mkdir -p '{project}'")
+            else:
+                project = Path(tempfile.mkdtemp(prefix=f"acc-untrusted-{tag}-"))
+        else:
+            env, home = (t.oenv, t.ohome) if dialog == "signin" else (t.uenv, t.uhome)
+        args = ["agent", "start", f"trial-start-{k}", "--kind", kind, "--project", str(project)]
+        import lib
+        args += ["--model", CLAUDE_MODEL] if kind == "claude" else ["--model", lib.CODEX_MODEL, "--effort", "low"]
+        if kind == "codex" and dialog != "trust":
+            args += ["--", "-c", f'projects."{project}".trust_level="trusted"']
+        t0 = time.time()
+        rc, out, err = t.cli(*args, remote=remote, env=env, timeout=90)
+        row = dict(where=where, dialog=dialog, kind=kind, raised=False, latency_s=None, ids=0)
+        if rc:
+            row["error"] = (err or out).strip()[:300]
+        else:
+            sid = json.loads(out.splitlines()[-1])["session"]["id"]
+            raised, first, ids, text = None, None, set(), ""
+            end = time.monotonic() + 60
+            while time.monotonic() < end:
+                rc2, text, _ = t.cli("agent", "read", sid, "--lines", "60", remote=remote, env=env, timeout=20)
+                if raised is None and START_SCREEN.search(text):
+                    raised = time.time()
+                snap = t.sock({"op": "snapshot"}, remote=remote, home=home).get("Ok", {}).get("sessions", [])
+                items = next((x.get("pending", []) for x in snap if x["id"] == sid), [])
+                ids |= {i["id"] for i in items}
+                if items and first is None:
+                    first = time.time()
+                if raised and first and time.time() - max(raised, first) > 1:
+                    break
+                if raised and time.time() - raised > 10:
+                    break  # no card in 10 s: a miss, no need to wait longer
+                time.sleep(0.1)
+            start = raised if raised is not None and (first is None or raised <= first) else t0 if raised is None else first
+            row.update(raised=raised is not None or first is not None, ids=len(ids), raised_on_screen=raised is not None,
+                       latency_s=round(first - start, 3) if first else None,
+                       screen=next((l.strip() for l in text.splitlines() if START_SCREEN.search(l)), text.strip()[-200:]))
+            t.cli("session", "close", sid, remote=remote, env=env, timeout=30)  # never answered
+        if dialog == "trust":
+            t.remote_sh(f"rmdir '{project}'") if remote else shutil.rmtree(project, ignore_errors=True)
+        with t.lock:
+            rec["startup"].append(row)
+
+
+def waited(samples, every):
+    """Minutes per day a session waited with no card (pure): `every` seconds for each sample of a session whose screen
+    showed a dialog while it had no card, over the days the samples span (at least one sample interval)."""
+    if not samples:
+        return None
+    span = max(samples[-1]["t"] - samples[0]["t"] + every, every) / 86400
+    lone = sum(1 for s in samples for x in s["sessions"] if x["waiting"] and not x["cards"])
+    return round(lone * every / 60 / span, 2)
+
+
+def field(nunchiro, days, every, out):
+    """The owner's own app, read only: `snapshot --json` and `agent read` of each agent session, every `every` s."""
+    end = time.time() + days * 86400
+    # As the owner, also from a Nunchiro terminal: a session's own token would be refused the owner's snapshot.
+    env = {k: v for k, v in os.environ.items() if k not in ("NUNCHIRO_TOKEN", "NUNCHIRO_SESSION", "NUNCHIRO_MACHINE")}
+    with open(out, "a") as f:
+        while time.time() < end:
+            t0 = time.time()
+            r = subprocess.run([nunchiro, "snapshot", "--json"], capture_output=True, text=True, timeout=30, env=env)
+            rows = []
+            for x in json.loads(r.stdout).get("sessions", []) if r.returncode == 0 else []:
+                # ponytail: this Mac's sessions only; a remote one would need `--machine` per alias
+                if x.get("kind") not in ("claude", "codex") or x.get("state") != "running" or x.get("machine"):
+                    continue
+                text = subprocess.run([nunchiro, "agent", "read", x["id"], "--lines", "40"], capture_output=True,
+                                      text=True, timeout=30, env=env).stdout
+                waiting = screen_state(text) == {"needs_you"} or bool(START_SCREEN.search("\n".join(text.splitlines()[-20:])))
+                rows.append(dict(id=x["id"], waiting=waiting, cards=len(x.get("pending", []))))
+            f.write(json.dumps(dict(t=t0, ok=r.returncode == 0, sessions=rows, **({} if r.returncode == 0 else
+                                                                                   dict(error=r.stderr.strip()[-300:])))) + "\n")
+            f.flush()
+            time.sleep(max(0, every - (time.time() - t0)))
+
+
+def waits_main(argv=None):
+    ap = argparse.ArgumentParser(prog="waits", description="p34's field figure; see docs/measure/rubric.md")
+    ap.add_argument("--days", type=float, default=7)
+    ap.add_argument("--every", type=int, default=30)
+    ap.add_argument("--nunchiro", default="nunchiro", help="the owner's app's CLI (default: nunchiro on PATH)")
+    ap.add_argument("--report", help="a raw file of an earlier run: its figure, no sampling")
+    a = ap.parse_args(argv)
+    raw = Path(a.report) if a.report else ROOT / "docs/measure" / f"waits-{time.strftime('%Y-%m-%d')}.jsonl"
+    if not a.report:
+        field(a.nunchiro, a.days, a.every, raw)
+    samples = [json.loads(l) for l in raw.read_text().splitlines() if l.strip()]
+    every = a.every
+    days = (samples[-1]["t"] - samples[0]["t"] + every) / 86400 if samples else 0
+    res = dict(waited_no_card_min_per_day=waited(samples, every), days=round(days, 2), samples=len(samples),
+               every_s=every, raw=raw, enough=days >= 7)
+    print(json.dumps({k: str(v) if k == "raw" else v for k, v in res.items()}, indent=1))
+    return res
+
+
 def parallel(jobs):
     threads = [threading.Thread(target=f, args=a) for f, a in jobs]
     for th in threads:
@@ -469,7 +632,7 @@ def spread(n, seats):
 
 
 def run(nunchiro, size, work, machine, remote_project=None, project_root=None, self_test=False):
-    rec = dict(sends=[], readings=[], cards=[], outward=[])
+    rec = dict(sends=[], readings=[], cards=[], outward=[], startup=[])
     started = time.time()
     t = Trial(nunchiro, work, machine, remote_project, project_root, self_test)
     try:
@@ -487,12 +650,13 @@ def run(nunchiro, size, work, machine, remote_project=None, project_root=None, s
         stop.set()
         reader.join()
         parallel([(outward, (t, s, ks, rec)) for s, ks in spread(size["outward"], list(t.seats)).items()])
+        startup(t, (STARTUP_SELF_TEST if self_test else STARTUP_PLAN)[:size["startup"]], rec)
     finally:
         seats = list(t.seats.values())
         if "shut" in locals():
             shut.set()
         t.stop()
-    prompts = len(rec["sends"]) + len(rec["cards"]) + len(rec["outward"])
+    prompts = len(rec["sends"]) + len(rec["cards"]) + len(rec["outward"])  # step 5 sends no prompt
     return dict(date=time.strftime("%Y-%m-%d"), started=time.strftime("%Y-%m-%d %H:%M", time.localtime(started)),
                 minutes=round((time.time() - started) / 60, 1), prompts=prompts, self_test=self_test, machine=machine,
                 size=size, seats=seats, agents=agents, figures=figures(rec), records=rec)

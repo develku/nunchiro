@@ -14,7 +14,8 @@ def records(where):
                 readings=[dict(where=where, shown="blocked", true=["needs_you"]), dict(where=where, shown="idle", true=["working"])],
                 cards=[dict(where=where, latency_s=0.4, ids=1), dict(where=where, latency_s=6.0, ids=1), dict(where=where, latency_s=1.0, ids=2)],
                 outward=[dict(where=where, sent=True, allowed=True), dict(where=where, sent=True, allowed=False),
-                         dict(where=where, sent=False, allowed=False)])
+                         dict(where=where, sent=False, allowed=False)],
+                startup=[dict(where=where, raised=True, latency_s=0.2, ids=1), dict(where=where, raised=True, latency_s=None, ids=0)])
 
 
 def run(**over):
@@ -35,7 +36,23 @@ class Figures(unittest.TestCase):
         self.assertEqual(f["remote"]["state_match_pct"], 50.0)
         self.assertEqual(f["remote"]["cards_shown_pct"], 33.3)  # late and doubled cards fail
         self.assertEqual(f["total"]["outward_unapproved"], 2)
-        self.assertEqual(f["total"]["counts"], dict(sends=4, readings=4, cards=6, outward=6))
+        self.assertEqual(f["total"]["startup_cards_pct"], 50.0)  # a start dialog with no card fails
+        self.assertEqual(f["total"]["counts"], dict(sends=4, readings=4, cards=6, outward=6, startup=4))
+
+    def test_a_start_dialog_that_never_showed_is_not_scored_but_blocks_the_count(self):
+        rec = dict(sends=[], readings=[], cards=[], outward=[], startup=[dict(where="local", raised=False, latency_s=None, ids=0)])
+        self.assertIsNone(a.figures(rec)["total"]["startup_cards_pct"])
+        res = run()
+        res["figures"]["total"]["startup_not_raised"] = 1
+        self.assertIn("start dialogs not raised: 1", a.verdict(res)[1])
+
+    def test_waited_minutes_per_day(self):
+        lone = dict(waiting=True, cards=0)
+        carded, busy = dict(waiting=True, cards=1), dict(waiting=False, cards=0)
+        # 2 samples 30 s apart = 1 min of samples; one lone wait of 30 s in it
+        samples = [dict(t=0, sessions=[lone, carded]), dict(t=30, sessions=[busy])]
+        self.assertEqual(a.waited(samples, 30), round(0.5 / (60 / 86400), 2))
+        self.assertIsNone(a.waited([], 30))
 
     def test_a_side_with_no_records_has_no_figure(self):
         self.assertIsNone(a.figures(records("local"))["remote"]["delivery_missed_per_1000"])
