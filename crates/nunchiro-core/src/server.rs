@@ -58,6 +58,23 @@ pub fn call_by(home: &Path, request: Request, until: Option<Instant>) -> Respons
 pub(crate) fn call_with_token(home: &Path, token: &str, request: Request) -> Response {
     call_with_token_by(home, token, request, None)
 }
+/// How long a caller waits for the core's reply.
+const REPLY_WAIT: Duration = Duration::from_secs(15);
+/// The same for a request that starts an agent, longer than the core's worst case for it, so a caller never gives up on
+/// a start the core then makes (a retry would make a second seat). A `--worktree` Codex start's own bounds add up to
+/// about 75 s: the base-branch reads (`start_worktree::READ`, 10 s each), `git worktree add` (`GIT_WORKTREE`, 10 s),
+/// `--version` (`VERSION_WAIT`, 3 s), the Codex start check (`outward::CODEX_ASK_DEADLINE`, 10 s) and the holder's
+/// hello (10 s). The window's requests go over its WebSocket, which waits for every reply.
+const START_REPLY_WAIT: Duration = Duration::from_secs(120);
+fn reply_wait(request: &Request) -> Duration {
+    match request {
+        Request::Remote { request, .. } => reply_wait(request),
+        Request::Start { .. } | Request::TeamOpen { .. } | Request::SwitchModel { .. } => {
+            START_REPLY_WAIT
+        }
+        _ => REPLY_WAIT,
+    }
+}
 fn call_with_token_by(
     home: &Path,
     token: &str,
@@ -65,8 +82,9 @@ fn call_with_token_by(
     until: Option<Instant>,
 ) -> Response {
     let mut stream = UnixStream::connect(home.join("core.sock")).map_err(|e| e.to_string())?;
+    let wait = reply_wait(&request);
     stream
-        .set_read_timeout(Some(Duration::from_secs(15)))
+        .set_read_timeout(Some(wait))
         .map_err(|e| e.to_string())?;
     stream
         .set_write_timeout(Some(Duration::from_secs(5)))
@@ -87,20 +105,27 @@ fn call_with_token_by(
     bytes.push(b'\n');
     stream.write_all(&bytes).map_err(|e| e.to_string())?;
     let mut line = String::new();
-    BufReader::new(Until { stream, until }.take(8 * 1024 * 1024))
-        .read_line(&mut line)
-        .map_err(|e| {
-            if stopping
-                && matches!(
-                    e.kind(),
-                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
-                )
-            {
-                "core did not answer stop".into()
-            } else {
-                e.to_string()
-            }
-        })?;
+    BufReader::new(
+        Until {
+            stream,
+            until,
+            wait,
+        }
+        .take(8 * 1024 * 1024),
+    )
+    .read_line(&mut line)
+    .map_err(|e| {
+        if stopping
+            && matches!(
+                e.kind(),
+                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+            )
+        {
+            "core did not answer stop".into()
+        } else {
+            e.to_string()
+        }
+    })?;
     serde_json::from_str(&line).map_err(|e| e.to_string())?
 }
 
@@ -108,6 +133,7 @@ fn call_with_token_by(
 struct Until {
     stream: UnixStream,
     until: Option<Instant>,
+    wait: Duration,
 }
 impl Read for Until {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
@@ -118,10 +144,7 @@ impl Read for Until {
             }
             // macOS answers EINVAL to SO_RCVTIMEO once the peer has closed: a core that replied and hung up before
             // this first read. The reply is still there to read, and a closed peer cannot make the read wait.
-            match self
-                .stream
-                .set_read_timeout(Some(left.min(Duration::from_secs(15))))
-            {
+            match self.stream.set_read_timeout(Some(left.min(self.wait))) {
                 Err(e) if e.raw_os_error() != Some(libc::EINVAL) => return Err(e),
                 _ => {}
             }
@@ -652,6 +675,7 @@ pub(crate) fn remote_from_owner(
             | Request::Direct { .. }
             | Request::DraftTaken { .. }
             | Request::DraftPutBack { .. }
+            | Request::TakeBack { .. }
             | Request::TeamOpen { .. } // ticket 990: a seat opens on this Mac, for its own lead
             | Request::Task { .. } // ticket 990 slice g: the ledger is this core's
             | Request::Note { .. } // ticket 990 slice h

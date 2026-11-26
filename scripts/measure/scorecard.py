@@ -26,6 +26,11 @@ Usage:
       Read only, p34's field figure on the owner's own app: every --every seconds, whether each agent session's screen
       shows a dialog while the core holds no card for it. Appends each sample to docs/measure/waits-<date>.jsonl and,
       after 7 days, writes waited_no_card_min_per_day into the manual file.
+  scorecard.py record [--nunchiro BIN] [--report FILE]
+      Read only, p08's two field figures from the owner's own app (record.py): `nunchiro serve status --json`, whose
+      record holds prompts delivered and those that needed a person, and the sessions before and after each core
+      restart. Writes missed_prompts_per_1000 and seats_lost_per_restart into the manual file once the record holds 7
+      days (the seats figure only when a restart fell in them).
   scorecard.py dev [--target DIR] [--out FILE]
       Maintainability figures (part p26): a cold and a warm debug build of the Rust workspace in DIR (a fresh cargo
       target, removed first), the web build, the gate's Rust test stage (scripts/cargo-test-gate.sh) on that target,
@@ -1184,6 +1189,20 @@ def waits_cmd(a):
                  f"own app (each agent session's screen against its cards); raw samples {Path(res['raw']).name}")
 
 
+def record_cmd(a):
+    """p08's field figures (record.main, its arguments passed on); written only from 7 days of record."""
+    import record
+    res = record.main(a.args)
+    if not res["figures"]:
+        print(f"not written: the record starts {res['first_day']}, the rubric's figures need 7 days"
+              + ("" if not res["enough"] else " with a delivered prompt or a restart"))
+        return
+    write_manual(None, res["figures"],
+                 f"scorecard.py record: `nunchiro serve status --json` of the owner's own app, the 7 days to "
+                 f"{time.strftime('%Y-%m-%d')}: {res['delivered']} prompts delivered, {res['resent']} sent again by the "
+                 f"core, {res['person']} needed a person; {res['restarts']} core restarts, {res['lost']} sessions not back")
+
+
 def write_manual(out, values, evidence):
     """An owner-run step's figures into docs/measure/manual-<date>.json (or `out`), other figures kept."""
     path = Path(out) if out else OUT_DIR / f"manual-{time.strftime('%Y-%m-%d')}.json"
@@ -1254,16 +1273,19 @@ def main():
     x.add_argument("args", nargs=argparse.REMAINDER)
     x = sub.add_parser("waits", add_help=False)
     x.add_argument("args", nargs=argparse.REMAINDER)
+    x = sub.add_parser("record", add_help=False)
+    x.add_argument("args", nargs=argparse.REMAINDER)
     w = sub.add_parser("weigh")
     w.add_argument("--secs", type=int, default=60)
     w.add_argument("--out")
     a, rest = ap.parse_known_args()
-    if a.cmd in ("accuracy", "waits"):
+    if a.cmd in ("accuracy", "waits", "record"):
         a.args = a.args + rest  # accuracy.py's own options, --help too
     elif rest:
         ap.error("unrecognized arguments: " + " ".join(rest))
     {"run": run_cmd, "ops": ops_cmd, "dev": dev_cmd, "merge": merge_cmd, "check": check_cmd, "page": page_cmd,
-     "tests": tests_cmd, "weigh": weigh_cmd, "accuracy": accuracy_cmd, "waits": waits_cmd}[a.cmd](a)
+     "tests": tests_cmd, "weigh": weigh_cmd, "accuracy": accuracy_cmd, "waits": waits_cmd,
+     "record": record_cmd}[a.cmd](a)
 
 
 if __name__ == "__main__":

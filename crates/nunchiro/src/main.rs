@@ -132,7 +132,7 @@ fn run() -> Result<(), String> {
     }
     if args == ["--help"] || args.is_empty() {
         println!(
-            "nunchiro serve [stop [--yes]]\nnunchiro serve status\nnunchiro session start --kind claude|codex|shell --project DIR [--worktree] [--label TEXT] [--model MODEL] [--effort LEVEL] [--resume ID] [--account LABEL] [--env KEY=VALUE]... [-- ARGS...]\nnunchiro session start --agent acp:NAME --project DIR [--worktree] [--label TEXT] [--resume ID]\nnunchiro session list|read|send-text|send-keys|close|label|resize\nnunchiro snapshot --json\nnunchiro widget new NAME\nnunchiro widget allow NAME --read|--act\nnunchiro permission-answers on|off [--project DIR]\nNUNCHIRO_HOME defaults to ~/.nunchiro (a debug build: nunchiro-home beside its binary); settings.json supports disable_hook_injection and worktrees_dir.\nread emits JSON byte replay; send-text writes exact text, send-keys enter submits.\nWaiting detection, queue and HTTP are reserved for later tickets."
+            "nunchiro serve [stop [--yes]]\nnunchiro serve status [--json]\nnunchiro session start --kind claude|codex|shell --project DIR [--worktree] [--label TEXT] [--model MODEL] [--effort LEVEL] [--resume ID] [--account LABEL] [--env KEY=VALUE]... [-- ARGS...]\nnunchiro session start --agent acp:NAME --project DIR [--worktree] [--label TEXT] [--resume ID]\nnunchiro session list|read|send-text|send-keys|close|label|resize\nnunchiro snapshot --json\nnunchiro widget new NAME\nnunchiro widget allow NAME --read|--act\nnunchiro permission-answers on|off [--project DIR]\nNUNCHIRO_HOME defaults to ~/.nunchiro (a debug build: nunchiro-home beside its binary); settings.json supports disable_hook_injection and worktrees_dir.\nread emits JSON byte replay; send-text writes exact text, send-keys enter submits.\nWaiting detection, queue and HTTP are reserved for later tickets."
         );
         println!(
             "nunchiro agent start|prompt|send|wait|read|get|list|send-keys|cancel|ask|reply|check\nnunchiro events [--project DIR] [--since ID]\nnunchiro agent thread read THREAD\nnunchiro worktree create|open|list|remove\nnunchiro layout <command> (see nunchiro layout --help)\nnunchiro session open --project DIR -- COMMAND\nnunchiro serve restart\nnunchiro serve update\nnunchiro diagnose\nnunchiro account list [--json]\nnunchiro account codex-reset [--reason TEXT] [--account ID] [--yes]\nnunchiro account leads-any on|off\nnunchiro browser open|goto|snapshot|click|fill|select|press|scroll|tabs|tab|handoff ARGS (inside a session)"
@@ -144,7 +144,9 @@ fn run() -> Result<(), String> {
         println!(
             "nunchiro mcp -- a stdio MCP server: the agent, worktree and room verbs as tools\nnunchiro token create --scope read|supervised|full [--project DIR] [--expires 30m|12h|7d]\nnunchiro token list|revoke [--json] [ID]"
         ); // ticket 573
-        println!("nunchiro extensions list|show|new|on|off [<args>] (nunchiro extensions --help)"); // ticket 455
+        println!(
+            "nunchiro extensions list|show|new|on|off|mcp [<args>] (nunchiro extensions --help)"
+        ); // ticket 455
         println!(
             "nunchiro board list|create|add|move|done|note|self [--json] (nunchiro board --help)"
         ); // V2.5-35
@@ -491,8 +493,10 @@ fn run() -> Result<(), String> {
     if args == ["serve", "update"] {
         return serve_update(&home);
     }
-    if args == ["serve", "status"] {
-        return serve_status(&home);
+    if args == ["serve", "status"] || args == ["serve", "status", "--json"] {
+        // Scripts read the JSON: a pipe gets it without --json too, as before the record's text existed.
+        let json = args.len() == 3 || !std::io::IsTerminal::is_terminal(&std::io::stdout());
+        return serve_status(&home, json);
     }
     if args.first().map(String::as_str) == Some("update") {
         return update::run(&home, &args[1..]);
@@ -755,7 +759,7 @@ fn swap_blockers(store: &serde_json::Value) -> usize {
 }
 // V2-1b: whether a core runs, and every holder listening in this data folder with the session that records it; a
 // holder no running core serves (or that no record names) is orphaned. Reads, never starts a core.
-fn serve_status(home: &Path) -> Result<(), String> {
+fn serve_status(home: &Path, json: bool) -> Result<(), String> {
     let core = std::os::unix::net::UnixStream::connect(home.join("core.sock")).is_ok();
     // The raw file: loading it as the core does could set it aside.
     let store: serde_json::Value = std::fs::read(home.join("sessions.json"))
@@ -781,8 +785,51 @@ fn serve_status(home: &Path) -> Result<(), String> {
             })
         })
         .collect();
-    println!("{}", serde_json::json!({"core": core, "holders": holders}));
+    let record = nunchiro_core::record::read(home);
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({"core": core, "holders": holders, "record": record})
+        );
+        return Ok(());
+    }
+    let orphaned = holders.iter().filter(|h| h["orphaned"] == true).count();
+    println!(
+        "core: {}\nholders: {} ({orphaned} orphaned)",
+        if core { "running" } else { "not running" },
+        holders.len()
+    );
+    print!("{}", record_text(&record));
     Ok(())
+}
+/// The delivery record as `serve status` prints it on a terminal: per day, then per core restart.
+fn record_text(record: &nunchiro_core::record::Record) -> String {
+    let days = nunchiro_core::record::DAYS;
+    let mut text = format!("\nPrompts, last {days} days (no message text is kept)\n");
+    if record.days.is_empty() {
+        text += "  none recorded\n";
+    } else {
+        text += "  day         delivered  sent again by the core  needed a person\n";
+    }
+    for (day, d) in &record.days {
+        text += &format!(
+            "  {day}  {:>9}  {:>22}  {:>15}\n",
+            d.delivered, d.resent, d.person
+        );
+    }
+    text += &format!("\nCore restarts, last {days} days (sessions running before -> came back)\n");
+    if record.restarts.is_empty() {
+        text += "  none recorded\n";
+    }
+    for r in &record.restarts {
+        text += &format!(
+            "  {}  {} -> {}\n",
+            nunchiro_core::record::when(r.at_ms),
+            r.before,
+            r.after
+        );
+    }
+    text
 }
 // v1a-09: from a terminal, ask once, listing what the full quit ends. Scripts (no tty) and `--yes` skip it.
 fn confirm_stop(home: &Path) -> bool {

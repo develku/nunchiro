@@ -248,3 +248,26 @@ fn words_no_window_took_stay_in_front() {
         Some("earlier words\nhalf typed words")
     );
 }
+
+#[test]
+fn take_back_clears_the_paste_and_keeps_the_row() {
+    let (sender, text) = automatic_1085()[1].clone();
+    let mut f = pasted_1085("home-take-back", sender, &text, &text);
+    let id = f.id.clone();
+    let row = rows(&f).into_iter().find(|s| s.content == text).unwrap();
+    let Ok(Reply::Agent { session }) = f.core.handle(Request::AgentGet { id: id.clone() }) else {
+        panic!("no session")
+    };
+    assert!(session.take_back, "the window may offer it");
+    f.core.handle(Request::TakeBack { id: id.clone() }).unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&got(&f)),
+        String::from_utf8_lossy(&[paste_1085(&text), b"\x15\x15\x15".to_vec()].concat()),
+        "no Enter; the box cleared"
+    );
+    assert!(!f.core.pending_enter.contains_key(&id));
+    assert_eq!(send_row(&f, &row.id).status, "queued");
+    assert!(f.core.later_rows.contains_key(&row.id), "it waits as Later");
+    // Nothing left to take back.
+    assert!(f.core.handle(Request::TakeBack { id }).is_err());
+}

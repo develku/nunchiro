@@ -56,6 +56,8 @@ export interface McpServer {
   env: string[];
   /** An own server written or edited outside Nunchiro: no session gets it until removed or added again. */
   changed?: boolean;
+  /** An own server for one project folder: only that project's sessions get it. Absent: every project. */
+  project?: string;
 }
 export interface ExtList {
   dir: string;
@@ -308,7 +310,7 @@ function TurnOnSheet({ t, item, error, onCancel, onConfirm }: { t: T; item: ExtI
   );
 }
 
-function ExtensionsPage({ core, t, commands, closeSettings, current, focus }: PageContext) {
+function ExtensionsPage({ core, t, commands, closeSettings, current, focus, projects }: PageContext) {
   const [list, setList] = useState<ExtList | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -318,6 +320,9 @@ function ExtensionsPage({ core, t, commands, closeSettings, current, focus }: Pa
   const commandField = useRef<HTMLInputElement>(null); // ticket 550: the empty MCP line's button puts the cursor here
   const [command, setCommand] = useState('');
   const [added, setAdded] = useState(''); // ticket 1123 T10: the server just added, for the restart line
+  const [only, setOnly] = useState(''); // the project folder a new server is for; '' is every project
+  // A project by its folder name; by its path when two projects share that name.
+  const projectName = (p: string) => (projects.filter((q) => baseName(q) === baseName(p)).length === 1 ? baseName(p) : tilde(p));
   const { list: widgets } = useWidgetList(core);
   // Ticket 452: the item whose files are shown (one at a time), and whether the New skill form is open.
   const [open, setOpen] = useState<string | null>(null);
@@ -406,6 +411,7 @@ function ExtensionsPage({ core, t, commands, closeSettings, current, focus }: Pa
         <>
           <span className="mono">{`${s.agent}: ${tilde(escaped(joinWords(s.command)))}`}</span>
           {s.env.length > 0 && <span> · {t('settings.extensions.envHidden', { names: s.env.join(', ') })}</span>}
+          {s.project && <span> · {t('settings.extensions.mcpOnly', { project: projectName(s.project) })}</span>}
           {s.changed && <span> · {t('settings.extensions.changedOutside')}</span>}
         </>
       }
@@ -459,21 +465,24 @@ function ExtensionsPage({ core, t, commands, closeSettings, current, focus }: Pa
   const noCommand = tried && !argv?.length;
   const mcpProblem = commandProblem || (noName || noCommand ? t('settings.extensions.mcpNeed') : '');
 
+  // A server for one project reaches only that project's sessions: Restart only when the open session is in it.
+  const addedFor = list?.own.find((s) => s.name === added)?.project;
+  const restartable = live && (!addedFor || live.project === addedFor);
   // Owner 11-25 Q3: under the server just added, before the empty field (mockup T10).
   const addedLine = (
     <div className="srow ext-added">
       <p className="ok-line" role="status">
-        {t('firstUse.mcp.added', { name: added })}
+        {addedFor ? t('settings.extensions.mcpAddedFor', { name: added, project: projectName(addedFor) }) : t('firstUse.mcp.added', { name: added })}
       </p>
       <div className="ob-acts">
-        {live && (
+        {restartable && (
           <button type="button" className="btn p" data-go="restart" disabled={notIdle} aria-describedby={notIdle ? 'why-restart' : undefined} onClick={() => void restartWith(live)}>
             {t('firstUse.mcp.restart', { name: sessionName(live) })}
           </button>
         )}
-        {live && notIdle && <Why id="why-restart" reason={t('firstUse.mcp.working', { name: sessionName(live) })} />}
-        {live && !notIdle && resumes && <span className="ext-keeps">{t('firstUse.mcp.keeps')}</span>}
-        <button type="button" className={live ? 'btn' : 'btn p'} data-go="new" onClick={() => (flushSync(closeSettings), askNew(live?.project))}>
+        {restartable && notIdle && <Why id="why-restart" reason={t('firstUse.mcp.working', { name: sessionName(live) })} />}
+        {restartable && !notIdle && resumes && <span className="ext-keeps">{t('firstUse.mcp.keeps')}</span>}
+        <button type="button" className={restartable ? 'btn' : 'btn p'} data-go="new" onClick={() => (flushSync(closeSettings), askNew(addedFor ?? live?.project))}>
           {t('firstUse.mcp.new')}
         </button>
       </div>
@@ -596,7 +605,7 @@ function ExtensionsPage({ core, t, commands, closeSettings, current, focus }: Pa
               e.preventDefault();
               if (!name.trim() || !argv?.length || commandProblem) return setTried(true);
               const added = name.trim();
-              void act({ op: 'extensions_mcp_add', name: added, command: argv }).then((ok) => ok && (setName(''), setNamed(false), setCommand(''), setTried(false), setAdded(added)));
+              void act({ op: 'extensions_mcp_add', name: added, command: argv, ...(only && { project: only }) }).then((ok) => ok && (setName(''), setNamed(false), setCommand(''), setOnly(''), setTried(false), setAdded(added)));
             }}
           >
             <div className="ext-paste">
@@ -610,6 +619,17 @@ function ExtensionsPage({ core, t, commands, closeSettings, current, focus }: Pa
               {t('firstUse.mcp.name')}
               <input {...PLAIN} className="mono" aria-label={t('settings.extensions.mcpName')} aria-invalid={noName} value={name} onChange={(e) => (setName(e.target.value), setNamed(true))} />
               <span>{t('firstUse.mcp.hint')}</span>
+            </label>
+            <label className="ext-name">
+              {t('settings.extensions.mcpFor')}
+              <select className="sinp" aria-label={t('settings.extensions.mcpForLabel')} value={only} onChange={(e) => setOnly(e.target.value)}>
+                <option value="">{t('settings.extensions.mcpAllProjects')}</option>
+                {projects.map((p) => (
+                  <option key={p} value={p}>
+                    {projectName(p)}
+                  </option>
+                ))}
+              </select>
             </label>
           </form>
           {mcpProblem && (

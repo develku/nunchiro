@@ -33,6 +33,14 @@ impl Harness {
         if !command.get_envs().any(|(key, _)| key == "CODEX_HOME") {
             command.env("CODEX_HOME", home.join("codex-home"));
         }
+        let path = format!(
+            "{}/tests/fixtures:{}",
+            env!("CARGO_MANIFEST_DIR"),
+            std::env::var("PATH").unwrap()
+        );
+        if !command.get_envs().any(|(key, _)| key == "PATH") {
+            command.env("PATH", path); // a test with its own fakes puts them first
+        }
         if !command.get_envs().any(|(key, _)| key == "HOME") {
             // Ticket 1083: the default worktrees folder lies in the user's home; never the real one.
             std::fs::create_dir_all(home.join("user")).unwrap();
@@ -41,14 +49,6 @@ impl Harness {
         let core = command
             .env("NUNCHIRO_HOME", &home)
             .env("SHELL", "/bin/sh") // ticket 286: the shell an ended agent leaves
-            .env(
-                "PATH",
-                format!(
-                    "{}/tests/fixtures:{}",
-                    env!("CARGO_MANIFEST_DIR"),
-                    std::env::var("PATH").unwrap()
-                ),
-            )
             .spawn()
             .unwrap();
         let h = Self { home, core };
@@ -1875,7 +1875,8 @@ fn t1150_codex_that_will_not_run_the_outward_hook_is_not_started() {
 /// Ticket 1150 round 2 (Codex look P1): a start needs Codex's yes. A Codex that cannot be asked is refused like one
 /// that says no: a program that ends, one that prints something else, one that answers `initialize` but not the
 /// question, and one that is slower than the bound (a real Codex under a managed policy that took over a second to
-/// answer started unchecked before). Nothing is left behind, and the same Codex answering in time starts.
+/// answer started unchecked before). Nothing is left behind, and the same Codex answering late but inside the deadline
+/// starts.
 #[test]
 fn t1150_codex_that_does_not_answer_is_not_started() {
     let h = Harness::new();
@@ -1883,7 +1884,7 @@ fn t1150_codex_that_does_not_answer_is_not_started() {
         serde_json::json!({"behave": "exit"}),
         serde_json::json!({"behave": "garbage"}),
         serde_json::json!({"initialize": {}}),
-        serde_json::json!({"behave": 8}), // past the 5 s it has to answer `initialize`
+        serde_json::json!({"behave": 30}), // past the 10 s deadline (`CODEX_ASK_DEADLINE`)
     ] {
         codex_answers(&h, answers.clone());
         let refused = start_codex(&h)
@@ -1896,9 +1897,14 @@ fn t1150_codex_that_does_not_answer_is_not_started() {
         panic!("no snapshot");
     };
     assert!(sessions.is_empty(), "a refused start left a session");
-    std::fs::remove_file(h.home.join("codex-app-server.json")).unwrap();
+    // The same Codex answering yes late (a loaded runner took over 5 s) still starts.
+    codex_answers(
+        &h,
+        serde_json::json!({"behave": 5.5, "initialize": {}, "hooks/list": {"data": [{"hooks": [{
+            "key": "/<session-flags>/config.toml:pre_tool_use:0:0", "enabled": true, "trustStatus": "trusted"}]}]}}),
+    );
     let Ok(Reply::Started { session }) = start_codex(&h) else {
-        panic!("a Codex that answers did not start");
+        panic!("a Codex that answers late did not start");
     };
     h.request(Request::Close { id: session.id });
 }
@@ -1930,6 +1936,93 @@ fn t1150_asking_codex_does_not_hold_the_registry_lock() {
         };
         h.request(Request::Close { id: session.id });
     });
+}
+
+/// A slow start is answered to its caller, never given up on while the core goes on with it. A `--worktree` Codex
+/// start whose `git worktree add` takes 5 s, whose `codex --version` outlasts its 3 s wait and whose Codex says yes
+/// at 8 s takes the core over 15 s; the caller used to give up at 15 s ("Resource temporarily unavailable") and the
+/// core then started the seat anyway, so a retry made a second one.
+#[test]
+fn a_slow_codex_worktree_start_is_answered_to_its_caller() {
+    let bin = home::short("slowbin");
+    let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
+    let script = |name: &str, text: String| {
+        let path = bin.join(name);
+        std::fs::write(&path, text).unwrap();
+        std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .unwrap();
+    };
+    script(
+        "git",
+        "#!/bin/sh\ncase \" $* \" in *\" worktree add \"*) /bin/sleep 5;; esac\nexec /usr/bin/git \"$@\"\n".into(),
+    );
+    script(
+        "codex",
+        format!(
+            "#!/bin/sh\ncase \"$1\" in --version) /bin/sleep 4;; app-server) /bin/sleep 8;; esac\nexec '{fixtures}/codex' \"$@\"\n"
+        ),
+    );
+    let mut command = home::git_env::scrubbed(env!("CARGO_BIN_EXE_nunchiro"));
+    command.arg("serve").env(
+        "PATH",
+        format!(
+            "{}:{fixtures}:{}",
+            bin.display(),
+            std::env::var("PATH").unwrap()
+        ),
+    );
+    let h = Harness::with_command(None, command);
+    let project = h.home.join("repo");
+    std::fs::create_dir(&project).unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &[
+            "-c",
+            "user.name=F",
+            "-c",
+            "user.email=f@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "f",
+        ],
+    ] {
+        let ok = home::git_env::scrubbed("git")
+            .current_dir(&project)
+            .args(args)
+            .status();
+        assert!(ok.unwrap().success());
+    }
+    let started = Instant::now();
+    let reply = call(
+        &h.home,
+        Request::Start {
+            receipt: None,
+            env: Default::default(),
+            folder: None,
+            session: StartSession {
+                account: None,
+                kind: AgentKind::Codex,
+                project: project.clone(),
+                worktree: true,
+                label: String::new(),
+                args: vec![],
+                model: None,
+                effort: None,
+                resume: None,
+            },
+        },
+    );
+    let took = started.elapsed();
+    let Ok(Reply::Started { session }) = reply else {
+        panic!("after {took:?}: {reply:?}");
+    };
+    assert!(
+        took > Duration::from_secs(15),
+        "not slow enough to test: {took:?}"
+    );
+    h.request(Request::Close { id: session.id });
+    let _ = std::fs::remove_dir_all(bin);
 }
 
 #[test]

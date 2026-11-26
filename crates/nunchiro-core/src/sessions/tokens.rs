@@ -57,6 +57,7 @@ fn never(request: &Request) -> bool {
             | Request::Direct { .. }
             | Request::DraftTaken { .. }
             | Request::DraftPutBack { .. }
+            | Request::TakeBack { .. }
             | Request::CodexResetUse { .. }
             | Request::BoardSelf
             | Request::Browser { .. }

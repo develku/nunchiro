@@ -6,6 +6,7 @@ import { useSyncExternalStore, type RefObject } from 'react';
 import type { CoreClient } from '../api';
 import type { Session } from '../types';
 import { getDraft, setDraft } from '../composer-drafts';
+import { noteWrite } from './nunchiroWrites';
 
 const taken = new Set<string>();
 /** The composer's line, by session: the words that came home and the box before and after (for ⌘Z). */
@@ -45,6 +46,8 @@ export function takeDraftsHome(core: CoreClient, sessions: Session[], composer: 
       } else setDraft(s.id, after);
       const homed: Homed = { words, before, after };
       noted.set(s.id, homed);
+      // ⌘Z: the box as it was, and the words back into the agent's box (no Enter).
+      noteWrite(s.id, { before, after, undo: () => core.request({ op: 'draft_put_back', id: s.id, words }) });
       emit();
     }
     // Answered on every snapshot that still carries them (a lost answer is sent again); `at` names this hand-over.

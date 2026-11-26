@@ -452,6 +452,7 @@ impl Sessions {
         // Gap rule: why each queued row waits. Shown only, like `stopped_sends`.
         let blocked = crate::delivery::blocked(&meta.pending);
         meta.draft_home = self.drafts_home.get(&meta.id).cloned(); // home.rs
+        meta.take_back = live && self.taken_back_row(&meta.id).is_some(); // home.rs
         // Type in terminal: the agent's box is on a current screen and nothing asks.
         meta.at_box = live
             && !blocked

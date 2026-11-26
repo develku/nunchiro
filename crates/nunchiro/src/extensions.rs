@@ -8,7 +8,7 @@ use nunchiro_core::{
 };
 use std::path::Path;
 
-const USAGE: &str = "usage: nunchiro extensions list [--json] | show <id> [<path>] | new <name> --about \"<one line>\" [--hook] | on <id> [--yes] | off <id>";
+const USAGE: &str = "usage: nunchiro extensions list [--json] | show <id> [<path>] | new <name> --about \"<one line>\" [--hook] | on <id> [--yes] | off <id> | mcp | mcp add <name> [--project <dir>] -- <command> [<arg>...] | mcp remove <name>";
 
 /// Nunchiro's own two switches (stored in settings.json, not in the `extensions.enabled` list).
 const HOOKS: &str = "nunchiro-hooks";
@@ -24,6 +24,17 @@ pub fn run(
     let words: Vec<&str> = args.iter().map(String::as_str).collect();
     if matches!(words.as_slice(), [] | ["--help"]) {
         println!("{USAGE}");
+        return Ok(());
+    }
+    if words.first() == Some(&"mcp") {
+        let request = mcp_request(&words[1..])?;
+        ensure_core(home)?;
+        let Reply::Extensions { own, .. } = super::call(home, request)? else {
+            return Err("unexpected reply".into());
+        };
+        for s in &own {
+            println!("{}", mcp_line(s));
+        }
         return Ok(());
     }
     if !matches!(
@@ -180,18 +191,7 @@ pub fn run(
             else {
                 return Err("unexpected reply".into());
             };
-            // A file's text goes to a terminal: control characters other than line ends and tabs are shown as a mark.
-            let plain: String = text
-                .chars()
-                .map(|c| {
-                    if c.is_control() && c != '\n' && c != '\t' {
-                        '\u{FFFD}'
-                    } else {
-                        c
-                    }
-                })
-                .collect();
-            print!("{plain}");
+            print!("{}", marked(&text, &['\n', '\t']));
         }
         ["on", id, rest @ ..] => {
             let item = find(&items, id)?;
@@ -238,6 +238,62 @@ pub fn run(
         _ => return Err(USAGE.into()),
     }
     Ok(())
+}
+
+/// Text for a terminal: control characters other than `keep` are shown as a mark, so stored text cannot move the cursor.
+fn marked(text: &str, keep: &[char]) -> String {
+    text.chars()
+        .map(|c| {
+            if c.is_control() && !keep.contains(&c) {
+                '\u{FFFD}'
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
+/// One own server as a list line: name, scope, command, and the changed mark. Stored text may be hand-written, so it
+/// keeps no control character (a tab or line end would split the columns).
+fn mcp_line(s: &nunchiro_core::extensions::McpServer) -> String {
+    let changed = if s.changed {
+        "\t(changed outside Nunchiro: no session gets it)"
+    } else {
+        ""
+    };
+    format!(
+        "{}\t{}\t{}{changed}",
+        marked(&s.name, &[]),
+        marked(s.project.as_deref().unwrap_or("all projects"), &[]),
+        marked(&s.command.join(" "), &[])
+    )
+}
+
+/// `mcp`, `mcp add <name> [--project <dir>] -- <command>...` or `mcp remove <name>`; a relative project is from here.
+fn mcp_request(words: &[&str]) -> Result<Request, String> {
+    let (name, project, command) = match words {
+        [] => return Ok(Request::ExtensionsList),
+        ["remove", name] => {
+            return Ok(Request::ExtensionsMcpRemove {
+                name: name.to_string(),
+            });
+        }
+        ["add", name, "--", command @ ..] => (name, None, command),
+        ["add", name, "--project", dir, "--", command @ ..] => (name, Some(*dir), command),
+        _ => return Err(USAGE.into()),
+    };
+    if command.is_empty() {
+        return Err(USAGE.into());
+    }
+    let project = match project {
+        Some(dir) => Some(std::fs::canonicalize(dir).map_err(|e| format!("project {dir}: {e}"))?),
+        None => None,
+    };
+    Ok(Request::ExtensionsMcpAdd {
+        name: name.to_string(),
+        command: command.iter().map(|w| w.to_string()).collect(),
+        project,
+    })
 }
 
 /// The extensions folder, its items, and Nunchiro's own hook lines.
@@ -361,7 +417,68 @@ fn confirm() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::cut;
+    use super::{Request, cut, mcp_line, mcp_request};
+    use nunchiro_core::extensions::McpServer;
+
+    #[test]
+    fn mcp_line_marks_control_characters_so_nothing_draws_over_the_changed_mark() {
+        let s = McpServer {
+            agent: "nunchiro".into(),
+            name: "x".into(),
+            command: vec!["evil\r\u{1b}[2K".into(), "a\nb\tc".into()],
+            env: vec![],
+            changed: true,
+            project: Some("/w\r\u{1b}[1A".into()),
+        };
+        let line = mcp_line(&s);
+        assert!(
+            !line.chars().any(|c| c.is_control() && c != '\t'),
+            "{line:?}"
+        );
+        assert_eq!(
+            line,
+            "x\t/w\u{FFFD}\u{FFFD}[1A\tevil\u{FFFD}\u{FFFD}[2K a\u{FFFD}b\u{FFFD}c\t(changed outside Nunchiro: no session gets it)"
+        );
+        let plain = McpServer {
+            changed: false,
+            project: None,
+            command: vec!["db-mcp".into()],
+            ..s
+        };
+        assert_eq!(mcp_line(&plain), "x\tall projects\tdb-mcp");
+    }
+
+    #[test]
+    fn mcp_words_make_add_list_and_remove_requests() {
+        let dir = std::env::temp_dir().canonicalize().unwrap();
+        let d = dir.to_str().unwrap();
+        let req = |w: &[&str]| serde_json::to_value(mcp_request(w).unwrap()).unwrap();
+        assert_eq!(
+            req(&[]),
+            serde_json::to_value(Request::ExtensionsList).unwrap()
+        );
+        assert_eq!(
+            req(&["add", "db", "--", "db-mcp", "-v"]),
+            serde_json::json!({"op": "extensions_mcp_add", "name": "db", "command": ["db-mcp", "-v"]})
+        );
+        assert_eq!(
+            req(&["add", "db", "--project", d, "--", "db-mcp"]),
+            serde_json::json!({"op": "extensions_mcp_add", "name": "db", "command": ["db-mcp"], "project": d})
+        );
+        assert_eq!(
+            req(&["remove", "db"]),
+            serde_json::json!({"op": "extensions_mcp_remove", "name": "db"})
+        );
+        for bad in [
+            &["add", "db"][..],
+            &["add", "db", "--"],
+            &["add", "db", "db-mcp"],
+            &["rm", "db"],
+        ] {
+            assert!(mcp_request(bad).is_err(), "{bad:?}");
+        }
+        assert!(mcp_request(&["add", "db", "--project", "/no/such/folder/x", "--", "x"]).is_err());
+    }
 
     #[test]
     fn cut_keeps_a_short_line_and_ends_a_long_one_at_a_word() {

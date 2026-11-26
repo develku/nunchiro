@@ -180,13 +180,17 @@ impl Core {
             HeaderValue::from_str(&format!("nunchiro.v1, nunchiro.token.{token}")).unwrap(),
         );
         let stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        // A 100 ms read timeout polls later reads only; the handshake gets the core's own bound.
         stream
-            .set_read_timeout(Some(Duration::from_millis(100)))
+            .set_read_timeout(Some(Duration::from_secs(5)))
             .unwrap();
         let (ws, _) = tungstenite::client(req, stream).map_err(|e| match e {
             tungstenite::HandshakeError::Failure(e) => e,
             tungstenite::HandshakeError::Interrupted(_) => tungstenite::Error::ConnectionClosed,
         })?;
+        ws.get_ref()
+            .set_read_timeout(Some(Duration::from_millis(100)))
+            .unwrap();
         Ok(Window { ws })
     }
 }
