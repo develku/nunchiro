@@ -109,9 +109,12 @@ and every agent it starts, cannot read it: Claude Code says "Not logged in" and 
   `nunchiro --machine <m> serve restart` (the next core starts in the login session), and start its sessions again:
   agents that were already running stay where they were started.
 
+To macOS a core started this way is its own program, not part of the SSH login: files under Desktop, Documents or
+Downloads, or on an external volume, can need the user's consent on that Mac's screen the first time.
 A restart asked from inside a session still starts the next core from the old core's record, in the same place.
-Other systems start the core directly, and so does a home under the temp folder (a test's), unless
-`NUNCHIRO_LAUNCHCTL` names the `launchctl` executable for a fixture.
+The job also removes itself when its run ends, so a dropped connection leaves none behind. Other systems start the
+core directly, and so does a test run: one that names its keychain (`NUNCHIRO_KEYCHAIN`, as the tests and scenarios
+do) or whose home is under the temp folder, unless `NUNCHIRO_LAUNCHCTL` names the `launchctl` executable for a fixture.
 
 ## Version window
 

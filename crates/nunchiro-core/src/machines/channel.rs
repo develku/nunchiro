@@ -34,12 +34,15 @@ pub fn ssh_login() -> bool {
     SSH_LOGIN_ENV.iter().any(|k| std::env::var_os(k).is_some())
 }
 /// Whether the session a core is born in matters for `home`: on macOS, where it decides if the login keychain can be
-/// read. A test's home under the temp folder is left out, as it gets no keychain item (`start_secrets::temp_home`): a
-/// test run inside an SSH login starts its cores as everywhere else. A fixture that names its `launchctl` opts in.
+/// read. A run told which keychain to use (`NUNCHIRO_KEYCHAIN`: every test and scenario, through cargo's and the
+/// scenarios' environment) is left out, and so is a home under the temp folder (a test binary started by hand), as
+/// neither gets a login keychain item (`start_secrets`): a test run inside an SSH login starts its cores as everywhere
+/// else. A fixture that names its `launchctl` opts in.
 pub fn login_session_matters(home: &Path) -> bool {
     cfg!(target_os = "macos")
         && (std::env::var_os("NUNCHIRO_LAUNCHCTL").is_some()
-            || !crate::start_secrets::temp_home(home))
+            || std::env::var_os("NUNCHIRO_KEYCHAIN").is_none()
+                && !crate::start_secrets::temp_home(home))
 }
 /// The core of `home` was started inside an SSH login (its start record keeps its environment): it lives in that
 /// login's security session, where the login keychain cannot be read, and so does every agent it starts.

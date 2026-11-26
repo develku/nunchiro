@@ -408,8 +408,18 @@ fn run() -> Result<(), String> {
     // core starts as its child.
     if args == ["serve", "start", "--here"] {
         // launchd names its job here; the core's sessions should see what a terminal's shell sees. Single-threaded.
+        let job = env::var("XPC_SERVICE_NAME")
+            .ok()
+            .filter(|label| label.starts_with(LOGIN_JOB));
         unsafe { env::set_var("XPC_SERVICE_NAME", "0") };
-        return ensure_core_via(&home, None, CoreStart::Direct);
+        let started = ensure_core_via(&home, None, true);
+        // The job removes itself: it never outlives a caller that went away (an SSH connection that dropped).
+        if let Some(label) = job {
+            // Safety: getuid has no preconditions.
+            let job = format!("gui/{}/{label}", unsafe { libc::getuid() });
+            launchctl(&["bootout".as_ref(), job.as_ref()]);
+        }
+        return started;
     }
     if args == ["serve", "restart"] {
         // v1a-23: inside a session, a helper finishes the restart once this process has exited and the helper has
@@ -939,6 +949,18 @@ fn login_job(label: &str, exe: &str, home: &str) -> String {
 /// as any terminal's would. The job and its file are removed again before this returns: nothing stays loaded, and the
 /// core stops as every core does (`serve stop`). `Ok(false)`: no login session took the job (nobody is logged in at
 /// this Mac's screen), so the caller starts the core itself.
+const LOGIN_JOB: &str = "dev.nunchiro.core-start.";
+/// Runs `launchctl`; true when it succeeded. `NUNCHIRO_LAUNCHCTL` names the program for fixtures, as `NUNCHIRO_SSH`
+/// does for ssh.
+fn launchctl(args: &[&std::ffi::OsStr]) -> bool {
+    Command::new(env::var_os("NUNCHIRO_LAUNCHCTL").unwrap_or_else(|| "/bin/launchctl".into()))
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
 fn start_in_login_session(home: &Path) -> Result<bool, String> {
     use std::os::unix::fs::OpenOptionsExt;
     let exe = env::current_exe().map_err(|e| e.to_string())?;
@@ -948,20 +970,10 @@ fn start_in_login_session(home: &Path) -> Result<bool, String> {
     };
     // Safety: getuid has no preconditions.
     let domain = format!("gui/{}", unsafe { libc::getuid() });
-    let label = format!("dev.nunchiro.core-start.{}", std::process::id());
+    let label = format!("{LOGIN_JOB}{}", std::process::id());
     // In the temp folder: launchd refuses a job file on an external volume, where a home may be.
     let file = env::temp_dir().join(format!("{label}.plist"));
     let _ = std::fs::remove_file(&file);
-    let launchctl = |args: &[&std::ffi::OsStr]| {
-        // `NUNCHIRO_LAUNCHCTL` names the program for fixtures, as `NUNCHIRO_SSH` does for ssh.
-        Command::new(env::var_os("NUNCHIRO_LAUNCHCTL").unwrap_or_else(|| "/bin/launchctl".into()))
-            .args(args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|s| s.success())
-    };
     let loaded = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -987,7 +999,8 @@ fn start_in_login_session(home: &Path) -> Result<bool, String> {
             thread::sleep(Duration::from_millis(20));
         }
     }
-    // The core left the job as it started (its own session, `spawn_detached`), so removing the job stops nothing.
+    // The core left the job as it started (its own session, `spawn_detached`), so removing the job stops nothing. The
+    // job's own run removes it too (`serve start --here`); this covers a run that hangs.
     launchctl(&["bootout".as_ref(), format!("{domain}/{label}").as_ref()]);
     if up {
         Ok(true)
@@ -996,14 +1009,10 @@ fn start_in_login_session(home: &Path) -> Result<bool, String> {
     }
 }
 fn ensure_core_from(home: &Path, start: Option<&Start>) -> Result<(), String> {
-    let via = core_start(
-        nunchiro_core::machines::login_session_matters(home),
-        nunchiro_core::machines::ssh_login(),
-        start.is_some(),
-    );
-    ensure_core_via(home, start, via)
+    ensure_core_via(home, start, false)
 }
-fn ensure_core_via(home: &Path, start: Option<&Start>, via: CoreStart) -> Result<(), String> {
+/// `here`: this run is the login session's own (`serve start --here`), so the core starts as its child.
+fn ensure_core_via(home: &Path, start: Option<&Start>, here: bool) -> Result<(), String> {
     if std::os::unix::net::UnixStream::connect(home.join("core.sock")).is_ok() {
         return Ok(());
     }
@@ -1019,9 +1028,15 @@ fn ensure_core_via(home: &Path, start: Option<&Start>, via: CoreStart) -> Result
     let user_home = env::var_os("HOME").map(PathBuf::from);
     refuse_rc_core_start(BUILD, home, user_home.as_deref())?;
     std::fs::create_dir_all(home).map_err(|e| e.to_string())?;
-    // With no login session the core starts here as before; it then tells the machine that drives it
-    // (`machine relay --stream`), so that side can say why this Mac's agents may not be signed in.
-    if via == CoreStart::LoginSession && start_in_login_session(home)? {
+    // Chosen once the home exists (a test home is told by its place). With no login session the core starts here as
+    // before; it then tells the machine that drives it (`machine relay --stream`), so that side can say why this
+    // Mac's agents may not be signed in.
+    let via = core_start(
+        nunchiro_core::machines::login_session_matters(home),
+        nunchiro_core::machines::ssh_login(),
+        start.is_some(),
+    );
+    if !here && via == CoreStart::LoginSession && start_in_login_session(home)? {
         return Ok(());
     }
     let mut cmd = match start {
