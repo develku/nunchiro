@@ -124,6 +124,8 @@ impl Sessions {
                 // Claude's input box showed, the screen can hold an agent's own words. Any other such question stays a
                 // dialog for the user.
                 let at = std::time::Instant::now();
+                // Every pass, also those that read no dialog below: once the box showed, start dialogs are over.
+                entry.observer.screen.note_box(&text);
                 if waiting::screen::past_start(&text) {
                     entry.observer.own_folder = None;
                     entry.observer.before_box = false;

@@ -41,6 +41,9 @@ pub struct Screen {
     /// Look 1117 v11 A-S3-7: the program in front switched to the alternate screen (`CSI ? 1049 h`, 1047, 47): a
     /// full-screen program (vim, less) waiting for keys. Kept through a resize by its caller.
     pub(crate) alt: bool,
+    /// The agent's input box has shown on this screen (`note_box`): its start is over, so a start dialog's rows read
+    /// later (a transcript view, a redraw caught before its box) are no card. Kept through a reset and a resize.
+    pub(crate) started: std::sync::atomic::AtomicBool,
     // Rendered text, dropped by `feed`; the idle tick reads an unchanged screen every 50 ms.
     text_cache: std::sync::OnceLock<String>,
     // S9: what `read_once` read from this text (the permission mode footer), dropped with `text_cache`.
@@ -65,6 +68,7 @@ impl Screen {
             faint: false,
             drawn: false,
             alt: false,
+            started: std::sync::atomic::AtomicBool::new(false),
             text_cache: std::sync::OnceLock::new(),
             read_cache: std::sync::OnceLock::new(),
             fast_cache: std::sync::OnceLock::new(),
@@ -398,7 +402,24 @@ impl Screen {
             .get_or_init(|| boxed(&self.text()).then(|| self.fast_mark()))
     }
     pub fn reset(&mut self) {
+        let started = self.started();
         *self = Self::new(self.cols, self.rows);
+        self.started = started.into();
+    }
+    pub(crate) fn started(&self) -> bool {
+        self.started.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    /// Notes the agent's input box in `text` (this screen's text): a row from the first column that starts with `❯`
+    /// (Claude) or `›` (Codex) and is no numbered choice. True when it is there.
+    pub(crate) fn note_box(&self, text: &str) -> bool {
+        let boxed = text
+            .lines()
+            .any(|l| l.starts_with(['\u{276f}', '\u{203a}']) && choice_row(l).is_none());
+        if boxed {
+            self.started
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        boxed
     }
     pub fn detect(&self, kind: AgentKind) -> Option<Detection> {
         if kind == AgentKind::Shell {
@@ -435,7 +456,10 @@ impl Screen {
                     .iter()
                     .any(|p| normalized.contains(p));
         // A permission prompt whose preview shows a start dialog's words (an edit to a file holding them) stays one.
-        let trust = trust || !permission && start_dialog(text);
+        // A start dialog only before the input box ever showed, never over a permission prompt (an edit to a file
+        // holding its words), and only as the last fallback: it never changes a question, a plan or a notice.
+        let boxed = self.note_box(text);
+        let start = !permission && !boxed && !self.started() && start_dialog(text);
         let plan = choices.len() >= 2 && plan_dialog(&normalized);
         // Look 1117 v13 N13-S3-4: Codex's rate-limit nudge only switches this session's model or keeps it (its "never show
         // again" changes settings and stays terminal-only), so it is a question. Its list takes the digit alone: a digit
@@ -476,7 +500,7 @@ impl Screen {
             Kind::Question
         } else if background {
             Kind::Background
-        } else if unclassified_prompt {
+        } else if unclassified_prompt || start {
             Kind::Dialog
         } else {
             return None;
@@ -671,24 +695,25 @@ fn start_rows(text: &str) -> bool {
 }
 
 /// A start dialog other than folder trust that waits for the user before the session starts: Claude's theme picker,
-/// sign-in question and security notes, Codex's sign-in and update screens. Each is read by its own heading rows, each a
-/// whole row (words inside a row of a diff or of code are no heading), and only with no input box on the screen (a row
-/// from the first column that starts with `❯` or `›` and is no numbered choice), so the same words in an agent's output
-/// are no card.
+/// sign-in question and security notes, Codex's sign-in and update screens. Each is read by its heading row and a row of
+/// its own below it (a numbered option or its hint), each a whole row: words inside a row of a diff or of code, or a
+/// heading quoted without its dialog, are no start dialog. `detect_in` reads it only before the input box ever showed.
 fn start_dialog(text: &str) -> bool {
     let rows: Vec<&str> = text.lines().map(str::trim).collect();
     let row = |r: &str| rows.iter().any(|l| l.eq_ignore_ascii_case(r));
     let starts = |r: &str| rows.iter().any(|l| l.starts_with(r));
+    let option = |r: &str| {
+        text.lines()
+            .filter_map(choice_row)
+            .any(|(_, label, _)| label.trim_start().starts_with(r))
+    };
     let next = row("Press enter to continue");
-    let dialog = row("Choose the text style that looks best with your terminal")
-        || row("Select login method:")
-        || row("Security notes:") && next
-        || starts("Welcome to Codex") && next
-        || starts("\u{2728} Update available!") && next;
-    dialog
-        && !text
-            .lines()
-            .any(|l| l.starts_with(['\u{276f}', '\u{203a}']) && choice_row(l).is_none())
+    row("Choose the text style that looks best with your terminal")
+        && row("To change this later, run /theme")
+        || row("Select login method:") && option("Claude account with subscription")
+        || row("Security notes:") && next && option("Claude can make mistakes.")
+        || starts("Welcome to Codex") && next && option("Sign in with ChatGPT")
+        || starts("\u{2728} Update available!") && next && option("Update now")
 }
 
 /// w25-s: a start question's "No, exit" row is still on the screen, read across rows a narrow window split: the question
