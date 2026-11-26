@@ -69,8 +69,8 @@ ourselves, is 521 MiB.
 | Memory added per session, 20 shell sessions, holders counted (MiB) | 1 | 20 | 100: herdr adds 0.9 MiB per session ((31.1 - 24.5) / 7, docs/v1/figures.md:424-425). 0: v1. New: each session's `nunchiro hold` process is counted (v1 read -0.83 MiB) | run |
 | Growth of sessions.json per session (KiB) | 1 | 50 | v1, unchanged | run |
 | Snapshot reply per session (KiB) | 2 | 50 | v1, unchanged | run |
-| Seats lost per restart, 7 days (field) | 0 | 1 | 100: a peer loses none: Orca's daemon kept its 4 sessions while the app was closed and through four launches and quits of the app (peers.py 11-26). 0: one seat per restart, the UO4 fail line | owner-run, see p08 |
-| Missed prompts per 1,000 delivered, 7 days (field) | 0 | 5 | 100: cmux never types into the terminal, so it has no dropped Enter (cmux docs/agent-messages.md:3). 0: own bar: at a few hundred prompts a day, 5 per 1,000 is a miss the person must fix every day, the UO2 fail line | not yet, see p08 |
+| Seats lost per restart, 7 days (field) | 0 | 1 | 100: a peer loses none: Orca's daemon kept its 4 sessions while the app was closed and through four launches and quits of the app (peers.py 11-26). 0: one seat per restart, the UO4 fail line | owner-run: `scorecard.py record` (the core's record in `serve status --json`) |
+| Missed prompts per 1,000 delivered, 7 days (field) | 0 | 5 | 100: cmux never types into the terminal, so it has no dropped Enter (cmux docs/agent-messages.md:3). 0: own bar: at a few hundred prompts a day, 5 per 1,000 is a miss the person must fix every day, the UO2 fail line | owner-run: `scorecard.py record` (the core's record in `serve status --json`). Prompts are queued sends with their Enter (`agent prompt`, other senders' lines, queued composer sends): only those can be missed where the core can see it. The window's direct composer writes have no queue row and are in neither count |
 | Memory-pressure kills on this Mac while Nunchiro runs seats, 7 days (field) | 0 | 3 | 100: none; the Mac must stay responsive with seats running. 0: own bar: one kill every other day; a single low-memory kill froze the owner's 16 GB Mac on 2026-11-25 with five seats. Counted from the JetsamEvent reports in /Library/Logs/DiagnosticReports whose time falls while the core held at least one seat | owner-run, not yet scripted |
 | Clean hours of a 24 h soak with 20 real sessions | 24 | 0 | own bar from scripts/measure/measurelib.py:397-409 (0 crashes, 0 stuck terminals, footprint at the end at most 1.25 x minute 2), run for 24 h instead of 10 min | owner-run, see p08 |
 | Install on a fresh folder (success of 5) | 5 of 5 | 0 of 5 | v1, unchanged | run |
@@ -325,9 +325,7 @@ sandboxes. A phone client is row M2 of p01.
 | Bot task set | p35 above | bot_task_success_pct, bot_owner_touches |
 | Reach | p37 above | RE1-RE5 |
 
-Not yet measurable, with what is missing: missed prompts per 1,000 (the core logs each dropped Enter,
-crates/nunchiro-core/src/sessions/deliver.rs:154, but no count of delivered prompts to divide by); opening a
-5,000-event conversation (the page does not report that paint); prompt delivery time to a real agent (no script).
+Not yet measurable, with what is missing: opening a 5,000-event conversation (the page does not report that paint); prompt delivery time to a real agent (no script).
 
 ## Rubric checks
 
