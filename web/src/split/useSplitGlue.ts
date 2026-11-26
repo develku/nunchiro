@@ -1,5 +1,5 @@
 // Splits: the window's split glue (split out of App.tsx, needs 183).
-import { docT, errorNote, notePlain, type Note } from '../errors';
+import { docT, errorNote, heldNote, notePlain, type Note } from '../errors';
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
 import { CoreClient, type Account } from '../api';
 import { startShell } from '../pane/SidePane';
@@ -14,7 +14,7 @@ import { defaultZone, type Dir, type Layout, type Op } from '../layout/model';
 import { LayoutStore } from '../layout/store';
 import type { AgentKind, Session } from '../types';
 import { agentName } from '../chat/conversation';
-import { lastAccount, likeNew } from '../NewSession';
+import { lastAccount, likeNew, startOp } from '../NewSession';
 import { agentOff } from '../settings/agents/newDefaults';
 import { ACCOUNTS_CHANGED } from '../tree';
 import { closeable, closeEnded } from '../chrome/closeEnded';
@@ -78,8 +78,9 @@ export function useSplitGlue({ core, connected, sessions, byId, ordered, current
     }
   }, [sessions, core]);
   // SPLITS: a session started in `s`'s folder for a split: a shell, or an agent with the New Session defaults (its model
-  // and effort, as NewSession's `like`). Returns the session, or null after saying why it did not start.
-  const startFor = async (s: Session, kind: AgentKind): Promise<Session | null> => {
+  // and effort, as NewSession's `like`). `then` gets the session; a refusal is said instead. A low-memory hold's note offers
+  // Start anyway: the same start past the hold, then `then`.
+  const startFor = async (s: Session, kind: AgentKind, then: (n: Session) => void, anyway = false): Promise<void> => {
     const list = accountsP.current ?? readAccounts();
     try {
       // The account as New Session prefills it: the one last used in this project by this agent, when it has 2+.
@@ -87,11 +88,10 @@ export function useSplitGlue({ core, connected, sessions, byId, ordered, current
       const account = accounts.filter((a) => a.agent === kind).length < 2 ? null : lastAccount(ordered, kind, s.project, accounts);
       // Ticket 810: a shell gets no label, so it reads as the catalogue's untitled terminal (an English "split shell N" did).
       const extra = kind === 'shell' ? {} : { ...likeNew(s, ordered, kind, s.project), ...(account ? { account } : {}) };
-      const reply = (await core.request({ op: 'start', session: { kind, project: s.cwd, ...extra, resume: null } })) as { session?: Session };
-      return reply.session ?? null;
+      const reply = (await core.request(startOp({ op: 'start', session: { kind, project: s.cwd, ...extra, resume: null } }, anyway))) as { session?: Session };
+      if (reply.session) then(reply.session);
     } catch (e) {
-      setPaneNote(errorNote(kind === 'shell' ? docT()('err.note.shellNotStarted', { error: notePlain(docT(), e) }) : docT()('err.note.agentNotStarted', { agent: agentName(kind), error: notePlain(docT(), e) }), e));
-      return null;
+      setPaneNote(heldNote(docT(), e, agentName(kind), () => void startFor(s, kind, then, true)) ?? errorNote(kind === 'shell' ? docT()('err.note.shellNotStarted', { error: notePlain(docT(), e) }) : docT()('err.note.agentNotStarted', { agent: agentName(kind), error: notePlain(docT(), e) }), e));
     }
   };
   // Look 1117 A S2-3: a shell opened in a split takes the focus (given at its open), so "Close the focused split" and the
@@ -115,14 +115,13 @@ export function useSplitGlue({ core, connected, sessions, byId, ordered, current
     const at = current;
     // Ticket 358: never an agent turned off; the other one, else a shell.
     const agent = at.kind === 'shell' || agentOff(at.kind) ? ((['claude', 'codex'] as const).find((k) => !agentOff(k)) ?? 'shell') : at.kind;
-    void startFor(at, how === 'terminal' ? 'shell' : agent).then((n) => n && (addSplit(at.id, side, `session:${n.id}`), focusShell(n)));
+    void startFor(at, how === 'terminal' ? 'shell' : agent, (n) => (addSplit(at.id, side, `session:${n.id}`), focusShell(n)));
   };
   const pickSplit = (sp: Split, c: Choice) => {
     const at = current;
     if (!at) return;
     if (c !== 'claude' && c !== 'codex' && c !== 'shell') return replaceSplit(at.id, sp.id, c);
-    void startFor(at, c).then((n) => {
-      if (!n) return;
+    void startFor(at, c, (n) => {
       if (splitsOf(at.id).some((x) => x.id === sp.id)) return (replaceSplit(at.id, sp.id, `session:${n.id}`), focusShell(n));
       endWithSplit(n); // the split closed while the session started
     });

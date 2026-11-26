@@ -9,6 +9,11 @@ import { copyText } from './terminal/clipboard';
 
 type T = (key: Key, args?: Record<string, string | number>) => string;
 
+/** pressure.rs HELD*: a new seat held while the Mac is low on memory. */
+const LOW_MEMORY = /^(Your|This) Mac is low on memory, so the new session was not started/;
+/** Whether a start was refused by the low-memory hold, which the owner's "Start anyway" passes. */
+export const isLowMemory = (e: unknown) => LOW_MEMORY.test(rawError(e));
+
 // [pattern, what happened, what to do]. The web gets only the core's message string (no code), so patterns are the
 // core's own wording. Order matters: the first match wins. A named group (`(?<name>...)`) fills that placeholder.
 export const KNOWN: [RegExp, Key, Key?][] = [
@@ -63,7 +68,7 @@ export const KNOWN: [RegExp, Key, Key?][] = [
   [/^too many grouped projects$/, 'err.groupedMax', 'err.groupedMax.todo'], // tree.rs:179
   [/^session holder did not answer; the agent still runs$/, 'err.holderSilent', 'err.later.todo'], // sessions.rs:4189
   [/^codex did not answer in time$/, 'err.codexSlow', 'err.later.todo'], // codex_reset.rs:219
-  [/^(Your|This) Mac is low on memory, so the new session was not started/, 'err.lowMemory', 'err.lowMemory.todo'], // pressure.rs HELD*
+  [LOW_MEMORY, 'err.lowMemory', 'err.lowMemory.todo'], // pressure.rs HELD*
   [/^This Mac is low on memory, so the scheduled run was not started/, 'err.lowMemorySchedule', 'err.lowMemorySchedule.todo'], // pressure.rs HELD_SCHEDULE
   [/^too many themes loading; try again$/, 'err.themesBusy', 'err.later.todo'], // themes_online.rs:318
   // Ticket 551: files/search.rs:63 and :66, the two refusals a search shows.
@@ -200,8 +205,14 @@ export const docT = () => makeT((typeof document === 'undefined' ? 'en' : docume
 
 /** A status-bar note: plain words, and for a failure the raw text it shows as the note's tooltip. */
 /** `session`: the session the failure is about (v9-Home-S3-5): the note leaves when another one is shown, and fades. */
-export type Note = string | { text: string; details: string; session?: string };
+/** `action`: one quiet button after the words (a held start's Start anyway); a press closes the note and runs it. */
+export type Note = string | { text: string; details: string; session?: string; action?: { label: string; tip: string; run: () => void } };
 export const errorNote = (text: string, e: unknown, session?: string): Note => ({ text, details: rawError(e), ...(session ? { session } : {}) });
+
+/** A window start's low-memory hold as a note naming the agent, with Start anyway (`again`: the same start, past the hold);
+ *  null for any other refusal. */
+export const heldNote = (t: T, e: unknown, agent: string, again: () => void): Note | null =>
+  isLowMemory(e) ? { text: t('err.lowMemory.agent', { agent }), details: rawError(e), action: { label: t('err.startAnyway'), tip: t('err.startAnyway.tip'), run: again } } : null;
 
 /** What happened, what to do, and the raw text for Details. `foreign`: the text comes from another program (SSH), so it is
  *  never matched to a sentence about Nunchiro. Anything not listed gets the generic line and keeps its words in Details. */
@@ -294,6 +305,11 @@ export function FailedNote({ t, note, onDismiss }: { t: T; note: Exclude<Note, s
       <button type="button" className="pane-note" data-tip={note.details} onClick={() => void copyText(note.details).then(setCopied)}>
         {copied === null ? note.text : t(copied ? 'about.copied' : 'about.copyFailed')}
       </button>
+      {note.action && (
+        <button type="button" className="btn pane-note-act" data-tip={note.action.tip} onClick={() => (onDismiss?.(), note.action!.run())}>
+          {note.action.label}
+        </button>
+      )}
       {onDismiss && (
         <button type="button" className="pane-note-x" aria-label={t('tree.dismiss')} onClick={onDismiss}>
           ×

@@ -2176,7 +2176,10 @@ fn the_window_starts_a_held_seat_anyway() {
     let refused = held["Err"].as_str().unwrap_or_else(|| panic!("{held}"));
     assert!(refused.contains("memory"), "{refused}");
     assert!(refused.ends_with("or start it anyway"), "{refused}");
-    let anyway = window_request(&h, serde_json::json!({"op": "start_anyway", "start": start}));
+    let anyway = window_request(
+        &h,
+        serde_json::json!({"op": "start_anyway", "start": start}),
+    );
     assert_eq!(anyway["Ok"]["type"], "started", "{anyway}");
     let id = anyway["Ok"]["session"]["id"].as_str().unwrap().to_string();
     h.request(Request::Close { id });

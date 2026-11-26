@@ -11,7 +11,8 @@ import { chordOf, label, merge, type Bindings } from './keys';
 import { pickFolder } from './pickFolder';
 import { FILE_ACCESS, FolderAccess } from './PermissionNeeded';
 import { makeT, type Lang, type T } from './i18n';
-import { ErrorDetails, errorNote, notePlain, plainError, type Note, rawError } from './errors';
+import { ErrorDetails, errorNote, heldNote, isLowMemory, notePlain, plainError, type Note, rawError } from './errors';
+import { agentName } from './chat/conversation';
 import { sessionName } from './Sidebar';
 import type { WithLog } from './picker/Picker';
 import type { AgentKind, Session } from './types';
@@ -80,14 +81,26 @@ export function lastAccount(ordered: Session[], kind: AgentKind, project: string
 /** The keys' own start (New terminal, Claude, Codex): a session of this kind in the current session's project, with that
  * project's last account and the current model and effort, as the popover's rows start it. Returns the session or throws. */
 /** Ticket 610: with no session tab open (the Room tab), `project` is the selected project's and the session starts there. */
-export async function quickStart(core: CoreClient, ordered: Session[], current: Session | null, kind: 'shell' | 'claude' | 'codex', project = current?.project) {
+export async function quickStart(core: CoreClient, ordered: Session[], current: Session | null, kind: 'shell' | 'claude' | 'codex', project = current?.project, anyway = false) {
   if (agentOff(kind) || !project) return; // ticket 358: its key does nothing and says nothing
   const agent = kind !== 'shell';
   const accounts = agent ? await core.accounts().then((r) => r.accounts, () => [] as Account[]) : [];
   const account = agent ? lastAccount(ordered, kind, project, accounts) : null;
   const like = agent ? likeNew(current, ordered, kind, project) : { model: null, effort: null };
-  const reply = (await core.request({ op: 'start', session: { kind, project, ...like, resume: null, ...(account ? { account } : {}) } })) as { session?: Session };
+  const reply = (await core.request(startOp({ op: 'start', session: { kind, project, ...like, resume: null, ...(account ? { account } : {}) } }, anyway))) as { session?: Session };
   return reply.session;
+}
+
+/** A window start as sent: `anyway` wraps it as the owner's Start anyway, past a low-memory hold. */
+export const startOp = (start: { op: 'start'; [k: string]: unknown }, anyway = false) => (anyway ? { op: 'start_anyway', start } : start);
+
+/** quickStart from the tree's +, the keys and the palette: the started session opens; a refusal is the status bar's note,
+ *  and a low-memory hold's note offers Start anyway, which runs the same start past it. */
+export function quickStartNoted(core: CoreClient, ordered: Session[], current: Session | null, kind: 'shell' | 'claude' | 'codex', project: string | undefined, opened: (s: Session) => void, setNote: (n: Note) => void, t: T, anyway = false) {
+  void quickStart(core, ordered, current, kind, project, anyway).then(
+    (s) => s && opened(s),
+    (e) => setNote(heldNote(t, e, agentName(kind), () => quickStartNoted(core, ordered, current, kind, project, opened, setNote, t, true)) ?? errorNote(t('err.note.notStarted', { error: notePlain(t, e) }), e)),
+  );
 }
 
 /** The catalogue for <html lang>, which App sets from the language setting; redone when it changes. */
@@ -152,6 +165,7 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [details, setDetails] = useState(''); // ticket 476: the raw reason, under Details
+  const [held, setHeld] = useState<{ line: string; run: () => void } | null>(null); // a low-memory hold's line and its Start anyway
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [listed, setListed] = useState(false); // the account list came back (or failed): a `go` start picks its account then
   const [acp, setAcp] = useState<AcpRow[]>([]);
@@ -257,12 +271,13 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
         .catch((e) => onNote?.(errorNote(t('err.note.cardAttach', { error: notePlain(t, e) }), e)));
     }
   };
-  const start = async (kind: AgentKind, opts: { acp?: string; account?: string | null } = {}) => {
+  const start = async (kind: AgentKind, opts: { acp?: string; account?: string | null; anyway?: boolean } = {}) => {
     if (!path && kind !== 'shell') return say('newtab.pickFolder'); // v25f F10: a shell needs no folder (the core starts it in $HOME)
     if (busy) return;
     setBusy(true);
     setError('');
     setDetails('');
+    setHeld(null);
     try {
       // Ticket 980: on a machine the remote core starts it with its own accounts, model and effort (this Mac's do not apply there).
       const like = !machine && (kind === 'claude' || kind === 'codex') ? likeNew(current, ordered, kind, path) : { model: null, effort: null };
@@ -270,13 +285,20 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
       const session = { kind, project: path, ...like, resume: null, ...(account ? { account } : {}), ...(opts.acp ? { args: [opts.acp] } : {}) };
       const wt = place === 'worktree' && canWorktree ? await newWorktree(path) : place === 'given' && given && !machine ? given.path : null;
       if (place === 'worktree' && canWorktree && !wt) return setBusy(false);
-      const request = { op: 'start', session, ...(wt ? { folder: wt } : {}) };
+      const request = startOp({ op: 'start', session, ...(wt ? { folder: wt } : {}) }, opts.anyway);
       const reply = (await core.request(machine ? { op: 'remote', machine, request } : request)) as { session?: Session };
       // The remote core's row does not name its machine; the tab and the tree know it by this.
       finish(reply.session && machine ? { ...reply.session, machine } : reply.session);
     } catch (e) {
       const m = rawError(e);
       if (m.startsWith(FILE_ACCESS)) setError(m); // F15: said with the permission steps below
+      // Held for low memory: the plain line and Start anyway (this Mac's hold only; another machine's core says its own).
+      else if (isLowMemory(m) && !machine) {
+        const line = plainError(t, m);
+        setError(line);
+        setDetails(m);
+        setHeld({ line, run: () => void start(kind, { ...opts, anyway: true }) });
+      }
       else (say('newtab.error', { error: plainError(t, m) }), setDetails(m));
       setBusy(false);
     }
@@ -520,6 +542,13 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
         error && (
           <span className="conflict nt-error" role="alert">
             {error}
+            {held?.line === error && (
+              <span className="nt-held">
+                <button type="button" className="btn" data-tip={t('err.startAnyway.tip')} onClick={held.run}>
+                  {t('err.startAnyway')}
+                </button>
+              </span>
+            )}
             <ErrorDetails t={t} details={details} />
           </span>
         )

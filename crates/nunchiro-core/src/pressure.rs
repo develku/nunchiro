@@ -9,8 +9,8 @@ use std::{
 
 /// The sentence a held start answers the owner's CLI with.
 pub const HELD: &str = "Your Mac is low on memory, so the new session was not started. Close something and try again, or start it anyway with `nunchiro agent start --anyway`";
-/// The window's: it has no "Start anyway" yet, so it names the CLI's.
-pub const HELD_WINDOW: &str = "Your Mac is low on memory, so the new session was not started. Close something and try again, or run `nunchiro agent start --anyway`";
+/// The window's: its note carries a "Start anyway" button.
+pub const HELD_WINDOW: &str = "Your Mac is low on memory, so the new session was not started. Close something and try again, or start it anyway";
 /// A session's: it cannot start anyway, so it is not told to.
 pub const HELD_SESSION: &str =
     "This Mac is low on memory, so the new session was not started. Try again once memory is free";
@@ -55,8 +55,8 @@ fn read() -> Option<i32> {
 pub(crate) enum Who {
     /// The owner's CLI, which can say `--anyway`.
     Owner,
-    /// The window, which has no override yet: held at critical only, since warning can be common and sticky on a Mac
-    /// running several seats.
+    /// The window, which overrides with its own "Start anyway": held at critical only, since warning can be common and
+    /// sticky on a Mac running several seats.
     Window,
     /// A session or a lead: no override.
     Session,
@@ -74,6 +74,24 @@ fn allowed(level: Option<i32>, who: Who, anyway: bool) -> Result<(), &'static st
         }),
         _ => Ok(()),
     }
+}
+
+/// The start a `StartAnyway` carries, and whether it was one: the owner's alone (the CLI's `--anyway`, the window's
+/// "Start anyway"); a session's token is refused.
+pub(crate) fn unwrap_anyway(
+    request: crate::api::Request,
+    owner: bool,
+) -> Result<(crate::api::Request, bool), String> {
+    let crate::api::Request::StartAnyway { start } = request else {
+        return Ok((request, false));
+    };
+    if !owner {
+        return Err(OWNER_ONLY.into());
+    }
+    let crate::api::Request::Start { .. } = *start else {
+        return Err("start_anyway carries a start only".into());
+    };
+    Ok((*start, true))
 }
 
 /// The check at a new seat's start; `path` names the start in the one log line a hold writes.
@@ -194,9 +212,9 @@ mod tests {
         }
         assert_eq!(allowed(Some(2), Who::Owner, false), Err(HELD));
         assert_eq!(allowed(Some(2), Who::Session, false), Err(HELD_SESSION));
-        // The window has no override yet: warning does not hold it, critical does, naming the CLI's way.
+        // Warning does not hold the window, critical does, pointing at its own button rather than the CLI.
         assert_eq!(allowed(Some(2), Who::Window, false), Ok(()));
-        assert!(HELD_WINDOW.contains("nunchiro agent start --anyway"));
+        assert!(HELD_WINDOW.ends_with("or start it anyway"));
         assert!(!HELD_SESSION.contains("anyway"));
     }
 

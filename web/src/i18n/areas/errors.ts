@@ -69,6 +69,9 @@ declare module '../index' {
     'err.note.undo': true;
     'err.lowMemory': true;
     'err.lowMemory.todo': true;
+    'err.lowMemory.agent': true;
+    'err.startAnyway': true;
+    'err.startAnyway.tip': true;
     'err.lowMemorySchedule': true;
     'err.lowMemorySchedule.todo': true;
   }
@@ -143,7 +146,10 @@ export const en = {
   'err.note.undo': 'Could not undo: {error}',
   // English only until release; other languages fall back to these.
   'err.lowMemory': 'Your Mac is low on memory, so the new session was not started.',
-  'err.lowMemory.todo': 'Close something and try again, or run nunchiro agent start --anyway.',
+  'err.lowMemory.todo': 'Close something and try again, or start it anyway.',
+  'err.lowMemory.agent': 'Your Mac is low on memory, so {agent} was not started.',
+  'err.startAnyway': 'Start anyway',
+  'err.startAnyway.tip': 'Start it now. Your Mac may slow down or close other apps.',
   'err.lowMemorySchedule': 'Your Mac is low on memory, so the scheduled run was not started.',
   'err.lowMemorySchedule.todo': 'Close something, then run it again.',
 };
