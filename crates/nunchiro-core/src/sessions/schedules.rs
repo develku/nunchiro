@@ -245,7 +245,7 @@ impl Sessions {
         let twice = entry
             .earlier
             .iter()
-            .find(|l| l.result != Some(crate::schedule::Outcome::Skipped))
+            .find(|l| !l.result.is_some_and(crate::schedule::Outcome::no_run))
             .is_some_and(|l| l.result == Some(crate::schedule::Outcome::Failed));
         let reason = if twice {
             format!("{reason} · second time in a row")
@@ -295,13 +295,8 @@ impl Sessions {
             !all.iter().any(|e| {
                 e.id == id
                     && e.last.as_ref().is_some_and(|l| {
-                        matches!(
-                            l.result,
-                            Some(
-                                crate::schedule::Outcome::Failed
-                                    | crate::schedule::Outcome::Skipped
-                            )
-                        )
+                        l.result
+                            .is_some_and(|r| r == crate::schedule::Outcome::Failed || r.no_run())
                     })
             })
         });

@@ -422,7 +422,7 @@ fn a_mode_four_seat_takes_no_scheduled_task() {
         &mate.id,
         Some("read the mail"),
         None,
-        Opener::Schedule("brief"),
+        Opener::Schedule("brief", crate::pressure::Who::Session),
     )
     .err()
     .unwrap();
@@ -479,7 +479,7 @@ fn a_seat_from_before_the_lock_is_replaced_not_reused() {
         &mate.id,
         Some("read the mail"),
         None,
-        Opener::Schedule("brief"),
+        Opener::Schedule("brief", crate::pressure::Who::Session),
     )
     .unwrap()
     .session;

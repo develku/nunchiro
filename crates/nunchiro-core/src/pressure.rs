@@ -14,6 +14,8 @@ pub const HELD_WINDOW: &str = "Your Mac is low on memory, so the new session was
 /// A session's: it cannot start anyway, so it is not told to.
 pub const HELD_SESSION: &str =
     "This Mac is low on memory, so the new session was not started. Try again once memory is free";
+/// A schedule's run that was held: its stored reason and the Run now refusal (a schedule has no `--anyway`).
+pub const HELD_SCHEDULE: &str = "This Mac is low on memory, so the scheduled run was not started. Close something, then run it again";
 /// An agent's own token asking to start anyway.
 pub const OWNER_ONLY: &str = "Only you can start a session anyway; a session cannot";
 /// Debug builds only: a test core's faked reading, a level number or "fail". A debug build without it reads normal, so
@@ -76,14 +78,77 @@ fn allowed(level: Option<i32>, who: Who, anyway: bool) -> Result<(), &'static st
 
 /// The check at a new seat's start; `path` names the start in the one log line a hold writes.
 pub(crate) fn check(who: Who, anyway: bool, path: &str) -> Result<(), String> {
-    let level = level();
-    allowed(level, who, anyway).map_err(|held| {
-        eprintln!(
-            "memory pressure: held a new seat (level {}, {path})",
-            level.unwrap_or(0)
-        );
+    checked(level(), who, anyway, path, None)
+}
+
+/// The levels last logged for a start retried by itself (`check_once`), by its key.
+static LOGGED: std::sync::Mutex<std::collections::BTreeMap<String, i32>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// `check_start` for a start the core retries by itself (the auto-started Reviewer, every pass): its hold is logged
+/// once per `key` until it starts or the level changes.
+pub(crate) fn check_once(
+    start: &crate::api::StartSession,
+    who: Who,
+    path: &str,
+    key: &str,
+) -> Result<(), String> {
+    if start.kind == crate::api::AgentKind::Shell || start.resume.is_some() {
+        return Ok(());
+    }
+    checked(level(), who, false, path, Some(key))
+}
+
+/// `allowed`, and its log line; with a `key`, a hold already logged at this level is not logged again.
+fn checked(
+    level: Option<i32>,
+    who: Who,
+    anyway: bool,
+    path: &str,
+    key: Option<&str>,
+) -> Result<(), String> {
+    let result = allowed(level, who, anyway);
+    let level = level.unwrap_or(0);
+    let log = key.is_none_or(|key| first_hold(key, result.is_err(), level));
+    result.map_err(|held| {
+        if log {
+            eprintln!("memory pressure: held a new seat (level {level}, {path})");
+        }
         held.to_string()
     })
+}
+
+/// Whether `key`'s hold at `level` is news: the first one, or one at another level. A start that went through
+/// forgets it.
+fn first_hold(key: &str, held: bool, level: i32) -> bool {
+    let Ok(mut logged) = LOGGED.lock() else {
+        return true;
+    };
+    match held {
+        false => {
+            logged.remove(key);
+            false
+        }
+        true => logged.insert(key.into(), level) != Some(level),
+    }
+}
+
+/// The check for a start that may be a new seat: a plain terminal and a resumed conversation are never held.
+pub(crate) fn check_start(
+    start: &crate::api::StartSession,
+    who: Who,
+    anyway: bool,
+    path: &str,
+) -> Result<(), String> {
+    if start.kind == crate::api::AgentKind::Shell || start.resume.is_some() {
+        return Ok(());
+    }
+    check(who, anyway, path)
+}
+
+/// Whether a start's refusal is a memory-pressure hold (a schedule's run reads "held", not failed).
+pub(crate) fn is_held(error: &str) -> bool {
+    [HELD, HELD_WINDOW, HELD_SESSION, HELD_SCHEDULE].contains(&error)
 }
 
 /// Where macOS writes its JetsamEvent reports.
@@ -133,6 +198,16 @@ mod tests {
         assert_eq!(allowed(Some(2), Who::Window, false), Ok(()));
         assert!(HELD_WINDOW.contains("nunchiro agent start --anyway"));
         assert!(!HELD_SESSION.contains("anyway"));
+    }
+
+    #[test]
+    fn a_retried_hold_is_logged_once_per_level_until_it_starts() {
+        let key = format!("task-{}", crate::store::new_id().unwrap());
+        assert!(first_hold(&key, true, 2));
+        assert!(!first_hold(&key, true, 2), "the same hold again");
+        assert!(first_hold(&key, true, 4), "the level changed");
+        assert!(!first_hold(&key, false, 1), "a start is no hold");
+        assert!(first_hold(&key, true, 4), "held again after it started");
     }
 
     #[test]

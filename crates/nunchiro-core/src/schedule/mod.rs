@@ -101,6 +101,15 @@ pub enum Outcome {
     Failed,
     /// Ticket 1002: more than 2 h late (`LATE_MS`), so not run.
     Skipped,
+    /// Not run: the Mac was low on memory when it was due (`pressure`); `reason` says so.
+    Held,
+}
+impl Outcome {
+    /// A slot that was no run: too late, or held for low memory. It neither ends a failed run's card nor breaks a
+    /// streak of failures.
+    pub(crate) fn no_run(self) -> bool {
+        matches!(self, Outcome::Skipped | Outcome::Held)
+    }
 }
 
 /// Ticket 993: when an entry runs. `at` and `daily` as on `Entry`; `days` only on a repeating one.
@@ -656,7 +665,7 @@ impl Schedules {
                     .ok_or("no such schedule")?;
                 let old = all.remove(at);
                 // A failed run is the user's cue to act; the edit is that act, so the failure does not outlive it.
-                let ran = |l: &Last| l.result != Some(Outcome::Failed);
+                let ran = |l: &Last| !matches!(l.result, Some(Outcome::Failed | Outcome::Held));
                 // Fired: its run is at or after its time. Run now before that time is no fire.
                 let fired = !old.daily && old.last.as_ref().is_some_and(|l| l.at >= old.next_ms);
                 (entry.paused, entry.last) = (old.paused && !fired, old.last.filter(ran));
@@ -940,11 +949,13 @@ pub fn fire(
         }
         Err(_) => return vec![],
     };
+    // "Run it again" is the owner's press in the window; a due run starts by itself.
+    use crate::pressure::Who;
     for entry in &again {
-        let _ = run_entry(registry, stopping, entry, now_ms);
+        let _ = run_entry(registry, stopping, entry, now_ms, Who::Window);
     }
     due.into_iter()
-        .map(|entry| run_entry(registry, stopping, &entry, now_ms))
+        .map(|entry| run_entry(registry, stopping, &entry, now_ms, Who::Session))
         .collect()
 }
 
@@ -954,11 +965,18 @@ fn run_entry(
     stopping: &AtomicBool,
     entry: &Entry,
     now_ms: u64,
+    who: crate::pressure::Who,
 ) -> Result<String, String> {
     let result = if stopping.load(Ordering::SeqCst) {
         Err("core is stopping".into())
     } else {
-        start(registry, stopping, entry)
+        start(registry, stopping, entry, who)
+    };
+    let held = result.as_ref().is_err_and(|e| crate::pressure::is_held(e));
+    // A schedule's own words: the start's sentence names `agent start --anyway`, which runs no schedule.
+    let result = match held {
+        true => Err(crate::pressure::HELD_SCHEDULE.to_string()),
+        false => result,
     };
     if let Err(e) = &result {
         eprintln!("schedule {}: {e}", entry.id);
@@ -970,14 +988,18 @@ fn run_entry(
     let last = Last {
         session: result.as_ref().ok().cloned(),
         at: now_ms,
-        result: reason.is_some().then_some(Outcome::Failed),
+        result: reason.is_some().then_some(match held {
+            true => Outcome::Held,
+            false => Outcome::Failed,
+        }),
         reason,
     };
     if let Ok(mut sessions) = lock(registry) {
         if let Some(session) = &last.session {
             sessions.scheduled_run(session, &entry.id);
         }
-        let failed = last.reason.clone();
+        // A held run is no failure: no card, its record says why.
+        let failed = last.reason.clone().filter(|_| !held);
         sessions.schedules.record(entry, last);
         // Look 11-17 v8 (Home S2-B): a failed run is the owner's card; a good one takes the card of an earlier
         // failure away (`schedules_changed`).
@@ -1003,6 +1025,7 @@ pub(crate) fn run_now(registry: &Mutex<Sessions>, id: &str) -> crate::api::Respo
         &AtomicBool::new(false),
         &entry,
         crate::queue::now_ms(),
+        crate::pressure::Who::Window, // the owner's press in the window
     )?;
     Ok(crate::api::Reply::Schedules {
         schedules: lock(registry)?.schedules.shown()?,
@@ -1043,6 +1066,7 @@ fn start(
     registry: &Mutex<Sessions>,
     stopping: &AtomicBool,
     entry: &Entry,
+    who: crate::pressure::Who,
 ) -> Result<String, String> {
     let run = &entry.run;
     // A teammate's schedule opens its seat (team.rs): the teammate as it is now, one session per seat, the task in
@@ -1054,7 +1078,7 @@ fn start(
             &id,
             Some(task),
             run.level,
-            crate::team::Opener::Schedule(&entry.id),
+            crate::team::Opener::Schedule(&entry.id, who),
         )
         .map(|opened| opened.session.id)
         // Ticket 993: the list shows this line; the id alone says nothing to the user.
@@ -1066,6 +1090,7 @@ fn start(
     // A model retired since the entry was made is this run's failure, not the whole file's (`check_stored`).
     run.check_model()?;
     let (session, first) = (run.start(), run.task.clone());
+    crate::pressure::check_start(&session, who, false, "schedule")?;
     let launch = {
         let sessions = lock(registry)?;
         // The known projects now, not when it was made: a project gone since then is refused.
