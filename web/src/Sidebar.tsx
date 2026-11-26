@@ -9,6 +9,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent as R
 import { buildTree, isReviewer, leadWorkers, withNames, withoutSeatAsks, withoutClosedHeads, byUrgency, cleanable, EXPAND_ALL, failedIn, foldGroup, expandedList, groupFolded, leaves, place, rowState, sameKeys, urgencyOf, withListed, listedName, type Group, type Machine, type ProjectGroup, type RowState, type Worktree, type WorktreeFact } from './tree';
 import { asks, decisionLines, placeOfCard, teamWaiting, waitingItems, type Item, type Line } from './tree/decisions'; // V2-8e
 import { DecisionRow, type OnAnswer } from './tree/DecisionLine'; // V2-8e
+import { Knocks, setKnown } from './queue/Knock';
 import { CleanupLine, HeadName, NeedYou, needTip, teamOpen, WtRow } from './tree/RowIcon';
 import { Gather, placeOf, Strip, stripSessions, urgentQueue, useHidden, type Tone } from './tree/strip'; // ticket 388
 import { DoneBars, DonePopover, JustRow } from './tree/DoneBars'; // ticket 1022 (replaces ticket 294's "N done" fold)
@@ -129,6 +130,7 @@ export function Tree(p: Props) {
   const listed = p.wt?.list;
   // Ticket 990 slice d: while a Home teammate exists, the Home folder's sessions sit in the Home group, not as a project.
   const team = useTeam(p.core as CoreClient, !!p.core);
+  useEffect(() => setKnown(p.sessions), [p.sessions]); // the chat names a delivered message's sender (queue/Knock.tsx)
   useAcpNames(p.core, p.sessions.some((s) => s.kind === 'acp' && !!s.level)); // ticket 994
   // A store that throws (private window, blocked site data) must not take the window down: the suggestion shows, off for this run only.
   const [leadOff, setLeadOff] = useState(() => { try { return localStorage.getItem(LEAD_OFF) === '1'; } catch { return false; } });
@@ -489,6 +491,10 @@ export function Tree(p: Props) {
         ⋯
       </button>
     );
+    // The knock: another sender's message waiting for a gap in this row's session (queue/Knock.tsx).
+    // The live session, not the held tree's copy: a knock shows while the tree holds still, as the bars and counts do.
+    const knocked = sessions.length === 1 ? byId.get(sessions[0].id) : undefined;
+    const knocks = knocked && p.core ? <Knocks session={knocked} sessions={p.sessions} team={team} core={p.core as CoreClient} t={t} /> : null;
     const wrap = (row: ReactNode) =>
       !l || !wt ? (
         // A row that is no managed worktree clears the selection: the menu and palette then act on its own project.
@@ -496,6 +502,7 @@ export function Tree(p: Props) {
           {row}
           {pill}
           {kidsOn}
+          {knocks}
           {main && more}
         </span>
       ) : (
@@ -513,7 +520,7 @@ export function Tree(p: Props) {
             else if ((e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.altKey && !e.ctrlKey) (e.preventDefault(), wt.remove(l.path));
           }}
           onClickCapture={(e) => {
-            if ((e.target as Element).closest('.wtmore, .needyou')) return;
+            if ((e.target as Element).closest('.wtmore, .needyou, .knocks')) return;
             if (e.detail === 0) {
               // Enter or Space on the row
               if (!sid) (e.stopPropagation(), openIt());
@@ -532,6 +539,7 @@ export function Tree(p: Props) {
           {row}
           {pill}
           {kidsOn}
+          {knocks}
           {more}
         </span>
       );

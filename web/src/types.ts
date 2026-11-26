@@ -192,7 +192,13 @@ export interface Session {
   folder_gone?: boolean;
   /** Look 1117 v10 N10-S3-3: an ended session's ask that ended with it unanswered, in its first words (api.rs `ended_ask`). */
   ended_ask?: string;
+  /** The core's send queue (api.rs `send_queue`): rows not delivered yet, by any sender. */
+  send_queue?: SendRow[];
+  /** Why each queued row waits, by send id (api.rs `send_waits`, snapshot only). */
+  send_waits?: Record<string, string>;
 }
+/** One row of a session's send queue or log (delivery.rs `Send`). `sender` is `user`, a session id, `core` or `widget:<name>`. */
+export type SendRow = { id: string; sender: string; at: number; content: string; status: string; submit?: boolean; settle?: string | null };
 /** The session's folder was under no git repository when it started (the core's `start_commit`), or is gone from disk
  *  (look 1117 v13 Home S3-5: a removed project folder read "harbor / main"): it has no checkout to name. */
 export const noCheckout = (s: Session) => s.start_commit?.kind === 'not_git' || !!s.folder_gone;
