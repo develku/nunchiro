@@ -2217,6 +2217,30 @@ fn the_window_opens_a_held_teammate_seat_anyway() {
     h.request(Request::Close { id: session });
 }
 
+/// A teammate's "New conversation" (`team_open` with `fresh`) held at critical opens with the window's Start anyway.
+#[test]
+fn the_window_opens_a_held_new_conversation_anyway() {
+    let h = under_pressure("4");
+    let saved = window_request(
+        &h,
+        serde_json::json!({"op": "team_save", "name": "Bo", "job": "reviews", "kind": "codex", "project": h.home}),
+    );
+    let id = saved["Ok"]["teammates"]
+        .as_array()
+        .and_then(|all| all.iter().find(|m| m["name"] == "Bo"))
+        .and_then(|m| m["id"].as_str())
+        .unwrap_or_else(|| panic!("{saved}"))
+        .to_string();
+    let fresh = |anyway: bool| serde_json::json!({"op": "team_open", "id": id, "fresh": "now", "anyway": anyway});
+    let held = window_request(&h, fresh(false));
+    let refused = held["Err"].as_str().unwrap_or_else(|| panic!("{held}"));
+    assert!(refused.ends_with("or start it anyway"), "{refused}");
+    let opened = window_request(&h, fresh(true));
+    assert_eq!(opened["Ok"]["type"], "team_opened", "{opened}");
+    let session = opened["Ok"]["session"]["id"].as_str().unwrap().to_string();
+    h.request(Request::Close { id: session });
+}
+
 /// Resuming a saved conversation is never held: after a full quit it is a plain start, and the window has no override.
 #[test]
 fn resuming_a_saved_session_is_not_held() {
