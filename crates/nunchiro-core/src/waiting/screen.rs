@@ -1447,4 +1447,33 @@ mod tests {
         s.mark_started();
         assert!(s.detect(AgentKind::Codex).is_none());
     }
+
+    /// Claude draws its start screens in pieces (rows arrive in more than one read). From the first read that shows
+    /// the dialog, its card text stays the same while the rest arrives, so the card keeps one id.
+    #[test]
+    fn a_start_dialog_drawn_in_pieces_keeps_one_card_text() {
+        let login = " Select login method:\n\n \u{276f} 1. Claude account with subscription \u{b7} Pro, Max, Team, or Enterprise\n\n   2. Anthropic Console account \u{b7} API usage billing\n\n   3. 3rd-party platform \u{b7} Amazon Bedrock, Microsoft Foundry, or Vertex AI\n";
+        let update = "\u{2728} Update available! 0.161.0 -> 0.170.0\n\n\u{203a} 1. Update now\n  2. Skip\n  3. Skip until next version\n\n  Press enter to continue\n";
+        for (kind, text) in [
+            (
+                AgentKind::Claude,
+                include_str!("../../tests/fixtures/start-screens/claude-2.1.332-theme.txt"),
+            ),
+            (AgentKind::Claude, CLAUDE_NOTES),
+            (AgentKind::Claude, login),
+            (AgentKind::Codex, CODEX_SIGN_IN),
+            (AgentKind::Codex, update),
+        ] {
+            let mut s = Screen::new(200, 60);
+            let mut texts = vec![];
+            for row in text.lines() {
+                s.feed(format!("{row}\r\n").as_bytes());
+                if let Some(d) = s.detect(kind) {
+                    texts.push(d.text);
+                }
+            }
+            texts.dedup();
+            assert_eq!(texts.len(), 1, "{texts:#?}");
+        }
+    }
 }
