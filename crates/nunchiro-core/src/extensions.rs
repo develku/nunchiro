@@ -91,6 +91,9 @@ pub struct McpServer {
     /// An own server whose seal does not verify: written or edited outside Nunchiro, so no launch gets it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub changed: bool,
+    /// An own server added for one project: only sessions of that project folder get it. Absent: every project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
 }
 
 /// Who sent an extensions request; only the owner's window may.
@@ -303,6 +306,7 @@ fn from_json(agent: &str, servers: Option<&serde_json::Value>) -> Vec<McpServer>
                 command,
                 env,
                 changed: false,
+                project: None,
             }
         })
         .collect()
@@ -356,6 +360,7 @@ pub fn agent_servers(user_home: &Path) -> (Vec<McpServer>, Vec<TooLarge>) {
                 command,
                 env,
                 changed: false,
+                project: None,
             });
         }
     }
@@ -401,6 +406,9 @@ pub fn own_servers(home: &Path) -> Vec<McpServer> {
     let key = crate::schedule::key(&home.join(KEY_FILE)).ok();
     let mut out = from_json("nunchiro", Some(&serde_json::Value::Object(raw.clone())));
     for s in &mut out {
+        s.project = raw
+            .get(&s.name)
+            .and_then(|v| v.get("project")?.as_str().map(String::from));
         s.changed = key
             .as_deref()
             .zip(raw.get(&s.name))
@@ -410,16 +418,22 @@ pub fn own_servers(home: &Path) -> Vec<McpServer> {
     out
 }
 
-/// The seal over one own server; name, command and args all count, so a copied or edited entry fails.
-fn seal(key: &[u8], name: &str, command: &str, args: &[String]) -> String {
-    let msg = serde_json::to_vec(&("extensions.mcp", name, command, args)).unwrap_or_default();
+/// The seal over one own server; name, command, args and project all count, so a copied or edited entry fails.
+/// A global entry's seal is the older build's, unchanged, so that build still starts it; a one-project entry's adds the
+/// project, so that build's check fails it and never starts it everywhere.
+fn seal(key: &[u8], name: &str, command: &str, args: &[String], project: Option<&str>) -> String {
+    let msg = match project {
+        None => serde_json::to_vec(&("extensions.mcp", name, command, args)),
+        Some(p) => serde_json::to_vec(&("extensions.mcp", name, command, args, p)),
+    }
+    .unwrap_or_default();
     crate::schedule::hmac(key, &msg)
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect()
 }
-/// `(command, args)` when the entry's seal verifies.
-fn verified(key: &[u8], name: &str, v: &serde_json::Value) -> Option<(String, Vec<String>)> {
+/// `(command, args, project)` when the entry's seal verifies. A `project` that is there but not text fails.
+fn verified(key: &[u8], name: &str, v: &serde_json::Value) -> Option<Own> {
     let command = v.get("command")?.as_str()?.to_string();
     let args = v
         .get("args")?
@@ -427,30 +441,44 @@ fn verified(key: &[u8], name: &str, v: &serde_json::Value) -> Option<(String, Ve
         .iter()
         .map(|a| a.as_str().map(String::from))
         .collect::<Option<Vec<_>>>()?;
+    let project = match v.get("project") {
+        None => None,
+        Some(p) => Some(p.as_str()?.to_string()),
+    };
     let mac = v.get("seal")?.as_str()?;
-    (valid_name(name) && crate::schedule::same(mac, &seal(key, name, &command, &args)))
-        .then_some((command, args))
+    (valid_name(name)
+        && crate::schedule::same(mac, &seal(key, name, &command, &args, project.as_deref())))
+    .then_some((command, args, project))
 }
+type Own = (String, Vec<String>, Option<String>);
 /// The own servers a launch may pass: sealed by `mcp_add` and unchanged since.
 /// Same-user limit (security review MUST 1, accepted; docs/areas/settings.md): the key is a 0600 file in the same
 /// user's data folder (as `schedule.key`), and every agent runs as that user, so an agent can read or replace the key,
 /// forge a seal and get its command into later launches. The seal stops a hand-written or edited entry from being
 /// launched silently (it shows as changed); it is not a sandbox, the same as that agent editing the user's own
 /// `~/.claude.json` or shell startup files. Upgrade with the keychain (or a separate user) when the core gets one.
-fn sealed(home: &Path) -> Vec<(String, String, Vec<String>)> {
+fn sealed(home: &Path) -> Vec<(String, Own)> {
     let Ok(key) = crate::schedule::key(&home.join(KEY_FILE)) else {
         return vec![];
     };
     own_raw(home)
         .unwrap_or_default()
         .into_iter()
-        .filter_map(|(name, v)| verified(&key, &name, &v).map(|(c, a)| (name, c, a)))
+        .filter_map(|(name, v)| verified(&key, &name, &v).map(|own| (name, own)))
+        .collect()
+}
+/// The sealed own servers a session of `project` (its project folder, also for a worktree session) gets.
+fn sealed_for(home: &Path, project: &Path) -> Vec<(String, String, Vec<String>)> {
+    sealed(home)
+        .into_iter()
+        .filter(|(_, (_, _, p))| p.as_deref().is_none_or(|p| Path::new(p) == project))
+        .map(|(name, (c, a, _))| (name, c, a))
         .collect()
 }
 
 /// Ticket 1002 lane 1: the names of the sealed own servers a launch passes (`claude_flags`).
 pub(crate) fn sealed_names(home: &Path) -> Vec<String> {
-    sealed(home).into_iter().map(|(name, _, _)| name).collect()
+    sealed(home).into_iter().map(|(name, _)| name).collect()
 }
 
 fn write_own(
@@ -471,7 +499,13 @@ fn write_lock() -> std::sync::MutexGuard<'static, ()> {
     WRITE.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-pub fn mcp_add(home: &Path, name: &str, command: &[String]) -> Result<(), String> {
+/// `project`: only sessions of that project folder get the server; `None`, every project.
+pub fn mcp_add(
+    home: &Path,
+    name: &str,
+    command: &[String],
+    project: Option<&Path>,
+) -> Result<(), String> {
     if !valid_name(name) {
         return Err("server name: letters, digits, - and _ only".into());
     }
@@ -483,18 +517,38 @@ pub fn mcp_add(home: &Path, name: &str, command: &[String]) -> Result<(), String
     {
         return Err("command: one to 64 non-empty arguments".into());
     }
+    let project = match project {
+        None => None,
+        Some(p) => Some(
+            p.to_str()
+                .filter(|s| p.is_absolute() && s.len() <= 4096 && !s.contains('\0'))
+                .ok_or("project: a full folder path")?,
+        ),
+    };
     let _held = write_lock();
     let mut servers = own_raw(home)?;
     if servers.len() >= MAX_ITEMS && !servers.contains_key(name) {
         return Err("too many servers".into());
     }
+    // One name is one server: added again for the same projects it is replaced, for other projects it is refused.
+    if let Some(was) = servers
+        .get(name)
+        .map(|v| v.get("project").and_then(|p| p.as_str()))
+        && was != project
+    {
+        return Err(format!(
+            "a server named {name} is already added for {}; remove it first or pick another name",
+            was.unwrap_or("all projects")
+        ));
+    }
     let key = crate::schedule::key(&home.join(KEY_FILE))?;
     let args = command[1..].to_vec();
-    let mac = seal(&key, name, &command[0], &args);
-    servers.insert(
-        name.into(),
-        serde_json::json!({ "command": command[0], "args": args, "seal": mac }),
-    );
+    let mac = seal(&key, name, &command[0], &args, project);
+    let mut entry = serde_json::json!({ "command": command[0], "args": args, "seal": mac });
+    if let Some(p) = project {
+        entry["project"] = p.into();
+    }
+    servers.insert(name.into(), entry);
     write_own(home, servers)
 }
 
@@ -1039,7 +1093,11 @@ pub fn handle(
     }
     match request {
         Request::ExtensionsList => {}
-        Request::ExtensionsMcpAdd { name, command } => mcp_add(home, &name, &command)?,
+        Request::ExtensionsMcpAdd {
+            name,
+            command,
+            project,
+        } => mcp_add(home, &name, &command, project.as_deref())?,
         Request::ExtensionsMcpRemove { name } => mcp_remove(home, &name)?,
         Request::ExtensionsSkillNew {
             name,
@@ -1074,7 +1132,7 @@ pub fn owner(home: &Path, request: Request) -> Result<Reply, String> {
 /// Claude: `--plugin-dir` per enabled custom folder, and `--mcp-config` with the sealed own servers as inline JSON (the
 /// file's path would let Claude read it again after this check). The shipped skill's
 /// own `--plugin-dir` stays in `sessions.rs` (it installs the files first); `default_on` tells it whether to add it.
-pub fn claude_flags(home: &Path, enabled: &[String]) -> Vec<OsString> {
+pub fn claude_flags(home: &Path, enabled: &[String], project: &Path) -> Vec<OsString> {
     let mut out = vec![];
     for name in custom_names(home)
         .into_iter()
@@ -1083,7 +1141,7 @@ pub fn claude_flags(home: &Path, enabled: &[String]) -> Vec<OsString> {
         out.push("--plugin-dir".into());
         out.push(dir(home).join(&name).into_os_string());
     }
-    let servers: serde_json::Map<String, serde_json::Value> = sealed(home)
+    let servers: serde_json::Map<String, serde_json::Value> = sealed_for(home, project)
         .into_iter()
         .map(|(name, command, args)| {
             (
@@ -1106,11 +1164,11 @@ pub fn claude_flags(home: &Path, enabled: &[String]) -> Vec<OsString> {
     out
 }
 
-/// Codex: each sealed own server as `-c mcp_servers.<name>.command=…` and `.args=[…]`.
+/// Codex: each sealed own server for `project` as `-c mcp_servers.<name>.command=…` and `.args=[…]`.
 /// shortcut: custom plugin folders do not reach Codex (it has no plugin folder flag); upgrade when Codex gets one.
-pub fn codex_flags(home: &Path) -> Vec<OsString> {
+pub fn codex_flags(home: &Path, project: &Path) -> Vec<OsString> {
     let mut out = vec![];
-    for (name, command, args) in sealed(home) {
+    for (name, command, args) in sealed_for(home, project) {
         out.push("-c".into());
         out.push(
             format!(

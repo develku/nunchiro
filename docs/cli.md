@@ -1171,6 +1171,23 @@ the hooks only report events to Nunchiro.
 ### `nunchiro extensions off <id>`
 Turns the item off. For `nunchiro-hooks` it is the window's "Add Nunchiro hooks to new sessions" switch.
 
+### `nunchiro extensions mcp [add <name> [--project <dir>] -- <command> [<arg>...] | remove <name>]`
+Nunchiro's own MCP servers, the "Your servers" list of Settings > Skills & hooks. Each server goes to new Claude and
+Codex sessions on their launch line; the agents' own config is never written. Without a word, lists one line per
+server: name, `all projects` or the project folder it is for, its command, and a mark when the entry was changed
+outside Nunchiro (no session gets it until it is removed or added again).
+
+`add` stores the command (no env: a server that needs env gets it from your shell). With `--project`, only sessions of
+that project folder get the server, a worktree's sessions included; a relative folder is taken from where you run the
+command. Added again under the same name for the same projects, the server is replaced. A name already added for all
+projects cannot be added for one project, nor the other way round, nor for a second project: the command says so in
+one line, and you remove the old one first or pick another name. `remove` takes it out of new sessions. Each change
+prints the list.
+
+The file is `$NUNCHIRO_HOME/extensions/mcp.json`; each entry carries a seal over its name, command and project, so an
+entry edited by hand (its project too) is not started. An entry for all projects is written as before, so an older
+Nunchiro reads and starts it; an older Nunchiro starts no one-project entry.
+
 ## Skill
 
 `plugin/skills/nunchiro/SKILL.md` teaches an agent this CLI. The core writes the plugin into

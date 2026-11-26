@@ -22,6 +22,10 @@ declare module '../index' {
     'settings.extensions.mcpCommand': true;
     'settings.extensions.mcpAdd': true;
     'settings.extensions.mcpRemove': true;
+    'settings.extensions.mcpFor': true;
+    'settings.extensions.mcpForLabel': true;
+    'settings.extensions.mcpAllProjects': true;
+    'settings.extensions.mcpOnly': true;
     'settings.extensions.widgets': true;
     'settings.extensions.widgetsNote': true;
     'settings.extensions.openLibrary': true;
@@ -60,6 +64,10 @@ export const en = {
   'settings.extensions.mcpCommand': 'Command',
   'settings.extensions.mcpAdd': 'Add for Nunchiro sessions',
   'settings.extensions.mcpRemove': 'Remove {name}',
+  'settings.extensions.mcpFor': 'For',
+  'settings.extensions.mcpForLabel': 'Sessions that get the server',
+  'settings.extensions.mcpAllProjects': 'All projects',
+  'settings.extensions.mcpOnly': 'only {project}',
   'field.extWidgets': 'Widgets',
   'settings.extensions.widgets': 'Widgets',
   'settings.extensions.widgetsNote': 'Approval and the on/off switches stay in the Widget library.',

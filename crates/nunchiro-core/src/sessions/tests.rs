@@ -7992,7 +7992,7 @@ fn extensions_never_write_claude_or_codex_home() {
     let before = snapshot(&user);
     // Every item on: the shipped skill, a custom folder, an own MCP server, orchestration's Codex pointer.
     fs::create_dir_all(home.join("extensions/mine/skills")).unwrap();
-    crate::extensions::mcp_add(&home, "files", &["files-mcp".into()]).unwrap();
+    crate::extensions::mcp_add(&home, "files", &["files-mcp".into()], None).unwrap();
     let mut s = ext_settings(Some(&["nunchiro", "custom:mine"]));
     s.orchestration.enabled = true;
     for kind in [AgentKind::Claude, AgentKind::Codex] {

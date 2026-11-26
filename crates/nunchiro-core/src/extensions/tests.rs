@@ -362,7 +362,10 @@ fn fifo_in_place_of_mcp_json_never_hangs() {
     std::thread::spawn(move || {
         let add = mcp_add(&h, "files", &["files-mcp".into()], None);
         let list = handle(&h, &h, Caller::Window, Request::ExtensionsList).map(|_| ());
-        let flags = (claude_flags(&h, &enabled(None), Path::new("/p")), codex_flags(&h, Path::new("/p")));
+        let flags = (
+            claude_flags(&h, &enabled(None), Path::new("/p")),
+            codex_flags(&h, Path::new("/p")),
+        );
         tx.send((add, list, flags)).unwrap();
     });
     let (add, list, flags) = rx
@@ -1048,7 +1051,12 @@ fn claude_names(home: &Path, project: &str) -> Vec<String> {
         return vec![];
     };
     let v: serde_json::Value = serde_json::from_str(inline).unwrap();
-    v["mcpServers"].as_object().unwrap().keys().cloned().collect()
+    v["mcpServers"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .cloned()
+        .collect()
 }
 /// The server names one Codex launch in `project` gets.
 fn codex_names(home: &Path, project: &str) -> Vec<String> {
@@ -1073,7 +1081,6 @@ fn mcp_for_one_project_reaches_only_that_projects_sessions() {
             Request::ExtensionsMcpAdd {
                 name: name.into(),
                 command: vec![format!("{name}-mcp")],
-                project: None,
                 project: project.map(PathBuf::from),
             },
         )
@@ -1136,7 +1143,13 @@ fn mcp_for_one_project_reaches_only_that_projects_sessions() {
 fn an_own_server_whose_project_was_edited_is_not_started() {
     let home = tmp("home");
     let file = home.join("extensions/mcp.json");
-    mcp_add(&home, "mine", &["mine-mcp".into()], Some(Path::new("/work/a"))).unwrap();
+    mcp_add(
+        &home,
+        "mine",
+        &["mine-mcp".into()],
+        Some(Path::new("/work/a")),
+    )
+    .unwrap();
     mcp_add(&home, "all", &["all-mcp".into()], None).unwrap();
     let original: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
@@ -1157,11 +1170,18 @@ fn an_own_server_whose_project_was_edited_is_not_started() {
                 "{name} with project {project} started in {p}"
             );
         }
-        assert!(own_servers(&home).iter().any(|s| s.name == name && s.changed));
+        assert!(
+            own_servers(&home)
+                .iter()
+                .any(|s| s.name == name && s.changed)
+        );
     }
     // The project key taken away: the entry reads as global, and its seal (made with the project) fails.
     let mut v = original.clone();
-    v["mcpServers"]["mine"].as_object_mut().unwrap().remove("project");
+    v["mcpServers"]["mine"]
+        .as_object_mut()
+        .unwrap()
+        .remove("project");
     std::fs::write(&file, serde_json::to_vec(&v).unwrap()).unwrap();
     assert_eq!(claude_names(&home, "/work/a"), ["all"]);
     assert_eq!(codex_names(&home, "/work/b"), ["all"]);
@@ -1202,12 +1222,20 @@ fn global_servers_keep_the_older_format_both_ways() {
         serde_json::json!({ "mcpServers": servers })
     };
     std::fs::create_dir_all(home.join("extensions")).unwrap();
-    std::fs::write(&file, serde_json::to_vec_pretty(&older(&["a", "b", "c"])).unwrap()).unwrap();
+    std::fs::write(
+        &file,
+        serde_json::to_vec_pretty(&older(&["a", "b", "c"])).unwrap(),
+    )
+    .unwrap();
     for p in ["/work/a", "/anything"] {
         assert_eq!(claude_names(&home, p), ["a", "b", "c"]);
         assert_eq!(codex_names(&home, p), ["a", "b", "c"]);
     }
-    assert!(own_servers(&home).iter().all(|s| !s.changed && s.project.is_none()));
+    assert!(
+        own_servers(&home)
+            .iter()
+            .all(|s| !s.changed && s.project.is_none())
+    );
     // Written again by Add (global): byte for byte what the older build writes.
     std::fs::remove_file(&file).unwrap();
     for n in ["a", "b", "c"] {
@@ -1218,7 +1246,13 @@ fn global_servers_keep_the_older_format_both_ways() {
         serde_json::to_vec_pretty(&older(&["a", "b", "c"])).unwrap()
     );
     // A one-project entry beside them: the older build's check passes a, b, c and fails it, so it never starts there.
-    mcp_add(&home, "mine", &["mine-mcp".into()], Some(Path::new("/work/a"))).unwrap();
+    mcp_add(
+        &home,
+        "mine",
+        &["mine-mcp".into()],
+        Some(Path::new("/work/a")),
+    )
+    .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
     let older_starts: Vec<&String> = v["mcpServers"]
         .as_object()

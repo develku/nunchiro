@@ -206,6 +206,7 @@ impl Sessions {
                     &self.settings,
                     AgentKind::Claude,
                     home_mode.is_some(),
+                    project,
                 )?); // ticket 276
             }
             AgentKind::Codex => {
@@ -239,6 +240,7 @@ impl Sessions {
                     &self.settings,
                     AgentKind::Codex,
                     false,
+                    project,
                 )?);
                 if let Some(resume) = &start.resume {
                     cmd.args(["resume", resume]);
@@ -1032,6 +1034,7 @@ pub(super) fn extension_flags(
     settings: &Settings,
     kind: AgentKind,
     locked: bool,
+    project: &Path,
 ) -> Result<Vec<std::ffi::OsString>, String> {
     let on = crate::extensions::enabled(settings.feature(crate::extensions::ENABLED_KEY));
     let default_on = crate::extensions::default_on(&on);
@@ -1043,7 +1046,7 @@ pub(super) fn extension_flags(
                 out.push(skill::install(home, settings.orchestration.enabled)?.into_os_string());
             }
             if !locked {
-                out.extend(crate::extensions::claude_flags(home, &on));
+                out.extend(crate::extensions::claude_flags(home, &on, project));
             }
         }
         AgentKind::Codex => {
@@ -1051,7 +1054,7 @@ pub(super) fn extension_flags(
                 out.push("-c".into());
                 out.push(skill::CODEX_INSTRUCTION.into());
             }
-            out.extend(crate::extensions::codex_flags(home));
+            out.extend(crate::extensions::codex_flags(home, project));
         }
         AgentKind::Shell | AgentKind::Acp => {}
     }

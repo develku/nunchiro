@@ -144,7 +144,9 @@ fn run() -> Result<(), String> {
         println!(
             "nunchiro mcp -- a stdio MCP server: the agent, worktree and room verbs as tools\nnunchiro token create --scope read|supervised|full [--project DIR] [--expires 30m|12h|7d]\nnunchiro token list|revoke [--json] [ID]"
         ); // ticket 573
-        println!("nunchiro extensions list|show|new|on|off [<args>] (nunchiro extensions --help)"); // ticket 455
+        println!(
+            "nunchiro extensions list|show|new|on|off|mcp [<args>] (nunchiro extensions --help)"
+        ); // ticket 455
         println!(
             "nunchiro board list|create|add|move|done|note|self [--json] (nunchiro board --help)"
         ); // V2.5-35
