@@ -125,7 +125,9 @@ impl Sessions {
                 // dialog for the user.
                 let at = std::time::Instant::now();
                 // Every pass, also those that read no dialog below: once the box showed, start dialogs are over.
+                let past = entry.observer.screen.started();
                 entry.observer.screen.note_box(entry.meta.kind, &text);
+                ran_changed |= !past && entry.observer.screen.started(); // saved, so a core restart keeps it
                 if waiting::screen::past_start(&text) {
                     entry.observer.own_folder = None;
                     entry.observer.before_box = false;

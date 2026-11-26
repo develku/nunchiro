@@ -428,6 +428,7 @@ fn recorded(name: &str, version: u16) -> (PathBuf, std::process::Child, Fake, St
         agent_started: Some(started),
         run_start: 0,
         launch_args: None,
+        past_start: false,
         agent_pid: None,
     };
     store::save(&home, vec![row], BTreeMap::from([(id.clone(), live)])).unwrap();
@@ -881,6 +882,7 @@ fn a_pre_lock_home_seat_behind_a_refusing_holder_ends_at_start() {
         agent_started: Some(started),
         run_start: 0,
         launch_args: None,
+        past_start: false,
         agent_pid: None,
     };
     store::save(&home, vec![row], BTreeMap::from([(id.clone(), live)])).unwrap();

@@ -1213,7 +1213,11 @@ impl Sessions {
                 if event != "SessionStart" {
                     let entry = self.entry(&id)?;
                     entry.observer.before_box = false;
-                    entry.observer.screen.mark_started(); // start dialogs make no card from here
+                    if !entry.observer.screen.started() {
+                        entry.observer.screen.mark_started(); // start dialogs make no card from here
+                        self.unsaved // saved by the tick, so a core restart keeps it
+                            .store(true, std::sync::atomic::Ordering::SeqCst);
+                    }
                 }
                 // Peer item 2 (ticket 991): an unnamed agent session takes its title from its first prompt; a name the
                 // user gave (any label) is never replaced.

@@ -44,6 +44,8 @@ pub struct Screen {
     /// The session's start is over (`note_box`, `mark_started`): so a start dialog's rows read
     /// later (a transcript view, a redraw caught before its box) are no card. Kept through a reset and a resize.
     pub(crate) started: std::sync::atomic::AtomicBool,
+    /// A start dialog was read on this screen and made a card (`detect_in`): Codex's composer after it ends the start.
+    asked: std::sync::atomic::AtomicBool,
     // Rendered text, dropped by `feed`; the idle tick reads an unchanged screen every 50 ms.
     text_cache: std::sync::OnceLock<String>,
     // S9: what `read_once` read from this text (the permission mode footer), dropped with `text_cache`.
@@ -69,6 +71,7 @@ impl Screen {
             drawn: false,
             alt: false,
             started: std::sync::atomic::AtomicBool::new(false),
+            asked: std::sync::atomic::AtomicBool::new(false),
             text_cache: std::sync::OnceLock::new(),
             read_cache: std::sync::OnceLock::new(),
             fast_cache: std::sync::OnceLock::new(),
@@ -406,7 +409,8 @@ impl Screen {
         *self = Self::new(self.cols, self.rows);
         self.started = started.into();
     }
-    /// The session's start is over (its first hook after SessionStart): start dialogs make no card from here.
+    /// The session's start is over (its first hook after SessionStart, `note_box`, or a start that was over before
+    /// the core restarted): start dialogs make no card from here.
     pub(crate) fn mark_started(&self) {
         self.started
             .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -415,14 +419,20 @@ impl Screen {
         self.started.load(std::sync::atomic::Ordering::Relaxed)
     }
     /// Notes the agent's input box in `text` (this screen's text): a row from the first column that starts with `❯`
-    /// (Claude) or `›` (Codex) and is no numbered choice. True when it is there. Claude's box ends its start; Codex's
-    /// does not (started by the core, Codex 0.162.1 draws its composer for a moment before its sign-in screen), so a
-    /// Codex start ends with its first hook after SessionStart (`mark_started`).
+    /// (Claude) or `›` (Codex) and is no numbered choice. True when it is there. Claude's box ends its start. Codex's
+    /// alone does not (Codex 0.162.1 draws its composer for a moment before its sign-in screen): a Codex start ends
+    /// with its composer once a start dialog was read (it was answered, or it never was one), with a running turn on
+    /// the screen, or with its first hook after SessionStart (`mark_started`; a Codex with a hooks file of its own
+    /// runs none of the core's general hooks).
+    /// shortcut: Codex's update screen answered, a composer for a moment, then its sign-in screen: that sign-in screen
+    /// gets no card. Nunchiro keeps the update screen off; if that changes, let the composer end the start only when
+    /// no key went to the agent since the dialog was read.
     pub(crate) fn note_box(&self, kind: AgentKind, text: &str) -> bool {
         let boxed = text
             .lines()
             .any(|l| l.starts_with(['\u{276f}', '\u{203a}']) && choice_row(l).is_none());
-        if boxed && kind == AgentKind::Claude {
+        let asked = self.asked.load(std::sync::atomic::Ordering::Relaxed);
+        if boxed && (kind == AgentKind::Claude || asked) || text.contains("esc to interrupt") {
             self.mark_started();
         }
         boxed
@@ -499,6 +509,12 @@ impl Screen {
             ]
             .iter()
             .any(|hint| normalized.contains(hint));
+        // Any other prompt on the screen is the card, with its own text (Codex's edit approval under a start dialog's
+        // rows that the agent printed).
+        let start = start.filter(|_| !(trust || question || background || unclassified_prompt));
+        if start.is_some() {
+            self.asked.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
         let item_kind = if trust {
             Kind::Dialog
         } else if permission {
@@ -513,10 +529,7 @@ impl Screen {
             return None;
         };
         // A start dialog's card is its own rows (`start_dialog`); any other prompt keeps its region.
-        let region = match start {
-            Some(rows) if item_kind == Kind::Dialog && !trust => rows,
-            _ => prompt_region(kind, text),
-        };
+        let region = start.unwrap_or_else(|| prompt_region(kind, text));
         // V2.5-87: no focus report reaches the card; the answer check compares this same text.
         for choice in &mut choices {
             choice.label = without_focus_reports(&choice.label);
@@ -1502,7 +1515,8 @@ mod tests {
         let redraw = |s: &mut Screen, text: &str| {
             s.feed(format!("\x1b[2J\x1b[H{}", text.replace('\n', "\r\n")).as_bytes());
         };
-        let composer = "\n\u{203a} Ask Codex to do anything\n\n  gpt-5-codex medium \u{b7} /tmp/x\n";
+        let composer =
+            "\n\u{203a} Ask Codex to do anything\n\n  gpt-5-codex medium \u{b7} /tmp/x\n";
         let view = format!(
             "{CODEX_SIGN_IN}\n  \u{2191}/\u{2193} to scroll   pgup/pgdn to page   home/end to jump\n  q to quit   esc to edit prev\n"
         );

@@ -73,6 +73,9 @@ impl Sessions {
             else {
                 continue;
             };
+            if live.past_start {
+                entry.observer.screen.mark_started(); // `reattach` keeps it
+            }
             if reattach(
                 entry,
                 record,
@@ -418,6 +421,7 @@ impl Sessions {
                         .launch
                         .clone()
                         .filter(|a| claude_modes::storable(e.meta.kind, a)), // W35: allow list only
+                    past_start: e.observer.screen.started(),
                     agent_pid: None,
                 };
                 Some((id.clone(), live))
@@ -432,6 +436,7 @@ impl Sessions {
                     agent_started: None,
                     run_start: 0,
                     launch_args: None,
+                    past_start: false,
                     agent_pid: None,
                 },
             );
@@ -568,7 +573,10 @@ pub(super) fn reattach(
         Attach::Attached(mut pty) => {
             pty.set_run_start(run_start);
             // Detection starts after what the ring held: only output after the reattach can prove a request.
+            // A start that was over stays over: the agent's first screens are long gone.
+            let past = entry.observer.screen.started();
             entry.observer = waiting::Observer::default();
+            entry.observer.screen.started = past.into();
             entry.observer.screen.feed(&pty.snapshot());
             entry.observer.output_offset = pty.end();
             entry.meta.pid = Some(pty.pid());
