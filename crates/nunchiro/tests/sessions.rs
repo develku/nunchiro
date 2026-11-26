@@ -2025,6 +2025,45 @@ fn a_slow_codex_worktree_start_is_answered_to_its_caller() {
     let _ = std::fs::remove_dir_all(bin);
 }
 
+/// A core whose memory-pressure reading is faked (debug builds only) at `level`, or as a failed reading ("fail").
+fn under_pressure(level: &str) -> Harness {
+    let mut command = home::git_env::scrubbed(env!("CARGO_BIN_EXE_nunchiro"));
+    command
+        .arg("serve")
+        .env("NUNCHIRO_TEST_MEMORY_PRESSURE", level);
+    Harness::with_command(None, command)
+}
+
+/// When macOS reports memory pressure, a new agent seat is not started: one plain sentence names memory, and nothing
+/// is left for it (no row, no holder). A plain terminal is not a seat and still opens.
+#[test]
+fn a_new_seat_is_held_under_memory_pressure() {
+    for level in ["2", "4"] {
+        let h = under_pressure(level);
+        let refused = start_codex(&h).expect_err("a seat started under memory pressure");
+        assert!(refused.contains("memory"), "{refused}");
+        assert!(refused.contains("not started"), "{refused}");
+        let Reply::Snapshot { sessions, .. } = h.request(Request::Snapshot) else {
+            panic!("no snapshot");
+        };
+        assert!(sessions.is_empty(), "a held start left a session");
+        assert!(
+            nunchiro_core::holder::sockets(&h.home).is_empty(),
+            "a held start left a holder"
+        );
+        let shell = h.start(&["/bin/cat"]);
+        h.request(Request::Close { id: shell.id });
+    }
+    // Normal pressure, and a reading that failed, start it.
+    for level in ["1", "fail"] {
+        let h = under_pressure(level);
+        let Ok(Reply::Started { session }) = start_codex(&h) else {
+            panic!("level {level}: a seat was held");
+        };
+        h.request(Request::Close { id: session.id });
+    }
+}
+
 #[test]
 fn gated_version_fixture_has_a_deadline_even_when_home_remains() {
     let h = Harness::new();
