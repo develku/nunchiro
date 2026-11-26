@@ -42,6 +42,7 @@ import { restartKeeping } from '../features/restart-keeping';
 import { restartStart } from '../PermissionNeeded';
 import { escaped, joinWords } from '../settings/agents/words';
 import { AttachedChips, typingPing } from '../queue/Knock';
+import { clearHomed, useHomed } from './draftHome';
 import { useTeamNow } from '../lead/lead';
 
 /** A pane terminal's selection goes to the composer as a quote; nothing is sent. */
@@ -104,6 +105,7 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
   const refused = useRefused(target?.id);
   const queued = useQueue(target?.id);
   const team = useTeamNow();
+  const homed = useHomed(target?.id); // words that came home from the terminal (draftHome.ts)
   /** Words coming back to the box go ahead of whatever it already holds. */
   const toBox = (box: HTMLTextAreaElement, text: string) => {
     if (!target) return;
@@ -316,6 +318,11 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
           />
         )}
         {target && <AttachedChips session={target} team={team} core={core} t={t} />}
+        {target && homed && (
+          <p className="chint" role="status" data-homed="">
+            {t('home.note')}
+          </p>
+        )}
         {target && held !== undefined && (
           <p className="queued held" role="status">
             <b>{t('chat.held.lead')}</b> <span className="queued-text">{held}</span>
@@ -379,6 +386,7 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
           onInput={(e) => {
             const el = e.currentTarget; // read now: the updater below runs after the event is gone
             typingPing(core, target); // the gap rule: another sender's message waits while the owner types
+            if (target) clearHomed(target.id); // his own edit: the line about the words from the terminal goes
             grow(el);
             if (offer && offer.sid === target?.id && !el.value.includes(offer.line)) setOffer(null); // the pasted line was edited away
             if (!target) return;

@@ -497,6 +497,8 @@ impl Sessions {
         self.verify_submits();
         let mut delivered = self.flush_enters()?;
         let mut canceled = false;
+        // Home.rs: sessions whose row waits only for the owner's text in the box.
+        let mut wants_home = Vec::new();
         for id in ids {
             // v1a-10: queued sends wait until a model switch has finished.
             // CHAT-MODELIST r2: and until a mode walk has ended.
@@ -564,9 +566,11 @@ impl Sessions {
                     continue; // no `at += 1`: the row left the queue and the next one moved into its slot
                 }
                 // Gap rule: attached, Later, text in the box, or the owner typing.
-                let gap = self
-                    .gap_hold(&id, &send.id, &send.sender, send.submit, &send.content)
-                    .is_some();
+                let why = self.gap_hold(&id, &send.id, &send.sender, send.submit, &send.content);
+                let gap = why.is_some();
+                if why == Some("terminal_text") && !wants_home.contains(&id) {
+                    wants_home.push(id.clone());
+                }
                 let entry = self.entry(&id)?;
                 if edited
                     || gap
@@ -756,11 +760,27 @@ impl Sessions {
                 break;
             }
         }
+        // Home.rs: a row that waits only for his text in the box, on a session that would take it now, brings the text
+        // home first (and Type in terminal just turned off does too).
+        let mut ready_home = Vec::new();
+        for id in wants_home {
+            if delivered.contains(&id) || self.entry(&id)?.switch.is_some() || self.walk_hold(&id) {
+                continue;
+            }
+            let snapshot = self.snapshot_session(&self.entries[&id].meta);
+            if !self.entry(&id)?.observer.behind
+                && self.send_ready(&id, &snapshot)?
+                && self.delivery_open(&id, &snapshot)
+            {
+                ready_home.push(id);
+            }
+        }
+        let homed = self.home_pass(&ready_home)?;
         if canceled {
             self.unsaved
                 .store(true, std::sync::atomic::Ordering::SeqCst);
         }
-        Ok(canceled || !delivered.is_empty())
+        Ok(canceled || homed || !delivered.is_empty())
     }
     /// Gap rule: the owner typed for session `id` (the window's composer or a key in its terminal).
     pub(super) fn typing(&mut self, id: &str) {

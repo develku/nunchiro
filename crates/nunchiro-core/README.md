@@ -551,7 +551,15 @@ next submit), `send_attach` (it goes with his next prompt, under his words, as `
 the owner]`, in one paste; a prompt starting with `/ ! # &` takes none) or `send_detach` (back to later). These five
 requests are the owner's and the window's only. Type in terminal (`direct`, owner and window only) holds such messages too
 (`direct`) while the owner types in the agent's own box; it ends 60 s after his last key there or the window's last
-renewal. The snapshot's `at_box` says the agent's input box is on a current screen and nothing asks. The marks live in memory: queued rows never outlive a core. Other
+renewal. The snapshot's `at_box` says the agent's input box is on a current screen and nothing asks.
+Text the owner left in an agent's box comes home (sessions/home.rs): when a queued row waits only for that text and the
+session would take it now, or Type in terminal just went off, and the box holds one row of his words (no collapsed
+`[Pasted`/`[Image` label), on a current and still screen, with no key for 5 s, the core writes `{words, at}` to
+`<home>/aside/<id>.json` (0600, atomic), then three Ctrl+U. Once a later pass reads the box empty the snapshot's
+`draft_home` hands the words to the window's composer, which answers `draft_taken` (the file goes); with no window it
+waits for the next one, also over a restart. A box not empty 1.5 s after the clear gets nothing more (the row keeps
+waiting as `terminal_text`, and the file goes while the box still shows the words). `draft_put_back` pastes words back
+into an empty box with no Enter. Spaces at the very end of the line are not kept (the screen does not hold them). The marks live in memory: queued rows never outlive a core. Other
 `send_waits` reasons: `turn`, `dialog`, `later`, `attached`.
 
 Text, settle, Enter (V1A-15): a submit send (`agent prompt`, the window's composer) to a Claude or Codex agent that

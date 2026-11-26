@@ -141,6 +141,14 @@ pub enum SessionState {
     Closed,
 }
 
+/// Words that came home from an agent's box (sessions/home.rs) and when they left it (ms).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DraftHome {
+    pub words: String,
+    pub at: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -265,6 +273,10 @@ pub struct Session {
         skip_deserializing
     )]
     pub at_box: bool,
+    /// Words the core took out of the agent's box for the window's composer (the composer answers `draft_taken`). Set
+    /// per snapshot, never saved in the session store (they live in `<home>/aside/<id>.json`).
+    #[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
+    pub draft_home: Option<DraftHome>,
     /// Look 11-17 N2: the last permission mode Claude's footer showed while the session ran (stored, unlike
     /// `permission_mode`), so a resume starts in the mode the session ran with. Ticket 991 (B6 chip): for Codex, the
     /// stored choice the owner's start applied (none when the arguments stated the permission, and on older rows).
@@ -1478,6 +1490,15 @@ pub enum Request {
     SendDetach {
         id: String,
         send: String,
+    },
+    /// The window's composer took the words `draft_home` gave it; their side file goes. Owner and window only.
+    DraftTaken {
+        id: String,
+    },
+    /// ⌘Z on words that came home: they go back into the agent's empty box, with no Enter. Owner and window only.
+    DraftPutBack {
+        id: String,
+        words: String,
     },
     /// Type in terminal (`on`) for session `id`: the owner types in the agent's own box; another sender's message waits
     /// (`direct`). It ends by itself 60 s after the last key in that terminal or the last renewal. Owner and window only.
