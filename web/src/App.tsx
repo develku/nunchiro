@@ -1,5 +1,5 @@
 // Window shell (spec Window (v1a), R8 final): left icon bar | left sidebar | centre | right icon bar.
-import { errorNote, lineError, notePlain, OwnWords, rawError, type Note } from './errors';
+import { lineError, OwnWords, rawError, type Note } from './errors';
 import { PermissionSheet } from './approval/PermissionSheet';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { CoreClient, type Boot } from './api';
@@ -64,7 +64,7 @@ import { Strip, waitingOrder } from './queue/Strip';
 import { useWaitingFlag } from './queue/useWaitingFlag'; // ticket 197
 import { useBoardItems } from './queue/board'; // v1b-18
 import { everStarted, markStarted } from './firstrun/ever';
-import { NEW_EVENT, NewSession, quickStart, StopAsk } from './NewSession'; // v1a-59
+import { NEW_EVENT, NewSession, quickStartNoted, StopAsk } from './NewSession'; // v1a-59
 import { PairSheet } from './pairing/PairSheet'; // V2.5-15
 // v1b-11: Diff (±) widget
 import { DIFF_OPEN } from './diff/Diff';
@@ -503,7 +503,7 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
           onToggle={(p) => update({ collapsed: settings.collapsed.includes(p) ? settings.collapsed.filter((x) => x !== p) : [...settings.collapsed, p] })}
           onOpen={open}
           onSelect={selectProject} // ticket 570
-          onStartIn={(project, kind) => void quickStart(core, ordered, current, kind, project).then((s) => s && openStarted(s), (e) => setPaneNote(errorNote(t('err.note.notStarted', { error: notePlain(t, e) }), e)))} // ticket 1130 C1
+          onStartIn={(project, kind) => quickStartNoted(core, ordered, current, kind, project, openStarted, setPaneNote, t)} // ticket 1130 C1
           selected={pj.selected}
           keyOf={(project) => ((i) => (i >= 0 && i < 9 ? jumpChip(bindings, 'project.jump', i + 1) : ''))(projectPaths.indexOf(project))}
           tabKeyOf={(id) => ((i) => (i >= 0 && i < 9 ? jumpChip(bindings, 'session.jump', i + 1) : ''))(pj.visible.indexOf(id))} // ticket 377: only a session open in the visible project's first nine tabs

@@ -756,16 +756,8 @@ fn connection(
             presented = Some(env.token.clone());
         }
         // `agent start --anyway`: the owner's start past a memory-pressure hold; never a session's.
-        let anyway = matches!(env.request, Request::StartAnyway { .. });
-        if let Request::StartAnyway { start } = env.request {
-            if !owner {
-                return Err(crate::pressure::OWNER_ONLY.into());
-            }
-            let Request::Start { .. } = *start else {
-                return Err("start_anyway carries a start only".into());
-            };
-            env.request = *start;
-        }
+        let (request, anyway) = crate::pressure::unwrap_anyway(env.request, owner)?;
+        env.request = request;
         if let Request::WindowAuth = env.request {
             // Ticket 1002 (Fable lane 2 review M1): the window's token (which answers Outbox cards) goes to the app only.
             let app = peer.as_ref().is_ok_and(|p| crate::peer::is_app(p, home));

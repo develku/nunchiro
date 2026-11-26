@@ -4,7 +4,8 @@
 // Ticket 1126: that pick is where every new session starts, the agents' too (the core applies it). At the owner's level of the
 // pick's week (`accounts.near_percent`, 98 unless set; round 4) the core writes a record (account_near.rs) and a card above the chip offers the next account with one button; only that
 // click switches (every usage number is one a session can write). The 5-hour share never counts.
-import { errorNote, FailedNote, notePlain, type Note } from '../errors';
+import { errorNote, FailedNote, heldNote, notePlain, startOp, type Note } from '../errors';
+import { agentName } from '../chat/conversation';
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { accountName, type Account, type AccountAgent, type AccountUsage, type CoreClient } from '../api';
 import type { T } from '../i18n';
@@ -120,12 +121,13 @@ export function AccountSwitch({ t, core, connected, onManage, current, onOpen }:
   // folder and resumes it there (sessions.rs, account_carry.rs); the account it ran on keeps its copy. Ticket 1126: a running
   // session not in the middle of a turn ends first (a resumed conversation cannot start while its old run is live, as
   // PermissionNeeded's restart); one mid-turn is never offered, so nothing here stops a turn.
-  const carry = async (agent: AccountAgent, a: Account) => {
+  /** `anyway`: a low-memory hold's Start anyway, the same carry past the hold. */
+  const carry = async (agent: AccountAgent, a: Account, anyway = false) => {
     close(agent);
     if (!current || (current.state === 'running' && current.attention.working)) return;
     const label = accountName(t, a);
-    const started = async (session: object) => {
-      const reply = (await core.request({ op: 'start', session })) as { session?: Session };
+    const started = async (session: object, past = false) => {
+      const reply = (await core.request(startOp({ op: 'start', session }, past))) as { session?: Session };
       if (!reply.session) throw new Error('the core started no session');
       onOpen(reply.session.id);
     };
@@ -133,12 +135,13 @@ export function AccountSwitch({ t, core, connected, onManage, current, onOpen }:
     try {
       if (current.state === 'running') await core.request({ op: 'close', id: current.id });
       ended = current.state === 'running';
-      await started({ ...restartRequest(current), account: a.default ? '' : a.label });
+      await started({ ...restartRequest(current), account: a.default ? '' : a.label }, anyway);
       setNote(t('accountSwitch.continued', { label }));
     } catch (e) {
       // Round 2 review SHOULD 2: its old run was ended first, so the conversation reopens on the account it ran on.
       const back = ended && (await started(restartRequest(current)).then(() => true, () => false));
-      setNote(errorNote(t(back ? 'accountSwitch.notContinuedBack' : 'accountSwitch.notContinued', { error: notePlain(t, e) }), e));
+      const held = !back && heldNote(t, e, agentName(current.kind, current.acp_agent), () => void carry(agent, a, true));
+      setNote(held || errorNote(t(back ? 'accountSwitch.notContinuedBack' : 'accountSwitch.notContinued', { error: notePlain(t, e) }), e));
     }
   };
   // The menu pattern of the icon bar's ⋯: arrows move (wrapping), Home and End jump, Esc closes and focus returns to the chip.

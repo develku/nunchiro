@@ -43,7 +43,11 @@ pub(super) fn answer(
             watches.remove(&id);
             return Ok(Reply::Ack);
         }
-        match frame.request.ok_or("frame has no request")? {
+        // The window is the owner, so its "Start anyway" passes a memory hold; a paired page never sends it
+        // (`browser::request_allowed`).
+        let request = frame.request.ok_or("frame has no request")?;
+        let (request, anyway) = crate::pressure::unwrap_anyway(request, true)?;
+        match request {
             // The window is a client like the CLI, minus hook intake and core shutdown (ticket 09 owns
             // quit through its own confirmation).
             Request::Hook { .. } | Request::Stop | Request::ExitIfIdle { .. } => {
@@ -176,9 +180,9 @@ pub(super) fn answer(
                 env,
                 receipt: _, // ticket 573: the window never retries a start
             } => {
-                // Held as the socket's start, at critical only until the window has its own "Start anyway".
+                // Held as the socket's start, at critical only; the window's "Start anyway" passes it.
                 let who = crate::pressure::Who::Window;
-                crate::pressure::check_start(&session, who, false, "window start")?;
+                crate::pressure::check_start(&session, who, anyway, "window start")?;
                 let launch = registry
                     .lock()
                     .map_err(|_| "session registry unavailable")?

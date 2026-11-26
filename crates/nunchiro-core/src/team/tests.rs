@@ -2053,6 +2053,7 @@ fn openers_hold_a_new_seat_by_who_opens_it() {
     };
     let who = |o: Opener| o.pressure().map(|(who, _)| who);
     assert_eq!(who(Opener::Window), Some(Who::Window));
+    assert_eq!(who(Opener::WindowAnyway), None, "the window's Start anyway");
     assert_eq!(who(Opener::Lead(&lead)), Some(Who::Session));
     assert_eq!(who(Opener::Schedule("s", Who::Session)), Some(Who::Session));
     assert_eq!(who(Opener::Schedule("s", Who::Window)), Some(Who::Window));

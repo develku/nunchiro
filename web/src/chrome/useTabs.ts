@@ -1,5 +1,6 @@
 // Shell: the tab strip's actions (split out of App.tsx, needs 183).
-import { docT, errorNote, lineError, notePlain, type Note } from '../errors';
+import { docT, errorNote, heldNote, lineError, notePlain, startOp, type Note } from '../errors';
+import { agentName } from '../chat/conversation';
 import { onContinue } from '../history/history';
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { useSeatFollow } from '../lead/lead';
@@ -124,13 +125,14 @@ export function useTabs({ core, tabs, visible, setTabs, active, setActive, byId,
   // effort; a shell has no conversation, so it starts a fresh one in the same folder with the same label.
   const [resuming, setResuming] = useState(false);
   const resumeBusy = useRef(false); // the palette's memoised command can hold an older render's `resuming`
-  const resume = async (s: Session) => {
+  /** `anyway`: a low-memory hold's Start anyway, the same restart past the hold. */
+  const resume = async (s: Session, anyway = false) => {
     if (resumeBusy.current) return;
     resumeBusy.current = true;
     setResuming(true);
     try {
       restarting.set(s.id, restartRequest(s));
-      const reply = (await core.request({ op: 'start', session: restartRequest(s) })) as { session?: Session };
+      const reply = (await core.request(startOp({ op: 'start', session: restartRequest(s) }, anyway))) as { session?: Session };
       if (reply.session) {
         const next = reply.session.id;
         setDraft(next, getDraft(s.id)); // ticket 371 item 17: before the box meets the new id; text a refused send or the queue gave back is in this draft too
@@ -138,7 +140,8 @@ export function useTabs({ core, tabs, visible, setTabs, active, setActive, byId,
         setActive(next);
       }
     } catch (e) {
-      setPaneNote(errorNote(t('shell.chrome.notRestarted', { error: notePlain(t, e) }), e, s.id));
+      const held = heldNote(t, e, agentName(s.kind, s.acp_agent), () => void resume(s, true));
+      setPaneNote(held ? { ...(held as Exclude<Note, string>), session: s.id } : errorNote(t('shell.chrome.notRestarted', { error: notePlain(t, e) }), e, s.id));
     } finally {
       restarting.delete(s.id);
       resumeBusy.current = false;
@@ -160,7 +163,7 @@ export function useTabs({ core, tabs, visible, setTabs, active, setActive, byId,
     setTabs((t) => (t.includes(id) ? t : t.toSpliced(Math.min(at, t.length), 0, id)));
     open(id);
   };
-  const bring = async (e: Closed): Promise<boolean> => {
+  const bring = async (e: Closed, anyway = false): Promise<boolean> => {
     const { tabs, byId } = now.current;
     if ('browser' in e) {
       // Ticket 997 L1: a page of the owner's own browser comes back in its centre tab (the "you" space was never a session).
@@ -179,12 +182,14 @@ export function useTabs({ core, tabs, visible, setTabs, active, setActive, byId,
     if (!restartable(gone)) return false;
     try {
       restarting.set(gone.id, restartRequest(gone));
-      const reply = (await core.request({ op: 'start', session: restartRequest(gone) })) as { session?: Session };
+      const reply = (await core.request(startOp({ op: 'start', session: restartRequest(gone) }, anyway))) as { session?: Session };
       if (!reply.session) throw new Error('the core started no session');
       putBack(reply.session.id, e.at);
     } catch (x) {
       noteClosed(e);
-      setPaneNote(errorNote(t('shell.chrome.notRestarted', { error: notePlain(t, x) }), x, gone.id));
+      // Start anyway takes the entry back off the closed list, as ⇧⌘T would, and brings it past the hold.
+      const held = heldNote(t, x, agentName(gone.kind, gone.acp_agent), () => void (forgetClosed([e.tab]), bring(e, true)));
+      setPaneNote(held ? { ...(held as Exclude<Note, string>), session: gone.id } : errorNote(t('shell.chrome.notRestarted', { error: notePlain(t, x) }), x, gone.id));
     } finally {
       restarting.delete(gone.id);
     }
