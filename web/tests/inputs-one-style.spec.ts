@@ -362,6 +362,7 @@ const WALKED: Record<string, { count: number; by: string }> = {
   'chat/ComposerWidget.tsx': { count: 1, by: 'exception: the chat composer (EXCEPTIONS)' },
   'chat/HandoffChip.tsx': { count: 1, by: 'inputs_one_style_chat' },
   'features/extension-files.tsx': { count: 1, by: 'inputs_one_style: settings extension file' },
+  'features/extensions.tsx': { count: 1, by: 'inputs_one_style: settings extensions (the MCP form\'s For select)' },
   'features/team.tsx': { count: 1, by: 'the shared :where(textarea) rule; not walked (the Job box opens on Add teammate; tests/team.spec.ts fills it)' },
   'features/setup-scripts.tsx': { count: 1, by: 'the shared :where(textarea) rule; not walked (the script box needs a project chosen in Git & Worktrees, ticket 259)' },
   'features/wt-files.tsx': { count: 1, by: 'the shared :where(textarea) rule; not walked (the sparse-checkout box needs a project chosen in Git & Worktrees)' },
