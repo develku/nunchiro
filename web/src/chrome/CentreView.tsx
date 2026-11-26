@@ -155,9 +155,11 @@ type Props = { pin?: string } & Pick<ReturnType<typeof useTabs>, 'renaming' | 's
     pinned: (pin: string) => Session | null;
   };
 
-/** Ticket 1145 round 3: focus a shown chat may take: on nothing, or still on what opened it (a tree row, a tab, the chat). */
+/** Ticket 1145 round 3: focus a shown chat may take: on nothing, or still on what opened it (a tree row, a tab, the chat).
+ *  WebKit (the app's own view) does not focus a clicked button: the click focuses its pane zone (`.lz`, tabindex -1)
+ *  instead, which counts as nothing. */
 const openerHolds = (el: Element | null) =>
-  !el || el === document.body || (!!el.closest('.tree, [role="tablist"], .chat, .cbox') && !el.closest('.peek, .kidpeek, [role="menu"], [role="dialog"], [role="listbox"], input, [contenteditable="true"], [contenteditable=""]'));
+  !el || el === document.body || el.matches('section.lz') || (!!el.closest('.tree, [role="tablist"], .chat, .cbox') && !el.closest('.peek, .kidpeek, [role="menu"], [role="dialog"], [role="listbox"], input, [contenteditable="true"], [contenteditable=""]'));
 
 /** The terminal widget: the session tab strip, the session head and the session's panes (chat, terminal,
  *  file and imported tabs, splits, side pane); with a pin, that one session's terminal. */

@@ -3,9 +3,9 @@
 // tree's floating layers are glass. Nothing the row said before is lost: every glyph but the working arc, the age, the
 // tooltip words and the counts stay. Reduced motion holds the lights still and the words still say the state.
 import type { Locator, Page } from '@playwright/test';
-import path from 'node:path';
-import { expect, openWindow, REPO, test, type Core } from './fixtures';
+import { expect, openWindow, test, type Core } from './fixtures';
 import { patchSnapshots } from './tree-mock-states';
+import { mockup } from './visual/mockups';
 
 const row = (app: Page, name: string) => app.locator('.tree .row.wt2', { hasText: name });
 const blockOf = (r: Locator) => r.locator('xpath=ancestor::div[contains(concat(" ", @class, " "), " sess ")][1]');
@@ -97,12 +97,12 @@ test('finished_is_a_faint_filled_bar: the head bars and the just-finished edge a
   await expect(app.locator('.grp[data-project="demo"] .cstrip .stip')).toHaveClass(/glass/);
 });
 
-// Measured against the approved mockup's A+B+C window (docs/design/polish-1121, `.win.v-c`): the row height, the word's
+// Measured against the approved mockup's A+B+C window (tests/visual/mockups/polish-abc.html, `.win.v-c`): the row height, the word's
 // size, the working line's thickness and the your-turn edge's width are the mockup's.
 test('rows_measure_as_the_polish_mockup: row 32, word 11 px, working line 1 px, your-turn edge 2 px', async ({ app, core }) => {
   await seed(app, core);
   const m = await app.context().newPage();
-  await m.goto(`file://${path.join(REPO, 'docs/design/polish-1121/index.html')}`);
+  await m.goto(`file://${mockup('polish-abc.html')}`);
   await m.emulateMedia({ reducedMotion: 'reduce' });
   const win = m.locator('.win.v-c:not(.dark)').first();
   const mock = {

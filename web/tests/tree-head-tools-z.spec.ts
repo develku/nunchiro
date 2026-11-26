@@ -58,9 +58,11 @@ test('tools_clickable_on_hover: Open in editor and Set icon (and the pill beside
   for (const sel of ['.ped', '.pic', '.padd:not(.wtadd)', '.wtadd', '.cstrip > .sg[data-tone="o"]']) {
     await head.locator(`:scope > ${sel}, :scope > .r ${sel}`).first().click({ trial: true, timeout: 5000 });
   }
-  // the "+" really answers: it opens the New session dialog.
+  // the "+" really answers: one press starts the default agent in the project (tree-start-1130.spec.ts has the details).
+  const count = () => (core.cli('snapshot', '--json').sessions as unknown[]).length;
+  const before = count();
   await head.locator(':scope > .padd:not(.wtadd)').click();
-  await expect(app.getByRole('dialog')).toBeVisible();
+  await expect.poll(count, { timeout: 15_000 }).toBe(before + 1);
 });
 
 test('name_truncates_not_overflows: a long name ellipsizes while the tools show, the head keeps its height and nothing scrolls sideways', async ({ app, core }) => {

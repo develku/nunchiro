@@ -2,7 +2,6 @@
 // widget take their window text from the catalogue. A key must never change what the owner is asked to approve, so the
 // old text is pinned three ways: the table below (old literal -> key, checked against the base commit's source), the
 // rendered text of every approval state, and the placeholders (library, version, host, hash come from data).
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Rollup } from 'vite';
@@ -14,7 +13,8 @@ import { harnessServer } from './sandbox-server';
 import { libServer } from './fixtures/libs/server';
 
 const WEB = path.resolve(import.meta.dirname, '..');
-const BASE = '193ac455'; // the commit this slice started from: the "before" snapshot lives in its history
+// The source this slice started from (commit 193ac455, which a fresh public clone does not hold), kept verbatim per file.
+const BASE: Record<string, string> = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures/i18n-widgets-base.json'), 'utf8'));
 const PREFIXES = ['widget.', 'approval.', 'decisions.'];
 const FILE = {
   P: 'src/approval/PermissionSheet.tsx',
@@ -155,7 +155,7 @@ const ROWS: [string, string, F, string?][] = [
   ['decisions.clickHint', 'A click does not allow a risky request: keep focus on the button and press Enter.', 'C'],
 ];
 
-const base = (f: F) => execFileSync('git', ['show', `${BASE}:web/${FILE[f]}`], { encoding: 'utf8', cwd: WEB });
+const base = (f: F) => BASE[FILE[f]];
 const now = (f: F) => fs.readFileSync(path.join(WEB, FILE[f]), 'utf8');
 const stripComments = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/ \/\/ .*$/gm, '');
 /** The model check of language-page.spec.ts: JSX text and text attributes. */
@@ -175,6 +175,7 @@ const LATER = new Set([
   'decisions.whatEdit', 'decisions.whatWrite', 'decisions.whyScreen', // ticket 991 B3/B4 (e5929c1b): the card's request words, new
   'decisions.everyPlace', 'decisions.windowShort', // added after this slice by later tickets; the check was not run then (found by w26-en)
   'decisions.alsoInDecisions', 'decisions.alsoInChat', 'decisions.allowOnce', 'decisions.focusEnter', // ticket 1030: the card above the composer, English only
+  'decisions.outward.calendar', 'decisions.outward.mail', 'decisions.outward.post', 'decisions.outward.publish', // the outward-action mark on a card, added later
 ]);
 const newKeys = () => Object.keys(EN).filter((k) => PREFIXES.some((p) => k.startsWith(p)) && !LATER.has(k));
 
@@ -189,7 +190,7 @@ test('english_text_unchanged: every new key holds exactly the text the base sour
   expect(ROWS.length).toBeGreaterThan(100);
   for (const [key, en, f, frag] of ROWS) {
     expect(EN[key as keyof typeof EN], key).toBe(en);
-    expect(base(f).includes(frag ?? en), `${key}: "${frag ?? en}" is in ${FILE[f]} at ${BASE}`).toBe(true);
+    expect(base(f).includes(frag ?? en), `${key}: "${frag ?? en}" is in the base ${FILE[f]}`).toBe(true);
   }
 });
 
@@ -223,7 +224,7 @@ test('fallback_per_string: an injected ko table shows its key in Korean and ever
 });
 
 test('no_catalogue_collision: every new key has a slice prefix, is in the table, and is not a key of the base catalogue', () => {
-  const before = new Set([...execFileSync('git', ['show', `${BASE}:web/src/i18n/index.ts`], { encoding: 'utf8', cwd: WEB }).matchAll(/^\s*'([\w.]+)':/gm)].map((m) => m[1]));
+  const before = new Set([...BASE['src/i18n/index.ts'].matchAll(/^\s*'([\w.]+)':/gm)].map((m) => m[1]));
   expect(before.size).toBeGreaterThan(50);
   const tabled = new Set(ROWS.map((r) => r[0]));
   expect(newKeys().sort()).toEqual([...tabled].sort());

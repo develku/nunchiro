@@ -20,7 +20,7 @@ test('bars_auto_is_kept_only_when_true: absent stays absent, garbage is dropped,
   expect(toggleBars(toggleBarsAuto(b)).barsHidden).toBe(true);
 });
 
-test('rails_autohide: off draws the bars; on hides both, edge and focus bring one back, it is kept, reduced motion has no slide', async ({ app }) => {
+test('rails_autohide: off draws the bars; on hides both, edge and focus bring one back, it is kept, reduced motion has no slide', async ({ app, browserName }) => {
   await openWindow(app);
   await expect(bar(app, 'left')).toHaveAttribute('data-bar', 'left');
   expect(await bar(app, 'left').getAttribute('data-auto')).toBeNull();
@@ -45,7 +45,7 @@ test('rails_autohide: off draws the bars; on hides both, edge and focus bring on
   await expect(bar(app, 'right')).not.toBeInViewport();
 
   await app.locator('.title .cmd').focus(); // Tab from the title bar's search button lands in the left bar, which comes back
-  await app.keyboard.press('Tab');
+  await app.keyboard.press(browserName === 'webkit' ? 'Alt+Tab' : 'Tab'); // WebKit's Tab skips buttons, as Safari's does
   await expect(bar(app, 'left').locator(':focus')).toHaveCount(1);
   await expect(bar(app, 'left')).toBeInViewport({ ratio: 1 });
   await app.evaluate(() => (document.activeElement as HTMLElement).blur());

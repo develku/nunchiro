@@ -6,11 +6,12 @@ import type { Page } from '@playwright/test';
 import { expect, openWindow, REPO, test } from './fixtures';
 import { append, rec, test as chatTest } from './fixtures/chat/harness';
 import { patchSnapshots } from './tree-mock-states';
+import { mockup } from './visual/mockups';
 import { seed } from './tree-seed';
 import { repo, worktree } from './visual/compare';
 
 const SHOTS = path.join(REPO, '.scratch/shots');
-const MOCK = path.join(REPO, 'docs/design/tree-done-1121/index.html');
+const MOCK = mockup('tree-done.html');
 const head = (app: Page, name: string) => app.locator(`.grp[data-project="${name}"] > .row.head`);
 type Snap = { id: string; label: string; state: string; agent_ended?: boolean };
 const snap = (core: { cli: (...a: string[]) => { sessions?: unknown } }) => core.cli('snapshot', '--json').sessions as Snap[];
