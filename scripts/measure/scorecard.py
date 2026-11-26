@@ -33,7 +33,7 @@ Usage:
       days (the seats figure only when a restart fell in them).
   scorecard.py dev [--target DIR] [--out FILE]
       Maintainability figures (part p26): a cold and a warm debug build of the Rust workspace in DIR (a fresh cargo
-      target, removed first), the web build, the gate's Rust test stage (scripts/cargo-test-gate.sh) on that target,
+      target, removed first), the web build, the pull-request gate's Rust test stage (TEST_STAGE) on that target,
       the largest source files, and the files that two or more open lanes (local branches with a commit today that
       origin/main does not have) both change. Writes docs/measure/dev-<date>.json; `page` reads the newest one.
   scorecard.py ops [--clones DIR] [--out FILE]
@@ -336,6 +336,10 @@ def own_folder(path):
     return p
 
 
+# The pull-request gate's Rust test stage (.github/workflows/ci.yml runs it from an archive, split over runners).
+TEST_STAGE = ["cargo", "nextest", "run", "--workspace", "--config-file", "scripts/nextest.toml"]
+
+
 def outside_holder(cmd, env, timeout=3600):
     """(seconds, exit code, output) of cmd run with launchd as its parent: a double fork, so no Nunchiro holder is
     above it (crates/nunchiro-core/src/peer.rs under_holder walks the parents; 29 holder tests fail inside a session).
@@ -412,7 +416,7 @@ def dev_cmd(a):
     warm, p = timed(["cargo", "build", "--workspace"], env)
     web, pw = timed(["pnpm", "--filter", "nunchiro-web", "build"], env)
     md2 = fresh_worktree_test(env, target / "md2")
-    tests, test_rc, test_out = outside_holder(["sh", "scripts/cargo-test-gate.sh"], env)
+    tests, test_rc, test_out = outside_holder(TEST_STAGE, env)
     summary = next((l for l in reversed(test_out.splitlines()) if "Summary" in l or "test result" in l), "")
     files = [(p, int(n)) for n, p in (l.split(None, 1) for l in subprocess.run(
         "git ls-files -z | xargs -0 wc -l", shell=True, cwd=ROOT, capture_output=True, text=True).stdout.splitlines()

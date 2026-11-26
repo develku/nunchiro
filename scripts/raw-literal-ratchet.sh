@@ -1,9 +1,7 @@
 #!/bin/sh
 # The raw-literal ratchet alone, in about a second: a count in scripts/raw-literals.baseline may fall, never rise,
-# and a file outside the baseline may not gain a literal (the same rule scripts/web-smoke.sh applies 15 minutes into
-# the gate). The merge gate runs this first (gate.pre_gate); a lane runs it before it reports.
-# Each offending file is written to $BUILD_LOOP_FAILURES as `build:web/src/<path>`, so the gate blames the lane that
-# touches the file without bisecting. Exit 0 pass, 1 a count rose or is new, 2 usage.
+# and a file outside the baseline may not gain a literal. Run it before opening a pull request that touches web/src.
+# Exit 0 pass, 1 a count rose or is new, 2 usage.
 set -u
 root=$(cd "$(dirname "$0")/.." && pwd)
 base=$root/scripts/raw-literals.baseline
@@ -18,5 +16,4 @@ bad=$(printf '%s\n' "$counts" | awk -v base="$base" '
 [ -z "$bad" ] && { echo "raw-literal ratchet: ok"; exit 0; }
 printf '%s\n' "$bad" | sed 's/^/raw literals: /' >&2
 echo "raw-literal ratchet failed: use a token from web/src/tokens.css (scripts/raw-literals.sh prints the counts)" >&2
-[ -n "${BUILD_LOOP_FAILURES:-}" ] && printf '%s\n' "$bad" | awk '{ sub(/:$/, "", $2); print "build:web/src/" $2 }' | sort -u >> "$BUILD_LOOP_FAILURES"
 exit 1

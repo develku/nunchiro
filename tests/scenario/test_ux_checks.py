@@ -23,9 +23,7 @@ def sh(*args, env=None):
 
 class RatchetScripts(unittest.TestCase):
     def test_scripts_parse(self):
-        for name in ("overlap-check.sh", "noop-click-check.sh", "duplicate-surfaces.sh", "web-smoke.sh"):
-            if name == "web-smoke.sh" and not os.path.exists(os.path.join(SCRIPTS, name)):
-                continue  # the merge-gate script is not in the public export (scripts/public-exclude.txt)
+        for name in ("overlap-check.sh", "noop-click-check.sh", "duplicate-surfaces.sh"):
             self.assertEqual(sh("-n", os.path.join(SCRIPTS, name)).returncode, 0, name)
 
     def ratchet(self, script, base_text, found_text):

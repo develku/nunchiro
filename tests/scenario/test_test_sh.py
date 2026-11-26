@@ -1,5 +1,5 @@
-"""Ticket 1130 C9 (p26 MD1): scripts/test.sh runs a check outside the session's process tree, and
-scripts/cargo-test-gate.sh goes through it inside a session. No network, no cargo: a fake cargo stands in."""
+"""Part p26 MD1: scripts/test.sh runs a check outside the session's process tree. No network, no cargo: a fake
+command stands in."""
 import os
 import signal
 import subprocess
@@ -9,7 +9,6 @@ import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 TEST_SH = os.path.join(ROOT, "scripts", "test.sh")
-GATE = os.path.join(ROOT, "scripts", "cargo-test-gate.sh")
 SESSION = dict(NUNCHIRO_SESSION="s-1", NUNCHIRO_TOKEN="t-1", NUNCHIRO_ARTIFACTS="/nowhere", NUNCHIRO_HOME="/owner-home")
 # What the command reports: the session variables it still sees, and its parent's parent (1: launchd).
 PROBE = 'echo "session=${NUNCHIRO_SESSION:-none} token=${NUNCHIRO_TOKEN:-none} art=${NUNCHIRO_ARTIFACTS:-none} home=${NUNCHIRO_HOME:-none} keep=${KEEP:-none}"; echo "grandparent=$(ps -o ppid= -p $PPID | tr -d " ")"'
@@ -86,30 +85,6 @@ class TestSh(unittest.TestCase):
             with open(pids) as f:
                 for pid in map(int, f.read().split()):
                     self.assert_gone(pid, "after test.sh returned")
-
-
-@unittest.skipUnless(os.path.isfile(GATE), "the public export has no scripts/cargo-test-gate.sh (ticket 1135)")
-class GateInASession(unittest.TestCase):
-    def run_gate(self, **extra):
-        with tempfile.TemporaryDirectory() as d:
-            b = os.path.join(d, "bin")
-            os.mkdir(b)
-            with open(os.path.join(b, "cargo"), "w") as f:
-                f.write("#!/bin/sh\n" + PROBE + "\n")
-            os.chmod(os.path.join(b, "cargo"), 0o755)
-            e = env(GATE_RUNNER="cargo", GATE_ROOT=d, PATH=b + os.pathsep + os.environ["PATH"], **extra)
-            return subprocess.run(["sh", GATE], env=e, capture_output=True, text=True, timeout=60)
-
-    def test_the_gate_runs_outside_the_session_when_it_sees_one(self):
-        p = self.run_gate(**SESSION)
-        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertIn("session=none token=none art=none home=none", p.stdout)
-        self.assertIn("grandparent=1\n", p.stdout)
-
-    def test_outside_a_session_the_gate_runs_in_place(self):
-        p = self.run_gate()
-        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertNotIn("grandparent=1\n", p.stdout)  # a whole line: "grandparent=14480" is not pid 1
 
 
 if __name__ == "__main__":
