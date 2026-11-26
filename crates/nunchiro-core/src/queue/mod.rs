@@ -481,6 +481,10 @@ pub struct Queue {
     /// One request, one card: until when a Claude session's permission frame waits for its held PermissionRequest
     /// hook, set by the PreToolUse hook before it (memory only). Claude draws its dialog before that hook runs.
     hook_expected: BTreeMap<String, u64>,
+    /// When the wait first hid a permission frame of the session: the wait ends `HOOK_EXPECTED_MS` after it, however
+    /// many PreToolUse hooks (a subagent's, a sibling call's) come meanwhile. Cleared once a card or hook item shows
+    /// or the screen clears.
+    hook_hidden: BTreeMap<String, u64>,
     // Ticket 1030 (look v33 R1): a hook item's tool, its input and Claude's own `permission_suggestions`, from which
     // "Allow for this session" forwards only those no broader than the request (`session_scope`; memory only).
     session_rules: BTreeMap<String, (String, Value, Vec<Value>)>,
@@ -724,6 +728,7 @@ impl Queue {
             stacked: BTreeSet::new(),
             tools: BTreeMap::new(),
             hook_expected: BTreeMap::new(),
+            hook_hidden: BTreeMap::new(),
             session_rules: BTreeMap::new(),
             resized: BTreeMap::new(),
             graced: BTreeSet::new(),
@@ -1035,6 +1040,7 @@ impl Queue {
     pub fn close(&mut self, id: &str, failed: bool) -> Result<(), String> {
         self.resized.remove(id);
         self.hook_expected.remove(id);
+        self.hook_hidden.remove(id);
         self.change(|q| {
             if let Some(s) = q.disk.sessions.get_mut(id) {
                 s.attention.failed = failed;
@@ -1336,6 +1342,7 @@ impl Queue {
                 Self::finish(s);
             }
             "PermissionRequest" | "Question" => {
+                self.hook_hidden.remove(id); // its hook item is the card now
                 let question = event == "Question"
                     || QUESTION_TOOLS.contains(&p["tool_name"].as_str().unwrap_or(""));
                 let text = p
@@ -1753,6 +1760,7 @@ impl Queue {
         Ok(())
     }
     pub fn clear_screen(&mut self, id: &str) -> Result<(), String> {
+        self.hook_hidden.remove(id);
         let items = &self
             .disk
             .sessions
@@ -1854,19 +1862,24 @@ impl Queue {
         // PermissionRequest hook makes no card of its own; the hook's item is the card, and its later frames pair with
         // it. With no permission item yet and the hook still expected, wait: the observer reads the still screen again
         // each second, so the frame becomes a card once the wait is over (no hook installed, or it failed).
+        let live_permission = self
+            .disk
+            .sessions
+            .get(id)
+            .ok_or("queue session missing")?
+            .items
+            .iter()
+            .any(|i| i.kind == Kind::Permission && !i.reconciled);
         if kind == Kind::Permission
+            && !live_permission
             && self.hook_expected.get(id).is_some_and(|until| *until > now)
-            && !self
-                .disk
-                .sessions
-                .get(id)
-                .ok_or("queue session missing")?
-                .items
-                .iter()
-                .any(|i| i.kind == Kind::Permission)
         {
-            return Ok(());
+            let since = *self.hook_hidden.entry(id.into()).or_insert(now);
+            if now.saturating_sub(since) < HOOK_EXPECTED_MS {
+                return Ok(());
+            }
         }
+        self.hook_hidden.remove(id);
         self.change(|q| {
             q.disk
                 .sessions
@@ -2686,8 +2699,11 @@ pub const SESSION_ALLOW: &str = "Yes, allow for this session";
 /// answer). The hold still ends when the window goes (`hook_waits`) or the terminal answers (`peer_gone`).
 pub const HOLD_MS: u64 = 1_800_000;
 const HOLDS: usize = 8;
-/// How long after Claude's PreToolUse hook its PermissionRequest hook is expected (`hook_expected`).
-// shortcut: a fixed wait, measured on the trial agent only; raise it if real Claude's hook lands later under load.
+/// How long after Claude's PreToolUse hook its PermissionRequest hook is expected (`hook_expected`), and the most a
+/// permission frame stays hidden from its first hidden read (`hook_hidden`).
+// shortcut: a fixed wait, measured on the trial agent only. It cannot pass ~3.9 s: the accuracy trial counts a dialog
+// with no card for longer as a miss, and `a_dialog_with_no_hook_gets_its_card_within_the_bound_while_tools_go_on`
+// goes red.
 const HOOK_EXPECTED_MS: u64 = 3000;
 
 /// v1b-30: more than one hook permission pending in this session: the screen shows one prompt while the card may
