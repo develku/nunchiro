@@ -198,7 +198,8 @@ def price_table():
 
 
 def usd(parts, model, prices):
-    row = next((p for name, p in prices if model and model.startswith(name)), None)
+    # Same rule as the core's price_of: a prefix never ends inside a number (claude-fable-5-2026... is not Fable 5.2).
+    row = next((p for name, p in prices if model and re.match(re.escape(name) + r"(?!\d)", model)), None)
     return None if row is None else sum(a * b for a, b in zip(parts, row)) / 1e9
 
 
@@ -557,6 +558,7 @@ def selftest():
     assert minutes([60, 180]) == dict(n=2, median_min=2, p90_min=3)
     prices = price_table()
     assert len(prices) > 10 and usd([1000, 0, 0, 0], "claude-opus-5-5-x", prices) == 0.004, prices[:3]
+    assert usd([1000, 0, 0, 0], "claude-fable-5-20261001", prices) == 0.01, "dated Fable 5 is not Fable 5.2"
     assert usd([1, 1, 1, 1], "unknown-model", prices) is None and folder_key("a.b/c-1") == "a-b-c-1"
     ev = [dict(type="session_started", at=0, session="s", state="working"), dict(type="state", at=60_000, session="s", state="waiting"),
           dict(type="room_message", at=180_000, data=dict(kind="team", body="core nudged B (quiet 21 min)", team=dict(what="advance", seat="s"))),

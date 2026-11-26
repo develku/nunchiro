@@ -100,13 +100,15 @@ pub struct Link {
 }
 
 /// Where `PRICES` comes from: Anthropic's public price page, read on the date shown (Claude rows; GPT-5 is OpenAI's list).
-pub const PRICE_SOURCE: &str = "Anthropic list prices, https://platform.claude.com/docs/en/about-claude/pricing, checked 2026-11-02";
+pub const PRICE_SOURCE: &str = "Anthropic list prices, https://platform.claude.com/docs/en/about-claude/pricing, checked 2026-11-27";
 
 /// Millionths of a dollar per token = milli-dollars per million tokens / 1000: (input, output, cache write, cache
-/// read). Public list prices, an estimate (`PRICE_SOURCE`); the first prefix that matches wins, so a longer name goes first.
+/// read). Public list prices, an estimate (`PRICE_SOURCE`); the first prefix that matches wins, so a longer name goes first,
+/// and a prefix never ends inside a number (`price_of`).
 // shortcut: a model not listed is left out of the cost and counted as `unpriced`; add it when a new model ships.
 // shortcut: Haiku 5.5 is priced at its up-to-100k-prompt tier (5x above that), so a long prompt is under-estimated.
 const PRICES: &[(&str, [u64; 4])] = &[
+    ("claude-fable-5-2", [8000, 40000, 10000, 200]),
     ("claude-fable-5-1", [10000, 50000, 12500, 250]),
     ("claude-fable-5", [10000, 50000, 12500, 1000]),
     ("claude-opus-5-5", [4000, 20000, 5000, 200]),
@@ -117,7 +119,7 @@ const PRICES: &[(&str, [u64; 4])] = &[
     ("claude-opus-4-5", [5000, 25000, 6250, 500]),
     // Opus 4 and 4.1 only: a later 4.x id is left unpriced rather than priced at 4.1 rates.
     ("claude-opus-4-1", [15000, 75000, 18750, 1500]),
-    ("claude-opus-4-2", [15000, 75000, 18750, 1500]),
+    ("claude-opus-4-20250514", [15000, 75000, 18750, 1500]),
     ("claude-sonnet-5-5", [2000, 10000, 2500, 100]),
     ("claude-sonnet-5", [2000, 10000, 2500, 200]),
     ("claude-sonnet-4", [3000, 15000, 3750, 300]),
@@ -125,11 +127,13 @@ const PRICES: &[(&str, [u64; 4])] = &[
     ("claude-haiku-4-5", [1000, 5000, 1250, 100]),
     ("gpt-5", [1250, 10000, 0, 125]),
 ];
-/// The price row of `model`, by the first matching prefix.
+/// The price row of `model`, by the first matching prefix that does not end inside a number, so a dated
+/// `claude-fable-5-20261001` stays Fable 5 and is not read as Fable 5.2.
 pub fn price_of(model: &str) -> Option<[u64; 4]> {
-    PRICES
-        .iter()
-        .find_map(|(p, price)| model.starts_with(p).then_some(*price))
+    PRICES.iter().find_map(|(p, price)| {
+        let rest = model.strip_prefix(p)?;
+        (!rest.starts_with(|c: char| c.is_ascii_digit())).then_some(*price)
+    })
 }
 
 /// One counted message or turn: its time, the sum `Totals` counts, and the four parts a price applies to.
