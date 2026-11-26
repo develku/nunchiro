@@ -1295,6 +1295,10 @@ mod tests {
         let login = " Claude Code can be used with your Claude subscription or billed based on API usage through your Console\n account.\n\n Select login method:\n\n \u{276f} 1. Claude account with subscription \u{b7} Pro, Max, Team, or Enterprise\n\n   2. Anthropic Console account \u{b7} API usage billing\n\n   3. 3rd-party platform \u{b7} Amazon Bedrock, Microsoft Foundry, or Vertex AI\n";
         let d = fed(login).detect(AgentKind::Claude).expect("login");
         assert_eq!((d.kind, d.choices.len()), (Kind::Dialog, 3));
+        // Codex's update screen, which Nunchiro keeps off (sessions/spawn.rs): a card if it ever shows.
+        let update = "\u{2728} Update available! 0.161.0 -> 0.170.0\n\n\u{203a} 1. Update now\n  2. Skip\n  3. Skip until next version\n\n  Press enter to continue\n";
+        let d = fed(update).detect(AgentKind::Codex).expect("update");
+        assert_eq!((d.kind, d.choices.len()), (Kind::Dialog, 3));
     }
 
     /// Codex animates its logo above the sign-in screen for about ten seconds: the card's text starts at its welcome

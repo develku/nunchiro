@@ -76,9 +76,11 @@ def send_mail(arguments):
 
 config = os.environ.get('CODEX_HOME' if codex else 'CLAUDE_CONFIG_DIR', '')
 START = {
-    'trust': ('You are running Codex in {cwd}\r\n\r\n  Since this folder is not version controlled, we recommend requiring '
-              'approval of all edits and commands.\r\n\r\n  Do you trust the contents of this directory?\r\n\r\n'
-              '› 1. Yes, continue\r\n  2. No, quit\r\n\r\n  Press enter to continue\r\n') if codex else
+    # Codex 0.162.1's own text (crates/nunchiro-core/tests/fixtures/start-screens/codex-0.162.1-trust.txt).
+    'trust': ('  Folder access\r\n  {cwd}\r\n\r\n  Trust this folder? Codex can read, edit, and run files here, subject to '
+              'your permission settings. Folder settings can run code automatically, even without a\r\n  model request. '
+              'Continue only if you trust these files. Your trust decision will be saved.\r\n\r\n'
+              '› 1. Trust and continue\r\n  2. Quit\r\n\r\n  enter continue · esc quit\r\n') if codex else
              (' Accessing workspace:\r\n\r\n {cwd}\r\n\r\n Quick safety check: Is this a project you created or one you '
               'trust? (Like your own code, a well-known open source project, or work from your team).\r\n\r\n'
               ' ❯ 1. Yes, I trust this folder\r\n   2. No, exit\r\n\r\n Enter to confirm · Esc to cancel\r\n'),
