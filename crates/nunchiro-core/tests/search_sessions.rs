@@ -684,7 +684,8 @@ fn rss_kib(pid: u32) -> u64 {
         .unwrap_or(0)
 }
 
-/// Spec V2-7 acceptance 1 and 3 over a generated 500 MB fixture of 100 transcripts (Claude and Codex, 80 closed):
+/// Spec V2-7 acceptance 1 and 3 over a generated 500 MB fixture of 80 transcripts (Claude and Codex, 50 closed; the core
+/// keeps at most 32 live sessions and the newest 50 Closed rows, so this is as many as it lists):
 /// time to the first hit for 20 phrases (each in 3 sessions spread over the list), p95 under 1 s; core memory growth
 /// during the scans under 50 MB; a permission raised mid-scan queued within 1 s. Also reported, with no bar: opening
 /// the first hit of each phrase (`sessions_hit` on a never-opened session builds its chat cache). Opt in: `cargo test -p nunchiro-core --features measure --test search_sessions search_sessions_perf_500mb -- --nocapture`, with
@@ -698,8 +699,8 @@ fn search_sessions_perf_500mb() {
     fs::create_dir_all(&agents).unwrap();
     let agents = agents.canonicalize().unwrap();
     let core = Core::at(home::short("srchp"), &agents);
-    const SESSIONS: usize = 100;
-    const LINES: usize = 5_000; // about 1 KB each: 5 MB per transcript
+    const SESSIONS: usize = 80;
+    const LINES: usize = 6_500; // about 1 KB each: 6.5 MB per transcript
     let filler = "the agent read the file, ran the tests and explained what changed in the module "
         .repeat(12);
     let mut ids = vec![];
@@ -718,10 +719,10 @@ fn search_sessions_perf_500mb() {
             body.push('\n');
         }
         for i in 0..LINES {
-            // Phrase p lives in sessions p*5 % 100, (p*5+33) % 100 and (p*5+66) % 100, at a line deep in the file.
+            // Phrase p lives in sessions p*4, (p*4+27) % 80 and (p*4+53) % 80 (one phrase per session), at a line deep in the file.
             let phrase = (0..20)
                 .find(|p| {
-                    [p * 5, (p * 5 + 33) % 100, (p * 5 + 66) % 100].contains(&n)
+                    [p * 4, (p * 4 + 27) % 80, (p * 4 + 53) % 80].contains(&n)
                         && i == LINES - 10 - p
                 })
                 .map(|p| format!(" quokka{p:02}zebra"))
@@ -736,7 +737,7 @@ fn search_sessions_perf_500mb() {
         }
         total += body.len() as u64;
         fs::write(&path, body).unwrap();
-        if n >= 20 {
+        if n >= 30 {
             core.close(&s);
         }
         ids.push(s.id);
