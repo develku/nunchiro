@@ -86,7 +86,8 @@ for (const pick of PICKS)
     await openChat(page, s.id);
     await page.getByRole('navigation', { name: 'Right bar' }).getByRole('button', { name: 'Diff', exact: true }).click();
     const sec = page.getByRole('complementary', { name: 'Diff' }).getByRole('region', { name: 'Diff of size.ts' });
-    await expect(sec.locator('tr.add .sh').first()).toBeVisible();
+    // The first highlight loads the highlighter and the grammar: seconds on a cold, slow WebKit runner.
+    await expect(sec.locator('tr.add .sh').first()).toBeVisible({ timeout: 15_000 });
     await expect(sec.locator('tr.del .sh').first()).toBeVisible();
     await shot(page.getByRole('complementary', { name: 'Diff' }), `diff-${slug(pick.name)}`);
     readable(await measure(sec));

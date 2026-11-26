@@ -110,7 +110,8 @@ export function useGlobalKeys({ editing, palette, finish, arrange, setMessage, d
       if (keyCapture.active || hints || copyId) return;
       // The "+" popover's and the project wizard's own fields take Enter, Cmd+Enter included: they start their session, not the composer's.
       // Ticket 374: so does a Diff line note's field, which only adds its note to the composer (never sends it).
-      if (composerKey(bindings, chord) && document.activeElement?.closest('.newtab, .newsess, .dnotebox')) return;
+      // And the New bot and Hand to a bot dialogs: Cmd+Enter is their Create and Hand over.
+      if (composerKey(bindings, chord) && document.activeElement?.closest('.newtab, .newsess, .dnotebox, .newbot')) return;
       if (pane && !e.metaKey) {
         // v1a-43: every key belongs to pane mode, composing or not (none reaches the PTY); fixed keys by physical code.
         e.preventDefault();

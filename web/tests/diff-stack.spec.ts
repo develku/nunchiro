@@ -67,8 +67,13 @@ test('diff_stack_all_files_coloured_and_collapsible', async ({ page, chatCore })
   await shot(page, 'dark');
   await page.evaluate(() => (document.documentElement.dataset.theme = 'light'));
   // Every file is in the same view: scrolling to the end reaches the last one; a click in the list scrolls to its file.
-  await dock(page).locator('.dstack').evaluate((e) => (e.scrollTop = e.scrollHeight));
-  await expect(file(page, names[19]).locator('tr.add')).toHaveCount(4);
+  // Sections mount as they near the viewport and their heights settle after, so the end moves: scroll again until it holds.
+  await expect
+    .poll(async () => {
+      await dock(page).locator('.dstack').evaluate((e) => (e.scrollTop = e.scrollHeight));
+      return file(page, names[19]).locator('tr.add').count();
+    })
+    .toBe(4);
   await list(page).filter({ hasText: names[10] }).click();
   await expect(file(page, names[10]).locator('.fhead')).toBeInViewport();
   // Collapse one file with its chevron.

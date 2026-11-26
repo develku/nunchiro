@@ -7,7 +7,7 @@ export const SURFACES: Record<string, string[]> = {
   // V2-CF3: a managed worktree's row: its own actions beside the session ones (they act on the row, which the click selects).
   // Mockup 05 (owner-approved): the items it draws, in its order. "New worktree" is the project row's button, not repeated here (NODUP).
   // Q6 A14: one row menu: a worktree row with a session also restarts, closes and diffs it (the `treerow` session items).
-  worktree: ['worktree.open', 'session.new', 'worktree.rename', 'worktree.copy-path', 'worktree.reveal', 'worktree.open-editor', 'session.stop', 'session.restart', 'session.close', 'session.settle', 'diff.open', 'worktree.remove'], // 1063: Move to done
+  worktree: ['worktree.open', 'session.new', 'worktree.hand', 'worktree.rename', 'worktree.copy-path', 'worktree.reveal', 'worktree.open-editor', 'session.stop', 'session.restart', 'session.close', 'session.settle', 'diff.open', 'worktree.remove'], // 1063: Move to done
   // V2.5-55 (needs 178 B1): a main-folder session's row: the `tree` items with the inline rename (not the tab's) and Copy path.
   treerow: ['session.new', 'session.stop', 'session.restart', 'session.close', 'session.settle', 'session.rename', 'session.copy-path', 'session.open-editor', 'focus.terminal', 'diff.open', 'worktree.tidy'],
   tab: ['session.new', 'session.stop', 'session.restart', 'session.close', 'tab.close', 'tab.close.others', 'tab.close.right', 'tab.close.all', 'tab.reopen', 'tab.rename', 'tab.move.left', 'tab.move.right', 'tab.split.right', 'tab.split.down', 'terminal.find'],

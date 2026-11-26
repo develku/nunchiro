@@ -32,6 +32,7 @@ import './chat.css';
 import './handoff.css'; // v2-3b
 import { keyText } from '../keys';
 import { freshSeats } from '../lead/lead';
+import { FirstChat } from '../bots/FirstChat';
 
 interface State {
   generation: number | null;
@@ -432,6 +433,8 @@ function ChatList({ boot, feed, session, shown, readOnly, head, main, t }: { t: 
           </div>
           </Pending.Provider>{/* v1b-12 */}
         </Open.Provider>
+      {/* A new bot's first chat: its SOUL card and its seat card follow the last row (bots/FirstChat.tsx). */}
+      {main && !readOnly && session.teammate && <FirstChat t={t} session={session} working={session.attention.working} />}
       {/* Always present, so a screen reader hears the row that appears in it (a live region added with its text is often skipped). */}
       <div className="wlive" role="status">
         {working && !emptyChat && <Working key={session.attention.working_since ?? 0} t={t} since={session.attention.working_since} />}

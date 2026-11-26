@@ -4,10 +4,15 @@ What changed for people who use Nunchiro. Newest first. Nunchiro is in developme
 
 ## 2026-11-26
 
-- A message you send to a session that waits at a start question (such as Claude's folder trust) is no
-  longer refused: it waits in that session's queue and goes in once you answer the question in its terminal. From
-  the command line, `nunchiro agent prompt` now says which session waits at which question, on which Mac, and how to
-  drop the message, instead of only `agent_blocked`.
+- A new bot takes a name and one sentence: "New bot" in the Bots view, or "New bot…" in the command palette. Its face
+  is given and a press changes it, and six starts (Lead, Reviewer, Release notes, Chief, Peer watch, Docs) fill the
+  sentence. Its chat opens at once: the bot greets you with one question, does one small job and writes its own SOUL
+  file, which the chat shows on a card with Read, Edit and Undo. A Lead or Chief start asks in the chat where the
+  bot sits; nobody takes a seat before you say so.
+- A bot can offer you a new bot when the same kind of work keeps coming back. You get a card in Decisions with the
+  name, the job and what the bot counted; nothing is made before you press Create bot.
+- "Hand to a bot…" in a worktree row's menu hands that worktree to a bot you pick, with a line on what to do with it.
+  The bot's chat opens; with no line, the bot asks.
 - Bots have their own view ("Open Bots" in the command palette, also reached from Settings). Every bot has a face
   that shows its state (resting, working, needs you), a seat (Chief for the office, Lead of one project, or none), a
   SOUL file that says who it is and that you can edit there, its schedules, and its model settings. A project lead's
@@ -29,6 +34,13 @@ What changed for people who use Nunchiro. Newest first. Nunchiro is in developme
   waits for a card in Nunchiro, also in full access, and runs only when you allow it. For ACP agents this covers
   commands the agent asks Nunchiro to run; a tool an agent runs inside itself is outside Nunchiro's reach.
 - A Codex start whose extra arguments set hooks is refused; keep your own hooks in Codex's config file.
+- Fixed: on a second Mac driven over SSH, agents said "Not logged in" (and `gh` that its token was invalid) when
+  Nunchiro's background service had been started by the SSH connection. It is now started in that Mac's login
+  session. When nobody is logged in there, the Machines page says that its agents may not be signed in and what to do.
+- A message you send to a session that waits at a start question (such as Claude's folder trust) is no
+  longer refused: it waits in that session's queue and goes in once you answer the question in its terminal. From
+  the command line, `nunchiro agent prompt` now says which session waits at which question, on which Mac, and how to
+  drop the message, instead of only `agent_blocked`.
 
 ## 2026-11-25
 

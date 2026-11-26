@@ -1727,3 +1727,128 @@ fn a_second_push_still_listing_an_answered_item_shows_it_again() {
     push(&h, vec![row("r1", &["a", "b", "c"])]);
     wait_for("a again", || pending_ids(&h) == ["a", "b", "c"]);
 }
+#[cfg(target_os = "macos")]
+mod ssh_login {
+    use super::*;
+    // A relay that an SSH login runs must not start the core as that login's child: on macOS such a core, and every agent
+    // it starts, cannot read the login keychain. The core is started through the user's login session (a one-shot launchd
+    // job); `launchctl` here is a script that stands in for it.
+    struct SshLogin {
+        local: Harness,
+        remote_home: PathBuf,
+    }
+    impl SshLogin {
+        /// `launchctl`: the script's body; it gets the relay's environment (`NUNCHIRO_HOME` is the remote home).
+        fn new(launchctl: &str) -> Self {
+            use std::os::unix::fs::PermissionsExt;
+            let remote_home = home::short("machine");
+            let script = remote_home.join("launchctl");
+            fs::write(
+                &script,
+                format!(
+                    "#!/bin/sh\necho \"$@\" >> \"$NUNCHIRO_HOME/launchctl.log\"\n{launchctl}\n"
+                ),
+            )
+            .unwrap();
+            fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
+            let shim = format!(
+                "export SSH_CONNECTION='192.0.2.1 50000 192.0.2.2 22' NUNCHIRO_LAUNCHCTL='{}'\nexec '{}' \"$@\"",
+                script.display(),
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../scripts/scenario/fake-ssh")
+                    .display()
+            );
+            let local = Harness::configured(
+                &shim,
+                Some(json!({"machines":{"other":{"projects":{}}}})),
+                Some(&remote_home),
+            );
+            // The owner's first snapshot opens the channel; its relay finds no core on the other side and starts one.
+            local.call(None, json!({"op":"snapshot"})).unwrap();
+            wait_for("the remote core", || {
+                std::os::unix::net::UnixStream::connect(remote_home.join("core.sock")).is_ok()
+            });
+            Self { local, remote_home }
+        }
+        fn started_env(&self) -> Value {
+            let record = fs::read(self.remote_home.join("core.start.json")).unwrap();
+            serde_json::from_slice::<Value>(&record).unwrap()["env"].clone()
+        }
+        fn launchctl_log(&self) -> String {
+            fs::read_to_string(self.remote_home.join("launchctl.log")).unwrap_or_default()
+        }
+    }
+    impl Drop for SshLogin {
+        fn drop(&mut self) {
+            let _ = home::git_env::scrubbed(env!("CARGO_BIN_EXE_nunchiro"))
+                .args(["serve", "stop", "--yes"])
+                .env("NUNCHIRO_HOME", &self.remote_home)
+                .env_remove("NUNCHIRO_TOKEN")
+                .env_remove("NUNCHIRO_MACHINE")
+                .output();
+            let until = Instant::now() + Duration::from_secs(5);
+            while self.remote_home.join("core.sock").exists() && Instant::now() < until {
+                thread::sleep(Duration::from_millis(20));
+            }
+            let _ = fs::remove_dir_all(&self.remote_home);
+        }
+    }
+    #[test]
+    fn relay_in_an_ssh_login_starts_the_core_through_the_login_session() {
+        // launchd runs the job with its own environment: nothing of the SSH login is in it.
+        let p = SshLogin::new(
+            "[ \"$1\" = bootstrap ] || exit 0\ncp \"$3\" \"$NUNCHIRO_HOME/job.plist\"\nenv -u SSH_CONNECTION -u NUNCHIRO_LAUNCHCTL \"$NUNCHIRO_BIN\" serve start --here >/dev/null 2>&1 &",
+        );
+        let uid = unsafe { libc::getuid() };
+        let log = p.launchctl_log();
+        assert!(log.contains(&format!("bootstrap gui/{uid} ")), "{log}");
+        let job = fs::read_to_string(p.remote_home.join("job.plist")).unwrap();
+        assert!(
+            job.contains("<string>serve</string><string>start</string><string>--here</string>"),
+            "{job}"
+        );
+        assert!(
+            job.contains(&format!(
+                "<key>NUNCHIRO_HOME</key><string>{}</string>",
+                p.remote_home.display()
+            )),
+            "{job}"
+        );
+        assert!(p.started_env()["SSH_CONNECTION"].is_null());
+        // Nothing stays behind: the job is removed from launchd, and its file is gone.
+        wait_for("the job's removal", || {
+            p.launchctl_log()
+                .contains(&format!("bootout gui/{uid}/dev.nunchiro.core-start."))
+        });
+        let file = log.lines().next().unwrap().rsplit(' ').next().unwrap();
+        assert!(
+            file.ends_with(".plist") && !std::path::Path::new(file).exists(),
+            "{log}"
+        );
+        // The rows arrive and the machine reads as usual.
+        wait_for("the channel", || {
+            machine(&p.local, "other")["channel"]["state"] == "up"
+        });
+        assert!(machine(&p.local, "other")["channel"]["error"].is_null());
+    }
+    #[test]
+    fn core_started_inside_an_ssh_login_is_reported_on_the_driving_machine() {
+        // Nobody is logged in at that Mac: launchd has no login session to start the job in.
+        let p = SshLogin::new("[ \"$1\" != bootstrap ] || exit 125");
+        assert!(p.started_env()["SSH_CONNECTION"].is_string());
+        let mut last = Value::Null;
+        wait_for("the sign-in note", || {
+            last = machine(&p.local, "other");
+            last["channel"]["error"]
+                .as_str()
+                .is_some_and(|e| e.contains("may not be signed in"))
+        });
+        assert_eq!(last["channel"]["state"], "up", "{last}");
+        assert_eq!(last["status"], "reachable", "{last}");
+        let note = last["channel"]["error"].as_str().unwrap();
+        assert!(
+            note.contains("other") && note.contains("serve restart"),
+            "{note}"
+        );
+    }
+}

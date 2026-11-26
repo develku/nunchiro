@@ -71,6 +71,7 @@ ourselves, is 521 MiB.
 | Snapshot reply per session (KiB) | 2 | 50 | v1, unchanged | run |
 | Seats lost per restart, 7 days (field) | 0 | 1 | 100: a peer loses none: Orca's daemon kept its 4 sessions while the app was closed and through four launches and quits of the app (peers.py 11-26). 0: one seat per restart, the UO4 fail line | owner-run, see p08 |
 | Missed prompts per 1,000 delivered, 7 days (field) | 0 | 5 | 100: cmux never types into the terminal, so it has no dropped Enter (cmux docs/agent-messages.md:3). 0: own bar: at a few hundred prompts a day, 5 per 1,000 is a miss the person must fix every day, the UO2 fail line | not yet, see p08 |
+| Memory-pressure kills on this Mac while Nunchiro runs seats, 7 days (field) | 0 | 3 | 100: none; the Mac must stay responsive with seats running. 0: own bar: one kill every other day; a single low-memory kill froze the owner's 16 GB Mac on 2026-11-25 with five seats. Counted from the JetsamEvent reports in /Library/Logs/DiagnosticReports whose time falls while the core held at least one seat | owner-run, not yet scripted |
 | Clean hours of a 24 h soak with 20 real sessions | 24 | 0 | own bar from scripts/measure/measurelib.py:397-409 (0 crashes, 0 stuck terminals, footprint at the end at most 1.25 x minute 2), run for 24 h instead of 10 min | owner-run, see p08 |
 | Install on a fresh folder (success of 5) | 5 of 5 | 0 of 5 | v1, unchanged | run |
 | Owner installs that landed, last 20 green mainwatch runs (%) | 100 | 0 | v1, unchanged | run |
@@ -113,7 +114,7 @@ is ignored. The figure names are the keys of ANCHORS in scripts/measure/scorecar
 | p11 | Feature cohesion | peer tasks | T6, T7, T8, T12, driven and timed | owner-run, not yet |
 | p12 | Test reliability | number + rubric | gate green rate, gate duration; TR1-TR3 | script and reading |
 | p13 | First use | peer tasks | T1 from the download page, T2, T10, driven and timed | owner-run, not yet |
-| p14 | Optimization and resources | field + number | idle CPU and memory at 5 real agent sessions with holders; memory per session, sessions.json and snapshot growth | growth: script; idle: owner-run (`weigh`) |
+| p14 | Optimization and resources | field + number + rubric | idle CPU and memory at 5 real agent sessions with holders; memory per session, sessions.json and snapshot growth; memory-pressure kills, 7 days; ML1 | growth: script; idle: owner-run (`weigh`); kills: owner-run, not yet scripted; ML1: rubric |
 | p15 | Speed | number | restored launch, cold launch, core start, terminal key to paint | script; key to paint owner-run |
 | p16 | Bot and team operation | peer rows | rows BT1-BT7 | reading; BT2 needs a look at the running app |
 | p17 | Docs accuracy | rubric | DA1-DA5 | reading |
@@ -318,6 +319,10 @@ crates/nunchiro-core/src/sessions/deliver.rs:154, but no count of delivered prom
 
 Unchanged from v1 unless marked. Under rule 3 these checks count only when their tests ran green in this run: RR3,
 ST1, ST2, AC1, AC2, AC3, DS3, DS4, DE3, DE4, IN2. The checks of p06, p16 and p22 are rows now (see "Capability rows").
+
+### p14 Optimization and resources (rubric row)
+
+- ML1 Under memory pressure the app protects the Mac before it starts another seat. pass: it reads the system's memory pressure, warns, and holds a new seat until the owner overrides or pressure falls; partial: it warns only; fail: nothing. The evidence is a test that fakes the pressure reading and shows the hold.
 
 ### p02 Release readiness
 - RR1 A signed and notarized build is produced by a script in the repo.
@@ -547,6 +552,8 @@ Where v2 differs from the audit's proposal, and why:
 - "Take the best of the three peers as 100" for launch: kept as the approved 0.3 s (herdr), although herdr's figure
   is an empty start and ours is a restored one. Stricter than the peer's own condition; kept because it was approved.
 - Reach leaves out Windows, Linux and cloud sandboxes: docs/product.md says who the app is not for.
+
+- Owner decision 2026-11-26 (stricter): p14 adds memory-pressure kills over 7 days and row ML1. The Mac staying responsive is the owner's second priority, and the idle figures alone scored a frozen Mac the same as a calm one.
 
 Not changed in v2 (the audit's lower-priority list, outside the approval of 2026-11-26): the weight of the default
 permission in Security, the time-to-restore anchor, three runs per skill trial, and the samples the judge picks in

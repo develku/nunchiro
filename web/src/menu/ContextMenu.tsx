@@ -36,7 +36,7 @@ export function ContextMenu({ commands, bindings, activate, say }: { commands: C
   const [at, setAt] = useState(0);
   const box = useRef<HTMLDivElement>(null);
   // A surface lists its commands in its own order (V2-CF3: the worktree's own first); a row with no session has nothing to stop.
-  const items = m ? [...new Set(SURFACES[m.surface] ?? [])].flatMap((id) => [...commands, ...(probe?.commands ?? [])].filter((c) => c.id === id && !(!m.session && (ROW_SESSION.has(id) || (m.surface === 'worktree' && id === 'diff.open')))))
+  const items = m ? [...new Set(SURFACES[m.surface] ?? [])].flatMap((id) => [...commands, ...(probe?.commands ?? [])].filter((c) => c.id === id && c.menu !== false && !(!m.session && (ROW_SESSION.has(id) || (m.surface === 'worktree' && id === 'diff.open')))))
         // Look 1117 (F2): a row whose session has ended has nothing to stop; Restart is its action, so Stop is not offered.
         .filter((c) => !(c.id === 'session.stop' && m.session && off(c, m)))
         // Ticket 991 A14: a row's menu stops that row's session, not "the current" one.

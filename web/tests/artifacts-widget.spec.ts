@@ -101,7 +101,8 @@ test('artifacts widget: each entry opens in one click', async ({ page, chatCore 
   await openWidget(page);
   before = await clicks();
   await changed(page).filter({ hasText: 'src/lib.rs' }).getByRole('button').click();
-  await expect(page.getByRole('region', { name: 'Diff of src/lib.rs' }).locator('tr.add')).toHaveText([/c/, /d/]);
+  // The patch comes from git through the core: seconds on a slow runner.
+  await expect(page.getByRole('region', { name: 'Diff of src/lib.rs' }).locator('tr.add')).toHaveText([/c/, /d/], { timeout: 15_000 });
   expect((await clicks()) - before).toBe(1);
 });
 

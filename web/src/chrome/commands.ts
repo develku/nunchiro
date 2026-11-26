@@ -69,6 +69,7 @@ import type { useLifetime } from '../settings/lifetime/useLifetime';
 import type { useAppSettings } from '../settings/useAppSettings';
 import type { useKeySink } from './useGlobalKeys';
 import type { Bars } from '../layout/bars';
+import { askNewBot } from '../bots/bots';
 
 async function detach() {
   if (!('__TAURI_INTERNALS__' in window)) return;
@@ -412,7 +413,8 @@ export function buildCommands({ resume, ordered, board, ownerList, current, t, o
       run: () => (setSettings((s) => ({ ...s, settingsPage: f.page })), setOverlay('settings'), setSettingsFocus((d) => ({ key: f.key, n: (d?.n ?? 0) + 1 }))),
     })),
     ...projectCommands(pt, current, sessions, t, team.teammates.some((m) => !m.project) ? team.home : ''), // V2-9a: group.*, project.pin, tree.expand-all, projects.pick
-    ...worktreeCommands(wt, current, projectList[0]?.project ?? null, t), // V2-8a; rc2b-fb: with the window's language
+    // A row menu offers "Hand to a bot…" only once there is a bot: with none, the tree's menus are as they were.
+    ...worktreeCommands(wt, current, projectList[0]?.project ?? null, t).map((c) => (c.id === 'worktree.hand' && !team.teammates.length ? { ...c, menu: false } : c)), // V2-8a; rc2b-fb: with the window's language
     ...leaderCommands(pt, current, team, t), // ticket 990: Add a leader to this project…
     // Ticket 473: translated; Palette's rank reads `name`, not the title's shape.
     ...ordered.map((s) => ({ id: `session.open.${s.id}`, title: t('palette.goTo', { name: sessionName(s), project: base(s.project) }) + tell(s), name: sessionName(s), state: paletteState(s), branch: wt.list.find((l) => l.path === s.cwd)?.branch || undefined, run: () => open(s.id) })),
@@ -435,6 +437,7 @@ export function buildCommands({ resume, ordered, board, ownerList, current, t, o
     // Ticket 1099 (feature cohesion): the places that had no palette row, each opened the way its icon or page opens it.
     ...(['usage', 'team', 'assistants'] as const).map((page): Command => ({ id: `${page}.page`, title: t(`coh.cmd.${page}Page`), run: () => (setSettings((s) => ({ ...s, settingsPage: page })), setOverlay('settings')) })),
     { id: 'bots.open', title: t('bots.cmd.open'), run: () => setOverlay('bots') }, // ticket 1168
+    { id: 'bots.new', title: t('bots.cmd.new'), run: askNewBot },
     { id: 'decisions.open', title: t('coh.cmd.decisions'), run: openCmd('decisions') }, // the Outbox's cards are in Decisions
     { id: 'schedules.open', title: t('coh.cmd.schedules'), run: () => openSchedules() },
     { id: 'schedules.new', title: t('coh.cmd.scheduleNew'), run: () => openSchedules(NEW_SCHEDULE) },

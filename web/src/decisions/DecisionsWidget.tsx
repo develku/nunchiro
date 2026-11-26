@@ -15,6 +15,7 @@ import { ErrorLine, rawError } from '../errors';
 import type { CoreClient } from '../api';
 import { MergeCard } from '../notes/MergeCard';
 import { RoleCard } from '../lead/RoleCard';
+import { BotOfferCard } from '../bots/BotOfferCard';
 import { GoalCard } from '../lead/GoalCard';
 import { OutboxCard } from '../lead/OutboxCard';
 import { ScheduleCard } from '../schedule/ScheduleCard';
@@ -237,6 +238,7 @@ export function DecisionsWidget({ sessions, onAnswer, ask, onBack, onFocused, on
   const merges = owner.filter((d) => d.owner?.type === 'merge');
   const byId = withResumed(new Map(sessions.map((s) => [s.id, s])), sessions); // a merge card filed before its lead's Resume
   const roles = owner.filter((d) => d.owner?.type === 'role');
+  const offers = owner.filter((d) => d.owner?.type === 'bot');
   const goals = owner.filter((d) => d.owner?.type === 'goal');
   const schedules = owner.filter((d) => d.owner?.type === 'schedule'); // ticket 993
   const outbox = owner.filter((d) => d.owner?.type === 'outward'); // ticket 1002 lane 2
@@ -255,6 +257,9 @@ export function DecisionsWidget({ sessions, onAnswer, ask, onBack, onFocused, on
           ))}
           {roles.map((d) => (
             <RoleCard key={d.id} d={d} onAnswer={onAnswer} t={t} />
+          ))}
+          {offers.map((d) => (
+            <BotOfferCard key={d.id} d={d} home={home} onAnswer={onAnswer} t={t} />
           ))}
           {goals.map((d) => (
             <GoalCard key={d.id} d={d} onAnswer={onAnswer} t={t} />
