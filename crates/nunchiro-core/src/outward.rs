@@ -737,4 +737,46 @@ mod tests {
             None
         );
     }
+
+    /// A fake `codex` in its own folder that waits `wait` seconds before it answers the start check, answering
+    /// `listed` to `hooks/list`; its pid goes to `pid` in that folder.
+    fn late_codex(wait: u32, listed: bool) -> (CodexAsk, std::path::PathBuf) {
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.scratch")
+            .join(format!("cxlate-{}", crate::store::new_id().unwrap()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let trust = if listed { "trusted" } else { "modified" };
+        let script = format!(
+            "#!/bin/sh\necho $$ > \"$(dirname \"$0\")/pid\"\n/bin/sleep {wait}\nprintf '%s\\n' '{{\"id\":1,\"result\":{{}}}}' '{{\"id\":2,\"result\":{{\"data\":[{{\"hooks\":[{{\"key\":\"{CODEX_KEY}\",\"enabled\":true,\"trustStatus\":\"{trust}\"}}]}}]}}}}'\nexec /bin/cat >/dev/null\n"
+        );
+        let program = dir.join("codex");
+        std::fs::write(&program, script).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let ask = CodexAsk {
+            program: program.to_string_lossy().into(),
+            cwd: dir.clone(),
+            env: Default::default(),
+            command: "/opt/n/nunchiro hook outward --codex".into(),
+        };
+        (ask, dir)
+    }
+
+    /// A Codex that answers yes late, on a busy Mac (CI saw the fake take over 5 s), still starts: the check waits up
+    /// to one absolute deadline, not 5 s per question.
+    #[test]
+    fn codex_that_answers_yes_late_is_started() {
+        let (ask, dir) = late_codex(7, true);
+        assert_eq!(ask.runs_hook(), Ok(()));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A late no is a no.
+    #[test]
+    fn codex_that_answers_no_late_is_refused() {
+        let (ask, dir) = late_codex(7, false);
+        let refused = ask.runs_hook().unwrap_err();
+        assert!(refused.contains("would not run"), "{refused}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
