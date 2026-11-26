@@ -18,6 +18,10 @@ Usage:
       (core, window, WebKit helpers, holders) by ps and footprint, with the number of Claude and Codex sessions it
       holds. Opens no file of the owner's home and sends the core nothing. Writes its two figures into
       docs/measure/manual-<date>.json. Run it while the agents wait at their prompts.
+  scorecard.py accuracy --machine ALIAS --remote-project DIR [--project-root DIR] | --self-test
+      The owner-run trial of part p34 (scripts/measure/accuracy.py, real agents on the owner's sign-ins, one Claude seat
+      on a second Mac). Writes the raw records to docs/measure/accuracy-<date>.json, and the four p34 figures into
+      docs/measure/manual-<date>.json only when the run is counted; a self-test never is.
   scorecard.py dev [--target DIR] [--out FILE]
       Maintainability figures (part p26): a cold and a warm debug build of the Rust workspace in DIR (a fresh cargo
       target, removed first), the web build, the gate's Rust test stage (scripts/cargo-test-gate.sh) on that target,
@@ -1149,11 +1153,32 @@ def weigh_cmd(a):
     if len(agents) < 5:
         print(f"not written: the rubric's figure needs at least 5 Claude or Codex sessions, this app holds {len(agents)}")
         return
-    path = Path(a.out) if a.out else OUT_DIR / f"manual-{time.strftime('%Y-%m-%d')}.json"
+    write_manual(a.out, dict(idle_mib_5=mib, idle_cpu_pct_5=cpu), evidence)
+
+
+def write_manual(out, values, evidence):
+    """An owner-run step's figures into docs/measure/manual-<date>.json (or `out`), other figures kept."""
+    path = Path(out) if out else OUT_DIR / f"manual-{time.strftime('%Y-%m-%d')}.json"
     doc = json.loads(path.read_text()) if path.is_file() else dict(date=time.strftime("%Y-%m-%d"), figures={})
-    doc["figures"].update(idle_mib_5=dict(value=mib, evidence=evidence), idle_cpu_pct_5=dict(value=cpu, evidence=evidence))
+    doc["figures"].update({k: dict(value=v, evidence=evidence) for k, v in values.items()})
     path.write_text(json.dumps(doc, indent=1) + "\n")
-    print(f"wrote idle_mib_5 and idle_cpu_pct_5 to {path}")
+    print(f"wrote {', '.join(values)} to {path}")
+
+
+def accuracy_cmd(a):
+    """p34's trial (accuracy.py, its arguments passed on); only a counted run writes the four figures."""
+    import accuracy
+    res, raw = accuracy.main(a.args)
+    if not res["counted"]:
+        print(f"not written ({res['mode']}): " + "; ".join(res["not_counted"]))
+        return
+    t, r = res["figures"]["total"], res["figures"]["remote"]
+    names = NUMBER_PARTS["p34"]
+    agents = "; ".join(f"{x['where']} {x['kind']} {x['version']}" for x in res["agents"])
+    evidence = (f"scorecard.py accuracy {res['started']}: {res['minutes']} min, {res['prompts']} prompts to 5 real seats "
+                f"({agents}), one Claude on the second Mac '{res['machine']}' whose own figures were "
+                + ", ".join(f"{k} {r[k]}" for k in names) + f"; counts {t['counts']}; raw records {raw.name}")
+    write_manual(None, {k: t[k] for k in names}, evidence)
 
 
 def merge_cmd(a):
@@ -1197,12 +1222,18 @@ def main():
     t = sub.add_parser("tests")
     t.add_argument("--target", help="CARGO_TARGET_DIR for the cargo test commands")
     t.add_argument("--out")
+    x = sub.add_parser("accuracy", add_help=False)
+    x.add_argument("args", nargs=argparse.REMAINDER)
     w = sub.add_parser("weigh")
     w.add_argument("--secs", type=int, default=60)
     w.add_argument("--out")
-    a = ap.parse_args()
+    a, rest = ap.parse_known_args()
+    if a.cmd == "accuracy":
+        a.args = a.args + rest  # accuracy.py's own options, --help too
+    elif rest:
+        ap.error("unrecognized arguments: " + " ".join(rest))
     {"run": run_cmd, "ops": ops_cmd, "dev": dev_cmd, "merge": merge_cmd, "check": check_cmd, "page": page_cmd,
-     "tests": tests_cmd, "weigh": weigh_cmd}[a.cmd](a)
+     "tests": tests_cmd, "weigh": weigh_cmd, "accuracy": accuracy_cmd}[a.cmd](a)
 
 
 if __name__ == "__main__":
