@@ -2124,12 +2124,43 @@ fn only_the_owner_starts_a_held_seat_anyway() {
     );
     let refused = raw(&start(false));
     assert!(refused.contains("memory"), "{refused}");
+    // A session cannot start anyway, so it is not told to.
+    assert!(!refused.contains("--anyway"), "{refused}");
     let Reply::Snapshot { sessions, .. } = h.request(Request::Snapshot) else {
         panic!("no snapshot");
     };
     let open = sessions.iter().filter(|s| s.state != SessionState::Closed);
     assert_eq!(open.count(), 1, "only the terminal runs: {sessions:?}");
     h.request(Request::Close { id: s.id });
+}
+
+/// Resuming a saved conversation is never held: after a full quit it is a plain start, and the window has no override.
+#[test]
+fn resuming_a_saved_session_is_not_held() {
+    let h = under_pressure("4");
+    let reply = call(
+        &h.home,
+        Request::Start {
+            receipt: None,
+            env: Default::default(),
+            folder: None,
+            session: StartSession {
+                account: None,
+                kind: AgentKind::Codex,
+                project: h.home.clone(),
+                worktree: false,
+                label: String::new(),
+                args: vec![],
+                model: None,
+                effort: None,
+                resume: Some("FAKE-CODEX-123".into()),
+            },
+        },
+    );
+    let Ok(Reply::Started { session }) = reply else {
+        panic!("a resume was held: {reply:?}");
+    };
+    h.request(Request::Close { id: session.id });
 }
 
 /// A core that restarts while the Mac is low on memory brings back every saved session: only new seats are held.
