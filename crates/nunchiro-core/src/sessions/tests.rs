@@ -6094,6 +6094,33 @@ fn t1094_an_empty_box_releases_the_dropped_message() {
     f.core.flush_delivery().unwrap();
     assert_eq!(copies(&f), first + 1, "the empty box takes it");
 }
+/// A send that finds the agent ready while an earlier row still waits in the queue goes behind that row, never ahead
+/// of it. A seat opened by a schedule queued its brief before the agent drew its box; the next scheduled task found
+/// the box drawn, was typed at once, and the brief (with the first task in it) was never typed.
+#[test]
+fn a_ready_send_never_overtakes_a_queued_one() {
+    let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
+    let mut f = unobserved("queued-first", boxed.as_bytes());
+    catch_up(&mut f);
+    let id = f.id.clone();
+    // Not ready yet: the brief waits in the queue.
+    hook(&mut f, "UserPromptSubmit");
+    f.core.prompt_as_user(&id, "the brief".into()).unwrap();
+    assert_eq!(rows(&f)[0].status, "queued");
+    // Ready now; the next task arrives before a delivery pass took the brief.
+    hook(&mut f, "Stop");
+    f.core.prompt_as_user(&id, "the task".into()).unwrap();
+    for _ in 0..5 {
+        f.core.tick().unwrap();
+    }
+    let got = got(&f);
+    let at = |w: &[u8]| got.windows(w.len()).position(|x| x == w);
+    assert!(at(b"the brief").is_some(), "the brief was never typed");
+    assert!(
+        at(b"the task").is_none_or(|t| t > at(b"the brief").unwrap()),
+        "the task went ahead of the brief"
+    );
+}
 /// Ticket 1094 r3 (review r2 NIT 1): the retry time of a message dropped again holds that message only; the owner's
 /// newer message goes at once.
 #[test]
