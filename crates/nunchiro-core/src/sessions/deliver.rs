@@ -320,6 +320,9 @@ impl Sessions {
                 self.hand_sent.remove(&id);
             }
             if queued && started {
+                // The delivery record: his Enter sent it, so it needed a person and is no resend by the core.
+                self.drops.remove(&send);
+                crate::record::count(&self.home, false, false, true);
                 self.finish_send(&id, &send, "delivered")?;
             }
         }

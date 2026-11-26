@@ -56,10 +56,20 @@ What a swap leaves running: every terminal and agent in a holder, its scrollback
 restart` and the plain `exit` request have no blockers: they end ACP chats, sign-ins and sandbox runs, and cancel queued
 sends. Both wait up to 40 s for the old core to wind down (a blocked hook or a worktree removal can hold it that long).
 
-### `nunchiro serve status`
-Prints `{"core": <bool>, "holders": [{"socket", "session", "orphaned"}]}`: whether a core runs, and every live
-session holder in this data folder with the session that records it. A holder is `orphaned` when no core runs or no
-session record names it (an unknown holder, which a core never adopts). Never starts a core.
+### `nunchiro serve status [--json]`
+Prints `{"core": <bool>, "holders": [{"socket", "session", "orphaned"}], "record": {"days", "restarts"}}`: whether a
+core runs, and every live session holder in this data folder with the session that records it. A holder is `orphaned`
+when no core runs or no session record names it (an unknown holder, which a core never adopts). Never starts a core.
+
+`record` is the delivery record of the last 30 days (`record.json` in the data folder, counts only, never message
+text): `days` maps each local date to `delivered` (prompts that reached the agent), `resent` (of those, prompts the core
+sent again by itself after a dropped Enter) and `person` (prompts that needed a person: his own Enter in the terminal
+sent one, or the core gave one up after a dropped Enter); `restarts` lists each core start that found running sessions,
+with `at_ms`, `before` (sessions the last core ran) and `after` (sessions that came back). A missing or broken record
+reads as empty; the record never stops a delivery or a start.
+
+On a terminal, without `--json`, the same is printed as text: a line per day and a line per restart. Piped, it prints
+the JSON as before.
 
 ### `nunchiro serve restart`
 Asks the core to exit without ending any agent, waits for its lock, starts a new one, which reattaches every live

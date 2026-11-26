@@ -1475,6 +1475,8 @@ impl Sessions {
             self.touch_input(id);
         }
         let attention = self.queue.attention(id);
+        // The delivery record: a row whose Enter was dropped before went again by the core's own hand.
+        let dropped = self.drops.contains_key(send) || self.retried.contains(send);
         let meta = &mut self.entries.get_mut(id).ok_or("session not found")?.meta;
         let index = meta
             .send_queue
@@ -1509,6 +1511,12 @@ impl Sessions {
             }
             if owner_sent {
                 self.owner_submitted(id); // gap rule: a Later goes after the turn this prompt starts
+            }
+            match status {
+                "delivered" => crate::record::count(&self.home, true, dropped, false),
+                // The core gave up on a row it once dropped: a person must see to it.
+                "failed" if dropped => crate::record::count(&self.home, false, false, true),
+                _ => {}
             }
             return Ok(());
         }

@@ -95,6 +95,10 @@ impl Sessions {
             .filter_map(|id| entries.get(id))
             .partition::<Vec<_>, _>(|e| resumable(&e.meta) == SessionState::Resumable);
         crate::events::core_started(kept.len(), lost.len(), exited.len());
+        let before = kept.len() + lost.len() + exited.len();
+        if before > 0 {
+            crate::record::restart(home, before, kept.len());
+        }
         // V1A-91: a `--version` probe ends with its core. A row the last core left running without a version probes
         // again when its agent came back, and otherwise reads `unknown` (and so `untested`, as any unknown version
         // does), so the field is never left empty. A row with no live record was not running then: kept as stored.

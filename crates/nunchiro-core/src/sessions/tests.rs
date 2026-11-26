@@ -11210,11 +11210,11 @@ fn t1085_a_dropped_automatic_line_is_cleared_and_goes_after_the_owner() {
             assert_eq!(
                 recorded(&f.home),
                 crate::record::Day {
-                    delivered: 2,
+                    delivered: 1,
                     resent: 1,
                     person: 0
                 },
-                "{text}: the owner's prompt, and the dropped line the core sent again"
+                "{text}: the dropped line the core sent again (his words went as keys, not a queued row)"
             );
         } else {
             assert_eq!(
