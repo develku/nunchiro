@@ -1108,7 +1108,7 @@ impl Sessions {
                 }
                 Ok(Reply::Ack)
             }
-            Request::DraftTaken { id } => self.draft_taken(&id),
+            Request::DraftTaken { id, at } => self.draft_taken(&id, at),
             Request::DraftPutBack { id, words } => self.draft_put_back(&id, words),
             // Ticket 990: the server serves it before this point (the start runs off the registry lock).
             Request::TeamOpen { .. } => Err("team open is for a lead's session".into()),

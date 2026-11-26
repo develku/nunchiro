@@ -12,7 +12,7 @@ pub(super) struct Homing {
     words: String,
     /// The row of the box this clear takes out.
     line: String,
-    at: std::time::Instant,
+    pub(super) at: std::time::Instant,
     /// The box did not read empty in time: nothing more is written for these words.
     stuck: bool,
     /// The side file still holds them.
@@ -20,6 +20,11 @@ pub(super) struct Homing {
 }
 /// How long a clear may take to show before the core stops trying for those words.
 pub(super) const CLEAR_SHOWS: std::time::Duration = std::time::Duration::from_millis(1500);
+/// How long the side copy of words a clear did not take out is kept (a clear that shows late still brings them home).
+pub(super) const KEEP_STUCK: std::time::Duration = std::time::Duration::from_secs(10);
+fn h_age(h: &Homing) -> std::time::Duration {
+    h.at.elapsed()
+}
 const ASIDE: &str = "aside";
 
 fn aside(home: &Path, id: &str) -> PathBuf {
@@ -99,8 +104,9 @@ impl Sessions {
             }
             if stuck || late {
                 if shown.as_deref().is_some_and(|s| s.trim() == line) {
-                    // The words are still in the box: the side copy of them is not needed (nothing is written again).
-                    if filed {
+                    // The words are still in the box: nothing is written again. The side copy stays a while longer in
+                    // case the clear only shows late, then goes (the box has them).
+                    if filed && h_age(&self.homing[id]) >= KEEP_STUCK {
                         self.unfile(id)?;
                         self.homing.get_mut(id).unwrap().filed = false;
                     }
@@ -168,7 +174,10 @@ impl Sessions {
             .map_or_else(queue::now_ms, |d| d.at)
     }
     /// The window's composer took session `id`'s words: the side file goes.
-    pub(super) fn draft_taken(&mut self, id: &str) -> Response {
+    pub(super) fn draft_taken(&mut self, id: &str, at: u64) -> Response {
+        if self.drafts_home.get(id).is_none_or(|d| d.at != at) {
+            return Ok(Reply::Ack); // an older hand-over: the words since then stay
+        }
         self.drafts_home.remove(id);
         match fs::remove_file(aside(&self.home, id)) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),

@@ -98,9 +98,20 @@ fn one_line_of_owner_text_comes_home_before_a_prompt_goes() {
         "the core never typed his words"
     );
     assert_eq!(draft_home(&mut f).map(|d| d.words).as_deref(), Some(WORDS));
-    // The composer took them: the side file goes.
+    // An answer to an older hand-over changes nothing; the composer's answer to this one removes the side file.
+    let at = draft_home(&mut f).unwrap().at;
     f.core
-        .handle(Request::DraftTaken { id: f.id.clone() })
+        .handle(Request::DraftTaken {
+            id: f.id.clone(),
+            at: at - 1,
+        })
+        .unwrap();
+    assert!(aside(&f).exists());
+    f.core
+        .handle(Request::DraftTaken {
+            id: f.id.clone(),
+            at,
+        })
         .unwrap();
     assert!(!aside(&f).exists());
     assert_eq!(draft_home(&mut f), None);
@@ -165,11 +176,15 @@ fn a_box_that_stays_full_gets_no_paste() {
     passes(&mut f);
     assert_eq!(got(&f), b"\x15\x15\x15");
     let id = f.id.clone();
-    // The box never redraws: past the wait for the clear, nothing more is written and the side copy goes.
+    // The box never redraws: past the wait for the clear, nothing more is written; the side copy stays a while (a late
+    // clear still brings the words home), then goes: the box has them.
     std::thread::sleep(home::CLEAR_SHOWS);
     passes(&mut f);
     passes(&mut f);
     assert_eq!(got(&f), b"\x15\x15\x15", "no second clear, no paste");
+    assert!(aside(&f).exists(), "kept a while");
+    f.core.homing.get_mut(&id).unwrap().at -= home::KEEP_STUCK;
+    passes(&mut f);
     assert!(!aside(&f).exists(), "the words are still in the box");
     assert_eq!(send_row(&f, &mine.id).status, "queued");
     assert_eq!(draft_home(&mut f), None);

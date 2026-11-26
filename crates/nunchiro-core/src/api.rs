@@ -1494,6 +1494,8 @@ pub enum Request {
     /// The window's composer took the words `draft_home` gave it; their side file goes. Owner and window only.
     DraftTaken {
         id: String,
+        /// The hand-over taken (`draft_home.at`): an answer to an older one leaves newer words alone.
+        at: u64,
     },
     /// ⌘Z on words that came home: they go back into the agent's empty box, with no Enter. Owner and window only.
     DraftPutBack {
