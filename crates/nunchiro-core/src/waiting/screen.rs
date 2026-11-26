@@ -1340,4 +1340,61 @@ mod tests {
         let diff = "  12 +        || has(&[\"security notes:\", \"press enter to continue\"])\n  13 +  Welcome to Codex, Sign in with ChatGPT, Press enter to continue\n";
         assert!(fed(diff).detect(AgentKind::Codex).is_none());
     }
+
+    const CLAUDE_NOTES: &str =
+        include_str!("../../tests/fixtures/start-screens/claude-2.1.332-security-notes.txt");
+    const CODEX_SIGN_IN: &str =
+        include_str!("../../tests/fixtures/start-screens/codex-0.162.1-sign-in.txt");
+
+    /// A start dialog's rows on the screen (an agent showing one of the files above) never change what another prompt
+    /// reads as: a question, a plan approval, Codex's rate-limit question and the shells notice keep their kind, so
+    /// their cards can still be answered.
+    #[test]
+    fn start_dialog_rows_never_change_another_prompt() {
+        let rule = "\u{2500}".repeat(40);
+        for (kind, quoted, tail) in [
+            (AgentKind::Claude, CLAUDE_NOTES, format!("{rule}\n \u{2610} Colour\n\nWhich colour?\n\n\u{276f} 1. red\n  2. blue\n{rule}\n\nEnter to select \u{b7} Esc to cancel\n")),
+            (AgentKind::Claude, CLAUDE_NOTES, format!("{rule}\n Ready to code?\n\n Claude has written up a plan and is ready to execute. Would you like to proceed?\n\n \u{276f} 1. Yes, and auto-accept edits\n   2. Yes, and manually approve edits\n   3. No, keep planning\n")),
+            (AgentKind::Claude, CLAUDE_NOTES, " Background shells still running\n \u{276f} 1. Kill and exit\n   2. Keep waiting\n".to_string()),
+            (AgentKind::Codex, CODEX_SIGN_IN, "  Approaching rate limits\n  Switch to a smaller model?\n\n\u{203a} 1. Switch\n  2. Keep current model\n\n  Press enter to confirm or esc to go back\n".to_string()),
+        ] {
+            let alone = fed(&tail).detect(kind).map(|d| d.kind);
+            let with = fed(&format!("{quoted}{tail}")).detect(kind).map(|d| d.kind);
+            assert!(alone.is_some(), "{tail}");
+            assert_eq!(with, alone, "{tail}");
+        }
+    }
+
+    /// Once the agent's input box has shown, the session is past its start: a redraw that shows a start dialog's rows
+    /// with no box (a transcript view, a frame read between the transcript and the box) is no card.
+    #[test]
+    fn start_dialog_rows_after_the_input_box_are_no_card() {
+        let rule = "\u{2500}".repeat(40);
+        for (kind, quoted, the_box) in [
+            (
+                AgentKind::Claude,
+                CLAUDE_NOTES,
+                format!("{rule}\n\u{276f} \n{rule}\n"),
+            ),
+            (
+                AgentKind::Codex,
+                CODEX_SIGN_IN,
+                "\n\u{203a} Ask Codex to do anything\n".to_string(),
+            ),
+        ] {
+            assert!(
+                fed(quoted).detect(kind).is_some(),
+                "a start screen before the box is a card"
+            );
+            let mut s = fed(&the_box);
+            assert!(s.detect(kind).is_none());
+            s.feed(format!("\x1b[2J\x1b[H{}", quoted.replace('\n', "\r\n")).as_bytes());
+            assert!(s.detect(kind).is_none(), "{quoted}");
+        }
+        // Heading rows alone, without the dialog's own options, are no start dialog either.
+        let rows = " Select login method:\n\n Choose the text style that looks best with your terminal\n\n Security notes:\n\n Press Enter to continue\n";
+        assert!(fed(rows).detect(AgentKind::Claude).is_none());
+        let rows = "  Welcome to Codex, OpenAI's command-line coding agent\n\n  \u{2728} Update available! 0.161.0 -> 0.170.0\n\n  Press enter to continue\n";
+        assert!(fed(rows).detect(AgentKind::Codex).is_none());
+    }
 }
