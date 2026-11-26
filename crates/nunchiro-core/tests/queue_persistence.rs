@@ -2759,3 +2759,49 @@ fn a_restored_permission_item_keeps_the_next_request_one_card() {
     );
     let _ = fs::remove_dir_all(&dir);
 }
+
+/// A held hook that starts late (a busy Mac: 3.5 s after its dialog was first read) is still one card with one id,
+/// while the screen is read again and again meanwhile.
+#[test]
+fn a_hook_3_5_s_after_its_dialog_is_still_one_card_with_one_id() {
+    use nunchiro_core::waiting::screen::Screen;
+    let frame = {
+        let mut screen = Screen::new(160, 50);
+        screen.feed(
+            "\x1b[2J\x1b[H\u{25cf} Bash(mkdir x)\r\nBash command\r\n  mkdir x\r\n Do you want to proceed?\r\n \u{276f} 1. Yes\r\n   2. No\r\n\r\n Esc to cancel\r\n"
+                .as_bytes(),
+        );
+        screen.detect(AgentKind::Claude).unwrap()
+    };
+    let call = json!({"tool_name":"Bash","tool_input":{"command":"mkdir x"}});
+    let dir = home("dialog-late-hook");
+    let mut q = Queue::open(&dir).unwrap();
+    q.register("s", AgentKind::Claude, 0).unwrap();
+    q.observe("s", "UserPromptSubmit", &json!({"prompt":"go"}), "hook", 1)
+        .unwrap();
+    q.observe("s", "PreToolUse", &call, "hook", 1000).unwrap();
+    let first_frame = 1100;
+    let mut ids = std::collections::BTreeSet::new();
+    for at in (first_frame..=first_frame + 3500 + 100).step_by(100) {
+        if at == first_frame + 3500 {
+            let mut held = call.clone();
+            held["nunchiro_event_id"] = json!("late");
+            q.observe("s", "PermissionRequest", &held, "hook", at)
+                .unwrap();
+        }
+        q.screen(
+            "s",
+            frame.kind.clone(),
+            frame.text.clone(),
+            frame.choices.clone(),
+            at,
+        )
+        .unwrap();
+        ids.extend(q.items_of("s").into_iter().map(|i| i.id));
+    }
+    let items = q.items_of("s");
+    assert_eq!(items.len(), 1, "{items:?}");
+    assert_eq!(ids.len(), 1, "the request showed under {} ids", ids.len());
+    assert_eq!(items[0].hook_event_id.as_deref(), Some("late"));
+    let _ = fs::remove_dir_all(&dir);
+}

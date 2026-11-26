@@ -4630,6 +4630,78 @@ fn w14_a_prompt_on_a_still_screen_gets_its_card_back_mid_turn() {
     }
     assert!(f.core.queue.items_of(&id).is_empty() && f.core.queue.attention(&id).working);
 }
+/// One request, one card: a permission dialog hidden while its held hook is expected is a card within 5 s of being
+/// drawn when that hook never comes, also while another agent's tool calls keep the session busy (its PreToolUse every
+/// 1.8 s; its PreToolUse and PostToolUse every 0.45 s). The re-read waited for a second with no event at all: the card
+/// came after more than 5 s, or only once the other agent stopped.
+#[test]
+fn a_hidden_permission_dialog_is_a_card_within_5_s_while_another_agent_calls_tools() {
+    let frame = "\x1b[2J\x1b[H\u{25cf} Bash(mkdir x)\r\nBash command\r\n  mkdir x\r\n Do you want to proceed?\r\n \u{276f} 1. Yes\r\n   2. No\r\n\r\n Esc to cancel\r\n";
+    let hook = |f: &mut Flood, event: &str, p: &serde_json::Value| {
+        let id = f.id.clone();
+        f.core
+            .queue
+            .observe(&id, event, p, "hook", queue::now_ms())
+            .unwrap();
+    };
+    let mut late = vec![];
+    // The other agent's first call and the time between its calls (ms), and whether each call also ends.
+    for (name, first, every, ends) in [
+        ("hidden-busy", 400, 1800, false),
+        ("hidden-busier", 450, 450, true),
+    ] {
+        let mut f = unobserved(name, frame.as_bytes());
+        // The fixture's queue session is a shell's; the wait for a held hook is Claude's.
+        f.core.queue.retain_sessions(|_| false).unwrap();
+        f.core
+            .queue
+            .register(&f.id, AgentKind::Claude, queue::now_ms())
+            .unwrap();
+        hook(
+            &mut f,
+            "UserPromptSubmit",
+            &serde_json::json!({"prompt": "go"}),
+        );
+        hook(
+            &mut f,
+            "PreToolUse",
+            &serde_json::json!({"tool_name": "Bash", "tool_input": {"command": "mkdir x"}}),
+        );
+        let drawn = std::time::Instant::now();
+        f.core.tick().unwrap();
+        assert!(
+            f.core.queue.items_of(&f.id).is_empty(),
+            "{name}: the dialog waits for its hook"
+        );
+        let other = serde_json::json!({"tool_name": "Read", "tool_input": {"file_path": "/tmp/a"}, "agent_id": "bg-1"});
+        let mut next = first;
+        let card = loop {
+            let ms = drawn.elapsed().as_millis() as u64;
+            if ms >= 7000 {
+                break None;
+            }
+            if ms >= next {
+                hook(&mut f, "PreToolUse", &other);
+                if ends {
+                    hook(&mut f, "PostToolUse", &other);
+                }
+                next += every;
+            }
+            f.core.tick().unwrap();
+            if !f.core.queue.items_of(&f.id).is_empty() {
+                break Some(ms);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        };
+        if card.is_none_or(|ms| ms >= 5000) {
+            late.push((name, card));
+        }
+    }
+    assert!(
+        late.is_empty(),
+        "ms from the dialog to its card (None: no card in 7 s): {late:?}"
+    );
+}
 /// Look 11-17 v5 item 1, rule c: a goal (a prompt as the user) sent to a lead stuck at a start question waits in its
 /// queue, is not typed into the question, and goes once the input box is back.
 #[test]
