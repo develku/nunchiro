@@ -406,6 +406,11 @@ impl Screen {
         *self = Self::new(self.cols, self.rows);
         self.started = started.into();
     }
+    /// The session's start is over (its first hook after SessionStart): start dialogs make no card from here.
+    pub(crate) fn mark_started(&self) {
+        self.started
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
     pub(crate) fn started(&self) -> bool {
         self.started.load(std::sync::atomic::Ordering::Relaxed)
     }
@@ -1413,6 +1418,9 @@ mod tests {
             );
             let mut s = fed(&the_box);
             assert!(s.detect(kind).is_none());
+            if kind == AgentKind::Codex {
+                s.mark_started(); // Codex's start ends with its first hook, not its composer
+            }
             s.feed(format!("\x1b[2J\x1b[H{}", quoted.replace('\n', "\r\n")).as_bytes());
             assert!(s.detect(kind).is_none(), "{quoted}");
         }
@@ -1421,5 +1429,21 @@ mod tests {
         assert!(fed(rows).detect(AgentKind::Claude).is_none());
         let rows = "  Welcome to Codex, OpenAI's command-line coding agent\n\n  \u{2728} Update available! 0.161.0 -> 0.170.0\n\n  Press enter to continue\n";
         assert!(fed(rows).detect(AgentKind::Codex).is_none());
+    }
+
+    /// Codex 0.162.1 started by the core draws its composer ("› Ask Codex to do anything") for a moment before its
+    /// sign-in screen: that composer does not end Codex's start, so the sign-in screen after it is still a card.
+    /// Codex's start ends with its first hook after SessionStart (`mark_started`).
+    #[test]
+    fn codex_composer_before_its_sign_in_screen_does_not_end_the_start() {
+        let mut s = fed("\n\u{203a} Ask Codex to do anything\n");
+        assert!(s.detect(AgentKind::Codex).is_none());
+        s.feed(format!("\x1b[2J\x1b[H{}", CODEX_SIGN_IN.replace('\n', "\r\n")).as_bytes());
+        assert_eq!(
+            s.detect(AgentKind::Codex).map(|d| d.kind),
+            Some(Kind::Dialog)
+        );
+        s.mark_started();
+        assert!(s.detect(AgentKind::Codex).is_none());
     }
 }
