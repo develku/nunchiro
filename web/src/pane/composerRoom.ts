@@ -19,6 +19,7 @@ export function room(c: Box, hosts: Box[]): { left: number; right: number } {
 
 const hosts = new Set<Element>();
 let watch: ResizeObserver | null = null;
+let frame = 0;
 const composerEl = () => document.querySelector('.composer:not([data-pinned])');
 
 function fit() {
@@ -36,7 +37,9 @@ function fit() {
 /** Keeps the composer clear of `el` until the returned function runs. */
 export function keepComposerClear(el: Element): () => void {
   hosts.add(el);
-  watch ??= new ResizeObserver(fit);
+  // A frame later: `data-pane-room` can change the composer's height, which inside the callback is WebKit's
+  // "ResizeObserver loop" page error.
+  watch ??= new ResizeObserver(() => (cancelAnimationFrame(frame), (frame = requestAnimationFrame(fit))));
   watch.observe(el);
   const composer = composerEl();
   if (composer) watch.observe(composer, { box: 'border-box' }); // a zone or window change that leaves the hosts alone
@@ -47,6 +50,7 @@ export function keepComposerClear(el: Element): () => void {
     if (hosts.size) return fit();
     watch?.disconnect();
     watch = null;
+    cancelAnimationFrame(frame);
     const root = document.documentElement;
     for (const p of ['--pane-room', '--pane-room-left', '--pane-over']) root.style.removeProperty(p);
     root.removeAttribute('data-pane-room');

@@ -74,7 +74,8 @@ function TaskCard({ t, core, x, list, byId, open, decide, menu, peek, setPeek }:
   const step = (i: number) => (i < at || (x.closed && landed) ? 'done' : i > at ? 'next' : you ? 'you' : 'now');
   return (
     <div className="tcard" data-task={x.id} data-stage={STAGES[at]} data-you={you || undefined} data-waits-seat={waitsSeat(x) || undefined} data-gone={x.closed ? true : undefined} data-selected={peek?.task === x.id || undefined}>
-      <button className="tcard-go" data-none={!seat || undefined} aria-pressed={peek?.task === x.id} onClick={() => seat && setPeek(peek?.session === seat.id ? null : { task: x.id, session: seat.id })}>
+      {/* Focused on click: WebKit (the app's view) leaves a clicked button unfocused, and the board's Esc needs focus inside it. */}
+      <button className="tcard-go" data-none={!seat || undefined} aria-pressed={peek?.task === x.id} onClick={(e) => (e.currentTarget.focus(), seat && setPeek(peek?.session === seat.id ? null : { task: x.id, session: seat.id }))}>
         <b className="tcard-t">{x.title}</b>
         {waitsSeat(x) && !x.seats?.length ? (
           <span className="tcard-stages"><span data-at="next">{t('tboard.waitsSeat')}</span></span>

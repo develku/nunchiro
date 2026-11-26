@@ -285,6 +285,8 @@ test.describe('search pixels', { tag: '@chromium' }, () => {
     );
     // Ticket 1041 lane 7b (N081): a running session's dot is the working light's blue, not the draft's grey fill.
     const run = await hits.locator('.sgd[data-state="running"]').first().evaluate((e) => getComputedStyle(e).backgroundColor);
+    // The A+B+C polish made the focus ring neutral (the draft's is blue): the selected hit's ring is the app's colour.
+    const ring = await hits.locator('.hit[aria-selected="true"]').first().evaluate((e) => getComputedStyle(e).outlineColor);
     const map = r8Map(page);
     await expectMatchesMockup(page, '06-search.html', '#o6a [role="listbox"]', hits, {
       name: 'search-hits',
@@ -293,7 +295,7 @@ test.describe('search pixels', { tag: '@chromium' }, () => {
         // The draft's rows (sessions, ages, times, projects) are not what a test can make the core say: its own markup and
         // inline styles are cloned per app row, with the app's text, so the pixels measure style, not data.
         await m.locator('#o6a [role="listbox"]').first().evaluate(
-          (lb, [list, h, run]) => {
+          (lb, [list, h, run, ring]) => {
             const [head, proj, sel, opt] = [...lb.children] as HTMLElement[];
             const out: Node[] = [];
             for (const g of list as Group[]) {
@@ -309,6 +311,7 @@ test.describe('search pixels', { tag: '@chromium' }, () => {
               out.push(hd, pj);
               for (const x of g.hits) {
                 const o = (x.selected ? sel : opt).cloneNode(true) as HTMLElement;
+                if (x.selected) o.style.outlineColor = ring;
                 o.innerHTML = `<span class="dim mono" style="font-size:10px">${x.who}</span> ${x.html}`;
                 out.push(o);
               }
@@ -316,7 +319,7 @@ test.describe('search pixels', { tag: '@chromium' }, () => {
             lb.replaceChildren(...out);
             Object.assign((lb as HTMLElement).style, { flex: 'none', height: `${h}px` });
           },
-          [groups, box.height, run] as const,
+          [groups, box.height, run, ring] as const,
         );
       },
     });

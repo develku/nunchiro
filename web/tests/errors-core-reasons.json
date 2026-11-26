@@ -507,5 +507,8 @@
  "folders_only takes no projects": "guard: the window asks import_list with folders_only only without projects (settings/onboarding/OnboardingPage.tsx), so it does not trip",
  "only the user sets the account a place's seats start on (`nunchiro task account <label> --project DIR` in the user's shell, or Settings > Team)": "agent: only a session's `nunchiro task account` gets it; the window's account request is the owner's",
  "no lead": "agent: the inner part of 'a start on another account needs its room line ({})' (sessions.rs lead_any_line), reached only by a session's start under its token (start_granted)",
- "the lead is not in the team": "agent: the inner part of 'a start on another account needs its room line ({})' (sessions.rs lead_any_line), reached only by a session's start under its token (start_granted)"
+ "the lead is not in the team": "agent: the inner part of 'a start on another account needs its room line ({})' (sessions.rs lead_any_line), reached only by a session's start under its token (start_granted)",
+ "this command is too large to ask the user about": "agent: the answer sent back to an ACP agent for its own file or terminal request, never to the window",
+ "journal not open": "internal: the event journal on disk (events.rs), written off every request path; a failure goes to the core log only",
+ "{}: not a regular file": "internal: the event journal on disk (events.rs), written off every request path; a failure goes to the core log only"
 }

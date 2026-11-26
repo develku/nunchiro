@@ -151,13 +151,14 @@ test('exit_unread_per_session: an agent that exits by itself is unread; opening 
   d.exited.add(e1.id);
   d.push();
   await expect.poll(() => ids(app)).toEqual([e1.id]);
-  await expect(row(app, e1.id).locator('.tip')).toContainText(LINE);
+  // An agent that ended by itself is a "just finished" row for its first 10 minutes (tree-done-1022.spec.ts): it keeps
+  // the unread mark, but that row has no state tip to carry the line.
+  await expect(row(app, e1.id)).toHaveClass(/\bjust\b/);
   // The old rule cleared the project's flag on opening any of its sessions; now only viewing that session does.
   await row(app, e2.id).click();
   await expect(tab(app, e2.id)).toHaveAttribute('aria-selected', 'true');
   await app.waitForTimeout(300);
   expect(await ids(app)).toEqual([e1.id]);
-  await expect(row(app, e1.id).locator('.tip')).toContainText(LINE);
   await row(app, e1.id).click();
   await expect(tab(app, e1.id)).toHaveAttribute('aria-selected', 'true');
   await expect.poll(() => ids(app)).toEqual([]);

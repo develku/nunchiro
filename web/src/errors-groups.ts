@@ -25,6 +25,9 @@ export const GROUPS: Record<string, string[]> = {
     'Codex did not stop ({}); nothing changed', '{} has not reported its conversation id yet',
     '{}; current line not cleared: a dialog is focused or the screen is not current', '{}; current line cleared', 'not imported',
     "fast mode is available after Claude's first reply", // sessions/claude_modes.rs (fast mode, ultracode, restart); nightly 11-21
+    '{} is busy: not closed', // sessions.rs close_idle: a restart that keeps the conversation, while a turn runs
+    "Codex was not asked whether it runs Nunchiro's outward-action check before this restart; switch again", // sessions/claude_modes.rs
+    "this Codex start changed after Codex was asked whether it runs Nunchiro's outward-action check, or it was never asked; start it again", // sessions/spawn.rs
   ],
   'err.g.extGone': [
     "no task {}", "no note {}", "no open loop {}", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
@@ -63,7 +66,7 @@ export const GROUPS: Record<string, string[]> = {
     'invalid metadata: {}', 'invalid metadata: expected an object', 'invalid metadata relationship', 'state file has no name', 'state file is not a regular file', 'state file has no folder', 'no free name to set the state file aside', 'state file changed while it was set aside', '{} would be {} bytes, over its {}-byte limit; nothing was written',
     'tree.toml: {}', 'tree.toml is not a regular file or is too large', 'tree.toml: unsupported version', 'tree.toml is not a regular file', 'tree.toml would exceed its size limit', 'widget cache must not be a symlink', 'widgets folder must not be a symlink',
     'invalid {} name', '{} folder must not be a symlink',
-    'sessions.json: {}', 'invalid outbox domains', 'queue store is not an object', 'the Home seat lock hook could not be written', // ticket 1002 (Home chief of staff, Outbox), worktree sharing; nightly 11-21
+    'sessions.json: {}', 'invalid outbox domains', 'queue store is not an object', 'the Home seat lock hook could not be written', 'the outward hook could not be written', // ticket 1002 (Home chief of staff, Outbox), worktree sharing; nightly 11-21
   ],
   'err.h.limit': [
     "the ledger is full: close or drop tasks first", "the list holds at most {} notes; remove some first", "at most {} roles", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
@@ -78,6 +81,7 @@ export const GROUPS: Record<string, string[]> = {
     '{}: at most {} files and {} folders per project', // ticket 1002 (Home chief of staff, Outbox), worktree sharing; nightly 11-21
   ],
   'err.h.value': [
+    "Codex arguments cannot set hooks; Nunchiro's outward-action check runs as a Codex hook. Keep your own hooks in Codex's config", // sessions/spawn.rs
     "a role note names its role", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
     "a SOUL needs at least one line", "a SOUL has at most 16 KB and no control characters", // team/bots.rs (ticket 1168)
     "a teammate runs Claude, Codex or an ACP agent", "a model or effort is 1 to 100 characters", "a teammate's name has 1 to {} characters and no control characters", "a teammate needs a job: one or two lines on what it is for", "a teammate's job has at most {} characters and no control characters", "a teammate's project must be a real folder, not through a symlink", 'a worktree is handed to the lead of its project', // team.rs (tickets 970, 990)

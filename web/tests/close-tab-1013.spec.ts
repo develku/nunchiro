@@ -22,8 +22,10 @@ test('command_closed_tab_goes_1013: session close on the CLI drops the tab; the 
   await expect(tab(byWindow.id).locator('.tdot')).toHaveAttribute('data-s', 'done');
   await expect(tab(byCommand.id)).toHaveCount(0);
   await app.locator('.tabs').screenshot({ path: shot('tabs') });
-  // Opened again from its tree row, the command-closed session keeps its tab (it went once).
-  await app.getByRole('button', { name: /^by-command, / }).click();
+  // Opened again from the tree (a finished session sits in its project's finished popover), the command-closed
+  // session keeps its tab (it went once).
+  await app.locator('.grp[data-project="close1013"] > .row.head button.dbar').click();
+  await app.locator(`[data-done-pop] [data-done-item="${byCommand.id}"]`).click();
   await expect(tab(byCommand.id)).toBeVisible();
   await app.waitForTimeout(500); // a few snapshots
   await expect(tab(byCommand.id)).toBeVisible();
