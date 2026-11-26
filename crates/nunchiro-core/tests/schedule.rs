@@ -105,7 +105,8 @@ fn schedules(home: &Path) -> Vec<nunchiro_core::schedule::Entry> {
     }
 }
 fn wait(what: &str, mut done: impl FnMut() -> bool) {
-    let until = Instant::now() + Duration::from_secs(10);
+    // 30 s, not 10: a hosted CI runner ran this in over 10 s where a Mac takes 2 s; the wait is on a condition.
+    let until = Instant::now() + Duration::from_secs(30);
     while !done() {
         assert!(Instant::now() < until, "{what}");
         thread::sleep(Duration::from_millis(20));
@@ -633,23 +634,54 @@ fn scheduled_task_reaches_the_session_and_a_teammate_keeps_one_seat() {
             .find(|r| r.label == "plain")
             .is_some_and(|r| output(&home, &r.id).contains("say the plain task"))
     });
-    wait(
-        "the teammate's seat never got its brief and both tasks",
-        || {
-            seat(&home).first().is_some_and(|r| {
-                let out = output(&home, &r.id);
-                // The fake never ends its turn, so the second task waits in the seat's queue, as any prompt to a busy agent.
-                let queued = r.send_queue.iter().any(|q| {
-                    q.content.starts_with("Scheduled task from the user")
-                        && q.content.ends_with("second mail task")
-                });
-                r.project == team.home()
-                    && out.contains("You are Inbox")
-                    && out.contains("first mail task")
-                    && queued
-            })
-        },
-    );
+    let last = std::cell::RefCell::new(String::new());
+    let until = Instant::now() + Duration::from_secs(30);
+    while !{
+        let done = seat(&home).first().is_some_and(|r| {
+            let out = output(&home, &r.id);
+            // Ticket 1172: what the seat looked like at the last try, printed if the wait runs out (red on CI only).
+            *last.borrow_mut() = format!(
+                "project {:?} (team home {:?}); queue {:?}; log {:?}; screen tail {:?}",
+                r.project,
+                team.home(),
+                r.send_queue.iter().map(|q| &q.content).collect::<Vec<_>>(),
+                r.send_log.iter().map(|q| &q.content).collect::<Vec<_>>(),
+                out.chars()
+                    .rev()
+                    .take(600)
+                    .collect::<String>()
+                    .chars()
+                    .rev()
+                    .collect::<String>()
+            );
+            // The fake never ends its turn, so the second task waits in the seat's queue, as any prompt to a busy agent.
+            let queued = r.send_queue.iter().any(|q| {
+                q.content.starts_with("Scheduled task from the user")
+                    && q.content.ends_with("second mail task")
+            });
+            r.project == team.home()
+                && out.contains("You are Inbox")
+                && out.contains("first mail task")
+                && queued
+        });
+        if !done && seat(&home).is_empty() {
+            *last.borrow_mut() = format!(
+                "no Inbox seat; rows {:?}",
+                rows(&home)
+                    .iter()
+                    .map(|r| (&r.label, &r.state))
+                    .collect::<Vec<_>>()
+            );
+        }
+        done
+    } {
+        assert!(
+            Instant::now() < until,
+            "the teammate's seat never got its brief and both tasks: {}",
+            last.borrow()
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
     // Entries fire in order, so the moved teammate's was tried before the seat got its tasks.
     assert!(rows(&home).iter().all(|r| r.label != "Moved"));
     let seats = seat(&home);

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Ticket v1b-25, spec Acceptance 15: every v1b path with real agents (Claude haiku, Codex cheapest), one row each:
-# script-widget-act, board-queue, web-widget-act, diff-card, chat-claude, chat-codex, images-claude, images-codex,
+# script-widget-act, web-widget-act, diff-card, chat-claude, chat-codex, images-claude, images-codex,
 # artifact-skill (cheapest first), then `v1b-full: config unchanged`: lib.snapshot()/guard_check plus a manifest of
 # config-like files under ~/.claude and ~/.codex, before and after the whole run (scripts/scenario/v1b_full.py).
 # RUNS (default 1) is passed to every chained script; Codex rows are `not run` without headroom. Exit 0 only when every

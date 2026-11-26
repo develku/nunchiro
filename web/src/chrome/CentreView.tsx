@@ -42,6 +42,8 @@ import { RoomView } from '../room/RoomView'; // ticket 571
 import { isRoomTab, roomOfTab, roomTabId, useRoom } from '../room/room';
 import { leadOf, leadSeatMate, placeOfMate, seatOf, useTeam, workingFor } from '../lead/lead'; // ticket 990
 import { TeamChip, TeamLine } from '../lead/LeadHead';
+import { Face } from '../bots/Face'; // ticket 1168
+import { eyesOf } from '../bots/bots';
 import { FreshButton, FreshToast } from '../lead/LeaderDialog';
 import { useDigest } from '../lead/HomeParts';
 import { useTasks, withMerges } from '../lead/tasks';
@@ -213,6 +215,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
   const owner = windowCtx().owner;
   const tasks = withMerges(useTasks(core, leadFolder, connected, sessions).tasks, owner);
   const digest = useDigest(core, connected && !!leadMate && !leadMate.project, sessions, owner); // Home view: the Home lead's chip
+  const leadBot = leadMate ? team.bots?.find((b) => b.id === leadMate.id) : undefined; // ticket 1168
   const needsYou = teamWaiting(deciding, owner, leadFolder, !(leadMate ?? tabLead)?.project); // q67 look (new 2): the tab's badge and the chip say the Team view's number
   // An ask to show the Team tab ("Open as a tab", the chip, the icon) waits until the tab is drawn: the move is a settings write.
   const [wantTab, setWantTab] = useState<string | null>(null);
@@ -577,6 +580,8 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
           <i className="st" data-s={shownStatus(current)} aria-hidden>
             {markGlyph(shownStatus(current))}
           </i>
+          {/* Ticket 1168 (mockup bots-1166 panel 4): the lead's face, once, in the header only (never in a tree row, a tab or the chat). */}
+          {leadMate && leadBot && <Face t={t} face={leadBot.face} name={leadMate.name} eyes={needsYou > 0 ? 'look' : eyesOf(sessions, leadMate.id)} size={22} />}
           <b data-tip={sessionName(current)} data-tip-clip>{sessionName(current)}</b>
           {leadMate && <span className="lead-tag">{t('lead.tag')}</span>}
           {/* Ticket 992: a seat's level, and the menu for the bot's next task. */}
@@ -611,7 +616,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
           {/* end v1b-20 */}
           {sideChatShown(current) && <button className="hbtn" data-tip={t('settings.keys.cmd.sideChat')} data-tip-cmd="session.side-chat" onClick={() => void openSideChat(current)}>{t('chat.side.title')}</button>}
           <span className="sp" />
-          {leadMate && <TeamChip t={t} mate={leadMate} tasks={tasks} sessions={sessions} onOpen={openTeam} digest={digest} waiting={needsYou} />}
+          {leadMate && <TeamChip t={t} mate={leadMate} tasks={tasks} sessions={sessions} onOpen={openTeam} digest={digest} waiting={needsYou} faced={!!leadBot} />}
           {/* Ticket 1031: the PR chip, moved here from the status bar (a shell has no chat to carry it). */}
           <SessionFacts t={t} core={core} boot={boot} session={current} />
           {/* Ticket 1130 B-L3 (C5): "New conversation" on a teammate's seat (not on an older conversation of one whose seat runs elsewhere). */}

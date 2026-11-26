@@ -1,6 +1,6 @@
 // Ticket v1b-12: the chat diff card's View / Accept / Reject. Real core, a fake Claude whose transcript the test
 // writes; "PERM <hook payload>" typed into its PTY asks through the real PermissionRequest hook and draws the
-// permission dialog, as Claude does (real agent: chat-diff-card.real.spec.ts via scripts/scenario/v1b-diff-card.sh).
+// permission dialog, as Claude does.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';

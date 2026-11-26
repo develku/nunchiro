@@ -28,7 +28,7 @@ test('home_group (990 d8): Home teammates sit in a Home group above the projects
   await group.locator('.home-rest .row').click();
   await expect(group.locator('.home-mate')).toHaveCount(3);
   await expect(group.locator('.home-mate').first()).toHaveAttribute('data-mate', 'mate-chief');
-  await expect(group.locator('.home-mate[data-mate="mate-chief"] .lead-tag')).toHaveText('Lead');
+  await expect(group.locator('.home-mate[data-mate="mate-chief"] .lead-tag')).toHaveText('Chief'); // ticket 1168 (owner 11-26): the office's lead is the Chief
   await expect(group.locator('.home-mate[data-mate="mate-inbox"] .lead-tag')).toHaveCount(0);
   await expect(group.locator('.home-mate[data-mate="mate-inbox"] .tm')).toHaveText('not running');
   // The Home folder's own session sits in the group (under the lead's row), not as a project named "home" with a "main" row.

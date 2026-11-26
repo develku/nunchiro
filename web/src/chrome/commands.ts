@@ -434,6 +434,7 @@ export function buildCommands({ resume, ordered, board, ownerList, current, t, o
     { id: 'history.open', title: t('history.open'), run: () => openHistory() }, // ticket 1073: History without its icon
     // Ticket 1099 (feature cohesion): the places that had no palette row, each opened the way its icon or page opens it.
     ...(['usage', 'team', 'assistants'] as const).map((page): Command => ({ id: `${page}.page`, title: t(`coh.cmd.${page}Page`), run: () => (setSettings((s) => ({ ...s, settingsPage: page })), setOverlay('settings')) })),
+    { id: 'bots.open', title: t('bots.cmd.open'), run: () => setOverlay('bots') }, // ticket 1168
     { id: 'decisions.open', title: t('coh.cmd.decisions'), run: openCmd('decisions') }, // the Outbox's cards are in Decisions
     { id: 'schedules.open', title: t('coh.cmd.schedules'), run: () => openSchedules() },
     { id: 'schedules.new', title: t('coh.cmd.scheduleNew'), run: () => openSchedules(NEW_SCHEDULE) },

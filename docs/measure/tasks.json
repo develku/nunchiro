@@ -1,4 +1,5 @@
 {
+ "run": null,
  "apps": [
   "Nunchiro",
   "Orca",
@@ -29,7 +30,7 @@
    "T9": "launch_warm_s"
   }
  },
- "note": "Steps from docs/code for every app, Nunchiro included (lead m1192); no app was driven this round. Orca, T3 Code and herdr from their source and docs; Claude Desktop and ChatGPT from their public docs only; Claude Code and Codex from --help and docs. A cell marked unknown (the docs read show the feature but not its steps) is left out of that app's mean and of the task's best. Timed rows for Nunchiro come from the measure script. Peer shots are from the timed GUI run of 2026-11-02 (Orca 1.4.245, T3 Code 0.1.6, Herdr.app 0.1.11); Nunchiro shots are this run's gate pictures of the isolated RC. Hover a cell for its path and evidence. Orca cells cite its source at commit 00910c0495; CLI cells cite the --help text kept in docs/measure/evidence/.",
+ "note": "Rubric v2 (ticket 1171): a cell counts only when the task was driven in the running app and timed: 'driven' holds the date, 'seconds' the median of three drives, 'steps' the inputs made on the default GUI path; 'run' above is the date of the run whose Nunchiro cells count. No cell below has been driven yet: every Nunchiro task scores 0 (not measured) until the first driven run. The step counts below are the v1 readings from docs and code (2026-11-25), kept as the starting notes for the drive. Steps from docs/code for every app, Nunchiro included (lead m1192); no app was driven this round. Orca, T3 Code and herdr from their source and docs; Claude Desktop and ChatGPT from their public docs only; Claude Code and Codex from --help and docs. A cell marked unknown (the docs read show the feature but not its steps) is left out of that app's mean and of the task's best. Timed rows for Nunchiro come from the measure script. Peer shots are from the timed GUI run of 2026-11-02 (Orca 1.4.245, T3 Code 0.1.6, Herdr.app 0.1.11); Nunchiro shots are this run's gate pictures of the isolated RC. Hover a cell for its path and evidence. Orca cells cite its source at commit 00910c0495; CLI cells cite the --help text kept in docs/measure/evidence/.",
  "versions": {
   "Nunchiro": "origin/main f5a578f6b (2026-11-24); app 0.1.0 unsigned local build",
   "Orca": "repo 00910c0495 (Mon Nov 23 2026); older clone 0cee6cbd not read; installed Orca.app 1.4.256 (Info.plist). Shots from 2026-11-02 run, v1.4.245",
@@ -665,9 +666,9 @@
   "T10": {
    "Nunchiro": {
     "result": "yes",
-    "steps": 3,
-    "path": "Click the composer of the open agent session; Cmd+V a `claude mcp add NAME -- COMMAND` line; click 'Add and restart' on the offer row (an idle session restarts on its conversation with the server)",
-    "evidence": "web/src/chat/ComposerWidget.tsx:181-221,274-288,370-373; web/src/features/pasted-server.ts:52-60; web/src/features/restart-keeping.ts:9-15 (re-counted 2026-11-25; the lane claimed 2, but the composer is not focused by default)",
+    "steps": 2,
+    "path": "With the agent session shown its composer already has focus (ticket 1145: a shown chat takes its composer, also when the window comes back); Cmd+V a `claude mcp add NAME -- COMMAND` line; click 'Add and restart' on the offer row (an idle session restarts on its conversation with the server)",
+    "evidence": "web/src/chrome/CentreView.tsx:171-200 (focus on show and on window focus), web/tests/composer-focus-1145.spec.ts:20-60; web/src/chat/ComposerWidget.tsx:181-221,274-288,370-373; web/src/features/pasted-server.ts:52-60; web/src/features/restart-keeping.ts:9-15 (re-counted 2026-11-26 at a04c8ec8f: 3 -> 2)",
     "stuck": "Only a pasted stdio `claude mcp add` line shows the offer; typing it, a bare command, or an http/sse add does not. A busy session gets 'for new sessions' and needs a new session (+1). -e/--env values are dropped. Settings path: Cmd+,; Skills & hooks; paste; Enter; Restart = 5. Skills are still added as a folder.",
     "shots": []
    },

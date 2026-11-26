@@ -40,6 +40,9 @@ export const GROUPS: Record<string, string[]> = {
   'err.h.fileBad': [
     'a set-aside sessions.json is kept: its sessions would stay at the old folder', // sessions/locate.rs: Locate (ticket 1040); the Problems row names the folder
     "ledger.json: {}", "ledger.json has version {}, this build reads 1", "notes.json: {}", "notes.json has version {}, this build reads 1", "loops.json: {}", "loops.json has version {}, this build reads 1", "roles.json: {}", "roles.json has version {}, this build reads 1", "{}.json: {}", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
+    // team/bots.rs (ticket 1168): a bots.json this build cannot read, and what a bot in it may not say.
+    "bots.json is too large", "bots.json: {}", "bots.json has version {}, this build reads 1", "bots.json holds an id that is not a bot id: \"{}\"", "bots.json: {}: a face is two plain words", "bots.json: {}: {}", "team.json has too many backups; move some away", "SOUL.md: {}",
+    "a bot runs Claude, Codex or an ACP agent", "a bot in a seat has no other project", "a pinned model has its own effort", "a lead seat names its project, another seat names none", "unknown variant `{}`, expected `none`, `chief` or `lead`", "a pinned rule names its model, a follow rule names none", "unknown variant `{}`, expected `follow` or `pinned`",
     'schedules.json has no folder', "team.json is too large", "team.json: {}", "team.json has version {}, this build reads 1", "team.json holds an id that is not a teammate id: \"{}\"", "teammate project {}: {}", // team.rs (ticket 970)
    
     'the conversation\'s record could not be copied: {}', 'the other account holds something that is not a record under this conversation\'s name; nothing was copied', '{} must not be a symlink', '{} is not a regular file', 'invalid {}: {}', 'invalid {}: larger than 1 MiB', 'invalid {}: version', 'invalid {}: account entry',
@@ -76,6 +79,7 @@ export const GROUPS: Record<string, string[]> = {
   ],
   'err.h.value': [
     "a role note names its role", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
+    "a SOUL needs at least one line", "a SOUL has at most 16 KB and no control characters", // team/bots.rs (ticket 1168)
     "a teammate runs Claude, Codex or an ACP agent", "a model or effort is 1 to 100 characters", "a teammate's name has 1 to {} characters and no control characters", "a teammate needs a job: one or two lines on what it is for", "a teammate's job has at most {} characters and no control characters", "a teammate's project must be a real folder, not through a symlink", 'a worktree is handed to the lead of its project', // team.rs (tickets 970, 990)
    
     'a saved machine is already named {}; forget it first or use a link with another label', // machines/share.rs: Add machine from a link

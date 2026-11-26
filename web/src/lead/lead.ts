@@ -5,6 +5,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import type { CoreClient } from '../api';
 import type { ListedWorktree } from '../tree';
 import { agentState, type Session } from '../types';
+import type { Bot } from '../bots/bots';
 
 type Level = 'light' | 'standard' | 'deep';
 /** Ticket 992: `level` absent is Auto (`level_max` its upper limit), else pinned; `next_level` is the level picked on the seat's
@@ -12,7 +13,7 @@ type Level = 'light' | 'standard' | 'deep';
  *  of a teammate whose `kind` is `acp`. */
 export type Teammate = { id: string; name: string; job: string; kind: 'claude' | 'codex' | 'acp'; agent?: string | null; model?: string | null; effort?: string | null; project?: string | null; lead?: boolean; level?: Level | null; level_max?: Level | null; next_level?: Level | null };
 /** `team_list`: the teammates and the folder every Home teammate works in (also Home's room). */
-export type Team = { teammates: Teammate[]; home: string };
+export type Team = { teammates: Teammate[]; bots?: Bot[]; home: string }; // ticket 1168: `bots`, the same roster with face, seat and model rule
 
 const NONE: Team = { teammates: [], home: '' };
 let state: Team = NONE;
