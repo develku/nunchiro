@@ -276,7 +276,8 @@ def price_table():
 def usd(parts, model, prices, one_hour=0):
     """List-price dollars of [input, output, cache write, cache read] tokens; 'one_hour' of the cache writes were 1-hour
     writes, which cost twice the base input (the price page) instead of the 5-minute write price."""
-    row = next((p for name, p in prices if model and model.startswith(name)), None)
+    # Same rule as the core's price_of: a prefix never ends inside a number (claude-fable-5-2026... is not Fable 5.2).
+    row = next((p for name, p in prices if model and re.match(re.escape(name) + r"(?!\d)", model)), None)
     return None if row is None else (sum(a * b for a, b in zip(parts, row)) + one_hour * (2 * row[0] - row[2])) / 1e9
 
 
@@ -752,6 +753,7 @@ def selftest():
     assert minutes([60, 180]) == dict(n=2, median_min=2, p90_min=3)
     prices = price_table()
     assert len(prices) > 10 and usd([1000, 0, 0, 0], "claude-opus-5-5-x", prices) == 0.004, prices[:3]
+    assert usd([1000, 0, 0, 0], "claude-fable-5-20261001", prices) == 0.01, "dated Fable 5 is not Fable 5.2"
     assert usd([1, 1, 1, 1], "unknown-model", prices) is None and folder_key("a.b/c-1") == "a-b-c-1"
     assert WORKTREE_ADD.findall("git -C /r worktree add -b x/y ~/w/z origin/main") == [("x/y", "~/w/z")]
     assert PUSH.findall("git push -u origin x/y && gh pr create") == ["x/y"] and text_of([dict(type="tool_result")]) is None
