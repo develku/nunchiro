@@ -4,6 +4,10 @@ What changed for people who use Nunchiro. Newest first. Nunchiro is in developme
 
 ## 2026-11-26
 
+- A message you send to a session that waits at a start question (such as Claude's folder trust) is no
+  longer refused: it waits in that session's queue and goes in once you answer the question in its terminal. From
+  the command line, `nunchiro agent prompt` now says which session waits at which question, on which Mac, and how to
+  drop the message, instead of only `agent_blocked`.
 - Bots have their own view ("Open Bots" in the command palette, also reached from Settings). Every bot has a face
   that shows its state (resting, working, needs you), a seat (Chief for the office, Lead of one project, or none), a
   SOUL file that says who it is and that you can edit there, its schedules, and its model settings. A project lead's

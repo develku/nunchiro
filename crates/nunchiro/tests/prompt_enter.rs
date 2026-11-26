@@ -272,7 +272,7 @@ fn cli_text_fails_on_a_start_question_at_the_bound() {
 
 /// A session at a start question (folder trust) and the words the owner sent it.
 fn at_start_question(h: &Harness) -> String {
-    let id = h.owner(json!({"op":"start","session":{"kind":"claude","project":h.home,"args":["--fixture-dialog"]}}))
+    let id = h.owner(json!({"op":"start","session":{"kind":"claude","project":h.home,"args":["--fixture-dialog","--fixture-box-after"]}}))
         .unwrap()["session"]["id"]
         .as_str()
         .unwrap()

@@ -244,7 +244,7 @@ with what it asks in `pending`, and stderr says `agent_blocked: ...`. Per verb:
 | Verb | 0 | 1 | 2 |
 |---|---|---|---|
 | `start` | started (or the receipt's session) | refused or failed | never |
-| `prompt`, `send` | delivered or queued (`--wait`: the state reached) | refused, stalled, timeout | the agent is blocked (`--until blocked` makes that a 0) |
+| `prompt`, `send` | delivered or queued (`--wait`: the state reached) | refused, stalled, timeout | the agent is blocked (`--until blocked` makes that a 0); a prompt kept behind a question in the agent's terminal |
 | `wait` | a listed state reached | timeout, the agent ended, not found | the agent is blocked and `blocked` is not listed |
 | `send-keys` | keys sent | refused | keys refused while a dialog is open (`agent_blocked: ...`) |
 | `get`, `list`, `read`, `cancel` | read or done | not found, refused | never |
@@ -266,7 +266,11 @@ starts again. When the first start failed, a retry starts again. `session start`
 ### `nunchiro agent prompt <agent> <text> [--wait] [--until done|idle|blocked]... [--timeout <ms>]`
 Sends `<text>` and presses Enter. Without `--wait` it returns the delivery. With `--wait` it returns the agent's
 state once any `--until` state is reached (default `done`; `idle` also matches `done`; default timeout 300000 ms).
-Refused with `agent_blocked` while a dialog is open. For a Claude agent a session token may submit only `/clear` and
+While a dialog is open (a start question such as folder trust) the owner's prompt is kept, never typed into it: it
+waits in the queue and goes in once the dialog is answered in the agent's terminal. The command ends with 2 and stderr
+says which session waits at what (its choices), on which machine with `--machine`, and the `agent cancel` command
+that drops the prompt; the window shows the dialog as a card on that session. From a session token the prompt is
+refused with `agent_blocked`. For a Claude agent a session token may submit only `/clear` and
 `/compact` as slash commands; any other text starting with `/` is refused (the user is not limited). Fails with `agent_prompt_stalled` when the agent shows no activity
 within 5 seconds of delivery, and with `agent_wait_timeout` at the timeout. If the agent is busy the send waits in its
 visible "send when ready" queue and is delivered once when it is ready; `agent cancel` removes it.

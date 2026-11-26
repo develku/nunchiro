@@ -800,7 +800,7 @@ fn remote_queued_send_is_delivered_when_worker_becomes_ready() {
 fn remote_start_question_is_one_card_on_the_driving_machine_and_keeps_the_prompt() {
     let p = Pair::new();
     let child = p
-        .call(None, json!({"op":"start","session":{"kind":"claude","project":p.project,"label":"worker","args":["--fixture-dialog"]}}))
+        .call(None, json!({"op":"start","session":{"kind":"claude","project":p.project,"label":"worker","args":["--fixture-dialog","--fixture-box-after"]}}))
         .unwrap()["session"]
         .clone();
     let row = || {
