@@ -270,6 +270,83 @@ fn cli_text_fails_on_a_start_question_at_the_bound() {
     assert!(h.screen(&id).contains("CHOICE:1"), "{}", h.screen(&id));
 }
 
+/// A session at a start question (folder trust) and the words the owner sent it.
+fn at_start_question(h: &Harness) -> String {
+    let id = h.owner(json!({"op":"start","session":{"kind":"claude","project":h.home,"args":["--fixture-dialog"]}}))
+        .unwrap()["session"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    h.until(|| h.session(&id)["pending"][0]["kind"] == "dialog");
+    id
+}
+/// The owner's prompt to a session that waits at a start question is kept, not refused: it sits in the queue, the CLI
+/// ends with 2 and says which session waits at what and what to do, the one card is the question's own, and the prompt
+/// goes in once the question is answered in the terminal.
+#[test]
+fn owner_prompt_waits_behind_a_start_question_and_goes_in_after_it() {
+    let h = Harness::new(None);
+    let id = at_start_question(&h);
+    let out = h.cli(&[
+        "agent",
+        "prompt",
+        &id,
+        "hello",
+        "--wait",
+        "--until",
+        "done",
+        "--timeout",
+        "4000",
+    ]);
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "{err}");
+    assert!(
+        err.contains("agent_blocked")
+            && err.contains("waits at a question in its terminal")
+            && err.contains("\"Yes, trust this folder\"")
+            && err.contains("The prompt is queued")
+            && err.contains("agent cancel"),
+        "{err}"
+    );
+    let s = h.session(&id);
+    assert_eq!(s["send_queue"][0]["content"], "hello", "{s}");
+    assert_eq!(s["send_queue"][0]["status"], "queued", "{s}");
+    assert_eq!(s["pending"].as_array().unwrap().len(), 1, "{s}");
+    // Nothing was typed into the question.
+    assert!(!h.screen(&id).contains("CHOICE:"), "{}", h.screen(&id));
+    h.cli(&["session", "send-keys", &id, "1", "enter"]);
+    h.until(|| acked(&h.screen(&id), "hello"));
+    assert!(h.screen(&id).contains("CHOICE:1"), "{}", h.screen(&id));
+}
+/// The owner drops a kept prompt with the command the CLI named; it is never typed.
+#[test]
+fn owner_cancels_a_prompt_kept_behind_a_start_question() {
+    let h = Harness::new(None);
+    let id = at_start_question(&h);
+    let out = h.cli(&["agent", "prompt", &id, "hello"]);
+    let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    assert_eq!(out.status.code(), Some(2), "{err}");
+    // "... To drop the prompt: nunchiro agent cancel <session> <send>"
+    let words: Vec<&str> = err
+        .rsplit_once("To drop the prompt: ")
+        .unwrap()
+        .1
+        .split(' ')
+        .collect();
+    assert_eq!(&words[..3], ["nunchiro", "agent", "cancel"], "{err}");
+    let dropped = h.cli(&words[1..]);
+    assert!(
+        dropped.status.success(),
+        "{}",
+        String::from_utf8_lossy(&dropped.stderr)
+    );
+    assert!(h.session(&id)["send_queue"].as_array().unwrap().is_empty());
+    h.cli(&["session", "send-keys", &id, "1", "enter"]);
+    h.until(|| h.screen(&id).contains("CHOICE:1"));
+    thread::sleep(Duration::from_millis(800));
+    assert!(!acked(&h.screen(&id), "hello"), "{}", h.screen(&id));
+}
+
 #[test]
 fn long_prompt_submits_on_paste_detecting_claude() {
     let h = Harness::new(None);
