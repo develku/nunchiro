@@ -2038,3 +2038,5 @@ fn window_ops_parse_and_agents_cannot_send_them() {
     // Not an `api::Request`: the owner socket, the CLI and a session's token cannot express a team op.
     assert!(serde_json::from_str::<crate::api::Request>(r#"{"op":"team_list"}"#).is_err());
 }
+
+mod one_minute;
