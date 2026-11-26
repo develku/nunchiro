@@ -84,6 +84,7 @@ export const GROUPS: Record<string, string[]> = {
     "Codex arguments cannot set hooks; Nunchiro's outward-action check runs as a Codex hook. Keep your own hooks in Codex's config", // sessions/spawn.rs
     "a role note names its role", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
     "a SOUL needs at least one line", "a SOUL has at most 16 KB and no control characters", // team/bots.rs (ticket 1168)
+    "a worktree to hand over must be a real folder, not through a symlink", "what to do with a worktree has at most {} characters and no control characters", // team/bots/first.rs: Hand to a bot
     "a teammate runs Claude, Codex or an ACP agent", "a model or effort is 1 to 100 characters", "a teammate's name has 1 to {} characters and no control characters", "a teammate needs a job: one or two lines on what it is for", "a teammate's job has at most {} characters and no control characters", "a teammate's project must be a real folder, not through a symlink", 'a worktree is handed to the lead of its project', // team.rs (tickets 970, 990)
    
     'a saved machine is already named {}; forget it first or use a link with another label', // machines/share.rs: Add machine from a link
@@ -137,6 +138,7 @@ export const GROUPS: Record<string, string[]> = {
     'the home\'s path cannot be named to the keychain', 'secrets not encoded', 'could not run curl: {}',
   ],
   'err.h.changed': [
+    "nothing to undo: this bot's first chat is over", // team/bots/first.rs: Undo on the SOUL card after the first chat ended
     "Codex was not asked whether it runs Nunchiro's outward-action check before this restart; switch again", "this Codex start changed after Codex was asked whether it runs Nunchiro's outward-action check, or it was never asked; start it again", // sessions/claude_modes.rs, sessions/spawn.rs: a Codex start or switch whose hook answer is stale
     "{} has another leader or none now: the goal was not sent", // sessions.rs: the goal card (Home view)
     "task {} is closed; nothing is kept from a closed task", "this task has no merge card: a lesson is kept from its card", "task {} is closed; there is nothing to merge", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
