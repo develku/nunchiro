@@ -260,13 +260,14 @@ impl Sessions {
     /// left typed after a dropped Enter (`left_typed`). The box must show them.
     pub(super) fn taken_back_row(&self, id: &str) -> Option<String> {
         let e = self.entries.get(id)?;
-        if e.acp.is_some() || e.observer.behind {
+        // His own edit since the paste (a key, words typed) makes the box his: nothing in it is cleared.
+        if e.acp.is_some() || e.observer.behind || e.input.edited() {
             return None;
         }
-        let shown = composer(&e.observer.screen.text(), e.meta.kind)?;
+        // Every row of the box, and exactly the message's words (not a prefix of them, nothing more).
+        let shown = box_text(&e.observer.screen.text(), e.meta.kind)?;
         let rows = &e.meta.send_queue;
-        let mine =
-            |s: &crate::delivery::Send| s.sender != "user" && holds_paste(&shown, &s.content);
+        let mine = |s: &crate::delivery::Send| s.sender != "user" && same_words(&shown, &s.content);
         if let Some(enter) = self.pending_enter.get(id) {
             return rows
                 .iter()

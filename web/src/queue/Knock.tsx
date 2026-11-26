@@ -138,7 +138,7 @@ function KnockPopover({ row, who, anchor, acts, session, core, t, onClose }: { r
         if (op === 'send_attach') {
           const box = document.querySelector<HTMLTextAreaElement>(`.composer textarea[data-draft-for="${CSS.escape(session)}"]`);
           const text = box ? box.value : getDraft(session);
-          noteWrite(session, { before: text, after: text, line: t('knock.putBack', { name: who.name }), undo: () => void core.request({ op: 'send_detach', id: session, send: row.id }).catch(() => {}) });
+          noteWrite(session, { before: text, after: text, line: t('knock.putBack', { name: who.name }), undo: () => core.request({ op: 'send_detach', id: session, send: row.id }) });
         }
         onClose(true);
       },

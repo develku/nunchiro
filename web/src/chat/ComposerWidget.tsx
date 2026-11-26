@@ -122,10 +122,16 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
     if (!target) return false;
     const w = takeWrite(target.id, box.value);
     if (w) {
-      setBox(box, w.before);
-      w.undo?.();
-      clearHomed(target.id);
-      setUndone(w.line ? { id: target.id, text: w.line } : null);
+      const id = target.id;
+      const done = () => {
+        setBox(box, w.before);
+        clearHomed(id);
+        setUndone(w.line ? { id, text: w.line } : null);
+      };
+      const asked = w.undo?.();
+      // Words going back to the terminal leave the box only once the core put them there; refused, they stay.
+      if (asked instanceof Promise) void asked.then(done, (e) => (noteWrite(id, w), setPaneNote(errorNote(notePlain(t, e), e))));
+      else done();
       return true;
     }
     if (box.value || !target.take_back) return false;

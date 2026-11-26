@@ -2,7 +2,8 @@
 // the box as it was before and after, and what undoes the write elsewhere (a detach, words put back in the terminal).
 // ⌘Z while the box still reads exactly `after` sets `before` and runs `undo`; after any edit of his it is the textarea's
 // own undo. Window memory only, newest last, a few per session.
-export type Write = { before: string; after: string; undo?: () => void; line?: string };
+/** `undo` may answer later (a request): the box is restored only once it did, and the write stays when it failed. */
+export type Write = { before: string; after: string; undo?: () => void | Promise<unknown>; line?: string };
 
 const writes = new Map<string, Write[]>();
 const KEEP = 5;
