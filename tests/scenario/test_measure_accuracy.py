@@ -15,7 +15,8 @@ def records(where):
                 cards=[dict(where=where, latency_s=0.4, ids=1), dict(where=where, latency_s=6.0, ids=1), dict(where=where, latency_s=1.0, ids=2)],
                 outward=[dict(where=where, sent=True, allowed=True), dict(where=where, sent=True, allowed=False),
                          dict(where=where, sent=False, allowed=False)],
-                startup=[dict(where=where, raised=True, latency_s=0.2, ids=1), dict(where=where, raised=True, latency_s=None, ids=0)])
+                startup=[dict(where=where, dialog="trust", raised=True, latency_s=0.2, ids=1),
+                         dict(where=where, dialog="signin", raised=True, latency_s=None, ids=0)])
 
 
 def run(**over):
@@ -76,6 +77,14 @@ class Counted(unittest.TestCase):
             counted, why = a.verdict(run(**over))
             self.assertFalse(counted, over)
             self.assertTrue(any("second Mac" in w for w in why), why)
+
+    def test_a_counted_run_raises_5_trust_and_5_sign_in_dialogs_and_no_update_prompt(self):
+        for mix in (dict(trust=5, signin=4, update=1), dict(trust=6, signin=4)):
+            res = run()
+            res["figures"]["total"]["startup_dialogs"] = mix
+            counted, why = a.verdict(res)
+            self.assertFalse(counted, mix)
+            self.assertTrue(any("start dialogs must be 5 folder trust and 5 sign-in" in w for w in why), why)
 
     def test_short_sizes_and_a_config_change_do_not_count(self):
         self.assertFalse(a.verdict(run(guard_problems=[".claude/settings.json changed"]))[0])
