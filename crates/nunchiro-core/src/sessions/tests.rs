@@ -1626,6 +1626,32 @@ fn a_failed_runs_card_names_a_streak_and_survives_a_skip() {
         ["boom · second time in a row"],
         "a skip is no run"
     );
+    // A slot held for low memory is no run either: the card stays, and the next failure is still the streak.
+    let held = |core: &mut Sessions, at: u64| {
+        let reason = Some("held".to_string());
+        let last = Last {
+            session: None,
+            at,
+            result: Some(Outcome::Held),
+            reason,
+        };
+        core.schedules.record(&entry, last);
+        core.schedules_changed();
+    };
+    done(&mut core, Outcome::Finished, 6);
+    done(&mut core, Outcome::Failed, 7);
+    held(&mut core, 8);
+    assert_eq!(
+        reasons(&core),
+        ["boom"],
+        "a held slot keeps the failed run's card"
+    );
+    done(&mut core, Outcome::Failed, 9);
+    assert_eq!(
+        reasons(&core),
+        ["boom · second time in a row"],
+        "a held slot is no run"
+    );
     core.handle(Request::Stop).unwrap();
     let _ = fs::remove_dir_all(home);
 }
