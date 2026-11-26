@@ -233,6 +233,27 @@ fn a_lead_or_chief_template_asks_for_the_seat_once_and_any_answer_ends_the_ask()
     fs::remove_dir_all(proj).unwrap();
 }
 
+#[test]
+fn every_bot_is_told_how_to_offer_a_new_bot() {
+    let home = home();
+    let team = Team::open(&home);
+    let old = team.save(None, mate("Scout", None)).unwrap();
+    let lead = Teammate {
+        lead: true,
+        ..mate("Chief", None)
+    };
+    let lead = team.save(None, lead).unwrap();
+    for id in [&old[0].id, &lead[1].id] {
+        let (_, _, brief) = team.brief(id, None).unwrap();
+        assert!(
+            brief.contains("`nunchiro bot offer \"<name>\" --job \"<one sentence>\" --why \"<what you counted>\"`")
+                && brief.contains("nothing is made before they press Create"),
+            "{brief}"
+        );
+    }
+    fs::remove_dir_all(home).unwrap();
+}
+
 /// A bot on the fake agent, made as the window makes one.
 fn fake_bot(s: &Seats, name: &str) -> String {
     made(&ask(

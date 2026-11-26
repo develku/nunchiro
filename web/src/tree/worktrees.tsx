@@ -23,6 +23,7 @@ import { push as pushUndo } from '../undo/store';
 import type { SetupStatus } from '../approval/types';
 import { enT, plural, type T } from './state';
 import { sessionName } from '../Sidebar';
+import { askHand } from '../bots/bots';
 
 /** A PR refusal in the window's words; ticket 403 item 14: the stale one ends in `: <branch>` (no branch holds a `:`). */
 const prRefusal = (message: string, t: T) => {
@@ -979,6 +980,8 @@ export function worktreeCommands(wt: Worktrees, current: Session | null, firstPr
     { id: 'session.new.worktree', title: t('firstUse.cmd.worktreeAgent'), enabled: wtAgent, why: project ? t('firstUse.why.noRepo') : t('palette.why.noProject'), run: () => void (wtAgent && project && wt.startNew(project)) },
     { id: 'worktree.tidy', title: t('dialog.worktree.cmd.tidy'), run: () => wt.setAsk({ kind: 'tidy', project: project ?? null }) },
     { id: 'worktree.open', title: t('dialog.worktree.cmd.open'), enabled: !!l && !l.missing, why: wtWhy, run: () => l && void wt.open(l.path) },
+    // "Hand to a bot…": the row's worktree goes to a bot the owner picks (bots/HandBot.tsx).
+    { id: 'worktree.hand', title: t('bots.hand.cmd'), enabled: !!l && !l.missing, why: wtWhy, run: () => l && !l.missing && askHand(l.path) },
     { id: 'worktree.copy-path', title: t('dialog.worktree.cmd.copyPath'), enabled: !!l, why: noWt, run: () => l && void copyText(l.path) },
     { id: 'worktree.reveal', title: t('dialog.worktree.cmd.reveal'), enabled: !!l && !l.missing && '__TAURI_INTERNALS__' in window, why: l ? (l.missing ? wtWhy : undefined) : noWt, run: () => l && void import('@tauri-apps/plugin-opener').then((o) => o.revealItemInDir(l.path)).catch(() => {}) },
     // Ticket 375: the row's own folder (never the main checkout), in the editor chosen in Settings; never on another machine.

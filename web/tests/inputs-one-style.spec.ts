@@ -23,6 +23,7 @@ const EXCEPTIONS: { selector: string; reason: string; skip?: string[] }[] = [
   { selector: '.histv-sel select', reason: 'History\'s project list (lane w59, the approved mockup docs/design/history-1121 `.sel`): the box draws the control and its words, the native list lies over it unseen' },
   { selector: '.wtdlg .wtfld input, .wtdlg textarea', skip: ['size'], reason: 'the New worktree dialog keeps the approved WTDIALOGS mockup field size (12 px, pixel-tested in fidelity-worktree); every other property is compared' },
   { selector: '.palette.glass > input', reason: 'the command palette\'s search line (ticket 1041 lane 6, polish-1121 mockup `.pal`): a borderless 15 px line on the glass, the palette\'s own designed input' },
+  { selector: '.newbot .nb-name, .newbot .nb-job', reason: 'the New bot and Hand to a bot dialogs keep the fields of the approved mockup docs/design/bots-1166.html (panel 3 `.bare`, `.area`): a bare 20 px name and a borderless box one tint step up' },
   { selector: '.xterm-helper-textarea', reason: 'the terminal library\'s off-screen keyboard sink: it takes the keys, it is never a field the user sees' },
 ];
 
@@ -354,6 +355,9 @@ test('inputs_one_style_unopened_drift: each of the six components still draws it
 const WALKED: Record<string, { count: number; by: string }> = {
   'board/CardEditor.tsx': { count: 3, by: 'inputs_one_style: card editor' },
   'bots/BotsView.tsx': { count: 1, by: 'inputs_one_style_unopened: bot soul box (opens on Edit)' },
+  'bots/FirstChat.tsx': { count: 1, by: 'the shared :where(textarea) rule; not walked (the SOUL card of a bot\'s first chat opens it on Edit; tests/bots-new.spec.ts first_chat_cards fills it)' },
+  'bots/HandBot.tsx': { count: 1, by: 'exception: the Hand to a bot dialog\'s box (EXCEPTIONS); tests/bots-new.spec.ts hand_worktree_to_bot fills it' },
+  'bots/NewBot.tsx': { count: 1, by: 'exception: the New bot dialog\'s sentence box (EXCEPTIONS); tests/bots-new.spec.ts new_bot_one_step fills it' },
   'board/EditPanel.tsx': { count: 1, by: 'the shared :where(select) rule; not walked (the Done days select of the board edit panel, ticket 1066; named by its label)' },
   'chat/ComposerWidget.tsx': { count: 1, by: 'exception: the chat composer (EXCEPTIONS)' },
   'chat/HandoffChip.tsx': { count: 1, by: 'inputs_one_style_chat' },

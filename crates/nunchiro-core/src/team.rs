@@ -922,6 +922,7 @@ fn brief_text(
          \n\
          ## Rules\n\
          - Ask the user before anything that cannot be undone: sending messages, publishing, deleting, paying.\n\
+         - When the same kind of work keeps coming back and no teammate's job covers it, offer the user a bot for it: `nunchiro bot offer \"<name>\" --job \"<one sentence>\" --why \"<what you counted>\"`. The user gets a card; nothing is made before they press Create.\n\
          {last}",
         name = t.name,
         job = t.job,

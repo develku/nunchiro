@@ -43,7 +43,7 @@ import { isRoomTab, roomOfTab, roomTabId, useRoom } from '../room/room';
 import { leadOf, leadSeatMate, placeOfMate, seatOf, useTeam, workingFor } from '../lead/lead'; // ticket 990
 import { TeamChip, TeamLine } from '../lead/LeadHead';
 import { Face } from '../bots/Face'; // ticket 1168
-import { eyesOf } from '../bots/bots';
+import { eyesOf, useFirstChat } from '../bots/bots';
 import { FreshButton, FreshToast } from '../lead/LeaderDialog';
 import { useDigest } from '../lead/HomeParts';
 import { useTasks, withMerges } from '../lead/tasks';
@@ -218,6 +218,8 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
   const tasks = withMerges(useTasks(core, leadFolder, connected, sessions).tasks, owner);
   const digest = useDigest(core, connected && !!leadMate && !leadMate.project, sessions, owner); // Home view: the Home lead's chip
   const leadBot = leadMate ? team.bots?.find((b) => b.id === leadMate.id) : undefined; // ticket 1168
+  const seatBot = current?.teammate ? team.bots?.find((b) => b.id === current.teammate) : undefined;
+  const firstChat = useFirstChat(current?.teammate); // a new bot's first chat (bots/FirstChat.tsx)
   const needsYou = teamWaiting(deciding, owner, leadFolder, !(leadMate ?? tabLead)?.project); // q67 look (new 2): the tab's badge and the chip say the Team view's number
   // An ask to show the Team tab ("Open as a tab", the chip, the icon) waits until the tab is drawn: the move is a settings write.
   const [wantTab, setWantTab] = useState<string | null>(null);
@@ -584,6 +586,8 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
           </i>
           {/* Ticket 1168 (mockup bots-1166 panel 4): the lead's face, once, in the header only (never in a tree row, a tab or the chat). */}
           {leadMate && leadBot && <Face t={t} face={leadBot.face} name={leadMate.name} eyes={needsYou > 0 ? 'look' : eyesOf(sessions, leadMate.id)} size={22} />}
+          {/* Mockup bots-1166 panel 3: any bot's own chat has its face at the header's left, as a lead's has. */}
+          {!leadMate && seatBot && <Face t={t} face={seatBot.face} name={seatBot.name} eyes={eyesOf(sessions, seatBot.id)} size={22} />}
           <b data-tip={sessionName(current)} data-tip-clip>{sessionName(current)}</b>
           {leadMate && <span className="lead-tag">{t('lead.tag')}</span>}
           {/* Ticket 992: a seat's level, and the menu for the bot's next task. */}
@@ -591,6 +595,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
           <span className="dim">
             {/* Ticket 790: claude and codex are program names; shell is a word, so it takes the catalogue's. */}
             {placeText(current)} · {current.kind === 'shell' ? t('firstrun.shell') : current.kind} · {t(statusKey(current))}
+            {firstChat && ` · ${t('bots.first.tag')}`}
           </span>
           {/* ticket 162: the agent CLIs update themselves (Claude Code 4 times in a week), and the core marks any version
               it has not been tested with; the line stays the same across updates, the exact version is in its tooltip. */}

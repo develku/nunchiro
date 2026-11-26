@@ -16,6 +16,8 @@ export interface Command {
   name?: string;
   /** Disabled commands stay listed (07b, 08, 10 fill them) but do nothing. */
   enabled?: boolean;
+  /** False: no row menu offers the command now (the palette still lists it). "Hand to a bot…" with no bot yet. */
+  menu?: boolean;
   /** Why a disabled command is disabled: the context menu shows it as the item's tooltip (ticket 299). */
   why?: string;
   /** Context menu: whether the command can run on this target (the row's session and `data-menu-arg`). When present it
@@ -273,6 +275,7 @@ export const AREA: Record<string, Area> = {
   'tree.clear-finished': VIEWS,
   'history.open': VIEWS,
   'bots.open': VIEWS, // ticket 1168: the Bots view
+  'bots.new': VIEWS,
   'usage.page': WINDOW,
   'team.page': WINDOW,
   'assistants.page': WINDOW,

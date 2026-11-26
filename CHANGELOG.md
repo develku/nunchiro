@@ -4,6 +4,15 @@ What changed for people who use Nunchiro. Newest first. Nunchiro is in developme
 
 ## 2026-11-26
 
+- A new bot takes a name and one sentence: "New bot" in the Bots view, or "New bot…" in the command palette. Its face
+  is given and a press changes it, and six starts (Lead, Reviewer, Release notes, Chief, Peer watch, Docs) fill the
+  sentence. Its chat opens at once: the bot greets you with one question, does one small job and writes its own SOUL
+  file, which the chat shows on a card with Read, Edit and Undo. A Lead or Chief start asks in the chat where the
+  bot sits; nobody takes a seat before you say so.
+- A bot can offer you a new bot when the same kind of work keeps coming back. You get a card in Decisions with the
+  name, the job and what the bot counted; nothing is made before you press Create bot.
+- "Hand to a bot…" in a worktree row's menu hands that worktree to a bot you pick, with a line on what to do with it.
+  The bot's chat opens; with no line, the bot asks.
 - Bots have their own view ("Open Bots" in the command palette, also reached from Settings). Every bot has a face
   that shows its state (resting, working, needs you), a seat (Chief for the office, Lead of one project, or none), a
   SOUL file that says who it is and that you can edit there, its schedules, and its model settings. A project lead's
