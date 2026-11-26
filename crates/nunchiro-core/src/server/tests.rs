@@ -175,6 +175,7 @@ fn reply_is_read_after_the_core_hung_up() {
     BufReader::new(Until {
         stream: client,
         until,
+        wait: REPLY_WAIT,
     })
     .read_line(&mut line)
     .unwrap();
