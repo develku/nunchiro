@@ -251,7 +251,9 @@ way to a real agent.
 ### p34 Multi-agent accuracy (new)
 
 One trial, run by the owner: a core on its own NUNCHIRO_HOME with 5 real agent sessions (3 Claude, 2 Codex, the
-cheapest models) on the owner's sign-ins, inside the config guard that scripts/scenario/v1b-full.sh uses:
+cheapest models) on the owner's sign-ins, inside the config guard that scripts/scenario/v1b-full.sh uses. One of the
+5 (one Claude) runs on a second Mac through `nunchiro --machine <alias>`; its figures are reported on their own and are
+in the totals, and a run without the second Mac is not counted:
 
 1. Delivery: 500 prompts sent with `nunchiro agent prompt` (100 per session, a one-line "reply ok" task), 250 of
    them while the session's composer holds half-typed text. Not submitted within 30 s without a person = missed.
@@ -306,7 +308,7 @@ sandboxes. A phone client is row M2 of p01.
 | Peer tasks | drive T1-T12 in Nunchiro (an isolated RC), Orca and T3 Code the same way (by hand with a recording, or computer use for all; the owner answers its access dialog); record steps, seconds and the date in tasks.json | p04, p11, p13 |
 | Seats lost per restart | over 7 days, for each restart of the owner's app (update, serve restart, relaunch): seats held before minus seats back after, from `nunchiro agent list` before and after; the mean | seats_lost_per_restart |
 | 24 h soak | 20 real agent sessions on a core with its own NUNCHIRO_HOME for 24 h with a heartbeat prompt every 10 min; clean hours until the first crash, stuck terminal or lost session; footprint at the end over minute 2 | soak_clean_hours, mem_growth_24h_ratio |
-| Accuracy trial | p34 above | the four p34 figures |
+| Accuracy trial | p34 above: `python3 -B scripts/measure/scorecard.py accuracy --machine <alias> --remote-project <dir on the second Mac>` (raw records in accuracy-<date>.json; the figures go into the manual file only when the run is counted; `--self-test` checks the script on a fixture agent and is never counted) | the four p34 figures |
 | Bot task set | p35 above | bot_task_success_pct, bot_owner_touches |
 | Reach | p37 above | RE1-RE5 |
 
@@ -532,6 +534,10 @@ How far a user's agent team runs without the person stepping in.
 6. Stability (p08): field figures and a 24 h soak replace "launches drawn" and "idle shells alive" (both 100 for any
    app). The gate green rate stays, so a low item was not dropped.
 7. New parts p33 to p37 (the audit's five blind spots). They count in the mean from the first v2 run.
+8. Multi-agent accuracy (p34) runs 1 of its 5 real sessions (one Claude) on a second Mac through
+   `nunchiro --machine <alias>` (owner decision, stricter). Reason: the path to another Mac (SSH, the remote core's
+   cards and states) is part of running many agents, and a trial on one Mac never touches it; a run without the
+   second Mac is not counted, and the second Mac's figures are shown beside the totals.
 
 Where v2 differs from the audit's proposal, and why:
 
