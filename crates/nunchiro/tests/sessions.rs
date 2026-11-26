@@ -1875,7 +1875,8 @@ fn t1150_codex_that_will_not_run_the_outward_hook_is_not_started() {
 /// Ticket 1150 round 2 (Codex look P1): a start needs Codex's yes. A Codex that cannot be asked is refused like one
 /// that says no: a program that ends, one that prints something else, one that answers `initialize` but not the
 /// question, and one that is slower than the bound (a real Codex under a managed policy that took over a second to
-/// answer started unchecked before). Nothing is left behind, and the same Codex answering in time starts.
+/// answer started unchecked before). Nothing is left behind, and the same Codex answering late but inside the deadline
+/// starts.
 #[test]
 fn t1150_codex_that_does_not_answer_is_not_started() {
     let h = Harness::new();
@@ -1883,7 +1884,7 @@ fn t1150_codex_that_does_not_answer_is_not_started() {
         serde_json::json!({"behave": "exit"}),
         serde_json::json!({"behave": "garbage"}),
         serde_json::json!({"initialize": {}}),
-        serde_json::json!({"behave": 8}), // past the 5 s it has to answer `initialize`
+        serde_json::json!({"behave": 30}), // past the 10 s deadline (`CODEX_ASK_DEADLINE`)
     ] {
         codex_answers(&h, answers.clone());
         let refused = start_codex(&h)
@@ -1896,9 +1897,14 @@ fn t1150_codex_that_does_not_answer_is_not_started() {
         panic!("no snapshot");
     };
     assert!(sessions.is_empty(), "a refused start left a session");
-    std::fs::remove_file(h.home.join("codex-app-server.json")).unwrap();
+    // The same Codex answering yes late (a loaded runner took over 5 s) still starts.
+    codex_answers(
+        &h,
+        serde_json::json!({"behave": 5.5, "initialize": {}, "hooks/list": {"data": [{"hooks": [{
+            "key": "/<session-flags>/config.toml:pre_tool_use:0:0", "enabled": true, "trustStatus": "trusted"}]}]}}),
+    );
     let Ok(Reply::Started { session }) = start_codex(&h) else {
-        panic!("a Codex that answers did not start");
+        panic!("a Codex that answers late did not start");
     };
     h.request(Request::Close { id: session.id });
 }

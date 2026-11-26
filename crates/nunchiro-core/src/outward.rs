@@ -313,12 +313,15 @@ fn codex_hook_listed(list: &Value) -> bool {
     all.any(|h| h["key"] == CODEX_KEY && h["enabled"] == true && h["trustStatus"] == "trusted")
 }
 
-/// How long the asked Codex may take to answer `initialize`, then `hooks/list`. Live 0.161.0 answers both in 24 to
-/// 176 ms (60 runs, median 38; the slowest while the whole test gate ran beside it). 5 s each is about thirty times
-/// the slowest seen, for a cold start, a busy Mac or a cloud-managed account's policy read, before a start is
-/// refused as unanswered. The wait is off the registry lock (`Launch::ask_codex`), so it holds that one start only.
-const CODEX_INIT_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
-const CODEX_LIST_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+/// The one absolute deadline for the start check: from starting the asked Codex to its `hooks/list` answer (and the
+/// policy read that only picks the refusal's words). Measured 2026-11-26 on an Apple-silicon Mac while 2 rustc ran: live
+/// Codex 0.161.0 answered both in 98 to 357 ms (20 cold starts, median 149), the tests' Python fake in at most 263 ms.
+/// 10 s is about 28 times the slowest, and twice the 5 s a loaded CI runner's fake once took (the old bound per
+/// question). It stays under the 15 s a CLI caller waits for the core's reply (`server::call`), leaving 5 s for the
+/// rest of the start, so a start is never refused to its caller while the core goes on with it. A Codex still silent
+/// at the deadline is refused, never taken as a yes. The wait is off the registry lock (`Launch::ask_codex`), so it
+/// holds that one start only.
+pub(crate) const CODEX_ASK_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// Ticket 1150: what a Codex start asks its Codex with: the session's program, folder and environment (before its own
 /// identity) and the outward hook's command (`sessions::spawn::codex_ask`). Two that are equal are the same start:
@@ -348,6 +351,7 @@ impl CodexAsk {
             self.program.contains('/'),
             "a unit test asked the real codex"
         );
+        let until = std::time::Instant::now() + CODEX_ASK_DEADLINE;
         let ask = |method: &str, params: Value| {
             let mut codex = crate::process::command(&self.program);
             codex
@@ -356,8 +360,8 @@ impl CodexAsk {
                 .current_dir(&self.cwd)
                 .args(["app-server", "-c", "features.plugins=false"])
                 .args(codex_args(&self.command, None));
-            let (init, wait) = (CODEX_INIT_WAIT, CODEX_LIST_WAIT);
-            crate::codex_reset::app_server(codex, init, method, params, wait, &|| true)
+            let (all, still) = (CODEX_ASK_DEADLINE, &|| true);
+            crate::codex_reset::app_server(codex, all, method, params, all, still, Some(until))
         };
         let cwds = serde_json::json!({"cwds": [self.cwd.to_string_lossy()]});
         Err(match ask("hooks/list", cwds) {
@@ -766,7 +770,7 @@ mod tests {
     /// to one absolute deadline, not 5 s per question.
     #[test]
     fn codex_that_answers_yes_late_is_started() {
-        let (ask, dir) = late_codex(7, true);
+        let (ask, dir) = late_codex(6, true);
         assert_eq!(ask.runs_hook(), Ok(()));
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -774,9 +778,42 @@ mod tests {
     /// A late no is a no.
     #[test]
     fn codex_that_answers_no_late_is_refused() {
-        let (ask, dir) = late_codex(7, false);
+        let (ask, dir) = late_codex(6, false);
         let refused = ask.runs_hook().unwrap_err();
         assert!(refused.contains("would not run"), "{refused}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Silence is never a yes: a Codex that never answers is refused once the deadline passes, not later, and is gone.
+    #[test]
+    fn codex_that_never_answers_is_refused_by_the_deadline() {
+        let (ask, dir) = late_codex(3600, true);
+        let started = std::time::Instant::now();
+        let refused = ask.runs_hook().unwrap_err();
+        let took = started.elapsed();
+        assert!(refused.contains("did not say"), "{refused}");
+        assert!(
+            took >= CODEX_ASK_DEADLINE,
+            "refused before the deadline: {took:?}"
+        );
+        // The kill and its bounded reap (`codex_reset::end`) come after the deadline.
+        assert!(
+            took < CODEX_ASK_DEADLINE + std::time::Duration::from_secs(3),
+            "refused late: {took:?}"
+        );
+        let pid: i32 = std::fs::read_to_string(dir.join("pid"))
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while unsafe { libc::kill(pid, 0) } == 0 && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            unsafe { libc::kill(pid, 0) } != 0,
+            "the asked Codex still runs"
+        );
         let _ = std::fs::remove_dir_all(dir);
     }
 }

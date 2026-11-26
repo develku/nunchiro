@@ -255,11 +255,11 @@ fn rpc(
         .args(ARGV)
         .env_clear()
         .envs(env);
-    app_server(command, INIT_WAIT, method, params, wait, still)
+    app_server(command, INIT_WAIT, method, params, wait, still, None)
 }
 /// `rpc`'s exchange with the `codex app-server` that `command` starts (its program, arguments and environment), for
 /// the reset reader and for the start check of ticket 1150 (`outward::codex_runs_hook`). `init_wait`: how long its
-/// answer to `initialize` may take.
+/// answer to `initialize` may take. `until`: an absolute end for the whole exchange, start included, when set.
 pub(crate) fn app_server(
     mut command: std::process::Command,
     init_wait: Duration,
@@ -267,7 +267,12 @@ pub(crate) fn app_server(
     params: Value,
     wait: Duration,
     still: &dyn Fn() -> bool,
+    until: Option<Instant>,
 ) -> Result<Value, (Fail, bool)> {
+    let by = |wait: Duration| {
+        let relative = Instant::now() + wait;
+        until.map_or(relative, |u| u.min(relative))
+    };
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -312,7 +317,7 @@ pub(crate) fn app_server(
             "clientInfo": {"name": "nunchiro", "title": null, "version": env!("CARGO_PKG_VERSION")},
             "capabilities": null}});
         line(&mut stdin, &init)?;
-        answer(&rx, 1, init_wait)?;
+        answer(&rx, 1, by(init_wait))?;
         line(&mut stdin, &json!({"method": "initialized"}))?;
         if !still() {
             return Err(Fail::Withdrawn);
@@ -322,7 +327,7 @@ pub(crate) fn app_server(
             &json!({"id": 2, "method": method, "params": params}),
         )?;
         sent = true;
-        answer(&rx, 2, wait)
+        answer(&rx, 2, by(wait))
     })();
     end(child);
     result.map_err(|f| (f, sent))
@@ -351,8 +356,7 @@ fn line(stdin: &mut impl Write, v: &Value) -> Result<(), Fail> {
         .map_err(|_| Fail::Gone)
 }
 /// The result of the answer to request `id`; notifications and other ids are skipped.
-fn answer(rx: &mpsc::Receiver<Vec<u8>>, id: u64, wait: Duration) -> Result<Value, Fail> {
-    let until = Instant::now() + wait;
+fn answer(rx: &mpsc::Receiver<Vec<u8>>, id: u64, until: Instant) -> Result<Value, Fail> {
     loop {
         let left = until.saturating_duration_since(Instant::now());
         let bytes = rx.recv_timeout(left).map_err(|e| match e {
@@ -1253,6 +1257,7 @@ read -r l
                 json!({}),
                 wait,
                 &|| true,
+                None,
             ));
         });
         let answer = rx.recv_timeout(Duration::from_secs(20));
