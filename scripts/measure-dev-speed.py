@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """Development speed for the scorecard (ticket 1127, part p30): the DORA four keys, adapted to this repo.
 
-  python3 -B scripts/measure-dev-speed.py [--days 7] [--out FILE] [--tasks FILE] [--prs FILE] [--events FILE] [--mainwatch FILE]
+  python3 -B scripts/measure-dev-speed.py [--days 7] [--out FILE] [--tasks FILE] [--prs FILE] [--events FILE] [--main-log FILE]
   python3 -B scripts/measure-dev-speed.py --selftest
 
 Read only. Sources:
-- git log of origin/main: "Merge lane <lane> (<branch> <sha>)" commits are the landings (the ground truth; merging moves
-  from bin/land into Nunchiro, so the bin/land events are optional). The lane's own commits are <merge>^1..<merge>^2.
-- merged pull requests (ticket 1148, the PR flow): one GitHub search of MEASURE_REPO (default develku/nunchiro) through
-  "gh api graphql", read only, or --prs FILE with the JSON of "gh pr list --state merged --json ...". A merged pull
-  request is a landing like a "Merge lane" commit; both are counted.
-- the bin/land events (<main checkout>/.scratch/build-loop/events.jsonl): enqueue, gate_result, landed, eject, kick,
-  receipt. Default: the main checkout of this repo's git common dir; --events or MEASURE_EVENTS.
-- the mainwatch log (<main checkout>/.scratch/fable/mainwatch.log, as in scorecard.py; --mainwatch or MEASURE_MAINWATCH):
-  red episodes, culprit lanes, owner installs.
+- merged pull requests (ticket 1148, the PR flow, every landing since 2026-11-26): one GitHub search of MEASURE_REPO
+  (default develku/nunchiro) through "gh api graphql", read only, or --prs FILE with the JSON of "gh pr list --state
+  merged --json ...".
+- git log of origin/main: "Merge lane <lane> (<branch> <sha>)" commits, the landings of the local gate before the PR
+  flow. The lane's own commits are <merge>^1..<merge>^2. Both kinds are counted.
+- the main CI log (scripts/measure/ci-log.py: Actions runs on main and owner installs; scorecard.CI_LOG, --main-log or
+  MEASURE_CI_LOG): red episodes, culprit lanes (in its history part), owner installs.
+- for days before the PR flow only: the local gate's event file (--events FILE or MEASURE_EVENTS; none by default):
+  enqueue, gate_result, landed, eject, kick, receipt. The PR flow has no such events, so gate rejects, review rounds,
+  first pass and rework are not measured without it (null).
 - the task ledger: --tasks FILE (the JSON of "nunchiro task list --all --json"); without it the script runs that command
   when NUNCHIRO_SESSION is set (it only lists), else it skips the ledger.
 - the core's event journal ("nunchiro events --history", read from the day files; the owner's shell only) and the agents'
@@ -22,14 +23,14 @@ Read only. Sources:
 
 The four keys:
 1. Deployment frequency: lanes landed on main per day (and landings, a landing being one merge time that can carry
-   several lanes), and owner installs per day ("owner install ...: installed" in the mainwatch log).
+   several lanes), and owner installs per day ("owner install ...: installed" in the main CI log).
 2. Lead time for changes: first lane commit (author date) to the merge on main, median and p90 (the DORA definition);
    also task created (ledger) to the merge, for lanes whose branch matches a task's worktree folder.
 3. Change failure rate: landed lanes later reverted (a "fable-revert-<lane>" merge, a "lead-revert<ticket>" merge
    (the lane of that ticket), a lane whose own commits are all reverts ("Revert ..."), or a merged pull request from a
-   "revert-<number>-<branch>" branch, GitHub's Revert button) or named culprit by mainwatch, over
-   lanes landed. Gate rejects (eject and kick events) are shown beside it: they never reached main.
-4. Time to restore: main red to green again (mainwatch), median.
+   "revert-<number>-<branch>" branch, GitHub's Revert button) or named culprit in the main CI log, over lanes landed.
+   Gate rejects (eject and kick events) are shown beside it: they never reached main.
+4. Time to restore: main red to green again (the main CI log), median.
 Flow split, where data exists: task created to the Reviewer seat, the Reviewer seat to its pass, the pass to the enqueue,
 the gate queue (last enqueue to landed, less the gate runs) and the gate runs (gate_result durations of the landed
 candidate). Review rounds per lane: distinct reviewed patches (receipt events of kind review). For a pull request the
@@ -41,11 +42,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts/measure"))
-import scorecard  # noqa: E402  (MAINWATCH, LANDLOOP and the red-episode parser of part p27)
+import scorecard  # noqa: E402  (CI_LOG, its date and the red-episode parser of part p27)
 
-EVENTS = Path(os.environ.get("MEASURE_EVENTS") or scorecard.MAINWATCH.parent.parent / "build-loop/events.jsonl")
+EVENTS = os.environ.get("MEASURE_EVENTS")
 MERGE = re.compile(r"^Merge lane (\S+) \((\S+) [0-9a-f]+\)$")
-REVERT = scorecard.REVERT_LANE  # a bin/land or lead revert lane; GitHub's revert branch of a pull request
+REVERT = scorecard.REVERT_LANE  # a local gate or lead revert lane; GitHub's revert branch of a pull request
 DAY = 86400
 
 
@@ -143,7 +144,7 @@ def read_prs(path, since):
 
 
 def stamped(text, start):
-    """(epoch, line) for the mainwatch lines, which carry times only: a time earlier than the one before starts the next
+    """(epoch, line) for the main CI log's lines, which carry times only: a time earlier than the one before starts the next
     day, from the start date (shortcut: the same as scorecard.parse_deploys, a gap of more than a day is not seen)."""
     day, last = 0, None
     for line in text.splitlines():
@@ -160,8 +161,8 @@ def stamped(text, start):
 
 def read_events(path):
     out = []
-    if path.is_file():
-        for line in path.read_text().splitlines():
+    if path and Path(path).is_file():
+        for line in Path(path).read_text().splitlines():
             try:
                 out.append(json.loads(line))
             except ValueError:
@@ -319,7 +320,7 @@ def seat_time(events, now):
     return states, stalls
 
 
-def measure(days, tasks_file=None, events_path=EVENTS, mainwatch_path=scorecard.MAINWATCH, now=None, project=None,
+def measure(days, tasks_file=None, events_path=EVENTS, log_path=scorecard.CI_LOG, now=None, project=None,
             claude_dirs=(), codex_dir=None, core=None, prs_file=None, prs=None):
     now = now or time.time()
     start = now - days * DAY
@@ -332,10 +333,8 @@ def measure(days, tasks_file=None, events_path=EVENTS, mainwatch_path=scorecard.
     tasks, tasks_src = read_tasks(tasks_file)
 
     # 1. Deployment frequency
-    mw = mainwatch_path.read_text() if mainwatch_path.is_file() else ""
-    ll = scorecard.LANDLOOP.read_text() if scorecard.LANDLOOP.is_file() else ""
-    first = re.search(r'"ts": "(\d{4}-\d\d-\d\d)T', ll)  # the landloop and mainwatch logs start in the same minute
-    mw_start = datetime.date.fromisoformat(first[1]) if first else None
+    mw = log_path.read_text() if log_path.is_file() else ""
+    mw_start = scorecard.log_start(mw)
     lines = list(stamped(mw, mw_start)) if mw_start else []
     installs = [t for t, line in lines if t >= start and re.search(r" owner install [0-9a-f]{40}: owner-install: installed ", line)]
     lane_days = per_day([m["at"] for m in landed], start, days)
@@ -386,7 +385,7 @@ def measure(days, tasks_file=None, events_path=EVENTS, mainwatch_path=scorecard.
     landed_names = {m["lane"] for m in landed}
     rr = [len(v) for k, v in rounds.items() if k in landed_names]
     cfr = dict(failed_lanes=failed, change_failure_pct=round(100 * len(failed) / len(landed), 1) if landed else None,
-               gate_rejected_lanes=rejects, gate_reject_pct=round(100 * len(rejects) / tries, 1) if tries else None,
+               gate_rejected_lanes=rejects, gate_reject_pct=round(100 * len(rejects) / tries, 1) if tries and win else None,
                review_rounds=dict(lanes=len(rr), median=statistics.median(rr) if rr else None, max=max(rr, default=None)))
 
     # 4. Time to restore (the p27 parser, cut to the window)
@@ -401,7 +400,7 @@ def measure(days, tasks_file=None, events_path=EVENTS, mainwatch_path=scorecard.
     stamp = lambda t: t and datetime.datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M")  # noqa: E731
     coverage = dict(git_merges_from=stamp(min((m["at"] for m in ms if "opened" not in m), default=None)),
                     pull_requests_from=stamp(min((m["at"] for m in ms if "opened" in m), default=None)),
-                    mainwatch_from=stamp(lines[0][0]) if lines else None,
+                    main_log_from=stamp(lines[0][0]) if lines else None,
                     events_from=stamp(min((iso(e["ts"]) for e in win), default=None)),
                     task_ledger_from=stamp(min((t["created"] / 1000 for t in tasks), default=None)))
 
@@ -475,7 +474,8 @@ def measure(days, tasks_file=None, events_path=EVENTS, mainwatch_path=scorecard.
     revert_lanes = len(ms) - len(landed)
     rework = dict(first_pass_pct=round(100 * one / len(rr), 1) if rr else None, reviewed_lanes=len(rr),
                   rejected_then_landed=rejected_landed, repeat_landings=again, revert_landings=revert_lanes,
-                  rework_pct=round(100 * (len(rejected_landed) + again + revert_lanes) / len(ms), 1) if ms else None)
+                  # without gate events the rejected-then-landed lanes are unknown: rework is not measured
+                  rework_pct=round(100 * (len(rejected_landed) + again + revert_lanes) / len(ms), 1) if ms and win else None)
 
     # 8. Seat utilisation from the core's attention states (live states only: exited and lost seats are gone)
     live = {}
@@ -572,8 +572,8 @@ def main():
     ap.add_argument("--out", help="JSON file (default docs/measure/devspeed-<today>.json)")
     ap.add_argument("--tasks", help='the JSON of "nunchiro task list --all --json"')
     ap.add_argument("--prs", help='the JSON of "gh pr list --state merged --json headRefName,createdAt,mergedAt,mergeCommit,commits,statusCheckRollup" (default: ask GitHub through gh)')
-    ap.add_argument("--events", default=str(EVENTS))
-    ap.add_argument("--mainwatch", default=str(scorecard.MAINWATCH))
+    ap.add_argument("--events", default=EVENTS, help="the local gate's event file, for days before the PR flow")
+    ap.add_argument("--main-log", default=str(scorecard.CI_LOG), help="the main CI log (scripts/measure/ci-log.py)")
     ap.add_argument("--project", default=str(Path(scorecard._COMMON).parent) if scorecard._COMMON else None,
                     help="the place whose core events are read (default: the main checkout)")
     ap.add_argument("--selftest", action="store_true")
@@ -582,7 +582,7 @@ def main():
         return selftest()
     claude = list(dict.fromkeys([str(Path.home() / ".claude")] + [p for p in (os.environ.get("MEASURE_CLAUDE_DIRS") or "").split(os.pathsep) if p]))
     codex = os.environ.get("MEASURE_CODEX_SESSIONS") or str(Path.home() / ".codex/sessions")
-    d = measure(a.days, a.tasks, Path(a.events), Path(a.mainwatch), project=a.project, claude_dirs=claude,
+    d = measure(a.days, a.tasks, a.events, Path(a.main_log), project=a.project, claude_dirs=claude,
                 codex_dir=codex if Path(codex).is_dir() else None, prs_file=a.prs)
     out = Path(a.out) if a.out else ROOT / f"docs/measure/devspeed-{time.strftime('%Y-%m-%d')}.json"
     out.parent.mkdir(parents=True, exist_ok=True)

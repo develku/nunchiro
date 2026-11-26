@@ -74,8 +74,8 @@ ourselves, is 521 MiB.
 | Memory-pressure kills on this Mac while Nunchiro runs seats, 7 days (field) | 0 | 3 | 100: none; the Mac must stay responsive with seats running. 0: own bar: one kill every other day; a single low-memory kill froze the owner's 16 GB Mac on 2026-11-25 with five seats. Counted from the JetsamEvent reports in /Library/Logs/DiagnosticReports whose time falls while the core held at least one seat | owner-run, not yet scripted |
 | Clean hours of a 24 h soak with 20 real sessions | 24 | 0 | own bar from scripts/measure/measurelib.py:397-409 (0 crashes, 0 stuck terminals, footprint at the end at most 1.25 x minute 2), run for 24 h instead of 10 min | owner-run, see p08 |
 | Install on a fresh folder (success of 5) | 5 of 5 | 0 of 5 | v1, unchanged | run |
-| Owner installs that landed, last 20 green mainwatch runs (%) | 100 | 0 | v1, unchanged | run |
-| Gate green rate on main, last 30 mainwatch runs (%) | 100 | 70 | v1, unchanged | run |
+| Owner installs that landed, last 20 green main CI runs (%) | 100 | 0 | v1, unchanged | run |
+| Gate green rate on main, last 30 main CI runs (%) | 100 | 70 | v1, unchanged | run |
 | Gate duration, median of the last 30 runs (min) | 5 | 30 | v1, unchanged | run |
 | Locale key coverage, 7 other languages (%) | 100 | 80 | v1, unchanged | run |
 | Cold debug build, warm rebuild, web build, Rust test stage, largest file, files over 2,000 lines, files shared by open lanes | | | v1, unchanged (3..20 min, 15..180 s, 15..120 s, 3..20 min, 2,000..15,000, 0..20, 0..10) | dev |
@@ -369,7 +369,7 @@ ST1, ST2, AC1, AC2, AC3, DS3, DS4, DE3, DE4, IN2. The checks of p06, p16 and p22
 - TH2 A report template starts with STATUS and lists what was not checked.
 - TH3 An agent can ask its lead and wait for the answer (CLI with a timeout).
 - TH4 Lessons from a task are kept (task learn or a recorded lesson file).
-- TH5 Landed lanes reverted on main: 5 % or less of the green runs in the mainwatch log = pass, 10 % or less = partial.
+- TH5 Landed lanes reverted on main: 5 % or less of the green runs in the main CI log = pass, 10 % or less = partial.
 
 ### p10 Accessibility
 - AC1 Every main screen works with the keyboard only (a spec walks it).
@@ -461,19 +461,20 @@ correctly. MD1-MD5 replaced MX1-MX5 on 2026-11-25; the number figures stay.
 
 ### p30 Development speed (added 2026-11-25 by the owner, ticket 1127)
 Measured by `python3 -B scripts/measure-dev-speed.py [--days 7]` over the last 7 days: git merges on origin/main (the
-ground truth), the bin/land events, the mainwatch log and the task ledger, all read only; it writes
+ground truth, with the merged pull requests), the main CI log, the task ledger and, for days before the PR flow, the
+local gate's events, all read only; it writes
 docs/measure/devspeed-<date>.json. The bands are the DORA ones (State of DevOps reports: elite, high, medium, low).
 pass = 100 points (20 of the part), partial = 50 (10), fail = 0. The IDs are DV, because DS1-DS5 belong to p19.
 - DV1 Deployment frequency (DORA elite: on demand, several a day). pass: a lane lands on main on at least 5 of the 7
-  days and the owner's app installs a green main on at least 5 of the days the mainwatch log covers; partial: at least
+  days and the owner's app installs a green main on at least 5 of the days the main CI log covers; partial: at least
   one landing and one owner install in the 7 days (high: daily to weekly); fail: less.
 - DV2 Lead time for changes, the first lane commit to its merge on main (elite: under a day). pass: median under 24 h
   and p90 under 7 days; partial: median under 7 days (high); fail: 7 days or more, or not measured. Task created to
   the merge is shown beside it.
-- DV3 Change failure rate: landed lanes later reverted (a fable-revert-<lane> merge) or named culprit by mainwatch,
+- DV3 Change failure rate: landed lanes later reverted (a revert lane or pull request) or named culprit in the main CI log,
   over lanes landed (elite to medium: 0-15 %). pass: 15 % or less; partial: 30 % or less; fail: more, or not measured.
   Gate rejects (eject and kick) and review rounds are shown, not scored: a rejected lane never reached main.
-- DV4 Time to restore main: red to green in the mainwatch log, median (elite: under 1 h). pass: under 60 min; partial:
+- DV4 Time to restore main: red to green in the main CI log, median (elite: under 1 h). pass: under 60 min; partial:
   under 24 h (high); fail: 24 h or more, or not measured.
 - DV5 The flow split is measured and its waits are short: build, review, review to enqueue, gate queue, gate run.
   pass: review and gate times are known for at least 80 % of landed lanes, the gate queue median is under 60 min and
@@ -576,6 +577,11 @@ Where v2 differs from the audit's proposal, and why:
   is an empty start and ours is a restored one. Stricter than the peer's own condition; kept because it was approved.
 - Reach leaves out Windows, Linux and cloud sandboxes: docs/product.md says who the app is not for.
 
+- Source names (2026-11-26, the PR flow): the gate and deploy figures read the main CI log
+  (scripts/measure/ci-log.py: GitHub Actions runs on every main tip and the recorded owner installs) where they read
+  the local main watcher's log; landings are merged pull requests. No anchor, window or method changed. Gate rejects,
+  review rounds, first pass and rework need the local gate's events, which the PR flow does not have: they read "not
+  measured" for days after 2026-11-26 (rework read 0 rejects before; now it is null, never better).
 - Owner decision 2026-11-26 (stricter): p14 adds memory-pressure kills over 7 days and row ML1. The Mac staying responsive is the owner's second priority, and the idle figures alone scored a frozen Mac the same as a calm one.
 
 Not changed in v2 (the audit's lower-priority list, outside the approval of 2026-11-26): the weight of the default

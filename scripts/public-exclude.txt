@@ -2,7 +2,7 @@
 # holds; * and ? are wildcards), then "#" and the reason. A line starting with "+" puts that path back. Blank lines and lines starting with "#" are ignored.
 
 # Agent and owner process state: how this repository is run, not what it builds.
-.agents/                  # build-loop settings and playbooks for the owner's agents
+.agents/                  # local gate settings and playbooks for the owner's agents
 .claude/                  # owner's Claude Code project settings and hooks
 AGENTS.md                 # agent instructions for this checkout
 CLAUDE.md                 # agent instructions for this checkout
@@ -41,12 +41,12 @@ docs/release/            # internal publish scan verdicts (ticket 188), the publ
 docs/design/              # design mockups and screenshot sets (97 MB); the one design file the code reads is kept below
 +docs/design/v25-threat-model.md  # kept (a line starting with + is put back): crates/nunchiro-core tests read it with include_str!
 
-# Owner build-loop scripts and their tests (the gate, nightly runs, merge guard, publish scan).
+# Owner local gate scripts and their tests (the gate, nightly runs, merge guard, publish scan).
 scripts/launchd/          # owner's nightly launchd job
 scripts/merge-guard.py    # Claude Code hook of the owner's build loop
 scripts/gen-gate-paths.py # writes .gate-paths
-scripts/gate-failures.sh  # build-loop [gate] helper
-scripts/gate-scope.sh     # build-loop [gate] helper
+scripts/gate-failures.sh  # local [gate] helper
+scripts/gate-scope.sh     # local [gate] helper
 scripts/nightly-reds.py   # owner's nightly web run
 scripts/web-nightly.sh    # owner's nightly web run
 scripts/nextest-trial.py  # one-off runner comparison
@@ -61,7 +61,7 @@ scripts/web-smoke.sh      # merge-gate web smoke (load wait, ratchets against or
 scripts/publish-scan.sh   # internal publish scan; its verdicts live in docs/release/publish-check.md, which leaves
 scripts/scrub-owner.py    # export --scrub step; it lists the private names it replaces
 scripts/public-sync.sh    # owner sync to the public repo; runs publish-scan.sh and scrub-owner.py, which leave
-tests/scenario/test_build_loop_optin.py   # tests .agents/build-loop.toml and .strict-paths
+tests/scenario/test_build_loop_optin.py   # tests the local gate settings in .agents/ and .strict-paths
 tests/scenario/test_gen_gate_paths.py     # tests scripts/gen-gate-paths.py
 tests/scenario/test_gate_failures.py      # tests scripts/gate-failures.sh
 tests/scenario/test_gate_scope.py         # tests scripts/gate-scope.sh
@@ -72,15 +72,15 @@ tests/scenario/test_githooks.py           # tests .githooks/
 tests/scenario/test_publish_scan.py       # tests scripts/publish-scan.sh against docs/release/publish-check.md
 tests/scenario/test_public_sync.py        # tests scripts/public-sync.sh (needs publish-scan.sh and scrub-owner.py)
 tests/scenario/test_no_owner_names.py     # tests export --scrub; it lists the private names it looks for
-tests/scenario/test_gate_quarantine.py    # tests scripts/gate-quarantine.sh and the gate line in .agents/build-loop.toml
+tests/scenario/test_gate_quarantine.py    # tests scripts/gate-quarantine.sh and the gate line in .agents/
 tests/scenario/test_area_specs.py         # tests scripts/area-specs.sh against docs/areas/
 tests/scenario/test_affected_specs.py     # tests scripts/affected-specs.py
-tests/scenario/test_web_smoke.py          # tests the merge-gate web smoke, the nightly and .agents/build-loop.toml
+tests/scenario/test_web_smoke.py          # tests the merge-gate web smoke, the nightly and .agents/
 tests/scenario/test_review_page_1105.py   # tests a review page under docs/design
 tests/scenario/test_docs_followups_1104.py # greps internal docs
 tests/scenario/test_supply_chain_weekly.py # reads scripts/launchd/ and the owner's supply-chain run log (ticket 1135)
 tests/scenario/test_trademark_search.py   # reads docs/adr/ (ticket 1135)
-tests/scenario/fixtures/tier_check_default_strict.txt  # fixture of test_build_loop_optin.py
+tests/scenario/fixtures/tier_check_default_strict.txt  # fixture of the local gate opt-in test above
 
 # Web specs that compare the window with a private mockup or write screenshots into docs/design.
 web/tests/accounts-head-414.spec.ts       # reads docs/design/providers-391

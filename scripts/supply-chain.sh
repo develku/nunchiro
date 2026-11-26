@@ -36,7 +36,7 @@
 #   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.me.nunchiro-supply-chain.plist
 # Each run prints one line for docs/release/supply-chain-log.md (also at the end of the report); the lead appends it
 # there in the record step, so a reader of the main line sees that outdated packages are tracked.
-# A mainwatch or loop step can run it the same way and read the exit code: 1 = file a ticket per finding the report
+# A scheduled step can run it the same way and read the exit code: 1 = file a ticket per finding the report
 # lists as blocking, 2 = rerun when the network is back. __REPO__ should be a checkout of the current main line.
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)

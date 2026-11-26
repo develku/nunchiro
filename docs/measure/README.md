@@ -66,8 +66,11 @@ alone. Never on a machine whose accounts are not the owner's own.
 3. `python3 -B scripts/measure/scorecard.py dev --target <a throwaway cargo target folder>` measures part 26 (cold and warm
    build, web build, the gate's Rust test stage, the largest files, files shared by today's open lanes; about 15-25
    minutes, heavy on the CPU) and writes dev-<today>.json.
-4. `python3 -B scripts/measure/scorecard.py ops --clones <a throwaway folder>` reads the mainwatch and landloop logs (read
-   only) for deploy stability and checks the supply chain: lockfiles, audit tools (nothing is fetched), an SBOM, and two
+4. `python3 -B scripts/measure/ci-log.py` writes the main CI log (the GitHub Actions runs on main and the owner installs
+   recorded with `ci-log.py --install`; `--history <log> --history-start <date>` puts an earlier log in the same format
+   first, so "the last 30 runs" can reach back before the PR flow), which `run`, `ops` and
+   `scripts/measure-dev-speed.py` read. `python3 -B scripts/measure/scorecard.py ops --clones <a throwaway folder>`
+   reads that log and the git log of origin/main (read only) for deploy stability and checks the supply chain: lockfiles, audit tools (nothing is fetched), an SBOM, and two
    clean clones of origin/main built and compared (about 6 minutes). Writes ops-<today>.json.
 5. `python3 -B scripts/measure/scorecard.py page results-<date>.json` renders scorecard.html (with the newest dev and ops files).
 

@@ -29,7 +29,7 @@ case $jobs in ''|*[!0-9]*|0) jobs=1 ;; esac
 # Round 2 security MUST: a test can plant any of these files with a future mtime and make it immutable (chflags uchg),
 # so neither a removal nor the write can replace it. So when a state file the runner did not write is still there
 # after a removal (at start, or in the exit trap), or the write of scenario-failed fails, the runner exits 75 (infra):
-# the [gate] wrapper then leaves the failure list empty and bin/land names nobody.
+# the [gate] wrapper then leaves the failure list empty and names nobody.
 st=${SCENARIO_STATE:-$root/.scratch}; passed=0; named=0
 gone() { for f; do { [ ! -e "$st/$f" ] && [ ! -L "$st/$f" ]; } || { echo "scenario: cannot remove $st/$f (infra)" >&2; return 1; }; done; }
 rm -rf "$st/web-smoke" "$st/scenario-passed" "$st/scenario-failed"

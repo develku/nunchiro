@@ -8,7 +8,7 @@ Usage:
       throwaway folder and its cold launch, a warm launch, the core start, idle memory and CPU of core + window + WebKit
       + holders at 0, 5 and --sessions shell sessions, sessions.json and snapshot growth, the send-to-agent latency, and
       a launch of the window on that home with its sessions and a 5,000-event conversation (the restored launch). Then
-      the gate and owner-install figures from the mainwatch log (read only) and the locale key coverage. Writes
+      the gate and owner-install figures from the main CI log (read only) and the locale key coverage. Writes
       docs/measure/results-<date>.json (or --out).
   scorecard.py tests [--target DIR] [--out FILE]
       Runs every command a check in parts.json names under "tests" (detached, as `dev` runs the gate's test stage) and
@@ -32,8 +32,8 @@ Usage:
       the largest source files, and the files that two or more open lanes (local branches with a commit today that
       origin/main does not have) both change. Writes docs/measure/dev-<date>.json; `page` reads the newest one.
   scorecard.py ops [--clones DIR] [--out FILE]
-      Parts p27 and p29. Deploy stability from the mainwatch and landloop logs (read only): each red episode on main
-      (first RED to the next GREEN), the change failure rate over tested main tips and the minutes red; reverts landed.
+      Parts p27 and p29. Deploy stability from the main CI log (read only): each red episode on main (first RED to
+      the next GREEN), the change failure rate over tested main tips and the minutes red; reverts landed (git log).
       Supply chain: lockfiles tracked, audit and outdated tools present (nothing is fetched: an audit that needs the
       network is reported as not run), an SBOM, and two clean clones of origin/main (scripts/update-clone.sh from a
       local bare copy) built with --locked --offline, whose nunchiro binaries are compared. Writes ops-<date>.json.
@@ -64,10 +64,11 @@ sys.path.insert(0, str(ROOT / "scripts/scenario"))
 
 OUT_DIR = ROOT / "docs/measure"
 SHOTS = OUT_DIR / "shots"
-# The coordinator's mainwatch log lives in the main checkout's .scratch (a worktree shares its git common dir).
+# The main CI log (scripts/measure/ci-log.py: Actions runs on main and owner installs) lives in the main checkout's
+# .scratch (a worktree shares its git common dir).
 _COMMON = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--path-format=absolute", "--git-common-dir"],
                          capture_output=True, text=True).stdout.strip()
-MAINWATCH = Path(os.environ.get("MEASURE_MAINWATCH") or Path(_COMMON or ROOT / ".git").parent / ".scratch/fable/mainwatch.log")
+CI_LOG = Path(os.environ.get("MEASURE_CI_LOG") or Path(_COMMON or ROOT / ".git").parent / ".scratch/fable/ci-main.log")
 OWNER_HOME = Path.home() / ".nunchiro"
 # The owner's folders a run must never open: the Nunchiro home and the agents' own settings (read through HOME).
 OWNER_DIRS = [OWNER_HOME, Path.home() / ".claude", Path.home() / ".codex"]
@@ -122,7 +123,6 @@ V2_RUN = {"mib_per_session"}
 # Checks whose wording rests on a test or spec: pass or partial only when a command named under the check's "tests"
 # ran green in this run (scorecard.py tests), at the commit the results were measured on.
 TEST_CHECKS = {"RR3", "ST1", "ST2", "AC1", "AC2", "AC3", "DS3", "DS4", "DE3", "DE4", "IN2"}
-LANDLOOP = MAINWATCH.parent / "landloop.log"
 SOURCE = re.compile(r"\.(rs|ts|tsx|css|py|sh)$")
 NOT_SOURCE = re.compile(r"(^|/)(tests?|fixtures)/|_tests?\.rs$|/tests\.rs$|\.spec\.ts$|\.test\.m?[jt]sx?$|(^|/)i18n/areas/")
 
@@ -146,7 +146,14 @@ def stats(values):
     return dict(median=round(statistics.median(vals), 3), min=round(min(vals), 3), max=round(max(vals), 3), n=len(vals), values=values)
 
 
-def parse_mainwatch(text, runs=30, installs=20):
+def log_start(text):
+    """The date of the main CI log's first line, from the "# first day" line ci-log.py writes first; None without it."""
+    import datetime
+    m = re.match(r"# first day (\d{4}-\d\d-\d\d)\n", text)
+    return datetime.date.fromisoformat(m[1]) if m else None
+
+
+def parse_main_log(text, runs=30, installs=20):
     """Gate runs ("testing <sha>" then "GREEN|RED <sha>") with their minutes, and owner install outcomes.
     A run that crosses midnight adds 24 h. Lines of other kinds are ignored."""
     def secs(hms):
@@ -187,7 +194,7 @@ def within(first, second):
 
 
 def parse_deploys(text, start=None):
-    """Red episodes on main from the mainwatch log: from the first RED after green to the next GREEN. The log has times
+    """Red episodes on main from the main CI log: from the first RED after green to the next GREEN. The log has times
     only; a time earlier than the one before it starts a new day (shortcut: a gap of more than a day is not seen; the
     log is read in one sitting by its owner's loop, so gaps are hours). Infra reds ("red at ... no named failure") are
     not change failures."""
@@ -222,7 +229,8 @@ def parse_deploys(text, start=None):
                 restore_median_min=statistics.median(mins) if mins else None, restore_max_min=max(mins, default=None))
 
 
-# A revert lane: bin/land's fable-revert-<lane>, GitHub's revert-<n>-<branch> and a lead's lead-revert<ticket> (ticket 1157).
+# A revert lane: the retired local gate's fable-revert-<lane>, GitHub's revert-<n>-<branch> and a lead's lead-revert<ticket>
+# (ticket 1157).
 REVERT_LANE = re.compile(r"^(?:fable-revert-|revert-\d+-|lead-revert-?)(.+)$")
 REVERT_SUBJECT = re.compile(r'^Revert (?!"Revert )')  # git's default subject; a revert of a revert lands the change again
 
@@ -251,11 +259,15 @@ def lane_subjects(since=None):
     return out
 
 
-def reverts_landed(text, subjects=None):
-    """Revert lanes (revert_of) in the landloop log's landed lists; subjects: {lane: own commit subjects}."""
+def reverts_landed(main_subjects, subjects=None):
+    """The reverts among the first-parent commit subjects of origin/main: a "Merge lane" merge whose lane is a revert
+    (revert_of; subjects: {lane: own commit subjects}), named by its lane, or a squashed pull request with git's revert
+    subject (GitHub's Revert button), named by its subject."""
     out = []
-    for m in re.finditer(r'"landed": \[([^\]]*)\]', text):
-        out += [x for x in re.findall(r'"([^"]+)"', m[1]) if revert_of(x, (subjects or {}).get(x, ())) is not None]
+    for s in main_subjects:
+        m = re.match(r"Merge lane (\S+) \(", s)
+        if m and revert_of(m[1], (subjects or {}).get(m[1], ())) is not None or not m and REVERT_SUBJECT.match(s):
+            out.append(m[1] if m else s)
     return out
 
 
@@ -416,14 +428,12 @@ def dev_cmd(a):
 
 def ops_cmd(a):
     out = dict(date=time.strftime("%Y-%m-%d %H:%M"), commit=git("rev-parse", "--short", "origin/main").strip())
-    mw = MAINWATCH.read_text() if MAINWATCH.is_file() else ""
-    import datetime
-    ll = LANDLOOP.read_text() if LANDLOOP.is_file() else ""
-    first = re.search(r'"ts": "(\d{4}-\d\d-\d\d)T', ll)  # the landloop and mainwatch logs start in the same minute
-    deploy = parse_deploys(mw, datetime.date.fromisoformat(first[1]) if first else None)
-    deploy["reverts_landed"] = reverts_landed(ll, lane_subjects(first and first[1])) if ll else None
-    deploy["revert_holds"] = len(re.findall(r"HOLD: [0-9a-f]{40}: the revert of", mw))
-    deploy["reverts_queued"] = len(re.findall(r"revert lane \S+ queued for", mw))
+    log = CI_LOG.read_text() if CI_LOG.is_file() else ""
+    start = log_start(log)
+    deploy = parse_deploys(log, start)
+    since = start and start.isoformat()
+    deploy["reverts_landed"] = reverts_landed(git("log", "origin/main", "--first-parent", *(["--since", since] if since else []),
+                                                  "--format=%s").splitlines(), lane_subjects(since)) if start else None
     out["deploy"] = deploy
     have = lambda *cmd: subprocess.run(list(cmd), capture_output=True).returncode == 0  # noqa: E731
     sup = dict(tools={"cargo audit": have("cargo", "audit", "--version"), "cargo outdated": have("cargo", "outdated", "--version"),
@@ -808,14 +818,14 @@ def run_cmd(a):
               f"send {figs['send_ms'][-1]} ms, restored launch {secs} s {restored}", flush=True)
     loads.append(rel.load())
     owner_after = owner_core_pid()
-    mw = parse_mainwatch(MAINWATCH.read_text()) if MAINWATCH.is_file() else None
+    gate = parse_main_log(CI_LOG.read_text()) if CI_LOG.is_file() else None
     out = dict(
         rubric=RUBRIC, agents="shell", restored=restores,
         date=time.strftime("%Y-%m-%d %H:%M"), commit=rel.versions()["commit"], host=rel.versions()["host"],
         macos=rel.versions()["macos"], repeats=a.repeats, sessions=a.sessions, load=ml.load_range(loads),
         figures={k: stats(v) for k, v in figs.items()},
         installs=dict(ok=installs, of=a.repeats), launches=dict(drawn=drawn, of=launches), sessions_alive_pct=stats(alive),
-        mainwatch=mw, locale=locale_coverage(),
+        main_log=gate, locale=locale_coverage(),
         repeat_loads=loads[:-1],
         owner_check=dict(owner_core_before=owner_before, owner_core_after=owner_after, same=owner_before == owner_after,
                          owner_files_open_by_our_processes=touched, dirs_checked=[d.name for d in OWNER_DIRS],
@@ -950,7 +960,7 @@ def flat(res, dev=None, manual=None):
     f.update((dev or {}).get("figures", {}))
     f["first_pass_review_pct"] = (((dev or {}).get("devspeed") or {}).get("rework") or {}).get("first_pass_pct")
     f.update(manual_figures(manual, res["date"]))
-    mw = res.get("mainwatch") or {}
+    mw = res.get("main_log") or res.get("mainwatch") or {}  # the second key: results files written before 2026-11-26
     f.update(installs_ok_pct=round(100 * res["installs"]["ok"] / res["installs"]["of"], 1), owner_installs_landed_pct=(mw.get("installs") or {}).get("landed_pct"),
              gate_green_pct=mw.get("green_pct"), gate_median_min=mw.get("median_min"),
              launches_drawn_pct=round(100 * res["launches"]["drawn"] / res["launches"]["of"], 1) if res["launches"]["of"] else None,
@@ -1040,7 +1050,7 @@ def render(res, parts, tasks, results_name, dev=None, manual=None, tests=None):
                    f"<li>Tested main tips: {d['tested']}; landings that broke main (culprit lanes): {d['failures']}; red episodes: {len(d['episodes'])}{' (main is red now)' if d['still_red'] else ''}; "
                    f"change failure rate {d['change_failure_pct']} %; minutes red: median {d['restore_median_min']}, max {d['restore_max_min']}</li>"
                    + "".join(f"<li>{e(x['sha'])}: red {e(x['red_at'])}, green {e(x['green_at'])}, {x['minutes']} min</li>" for x in d["episodes"])
-                   + f"<li>Reverts landed: {e(', '.join(d['reverts_landed'] or []))}; reverts queued by mainwatch: {d['reverts_queued']}; held: {d['revert_holds']}</li>"
+                   + f"<li>Reverts landed: {e(', '.join(d['reverts_landed'] or []))}</li>"
                    f"<li>Supply: {e(json.dumps({k: v for k, v in sp.items() if k != 'not_run'}))}</li><li>{e(sp['not_run'])}</li></ul>")
     if dev and dev.get("date"):
         devsec += (f"<h2>Maintainability details (scorecard.py dev, {e(dev['date'])}, commit {e(dev['commit'])}, load {dev['load'][0]}-{dev['load'][1]})</h2><ul>"
@@ -1100,7 +1110,7 @@ names scores 0 ({unmeasured} figures here), and a check that rests on a test cou
 <h2>Measured figures (median and range over all repeats; each run's median and the run-to-run spread)</h2>
 <table><tr><th>Figure</th><th>Median</th><th>Range (all repeats)</th><th>Run medians (run-to-run spread)</th><th>n</th></tr>{numtab}</table>
 <div class=n>1-min load per run: {e(json.dumps(res.get('run_loads') or [res['load']]))}</div>
-<div class=n>Gate (mainwatch, last {(res.get('mainwatch') or {}).get('runs')} runs): {e(json.dumps(res.get('mainwatch'), ensure_ascii=False))}<br>
+<div class=n>Gate on main, last {(res.get('main_log') or {}).get('runs')} runs: {e(json.dumps(res.get('main_log'), ensure_ascii=False))}<br>
 Locale: {e(json.dumps(res.get('locale'), ensure_ascii=False))}<br>Owner check: {e(json.dumps(res['owner_check']))}</div>
 </body></html>
 """

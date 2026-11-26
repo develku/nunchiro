@@ -1,5 +1,5 @@
 """Ticket 1148, the flow record on the PR flow: scripts/measure/ci-log.py (Actions runs and owner installs in the
-mainwatch log format) and the pull-request and journal parts of scripts/measure-dev-speed.py. Fixtures only: no gh, no
+main CI log) and the pull-request and journal parts of scripts/measure-dev-speed.py. Fixtures only: no gh, no
 nunchiro command, no owner file."""
 import datetime
 import importlib.util
@@ -45,7 +45,7 @@ class UtcClock(unittest.TestCase):
 
 
 class CiLog(UtcClock):
-    # The old mainwatch log: its first line is on 2026-11-24, its last on 2026-11-25 at 16:22:03, main green.
+    # A history log: its first line is on 2026-11-24, its last on 2026-11-25 at 16:22:03, main green.
     OLD = "\n".join([f"22:00:00 testing {A}", f"22:10:00 GREEN {A}", f"16:06:00 testing {A}", f"16:16:00 GREEN {A}",
                      f"16:22:03 owner install {A}: owner-install: waiting, the core cannot be replaced now"]) + "\n"
     RUNS = [  # newest first, as gh prints them
@@ -67,7 +67,7 @@ class CiLog(UtcClock):
 
     def test_the_exact_lines(self):
         day = lambda mark, d: [f"23:59:59 {mark} {Z} day {d}", f"00:00:00 {mark} {Z} day {d}"]  # noqa: E731
-        self.assertEqual(self.text(), self.OLD + "\n".join(
+        self.assertEqual(self.text(), "# first day 2026-11-24\n" + self.OLD + "\n".join(
             day("GREEN", "2026-11-26") + [
                 f"17:00:00 testing {B}",
                 f"17:05:00 testing {C}",
@@ -85,11 +85,12 @@ class CiLog(UtcClock):
             ]) + "\n")
 
     def test_the_scorecard_parsers_read_it(self):
-        r = s.parse_mainwatch(self.text())
+        r = s.parse_main_log(self.text())
         self.assertEqual((r["runs"], r["green"], r["median_min"], r["max_min"]), (5, 4, 12.0, 25.0))
         i = r["installs"]
         self.assertEqual((i["n"], i["installed"], i["skipped"], i["failed"]), (3, 1, 1, 1))
-        d = s.parse_deploys(self.text(), datetime.date(2026, 11, 24))
+        self.assertEqual(s.log_start(self.text()), datetime.date(2026, 11, 24))
+        d = s.parse_deploys(self.text(), s.log_start(self.text()))
         # the first line after the old log is later in the day than its last line, and 11-27 has no line at all
         self.assertEqual([(e["red_at"], e["green_at"], e["minutes"]) for e in d["episodes"]],
                          [("2026-11-26 17:30", "2026-11-28 18:12", 2 * 1440 + 42)])
@@ -101,14 +102,14 @@ class CiLog(UtcClock):
         self.assertEqual(got[f"testing {F}"], datetime.datetime(2026, 11, 28, 18, 40))
 
     def test_no_old_log(self):
-        self.assertEqual(cilog.build("", None, self.RUNS[-2:-1], since="2026-11-26"), f"17:00:00 testing {B}\n17:20:00 GREEN {B}\n")
+        self.assertEqual(cilog.build("", None, self.RUNS[-2:-1], since="2026-11-26"), "# first day 2026-11-26\n" f"17:00:00 testing {B}\n17:20:00 GREEN {B}\n")
 
     def test_the_day_lines_are_no_gate_run_and_end_no_red_episode(self):
         text = self.text()
         marks = [line for line in text.splitlines() if Z in line]
         self.assertEqual(len(marks), 6)
         bare = "\n".join(line for line in text.splitlines() if Z not in line)
-        self.assertEqual(s.parse_mainwatch(text), s.parse_mainwatch(bare))  # runs, green rate, minutes, installs
+        self.assertEqual(s.parse_main_log(text), s.parse_main_log(bare))  # runs, green rate, minutes, installs
         d = s.parse_deploys(text, datetime.date(2026, 11, 24))
         self.assertEqual((d["tested"], len(d["episodes"])), (s.parse_deploys(bare)["tested"], 1))  # red through two midnights: one episode
         # main red and never green again: the RED day lines keep it red, a GREEN one is never written into it
@@ -116,7 +117,7 @@ class CiLog(UtcClock):
         self.assertEqual([m.split()[1] for m in red.splitlines() if Z in m], ["GREEN"] * 2 + ["RED"] * 4)
         d = s.parse_deploys(red, datetime.date(2026, 11, 24))
         self.assertEqual((d["still_red"], d["episodes"], d["failures"]), (True, [], 1))
-        self.assertEqual(s.parse_mainwatch(red)["runs"], 3)  # the old log's two and the red one
+        self.assertEqual(s.parse_main_log(red)["runs"], 3)  # the old log's two and the red one
 
     def test_every_attempt_of_a_rerun_is_a_gate_run(self):
         """Codex look, P1: a failed run rerun to green was read as one green run."""
@@ -128,8 +129,8 @@ class CiLog(UtcClock):
             return dict(status="completed", conclusion="failure", run_started_at="2026-11-26T17:00:00Z", updated_at="2026-11-26T17:20:00Z")
         text = cilog.build("", None, cilog.attempts(listed, fetch))
         self.assertEqual(asked, [(9, 1)])
-        self.assertEqual(text, f"17:00:00 testing {B}\n17:20:00 RED {B}: Actions run 9\n17:40:00 testing {B}\n17:50:00 GREEN {B}\n")
-        r = s.parse_mainwatch(text)
+        self.assertEqual(text, "# first day 2026-11-26\n" f"17:00:00 testing {B}\n17:20:00 RED {B}: Actions run 9\n17:40:00 testing {B}\n17:50:00 GREEN {B}\n")
+        r = s.parse_main_log(text)
         self.assertEqual((r["runs"], r["green"], r["green_pct"]), (2, 1, 50.0))
         d = s.parse_deploys(text, datetime.date(2026, 11, 26))
         self.assertEqual((d["tested"], d["failures"], d["change_failure_pct"], d["restore_median_min"]), (2, 1, 50.0, 30))
@@ -140,17 +141,17 @@ class CiLog(UtcClock):
 
     def test_an_older_tips_green_does_not_restore_a_newer_red(self):
         text = cilog.build("", None, self.OLDER_GREEN_AFTER_NEWER_RED)
-        self.assertEqual(text, f"09:55:00 testing {A}\n10:00:00 testing {B}\n10:10:00 RED {B}: Actions run 2\n")
+        self.assertEqual(text, "# first day 2026-11-26\n" f"09:55:00 testing {A}\n10:00:00 testing {B}\n10:10:00 RED {B}: Actions run 2\n")
         d = s.parse_deploys(text, datetime.date(2026, 11, 26))
         self.assertEqual((d["still_red"], d["episodes"], d["failures"]), (True, [], 1))
 
     def test_the_older_green_counts_as_a_gate_run_once_main_is_green(self):
         runs = [run(C, "2026-11-26T10:15:00Z", "2026-11-26T10:40:00Z", "success")] + self.OLDER_GREEN_AFTER_NEWER_RED
         text = cilog.build("", None, runs)
-        self.assertEqual(text.splitlines()[3:], [f"10:15:00 testing {C}", f"10:40:00 GREEN {C}", f"10:40:00 GREEN {A}"])
+        self.assertEqual(text.splitlines()[4:], [f"10:15:00 testing {C}", f"10:40:00 GREEN {C}", f"10:40:00 GREEN {A}"])
         d = s.parse_deploys(text, datetime.date(2026, 11, 26))
         self.assertEqual([(e["red_at"], e["green_at"], e["minutes"]) for e in d["episodes"]], [("2026-11-26 10:10", "2026-11-26 10:40", 30)])
-        r = s.parse_mainwatch(text)
+        r = s.parse_main_log(text)
         self.assertEqual((r["runs"], r["green"], r["green_pct"]), (3, 2, 66.7))
 
     def test_a_green_rerun_of_an_older_tip_does_not_restore_a_newer_red(self):
@@ -175,7 +176,7 @@ def check(name, start, end, workflow="CI"):
 
 
 class DevSpeed(UtcClock):
-    def measure(self, core=(), more=()):
+    def measure(self, core=(), more=(), log="", events=None):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__("shutil").rmtree(tmp))
         ms = lambda at: speed.iso(at) * 1000  # noqa: E731
@@ -194,11 +195,14 @@ class DevSpeed(UtcClock):
         ]
         old = [dict(lane="lead-old9", branch="lead/old-9", sha=E, at=int(speed.iso("2026-11-25T10:00:00Z")),
                     first_commit=int(speed.iso("2026-11-25T08:00:00Z")))] + list(more)
-        keep = (speed.merges, speed.git, s.LANDLOOP)
-        self.addCleanup(lambda: (setattr(speed, "merges", keep[0]), setattr(speed, "git", keep[1]), setattr(s, "LANDLOOP", keep[2])))
-        speed.merges, speed.git, s.LANDLOOP = (lambda since: old), (lambda *a: "abc1234\n"), tmp / "none"
-        return speed.measure(7, tasks_file=tmp / "tasks.json", events_path=tmp / "none", mainwatch_path=tmp / "none",
-                             now=speed.iso("2026-11-28T12:00:00Z"), core=list(core), prs=prs)
+        keep = (speed.merges, speed.git)
+        self.addCleanup(lambda: (setattr(speed, "merges", keep[0]), setattr(speed, "git", keep[1])))
+        speed.merges, speed.git = (lambda since: old), (lambda *a: "abc1234\n")
+        (tmp / "ci-main.log").write_text(log)
+        if events is not None:
+            (tmp / "events.jsonl").write_text("".join(json.dumps(e) + "\n" for e in events))
+        return speed.measure(7, tasks_file=tmp / "tasks.json", events_path=events is not None and tmp / "events.jsonl",
+                             log_path=tmp / "ci-main.log", now=speed.iso("2026-11-28T12:00:00Z"), core=list(core), prs=prs)
 
     def test_pull_requests_are_landings_beside_the_old_merges(self):
         d = self.measure()
@@ -211,6 +215,24 @@ class DevSpeed(UtcClock):
         d = self.measure()
         self.assertEqual((d["change_failure"]["failed_lanes"], d["change_failure"]["change_failure_pct"]), (["lead/flow-a-1"], 33.3))
         self.assertEqual((d["rework"]["revert_landings"], d["rework"]["repeat_landings"]), (1, 0))
+        # the PR flow has no gate events: rejects and rework are not measured, not 0
+        self.assertEqual((d["change_failure"]["gate_reject_pct"], d["rework"]["rework_pct"]), (None, None))
+
+    def test_history_gate_events_still_count(self):
+        ev = [dict(ts="2026-11-25T09:00:00Z", kind="eject", lane="lead-old9"),
+              dict(ts="2026-11-25T09:30:00Z", kind="receipt", review_kind="review", lane="lead-old9", patch_id="p1")]
+        d = self.measure(events=ev)
+        self.assertEqual(d["change_failure"]["gate_rejected_lanes"], ["lead-old9"])
+        self.assertEqual((d["rework"]["rejected_then_landed"], d["rework"]["first_pass_pct"]), (["lead-old9"], 100.0))
+        self.assertEqual(d["rework"]["rework_pct"], 50.0)  # 1 rejected then landed + 1 revert over 4 merges
+
+    def test_installs_and_restore_come_from_the_main_ci_log(self):
+        d = self.measure(log=CiLog.text(CiLog()))
+        self.assertEqual(d["coverage"]["main_log_from"], "2026-11-24 22:00")
+        f = d["deployment_frequency"]
+        self.assertEqual((f["owner_installs"], f["installs_by_day"]["2026-11-26"]), (1, 1))
+        r = d["time_to_restore"]
+        self.assertEqual((r["median_min"], r["still_red"], len(r["episodes"])), (2 * 1440 + 42, False, 1))
 
     def test_a_lead_revert_lane_and_a_plain_git_revert_are_reverts(self):
         # Ticket 1157: lane lead-revert1145 reverted ticket 1145 with "Revert ticket 1145 ..."; a lane whose own

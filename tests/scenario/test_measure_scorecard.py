@@ -1,4 +1,4 @@
-"""Ticket 1098 scorecard: anchors, the mainwatch parser, peer task scores and the number + rubric mix."""
+"""Ticket 1098 scorecard: anchors, the main CI log parser, peer task scores and the number + rubric mix."""
 import os
 import shutil
 import subprocess
@@ -29,7 +29,7 @@ class Points(unittest.TestCase):
                 self.assertIn(n, s.ANCHORS)
 
 
-class Mainwatch(unittest.TestCase):
+class MainLog(unittest.TestCase):
     LOG = "\n".join([
         f"23:55:00 testing {A}",
         f"00:05:00 GREEN {A}",
@@ -42,12 +42,12 @@ class Mainwatch(unittest.TestCase):
     ])
 
     def test_runs_cross_midnight_and_count_green(self):
-        r = s.parse_mainwatch(self.LOG)
+        r = s.parse_main_log(self.LOG)
         self.assertEqual((r["runs"], r["green"], r["green_pct"]), (2, 1, 50.0))
         self.assertEqual((r["min_min"], r["max_min"]), (10.0, 12.5))
 
     def test_owner_installs(self):
-        i = s.parse_mainwatch(self.LOG)["installs"]
+        i = s.parse_main_log(self.LOG)["installs"]
         self.assertEqual((i["n"], i["installed"], i["skipped"], i["failed"], i["landed_pct"]), (3, 1, 1, 1, 33.3))
 
 
@@ -287,15 +287,17 @@ class Deploys(unittest.TestCase):
         self.assertEqual((d["tested"], d["failures"], d["change_failure_pct"], d["still_red"]), (3, 1, 33.3, False))
 
     def test_reverts_landed(self):
-        text = '{"landed": ["lead-a", "fable-revert-lead-b"], "x": 1}\n{"landed": []}'
-        self.assertEqual(s.reverts_landed(text), ["fable-revert-lead-b"])
+        # first-parent subjects of main: a revert lane of the local gate, and a pull request reverted with GitHub's button
+        main = ["Merge lane lead-a (lead/a 8f4cac357467)", "Merge lane fable-revert-lead-b (fable/revert-lead-b 1a2b3c4d5e6f)",
+                'Revert "ui: a change (#11)" (#12)', "ui: a change (#11)", 'Revert "Revert "ui: a change (#11)" (#12)" (#13)']
+        self.assertEqual(s.reverts_landed(main), ["fable-revert-lead-b", 'Revert "ui: a change (#11)" (#12)'])
 
     def test_a_lead_revert_lane_and_a_plain_git_revert_are_reverts_landed(self):
         # Ticket 1157: lead-revert<ticket>, and a lane whose own commits all start "Revert " (not a revert of a revert)
-        text = '{"landed": ["lead-revert1145", "lead-undo", "lead-again", "lead-c"]}'
+        main = [f"Merge lane {x} (lead/{x} 8f4cac357467)" for x in ("lead-revert1145", "lead-undo", "lead-again", "lead-c")]
         subjects = {"lead-undo": ['Revert "Merge lane lead-c (lead/c 8f4cac357467)"'],
                     "lead-again": ['Revert "Revert lane lead-c: red main"'], "lead-c": ["c: a change"]}
-        self.assertEqual(s.reverts_landed(text, subjects), ["lead-revert1145", "lead-undo"])
+        self.assertEqual(s.reverts_landed(main, subjects), ["lead-revert1145", "lead-undo"])
         self.assertEqual(s.revert_of("lead-undo", subjects["lead-undo"]), "lead-c")
         self.assertEqual(s.revert_of("lead-x", ["Revert ticket 1145 (composer takes focus)"]), "")
 
