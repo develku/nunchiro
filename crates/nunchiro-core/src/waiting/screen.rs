@@ -422,10 +422,7 @@ impl Screen {
             || normalized.contains("is this a directory you created or one you trust")
             || normalized.contains("allow external claude.md file imports?");
         // w25-m: the same questions cut off by a short window (`cut_off`): no options to read, still the user's.
-        let trust = trust
-            || normalized.contains(CUT_OFF)
-            || start_rows(text)
-            || start_dialog(&normalized, text);
+        let trust = trust || normalized.contains(CUT_OFF) || start_rows(text);
         let (mut choices, cursors) = Self::choices(text);
         let permission = normalized.contains("do you want to proceed?")
             || normalized.contains("would you like to run the following command")
@@ -437,6 +434,8 @@ impl Screen {
                 && ["do you want to make this edit to", "do you want to create", "do you want to overwrite"]
                     .iter()
                     .any(|p| normalized.contains(p));
+        // A permission prompt whose preview shows a start dialog's words (an edit to a file holding them) stays one.
+        let trust = trust || !permission && start_dialog(text);
         let plan = choices.len() >= 2 && plan_dialog(&normalized);
         // Look 1117 v13 N13-S3-4: Codex's rate-limit nudge only switches this session's model or keeps it (its "never show
         // again" changes settings and stays terminal-only), so it is a question. Its list takes the digit alone: a digit
@@ -672,24 +671,20 @@ fn start_rows(text: &str) -> bool {
 }
 
 /// A start dialog other than folder trust that waits for the user before the session starts: Claude's theme picker,
-/// sign-in question and security notes, Codex's sign-in and update screens. Each is read by its own heading words, and only with no
-/// input box on the screen (a row from the first column that starts with `❯` or `›` and is no numbered choice), so the
-/// same words in an agent's output are no card.
-fn start_dialog(normalized: &str, text: &str) -> bool {
-    let has = |words: &[&str]| words.iter().all(|w| normalized.contains(w));
-    let dialog = has(&["choose the text style that looks best with your terminal"])
-        || has(&["select login method:", "claude account with subscription"])
-        || has(&["security notes:", "press enter to continue"])
-        || has(&[
-            "welcome to codex",
-            "sign in with chatgpt",
-            "press enter to continue",
-        ])
-        || has(&[
-            "update available!",
-            "skip until next version",
-            "press enter to continue",
-        ]);
+/// sign-in question and security notes, Codex's sign-in and update screens. Each is read by its own heading rows, each a
+/// whole row (words inside a row of a diff or of code are no heading), and only with no input box on the screen (a row
+/// from the first column that starts with `❯` or `›` and is no numbered choice), so the same words in an agent's output
+/// are no card.
+fn start_dialog(text: &str) -> bool {
+    let rows: Vec<&str> = text.lines().map(str::trim).collect();
+    let row = |r: &str| rows.iter().any(|l| l.eq_ignore_ascii_case(r));
+    let starts = |r: &str| rows.iter().any(|l| l.starts_with(r));
+    let next = row("Press enter to continue");
+    let dialog = row("Choose the text style that looks best with your terminal")
+        || row("Select login method:")
+        || row("Security notes:") && next
+        || starts("Welcome to Codex") && next
+        || starts("\u{2728} Update available!") && next;
     dialog
         && !text
             .lines()
