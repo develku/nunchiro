@@ -651,6 +651,11 @@ mod tests {
         fn whole(stream: &mut std::os::unix::net::UnixStream) {
             let _ = stream.write_all(THREE.as_bytes());
         }
+        // A whole reply well inside ASK_LIMIT but late by a busy host's scheduling, as a loaded test runner answers.
+        fn whole_but_slow(stream: &mut std::os::unix::net::UnixStream) {
+            std::thread::sleep(Duration::from_millis(400));
+            let _ = stream.write_all(THREE.as_bytes());
+        }
         fn oversized(stream: &mut std::os::unix::net::UnixStream) {
             let _ = stream.write_all(" ".repeat(ASK_BYTES as usize + 1).as_bytes());
             let _ = stream.write_all(THREE.as_bytes());
@@ -665,6 +670,8 @@ mod tests {
         let limit = Duration::from_millis(300);
         let (home, _) = odd_core("ask-whole", whole);
         assert_eq!(ask(&home, limit), Some(3));
+        let (home, _) = odd_core("ask-slow", whole_but_slow);
+        assert_eq!(ask(&home, limit), Some(3), "a whole reply inside ASK_LIMIT");
         let (home, _) = odd_core("ask-big", oversized);
         assert_eq!(ask(&home, limit), None, "a reply past ASK_BYTES");
         let (home, _) = odd_core("ask-late", drip_then_late);
