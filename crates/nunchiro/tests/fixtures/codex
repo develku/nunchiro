@@ -10,7 +10,8 @@ if args[:1] == ['app-server']:
     # Nunchiro's outward hook is listed, on and trusted. This one says so (the answers of
     # nunchiro-core/tests/fixtures/codex-app-server), unless the test's `codex-app-server.json` says otherwise: a
     # result per method (a method left out is not answered), and `behave` for a Codex that cannot be asked: "exit",
-    # "garbage", or seconds to wait before it answers.
+    # "garbage", "hold" (writes `codex-asked`, then answers once `codex-hold` is gone), or seconds to wait before
+    # it answers.
     results = {'initialize': {}, 'hooks/list': {'data': [{'hooks': [{
         'key': '/<session-flags>/config.toml:pre_tool_use:0:0', 'enabled': True, 'trustStatus': 'trusted'}]}]}}
     answers = os.path.join(os.environ['NUNCHIRO_HOME'], 'codex-app-server.json')
@@ -19,7 +20,13 @@ if args[:1] == ['app-server']:
     behave = results.pop('behave', None)
     if behave == 'exit':
         raise SystemExit
-    if behave == 'garbage':
+    if behave == 'hold':
+        import time
+        home = os.environ['NUNCHIRO_HOME']
+        open(os.path.join(home, 'codex-asked'), 'w').close()
+        while os.path.exists(os.path.join(home, 'codex-hold')):
+            time.sleep(0.01)
+    elif behave == 'garbage':
         print('Welcome to Codex', flush=True)
     elif behave:
         import time

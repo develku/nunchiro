@@ -175,7 +175,7 @@ def check(name, start, end, workflow="CI"):
 
 
 class DevSpeed(UtcClock):
-    def measure(self, core=()):
+    def measure(self, core=(), more=()):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__("shutil").rmtree(tmp))
         ms = lambda at: speed.iso(at) * 1000  # noqa: E731
@@ -193,7 +193,7 @@ class DevSpeed(UtcClock):
             pr("lead/too-old-3", "2026-11-01T15:00:00Z", "2026-11-01T16:00:00Z", D),
         ]
         old = [dict(lane="lead-old9", branch="lead/old-9", sha=E, at=int(speed.iso("2026-11-25T10:00:00Z")),
-                    first_commit=int(speed.iso("2026-11-25T08:00:00Z")))]
+                    first_commit=int(speed.iso("2026-11-25T08:00:00Z")))] + list(more)
         keep = (speed.merges, speed.git, s.LANDLOOP)
         self.addCleanup(lambda: (setattr(speed, "merges", keep[0]), setattr(speed, "git", keep[1]), setattr(s, "LANDLOOP", keep[2])))
         speed.merges, speed.git, s.LANDLOOP = (lambda since: old), (lambda *a: "abc1234\n"), tmp / "none"
@@ -211,6 +211,20 @@ class DevSpeed(UtcClock):
         d = self.measure()
         self.assertEqual((d["change_failure"]["failed_lanes"], d["change_failure"]["change_failure_pct"]), (["lead/flow-a-1"], 33.3))
         self.assertEqual((d["rework"]["revert_landings"], d["rework"]["repeat_landings"]), (1, 0))
+
+    def test_a_lead_revert_lane_and_a_plain_git_revert_are_reverts(self):
+        # Ticket 1157: lane lead-revert1145 reverted ticket 1145 with "Revert ticket 1145 ..."; a lane whose own
+        # commits are all git's default revert names the lane; a revert of a revert lands the change again.
+        merge = lambda lane, at, *subjects: dict(lane=lane, branch="lead/" + lane, sha=None, at=int(speed.iso(at)),  # noqa: E731
+                                                 first_commit=int(speed.iso(at)), subjects=list(subjects))
+        d = self.measure(more=[
+            merge("lead-focus1145", "2026-11-26T01:00:00Z", "composer: takes focus (ticket 1145)"),
+            merge("lead-revert1145", "2026-11-26T02:00:00Z", "Revert ticket 1145 (composer takes focus): it steals focus"),
+            merge("lead-undo", "2026-11-26T03:00:00Z", 'Revert "Merge lane lead-old9 (lead/old-9 8f4cac357467)"'),
+            merge("lead-again", "2026-11-26T04:00:00Z", 'Revert "Revert lane lead-old9: red main"', "lead-old9 with its fix"),
+        ])
+        self.assertEqual(d["change_failure"]["failed_lanes"], ["lead-focus1145", "lead-old9", "lead/flow-a-1"])
+        self.assertEqual((d["deployment_frequency"]["lanes"], d["rework"]["revert_landings"]), (5, 3))
 
     def test_the_flow_split_of_a_pull_request(self):
         f = self.measure()["flow"]

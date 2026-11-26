@@ -1052,11 +1052,17 @@ mod tests {
             assert_eq!(zoom(rules_of(space), &p), 1.0, "{space:?}");
             assert!(scaled(space), "{space:?}");
         }
-        assert!(
-            !include_str!("agent.rs").contains("set_zoom")
-                && !include_str!("agent.rs").contains("setPageZoom"),
-            "agent views must not zoom: Input::at posts at page zoom 1 through the frame's scale"
-        );
+        // Ticket 1162: agent.rs and the children its code moved to.
+        for agent in [
+            include_str!("agent.rs"),
+            include_str!("agent/settle.rs"),
+            include_str!("agent/workers.rs"),
+        ] {
+            assert!(
+                !agent.contains("set_zoom") && !agent.contains("setPageZoom"),
+                "agent views must not zoom: Input::at posts at page zoom 1 through the frame's scale"
+            );
+        }
     }
 
     /// A1: a 1280x800 page fits the slot at a scale of whole 1/160 steps, so it draws at whole points; at most 1 (a large

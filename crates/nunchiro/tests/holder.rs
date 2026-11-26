@@ -1420,8 +1420,16 @@ fn an_inside_peer_of_a_reattached_session_is_its_caller() {
 
 /// S6: `serve update` replaces only a core older than its own RC stamp (`NUNCHIRO_BUILD`, read at compile time), so the
 /// newer build is this crate built with a stamp, in a target folder of its own: the test's binary stays unstamped.
+/// Ticket 1156: that folder sits in the active target dir (next to this test binary's <target>/<profile>/deps/, the
+/// rule of fixtures/cli.rs), so CARGO_TARGET_DIR holds; with none set it is <workspace>/target/core-swap-stamped.
 fn stamped_build() -> PathBuf {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let exe = std::env::current_exe().unwrap();
+    let target = exe
+        .ancestors()
+        .nth(3)
+        .expect("<target>/<profile>/deps/<test>")
+        .join("core-swap-stamped");
     let out = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
         .args([
             "build",
@@ -1431,9 +1439,8 @@ fn stamped_build() -> PathBuf {
             "nunchiro",
             "-j",
             "4", // the brief's job limit: this build is not under the outer cargo's -j
-            "--target-dir",
-            "target/core-swap-stamped",
         ])
+        .env("CARGO_TARGET_DIR", &target) // not --target-dir <path>: gen-gate-paths takes literal arguments only
         .env("NUNCHIRO_BUILD", "2")
         .current_dir(&root)
         .output()
@@ -1443,7 +1450,7 @@ fn stamped_build() -> PathBuf {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    root.join("target/core-swap-stamped/debug/nunchiro")
+    target.join("debug/nunchiro")
 }
 
 /// S6: the window as the app runs it: a port and token from the owner socket's `window_auth` (new for every core),

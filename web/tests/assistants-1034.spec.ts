@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, openWindow, test, type Core } from './fixtures';
-import { mates, sessions } from './leader-990';
+import { mates, roster, sessions } from './leader-990';
 import { closeSettings, openSettings } from './settings-modal';
 
 const step = (app: Page, id: string) => app.locator(`.ob-step[data-step="${id}"]`);
@@ -14,10 +14,7 @@ const panel = (app: Page) => app.locator('.ob-panel');
 const group = (app: Page) => app.locator('.tree .home-grp');
 const nameField = (app: Page) => app.locator('.settings input[data-assistant-name]');
 type Saved = { name: string; job: string; kind: string; lead?: boolean; project?: string };
-const team = (core: Core) => {
-  const file = path.join(core.home, 'team', 'team.json');
-  return fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, 'utf8')).teammates as Saved[]) : [];
-};
+const team = (core: Core) => roster<Saved>(core); // ticket 1168: the roster as the core keeps it
 const onboarding = async (app: Page) => {
   await openSettings(app);
   await app.locator('.settings > nav button[data-page="onboarding"]').click();
@@ -100,7 +97,7 @@ test('name_your_assistant (1034): the optional step before the first session sav
   const mate = group(app).locator('.home-mate');
   await expect(mate).toHaveCount(1);
   await expect(mate.locator('.nm')).toHaveText('Friday');
-  await expect(mate.locator('.lead-tag')).toHaveText('Lead');
+  await expect(mate.locator('.lead-tag')).toHaveText('Chief'); // ticket 1168 (owner 11-26): the office's lead is the Chief; the section keeps its name
   await expect(group(app).locator('.home-setup')).toHaveCount(0);
 });
 

@@ -21,7 +21,7 @@ type Wt = NonNullable<WindowCtx['wt']>;
 
 /** Owner 11-17: the lead's one header chip, "N tasks · M needs you" (orange while M > 0) beside the running seats' faces (the lead
  *  first). A press opens the place's Team view where it lives (the side or its tab). */
-export function TeamChip({ t, mate, tasks, sessions, onOpen, digest, waiting = 0 }: { t: T; mate: Teammate; tasks: TaskView[]; sessions: Session[]; onOpen: () => void; digest?: Digest | null; waiting?: number }) {
+export function TeamChip({ t, mate, tasks, sessions, onOpen, digest, waiting = 0, faced }: { t: T; mate: Teammate; tasks: TaskView[]; sessions: Session[]; onOpen: () => void; digest?: Digest | null; waiting?: number; faced?: boolean }) {
   const byId = new Map(sessions.map((s) => [s.id, s]));
   const live = tasks.flatMap((x) => (x.closed ? [] : (x.seats ?? []).filter((s) => x.live?.includes(s.session))));
   // Home view: the Home lead's chip reads the core's digest and the Decisions pane's count, "3 projects · 2 needs you".
@@ -30,7 +30,9 @@ export function TeamChip({ t, mate, tasks, sessions, onOpen, digest, waiting = 0
   return (
     <button className="lead-room" data-team-chip data-needs={needs || undefined} aria-label={count} data-tip={t('lead.team.open')} onClick={onOpen}>
       <span className="lead-stack" aria-hidden>
-        <Avatar letter={mate.name} label={mate.name} c={3} face={null} small />
+        {/* Ticket 1168: the lead's own face is drawn once, at the header's left (bots/Face.tsx); the letter circle stays only
+            where the core sent no bot for it. */}
+        {!faced && <Avatar letter={mate.name} label={mate.name} c={3} face={null} small />}
         {live.slice(0, 3).map((s) => (
           <Avatar key={s.session} letter={roleWord(t, s.role)} label={t('lead.face', { label: seatLabel(t, s), state: t(`lead.face.${faceOf(s, byId)}`) })} c={hue(s.session)} face={null} small />
         ))}

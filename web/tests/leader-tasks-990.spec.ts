@@ -146,7 +146,9 @@ test('lead_tasks (990 g): the Team view lists the ledger\'s tasks by state, need
   const chip = app.locator('.shead [data-team-chip]');
   await expect(chip).toHaveAccessibleName('6 tasks · 1 needs you');
   await expect(chip).toHaveAttribute('data-needs', 'true');
-  await expect(chip.locator('.lead-av')).toHaveCount(4);
+  // Ticket 1168 (mockup bots-1166 panel 4): the lead's own face left the chip for the header's left, drawn once.
+  await expect(chip.locator('.lead-av')).toHaveCount(3);
+  await expect(app.locator('.shead .face')).toHaveCount(1);
   await expect(app.locator('.lead-band')).toHaveCount(0);
   await expect(app.getByRole('switch', { name: 'Show room' })).toHaveCount(0);
   // Answer opens the seat that waits, and the Team view stays at the side (the same place); a press on a row opens its most urgent seat.

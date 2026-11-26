@@ -31,6 +31,7 @@ import { useScheduleList } from '../schedule/schedules';
 import { PLACE_FIELD, PlaceSection } from '../lead/place';
 import type { Place } from '../lead/tasks';
 import { registerSettingsPage, type PageContext } from './registry';
+import { OpenBots } from '../bots/BotsMoved'; // ticket 1168
 import '../lead/lead.css'; // the row menu (.lead-more, .lead-menu), as the Schedules tab's rows
 import './team.css';
 
@@ -44,7 +45,7 @@ const KINDS: ['claude' | 'codex', string][] = [
 type Listed = Team;
 // `model` and `effort`: '' is the agent's default. Ticket 990: `lead` leads its place (at most one; a second moves the role).
 // Ticket 992: `level` '' is Auto (`levelMax` '' no limit), else pinned; a `model` makes it a custom model, with no levels.
-type Draft = { id?: string; name: string; job: string; kind: Kind; agent?: string; project: string; model: string; effort: string; lead: boolean; level?: '' | Level; levelMax?: '' | Level };
+export type Draft = { id?: string; name: string; job: string; kind: Kind; agent?: string; project: string; model: string; effort: string; lead: boolean; level?: '' | Level; levelMax?: '' | Level };
 const EMPTY: Draft = { name: '', job: '', kind: 'claude', project: '', model: '', effort: '', lead: false, level: '', levelMax: '' };
 export const draftOf = (m: Teammate): Draft => ({ id: m.id, name: m.name, job: m.job, kind: m.kind, agent: m.agent ?? '', project: m.project ?? '', model: m.model ?? '', effort: m.effort ?? '', lead: !!m.lead, level: isLevel(m.level) ? m.level : '', levelMax: isLevel(m.level_max) ? m.level_max : '' });
 /** The `team_save` op of a draft. */
@@ -229,18 +230,7 @@ function TeamPage({ core, t, projects, closeSettings, toast, sessions }: Pick<Pa
         </summary>
         {/* "Up to" is Auto's limit: a fixed level, a custom model, a lead (its seat keeps its own level) and an agent whose
             levels are all the same have none. */}
-        {!draft.model && !draft.level && !draft.lead && !oneLevel(table, agentKey(draft.kind, draft.agent)) && (
-          <Field caption={t('level.upTo')}>
-            <Select label={t('level.upTo')} value={draft.levelMax ?? ''} onChange={(v) => setDraft({ ...draft, levelMax: isLevel(v) ? v : '' })}>
-              <option value="">{t('level.noLimit')}</option>
-              {LEVELS.map((l) => (
-                <option key={l} value={l}>
-                  {barsText(l)} {slotText(t, table, draft, l)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )}
+        <UpTo t={t} table={table} draft={draft} setDraft={setDraft} />
         <Field caption={t('level.custom')} info={<Info t={t} label={t('level.custom')} text={t('level.customNote')} />}>
           <div className="team-picks" role="group" aria-label={t('level.custom')}>
             <MatePicks t={t} core={core} draft={draft} setDraft={setDraft} part="model" />
@@ -277,11 +267,15 @@ function TeamPage({ core, t, projects, closeSettings, toast, sessions }: Pick<Pa
         title={t('team.section')}
         action={
           !draft && (
-            // Ticket 991 C15: the same Add button as Add machine (outlined, with the plus).
-            <button type="button" className="btn withicon" data-setting="team" onClick={() => setDraft(EMPTY)}>
-              <Icon name="plus" size={14} />
-              {t('team.add')}
-            </button>
+            <>
+              {/* Ticket 1168: the Bots view shows these teammates as bots (face, seat, SOUL). */}
+              <OpenBots t={t} />
+              {/* Ticket 991 C15: the same Add button as Add machine (outlined, with the plus). */}
+              <button type="button" className="btn withicon" data-setting="team" onClick={() => setDraft(EMPTY)}>
+                <Icon name="plus" size={14} />
+                {t('team.add')}
+              </button>
+            </>
           )
         }
       >
@@ -373,12 +367,29 @@ function TeamPage({ core, t, projects, closeSettings, toast, sessions }: Pick<Pa
   );
 }
 
+/** Auto's upper limit ("Up to"). Its own component since ticket 1168: a bot's page shows it too (bots/BotsView.tsx). */
+export function UpTo({ t, table, draft, setDraft }: { t: PageContext['t']; table: Table; draft: Draft; setDraft: (d: Draft) => void }) {
+  if (draft.model || draft.level || draft.lead || oneLevel(table, agentKey(draft.kind, draft.agent))) return null;
+  return (
+    <Field caption={t('level.upTo')}>
+      <Select label={t('level.upTo')} value={draft.levelMax ?? ''} onChange={(v) => setDraft({ ...draft, levelMax: isLevel(v) ? v : '' })}>
+        <option value="">{t('level.noLimit')}</option>
+        {LEVELS.map((l) => (
+          <option key={l} value={l}>
+            {barsText(l)} {slotText(t, table, draft, l)}
+          </option>
+        ))}
+      </Select>
+    </Field>
+  );
+}
+
 /** Ticket 992: the level rule, one choice: Auto or a fixed level, each level as the model and effort it starts for this
  *  teammate's agent (ticket 994). A custom model leaves it off, and says so on its own line (the kit's Why, ticket 475:
  *  why a control cannot work is never only a tooltip). Auto's "Up to" is under Advanced. No choice, and the rule as
  *  text, for a lead (its seat keeps its own level: no task's level replaces the conversation the user talks to) and for
  *  an agent whose levels are all the same. */
-function LevelRule({ t, table, draft, setDraft }: { t: PageContext['t']; table: Table; draft: Draft; setDraft: (d: Draft) => void }) {
+export function LevelRule({ t, table, draft, setDraft }: { t: PageContext['t']; table: Table; draft: Draft; setDraft: (d: Draft) => void }) {
   const off = !!draft.model;
   const one = oneLevel(table, agentKey(draft.kind, draft.agent));
   // The choices are one line while they fit the form, else a column (team.css): measured as a line, after every render

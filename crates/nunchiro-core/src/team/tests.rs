@@ -13,6 +13,7 @@ fn team_list_makes_the_home_folder() {
     let Reply::Team {
         teammates,
         home: folder,
+        ..
     } = window(&reg, &home, Op::TeamList).unwrap()
     else {
         panic!("not a team reply")
@@ -975,6 +976,9 @@ fn a_long_memory_is_cut_in_the_brief_and_a_bad_file_is_refused() {
     assert!(prompt.contains("[cut here: the file is longer"));
     assert!(prompt.len() < MEMORY_QUOTE_MAX + 4096);
     // A file this build cannot read is left as it is: nothing lists and nothing is written over it.
+    // Ticket 1168: `team.json` is the roster only while there is no `bots.json` (a home from before the move); the
+    // same refusals for `bots.json` are in bots/tests.rs.
+    let _ = fs::remove_file(home.join("team/bots.json"));
     fs::write(team.file(), r#"{"version":2,"teammates":[]}"#).unwrap();
     assert!(team.list().unwrap_err().contains("version 2"));
     assert!(team.save(None, mate("Other", None)).is_err());

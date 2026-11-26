@@ -6,13 +6,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { type Core, expect, openWindow, REPO, test } from './fixtures';
-import { mateMenu, mates } from './leader-990';
+import { mateMenu, mates, roster } from './leader-990';
 import { openSettings } from './settings-modal';
 
 const fake = (core: Core) => fs.writeFileSync(path.join(core.home, 'bin', 'claude'), fs.readFileSync(path.join(REPO, 'crates/nunchiro-core/tests/fixtures/claude-mode')), { mode: 0o700 });
-const stored = (core: Core) => JSON.parse(fs.readFileSync(path.join(core.home, 'team', 'team.json'), 'utf8')).teammates as { id: string; name: string; job: string; kind: string; project?: string }[];
+const stored = (core: Core) => roster<{ id: string; name: string; job: string; kind: string; project?: string }>(core); // ticket 1168: the roster as the core keeps it
 const sessions = (core: Core) => core.cli('snapshot', '--json').sessions as { id: string; label: string; project: string; kind: string }[];
-const reads = (core: Core, id: string) => (fs.existsSync(path.join(core.home, `stdin-${id}.log`)) ? fs.readFileSync(path.join(core.home, `stdin-${id}.log`), 'utf8') : '');
+// The fixture logs each read (at most 1024 bytes) on its own `READ <hex>` line: joined, so a sentence of the brief that
+// sits across two reads is still found (ticket 1168's one more line in the brief moved the cut onto one).
+const reads = (core: Core, id: string) => (fs.existsSync(path.join(core.home, `stdin-${id}.log`)) ? fs.readFileSync(path.join(core.home, `stdin-${id}.log`), 'utf8').split('\n').filter((l) => l.startsWith('READ ')).map((l) => l.slice(5)).join('') : '');
 const landed = (core: Core, id: string, text: string) => reads(core, id).includes(Buffer.from(text).toString('hex'));
 async function openTeam(app: Page) {
   await openSettings(app);

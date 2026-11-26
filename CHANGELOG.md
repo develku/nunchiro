@@ -4,6 +4,22 @@ What changed for people who use Nunchiro. Newest first. Nunchiro is in developme
 
 ## 2026-11-26
 
+- Bots have their own view ("Open Bots" in the command palette, also reached from Settings). Every bot has a face
+  that shows its state (resting, working, needs you), a seat (Chief for the office, Lead of one project, or none), a
+  SOUL file that says who it is and that you can edit there, its schedules, and its model settings. A project lead's
+  chat header shows the lead's face.
+- The teammates you already have become bots as they are. Your team file is copied to a backup before the first
+  change, and an older build still reads it.
+- An outward action is refused, not asked, when its card could not show all of it: a command too long for the card,
+  or a call that carries a field named like a secret (a token or a password). This holds for Claude, Codex and ACP
+  agents. The card for an ACP agent's command also shows its folder and the variables the agent set.
+- Fixed: installing an update could put the old build back with "sessions did not come back" when an agent's own
+  `nunchiro` command started the background service in the middle of the install.
+- Showing a chat puts the cursor in its message box, and so does coming back to the window. A button, card, menu,
+  dialog or field you had focused keeps the focus.
+- Fixed: the window could crash when an agent's list of subagents came back in an unexpected form.
+- For contributors: every web test, the screenshot tests included, and the long Rust tests run once a week on
+  hosted CI; pull requests keep running the core set.
 - Codex sessions and ACP agents now ask before an outward action too, as Claude sessions do: publishing a package,
   creating a release, making a repository public, or sending mail or posts through an MCP tool. In Codex the action
   waits for a card in Nunchiro, also in full access, and runs only when you allow it. For ACP agents this covers
