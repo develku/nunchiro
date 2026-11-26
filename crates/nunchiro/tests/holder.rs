@@ -1476,10 +1476,15 @@ impl Window {
         );
         let stream =
             std::net::TcpStream::connect(("127.0.0.1", port)).map_err(|e| e.to_string())?;
+        // The handshake waits as long as the core's own handshake bound; only later reads poll in 100 ms steps (a
+        // 100 ms handshake read ran out on a loaded runner: "Interrupted handshake (WouldBlock)").
         stream
-            .set_read_timeout(Some(Duration::from_millis(100)))
+            .set_read_timeout(Some(Duration::from_secs(5)))
             .unwrap();
         let (ws, _) = tungstenite::client(req, stream).map_err(|e| e.to_string())?;
+        ws.get_ref()
+            .set_read_timeout(Some(Duration::from_millis(100)))
+            .unwrap();
         Ok(Self(ws))
     }
     /// What the page does after a close: it reconnects with what the app hands it once the next core answers.
