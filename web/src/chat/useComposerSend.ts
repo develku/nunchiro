@@ -474,18 +474,23 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
   };
   // v25-sendkeys: Cmd+Enter starts a session with this text in the agent and folder the New Session dialog would
   // prefill (the same `start` request and its checks) and stays on the current view; the tree shows it working.
-  /** `anyway`: the held start's Start anyway, which sends what the box holds then, past the hold. */
-  const backgroundSend = async (el: HTMLTextAreaElement, box: Session | null, anyway = false) => {
-    const text = el.value.trim();
+  /** `held`: the held start's Start anyway, which sends the text that was held, past the hold. The box is cleared only
+   *  while it still holds that text (it was given back there); words typed since stay. */
+  const backgroundSend = async (el: HTMLTextAreaElement, box: Session | null, held?: string) => {
+    const anyway = held !== undefined;
+    const text = held ?? el.value.trim();
     if (!text) return;
     const project = current?.project ?? ordered.find((s) => s.kind !== 'shell')?.project;
     if (!project) return setPaneNote(t('composer.backgroundFailed', { error: 'no project to start in' }));
     // New Session's own prefill: the agent last used in this folder, else Claude.
     const kind = [...ordered].reverse().find((s) => s.project === project && s.kind !== 'shell')?.kind ?? 'claude';
-    el.value = '';
-    el.style.height = '';
-    el.closest('.cbox')?.removeAttribute('data-shell'); // ticket 1044: the "!" cue ends with the text
-    if (box) noDraft(box.id); // Q9 tt-J22-2: a reload must not bring the sent text back
+    const mine = el.value.trim() === text;
+    if (mine) {
+      el.value = '';
+      el.style.height = '';
+      el.closest('.cbox')?.removeAttribute('data-shell'); // ticket 1044: the "!" cue ends with the text
+      if (box) noDraft(box.id); // Q9 tt-J22-2: a reload must not bring the sent text back
+    }
     let started: Session | null = null;
     try {
       const accounts = (await (accountsP.current ?? readAccounts())).filter((a) => a.agent === kind);
@@ -502,11 +507,13 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
       // The session is up but its text is not: the text is not put back in the box, where a second Cmd+Enter would
       // start a second session with it.
       if (!started) {
-        if (box) giveBack(el, box, text);
+        if (!mine) {
+          // The box holds newer words: they stay, and Start anyway still carries the held text.
+        } else if (box) giveBack(el, box, text);
         else (el.value = text), grow(el);
       } else setDraft(started.id, text); // the new session's box holds the text its prompt did not take
-      // Held for low memory: the text is back in the box, and Start anyway runs the same send past the hold.
-      setPaneNote((!started && heldNote(t, e, agentName(kind), () => void backgroundSend(el, box, true))) || errorNote(t('composer.backgroundFailed', { error: notePlain(t, e) }), e));
+      // Held for low memory: the text is back in the box, and Start anyway sends that same text past the hold.
+      setPaneNote((!started && heldNote(t, e, agentName(kind), () => void backgroundSend(el, box, text))) || errorNote(t('composer.backgroundFailed', { error: notePlain(t, e) }), e));
     }
   };
   return { pendingEnter, uncertainSend, pressRow, drafts, setDrafts, givenBack, setGivenBack, grow, stopAgent, send, steerNow, backgroundSend };

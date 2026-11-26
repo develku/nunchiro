@@ -5,27 +5,29 @@ import { useState } from 'react';
 import type { CoreClient } from '../api';
 import { canRestart, restartStart } from '../PermissionNeeded';
 import type { Session } from '../types';
-import { ErrorLine } from '../errors';
+import { ErrorLine, isLowMemory, startOp } from '../errors';
 import { useHtmlLangT } from '../i18n/lib/useHtmlLangT';
 
 export function HolderLine({ core, session, onReplaced }: { core: CoreClient; session: Session; onReplaced: (old: string, next: Session) => void }) {
   const t = useHtmlLangT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  if (session.state !== 'running' || !session.holder_status) return null;
+  // A restart held for low memory has closed the old run already: the line stays to offer Start anyway.
+  if ((session.state !== 'running' || !session.holder_status) && !isLowMemory(error)) return null;
   if (session.holder_status === 'update_nunchiro')
     return (
       <p className="perm-needed" role="status">
         <b>{t('rest.shell.holder.update')}</b> · {t('rest.shell.holder.newer')}
       </p>
     );
-  const restart = async () => {
+  /** `anyway`: a low-memory hold's Start anyway; the old run was closed by the first try. */
+  const restart = async (anyway = false) => {
     setBusy(true);
     setError(null);
     try {
-      await core.request({ op: 'close', id: session.id });
+      if (!anyway) await core.request({ op: 'close', id: session.id });
       if (canRestart(session)) {
-        const reply = (await core.request({ op: 'start', session: restartStart(session) })) as { session?: Session };
+        const reply = (await core.request(startOp({ op: 'start', session: restartStart(session) }, anyway))) as { session?: Session };
         if (reply.session) onReplaced(session.id, reply.session);
       }
     } catch (e) {
@@ -40,7 +42,7 @@ export function HolderLine({ core, session, onReplaced }: { core: CoreClient; se
       <button className="btn" disabled={busy} onClick={() => void restart()}>
         {t('shell.chrome.restartSession')}
       </button>
-      <ErrorLine t={t} error={error} className="" />
+      <ErrorLine t={t} error={error} className="" anyway={() => void restart(true)} />
     </div>
   );
 }

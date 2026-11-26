@@ -278,6 +278,20 @@
   text-overflow: ellipsis;
   max-width: 360px;
 }
+/* A held start's line: the words shorten, Start anyway stays whole. */
+.pk-msg:has(.btn) {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  max-width: 480px;
+}
+.pk-msg-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pk-msg .btn {
+  flex: none;
+}
 .pk-msg[data-error] {
   color: var(--error);
 }

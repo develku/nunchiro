@@ -173,8 +173,8 @@ test('held_background_send_from_an_empty_box: Start anyway after the box was emp
 test('held_custom_model_start_offers_start_anyway: the picker\'s start on a custom id held for low memory offers Start anyway, which starts it', async ({ app, core }) => {
   fs.copyFileSync(path.join(REPO, 'crates/nunchiro/tests/fixtures/claude-picker'), path.join(core.home, 'bin/claude'));
   const s = core.cli('session', 'start', '--kind', 'claude', '--project', core.project('demo'), '--label', 'claude').session as { id: string };
-  const sent = await holdStarts(app);
   await openWindow(app);
+  // The custom id is stored first, over the window's own socket; the held starts are faked after it, from a reload.
   await app.evaluate(
     () =>
       new Promise<void>((ok) => {
@@ -183,6 +183,8 @@ test('held_custom_model_start_offers_start_anyway: the picker\'s start on a cust
         ws.onmessage = (e) => JSON.parse(e.data).id === 1 && (ws.close(), ok());
       }),
   );
+  const sent = await holdStarts(app);
+  await openWindow(app);
   await app.locator(`.tab[data-tab="${s.id}"]`).click();
   await app.locator('[data-picker="model"]').click();
   await app.locator('[data-menu="model"] [data-item="more"]').click();

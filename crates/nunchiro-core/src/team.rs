@@ -962,7 +962,7 @@ pub(crate) enum Opener<'a> {
 
 impl Opener<'_> {
     /// How a seat this opener starts is held under memory pressure, and its name in the hold's log line. A new
-    /// conversation is checked before its handover (`fresh_lead`), and an Undo resumes, so neither is held here.
+    /// conversation is checked before its handover (the window's `TeamOpen`), and an Undo resumes, so neither is held here.
     fn pressure(&self) -> Option<(crate::pressure::Who, &'static str)> {
         use crate::pressure::Who;
         match self {
@@ -1438,8 +1438,6 @@ pub(crate) fn fresh_lead(
         return Err("a new conversation is already being opened".into());
     }
     let _one = Handing(id.to_string());
-    // Before the handover: a held new conversation must leave the old seat running.
-    crate::pressure::check(crate::pressure::Who::Window, false, "new conversation")?;
     let lock = || {
         registry
             .lock()
@@ -1792,8 +1790,13 @@ pub fn window(
         Op::TeamOpen {
             id,
             fresh: Some(how),
+            anyway,
             ..
-        } => fresh_lead(registry, &id, how, HANDOVER_WAIT).map(Opened::reply),
+        } => {
+            // Before the handover: a held new conversation leaves the old seat running; Start anyway passes it.
+            crate::pressure::check(crate::pressure::Who::Window, anyway, "new conversation")?;
+            fresh_lead(registry, &id, how, HANDOVER_WAIT).map(Opened::reply)
+        }
         Op::TeamBrief { id } => {
             team.brief(&id, None)
                 .map(|(teammate, project, prompt)| Reply::TeamBrief {

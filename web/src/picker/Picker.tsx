@@ -1,7 +1,7 @@
 // Composer chips for the session's model and effort (ticket 10; W35 mockup 2, docs/design/model-picker-1120: `Opus 5.5 ↯ ▾`,
 // `xHigh · ultracode ▾`). Opening, browsing and closing a menu sends nothing; choosing an item is the click that sends one
 // switch_model. Claude's Fast mode (model menu) and Ultracode (effort menu) are toggles on the same request.
-import { docT, ErrorDetails, plainError, rawError } from '../errors';
+import { docT, ErrorDetails, isLowMemory, plainError, rawError, startOp } from '../errors';
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKey, type ReactNode } from 'react';
 import type { AcpRow, CoreClient } from '../api';
 import type { Session } from '../types';
@@ -67,7 +67,7 @@ export function Picker({ core, session, connected, onReplaced, sessions = [], on
     if (connected) void refreshSeen(core).then(() => setVersionsRead((n) => n + 1));
   }, [core, connected, open]);
   const [busy, setBusy] = useState<string | null>(null);
-  const [msg, setMsg] = useState<{ text: string; error: boolean; details?: string } | null>(null);
+  const [msg, setMsg] = useState<{ text: string; error: boolean; details?: string; anyway?: () => void } | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const model = s?.model ?? null;
   const effort = s?.effort ?? null;
@@ -166,14 +166,16 @@ export function Picker({ core, session, connected, onReplaced, sessions = [], on
   const pickModel = (m: Pick) => choose({ model: m, effort: efforts(kind, m).some((e) => e.value === effort) ? effort : null });
   const pickEffort = (e: Pick) => choose({ model, effort: e });
   // Ticket 358: a custom id Claude's picker cannot switch to starts a new Claude session in this folder on it.
-  const startOn = async (m: Pick) => {
+  // A low-memory hold offers Start anyway, the same start past it.
+  const startOn = async (m: Pick, anyway = false) => {
     setOpen(null);
     setMsg(null);
     try {
-      const reply = (await core.request({ op: 'start', session: { kind, project: s.cwd, model: m, effort: null, resume: null, ...(s.account ? { account: s.account } : {}) } })) as { session?: Session };
+      const reply = (await core.request(startOp({ op: 'start', session: { kind, project: s.cwd, model: m, effort: null, resume: null, ...(s.account ? { account: s.account } : {}) } }, anyway))) as { session?: Session };
       if (reply.session) openSession(reply.session.id);
     } catch (e) {
-      setMsg({ text: plainError(docT(), e), error: true, details: rawError(e) });
+      const held = isLowMemory(e);
+      setMsg({ text: held ? docT()('err.lowMemory.agent', { agent: agentName(kind) }) : plainError(docT(), e), error: true, details: rawError(e), anyway: held ? () => void startOn(m, true) : undefined });
     }
   };
   const modes = s.modes ?? {};
@@ -425,7 +427,12 @@ export function Picker({ core, session, connected, onReplaced, sessions = [], on
     <div className="pk" ref={root}>
       {msg && (
         <span className="pk-msg" role="status" data-error={msg.error || undefined}>
-          {msg.text}
+          <span className="pk-msg-t">{msg.text}</span>
+          {msg.anyway && (
+            <button type="button" className="btn" data-tip={docT()('err.startAnyway.tip')} onClick={msg.anyway}>
+              {docT()('err.startAnyway')}
+            </button>
+          )}
           <ErrorDetails t={docT()} details={msg.details} />
         </span>
       )}
