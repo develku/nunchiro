@@ -2241,6 +2241,200 @@ fn the_window_opens_a_held_new_conversation_anyway() {
     h.request(Request::Close { id: session });
 }
 
+/// A core whose memory reading is the file `level` (changed by the test), its waiting list read every 200 ms.
+fn waiting_core(level: &std::path::Path) -> Harness {
+    let mut command = home::git_env::scrubbed(env!("CARGO_BIN_EXE_nunchiro"));
+    command
+        .arg("serve")
+        .env("NUNCHIRO_TEST_MEMORY_PRESSURE", level)
+        .env("NUNCHIRO_TEST_MEMORY_WAIT", "200,1000,600000");
+    Harness::with_command(None, command)
+}
+
+/// The window's own socket, kept open: its requests and the events it hears.
+struct Window(tungstenite::WebSocket<std::net::TcpStream>, u64);
+impl Window {
+    fn open(h: &Harness) -> Window {
+        use tungstenite::{client::IntoClientRequest, http::HeaderValue};
+        let Ok(Reply::WindowAuth { port, token }) = call(&h.home, Request::WindowAuth) else {
+            panic!("no window_auth reply");
+        };
+        let mut req = format!("ws://127.0.0.1:{port}/ws")
+            .into_client_request()
+            .unwrap();
+        let headers = req.headers_mut();
+        headers.insert("Origin", HeaderValue::from_static("tauri://localhost"));
+        headers.insert(
+            "Sec-WebSocket-Protocol",
+            HeaderValue::from_str(&format!("nunchiro.v1, nunchiro.token.{token}")).unwrap(),
+        );
+        let stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(60)))
+            .unwrap();
+        Window(tungstenite::client(req, stream).unwrap().0, 100)
+    }
+    fn request(&mut self, request: serde_json::Value) -> serde_json::Value {
+        self.1 += 1;
+        let id = self.1;
+        let frame = serde_json::json!({"id": id, "request": request});
+        self.0
+            .send(tungstenite::Message::Text(frame.to_string().into()))
+            .unwrap();
+        loop {
+            if let tungstenite::Message::Text(t) = self.0.read().unwrap() {
+                let v: serde_json::Value = serde_json::from_str(&t).unwrap();
+                if v["id"] == id {
+                    return v["response"].clone();
+                }
+            }
+        }
+    }
+    /// The next `memory_wait` event `until` takes.
+    fn waiting(&mut self, mut until: impl FnMut(&serde_json::Value) -> bool) -> serde_json::Value {
+        loop {
+            if let tungstenite::Message::Text(t) = self.0.read().unwrap() {
+                let v: serde_json::Value = serde_json::from_str(&t).unwrap();
+                if v["event"] == "memory_wait" && until(&v) {
+                    return v;
+                }
+            }
+        }
+    }
+}
+
+/// The owner's held click waits: the window hears one waiting entry, and once memory is free the start goes by
+/// itself, a note names it and the list is empty. At warning the window's start goes at once (held at critical only).
+#[test]
+fn the_windows_held_start_waits_and_starts_by_itself() {
+    let level = home::short("lvl").join("level");
+    std::fs::write(&level, "4").unwrap();
+    let h = waiting_core(&level);
+    let mut w = Window::open(&h);
+    let start = serde_json::json!({"op": "start", "session": {"kind": "codex", "project": h.home, "resume": null}});
+    let waits = w.request(serde_json::json!({"op": "start_or_wait", "start": start}));
+    assert_eq!(waits["Ok"]["type"], "memory_waiting", "{waits}");
+    let event = w.waiting(|v| v["entries"].as_array().is_some_and(|e| e.len() == 1));
+    let entry = &event["entries"][0];
+    assert_eq!(
+        (&entry["agent"], &entry["asker"]),
+        (&serde_json::json!("Codex"), &serde_json::json!("you")),
+        "{event}"
+    );
+    std::fs::write(&level, "1").unwrap();
+    let event = w.waiting(|v| {
+        v["entries"].as_array().is_some_and(|e| e.is_empty())
+            && v["notes"].as_array().is_some_and(|n| !n.is_empty())
+    });
+    let note = &event["notes"][0];
+    assert_eq!(
+        (&note["outcome"], &note["mine"]),
+        (&serde_json::json!("started"), &serde_json::json!(true)),
+        "{event}"
+    );
+    let id = note["session"].as_str().unwrap().to_string();
+    let Reply::Snapshot { sessions, .. } = h.request(Request::Snapshot) else {
+        panic!("no snapshot");
+    };
+    assert!(
+        sessions
+            .iter()
+            .any(|s| s.id == id && s.state == SessionState::Running),
+        "{sessions:?}"
+    );
+    h.request(Request::Close { id });
+    std::fs::write(&level, "2").unwrap();
+    let now = w.request(serde_json::json!({"op": "start_or_wait", "start": start}));
+    assert_eq!(now["Ok"]["type"], "started", "{now}");
+    h.request(Request::Close {
+        id: now["Ok"]["session"]["id"].as_str().unwrap().to_string(),
+    });
+}
+
+/// A session's held start waits with its own sentence; the window starts one anyway and cancels another, and the
+/// session's own token can do neither.
+#[test]
+fn the_window_starts_anyway_or_cancels_a_sessions_waiting_start() {
+    let level = home::short("lvl").join("level");
+    std::fs::write(&level, "2").unwrap();
+    let h = waiting_core(&level);
+    let s = print_env(&h, &["NUNCHIRO_TOKEN"]);
+    h.wait_text(&s.id, "NUNCHIRO_TOKEN:");
+    let out = h.read(&s.id);
+    let token = out
+        .split("NUNCHIRO_TOKEN:")
+        .nth(1)
+        .and_then(|t| t.lines().next())
+        .map(|t| t.trim_end().to_string())
+        .unwrap();
+    let raw = |request: serde_json::Value| {
+        use std::io::{BufRead, Write};
+        let mut stream = std::os::unix::net::UnixStream::connect(h.home.join("core.sock")).unwrap();
+        writeln!(
+            stream,
+            "{}",
+            serde_json::json!({"token": token, "request": request})
+        )
+        .unwrap();
+        let mut reply = String::new();
+        std::io::BufReader::new(stream)
+            .read_line(&mut reply)
+            .unwrap();
+        serde_json::from_str::<serde_json::Value>(&reply).unwrap()
+    };
+    for label in ["first", "second"] {
+        let held = raw(
+            serde_json::json!({"op": "start", "session": {"account": null, "kind": "codex", "project": h.home, "worktree": false, "label": label, "args": [], "model": null, "effort": null, "resume": null}}),
+        );
+        let said = held["Err"].as_str().unwrap_or_else(|| panic!("{held}"));
+        assert!(
+            said.contains("is waiting") && said.ends_with("Do not start it again"),
+            "{said}"
+        );
+    }
+    let mut w = Window::open(&h);
+    let list = w.request(serde_json::json!({"op": "memory_wait_list"}));
+    let entries = list["Ok"]["entries"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{list}"))
+        .clone();
+    assert_eq!(entries.len(), 2, "{list}");
+    let id = |label: &str| {
+        entries.iter().find(|e| e["agent"] == label).unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    for request in [
+        serde_json::json!({"op": "memory_wait_go", "id": id("first")}),
+        serde_json::json!({"op": "memory_wait_cancel", "id": id("second")}),
+    ] {
+        let refused = raw(request.clone());
+        assert!(refused["Err"].is_string(), "{request}: {refused}");
+    }
+    let started = w.request(serde_json::json!({"op": "memory_wait_go", "id": id("first")}));
+    assert_eq!(started["Ok"]["type"], "memory_wait_started", "{started}");
+    let cancelled = w.request(serde_json::json!({"op": "memory_wait_cancel", "id": id("second")}));
+    assert_eq!(cancelled["Ok"]["type"], "ack", "{cancelled}");
+    let list = w.request(serde_json::json!({"op": "memory_wait_list"}));
+    assert_eq!(list["Ok"]["entries"], serde_json::json!([]), "{list}");
+    let Reply::Snapshot { sessions, .. } = h.request(Request::Snapshot) else {
+        panic!("no snapshot");
+    };
+    let labels: Vec<_> = sessions
+        .iter()
+        .filter(|s| s.state == SessionState::Running)
+        .map(|s| s.label.as_str())
+        .collect();
+    assert!(
+        labels.contains(&"first") && !labels.contains(&"second"),
+        "{labels:?}"
+    );
+    for s in sessions {
+        h.request(Request::Close { id: s.id });
+    }
+}
+
 /// Resuming a saved conversation is never held: after a full quit it is a plain start, and the window has no override.
 #[test]
 fn resuming_a_saved_session_is_not_held() {

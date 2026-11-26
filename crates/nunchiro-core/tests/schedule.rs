@@ -1721,6 +1721,10 @@ fn token_of(home: &Path, label: &str) -> String {
     token
 }
 fn leads(tag: &str) -> Leads {
+    leads_with(tag, &[])
+}
+/// `leads`, its core started with `env` as well.
+fn leads_with(tag: &str, env: &[(&str, &str)]) -> Leads {
     use nunchiro_core::team::Team;
     let (home, proj, path) = setup(tag);
     talking_claude(&home);
@@ -1748,7 +1752,13 @@ fn leads(tag: &str) -> Leads {
             .unwrap();
     }
     drop(s);
-    let core = serve(&home, &path);
+    let claude_home = home.join("claude-home").to_string_lossy().into_owned();
+    let mut envs = vec![
+        ("PATH", path.as_str()),
+        ("CLAUDE_CONFIG_DIR", claude_home.as_str()),
+    ];
+    envs.extend_from_slice(env);
+    let core = home::spawn_serve(&home, &envs);
     let (chief, main) = (token_of(&home, "Chief"), token_of(&home, "Main"));
     // The two once entries fired and stay listed (switched off); the tests start from an empty list.
     for e in schedules(&home) {
@@ -2615,5 +2625,347 @@ fn an_edit_of_a_removed_teammates_schedule_saves_and_keeps_its_target() {
             UTC
         )
         .is_err()
+    );
+}
+
+/// Whether the session `label` got `line` through its send queue (written, or queued behind its turn; never canceled).
+fn told(home: &Path, label: &str, line: &str) -> bool {
+    rows(home).iter().filter(|r| r.label == label).any(|r| {
+        r.send_log
+            .iter()
+            .chain(&r.send_queue)
+            .any(|s| s.content.contains(line) && s.status != "canceled")
+    })
+}
+/// A memory reading the test changes (the file `NUNCHIRO_TEST_MEMORY_PRESSURE` names), at `level` now.
+fn level_file(tag: &str, level: &str) -> PathBuf {
+    let file = home::short(tag).join("level");
+    fs::write(&file, level).unwrap();
+    file
+}
+/// The waiting list's times shortened: a read every 200 ms, starts 1 s apart, dropped after `max` ms.
+fn waiting(file: &Path, max: u64) -> [(&'static str, String); 2] {
+    [
+        (
+            "NUNCHIRO_TEST_MEMORY_PRESSURE",
+            file.to_string_lossy().into_owned(),
+        ),
+        ("NUNCHIRO_TEST_MEMORY_WAIT", format!("200,1000,{max}")),
+    ]
+}
+fn as_env<'a>(env: &'a [(&'static str, String); 2]) -> [(&'static str, &'a str); 2] {
+    [(env[0].0, env[0].1.as_str()), (env[1].0, env[1].1.as_str())]
+}
+/// A request as the owner (the core's token), its JSON answer.
+fn owner(home: &Path, request: Value) -> Value {
+    let token = fs::read_to_string(home.join("core.token")).unwrap();
+    raw(home, token.trim(), request)
+}
+fn waiting_list(home: &Path) -> Vec<Value> {
+    let list = owner(home, json!({"op":"memory_wait_list"}));
+    list["Ok"]["entries"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{list}"))
+        .clone()
+}
+fn wait_long(what: &str, mut done: impl FnMut() -> bool) {
+    let until = Instant::now() + Duration::from_secs(60);
+    while !done() {
+        assert!(Instant::now() < until, "{what}");
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// A lead's `team open` held at warning waits, and the seat opens by itself once memory is free: it gets its brief,
+/// the lead gets one line, and the list is empty again. The same open asked again adds nothing.
+#[test]
+fn a_leads_held_team_open_waits_and_opens_by_itself() {
+    let file = level_file("lvl-lead", "1");
+    let env = waiting(&file, 600_000);
+    let l = leads_with("sch-wait-lead", &as_env(&env));
+    fs::write(&file, "2").unwrap();
+    let open = || raw(&l.home, &l.main, json!({"op":"team_open","name":"Helper"}));
+    let first = open();
+    assert_eq!(
+        first["Err"],
+        "This Mac is low on memory, so Helper's seat is waiting. The task is kept and goes to Helper when the seat opens. Do not open it again",
+        "{first}"
+    );
+    assert_eq!(open(), first, "asked again: the same sentence");
+    let list = waiting_list(&l.home);
+    assert_eq!(list.len(), 1, "{list:?}");
+    assert_eq!(
+        (&list[0]["asker"], &list[0]["by"]),
+        (&json!("session"), &json!("Main")),
+        "{list:?}"
+    );
+    thread::sleep(Duration::from_millis(1500));
+    assert!(
+        rows(&l.home).iter().all(|r| r.label != "Helper"),
+        "a held seat started"
+    );
+    fs::write(&file, "1").unwrap();
+    let lead = rows(&l.home)
+        .into_iter()
+        .find(|r| r.label == "Main")
+        .unwrap();
+    wait_long("the waiting seat did not open", || {
+        rows(&l.home)
+            .iter()
+            .any(|r| r.label == "Helper" && r.state == SessionState::Running)
+    });
+    let helper = rows(&l.home)
+        .into_iter()
+        .find(|r| r.label == "Helper")
+        .unwrap();
+    assert_eq!(
+        helper.parent.as_deref(),
+        Some(lead.id.as_str()),
+        "opened as the lead's worker"
+    );
+    wait("the seat got no brief", || {
+        output(&l.home, &helper.id).contains("You are Helper")
+    });
+    wait("the lead got no line", || {
+        told(&l.home, "Main", "Helper started after waiting for memory.")
+    });
+    assert!(waiting_list(&l.home).is_empty());
+}
+
+/// Three waiting starts go one at a time, at least the gap apart (1 s here), oldest first; warning again in between
+/// stops the rest until memory is free again. Each asker hears its own line.
+#[test]
+fn waiting_starts_go_one_at_a_time() {
+    let file = level_file("lvl-three", "1");
+    let env = waiting(&file, 600_000);
+    let l = leads_with("sch-wait-three", &as_env(&env));
+    fs::write(&file, "2").unwrap();
+    for label in ["one", "two", "three"] {
+        let start = json!({"op":"start","session":{"account":null,"kind":"claude","project":l.proj,"worktree":false,"label":label,"args":[],"model":null,"effort":null,"resume":null}});
+        let held = raw(&l.home, &l.main, start);
+        assert_eq!(
+            held["Err"],
+            "This Mac is low on memory, so the new session is waiting. It starts by itself when memory is free, and you get a message then. Do not start it again",
+            "{held}"
+        );
+    }
+    assert_eq!(waiting_list(&l.home).len(), 3);
+    let up = |label: &str| rows(&l.home).iter().any(|r| r.label == label);
+    fs::write(&file, "1").unwrap();
+    wait_long("the first did not start", || up("one"));
+    let first = Instant::now();
+    fs::write(&file, "2").unwrap();
+    thread::sleep(Duration::from_millis(2500));
+    assert!(!up("two") && !up("three"), "warning again stops the rest");
+    fs::write(&file, "1").unwrap();
+    wait_long("the second did not start", || up("two"));
+    assert!(!up("three"), "one at a time");
+    let second = Instant::now();
+    wait_long("the third did not start", || up("three"));
+    assert!(
+        Instant::now() - second >= Duration::from_millis(1000),
+        "the gap"
+    );
+    assert!(second - first >= Duration::from_millis(1000));
+    wait("the asker got no lines", || {
+        ["one", "two", "three"].iter().all(|n| {
+            told(
+                &l.home,
+                "Main",
+                &format!("{n} started after waiting for memory."),
+            )
+        })
+    });
+}
+
+/// A due run held at warning waits, its Last run says so; the owner starts one anyway and cancels another (a cancelled
+/// run is a skipped slot). A session's token can do neither, nor list them.
+#[test]
+fn the_owner_starts_anyway_or_cancels_a_waiting_run_and_a_session_cannot() {
+    let (home, proj, path) = setup("sch-wait-owner");
+    talking_claude(&home);
+    let mut core = serve(&home, &path);
+    shell(&home, &proj, "exec cat");
+    core.stop();
+    let mut s = Schedules::load(&home);
+    for label in ["nightly", "late"] {
+        s.add(
+            run(&proj, label),
+            "21:00".into(),
+            true,
+            None,
+            &known(&proj),
+            0,
+            UTC,
+        )
+        .unwrap();
+    }
+    drop(s);
+    let file = level_file("lvl-owner", "2");
+    let env = waiting(&file, 600_000);
+    let claude_home = home.join("claude-home").to_string_lossy().into_owned();
+    let mut envs = vec![
+        ("PATH", path.as_str()),
+        ("CLAUDE_CONFIG_DIR", claude_home.as_str()),
+    ];
+    envs.extend_from_slice(&as_env(&env));
+    let _core = home::spawn_serve(&home, &envs);
+    wait("the due runs do not wait", || {
+        waiting_list(&home).len() == 2
+    });
+    for e in schedules(&home) {
+        let last = serde_json::to_value(e.last.clone().unwrap()).unwrap();
+        assert_eq!(
+            (&last["result"], &last["reason"]),
+            (&json!("held"), &json!("waiting for memory")),
+            "{last}"
+        );
+    }
+    let list = waiting_list(&home);
+    let id = |label: &str| {
+        list.iter()
+            .find(|e| e["agent"] == label)
+            .and_then(|e| e["id"].as_str())
+            .unwrap_or_else(|| panic!("{list:?}"))
+            .to_string()
+    };
+    assert!(list.iter().all(|e| e["asker"] == "schedule"), "{list:?}");
+    // A session's own token: a plain terminal (never held) that prints it.
+    let printer = shell(&home, &proj, "echo \"TOKEN=$NUNCHIRO_TOKEN.\"; exec cat");
+    let mut token = String::new();
+    wait("no token", || {
+        output(&home, &printer.id)
+            .split("TOKEN=")
+            .nth(1)
+            .and_then(|t| t.split('.').next())
+            .filter(|t| !t.is_empty())
+            .map(|t| token = t.to_string())
+            .is_some()
+    });
+    for request in [
+        json!({"op":"memory_wait_go","id":id("nightly")}),
+        json!({"op":"memory_wait_cancel","id":id("late")}),
+        json!({"op":"memory_wait_list"}),
+    ] {
+        let refused = raw(&home, &token, request.clone());
+        assert!(refused["Err"].is_string(), "{request}: {refused}");
+    }
+    assert_eq!(waiting_list(&home).len(), 2, "a session changed the list");
+    let started = owner(&home, json!({"op":"memory_wait_go","id":id("nightly")}));
+    assert_eq!(started["Ok"]["type"], "memory_wait_started", "{started}");
+    assert_eq!(started["Ok"]["mine"], false);
+    wait("Start anyway started nothing", || {
+        rows(&home).iter().any(|r| r.label == "nightly")
+    });
+    let cancelled = owner(&home, json!({"op":"memory_wait_cancel","id":id("late")}));
+    assert_eq!(cancelled["Ok"]["type"], "ack", "{cancelled}");
+    assert!(waiting_list(&home).is_empty());
+    let late = schedules(&home)
+        .into_iter()
+        .find(|e| e.run.label == "late")
+        .unwrap();
+    let last = serde_json::to_value(late.last.unwrap()).unwrap();
+    assert_eq!(last["result"], "skipped", "{last}");
+    thread::sleep(Duration::from_millis(1500));
+    assert!(
+        rows(&home).iter().all(|r| r.label != "late"),
+        "a cancelled run started"
+    );
+}
+
+/// A start that waits longer than the longest wait (1.5 s here) is dropped: a schedule logs a skipped slot for low
+/// memory, and a lead hears that its seat was not started.
+#[test]
+fn a_start_that_waits_too_long_is_dropped() {
+    let file = level_file("lvl-drop", "1");
+    let env = waiting(&file, 1500);
+    let l = leads_with("sch-wait-drop", &as_env(&env));
+    fs::write(&file, "2").unwrap();
+    let held = raw(&l.home, &l.main, json!({"op":"team_open","name":"Helper"}));
+    assert!(
+        held["Err"].as_str().is_some_and(|e| e.contains("waiting")),
+        "{held}"
+    );
+    wait("the lead was not told", || {
+        told(
+            &l.home,
+            "Main",
+            "Helper was not started: this Mac stayed low on memory for 30 minutes.",
+        )
+    });
+    assert!(rows(&l.home).iter().all(|r| r.label != "Helper"));
+    assert!(waiting_list(&l.home).is_empty());
+    // A due run: its slot is skipped for low memory.
+    let (home, proj, path) = setup("sch-wait-drop2");
+    let mut core = serve(&home, &path);
+    shell(&home, &proj, "exec cat");
+    core.stop();
+    Schedules::load(&home)
+        .add(
+            run(&proj, "nightly"),
+            "21:00".into(),
+            true,
+            None,
+            &known(&proj),
+            0,
+            UTC,
+        )
+        .unwrap();
+    fs::write(&file, "2").unwrap();
+    let claude_home = home.join("claude-home").to_string_lossy().into_owned();
+    let mut envs = vec![
+        ("PATH", path.as_str()),
+        ("CLAUDE_CONFIG_DIR", claude_home.as_str()),
+    ];
+    envs.extend_from_slice(&as_env(&env));
+    let _core = home::spawn_serve(&home, &envs);
+    wait("the run was not dropped", || {
+        schedules(&home)[0].last.as_ref().is_some_and(|l| {
+            let l = serde_json::to_value(l).unwrap();
+            l["result"] == "skipped" && l["reason"] == "low memory"
+        })
+    });
+    assert!(rows(&home).iter().all(|r| r.label != "nightly"));
+}
+
+/// The waiting list lives in the core's memory only: a core restarted while starts wait starts none of them, and
+/// says nothing about them.
+#[test]
+fn a_core_restart_drops_the_waiting_starts() {
+    let (home, proj, path) = setup("sch-wait-restart");
+    let mut core = serve(&home, &path);
+    shell(&home, &proj, "exec cat");
+    core.stop();
+    Schedules::load(&home)
+        .add(
+            run(&proj, "nightly"),
+            "21:00".into(),
+            true,
+            None,
+            &known(&proj),
+            0,
+            UTC,
+        )
+        .unwrap();
+    let file = level_file("lvl-restart", "2");
+    let env = waiting(&file, 600_000);
+    let claude_home = home.join("claude-home").to_string_lossy().into_owned();
+    let mut envs = vec![
+        ("PATH", path.as_str()),
+        ("CLAUDE_CONFIG_DIR", claude_home.as_str()),
+    ];
+    envs.extend_from_slice(&as_env(&env));
+    let mut core = home::spawn_serve(&home, &envs);
+    wait("the due run does not wait", || {
+        waiting_list(&home).len() == 1
+    });
+    core.stop();
+    fs::write(&file, "1").unwrap();
+    let _core = home::spawn_serve(&home, &envs);
+    thread::sleep(Duration::from_millis(2000));
+    assert!(waiting_list(&home).is_empty());
+    assert!(
+        rows(&home).iter().all(|r| r.label != "nightly"),
+        "a start after the restart"
     );
 }
