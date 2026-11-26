@@ -317,3 +317,65 @@ fn an_attached_senders_name_carries_no_control_character() {
     f.core.entries.get_mut(&id).unwrap().meta.label = "Ada\x1b[201~\r".into();
     assert_eq!(f.core.sender_name(&id), "Ada[201~");
 }
+
+fn direct(f: &mut Flood, on: bool) {
+    f.core
+        .handle(Request::Direct {
+            id: f.id.clone(),
+            on,
+        })
+        .unwrap();
+}
+
+#[test]
+fn direct_holds_other_senders_and_expires() {
+    let mut f = seat("gap-direct", AgentKind::Claude, &claude_box(""));
+    let id = f.id.clone();
+    direct(&mut f, true);
+    let line = agent_line(&mut f, "agent line");
+    for _ in 0..3 {
+        f.core.flush_delivery().unwrap();
+    }
+    assert_eq!(got(&f), b"", "nothing while he types in the terminal");
+    assert_eq!(wait_of(&mut f, &line.id).as_deref(), Some("direct"));
+    // A key in that terminal keeps it on; a window that died stops renewing it, and it ends 60 s after.
+    f.core
+        .handle(text_request(&f, "\x1b[A", false, &[]))
+        .unwrap();
+    assert!(f.core.direct_until[&id] > std::time::Instant::now() + DIRECT_QUIET / 2);
+    // (The key marked the box edited by hand; the agent drew it empty again.)
+    f.core.entries.get_mut(&id).unwrap().input = Default::default();
+    *f.core.direct_until.get_mut(&id).unwrap() = std::time::Instant::now();
+    quiet(&mut f);
+    f.core.flush_delivery().unwrap();
+    assert!(String::from_utf8_lossy(&got(&f)).ends_with("\x1b[200~agent line\x1b[201~"));
+}
+
+#[test]
+fn the_owners_prompt_goes_while_direct_is_on_and_the_box_is_empty() {
+    let mut f = seat("gap-direct-own", AgentKind::Codex, &codex_box(""));
+    direct(&mut f, true);
+    let mine = owner_prompt(&mut f, "my prompt");
+    assert_eq!(mine.status, "attempting");
+    assert_eq!(got(&f), paste_1085("my prompt"));
+    direct(&mut f, false);
+    assert!(f.core.direct_until.is_empty());
+}
+
+#[test]
+fn at_box_reads_the_input_box_and_no_question() {
+    let mut f = seat("gap-at-box", AgentKind::Claude, &claude_box(""));
+    let Ok(Reply::Agent { session }) = f.core.handle(Request::AgentGet { id: f.id.clone() }) else {
+        panic!("no session")
+    };
+    assert!(session.at_box);
+    let mut g = seat(
+        "gap-at-dialog",
+        AgentKind::Claude,
+        &String::from_utf8(dialog_after(0)).unwrap(),
+    );
+    let Ok(Reply::Agent { session }) = g.core.handle(Request::AgentGet { id: g.id.clone() }) else {
+        panic!("no session")
+    };
+    assert!(!session.at_box);
+}

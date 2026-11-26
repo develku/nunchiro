@@ -196,6 +196,8 @@ export interface Session {
   send_queue?: SendRow[];
   /** Why each queued row waits, by send id (api.rs `send_waits`, snapshot only). */
   send_waits?: Record<string, string>;
+  /** The agent's input box is on a current screen and nothing asks (api.rs `at_box`, snapshot only). */
+  at_box?: boolean;
 }
 /** One row of a session's send queue or log (delivery.rs `Send`). `sender` is `user`, a session id, `core` or `widget:<name>`. */
 export type SendRow = { id: string; sender: string; at: number; content: string; status: string; submit?: boolean; settle?: string | null };

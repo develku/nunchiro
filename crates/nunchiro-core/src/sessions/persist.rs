@@ -289,6 +289,7 @@ impl Sessions {
             now_rows: std::collections::BTreeSet::new(),
             later_rows: BTreeMap::new(),
             attached: std::collections::BTreeSet::new(),
+            direct_until: BTreeMap::new(),
             goal_wakes: vec![],
             loops_checked: 0,
             removing_worktrees: std::collections::BTreeSet::new(),

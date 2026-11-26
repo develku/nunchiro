@@ -54,6 +54,7 @@ fn never(request: &Request) -> bool {
             | Request::SendLater { .. }
             | Request::SendAttach { .. }
             | Request::SendDetach { .. }
+            | Request::Direct { .. }
             | Request::CodexResetUse { .. }
             | Request::BoardSelf
             | Request::Browser { .. }

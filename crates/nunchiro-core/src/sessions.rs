@@ -352,6 +352,8 @@ pub struct Sessions {
     later_rows: BTreeMap<String, Option<u64>>,
     /// Gap rule: rows the owner attached to his next prompt; they go in with it, under his words.
     attached: std::collections::BTreeSet<String>,
+    /// Type in terminal: by session, until when the owner types in the agent's own box (`Direct`, renewed by his keys).
+    direct_until: BTreeMap<String, std::time::Instant>,
     /// Home view change 4: the leads (teammate id, prompt) a goal the user sent must reach; `team::wake_goals` opens
     /// each seat off the registry lock and hands it the goal.
     pub(crate) goal_wakes: Vec<(String, String)>,
@@ -852,6 +854,13 @@ impl Sessions {
                 if !report && !composer && !text.ends_with('\r') {
                     self.typing(&id); // gap rule: a key in the terminal is the owner typing there
                 }
+                // Type in terminal: his keys there keep it on.
+                if !report
+                    && !composer
+                    && let Some(until) = self.direct_until.get_mut(&id)
+                {
+                    *until = std::time::Instant::now() + DIRECT_QUIET;
+                }
                 if !report && text.ends_with('\r') {
                     self.owner_submitted(&id); // gap rule: his Enter there releases a Later after its turn
                 }
@@ -1082,6 +1091,16 @@ impl Sessions {
             Request::SendLater { id, send } => self.knock_choice(&id, &send, Knock::Later),
             Request::SendAttach { id, send } => self.knock_choice(&id, &send, Knock::Attach),
             Request::SendDetach { id, send } => self.knock_choice(&id, &send, Knock::Detach),
+            Request::Direct { id, on } => {
+                self.entry(&id)?;
+                if on {
+                    self.direct_until
+                        .insert(id, std::time::Instant::now() + DIRECT_QUIET);
+                } else {
+                    self.direct_until.remove(&id);
+                }
+                Ok(Reply::Ack)
+            }
             // Ticket 990: the server serves it before this point (the start runs off the registry lock).
             Request::TeamOpen { .. } => Err("team open is for a lead's session".into()),
             Request::Task { .. } => Err("task requests run off the registry lock".into()), // `ledger::serve`

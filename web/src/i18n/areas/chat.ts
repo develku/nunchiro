@@ -51,6 +51,13 @@ declare module '../index' {
     'knock.detach': true;
     'knock.from': true;
     'knock.failed': true;
+    // Type in terminal: letters typed in an agent's terminal go to the composer unless it is on.
+    'direct.on': true;
+    'direct.onTip': true;
+    'direct.done': true;
+    'direct.doneTip': true;
+    'direct.line': true;
+    'direct.note': true;
   }
 }
 
@@ -62,6 +69,9 @@ export const en = {
   'knock.now': 'Send now', 'knock.attach': 'Attach to my next prompt', 'knock.laterBtn': 'Later',
   'knock.chip': 'Attached: message from {name}', 'knock.detach': 'Detach the message from {name}', 'knock.from': 'Message from {name}',
   'knock.failed': 'Not changed: {error}',
+  'direct.on': 'Type in terminal', 'direct.onTip': 'Type in the agent’s own box; other messages wait until you are done',
+  'direct.done': 'Done', 'direct.doneTip': 'Letters go to the composer again',
+  'direct.line': 'Typing in terminal. Messages wait until you are done.', 'direct.note': 'Typing goes to the composer.',
   'chat.held.working': 'Waiting for the agent to finish its turn:', 'chat.held.behind': 'Waiting for earlier messages to go first ({n}):', // ticket 1056
   'chat.held.retry': 'The agent did not take it yet. It goes again when the agent is ready:', // ticket 1094
   'chat.held.stopped': 'The agent did not take it and it will not be pasted again. Cancel send puts it back in the box:', // ticket 1121

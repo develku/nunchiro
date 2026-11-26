@@ -50,6 +50,7 @@ fn chat_codex_cannot_alias_another_rollout_through_a_symlink() {
             home_mode: None,
             permission_mode: None,
             starting: false,
+            at_box: false,
             ran_mode: None,
             mode_state: None, // CHAT-MODELIST
             parent: None,

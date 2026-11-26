@@ -575,6 +575,7 @@ fn chat_recovery_keeps_distinct_journal_stop_texts_without_turn_ids() {
             home_mode: None,
             permission_mode: None,
             starting: false,
+            at_box: false,
             ran_mode: None,
             mode_state: None, // CHAT-MODELIST
             parent: None,

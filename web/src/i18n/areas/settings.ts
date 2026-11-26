@@ -1597,6 +1597,7 @@ declare module '../index' {
     "settings.kbd.cmd.search.sessions": true;
     "settings.kbd.cmd.focus.composer": true;
     "settings.kbd.cmd.knock.open": true;
+    "settings.kbd.cmd.terminal.direct": true;
     "settings.kbd.cmd.focus.terminal": true;
     "settings.kbd.cmd.focus.tree": true;
     "settings.kbd.cmd.terminal.clear": true;
@@ -1765,6 +1766,7 @@ function r3En() {
     "settings.kbd.cmd.search.sessions": "Search sessions (the chats of every session started in Nunchiro)",
     "settings.kbd.cmd.focus.composer": "Focus the composer",
     "settings.kbd.cmd.knock.open": "Open the waiting message",
+    "settings.kbd.cmd.terminal.direct": "Type in terminal, or Done",
     "settings.kbd.cmd.focus.terminal": "Focus the terminal",
     "settings.kbd.cmd.focus.tree": "Focus the tree",
     "settings.kbd.cmd.terminal.clear": "Clear the terminal (window copy only)",

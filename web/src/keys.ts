@@ -108,6 +108,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   'focus.composer': ['prefix KeyI'],
   'focus.terminal': ['prefix KeyO'],
   'knock.open': ['prefix Shift+KeyK'], // the knock: the first waiting message of the session in front
+  'terminal.direct': ['prefix Shift+KeyO'], // Type in terminal (o: the terminal)
   'pane.toggle': ['Meta+KeyJ'], // AGENTVIEW: the session's side pane (the Right bar's Terminal icon)
   'pane.shell.new': ['Control+Backquote'], // ticket 1130 C4: Claude Desktop's terminal key; shows the pane's shell, or starts one
   'pane.maximize': ['Shift+Meta+Enter'],
@@ -231,6 +232,7 @@ export const AREA: Record<string, Area> = {
   'focus.tree': FOCUS,
   'focus.composer': FOCUS,
   'knock.open': SESSIONS,
+  'terminal.direct': TERMINAL,
   'focus.terminal': FOCUS,
   'composer.toggle': COMPOSER,
   'composer.steerNow': COMPOSER, // v25-sendkeys
