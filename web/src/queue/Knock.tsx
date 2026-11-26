@@ -13,6 +13,8 @@ import type { BotFace } from '../bots/bots';
 import type { Team } from '../lead/lead';
 import { notePlain } from '../errors';
 import './knock.css';
+import { noteWrite } from '../chat/nunchiroWrites';
+import { getDraft } from '../composer-drafts';
 
 /** Another sender's queued row of `s`, with why it waits (`send_waits`). */
 export type Knock = SendRow & { wait?: string };
@@ -131,7 +133,15 @@ function KnockPopover({ row, who, anchor, acts, session, core, t, onClose }: { r
   }, [anchor, acts, onClose]);
   const choose = (op: 'send_now' | 'send_attach' | 'send_later') =>
     core.request({ op, id: session, send: row.id }).then(
-      () => onClose(true),
+      () => {
+        // ⌘Z in the composer while its text is as it is now detaches it again (nunchiroWrites.ts).
+        if (op === 'send_attach') {
+          const box = document.querySelector<HTMLTextAreaElement>(`.composer textarea[data-draft-for="${CSS.escape(session)}"]`);
+          const text = box ? box.value : getDraft(session);
+          noteWrite(session, { before: text, after: text, line: t('knock.putBack', { name: who.name }), undo: () => void core.request({ op: 'send_detach', id: session, send: row.id }).catch(() => {}) });
+        }
+        onClose(true);
+      },
       (e) => setError(t('knock.failed', { error: notePlain(t, e) })),
     );
   const text = row.content.length > PREVIEW ? `${row.content.slice(0, PREVIEW)}…` : row.content;

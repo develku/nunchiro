@@ -173,6 +173,7 @@ impl Sessions {
             | Request::Direct { .. }
             | Request::DraftTaken { .. }
             | Request::DraftPutBack { .. }
+            | Request::TakeBack { .. }
             | Request::ImagePut { .. }
             | Request::WidgetList
             | Request::WidgetRun { .. }

@@ -200,6 +200,8 @@ export interface Session {
   at_box?: boolean;
   /** Words the core took out of the agent's box for this composer (api.rs `draft_home`); answered with `draft_taken`. */
   draft_home?: { words: string; at: number };
+  /** Another sender's message sits in the agent's box waiting for its Enter (api.rs `take_back`): ⌘Z takes it back. */
+  take_back?: boolean;
 }
 /** One row of a session's send queue or log (delivery.rs `Send`). `sender` is `user`, a session id, `core` or `widget:<name>`. */
 export type SendRow = { id: string; sender: string; at: number; content: string; status: string; submit?: boolean; settle?: string | null };

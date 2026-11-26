@@ -277,6 +277,14 @@ pub struct Session {
     /// per snapshot, never saved in the session store (they live in `<home>/aside/<id>.json`).
     #[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
     pub draft_home: Option<DraftHome>,
+    /// Another sender's message sits in the agent's box waiting for its Enter (pasted, or left after a dropped Enter):
+    /// `take_back` clears it and puts the row back. Set per snapshot, never saved.
+    #[serde(
+        default,
+        skip_serializing_if = "std::ops::Not::not",
+        skip_deserializing
+    )]
+    pub take_back: bool,
     /// Look 11-17 N2: the last permission mode Claude's footer showed while the session ran (stored, unlike
     /// `permission_mode`), so a resume starts in the mode the session ran with. Ticket 991 (B6 chip): for Codex, the
     /// stored choice the owner's start applied (none when the arguments stated the permission, and on older rows).
@@ -1501,6 +1509,11 @@ pub enum Request {
     DraftPutBack {
         id: String,
         words: String,
+    },
+    /// ⌘Z on another sender's message in the agent's box: its Enter is canceled, the box cleared, and the row waits as
+    /// Later. A message the agent already took is not undone. Owner and window only.
+    TakeBack {
+        id: String,
     },
     /// Type in terminal (`on`) for session `id`: the owner types in the agent's own box; another sender's message waits
     /// (`direct`). It ends by itself 60 s after the last key in that terminal or the last renewal. Owner and window only.
