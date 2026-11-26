@@ -325,10 +325,11 @@ impl Sessions {
         }
         Ok(())
     }
-    /// Ticket 1094 r4: session `id`'s screen shows its input box, and the box is empty.
-    fn box_empty(&self, id: &str) -> bool {
+    /// Ticket 1094 r4: session `id`'s screen shows its input box, and the box is empty: every row of it, not only the
+    /// first (a draft may start with a blank line).
+    pub(super) fn box_empty(&self, id: &str) -> bool {
         self.entries.get(id).is_some_and(|e| {
-            composer(&e.observer.screen.text(), e.meta.kind).is_some_and(|c| c.trim().is_empty())
+            box_text(&e.observer.screen.text(), e.meta.kind).is_some_and(|t| t.trim().is_empty())
         })
     }
     /// Ticket 1094: whether session `id` may take its next queued send. A delivery is in flight until a turn ends
@@ -597,7 +598,7 @@ impl Sessions {
                     }
                     // A row of its own once dropped goes again only into an empty box: Codex's box held the owner's
                     // half-typed words and the copy behind them, read as free of the copy, and took it twice more.
-                    let clean = !copy && shown.is_some_and(|c| n == 0 || c.trim().is_empty());
+                    let clean = !copy && shown.is_some() && (n == 0 || self.box_empty(&id));
                     if n > REPASTES {
                         self.spent.insert(send_id.clone());
                     } else if !clean {

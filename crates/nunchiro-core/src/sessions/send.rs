@@ -367,11 +367,16 @@ impl Sessions {
         let send = self.begin_send(sender, id, text, vec![], true, "queued")?;
         Ok(Reply::Delivery { send })
     }
-    /// A running Claude or Codex whose input box is marked as edited by hand.
+    /// A running Claude or Codex whose input box is marked as edited by hand. Codex's mark ends also when its box reads
+    /// empty on a current screen: a Stop (Esc) marks it, and Codex has no box clear after a Stop as Claude has
+    /// (`interrupted`), so a lead's wake lines waited for the owner's next Enter.
     pub(crate) fn box_edited(&self, id: &str) -> bool {
-        self.entries
-            .get(id)
-            .is_some_and(|e| hand_edits(e.meta.kind) && e.agent_live() && e.input.edited())
+        self.entries.get(id).is_some_and(|e| {
+            hand_edits(e.meta.kind)
+                && e.agent_live()
+                && e.input.edited()
+                && !(e.meta.kind == AgentKind::Codex && !e.observer.behind && self.box_empty(id))
+        })
     }
     /// `walking`: this is the mode walk's own Shift+Tab (`set_mode`, `advance_walks`, `end_walk`), the one send a
     /// running walk lets through. Every other send queues behind the walk, as behind a model switch, and a second mode

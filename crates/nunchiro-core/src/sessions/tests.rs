@@ -11545,40 +11545,50 @@ fn t1121_repastes_are_bounded() {
     assert_eq!(send_row(&f, &row.id).status, "queued");
 }
 /// A dropped row goes again only into an empty box. Codex's box held the owner's half-typed words with the row's copy
-/// behind them (`› half typed reply ok #9`): read as free of the copy, the row was pasted behind it two more times.
+/// behind them (`› half typed reply ok #9`): read as free of the copy, the row was pasted behind it two more times. A
+/// box whose first row is blank and whose words are below is not empty either (Codex look).
 #[test]
 fn a_dropped_row_is_never_pasted_again_behind_other_words() {
-    let glued = "\x1b[2J\x1b[H\u{203a} half typed reply ok #9\r\n\r\n  gpt-5-codex medium · /p\r\n";
-    let mut f = unobserved("drop-glued", glued.as_bytes());
-    f.core.entries.get_mut(&f.id).unwrap().meta.kind = AgentKind::Codex;
-    catch_up(&mut f);
-    let id = f.id.clone();
-    hook(&mut f, "UserPromptSubmit");
-    f.core.prompt_as_user(&id, "reply ok #9".into()).unwrap();
-    let row = rows(&f)
-        .into_iter()
-        .find(|s| s.content == "reply ok #9")
-        .unwrap();
-    f.core.drops.insert(row.id.clone(), 1);
-    f.core.left_typed.insert(id.clone());
-    hook(&mut f, "Stop");
-    for _ in 0..5 {
-        f.core.tick().unwrap();
+    for (name, frame) in [
+        ("drop-glued", "\u{203a} half typed reply ok #9\r\n"),
+        ("drop-below", "\u{203a} \r\n  half typed\r\n"),
+    ] {
+        let screen = format!("\x1b[2J\x1b[H{frame}\r\n  gpt-5-codex medium · /p\r\n");
+        let mut f = unobserved(name, screen.as_bytes());
+        f.core.entries.get_mut(&f.id).unwrap().meta.kind = AgentKind::Codex;
+        catch_up(&mut f);
+        let id = f.id.clone();
+        hook(&mut f, "UserPromptSubmit");
+        f.core.prompt_as_user(&id, "reply ok #9".into()).unwrap();
+        let row = rows(&f)
+            .into_iter()
+            .find(|s| s.content == "reply ok #9")
+            .unwrap();
+        f.core.drops.insert(row.id.clone(), 1);
+        f.core.left_typed.insert(id.clone());
+        hook(&mut f, "Stop");
+        for _ in 0..5 {
+            f.core.tick().unwrap();
+        }
+        assert!(
+            !got(&f).windows(11).any(|w| w == b"reply ok #9"),
+            "{name}: pasted again behind other words"
+        );
+        assert_eq!(send_row(&f, &row.id).status, "queued", "{name}");
     }
-    assert!(
-        !got(&f).windows(11).any(|w| w == b"reply ok #9"),
-        "pasted again behind other words"
-    );
-    assert_eq!(send_row(&f, &row.id).status, "queued");
 }
-/// Words typed by hand into Codex's box mark it edited, as Claude's, until the owner's Enter sends them.
+/// Words typed by hand into Codex's box mark it edited, as Claude's, until the owner's Enter sends them or the box
+/// reads empty (a Stop's Esc marks it too, and Codex's box is not cleared after a Stop).
 #[test]
 fn hand_typed_words_mark_a_codex_box_edited() {
-    let mut f = unobserved(
-        "codex-edited",
-        "\x1b[2J\x1b[H\u{203a} \r\n\r\n  gpt-5-codex medium · /p\r\n".as_bytes(),
-    );
-    f.core.entries.get_mut(&f.id).unwrap().meta.kind = AgentKind::Codex;
+    let codex = |name: &str, row: &str| {
+        let screen = format!("\x1b[2J\x1b[H\u{203a} {row}\r\n\r\n  gpt-5-codex medium · /p\r\n");
+        let mut f = unobserved(name, screen.as_bytes());
+        f.core.entries.get_mut(&f.id).unwrap().meta.kind = AgentKind::Codex;
+        catch_up(&mut f);
+        f
+    };
+    let mut f = codex("codex-edited", "half typed");
     let id = f.id.clone();
     f.core
         .handle(text_request(&f, "half typed ", false, &[]))
@@ -11590,6 +11600,11 @@ fn hand_typed_words_mark_a_codex_box_edited() {
     assert!(f.core.box_edited(&id), "a key");
     stop_keys(&mut f, &["enter"], &[]).unwrap();
     assert!(!f.core.box_edited(&id), "his Enter key");
+    let mut f = codex("codex-stopped", "");
+    let id = f.id.clone();
+    stop_keys(&mut f, &["esc"], &[]).unwrap();
+    assert!(f.core.entries[&id].input.edited(), "the Stop marks it");
+    assert!(!f.core.box_edited(&id), "an empty box holds no words");
 }
 /// Ticket 1121 (review r1): at exactly REPASTES drops the row still goes into an empty box, once; one drop more stops it
 /// and the snapshot names it, so the composer can say it will not go again.
