@@ -631,7 +631,22 @@ impl Sessions {
             }
             Request::AgentSend { id, text } => self.send("user", &id, text, vec![], false),
             Request::AgentPrompt { id, text } => {
-                let reply = self.send("user", &id, text.clone(), vec![], true)?;
+                let reply = match self.send("user", &id, text.clone(), vec![], true) {
+                    // The owner's words to a session that waits at a question in its terminal (a start question such
+                    // as folder trust) are kept, not refused: typed now they would answer the question, so they wait
+                    // in the session's queue, go in once it is answered there, and are dropped like any queued send.
+                    // The question's own card says which session waits; a session's prompt is still refused.
+                    Err(e)
+                        if e == "agent_blocked"
+                            && (self.queue.items_of(&id).iter())
+                                .any(|item| item.kind == queue::Kind::Dialog) =>
+                    {
+                        Reply::Delivery {
+                            send: self.begin_send("user", &id, text.clone(), vec![], true, "queued")?,
+                        }
+                    }
+                    sent => sent?,
+                };
                 self.told(&id, &text); // ticket 990: a sub-bot's lead learns what the user said to it
                 Ok(reply)
             }
