@@ -149,6 +149,14 @@ pub struct Session {
     /// box read for CLEAN_WAIT); the composer says so. Snapshot only: never saved, never read from a store.
     #[serde(default, skip_serializing_if = "Vec::is_empty", skip_deserializing)]
     pub stopped_sends: Vec<String>,
+    /// Why each queued row waits, by send id: `turn`, `typing`, `terminal_text`, `later`, `attached`, `dialog`. Snapshot
+    /// only: never saved, never read from a store.
+    #[serde(
+        default,
+        skip_serializing_if = "std::collections::BTreeMap::is_empty",
+        skip_deserializing
+    )]
+    pub send_waits: std::collections::BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub side_parent: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1438,6 +1446,30 @@ pub enum Request {
     LimitResume {
         id: String,
         on: bool,
+    },
+    /// The owner is typing for session `id` (the window's composer or terminal); carries no text. Another sender's
+    /// queued message waits `TYPING_QUIET` after the last one. Owner and window only.
+    Typing {
+        id: String,
+    },
+    /// The owner's choice on another sender's queued message `send` of session `id` (the knock): send it now (no wait
+    /// for his typing), later (after his next prompt's turn), attached to his next prompt, or detached again (later).
+    /// Owner and window only.
+    SendNow {
+        id: String,
+        send: String,
+    },
+    SendLater {
+        id: String,
+        send: String,
+    },
+    SendAttach {
+        id: String,
+        send: String,
+    },
+    SendDetach {
+        id: String,
+        send: String,
     },
     /// Ticket 990: a lead opens the seat of a teammate of its place, by name (`nunchiro team open <name>`). Only the
     /// place's lead seat may; the seat starts as its worker, with the teammate's own brief as its first prompt.

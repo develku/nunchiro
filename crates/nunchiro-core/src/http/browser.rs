@@ -584,6 +584,11 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | ProjectLocate { .. }
         | ProblemFix { .. }
         | LimitResume { .. } // ticket 372: owner and window only
+        | Typing { .. } // owner and window only
+        | SendNow { .. }
+        | SendLater { .. }
+        | SendAttach { .. }
+        | SendDetach { .. }
         | TeamOpen { .. } // ticket 990: a lead's session only
         | Task { .. } // ticket 990 slice g: the owner's window and sessions, never a page
         | Note { .. } // ticket 990 slice h

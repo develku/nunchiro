@@ -47,9 +47,7 @@ fn status(f: &Flood, send: &str) -> String {
     send_row(f, send).status
 }
 fn typing(f: &mut Flood) {
-    f.core
-        .handle(Request::Typing { id: f.id.clone() })
-        .unwrap();
+    f.core.handle(Request::Typing { id: f.id.clone() }).unwrap();
 }
 /// The owner's last key was `TYPING_QUIET` ago.
 fn quiet(f: &mut Flood) {
@@ -118,7 +116,11 @@ fn nothing_is_pasted_into_a_box_that_holds_text() {
 
 #[test]
 fn the_composer_send_waits_behind_text_in_the_box() {
-    let mut f = seat("gap-composer", AgentKind::Claude, &claude_box("my own words"));
+    let mut f = seat(
+        "gap-composer",
+        AgentKind::Claude,
+        &claude_box("my own words"),
+    );
     f.core
         .handle(text_request(&f, "from the composer", true, &[]))
         .unwrap();
@@ -128,7 +130,10 @@ fn the_composer_send_waits_behind_text_in_the_box() {
         .into_iter()
         .find(|s| s.content == "from the composer")
         .unwrap();
-    assert_eq!((row.sender.as_str(), row.status.as_str()), ("user", "queued"));
+    assert_eq!(
+        (row.sender.as_str(), row.status.as_str()),
+        ("user", "queued")
+    );
 }
 
 #[test]
@@ -303,4 +308,12 @@ fn one_message_per_gap() {
     assert_eq!(got(&f), [paste_1085("first"), b"\r".to_vec()].concat());
     assert_eq!(status(&f, &second.id), "queued");
     assert_eq!(wait_of(&mut f, &second.id), None, "it goes in the next gap");
+}
+
+#[test]
+fn an_attached_senders_name_carries_no_control_character() {
+    let mut f = seat("gap-name", AgentKind::Claude, &claude_box(""));
+    let id = f.id.clone();
+    f.core.entries.get_mut(&id).unwrap().meta.label = "Ada\x1b[201~\r".into();
+    assert_eq!(f.core.sender_name(&id), "Ada[201~");
 }

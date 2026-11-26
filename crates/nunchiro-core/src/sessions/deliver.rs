@@ -482,6 +482,11 @@ impl Sessions {
         self.copy_left.retain(|_, send| waits(send));
         self.spent.retain(waits);
         self.clean_wait.retain(|send, _| waits(send));
+        self.now_rows.retain(waits);
+        self.later_rows.retain(|send, _| waits(send));
+        self.attached.retain(waits);
+        let now = std::time::Instant::now();
+        self.typing_until.retain(|_, t| now < *t);
         // Round 6: in-flight times of sessions that are gone (one per session ever started otherwise).
         let live = &self.entries;
         self.inflight_at.retain(|id, _| live.contains_key(id));
@@ -557,8 +562,13 @@ impl Sessions {
                     canceled = true;
                     continue; // no `at += 1`: the row left the queue and the next one moved into its slot
                 }
+                // Gap rule: attached, Later, text in the box, or the owner typing.
+                let gap = self
+                    .gap_hold(&id, &send.id, &send.sender, send.submit, &send.content)
+                    .is_some();
                 let entry = self.entry(&id)?;
                 if edited
+                    || gap
                     || later
                     || note
                         && entry.acp.is_none()
@@ -644,6 +654,8 @@ impl Sessions {
                                 && s.status == "queued"
                                 && self.wake_rows.contains(&s.id)
                                 && !self.send_refused(&id, s)
+                                // Gap rule: a line the owner holds (Later, attached, typing) is not carried along.
+                                && self.gap_hold(&id, &s.id, &s.sender, s.submit, &s.content).is_none()
                         })
                         .cloned()
                         .collect();
@@ -681,6 +693,48 @@ impl Sessions {
                         .or_default()
                         .extend(joined);
                 }
+                // Gap rule: the owner's prompt takes the messages he attached, under his words, in one paste.
+                if row.sender == "user" && row.submit && joinable(&row.content) {
+                    let rest: Vec<_> = self.entries[&id]
+                        .meta
+                        .send_queue
+                        .iter()
+                        .filter(|s| {
+                            s.status == "queued"
+                                && self.attached.contains(&s.id)
+                                && !self.send_refused(&id, s)
+                        })
+                        .cloned()
+                        .collect();
+                    let mut joined = Vec::new();
+                    for s in rest {
+                        let piece = format!(
+                            "\n\n[Message from {}, attached by the owner]\n{}",
+                            self.sender_name(&s.sender),
+                            s.content
+                        );
+                        if row.content.len() + piece.len() > crate::delivery::SEND_LIMIT {
+                            break;
+                        }
+                        row.content.push_str(&piece);
+                        joined.push(s.id);
+                    }
+                    if !joined.is_empty() {
+                        if let Some(queued) =
+                            (self.entry(&id)?.meta.send_queue.iter_mut()).find(|s| s.id == row.id)
+                        {
+                            queued.content = row.content.clone();
+                        }
+                        for send in &joined {
+                            self.attached.remove(send);
+                            self.mark_send(&id, send, "attempting")?;
+                        }
+                        self.joined_rows
+                            .entry(row.id.clone())
+                            .or_default()
+                            .extend(joined);
+                    }
+                }
                 #[cfg(test)]
                 self.send_clones
                     .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -706,6 +760,178 @@ impl Sessions {
                 .store(true, std::sync::atomic::Ordering::SeqCst);
         }
         Ok(canceled || !delivered.is_empty())
+    }
+    /// Gap rule: the owner typed for session `id` (the window's composer or a key in its terminal).
+    pub(super) fn typing(&mut self, id: &str) {
+        self.typing_until
+            .insert(id.into(), std::time::Instant::now() + TYPING_QUIET);
+    }
+    /// Gap rule: session `id`'s input box shows text the owner put there: not the agent's faint suggestion or
+    /// placeholder, not the core's own paste, dropped copy or submit, not a stopped prompt the next submit clears.
+    pub(super) fn owner_text(&self, id: &str) -> bool {
+        let Some(e) = self.entries.get(id) else {
+            return false;
+        };
+        if e.acp.is_some()
+            || !matches!(e.meta.kind, AgentKind::Claude | AgentKind::Codex)
+            || e.observer.clear_box
+            || self.left_typed.contains(id)
+            || self.copy_left.contains_key(id)
+            || self.pending_enter.contains_key(id)
+        {
+            return false;
+        }
+        // The box's first row: with Claude's bottom rule lost (a real 2.1.331 screen), the rows under it are footer
+        // pieces, which `box_text` would read as words.
+        let Some(text) = composer(&e.observer.screen.text(), e.meta.kind) else {
+            return false;
+        };
+        !text.trim().is_empty()
+            && !e.observer.screen.composer_faint()
+            && !self
+                .submitted
+                .get(id)
+                .is_some_and(|s| same_words(&text, &s.text))
+    }
+    /// Gap rule: session `id` has a queued message the owner attached to his next prompt.
+    pub(super) fn has_attached(&self, id: &str) -> bool {
+        self.entries.get(id).is_some_and(|e| {
+            e.meta
+                .send_queue
+                .iter()
+                .any(|s| s.status == "queued" && self.attached.contains(&s.id))
+        })
+    }
+    /// Gap rule: why a queued row of session `id` (`send` is its id, empty for one not queued yet) waits beyond the
+    /// turn: attached to his next prompt, Later, text in the box (every sender), or the owner typing (other senders;
+    /// an answer into a running turn, a deny note and a widget act do not wait for it). `None`: it may go.
+    pub(super) fn gap_hold(
+        &self,
+        id: &str,
+        send: &str,
+        sender: &str,
+        submit: bool,
+        content: &str,
+    ) -> Option<&'static str> {
+        if self.attached.contains(send) {
+            return Some("attached");
+        }
+        let seq = self.queue.attention(id).completion_seq;
+        if self
+            .later_rows
+            .get(send)
+            .is_some_and(|m| m.is_none_or(|at| seq <= at))
+        {
+            return Some("later");
+        }
+        let other = sender != "user";
+        // Words another send typed and nobody submitted (an agent's text without Enter) are in the box too.
+        let unsent = other
+            && self.entries.get(id).is_some_and(|e| {
+                e.acp.is_none()
+                    && e.meta.kind != AgentKind::Shell
+                    && e.input.pending()
+                    && !e.input.edited()
+            })
+            && !self.pending_enter.contains_key(id);
+        if !content.trim().is_empty() && (self.owner_text(id) || submit && unsent) {
+            return Some("terminal_text");
+        }
+        let exempt = self.now_rows.contains(send)
+            || self.steers.contains(send)
+            || self.deny_notes.contains(send)
+            || crate::delivery::widget_sender(sender);
+        // Keys alone (an Esc, a digit) keep their own checks: a box edited by hand refuses another sender's Enter.
+        if other
+            && !exempt
+            && !content.trim().is_empty()
+            && self
+                .typing_until
+                .get(id)
+                .is_some_and(|t| std::time::Instant::now() < *t)
+        {
+            return Some("typing");
+        }
+        None
+    }
+    /// Gap rule: a submit of the owner's went into session `id`: its Later rows go once a turn ends after this.
+    pub(super) fn owner_submitted(&mut self, id: &str) {
+        self.typing_until.remove(id); // his Enter ends his typing there
+        let seq = self.queue.attention(id).completion_seq;
+        let Some(e) = self.entries.get(id) else {
+            return;
+        };
+        for s in &e.meta.send_queue {
+            if let Some(mark @ None) = self.later_rows.get_mut(&s.id) {
+                *mark = Some(seq);
+            }
+        }
+    }
+    /// Gap rule: the owner's choice on another sender's queued message (the knock).
+    pub(super) fn knock_choice(&mut self, id: &str, send: &str, choice: Knock) -> Response {
+        let row = self
+            .entry(id)?
+            .meta
+            .send_queue
+            .iter()
+            .find(|s| s.id == send)
+            .ok_or("send not found")?;
+        if row.status != "queued" {
+            return Err("send is not queued".into());
+        }
+        if row.sender == "user" {
+            return Err("your own prompt does not wait for you".into());
+        }
+        if choice == Knock::Attach && (!row.submit || row.content.trim().is_empty()) {
+            return Err("only a message with words can be attached".into());
+        }
+        if choice == Knock::Detach && !self.attached.contains(send) {
+            return Err("the message is not attached".into());
+        }
+        self.now_rows.remove(send);
+        self.later_rows.remove(send);
+        self.attached.remove(send);
+        match choice {
+            Knock::Now => {
+                self.now_rows.insert(send.into());
+            }
+            Knock::Later | Knock::Detach => {
+                self.later_rows.insert(send.into(), None);
+            }
+            Knock::Attach => {
+                self.attached.insert(send.into());
+            }
+        }
+        Ok(Reply::Ack)
+    }
+    /// Gap rule: how an attached message is named under the owner's words.
+    pub(super) fn sender_name(&self, sender: &str) -> String {
+        // The name goes inside a paste: no control character (an ESC would end the paste early, a CR press Enter).
+        let name = self.raw_sender_name(sender);
+        let shown: String = name.chars().filter(|c| !c.is_control()).take(80).collect();
+        if shown.trim().is_empty() {
+            "another sender".into()
+        } else {
+            shown.trim().into()
+        }
+    }
+    fn raw_sender_name(&self, sender: &str) -> String {
+        if let Some(e) = self.entries.get(sender) {
+            if !e.meta.label.trim().is_empty() {
+                return e.meta.label.trim().into();
+            }
+            if let Some(seat) = &e.meta.teammate {
+                return seat.clone();
+            }
+            return "another session".into();
+        }
+        if let Some(name) = sender.strip_prefix("widget:") {
+            return name.into();
+        }
+        if sender == CORE {
+            return "Nunchiro".into();
+        }
+        "another sender".into()
     }
     /// A queued row the flush cancels: its sender no longer owns the target, or a widget act lost its grant.
     fn send_refused(&self, id: &str, send: &crate::delivery::Send) -> bool {
@@ -760,6 +986,20 @@ impl Sessions {
                         }))
     }
 }
+/// Gap rule: a prompt that starts with `/ ! # &` (a command, bash mode, memory, a background run) takes no attachment.
+pub(super) fn joinable(text: &str) -> bool {
+    !text.trim_start().starts_with(['/', '!', '#', '&'])
+}
+/// Gap rule: the owner's choices on a waiting message.
+#[derive(PartialEq, Clone, Copy)]
+pub(super) enum Knock {
+    Now,
+    Later,
+    Attach,
+    Detach,
+}
+/// Gap rule: another sender's line waits this long after the owner's last key for the session.
+pub(super) const TYPING_QUIET: std::time::Duration = std::time::Duration::from_secs(5);
 // A step reads the screen only after the agent redrew it and then stayed quiet, never a stale frame. v1a-24 r3:
 // an echoed Enter waits for the same quiet.
 pub(super) const SWITCH_SETTLE: std::time::Duration = std::time::Duration::from_millis(100);

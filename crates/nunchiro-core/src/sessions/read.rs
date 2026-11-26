@@ -449,6 +449,18 @@ impl Sessions {
             i
         })
         .collect();
+        // Gap rule: why each queued row waits. Shown only, like `stopped_sends`.
+        let blocked = crate::delivery::blocked(&meta.pending);
+        meta.send_waits = (meta.send_queue.iter())
+            .filter(|s| s.status == "queued")
+            .filter_map(|s| {
+                let why = self
+                    .gap_hold(&meta.id, &s.id, &s.sender, s.submit, &s.content)
+                    .or_else(|| blocked.then_some("dialog"))
+                    .or_else(|| meta.attention.working.then_some("turn"))?;
+                Some((s.id.clone(), why.to_string()))
+            })
+            .collect();
         // V2-5b: the cards of states v1a-33 and V2-1b keep.
         if meta.problem.is_none() {
             meta.problem = crate::problems::kept(&meta);

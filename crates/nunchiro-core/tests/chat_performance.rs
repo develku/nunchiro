@@ -49,6 +49,7 @@ fn chat_release_100mb_poll_and_memory_budget() {
     let session = Session {
         side_chat: false,
         stopped_sends: Vec::new(),
+        send_waits: Default::default(),
         side_parent: None,
         teammate: None,
         resumed_from: vec![],

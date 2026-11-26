@@ -1173,10 +1173,8 @@ fn notice_never_submits_text_another_session_typed() {
         .chain(&meta.send_queue)
         .find(|s| is_notice(&s.content))
         .unwrap();
-    assert_eq!(
-        notice.status, "failed",
-        "the session gate refused the submit"
-    );
+    // Gap rule: it waits in the queue (the box holds words nobody submitted), never typed behind them.
+    assert_eq!(notice.status, "queued", "nothing typed behind the words");
     let screen = f.core.entries[&lead].observer.screen.text();
     assert!(
         !(screen.contains(NOTICE_TAIL) || screen.contains(NOTICE_ONE)),

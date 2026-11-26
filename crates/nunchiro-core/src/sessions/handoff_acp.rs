@@ -204,6 +204,7 @@ impl Sessions {
         let meta = Session {
             side_chat: start.args.iter().any(|arg| arg == SIDE_CHAT_ARG),
             stopped_sends: Vec::new(),
+            send_waits: Default::default(),
             side_parent: side_parent(start),
             side_split: side_split(start),
             machine: None,
@@ -377,6 +378,7 @@ impl Sessions {
         let meta = Session {
             side_chat: start.args.iter().any(|arg| arg == SIDE_CHAT_ARG),
             stopped_sends: Vec::new(),
+            send_waits: Default::default(),
             side_parent: side_parent(start),
             side_split: side_split(start),
             machine: None,
