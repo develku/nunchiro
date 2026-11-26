@@ -849,7 +849,7 @@ fn usage_price_table_has_5x_and_fable_rows_with_dated_source() {
             let b = w.as_bytes();
             b.len() == 10 && b[4] == b'-' && b[7] == b'-' && b[..4].iter().all(u8::is_ascii_digit)
         });
-    assert_eq!(date, Some("2026-11-02"), "{source}");
+    assert_eq!(date, Some("2026-11-27"), "{source}");
 }
 
 #[test]
