@@ -1493,6 +1493,60 @@ mod tests {
         assert!(s.detect(AgentKind::Codex).is_none());
     }
 
+    /// A Codex that runs none of Nunchiro's general hooks (its own hooks file keeps them out) ends its start too: by
+    /// a running turn on its screen, or by its composer once a start dialog was read (it was answered, or it never was
+    /// one). After that a start dialog's rows with no composer (its transcript view, a redraw read before its
+    /// composer) are no card.
+    #[test]
+    fn codex_start_ends_without_a_hook() {
+        let redraw = |s: &mut Screen, text: &str| {
+            s.feed(format!("\x1b[2J\x1b[H{}", text.replace('\n', "\r\n")).as_bytes());
+        };
+        let composer = "\n\u{203a} Ask Codex to do anything\n\n  gpt-5-codex medium \u{b7} /tmp/x\n";
+        let view = format!(
+            "{CODEX_SIGN_IN}\n  \u{2191}/\u{2193} to scroll   pgup/pgdn to page   home/end to jump\n  q to quit   esc to edit prev\n"
+        );
+        // A turn ran, then its transcript view shows a start dialog's rows.
+        let mut s = fed(composer);
+        assert!(s.detect(AgentKind::Codex).is_none());
+        redraw(
+            &mut s,
+            &format!("\u{2022} Working (1s \u{2022} esc to interrupt)\n{composer}"),
+        );
+        assert!(s.detect(AgentKind::Codex).is_none());
+        redraw(&mut s, &view);
+        assert!(s.detect(AgentKind::Codex).is_none(), "after a turn");
+        // A resumed session's rows read before its composer is drawn under them: a card for that read, as for a real
+        // sign-in screen, and none once the composer showed.
+        let mut s = fed(CODEX_SIGN_IN);
+        assert_eq!(
+            s.detect(AgentKind::Codex).map(|d| d.kind),
+            Some(Kind::Dialog)
+        );
+        redraw(&mut s, &format!("{CODEX_SIGN_IN}{composer}"));
+        assert!(s.detect(AgentKind::Codex).is_none());
+        redraw(&mut s, CODEX_SIGN_IN);
+        assert!(s.detect(AgentKind::Codex).is_none(), "after the composer");
+    }
+
+    /// Before the start is over too, another prompt's card is that prompt: Codex's edit approval under a start
+    /// dialog's rows (the agent showed one of the files above) keeps its own text.
+    #[test]
+    fn a_prompt_under_start_dialog_rows_keeps_its_own_text() {
+        let edit = "  Would you like to make the following edits?\n\n  crates/x.rs (+1 -0)\n    1 +fn a() {}\n\n\u{203a} 1. Yes, proceed (y)\n  2. Yes, and don't ask again for these files (a)\n  3. No, and tell Codex what to do differently (esc)\n\n  Press enter to confirm or esc to cancel\n";
+        let d = fed(&format!("{CODEX_SIGN_IN}\n{edit}"))
+            .detect(AgentKind::Codex)
+            .expect("card");
+        assert_eq!(d.kind, Kind::Dialog);
+        assert!(
+            d.text
+                .trim_start()
+                .starts_with("Would you like to make the following edits?"),
+            "{}",
+            d.text
+        );
+    }
+
     /// Claude draws its start screens in pieces (rows arrive in more than one read). From the first read that shows
     /// the dialog, its card text stays the same while the rest arrives, so the card keeps one id.
     #[test]
