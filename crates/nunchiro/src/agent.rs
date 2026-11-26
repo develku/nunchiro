@@ -309,7 +309,7 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
 /// `nunchiro agent`, `agent --help` and `agent <verb> ... --help` print this (look v10 Home S2-3: a lead's
 /// `agent reply --help` failed with "unknown option --help", so it took its own working reply for a failure too and
 /// answered by typing into the worker's terminal instead).
-pub const USAGE: &str = "nunchiro agent start <name> --kind claude|codex --project <dir> [--worktree] [--model <m>] [--effort <level>] [--env <KEY=VALUE>]... [--receipt <id>] [-- <args>...]
+pub const USAGE: &str = "nunchiro agent start <name> --kind claude|codex --project <dir> [--worktree] [--model <m>] [--effort <level>] [--env <KEY=VALUE>]... [--receipt <id>] [--anyway] [-- <args>...]
 nunchiro agent prompt <agent> <text> [--wait] [--until done|idle|blocked]... [--timeout <ms>]
 nunchiro agent send <agent> <text> [--wait] [--until ...] [--timeout <ms>]   (types the text into the agent's terminal)
 nunchiro agent wait <agent> --until working|done|idle|blocked|failed|exited [--timeout <ms>]
