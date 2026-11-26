@@ -2561,3 +2561,84 @@ fn a_local_slash_command_ends_its_turn_without_a_stop() {
     assert!(queue.attention("s").working, "the model turn still works");
     let _ = fs::remove_dir_all(&home);
 }
+
+/// One permission request is one card with one id. Claude runs its PreToolUse hook, draws its dialog, then runs the
+/// held PermissionRequest hook: a screen read in between used to raise a screen card, and the hook's item replaced it
+/// under a new id (a prompt the screen cannot prove, here a frame with no dashed body rules, never merges), so the
+/// owner's answer on the first card found nothing. With no hook after the window, the screen card still comes.
+#[test]
+fn a_dialog_drawn_before_its_held_hook_is_one_card_with_one_id() {
+    use nunchiro_core::waiting::screen::Screen;
+    let frame = {
+        let mut screen = Screen::new(160, 50);
+        screen.feed(
+            "\x1b[2J\x1b[H> [trial perm 1] make a folder\r\n\u{25cf} Bash(mkdir trial-1)\r\nBash command\r\n  mkdir trial-1\r\n Do you want to proceed?\r\n \u{276f} 1. Yes\r\n   2. No\r\n\r\n Esc to cancel\r\n"
+                .as_bytes(),
+        );
+        screen.detect(AgentKind::Claude).unwrap()
+    };
+    assert_eq!(frame.kind, nunchiro_core::queue::Kind::Permission);
+    let call = json!({"tool_name":"Bash","tool_input":{"command":"mkdir trial-1"}});
+    let dir = home("dialog-before-hook");
+    let mut q = Queue::open(&dir).unwrap();
+    q.register("s", AgentKind::Claude, 0).unwrap();
+    q.observe(
+        "s",
+        "UserPromptSubmit",
+        &json!({"prompt":"[trial perm 1] make a folder"}),
+        "hook",
+        10,
+    )
+    .unwrap();
+    q.observe("s", "PreToolUse", &call, "hook", 20).unwrap();
+    let mut ids = std::collections::BTreeSet::new();
+    for at in [30, 60, 90] {
+        q.screen(
+            "s",
+            frame.kind.clone(),
+            frame.text.clone(),
+            frame.choices.clone(),
+            at,
+        )
+        .unwrap();
+        ids.extend(q.items_of("s").into_iter().map(|i| i.id));
+    }
+    let mut held = call.clone();
+    held["nunchiro_event_id"] = json!("e1");
+    q.observe("s", "PermissionRequest", &held, "hook", 120)
+        .unwrap();
+    q.screen(
+        "s",
+        frame.kind.clone(),
+        frame.text.clone(),
+        frame.choices.clone(),
+        150,
+    )
+    .unwrap();
+    let items = q.items_of("s");
+    ids.extend(items.iter().map(|i| i.id.clone()));
+    assert_eq!(items.len(), 1, "{items:?}");
+    assert_eq!(ids.len(), 1, "the request showed under {} ids", ids.len());
+    assert_eq!(
+        items[0].hook_event_id.as_deref(),
+        Some("e1"),
+        "the card answers through the hook"
+    );
+    let _ = fs::remove_dir_all(&dir);
+    // A PreToolUse with no PermissionRequest after it (no hook installed, or it failed): the dialog's card comes once
+    // the wait is over.
+    let dir = home("dialog-no-hook");
+    let mut q = Queue::open(&dir).unwrap();
+    q.register("s", AgentKind::Claude, 0).unwrap();
+    q.observe("s", "PreToolUse", &call, "hook", 20).unwrap();
+    q.screen(
+        "s",
+        frame.kind.clone(),
+        frame.text.clone(),
+        frame.choices.clone(),
+        20 + 10_000,
+    )
+    .unwrap();
+    assert_eq!(q.items_of("s").len(), 1);
+    let _ = fs::remove_dir_all(&dir);
+}
