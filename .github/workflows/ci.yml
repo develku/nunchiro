@@ -62,6 +62,8 @@ jobs:
 
   # clippy, doctests and one build of every test binary; the partitions below run the archive.
   rust-build:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -121,13 +123,15 @@ jobs:
           cargo nextest run --archive-file nextest-archive.tar.zst --workspace-remap . --extract-to . --extract-overwrite
           --config-file scripts/nextest.toml --no-tests fail --test-threads 4 --partition count:${{ matrix.partition }}/${{ strategy.job-total }}
 
-  # Pull requests skip the app check when no app input changed (scripts/check-app.sh APP_INPUTS); it saves a macOS
-  # runner, of which the free plan has 5. Main and merge-queue runs always check the app.
+  # Pull requests skip the app check when no app input changed (scripts/check-app.sh APP_INPUTS), and the Rust and web
+  # jobs when only safe docs changed (scripts/docs-only.sh); each saves macOS runners, of which the free plan has 5.
+  # Main and merge-queue runs always run every job (main saves the caches, and scripts/measure/ci-log.py reads its runs).
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       app: ${{ steps.app.outputs.needed }}
+      docs_only: ${{ steps.docs.outputs.only }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -142,6 +146,15 @@ jobs:
             case $rc in 0) ;; 1) needed=false ;; *) echo "check-app.sh --needed exited $rc" >&2; exit 1 ;; esac
           fi
           echo "needed=$needed" >> "$GITHUB_OUTPUT"
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+      - id: docs
+        run: |
+          # Fails open to running everything: only exit 0 skips; 1, a bad ref or a broken script all give false.
+          only=false
+          if [ "$EVENT" = pull_request ] && scripts/docs-only.sh "origin/$BASE"; then only=true; fi
+          echo "only=$only" >> "$GITHUB_OUTPUT"
         env:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.base_ref }}
@@ -171,6 +184,8 @@ jobs:
 
   # cli docs, the Python scenario suite and the Playwright core set: all three need the core binary.
   web:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -206,8 +221,8 @@ jobs:
           SCENARIO_JOBS: 2
 
   # The one required check of the merge queue. `always()`: a skipped or cancelled job must still fail it (T3 Code
-  # ci.yml:660-696; Orca pr.yml:1279). Add every new job to `needs`. The one allowed skip: `app` when `changes`
-  # succeeded and said no app input changed.
+  # ci.yml:660-696; Orca pr.yml:1279). Add every new job to `needs`. The allowed skips: `app` when `changes` said no app
+  # input changed, and `rust-build`, `rust-test` and `web` when `changes` said only safe docs changed.
   gate:
     if: always()
     needs: [lint, changes, rust-build, rust-test, app, web]
@@ -218,5 +233,6 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          echo "$RESULTS" | jq -e '.changes.outputs.app as $app | all(to_entries[];
-            .value.result == "success" or (.key == "app" and .value.result == "skipped" and $app == "false"))' > /dev/null
+          echo "$RESULTS" | jq -e '.changes.outputs.app as $app | .changes.outputs.docs_only as $docs | all(to_entries[];
+            .value.result == "success" or (.key == "app" and .value.result == "skipped" and $app == "false")
+            or ((.key == "rust-build" or .key == "rust-test" or .key == "web") and .value.result == "skipped" and $docs == "true"))' > /dev/null
