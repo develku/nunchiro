@@ -104,7 +104,8 @@ function Dialog({ core, t, projects: listed, front, open, onClose }: Props & { o
   };
   const model = picks.model ? t('bots.new.pinned', { model: pairText(t, picks.kind, { model: picks.model, effort: picks.effort || null }, { agent: picks.agent }) }) : t('bots.new.follows');
   return (
-    <div className="rmscrim" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+    // A press beside the dialog closes it only while nothing is typed: words are never lost to a stray click.
+    <div className="rmscrim" onPointerDown={(e) => e.target === e.currentTarget && !name && !job && onClose()}>
       <form ref={box} className="newbot" data-new-bot data-tile={face.tile} role="dialog" aria-modal="true" aria-label={t('bots.new.title')} aria-busy={busy || undefined} onSubmit={(e) => void submit(e)} onKeyDown={key}>
         <h2>{t('bots.new.title')}</h2>
         <div className="nb-id">

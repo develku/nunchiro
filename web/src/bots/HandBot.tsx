@@ -63,7 +63,7 @@ function Dialog({ core, t, sessions, team: join, open, worktree, onClose }: Prop
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) return (e.preventDefault(), box.current?.requestSubmit());
   };
   return (
-    <div className="rmscrim" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="rmscrim" onPointerDown={(e) => e.target === e.currentTarget && !goal && onClose()}>
       <form ref={box} className="newbot handbot" data-hand-bot role="dialog" aria-modal="true" aria-label={title} aria-busy={busy || undefined} onSubmit={(e) => void submit(e)} onKeyDown={key}>
         <h2>{title}</h2>
         <p className="nb-note">{t('bots.hand.note')}</p>

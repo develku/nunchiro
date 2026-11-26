@@ -203,6 +203,16 @@ test('hand_worktree_to_bot: a worktree row hands its worktree to a bot, whose ch
   expect(hand).toContain(wt.path);
   expect(hand).toContain('Review what is there.');
   await expect(app.locator('.shead')).toContainText('Ori');
+  // Handed to the project's own Lead, the worktree also joins that Lead's team, as "Hand to the lead" does.
+  const teamOf = () => (core.cli('worktree', 'list').worktrees as { path: string; team?: string }[]).find((w) => w.path === wt.path)?.team;
+  expect(teamOf()).toBeUndefined();
+  await app.locator(`.tree [data-wt="${wt.path}"] [data-menu="worktree"]`).first().click({ button: 'right' });
+  await app.getByRole('menuitem', { name: 'Hand to a bot…' }).click();
+  await dlg.locator('[data-hand-to="bot-dalsu"]').click();
+  await dlg.locator('[data-hand-go]').click();
+  await expect(dlg).toHaveCount(0);
+  await expect.poll(teamOf).toBe('bot-dalsu');
+  await expect(app.locator('.shead')).toContainText('Dalsu');
 });
 
 // Pictures for the comparison with the mockup, on request: PW_OPT_IN=shots ... --project shots -g bots_new_shots
