@@ -131,11 +131,14 @@ jobs:
           fetch-depth: 0
       - id: app
         run: |
-          if [ "$EVENT" != pull_request ] || scripts/check-app.sh --needed "origin/$BASE"; then
-            echo needed=true >> "$GITHUB_OUTPUT"
-          else
-            echo needed=false >> "$GITHUB_OUTPUT"
+          # Only exit 1 means "unchanged"; any other failure (a bad ref, a broken script) fails this job and so gate.
+          needed=true
+          if [ "$EVENT" = pull_request ]; then
+            rc=0
+            scripts/check-app.sh --needed "origin/$BASE" || rc=$?
+            case $rc in 0) ;; 1) needed=false ;; *) echo "check-app.sh --needed exited $rc" >&2; exit 1 ;; esac
           fi
+          echo "needed=$needed" >> "$GITHUB_OUTPUT"
         env:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.base_ref }}
