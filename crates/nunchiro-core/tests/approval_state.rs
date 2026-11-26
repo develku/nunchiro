@@ -936,7 +936,8 @@ mod agent_command {
         let script = s.home.join("token.sh");
         fs::write(
             &script,
-            "printf %s \"$NUNCHIRO_TOKEN\" > \"$NUNCHIRO_HOME/session.token\"\nexec sleep 60\n",
+            // The shell's redirect makes the file before printf writes it; the pause stands in for a busy host.
+            ": > \"$NUNCHIRO_HOME/session.token\"\nsleep 0.3\nprintf %s \"$NUNCHIRO_TOKEN\" >> \"$NUNCHIRO_HOME/session.token\"\nexec sleep 60\n",
         )
         .unwrap();
         let started = s.owner(json!({"op":"start","session":{"kind":"shell","project":s.home,"label":"s","args":["/bin/sh",script]}}));
