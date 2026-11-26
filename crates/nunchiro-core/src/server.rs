@@ -644,6 +644,12 @@ pub(crate) fn remote_from_owner(
             | Request::EditorApps // ticket 375: this Mac's apps
             | Request::ProblemFix { .. } // v2-5b
             | Request::LimitResume { .. } // ticket 372: a timer that types into a local session
+            | Request::Typing { .. } // the owner's typing and his choices on a waiting message stay local
+            | Request::SendNow { .. }
+            | Request::SendLater { .. }
+            | Request::SendAttach { .. }
+            | Request::SendDetach { .. }
+            | Request::Direct { .. }
             | Request::TeamOpen { .. } // ticket 990: a seat opens on this Mac, for its own lead
             | Request::Task { .. } // ticket 990 slice g: the ledger is this core's
             | Request::Note { .. } // ticket 990 slice h

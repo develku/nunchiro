@@ -532,6 +532,7 @@ fn chat_recovery_keeps_distinct_journal_stop_texts_without_turn_ids() {
         let session = Session {
             side_chat: false,
             stopped_sends: Vec::new(),
+            send_waits: Default::default(),
             side_parent: None,
             teammate: None,
             resumed_from: vec![],
@@ -574,6 +575,7 @@ fn chat_recovery_keeps_distinct_journal_stop_texts_without_turn_ids() {
             home_mode: None,
             permission_mode: None,
             starting: false,
+            at_box: false,
             ran_mode: None,
             mode_state: None, // CHAT-MODELIST
             parent: None,

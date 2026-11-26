@@ -18,6 +18,14 @@ Usage:
       (core, window, WebKit helpers, holders) by ps and footprint, with the number of Claude and Codex sessions it
       holds. Opens no file of the owner's home and sends the core nothing. Writes its two figures into
       docs/measure/manual-<date>.json. Run it while the agents wait at their prompts.
+  scorecard.py accuracy --machine ALIAS --remote-project DIR [--project-root DIR] | --self-test
+      The owner-run trial of part p34 (scripts/measure/accuracy.py, real agents on the owner's sign-ins, one Claude seat
+      on a second Mac). Writes the raw records to docs/measure/accuracy-<date>.json, and the four p34 figures into
+      docs/measure/manual-<date>.json only when the run is counted; a self-test never is.
+  scorecard.py waits [--days 7] [--every 30] | --report FILE
+      Read only, p34's field figure on the owner's own app: every --every seconds, whether each agent session's screen
+      shows a dialog while the core holds no card for it. Appends each sample to docs/measure/waits-<date>.jsonl and,
+      after 7 days, writes waited_no_card_min_per_day into the manual file.
   scorecard.py dev [--target DIR] [--out FILE]
       Maintainability figures (part p26): a cold and a warm debug build of the Rust workspace in DIR (a fresh cargo
       target, removed first), the web build, the gate's Rust test stage (scripts/cargo-test-gate.sh) on that target,
@@ -85,6 +93,7 @@ ANCHORS = {
     "prompt_delivery_ms": (1000, 10000),
     # p34 multi-agent accuracy (trial)
     "delivery_missed_per_1000": (0, 5), "state_match_pct": (100, 90), "cards_shown_pct": (100, 95), "outward_unapproved": (0, 1),
+    "startup_cards_pct": (100, 95), "waited_no_card_min_per_day": (0, 12),
     # p35 bot quality
     "bot_task_success_pct": (100, 0), "bot_owner_touches": (0, 3), "first_pass_review_pct": (100, 50),
 }
@@ -101,7 +110,8 @@ NUMBER_PARTS = {
             "largest_file_lines", "files_over_2000", "shared_files_open_lanes"],
     "p27": ["change_failure_pct", "restore_median_min"],
     "p33": ["chat_open_5000_ms", "stream8_worst_frame_ms", "mem_growth_24h_ratio", "prompt_delivery_ms"],
-    "p34": ["delivery_missed_per_1000", "state_match_pct", "cards_shown_pct", "outward_unapproved"],
+    "p34": ["delivery_missed_per_1000", "state_match_pct", "cards_shown_pct", "outward_unapproved", "startup_cards_pct",
+            "waited_no_card_min_per_day"],
     "p35": ["bot_task_success_pct", "bot_owner_touches", "first_pass_review_pct"],
 }
 # Figures no script measures yet (rubric.md, "Owner-run steps"): read from docs/measure/manual-<date>.json, where each
@@ -1159,11 +1169,44 @@ def weigh_cmd(a):
     if len(agents) < 5:
         print(f"not written: the rubric's figure needs at least 5 Claude or Codex sessions, this app holds {len(agents)}")
         return
-    path = Path(a.out) if a.out else OUT_DIR / f"manual-{time.strftime('%Y-%m-%d')}.json"
+    write_manual(a.out, dict(idle_mib_5=mib, idle_cpu_pct_5=cpu), evidence)
+
+
+def waits_cmd(a):
+    """p34's field figure (accuracy.waits_main, its arguments passed on); written only after 7 days of samples."""
+    import accuracy
+    res = accuracy.waits_main(a.args)
+    if not res["enough"] or res["waited_no_card_min_per_day"] is None:
+        print(f"not written: {res['days']} days of samples, the rubric's figure needs 7")
+        return
+    write_manual(None, dict(waited_no_card_min_per_day=res["waited_no_card_min_per_day"]),
+                 f"scorecard.py waits: {res['samples']} samples every {res['every_s']} s over {res['days']} days of the owner's "
+                 f"own app (each agent session's screen against its cards); raw samples {Path(res['raw']).name}")
+
+
+def write_manual(out, values, evidence):
+    """An owner-run step's figures into docs/measure/manual-<date>.json (or `out`), other figures kept."""
+    path = Path(out) if out else OUT_DIR / f"manual-{time.strftime('%Y-%m-%d')}.json"
     doc = json.loads(path.read_text()) if path.is_file() else dict(date=time.strftime("%Y-%m-%d"), figures={})
-    doc["figures"].update(idle_mib_5=dict(value=mib, evidence=evidence), idle_cpu_pct_5=dict(value=cpu, evidence=evidence))
+    doc["figures"].update({k: dict(value=v, evidence=evidence) for k, v in values.items()})
     path.write_text(json.dumps(doc, indent=1) + "\n")
-    print(f"wrote idle_mib_5 and idle_cpu_pct_5 to {path}")
+    print(f"wrote {', '.join(values)} to {path}")
+
+
+def accuracy_cmd(a):
+    """p34's trial (accuracy.py, its arguments passed on); only a counted run writes the four figures."""
+    import accuracy
+    res, raw = accuracy.main(a.args)
+    if not res["counted"]:
+        print(f"not written ({res['mode']}): " + "; ".join(res["not_counted"]))
+        return
+    t, r = res["figures"]["total"], res["figures"]["remote"]
+    names = [k for k in NUMBER_PARTS["p34"] if k != "waited_no_card_min_per_day"]  # the field figure is `waits`
+    agents = "; ".join(f"{x['where']} {x['kind']} {x['version']}" for x in res["agents"])
+    evidence = (f"scorecard.py accuracy {res['started']}: {res['minutes']} min, {res['prompts']} prompts to 5 real seats "
+                f"({agents}), one Claude on the second Mac '{res['machine']}' whose own figures were "
+                + ", ".join(f"{k} {r[k]}" for k in names) + f"; counts {t['counts']}; raw records {raw.name}")
+    write_manual(None, {k: t[k] for k in names}, evidence)
 
 
 def merge_cmd(a):
@@ -1207,12 +1250,20 @@ def main():
     t = sub.add_parser("tests")
     t.add_argument("--target", help="CARGO_TARGET_DIR for the cargo test commands")
     t.add_argument("--out")
+    x = sub.add_parser("accuracy", add_help=False)
+    x.add_argument("args", nargs=argparse.REMAINDER)
+    x = sub.add_parser("waits", add_help=False)
+    x.add_argument("args", nargs=argparse.REMAINDER)
     w = sub.add_parser("weigh")
     w.add_argument("--secs", type=int, default=60)
     w.add_argument("--out")
-    a = ap.parse_args()
+    a, rest = ap.parse_known_args()
+    if a.cmd in ("accuracy", "waits"):
+        a.args = a.args + rest  # accuracy.py's own options, --help too
+    elif rest:
+        ap.error("unrecognized arguments: " + " ".join(rest))
     {"run": run_cmd, "ops": ops_cmd, "dev": dev_cmd, "merge": merge_cmd, "check": check_cmd, "page": page_cmd,
-     "tests": tests_cmd, "weigh": weigh_cmd}[a.cmd](a)
+     "tests": tests_cmd, "weigh": weigh_cmd, "accuracy": accuracy_cmd, "waits": waits_cmd}[a.cmd](a)
 
 
 if __name__ == "__main__":

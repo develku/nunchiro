@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>내 칸은 내 것</title>
+<style>
+/* Colour and size values copied from web/src/tokens.css (nunchiro-pub main). No network, no external files. */
+:root{--page:#f6f6f4;--panel:#ffffff;--text:#1f2328;--muted:#59636e;--faint:#818b98;--line:#d1d9e0;
+--you:#bc4c00;--you-bg:#fff1e5;--run:#0969da;--ok:#1a7f37;--bad:#cf222e;--on-status:#ffffff;--idle:#8c959f;--ring-focus:#6e7781;
+--tint-1:rgb(15 20 30/.045);--tint-2:rgb(15 20 30/.085);--shadow-card:0 1px 3px #0000001f;--shadow-float:0 12px 32px rgb(0 0 0/.14),0 1px 3px rgb(0 0 0/.08);
+--r-6:6px;--r-8:8px;--r-12:12px;
+--font-ui:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Segoe UI',sans-serif;--font-code:'SF Mono',Menlo,'D2Coding',monospace;color-scheme:light}
+[data-theme=dark]{--page:#0d1117;--panel:#151b23;--text:#e6edf3;--muted:#9198a1;--faint:#9198a1;--line:#3d444d;
+--you:#f0883e;--you-bg:#3a2614;--run:#4493f8;--ok:#3fb950;--bad:#f85149;--on-status:#151b23;--idle:#7d8c86;--ring-focus:#8b949e;
+--tint-1:rgb(255 255 255/.055);--tint-2:rgb(255 255 255/.1);--shadow-card:0 1px 3px #0000005c;--shadow-float:0 12px 32px rgb(0 0 0/.45),0 1px 3px rgb(0 0 0/.3);color-scheme:dark}
+*{box-sizing:border-box}
+html{word-break:keep-all;overflow-wrap:break-word}
+body{margin:0;font:13px/1.55 var(--font-ui);color:var(--text);background:var(--page)}
+h1,h2,h3,p{margin:0}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+code{font:12px var(--font-code);background:var(--tint-1);padding:1px 5px;border-radius:4px}
+kbd{font:11px var(--font-code);padding:1px 5px;border-radius:4px;background:var(--tint-2)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px 80px}
+.nav{position:sticky;top:0;z-index:9;display:flex;gap:4px;align-items:center;padding:8px 0;background:var(--page);box-shadow:0 1px 0 var(--tint-2);overflow-x:auto}
+.nav a{padding:3px 9px;border-radius:6px;color:var(--muted);white-space:nowrap;text-decoration:none}.nav a:hover{background:var(--tint-1);color:var(--text)}
+.nav button{margin-left:auto;border-radius:6px;padding:4px 12px;background:var(--tint-2);white-space:nowrap}
+.top h1{font-size:26px;line-height:1.25;letter-spacing:-.01em;margin:26px 0 8px}
+.top p{color:var(--muted);max-width:880px;font-size:14px}
+.sum{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:16px;margin-top:18px;align-items:stretch}
+@media(max-width:860px){.sum{grid-template-columns:1fr}}
+.card{background:var(--panel);border-radius:var(--r-12);box-shadow:var(--shadow-card)}
+.sum .card{padding:16px 18px}
+.sum ol{margin:8px 0 0;padding-left:18px}.sum li{margin:0 0 5px}
+.fig b{display:block;font-size:44px;line-height:1;letter-spacing:-.03em;margin:6px 0 6px}
+.fig small{color:var(--muted);display:block}
+.cap{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.panel{margin:46px 0 0;scroll-margin-top:50px}
+.phead{display:flex;gap:14px;align-items:flex-start;margin:0 0 14px}
+.num{font-size:40px;font-weight:700;line-height:1;color:var(--faint);letter-spacing:-.04em;min-width:30px}
+.phead h2{font-size:19px;letter-spacing:-.01em}
+.phead p{color:var(--muted);max-width:860px}
+.two{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:18px;align-items:start}
+.half{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.third{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media(max-width:1000px){.two,.half,.third{grid-template-columns:1fr}}
+.when{font-size:12px;color:var(--muted);margin:0 0 6px}.when b{color:var(--text)}
+.notes{font-size:13px}.notes ul{margin:6px 0 12px;padding-left:16px}.notes li{margin:0 0 5px}
+
+/* the app window: tree, the session's pane, the composer */
+.win{background:var(--page);border-radius:var(--r-12);box-shadow:var(--shadow-float),0 0 0 1px var(--tint-2);overflow:hidden;display:grid;grid-template-columns:176px minmax(0,1fr)}
+.win.solo{grid-template-columns:1fr}
+.tree{padding:10px 6px;background:var(--tint-1);font-size:12px}
+.tree .proj{font-weight:600;color:var(--muted);padding:2px 8px 6px;font-size:11px}
+.trow{display:flex;align-items:center;gap:7px;height:28px;padding:0 6px 0 0;border-radius:var(--r-6);white-space:nowrap;position:relative}
+.trow.on{background:var(--tint-2)}
+.trow>i{width:3px;height:16px;border-radius:2px;background:var(--idle);flex:none}
+.trow>i.run{background:var(--run)}
+.trow>span{overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.face{display:inline-block;flex:none;width:var(--s,18px);height:var(--s,18px);border-radius:27%;overflow:hidden;vertical-align:middle}
+.face svg{display:block;width:100%;height:100%}
+.face.dim{opacity:.45}
+.knock{display:inline-flex;align-items:center;gap:2px;flex:none}
+.knock b{font-size:10px;font-weight:700;color:var(--muted)}
+.glyph{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:27%;background:var(--tint-2);color:var(--muted);font-size:10px;font-weight:700;flex:none}
+.pane{display:flex;flex-direction:column;min-width:0;background:var(--panel)}
+.chat{padding:12px 14px 6px;flex:1;min-height:120px;font-size:13px}
+.chat .u{margin:0 0 8px;padding:6px 10px;border-radius:var(--r-8);background:var(--tint-1);display:inline-block;max-width:90%}
+.chat .a{margin:0 0 8px;color:var(--text)}
+.chat .w{color:var(--muted);font-size:12px}
+.chat .from{display:flex;gap:8px;align-items:flex-start;margin:0 0 8px;padding:6px 10px;border-radius:var(--r-8);background:var(--tint-1);max-width:92%}
+.chat .from small{display:block;font-size:11px;color:var(--faint);font-weight:600}
+.comp{margin:6px 12px 12px;border-radius:var(--r-12);background:var(--panel);box-shadow:var(--shadow-card),0 0 0 1px var(--tint-2)}
+.comp.focus{box-shadow:var(--shadow-card),0 0 0 2px var(--ring-focus)}
+.comp .ta{padding:10px 12px 4px;min-height:44px;font-size:13px}
+.comp .ta .ph{color:var(--faint)}
+.comp .bar{display:flex;align-items:center;gap:6px;padding:4px 8px 8px;color:var(--muted);font-size:12px}
+.comp .bar .sp{margin-left:auto}
+.chipx{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px 0 3px;border-radius:999px;background:var(--tint-2);font-size:12px;margin:8px 0 0 10px}
+.chipx em{font-style:normal;color:var(--faint);margin-left:2px}
+.cur{display:inline-block;width:1.5px;height:15px;background:var(--text);vertical-align:-3px;margin-left:1px}
+.mine{background:var(--you-bg);border-radius:3px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 11px;border-radius:var(--r-6);background:var(--tint-2);font-weight:500;white-space:nowrap;font-size:12px}
+.btn.primary{background:var(--text);color:var(--panel)}
+.btn.quiet{background:none;color:var(--muted)}
+.btn.sm{height:22px;padding:0 8px}
+.line{display:flex;align-items:center;gap:8px;min-height:30px;padding:5px 12px;background:var(--tint-1);font-size:12px;color:var(--muted)}
+.line b{color:var(--text);font-weight:600}.line .sp{margin-left:auto}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--run);flex:none}.dot.ok{background:var(--ok)}.dot.n{background:var(--idle)}
+/* the knock's popovers */
+.pop{background:var(--panel);border-radius:var(--r-12);box-shadow:var(--shadow-float),0 0 0 1px var(--tint-2);padding:12px 14px;max-width:330px}
+.pop .hd{display:flex;align-items:center;gap:8px;font-weight:600}
+.pop .hd small{font-weight:400;color:var(--faint);margin-left:auto;font-size:11px}
+.pop .body{margin:8px 0;padding:8px 10px;border-radius:var(--r-8);background:var(--tint-1);font-size:12.5px}
+.pop .why{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.pop .acts{display:flex;flex-direction:column;gap:2px;margin:10px -6px -4px}
+.pop .acts button{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px;border-radius:var(--r-6);text-align:left;font-size:13px}
+.pop .acts button:hover,.pop .acts button.hot{background:var(--tint-1)}
+.pop .acts button small{margin-left:auto;color:var(--faint);font-size:11px}
+/* the terminal */
+.thead{display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;font-size:12px;color:var(--muted);box-shadow:inset 0 -1px 0 var(--tint-1)}
+.thead .sp{margin-left:auto}
+.term{font:12px/1.5 var(--font-code);padding:10px 12px 8px;white-space:pre;overflow:hidden;min-height:118px}
+.term .dim{color:var(--faint)}.term .rule{color:var(--line)}
+.term.direct{box-shadow:inset 0 0 0 2px var(--ring-focus)}
+.tcur{display:inline-block;width:7px;height:14px;background:var(--text);vertical-align:-2px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;vertical-align:top;padding:8px 12px}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:700}
+tr+tr td{box-shadow:inset 0 1px 0 var(--tint-1)}
+td small{color:var(--muted);display:block}
+.yes{color:var(--ok);font-weight:600}.no{color:var(--bad);font-weight:600}.mid{color:var(--you);font-weight:600}
+</style>
+</head>
+<body>
+<!-- Faces: the drawing of web/src/bots/Face.tsx (approved mockup docs/design/bots-1166.html), with fixed colours here. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="ada" viewBox="0 0 64 64"><rect width="64" height="64" fill="#ffd9bd"/><path d="M12 31 15 10 30 21ZM52 31 49 10 34 21Z" fill="#6b4a36" stroke="#6b4a36" stroke-width="4" stroke-linejoin="round"/><circle cx="32" cy="42" r="23" fill="#6b4a36"/><ellipse cx="32" cy="47" rx="16.5" ry="14" fill="#fff4ea"/><ellipse cx="25.5" cy="44" rx="3.3" ry="4.6" fill="#2b2118"/><ellipse cx="38.5" cy="44" rx="3.3" ry="4.6" fill="#2b2118"/><ellipse cx="32" cy="52.5" rx="1.9" ry="2.2" fill="#2b2118"/></symbol>
+  <symbol id="bo" viewBox="0 0 64 64"><rect width="64" height="64" fill="#c9ecd9"/><circle cx="14" cy="23" r="8" fill="#3f6b5a"/><circle cx="50" cy="23" r="8" fill="#3f6b5a"/><circle cx="32" cy="42" r="23" fill="#3f6b5a"/><ellipse cx="32" cy="47" rx="16.5" ry="14" fill="#f2fbf6"/><ellipse cx="25.5" cy="44" rx="3.3" ry="4.6" fill="#1d2b25"/><ellipse cx="38.5" cy="44" rx="3.3" ry="4.6" fill="#1d2b25"/><ellipse cx="32" cy="52.5" rx="1.9" ry="2.2" fill="#1d2b25"/></symbol>
+</svg>
+
+<div class="wrap">
+<div class="nav">
+  <a href="#p1">1 쓰는 중의 노크</a><a href="#p2">2 노크를 열면</a><a href="#p3">3 틈에 전달</a><a href="#p4">4 터미널에 직접 쓰기</a><a href="#p5">5 되돌리기</a><a href="#p6">6 p34 수치</a><a href="#p7">7 만드는 순서</a><a href="#p8">8 다른 앱</a>
+  <button onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">밝게 / 어둡게</button>
+</div>
+
+<div class="top">
+  <h1>내 칸은 내 것: 쓰던 글은 Nunchiro의 입력칸에만 있고, 남의 메시지는 문 밖에서 노크합니다</h1>
+  <p>1차 안(글을 잠깐 치워 두고 보내고 돌려놓기)은 쓰는 도중에 내 칸을 건드리므로 버립니다. 2차 안에서는 에이전트의 터미널 입력칸에 Nunchiro만 글을 넣고, 내가 쓰는 동안에는 아무것도 들어가지 않습니다.</p>
+  <div class="sum">
+    <div class="card">
+      <div class="cap">결정</div>
+      <ol>
+        <li><b>내 글의 자리는 Nunchiro 입력칸 하나입니다.</b> 터미널에서 글자를 치면 그 글자는 Nunchiro 입력칸으로 갑니다. 터미널에 직접 쓰고 싶으면 <code>Type in terminal</code>을 켭니다.</li>
+        <li><b>남의 메시지는 틈에만 들어갑니다.</b> 틈은 에이전트가 차례를 끝냈고, 내가 5초 동안 치지 않았고, 터미널 입력칸이 비어 있는 때입니다.</li>
+        <li><b>기다리는 메시지는 세션 줄에 보낸 봇의 얼굴로 보입니다.</b> 올리면 미리 보기, 누르면 <code>Send now</code> / <code>Attach to my next prompt</code> / <code>Later</code>.</li>
+        <li><b>내가 보낸 프롬프트</b>는 차례가 끝나면 바로 들어갑니다. 내가 다음 글을 쓰고 있어도 기다리지 않습니다.</li>
+        <li><b>⌘Z</b>는 Nunchiro가 칸에 넣은 것을 빼고 내 글을 글자 그대로 되돌립니다.</li>
+      </ol>
+    </div>
+    <div class="card fig">
+      <div class="cap">p34 전달 예상치</div>
+      <b>0 / 1,000</b>
+      <small>500건 중 0건 놓침. 아직 잰 값이 아닙니다. 이유와 조건은 6번에 있습니다.</small>
+    </div>
+  </div>
+</div>
+
+<section class="panel" id="p1">
+  <div class="phead"><div class="num">1</div><div>
+    <h2>쓰는 중에 메시지가 오면: 줄에 얼굴이 뜨고, 칸에는 아무것도 들어가지 않습니다</h2>
+    <p>parser-fix에게 보낼 글을 쓰는 중에 리드 Ada와 일꾼 Bo가 그 세션으로 메시지를 보냈습니다. 세션 줄 오른쪽에 두 얼굴이 생깁니다. 입력칸과 대화는 그대로입니다.</p>
+  </div></div>
+  <div class="two">
+    <div class="win">
+      <div class="tree"><div class="proj">nunchiro</div>
+        <div class="trow"><i class="run"></i><span>Ada (lead)</span></div>
+        <div class="trow on"><i></i><span>parser-fix</span><span class="knock"><span class="face"><svg><use href="#ada"/></svg></span><span class="face"><svg><use href="#bo"/></svg></span></span></div>
+        <div class="trow"><i class="run"></i><span>Bo</span></div>
+        <div class="trow"><i></i><span>docs</span></div></div>
+      <div class="pane">
+        <div class="chat"><div class="u">Fix the tokenizer for nested quotes.</div>
+          <div class="a">Done. 3 files changed, 14 tests pass.</div></div>
+        <div class="comp focus"><div class="ta">Good. Now also rename the old flag and keep the<span class="cur"></span></div>
+          <div class="bar"><span>Claude · auto</span><span class="sp"><kbd>⏎</kbd> Send</span></div></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="cap">보이는 것</div>
+      <ul>
+        <li>세션 줄: 보낸 봇의 얼굴. 셋까지 보이고 넘으면 <code>+2</code>. 줄의 상태 색은 바뀌지 않습니다.</li>
+        <li>봇이 아닌 보낸 이: 예약은 <span class="glyph">◷</span>, 코어는 <span class="glyph">N</span>, 봇 얼굴이 없는 세션은 이름 첫 글자.</li>
+        <li>다른 세션을 보고 있어도 얼굴은 그 줄에 뜹니다. 소리와 알림은 내지 않습니다.</li>
+      </ul>
+      <div class="cap">"쓰는 중"의 뜻</div>
+      <ul>
+        <li>이 세션의 입력칸(또는 직접 쓰기를 켠 터미널)에 마지막 키를 누른 지 5초가 안 됨. 한글 조합 중도 포함합니다.</li>
+        <li>쓰다 만 글이 칸에 남아 있기만 한 것은 쓰는 중이 아닙니다. 글은 Nunchiro 칸에 있어 전달이 건드리지 않습니다.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p2">
+  <div class="phead"><div class="num">2</div><div>
+    <h2>노크를 열면: 미리 보기와 세 가지 선택</h2>
+    <p>얼굴에 마우스를 올리면 왼쪽이, 누르면 오른쪽이 뜹니다. 아무것도 고르지 않으면 다음 틈에 저절로 들어갑니다.</p>
+  </div></div>
+  <div class="half">
+    <div>
+      <p class="when"><b>올렸을 때</b> · 미리 보기</p>
+      <div class="pop">
+        <div class="hd"><span class="face" style="--s:24px"><svg><use href="#ada"/></svg></span>Ada<small>14:02</small></div>
+        <div class="body">Run the full test suite and report failures before you touch the parser again.</div>
+        <div class="why"><span class="dot n"></span>Goes in when you pause typing.</div>
+      </div>
+      <div class="notes" style="margin-top:12px"><ul>
+        <li>아래 한 줄은 기다리는 이유입니다. 네 가지 가운데 하나입니다:<br><code>Goes in when you pause typing.</code><br><code>Goes in when this turn ends.</code><br><code>Waiting: you are typing in the terminal.</code><br><code>Later: after your next prompt.</code></li>
+        <li>글은 처음 300자까지 보입니다.</li>
+      </ul></div>
+    </div>
+    <div>
+      <p class="when"><b>눌렀을 때</b> · 세 가지 선택</p>
+      <div class="pop">
+        <div class="hd"><span class="face" style="--s:24px"><svg><use href="#ada"/></svg></span>Ada<small>14:02</small></div>
+        <div class="body">Run the full test suite and report failures before you touch the parser again.</div>
+        <div class="acts">
+          <button class="hot"><b>Send now</b><small>⏎</small></button>
+          <button>Attach to my next prompt</button>
+          <button>Later</button>
+        </div>
+      </div>
+      <div class="notes" style="margin-top:12px"><ul>
+        <li><code>Send now</code>: 내가 쓰는 중이어도 지금 넣습니다. 에이전트가 일하는 중이면 그 차례가 끝나는 즉시 넣습니다.</li>
+        <li><code>Attach to my next prompt</code>: 내 다음 프롬프트 아래에 붙여 한 번에 보냅니다. 입력칸 위에 표시가 붙습니다 (5번).</li>
+        <li><code>Later</code>: 내 다음 프롬프트의 차례가 끝날 때까지 미룹니다. 얼굴은 흐리게 남습니다.</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p3">
+  <div class="phead"><div class="num">3</div><div>
+    <h2>틈에 전달: 5초 멈추면 들어가고, 내 글은 그대로입니다</h2>
+    <p>에이전트가 차례를 끝낸 상태에서 5초 동안 치지 않으면 기다리던 메시지가 순서대로 하나씩 들어갑니다. 대화에는 누가 보냈는지와 함께 한 줄로 보입니다.</p>
+  </div></div>
+  <div class="half">
+    <div>
+      <p class="when"><b>틈</b> · Ada의 메시지가 들어감</p>
+      <div class="win">
+        <div class="tree"><div class="proj">nunchiro</div>
+          <div class="trow"><i class="run"></i><span>Ada (lead)</span></div>
+          <div class="trow on"><i class="run"></i><span>parser-fix</span><span class="knock"><span class="face"><svg><use href="#bo"/></svg></span></span></div>
+          <div class="trow"><i class="run"></i><span>Bo</span></div></div>
+        <div class="pane">
+          <div class="chat"><div class="a">Done. 3 files changed, 14 tests pass.</div>
+            <div class="from"><span class="face" style="--s:20px"><svg><use href="#ada"/></svg></span><div><small>Message from Ada</small>Run the full test suite and report failures before you touch the parser again.</div></div>
+            <div class="w">· Running tests…</div></div>
+          <div class="comp"><div class="ta">Good. Now also rename the old flag and keep the</div>
+            <div class="bar"><span>Claude · auto</span><span class="sp"><kbd>⏎</kbd> Queue</span></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <ul>
+        <li>한 틈에 하나만 들어갑니다. Bo의 메시지는 이 차례가 끝난 다음 틈을 기다립니다. 일꾼들의 "끝났습니다" 알림은 지금처럼 하나로 묶여 들어갑니다.</li>
+        <li>이때 내가 Enter를 누르면 내 글은 지금처럼 대기열로 갑니다(<code>Queue</code>). 바로 넣으려면 지금처럼 <kbd>⌃⏎</kbd>입니다.</li>
+        <li>내가 보낸 프롬프트는 5초를 기다리지 않습니다. 차례가 끝나면 바로 들어가고, 남의 메시지보다 먼저 갑니다.</li>
+        <li>차례가 끝나는 때는 지금 코어가 쓰는 신호 그대로입니다: Claude는 Stop 훅, Codex는 입력칸으로 돌아온 화면.</li>
+        <li>정직하게: 5초 넘게 생각에 잠기면 메시지가 들어가 에이전트가 일을 시작합니다. 내 글은 건드리지 않습니다. 싫으면 <code>Later</code>를 누릅니다.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p4">
+  <div class="phead"><div class="num">4</div><div>
+    <h2>터미널에 직접 쓰기: 켜야만 되고, 켠 동안에는 아무것도 들어가지 않습니다</h2>
+    <p>에이전트 세션의 터미널에서 글자를 치면 그 글자는 Nunchiro 입력칸으로 갑니다. 방향키, Enter, Esc, Ctrl+C, Shift+Tab 같은 조작 키는 지금처럼 터미널로 갑니다. 질문 창이나 모델 고르기가 떠 있을 때는 글자도 터미널로 갑니다.</p>
+  </div></div>
+  <div class="third">
+    <div>
+      <p class="when"><b>꺼짐(기본)</b> · 터미널에서 "re"를 침</p>
+      <div class="win solo"><div class="pane">
+        <div class="thead"><span>parser-fix · terminal</span><span class="sp"><button class="btn sm">Type in terminal</button></span></div>
+        <div class="term"><span class="dim">⏺ Done. 3 files changed.</span>
+<span class="rule">──────────────────────────</span>
+❯ <span class="dim">Try "fix lint errors"</span>
+<span class="rule">──────────────────────────</span></div>
+        <div class="line"><span class="dot n"></span><span>Typing goes to the composer.</span></div>
+        <div class="comp focus"><div class="ta">re<span class="cur"></span></div><div class="bar"><span>Claude · auto</span><span class="sp"><kbd>⏎</kbd> Send</span></div></div>
+      </div></div>
+    </div>
+    <div>
+      <p class="when"><b>켬</b> · 터미널에 직접 쓰는 중</p>
+      <div class="win solo"><div class="pane">
+        <div class="thead"><span>parser-fix · terminal</span><span class="knock"><span class="face dim"><svg><use href="#ada"/></svg></span></span><span class="sp"><button class="btn sm primary">Done</button></span></div>
+        <div class="term direct"><span class="dim">⏺ Done. 3 files changed.</span>
+<span class="rule">──────────────────────────</span>
+❯ <span class="mine">/model op</span><span class="tcur"></span>
+<span class="rule">──────────────────────────</span></div>
+        <div class="line"><span class="dot n"></span><span><b>Typing in terminal.</b> Messages wait until you are done.</span></div>
+      </div></div>
+    </div>
+    <div>
+      <p class="when"><b>끄고 나감</b> · 남은 글을 Nunchiro 칸으로 가져옴</p>
+      <div class="win solo"><div class="pane">
+        <div class="thead"><span>parser-fix · terminal</span><span class="sp"><button class="btn sm">Type in terminal</button></span></div>
+        <div class="term"><span class="dim">⏺ Done. 3 files changed.</span>
+<span class="rule">──────────────────────────</span>
+❯ <span class="dim">Try "fix lint errors"</span>
+<span class="rule">──────────────────────────</span></div>
+        <div class="line"><span class="dot ok"></span><span>Your text from the terminal is now in the composer.</span><span class="sp"><button class="btn sm quiet">Undo <kbd>⌘Z</kbd></button></span></div>
+        <div class="comp"><div class="ta"><span class="mine">check the tokenizer aga</span></div><div class="bar"><span>Claude · auto</span><span class="sp"><kbd>⏎</kbd> Send</span></div></div>
+      </div></div>
+    </div>
+  </div>
+  <div class="notes" style="margin-top:14px">
+    <div class="cap">터미널 습관이 살아남는 길</div>
+    <table>
+      <tr><th>습관</th><th>2차 안에서</th><th>지금 이미 있는가</th></tr>
+      <tr><td>슬래시 명령</td><td>Nunchiro 칸에서 <code>/</code> 메뉴로 고르고 보냅니다. 에이전트가 띄우는 고르기 창은 터미널에서 방향키와 Enter로 답합니다.</td><td><span class="yes">있음</span> (chat/ComposerMenu.tsx)</td></tr>
+      <tr><td>Shift+Tab (권한 방식)</td><td>Nunchiro 칸의 권한 표시를 누르거나, 터미널에서 그대로 누릅니다.</td><td><span class="yes">있음</span> (chat/PermChip.tsx)</td></tr>
+      <tr><td>Esc, Ctrl+C</td><td>Nunchiro 칸에서 Esc는 멈춤입니다. 터미널에서는 그대로 갑니다.</td><td><span class="yes">있음</span> (ComposerWidget.tsx:402)</td></tr>
+      <tr><td>질문, 권한 창에 답하기</td><td>카드로 답하거나 터미널에서 그대로 답합니다.</td><td><span class="yes">있음</span></td></tr>
+      <tr><td>터미널에 바로 글 쓰기</td><td><code>Type in terminal</code> 버튼이나 단축키로 켭니다. 터미널에서 포커스가 나가거나 <code>Done</code>을 누르면 꺼집니다.</td><td><span class="mid">새로 만듦</span></td></tr>
+      <tr><td>터미널에 쓰다 남긴 글</td><td>끌 때 Nunchiro 칸으로 가져오고 터미널 칸은 비웁니다. 한 줄 글만 가져옵니다. 여러 줄이거나 붙여넣기 표시가 있으면 그대로 두고, 남의 메시지는 그 글이 없어질 때까지 기다립니다.</td><td><span class="mid">새로 만듦</span> (Orca가 같은 일을 함)</td></tr>
+    </table>
+    <ul style="margin-top:10px">
+      <li>셸 세션의 터미널은 달라지지 않습니다. 글자를 돌리는 것은 Claude와 Codex 세션뿐입니다.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="panel" id="p5">
+  <div class="phead"><div class="num">5</div><div>
+    <h2>되돌리기: ⌘Z 한 번으로 Nunchiro가 넣은 것을 빼고 내 글을 그대로</h2>
+    <p>Nunchiro가 칸에 무언가를 넣을 때마다 그 직전의 내 글을 글자 그대로 기억합니다. 그 뒤로 내가 고치지 않았다면 ⌘Z가 그것을 되돌립니다. 내가 고친 뒤에는 ⌘Z가 보통의 글자 되돌리기로 돌아갑니다.</p>
+  </div></div>
+  <div class="half">
+    <div>
+      <p class="when"><b>전</b> · Ada의 메시지를 내 다음 프롬프트에 붙여 둠</p>
+      <div class="win solo"><div class="pane">
+        <div class="comp focus"><span class="chipx"><span class="face" style="--s:16px"><svg><use href="#ada"/></svg></span>Attached: message from Ada<em>×</em></span>
+          <div class="ta">Good. Now also rename the old flag and keep the<span class="cur"></span></div>
+          <div class="bar"><span>Claude · auto</span><span class="sp"><kbd>⌘Z</kbd> Undo attach</span></div></div>
+      </div></div>
+    </div>
+    <div>
+      <p class="when"><b>⌘Z 뒤</b> · 붙임이 빠지고 메시지는 줄로 돌아감</p>
+      <div class="win solo"><div class="pane">
+        <div class="comp focus"><div class="ta">Good. Now also rename the old flag and keep the<span class="cur"></span></div>
+          <div class="bar"><span>Claude · auto</span><span class="sp"><kbd>⏎</kbd> Send</span></div></div>
+        <div class="line"><span class="dot n"></span><span>Put back. Ada's message waits on the row again.</span></div>
+      </div></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <table>
+      <tr><th>Nunchiro가 넣은 것</th><th>⌘Z가 하는 일</th></tr>
+      <tr><td>내 칸: 붙여 둔 메시지 표시</td><td>표시를 빼고, 메시지는 세션 줄에서 <code>Later</code>로 다시 기다립니다.</td></tr>
+      <tr><td>내 칸: 터미널에서 가져온 글</td><td>칸을 가져오기 전 글로 되돌리고, 그 글을 터미널 칸에 다시 붙여 넣습니다. Enter는 누르지 않습니다.</td></tr>
+      <tr><td>내 칸: 보내기 취소로 돌려받은 글</td><td>돌려받기 전 글로 되돌립니다.</td></tr>
+      <tr><td>터미널 칸: 넣었지만 아직 Enter 전인 메시지, 또는 Enter가 안 먹어 남은 메시지</td><td>터미널 칸을 비우고, 메시지는 세션 줄에서 <code>Later</code>로 다시 기다립니다.</td></tr>
+      <tr><td>이미 에이전트가 받은 메시지</td><td><span class="mid">되돌릴 수 없습니다.</span> 에이전트가 이미 읽었습니다. 멈추려면 지금처럼 Esc입니다.</td></tr>
+    </table>
+  </div>
+</section>
+
+<section class="panel" id="p6">
+  <div class="phead"><div class="num">6</div><div>
+    <h2>p34 전달 수치: 0 / 1,000으로 예상하는 이유와 조건</h2>
+    <p>p34는 <code>nunchiro agent prompt</code>로 500건을 보내고, 그중 250건은 "세션의 입력칸에 쓰다 만 글이 있을 때" 보냅니다. 30초 안에 사람 없이 전송되지 않으면 놓친 것입니다. 이 기준은 바꾸지 않습니다.</p>
+  </div></div>
+  <div class="card">
+    <table>
+      <tr><th>시험이 쓰다 만 글을 두는 곳</th><th>일어나는 일</th><th>예상</th></tr>
+      <tr><td><b>Nunchiro 입력칸</b><small>2차 안에서 글이 사는 곳</small></td><td>에이전트의 칸은 비어 있습니다. 시험의 500건은 "내가 보낸 프롬프트"라 차례가 끝나면 바로 들어갑니다.</td><td><span class="yes">0 / 1,000</span></td></tr>
+      <tr><td><b>에이전트의 터미널 칸, 한 줄</b><small>코드가 composer라고 부르는 곳</small></td><td>직접 쓰기가 꺼져 있으므로 코어가 그 글을 Nunchiro 칸으로 가져오고 터미널 칸을 비운 뒤 보냅니다. 몇 초 걸립니다.</td><td><span class="yes">0 / 1,000</span> (PR 4 뒤)</td></tr>
+      <tr><td><b>에이전트의 터미널 칸, 여러 줄</b></td><td>글자 그대로 읽을 수 없어 건드리지 않습니다. 사람이 그 글을 보내거나 지울 때까지 기다립니다.</td><td><span class="no">최대 500 / 1,000</span></td></tr>
+      <tr><td><b>직접 쓰기를 켠 채</b></td><td>사람이 그 칸에 있다는 뜻이라 기다립니다.</td><td><span class="no">그 건은 놓침</span></td></tr>
+    </table>
+  </div>
+  <div class="notes" style="margin-top:10px"><ul>
+    <li>0은 설계로 본 예상입니다. 이 시험은 아직 한 번도 돌리지 않았습니다.</li>
+    <li>PR 4가 들어가기 전에는 둘째 줄이 지금과 같습니다: 250건 놓침, 500 / 1,000.</li>
+    <li>남의 메시지가 내 타이핑을 기다리는 것은 이 수치에 들어가지 않습니다. 시험의 500건은 모두 내가 보낸 프롬프트입니다 (sessions.rs:633).</li>
+  </ul></div>
+</section>
+
+<section class="panel" id="p7">
+  <div class="phead"><div class="num">7</div><div>
+    <h2>만드는 순서: 작은 PR 다섯</h2>
+  </div></div>
+  <div class="card">
+    <table>
+      <tr><th>PR</th><th>내용</th><th>이것만 들어가도 보이는 것</th></tr>
+      <tr><td><b>1</b> 코어</td><td>틈 규칙, "쓰는 중" 신호, 기다리는 이유, Send now / Attach / Later 요청</td><td>내가 쓰는 동안 남의 메시지가 들어가지 않습니다.</td></tr>
+      <tr><td><b>2</b> 웹</td><td>세션 줄의 얼굴, 미리 보기, 세 가지 선택, 붙임 표시</td><td>노크</td></tr>
+      <tr><td><b>3</b> 웹+코어</td><td>터미널의 글자를 Nunchiro 칸으로, <code>Type in terminal</code></td><td>터미널 칸에 내 글이 생기지 않습니다.</td></tr>
+      <tr><td><b>4</b> 코어+웹</td><td>터미널 칸에 남은 한 줄 글을 Nunchiro 칸으로 가져오기</td><td>p34의 둘째 줄이 0이 됩니다.</td></tr>
+      <tr><td><b>5</b> 웹+코어</td><td>⌘Z</td><td>되돌리기</td></tr>
+    </table>
+  </div>
+  <div class="notes" style="margin-top:10px">
+    <div class="cap">나중에, 이번에는 만들지 않음</div>
+    <ul>
+      <li>급한 정도: 보낸 이가 "급함"을 붙이면 타이핑을 기다리지 않는 등급.</li>
+      <li>리드 묶음: 알아만 두면 되는 메시지를 리드가 모아 한 번에 전하기.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="panel" id="p8">
+  <div class="phead"><div class="num">8</div><div>
+    <h2>다른 앱은 어떻게 나눴나</h2>
+  </div></div>
+  <div class="card">
+    <table>
+      <tr><th>앱</th><th>확인한 것</th><th>여기서 가져온 것</th></tr>
+      <tr><td><b>T3 Code</b></td><td>에이전트의 터미널 칸이 없습니다. 입력칸이 API로 보냅니다 (useComposerSend.ts:327, 386). 터미널 서랍은 그냥 셸입니다 (terminal/Manager.ts:478-482). <code>mod+z</code>가 지운 글을 되살립니다 (keybindings.ts:216, discardComposerDraft.ts:25-40).</td><td>글의 자리는 앱의 입력칸 하나. ⌘Z는 그 뒤로 새 글이 없을 때만.</td></tr>
+      <tr><td><b>Orca</b></td><td>채팅 입력칸의 글은 앱이 갖고 있고, 보낼 때 터미널에 붙여 넣고 Enter를 누릅니다 (native-chat-runtime-send.ts:45). 채팅과 터미널을 단축키로 바꿉니다 (definitions-core-4.ts:44-52). 채팅을 열 때 터미널 칸의 글을 입력칸으로 가져오고, 접힌 붙여넣기 표시는 가져오지 않습니다 (use-native-chat-terminal-draft-pickup.ts:25-40).</td><td>터미널에 남은 글 가져오기, 가져오지 않는 경우.</td></tr>
+      <tr><td><b>Orca</b></td><td>남의 메시지가 글 때문에 기다릴 때 화면에는 아무 표시가 없고, 보낸 쪽 CLI에 글 한 줄만 나옵니다 (mailbox-delivery-hold.ts:107).</td><td>노크는 여기에 없는 것을 새로 만드는 부분입니다.</td></tr>
+    </table>
+  </div>
+</section>
+</div>
+</body>
+</html>

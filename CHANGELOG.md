@@ -37,6 +37,10 @@ What changed for people who use Nunchiro. Newest first. Nunchiro is in developme
 - Fixed: on a second Mac driven over SSH, agents said "Not logged in" (and `gh` that its token was invalid) when
   Nunchiro's background service had been started by the SSH connection. It is now started in that Mac's login
   session. When nobody is logged in there, the Machines page says that its agents may not be signed in and what to do.
+- A message you send to a session that waits at a start question (such as Claude's folder trust) is no
+  longer refused: it waits in that session's queue and goes in once you answer the question in its terminal. From
+  the command line, `nunchiro agent prompt` now says which session waits at which question, on which Mac, and how to
+  drop the message, instead of only `agent_blocked`.
 
 ## 2026-11-25
 

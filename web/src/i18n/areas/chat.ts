@@ -34,10 +34,44 @@ declare module '../index' {
     // ticket 581: a chat edit card while its session waits on a permission; ticket 199: the strip's "+N" button.
     'chat.row.waitingApproval': true;
     'chat.strip.next': true;
+    // The knock: another sender's message waits at the session's row (English only until the translation pass).
+    'knock.label': true;
+    'knock.later': true;
+    'knock.more': true;
+    'knock.why.typing': true;
+    'knock.why.turn': true;
+    'knock.why.direct': true;
+    'knock.why.terminal_text': true;
+    'knock.why.later': true;
+    'knock.why.attached': true;
+    'knock.now': true;
+    'knock.attach': true;
+    'knock.laterBtn': true;
+    'knock.chip': true;
+    'knock.detach': true;
+    'knock.from': true;
+    'knock.failed': true;
+    // Type in terminal: letters typed in an agent's terminal go to the composer unless it is on.
+    'direct.on': true;
+    'direct.onTip': true;
+    'direct.done': true;
+    'direct.doneTip': true;
+    'direct.line': true;
+    'direct.note': true;
   }
 }
 
 export const en = {
+  'knock.label': 'Message from {name}, waiting', 'knock.later': 'Message from {name}, later', 'knock.more': '{n} more messages waiting',
+  'knock.why.typing': 'Goes in when you pause typing.', 'knock.why.turn': 'Goes in when this turn ends.',
+  'knock.why.direct': 'Waiting: you are typing in the terminal.', 'knock.why.terminal_text': 'Waiting: your text is in the terminal.',
+  'knock.why.later': 'Later: after your next prompt.', 'knock.why.attached': 'Attached to your next prompt.',
+  'knock.now': 'Send now', 'knock.attach': 'Attach to my next prompt', 'knock.laterBtn': 'Later',
+  'knock.chip': 'Attached: message from {name}', 'knock.detach': 'Detach the message from {name}', 'knock.from': 'Message from {name}',
+  'knock.failed': 'Not changed: {error}',
+  'direct.on': 'Type in terminal', 'direct.onTip': 'Type in the agent’s own box; other messages wait until you are done',
+  'direct.done': 'Done', 'direct.doneTip': 'Letters go to the composer again',
+  'direct.line': 'Typing in terminal. Messages wait until you are done.', 'direct.note': 'Typing goes to the composer.',
   'chat.held.working': 'Waiting for the agent to finish its turn:', 'chat.held.behind': 'Waiting for earlier messages to go first ({n}):', // ticket 1056
   'chat.held.retry': 'The agent did not take it yet. It goes again when the agent is ready:', // ticket 1094
   'chat.held.stopped': 'The agent did not take it and it will not be pasted again. Cancel send puts it back in the box:', // ticket 1121

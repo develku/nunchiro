@@ -41,6 +41,8 @@ import { composerOffer } from '../features/pasted-server';
 import { restartKeeping } from '../features/restart-keeping';
 import { restartStart } from '../PermissionNeeded';
 import { escaped, joinWords } from '../settings/agents/words';
+import { AttachedChips, typingPing } from '../queue/Knock';
+import { useTeamNow } from '../lead/lead';
 
 /** A pane terminal's selection goes to the composer as a quote; nothing is sent. */
 export const insertQuote = (composer: RefObject<HTMLTextAreaElement | null>) => (text: string) => {
@@ -101,6 +103,7 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
   const context = useSessionContext(core, target, !!target && target.id === current?.id, connected);
   const refused = useRefused(target?.id);
   const queued = useQueue(target?.id);
+  const team = useTeamNow();
   /** Words coming back to the box go ahead of whatever it already holds. */
   const toBox = (box: HTMLTextAreaElement, text: string) => {
     if (!target) return;
@@ -312,6 +315,7 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
             onSend={(from) => void send(from.closest('.cbox')!.querySelector('textarea:not(.hoff-edit)')!, target)}
           />
         )}
+        {target && <AttachedChips session={target} team={team} core={core} t={t} />}
         {target && held !== undefined && (
           <p className="queued held" role="status">
             <b>{t('chat.held.lead')}</b> <span className="queued-text">{held}</span>
@@ -371,8 +375,10 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
             const o = offers && target ? composerOffer(e.clipboardData.getData('text/plain')) : null;
             if (o && target) setOffer({ ...o, sid: target.id });
           }}
+          onCompositionUpdate={() => typingPing(core, target)}
           onInput={(e) => {
             const el = e.currentTarget; // read now: the updater below runs after the event is gone
+            typingPing(core, target); // the gap rule: another sender's message waits while the owner types
             grow(el);
             if (offer && offer.sid === target?.id && !el.value.includes(offer.line)) setOffer(null); // the pasted line was edited away
             if (!target) return;

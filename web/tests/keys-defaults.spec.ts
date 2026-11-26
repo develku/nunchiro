@@ -103,6 +103,8 @@ const KEPT: Record<string, string[]> = {
   'projects.pick': ['prefix KeyJ'],
   'files.quickOpen': ['Meta+KeyP'], // ticket 821
   'session.new.worktree': ['Shift+Meta+KeyN'], // ticket 1130 C2
+  'knock.open': ['prefix Shift+KeyK'], // the knock: the first waiting message of the session in front
+  'terminal.direct': ['prefix Shift+KeyO'], // Type in terminal
 };
 
 test('default_keymap_table: DEFAULT_BINDINGS is the brief’s table for the changed ids, the old value for the rest, every id has an area', () => {

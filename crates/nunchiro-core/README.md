@@ -540,6 +540,20 @@ delivery and five seconds without activity does the CLI return `agent_prompt_sta
 Prompt `--wait` compares the submitted turn's counters, not an earlier busy turn's completion.
 Each delivery tick attempts at most one send per ready session, across all sessions.
 
+The gap rule: nothing is typed into a Claude or Codex input box that shows text the core did not put there (not
+the agent's faint suggestion or placeholder): every queued submit waits, the owner's own too, and the snapshot names
+the reason (`send_waits`: `terminal_text`). A message from another sender (a lead, another agent, a schedule, the
+core) also waits while the owner types for that session: `typing` (the window sends `typing` from its composer, at
+most every 2 s, and any key the terminal sends counts) holds such rows for 5 s after the last one. The owner's own
+prompts never wait for his typing; answers into a running turn, deny notes and widget acts do not either. On another
+sender's queued row the owner may `send_now` (no typing wait), `send_later` (it waits until a turn ends after his
+next submit), `send_attach` (it goes with his next prompt, under his words, as `[Message from <name>, attached by
+the owner]`, in one paste; a prompt starting with `/ ! # &` takes none) or `send_detach` (back to later). These five
+requests are the owner's and the window's only. Type in terminal (`direct`, owner and window only) holds such messages too
+(`direct`) while the owner types in the agent's own box; it ends 60 s after his last key there or the window's last
+renewal. The snapshot's `at_box` says the agent's input box is on a current screen and nothing asks. The marks live in memory: queued rows never outlive a core. Other
+`send_waits` reasons: `turn`, `dialog`, `later`, `attached`.
+
 Text, settle, Enter (V1A-15): a submit send (`agent prompt`, the window's composer) to a Claude or Codex agent that
 has bracketed paste on (its last `ESC[?2004h`/`ESC[?2004l` switch, tracked from PTY output) writes the text wrapped
 in `ESC[200~ … ESC[201~` and leaves the send `attempting`. A later delivery tick writes Enter as its own write once

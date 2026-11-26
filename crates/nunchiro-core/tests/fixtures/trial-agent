@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""The accuracy trial's agent, for its self-test only (scripts/measure/accuracy.py --self-test): no model calls, no
+agent configuration read. It draws Claude 2.1.310's history, input box, permission dialog and question (the frames of
+claude-mode and waiting/screen.rs tests), or Codex 0.161's when started with Codex's `-c hooks.*` arguments, and runs
+the hooks Nunchiro gave it the way the agent would (nudge-agent's parsing). The trial reads it only as it reads a real
+agent: its screen, the cards, and the fake mail server's log. A submitted line picks the turn:
+  `[trial perm <n>] ...`  a Bash permission request for `mkdir trial-<n>` (PreToolUse, then the held PermissionRequest);
+  `[trial ask <n>] ...`   an AskUserQuestion question, answered by a digit;
+  `[trial mail <n>] ...`  the fake mail MCP server's send_email (the server of `--mcp-config` or `-c mcp_servers.*`)
+                          behind the outward hook, called only when the hooks let it run;
+  anything else           a turn that says ok.
+Before its box it shows the start screen a real agent would: the folder-trust question in a folder named
+`acc-untrusted-*`, the sign-in screen when its config folder (CLAUDE_CONFIG_DIR or CODEX_HOME) holds
+`trial-signed-out`, Codex's update screen when CODEX_HOME holds `trial-update`. 1 or Enter goes on; 2 or Esc quits."""
+import json, os, re, select, subprocess, sys, threading, time, tty
+
+if '--version' in sys.argv:
+    print('2.1.310 (Claude Code)')
+    raise SystemExit
+if sys.argv[1:2] == ['app-server']:
+    # Ticket 1150: the core's question before a Codex start; the yes of tests/fixtures/codex-app-server.
+    print('{"id":1,"result":{}}\n{"id":2,"result":{"data":[{"hooks":[{"key":"/<session-flags>/config.toml:pre_tool_use:0:0","enabled":true,"trustStatus":"trusted"}]}]}}', flush=True)
+    sys.stdin.read()
+    raise SystemExit
+args = sys.argv[1:]
+commands, codex, mail = {}, '--settings' not in args, {}
+for i, a in enumerate(args):
+    if a == '--settings':
+        for event, blocks in json.load(open(args[i + 1])).get('hooks', {}).items():
+            commands[event] = [h['command'] for b in blocks for h in b['hooks']]
+    if a == '--mcp-config':
+        mail = json.loads(args[i + 1])['mcpServers']['fakemail']
+    m = re.match(r'hooks\.(\w+)=.*command=("(?:[^"\\]|\\.)*")', a)
+    if m:
+        commands.setdefault(m.group(1), []).append(json.loads(m.group(2)))
+    m = re.match(r'mcp_servers\.fakemail\.(command|args)=(.*)', a)
+    if m:
+        mail[m.group(1)] = json.loads(m.group(2))
+
+
+def hook(event, payload):
+    """Every command of `event`; their stdout lines (JSON) and whether one ended with exit 2 (a block)."""
+    outs, blocked = [], False
+    for cmd in commands.get(event, []):
+        r = subprocess.run(cmd, shell=True, input=json.dumps(payload).encode(), capture_output=True)
+        blocked |= r.returncode == 2
+        with open(os.path.join(os.environ['NUNCHIRO_HOME'], 'trial-agent.log'), 'a') as f:  # for debugging the self-test
+            f.write(json.dumps(dict(event=event, rc=r.returncode, out=r.stdout.decode()[-400:], err=r.stderr.decode()[-400:])) + '\n')
+        outs += [json.loads(x) for x in r.stdout.decode().splitlines() if x.strip().startswith('{')]
+    return outs, blocked
+
+
+def decided(outs):
+    """allow, deny, ask or None from hook outputs (PreToolUse's permissionDecision, PermissionRequest's behavior)."""
+    for o in outs:
+        h = o.get('hookSpecificOutput', {})
+        d = h.get('permissionDecision') or h.get('decision', {}).get('behavior')
+        if d:
+            return d
+    return None
+
+
+def send_mail(arguments):
+    """One tools/call to the fake mail MCP server, as an agent's MCP client makes it."""
+    p = subprocess.Popen([mail['command'], *mail.get('args', [])], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    for m in ({'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2024-11-05'}},
+              {'method': 'notifications/initialized'},
+              {'id': 2, 'method': 'tools/call', 'params': {'name': 'send_email', 'arguments': arguments}}):
+        p.stdin.write(json.dumps(dict(m, jsonrpc='2.0')) + '\n')
+        p.stdin.flush()
+        if 'id' in m:
+            p.stdout.readline()
+    p.stdin.close()
+    p.wait(10)
+
+
+config = os.environ.get('CODEX_HOME' if codex else 'CLAUDE_CONFIG_DIR', '')
+START = {
+    'trust': ('You are running Codex in {cwd}\r\n\r\n  Since this folder is not version controlled, we recommend requiring '
+              'approval of all edits and commands.\r\n\r\n  Do you trust the contents of this directory?\r\n\r\n'
+              '› 1. Yes, continue\r\n  2. No, quit\r\n\r\n  Press enter to continue\r\n') if codex else
+             (' Accessing workspace:\r\n\r\n {cwd}\r\n\r\n Quick safety check: Is this a project you created or one you '
+              'trust? (Like your own code, a well-known open source project, or work from your team).\r\n\r\n'
+              ' ❯ 1. Yes, I trust this folder\r\n   2. No, exit\r\n\r\n Enter to confirm · Esc to cancel\r\n'),
+    'signin': ('  Welcome to Codex, OpenAI\'s command-line coding agent\r\n\r\n  Sign in with ChatGPT to use Codex as part of '
+               'your paid plan\r\n\r\n› 1. Sign in with ChatGPT\r\n  2. Provide your own API key\r\n\r\n  Press Enter to continue\r\n')
+              if codex else (' Select login method:\r\n\r\n ❯ 1. Claude account with subscription · Pro, Max, Team, or '
+                             'Enterprise\r\n\r\n   2. Anthropic Console account · API usage billing\r\n'),
+    'update': ('✨ Update available! 0.161.0 -> 0.170.0\r\n\r\n› 1. Update now\r\n  2. Skip\r\n  3. Skip until next version'
+               '\r\n\r\n  Press enter to continue\r\n'),
+}
+starts = [k for k, on in (('trust', os.path.basename(os.getcwd()).startswith('acc-untrusted-')),
+                          ('signin', os.path.exists(os.path.join(config, 'trial-signed-out'))),
+                          ('update', codex and os.path.exists(os.path.join(config, 'trial-update')))) if on]
+view = {'state': 'idle', 'line': '', 'screen': 'start' if starts else 'box', 'history': []}
+paint = threading.Lock()
+
+
+def draw():
+    with paint:
+        cols = os.get_terminal_size(1).columns
+        rule = '─' * cols
+        out = '\x1b[2J\x1b[H' + ''.join(h + '\r\n' for h in view['history'][-12:])
+        if view['screen'] == 'start':
+            out = '\x1b[2J\x1b[H' + START[starts[0]].format(cwd=os.getcwd())
+        elif view['screen'] == 'perm':
+            out += f'Bash command\r\n  {view["cmd"]}\r\n Do you want to proceed?\r\n ❯ 1. Yes\r\n   2. No\r\n\r\n Esc to cancel\r\n'
+        elif view['screen'] == 'mail':
+            out += 'Tool use\r\n  fakemail - send_email(to: "trial@example.invalid") (MCP)\r\n Do you want to proceed?\r\n ❯ 1. Yes\r\n   2. No\r\n\r\n Esc to cancel\r\n'
+        elif view['screen'] == 'ask':
+            out += (f'{rule}\r\n ☐ Colour\r\n\r\nWhich colour should go in a comment?\r\n\r\n'
+                    f'❯ 1. red\r\n  2. blue\r\n  3. Type something.\r\n{rule}\r\n  4. Chat about this\r\n\r\n'
+                    'Enter to select · ↑/↓ to navigate · Esc to cancel\r\n')
+        elif codex:
+            working = '• Working (1s • esc to interrupt)\r\n\r\n' if view['state'] == 'working' else ''
+            out += f'{working}› {view["line"] or "Ask Codex to do anything"}\r\n\r\n  gpt-5-codex medium · {os.getcwd()}\r\n'
+        else:
+            foot = '  esc to interrupt' if view['state'] == 'working' else '  ⏸ manual mode on (shift+tab to cycle)'
+            out += f'{rule}\r\n❯ {view["line"]}\r\n{rule}\r\n{foot}\r\n'
+        sys.stdout.write(out)
+        sys.stdout.flush()
+
+
+answer = {}  # the key pressed on a dialog, set by the reader while one waits
+
+
+def key():
+    answer.clear()
+    while 'key' not in answer:
+        time.sleep(0.02)
+    return answer['key']
+
+
+def permit(call, screen):
+    """Claude's permission path: PreToolUse may decide; else its dialog shows while the held PermissionRequest hook
+    runs, and with no decision from it the dialog waits for a person's key (1 yes, 2 or Esc no)."""
+    outs, blocked = hook('PreToolUse', call)
+    d = decided(outs)
+    if blocked or d in ('allow', 'deny'):
+        return not blocked and d == 'allow'
+    view.update(screen=screen, state='needs_you')
+    draw()
+    d = decided(hook('PermissionRequest', call)[0])
+    return d == 'allow' if d in ('allow', 'deny') else key() == '1'
+
+
+def turn(line):
+    m = re.match(r'\[trial (perm|ask|mail) (\d+)\]', line)
+    kind, n = (m.group(1), m.group(2)) if m else ('reply', None)
+    view['history'].append(('› ' if codex else '> ') + line)
+    hook('UserPromptSubmit', {'prompt': line})
+    view['state'] = 'working'
+    draw()
+    time.sleep(0.2)
+    if kind == 'perm':
+        call = {'tool_name': 'Bash', 'tool_input': {'command': f'mkdir trial-{n}'}}
+        view.update(cmd=call['tool_input']['command'])
+        view['history'].append(f'● Bash(mkdir trial-{n})')
+        if permit(call, 'perm'):
+            os.makedirs(f'trial-{n}', exist_ok=True)
+    elif kind == 'ask':
+        call = {'tool_name': 'AskUserQuestion', 'tool_input': {'questions': [{'question': 'Which colour should go in a comment?',
+                'header': 'Colour', 'options': [{'label': 'red'}, {'label': 'blue'}], 'multiSelect': False}]}}
+        view.update(screen='ask', state='needs_you')
+        draw()
+        hook('PreToolUse', call)
+        hook('PostToolUse', dict(call, tool_response={'answers': key()}))
+    elif kind == 'mail':
+        arguments = {'to': 'trial@example.invalid', 'subject': f'trial {n}', 'body': 'hello'}
+        call = {'tool_name': 'mcp__fakemail__send_email', 'tool_input': arguments}
+        if codex:  # Codex has no ask: its PreToolUse hook (Nunchiro's) holds for the card and denies or stays silent
+            outs, blocked = hook('PreToolUse', call)
+            go = not blocked and decided(outs) in (None, 'allow')
+        else:
+            go = permit(call, 'mail')
+        if go:
+            send_mail(arguments)
+    view['screen'] = 'box'
+    view['history'].append('ok')
+    hook('Stop', {})
+    view['state'] = 'done'
+    draw()
+
+
+tty.setraw(0)
+sys.stdout.write('\x1b[?2004h')
+draw()
+worker = None
+while True:
+    if not select.select([0], [], [], 0.1)[0]:
+        continue
+    data = os.read(0, 65536)
+    if not data:
+        break
+    text = re.sub(r'\x1b\[[0-9;?]*[~A-Za-z]', '', data.decode('utf-8', 'replace'))
+    if view['screen'] == 'start':
+        pressed = next((c for c in text if c in '12\r\x1b'), None)
+        if pressed in ('2', '\x1b'):
+            break  # No, exit
+        if pressed:
+            starts.pop(0)
+            view['screen'] = 'start' if starts else 'box'
+            draw()
+        continue
+    if view['screen'] in ('ask', 'perm', 'mail'):
+        pressed = next((c for c in text if c in '123\x1b'), None)
+        if pressed:
+            answer['key'] = pressed
+        continue
+    for ch in text:
+        if ch == '\r':
+            if worker and worker.is_alive():
+                continue  # Claude holds Enter while it works
+            line, view['line'] = view['line'], ''
+            worker = threading.Thread(target=turn, args=(line,), daemon=True)
+            worker.start()
+        elif ch == '\x15':
+            view['line'] = ''
+        elif ch == '\x7f':
+            view['line'] = view['line'][:-1]
+        elif ch >= ' ':
+            view['line'] += ch
+    draw()

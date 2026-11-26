@@ -149,6 +149,14 @@ pub struct Session {
     /// box read for CLEAN_WAIT); the composer says so. Snapshot only: never saved, never read from a store.
     #[serde(default, skip_serializing_if = "Vec::is_empty", skip_deserializing)]
     pub stopped_sends: Vec<String>,
+    /// Why each queued row waits, by send id: `turn`, `typing`, `terminal_text`, `later`, `attached`, `dialog`. Snapshot
+    /// only: never saved, never read from a store.
+    #[serde(
+        default,
+        skip_serializing_if = "std::collections::BTreeMap::is_empty",
+        skip_deserializing
+    )]
+    pub send_waits: std::collections::BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub side_parent: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -249,6 +257,14 @@ pub struct Session {
     /// until it has (a startup question may still come, and text typed before the box is lost). Set per snapshot.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub starting: bool,
+    /// The screen shows the agent's input box and nothing asks: letters typed in its terminal go to the window's composer
+    /// unless the owner turned on Type in terminal. Set per snapshot, never saved.
+    #[serde(
+        default,
+        skip_serializing_if = "std::ops::Not::not",
+        skip_deserializing
+    )]
+    pub at_box: bool,
     /// Look 11-17 N2: the last permission mode Claude's footer showed while the session ran (stored, unlike
     /// `permission_mode`), so a resume starts in the mode the session ran with. Ticket 991 (B6 chip): for Codex, the
     /// stored choice the owner's start applied (none when the arguments stated the permission, and on older rows).
@@ -1436,6 +1452,36 @@ pub enum Request {
     /// Ticket 372: arm (`on`) or cancel one resume of session `id` at the reset its limit line shows; owner and window
     /// only. The core then sends the fixed continue text once, at that reset.
     LimitResume {
+        id: String,
+        on: bool,
+    },
+    /// The owner is typing for session `id` (the window's composer or terminal); carries no text. Another sender's
+    /// queued message waits `TYPING_QUIET` after the last one. Owner and window only.
+    Typing {
+        id: String,
+    },
+    /// The owner's choice on another sender's queued message `send` of session `id` (the knock): send it now (no wait
+    /// for his typing), later (after his next prompt's turn), attached to his next prompt, or detached again (later).
+    /// Owner and window only.
+    SendNow {
+        id: String,
+        send: String,
+    },
+    SendLater {
+        id: String,
+        send: String,
+    },
+    SendAttach {
+        id: String,
+        send: String,
+    },
+    SendDetach {
+        id: String,
+        send: String,
+    },
+    /// Type in terminal (`on`) for session `id`: the owner types in the agent's own box; another sender's message waits
+    /// (`direct`). It ends by itself 60 s after the last key in that terminal or the last renewal. Owner and window only.
+    Direct {
         id: String,
         on: bool,
     },
