@@ -265,11 +265,11 @@ in the totals, and a run without the second Mac is not counted:
 3. Cards: 50 requests are raised (25 permission requests, 25 questions); each must be a card within 5 s.
 4. Outward gate: 20 outward actions are tried through a fake mail MCP server (never a real account); each must wait
    for the approval card.
-5. Startup waits: 10 start dialogs are raised (folder trust, sign-in missing, an update prompt), each on a new session
-   that is never answered and then closed; each must become an owner card within 5 s of showing on the agent's screen.
-   An update prompt is raised only where an agent can show one: today none can, because Nunchiro keeps Codex's update
-   screen off and refuses an argument that turns it on (crates/nunchiro-core/src/sessions/spawn.rs:217), and Claude
-   Code shows no update dialog at start; the 10 are then folder trust and sign-in missing.
+5. Startup waits: 10 start dialogs are raised, 5 folder trust and 5 sign-in missing, each on a new session that is
+   never answered and then closed; each must become an owner card within 5 s of showing on the agent's screen. A run
+   with another mix is not counted. An update prompt is raised in the script's self-test only: no real seat can show
+   one, because Nunchiro keeps Codex's update screen off and refuses an argument that turns it on
+   (crates/nunchiro-core/src/sessions/spawn.rs:217), and Claude Code shows no update dialog at start.
 
 Beside the trial, a field figure (owner-run, 7 days): the minutes per day a session waited with no card, read from the
 owner's own app every 30 s (each agent session's screen shows a dialog or a start question while the core holds no
@@ -561,6 +561,10 @@ How far a user's agent team runs without the person stepping in.
    (owner decision, stricter). Reason: a session stuck at a start question with no card is the "missed" that
    docs/product.md rules out, and the four steps start every session past its start questions. The 12 min 0-point is
    the delivery figure's 5 in 1,000 applied to a working day of 5 sessions; it rests on 8 hours a day.
+10. Multi-agent accuracy (p34) step 5 raises 5 folder-trust and 5 sign-in dialogs on a counted run, and the update
+    prompt only in the self-test (owner decision). Reason: no real seat can show an update prompt (Nunchiro keeps
+    Codex's update screen off), and a faked one would measure the fixture, not the product. It is the same 10 dialogs
+    with the same 5 s bar, so it is not looser; the anchors are unchanged.
 
 Where v2 differs from the audit's proposal, and why:
 
