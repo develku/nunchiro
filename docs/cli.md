@@ -255,9 +255,11 @@ with what it asks in `pending`, and stderr says `agent_blocked: ...`. Per verb:
 verb's usage and exits 0; it starts nothing and sends nothing.
 
 ### `nunchiro agent start <name> --kind claude|codex --project <dir> [--worktree] [--model <m>] [--effort <level>] [--env <KEY=VALUE>]... [--receipt <id>] [--anyway] [-- <args>...]`
-While macOS reports memory pressure, a new agent session is not started and the command says so in one sentence that
-names memory (one reading at the start; running sessions, model switches and sessions a core brings back are never
-held; a reading that fails allows the start). `--anyway` starts it all the same; only the owner can, never a session.
+While macOS reports memory pressure (warning or critical), a new agent session is not started and the command says so
+in one sentence that names memory (one reading at the start; running sessions, resumed conversations, model switches
+and sessions a core brings back are never held; a reading that fails allows the start). `--anyway` starts it all the
+same; only the owner can, never a session. A start from the window is held at critical pressure only. Each hold writes
+one line to the core's log.
 Starts a session labeled `<name>`; a name that starts with `-` is refused with a usage error (`agent start --help` prints the usage and starts nothing). (`--agent acp:<name>` in place of `--kind` starts an ACP agent). Same options and reply as `session start`, in any project, from inside a session
 too. The reply carries a `receipt` (24 hex characters, made up when `--receipt` is not given). A receipt is 1-128
 printable ASCII characters without spaces; any other value (an empty one too) is refused with `start_receipt_invalid`.

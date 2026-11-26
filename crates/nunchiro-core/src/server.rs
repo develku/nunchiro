@@ -1234,7 +1234,6 @@ fn connection(
                 "team open is for a lead's session; the owner opens a teammate in Settings > Team",
             )?;
             let id = sessions.lead_may_open(caller, name)?;
-            crate::pressure::check(false)?;
             drop(sessions);
             return crate::team::open_seat(
                 registry,
@@ -1296,9 +1295,14 @@ fn connection(
                 }
                 claim.0 = Some(key);
             }
-            // A new agent seat waits while the Mac is low on memory; a plain terminal is no seat.
-            if session.kind != AgentKind::Shell {
-                crate::pressure::check(anyway)?;
+            // A new agent seat waits while the Mac is low on memory; a plain terminal is no seat, and a saved
+            // conversation resumed is never held.
+            if session.kind != AgentKind::Shell && session.resume.is_none() {
+                let who = match caller {
+                    None => crate::pressure::Who::Owner,
+                    Some(_) => crate::pressure::Who::Session,
+                };
+                crate::pressure::check(who, anyway, "start")?;
             }
             let mut launch = sessions
                 .launch_as(caller.as_ref(), session.clone(), false)?

@@ -141,7 +141,7 @@ export const en = {
   'err.note.undo': 'Could not undo: {error}',
   // English only until release; other languages fall back to these.
   'err.lowMemory': 'Your Mac is low on memory, so the new session was not started.',
-  'err.lowMemory.todo': 'Close something, then try again.',
+  'err.lowMemory.todo': 'Close something and try again, or run nunchiro agent start --anyway.',
 };
 
 export const ko = {

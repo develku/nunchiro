@@ -176,9 +176,9 @@ pub(super) fn answer(
                 env,
                 receipt: _, // ticket 573: the window never retries a start
             } => {
-                // Held as the socket's start; the window shows the sentence (its "Start anyway" waits for a design).
-                if session.kind != crate::api::AgentKind::Shell {
-                    crate::pressure::check(false)?;
+                // Held as the socket's start, at critical only until the window has its own "Start anyway".
+                if session.kind != crate::api::AgentKind::Shell && session.resume.is_none() {
+                    crate::pressure::check(crate::pressure::Who::Window, false, "window start")?;
                 }
                 let launch = registry
                     .lock()

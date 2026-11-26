@@ -7,8 +7,13 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-/// The sentence a held start answers with.
+/// The sentence a held start answers the owner's CLI with.
 pub const HELD: &str = "Your Mac is low on memory, so the new session was not started. Close something and try again, or start it anyway with `nunchiro agent start --anyway`";
+/// The window's: it has no "Start anyway" yet, so it names the CLI's.
+pub const HELD_WINDOW: &str = "Your Mac is low on memory, so the new session was not started. Close something and try again, or run `nunchiro agent start --anyway`";
+/// A session's: it cannot start anyway, so it is not told to.
+pub const HELD_SESSION: &str =
+    "This Mac is low on memory, so the new session was not started. Try again once memory is free";
 /// An agent's own token asking to start anyway.
 pub const OWNER_ONLY: &str = "Only you can start a session anyway; a session cannot";
 /// Debug builds only: a test core's faked reading, a level number or "fail". A debug build without it reads normal, so
@@ -43,17 +48,42 @@ fn read() -> Option<i32> {
     (read == 0 && size == std::mem::size_of::<i32>()).then_some(value)
 }
 
-/// Whether a new seat may start: held above normal pressure unless the owner said anyway. A failed reading allows it.
-fn allowed(level: Option<i32>, anyway: bool) -> Result<(), String> {
+/// Who asks for the new seat.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Who {
+    /// The owner's CLI, which can say `--anyway`.
+    Owner,
+    /// The window, which has no override yet: held at critical only, since warning can be common and sticky on a Mac
+    /// running several seats.
+    Window,
+    /// A session or a lead: no override.
+    Session,
+}
+
+/// Whether a new seat may start: held from warning (critical for the window) unless the owner said anyway. A failed
+/// reading allows it.
+fn allowed(level: Option<i32>, who: Who, anyway: bool) -> Result<(), &'static str> {
+    let from = if who == Who::Window { 4 } else { 2 };
     match level {
-        Some(level) if level > 1 && !anyway => Err(HELD.into()),
+        Some(level) if level >= from && !anyway => Err(match who {
+            Who::Owner => HELD,
+            Who::Window => HELD_WINDOW,
+            Who::Session => HELD_SESSION,
+        }),
         _ => Ok(()),
     }
 }
 
-/// The check at a new seat's start.
-pub(crate) fn check(anyway: bool) -> Result<(), String> {
-    allowed(level(), anyway)
+/// The check at a new seat's start; `path` names the start in the one log line a hold writes.
+pub(crate) fn check(who: Who, anyway: bool, path: &str) -> Result<(), String> {
+    let level = level();
+    allowed(level, who, anyway).map_err(|held| {
+        eprintln!(
+            "memory pressure: held a new seat (level {}, {path})",
+            level.unwrap_or(0)
+        );
+        held.to_string()
+    })
 }
 
 /// Where macOS writes its JetsamEvent reports.
@@ -86,17 +116,23 @@ mod tests {
 
     #[test]
     fn pressure_above_normal_holds_a_new_seat_unless_anyway() {
-        assert_eq!(allowed(Some(1), false), Ok(()));
-        for level in [2, 4] {
-            let held = allowed(Some(level), false).unwrap_err();
+        for who in [Who::Owner, Who::Window, Who::Session] {
+            assert_eq!(allowed(Some(1), who, false), Ok(()));
+            assert_eq!(allowed(Some(4), who, true), Ok(()));
+            // A reading that failed never holds a start.
+            assert_eq!(allowed(None, who, false), Ok(()));
+            let held = allowed(Some(4), who, false).unwrap_err();
             assert!(
                 held.contains("memory") && held.contains("not started"),
                 "{held}"
             );
-            assert_eq!(allowed(Some(level), true), Ok(()));
         }
-        // A reading that failed never holds a start.
-        assert_eq!(allowed(None, false), Ok(()));
+        assert_eq!(allowed(Some(2), Who::Owner, false), Err(HELD));
+        assert_eq!(allowed(Some(2), Who::Session, false), Err(HELD_SESSION));
+        // The window has no override yet: warning does not hold it, critical does, naming the CLI's way.
+        assert_eq!(allowed(Some(2), Who::Window, false), Ok(()));
+        assert!(HELD_WINDOW.contains("nunchiro agent start --anyway"));
+        assert!(!HELD_SESSION.contains("anyway"));
     }
 
     #[test]
