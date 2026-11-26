@@ -258,6 +258,15 @@ def median(values):
     return statistics.median(values)
 
 
+def chat_open(opens):
+    """p33 long-chat open: [[request, mark]] in page ms (mark None = no chat-drawn mark in time) -> ms figures."""
+    if any(m is not None and m < t for t, m in opens):
+        raise ValueError("a chat-drawn mark came before its open request: the chat was already drawn")
+    ms = [round(m - t, 1) for t, m in opens if m is not None]
+    return dict(n=len(ms), misses=len(opens) - len(ms), values=ms, median_ms=round(median(ms), 1) if ms else None,
+                p95_ms=pct(ms, 95) if ms else None, max_ms=max(ms, default=None))
+
+
 def spread(values):
     """(max - min) / median: the repeat-to-repeat noise of one row."""
     m = median(values)
