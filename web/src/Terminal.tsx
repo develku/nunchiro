@@ -600,7 +600,8 @@ export function TerminalView({ core, id, active, fontSize, fontFamily, theme, co
       onFocus={() => (route.current.noted = false)}
       onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setDirect(core, id, false)}
     >
-      {agentBox && connected && (
+      {/* Only while the input box shows (or it is on): with a dialog up, letters go to the terminal anyway. */}
+      {agentBox && connected && (atBox || direct) && (
         <button
           type="button"
           className="tdir-btn"
