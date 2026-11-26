@@ -83,6 +83,11 @@ fn typed_error(error: String, uncertain: bool) -> String {
         error
     }
 }
+/// The agents whose input box the core follows: keys or words typed there by hand mark it edited (`Input::edited`)
+/// until the owner's Enter, and a dropped prompt is never pasted behind them.
+fn hand_edits(kind: AgentKind) -> bool {
+    matches!(kind, AgentKind::Claude | AgentKind::Codex)
+}
 #[derive(Clone, Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
@@ -826,7 +831,7 @@ impl Sessions {
                     self.submitted.remove(&id); // the box holds the user's own words from here
                     self.left_typed.remove(&id); // ticket 1085: so nothing in it is cleared as the core's own
                 }
-                let uncertain = !report && self.entry(&id)?.meta.kind == AgentKind::Claude;
+                let uncertain = !report && hand_edits(self.entry(&id)?.meta.kind);
                 if uncertain {
                     self.entry(&id)?.input.mark_uncertain();
                 }
@@ -854,7 +859,7 @@ impl Sessions {
                 self.live(&id)?
                     .write(text.as_bytes())
                     .map_err(|error| typed_error(error, uncertain))?;
-                if text.ends_with('\r') && self.entry(&id)?.meta.kind == AgentKind::Claude {
+                if text.ends_with('\r') && hand_edits(self.entry(&id)?.meta.kind) {
                     self.entry(&id)?.input = Default::default();
                 }
                 if text.ends_with('\r') {
@@ -950,7 +955,7 @@ impl Sessions {
                         return Err("agent_blocked: a question is on the screen; answer it first".into());
                     }
                 }
-                let uncertain = self.entry(&id)?.meta.kind == AgentKind::Claude;
+                let uncertain = hand_edits(self.entry(&id)?.meta.kind);
                 if uncertain {
                     self.entry(&id)?.input.mark_uncertain();
                 }
@@ -972,7 +977,7 @@ impl Sessions {
                 if interrupt_key(&keys) {
                     self.interrupted(&id)?;
                 }
-                if data.ends_with(b"\r") && self.entry(&id)?.meta.kind == AgentKind::Claude {
+                if data.ends_with(b"\r") && hand_edits(self.entry(&id)?.meta.kind) {
                     self.entry(&id)?.input = Default::default();
                 }
                 if data.ends_with(b"\r") {
