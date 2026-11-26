@@ -312,9 +312,10 @@ const UNOPENED: { file: string; wrapper: string; html: string }[] = [
   { file: 'pairing/BrowserApp.tsx', wrapper: 'className="browser-reply"', html: '<main class="browser-app"><form class="browser-reply"><label>Reply <textarea rows="2"></textarea></label></form></main>' },
   { file: 'pane/browser/view/BrowserView.tsx', wrapper: 'className="bprofile"', html: '<div class="bview"><div class="bslot"><div class="empty"><label class="bprofile">Profile <select><option>Default</option></select></label></div></div></div>' },
   { file: 'room/RoomView.tsx', wrapper: 'className="room-composer"', html: '<div class="room-composer"><select aria-label="To"><option>Lead</option></select><select aria-label="Thread"><option>Thread: main</option></select><input aria-label="Message"></div>' },
+  { file: 'bots/BotsView.tsx', wrapper: 'className="bot-card" data-bot-soul', html: '<section class="bot-card" data-bot-soul><form><textarea aria-label="probe soul"></textarea></form></section>' },
 ];
 for (const scheme of SCHEMES)
-  test(`inputs_one_style_unopened ${scheme}: the import search, merge-method select, phone reply box, profile picker and room composer have the kit's field look`, async ({ app, core, browser }) => {
+  test(`inputs_one_style_unopened ${scheme}: the import search, merge-method select, phone reply box, profile picker, room composer and bot soul box have the kit's field look`, async ({ app, core, browser }) => {
     test.setTimeout(120_000);
     core.shell(core.project('demo'), 'one');
     await app.emulateMedia({ colorScheme: scheme });
@@ -342,7 +343,7 @@ for (const scheme of SCHEMES)
     expect(found).toEqual([]);
   });
 
-test('inputs_one_style_unopened_drift: each of the five components still draws its field inside the wrapper the probe copies', () => {
+test('inputs_one_style_unopened_drift: each of the six components still draws its field inside the wrapper the probe copies', () => {
   const src = path.join(import.meta.dirname, '../src');
   for (const u of UNOPENED) expect(fs.readFileSync(path.join(src, u.file), 'utf8'), u.file).toContain(u.wrapper);
 });
@@ -352,6 +353,7 @@ test('inputs_one_style_unopened_drift: each of the five components still draws i
 // of them than listed, or an unlisted file, fails.
 const WALKED: Record<string, { count: number; by: string }> = {
   'board/CardEditor.tsx': { count: 3, by: 'inputs_one_style: card editor' },
+  'bots/BotsView.tsx': { count: 1, by: 'inputs_one_style_unopened: bot soul box (opens on Edit)' },
   'board/EditPanel.tsx': { count: 1, by: 'the shared :where(select) rule; not walked (the Done days select of the board edit panel, ticket 1066; named by its label)' },
   'chat/ComposerWidget.tsx': { count: 1, by: 'exception: the chat composer (EXCEPTIONS)' },
   'chat/HandoffChip.tsx': { count: 1, by: 'inputs_one_style_chat' },

@@ -301,12 +301,10 @@
   line-height: 1.5;
 }
 .bot-card textarea {
+  /* size and spacing only: the shared field rule (styles.css) draws the look */
   width: 100%;
   box-sizing: border-box;
   min-height: 140px;
-  resize: vertical;
-  font: inherit;
-  font-size: var(--fs-13);
   line-height: 1.5;
 }
 .bot-acts {

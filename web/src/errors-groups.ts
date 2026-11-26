@@ -17,6 +17,7 @@ const TIGHT: Record<string, string> = {
 // shape gets its group line silently, so read the line before adding a template like that.
 export const GROUPS: Record<string, string[]> = {
   'err.h.later': [
+    'journal not open', '{} is busy: not closed', // events.rs; sessions.rs: Close idle on a session that is working or waiting
     'machine is already being forgotten', 'machine channel is still closing; retry removal', 'machine start in progress; retry removal', 'machine is being forgotten',
     'a new conversation is already being opened', // team.rs: a second New conversation (or its Undo) while the first one opens
     'a check is running', '{} is signing in', 'agent commands are busy', 'chat cache busy', 'chat append already pending', 'chat append exceeded hook wait',
@@ -41,6 +42,7 @@ export const GROUPS: Record<string, string[]> = {
     'message not found in this room', 'ask not found in this room', 'send not found', 'send is not queued', 'worktree not managed or outside grants', 'worktree not managed',
   ],
   'err.h.fileBad': [
+    '{}: not a regular file', 'the outward hook could not be written', // events.rs: a journal day file; sessions/spawn.rs: Codex's hooks file has no hook list
     'a set-aside sessions.json is kept: its sessions would stay at the old folder', // sessions/locate.rs: Locate (ticket 1040); the Problems row names the folder
     "ledger.json: {}", "ledger.json has version {}, this build reads 1", "notes.json: {}", "notes.json has version {}, this build reads 1", "loops.json: {}", "loops.json has version {}, this build reads 1", "roles.json: {}", "roles.json has version {}, this build reads 1", "{}.json: {}", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
     // team/bots.rs (ticket 1168): a bots.json this build cannot read, and what a bot in it may not say.
@@ -69,6 +71,7 @@ export const GROUPS: Record<string, string[]> = {
     'sessions.json: {}', 'invalid outbox domains', 'queue store is not an object', 'the Home seat lock hook could not be written', 'the outward hook could not be written', // ticket 1002 (Home chief of staff, Outbox), worktree sharing; nightly 11-21
   ],
   'err.h.limit': [
+    'this command is too large to ask the user about', // acp/client.rs: an ACP agent's terminal command too large for the ask card
     "the ledger is full: close or drop tasks first", "the list holds at most {} notes; remove some first", "at most {} roles", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
     "a team holds at most {} teammates", // team.rs (ticket 970)
     "{} open loops already: close some first", // loops.rs: the yes on a "Keep track?" card (ticket 1003)
@@ -137,6 +140,7 @@ export const GROUPS: Record<string, string[]> = {
     'the home\'s path cannot be named to the keychain', 'secrets not encoded', 'could not run curl: {}',
   ],
   'err.h.changed': [
+    "Codex was not asked whether it runs Nunchiro's outward-action check before this restart; switch again", "this Codex start changed after Codex was asked whether it runs Nunchiro's outward-action check, or it was never asked; start it again", // sessions/claude_modes.rs, sessions/spawn.rs: a Codex start or switch whose hook answer is stale
     "{} has another leader or none now: the goal was not sent", // sessions.rs: the goal card (Home view)
     "task {} is closed; nothing is kept from a closed task", "this task has no merge card: a lesson is kept from its card", "task {} is closed; there is nothing to merge", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
     'account folder changed during the remove; nothing was removed', 'could not save the library: its stored file was removed meanwhile', 'card changed', 'fork message changed; select it again', 'chat changed while reading', 'transcript identity changed during read', 'the agent command changed since this start was prepared; start it again',

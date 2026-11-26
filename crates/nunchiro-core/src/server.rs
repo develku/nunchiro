@@ -116,8 +116,15 @@ impl Read for Until {
             if left.is_zero() {
                 return Err(std::io::ErrorKind::TimedOut.into());
             }
-            self.stream
-                .set_read_timeout(Some(left.min(Duration::from_secs(15))))?;
+            // macOS answers EINVAL to SO_RCVTIMEO once the peer has closed: a core that replied and hung up before
+            // this first read. The reply is still there to read, and a closed peer cannot make the read wait.
+            match self
+                .stream
+                .set_read_timeout(Some(left.min(Duration::from_secs(15))))
+            {
+                Err(e) if e.raw_os_error() != Some(libc::EINVAL) => return Err(e),
+                _ => {}
+            }
         }
         self.stream.read(buf)
     }

@@ -738,6 +738,9 @@ def run_cmd(a):
             time.sleep(a.idle_secs)
             figs["idle_cpu_pct"].append(round((bl.cputime(pids()) - c0) / (time.monotonic() - t1) * 100, 2))
             figs["idle_mib"].append(m0["app_mib"])
+            # The cost base is sampled after the idle window: just after launch the window still holds its load-time
+            # memory (about 75 MiB more), which made 20 sessions read as a negative cost.
+            base = rel.sample(arm, "idle0_settled", True, rec)
             start = lambda i: arm.cli("session", "start", "--kind", "shell", "--project", str(arm.home), "--label", f"s{i}",  # noqa: E731
                                       "--", "/bin/cat")["session"]["id"]
             # Five sessions first: the floor of the scored idle figures (rubric v2 names five real agent sessions,
@@ -759,7 +762,7 @@ def run_cmd(a):
             figs["cpu_pct_sessions"].append(round((bl.cputime(pids() + hn) - c0) / (time.monotonic() - t1) * 100, 2))
             figs["mib_sessions"].append(round(m1["app_mib"] + hn_mib, 1))
             # A session's holder is part of what it costs; a sum that found no holder per session is refused.
-            figs["mib_per_session"].append(round((m1["app_mib"] + hn_mib - m0["app_mib"]) / a.sessions, 2) if len(hn) == a.sessions else None)
+            figs["mib_per_session"].append(mib_per_session(base["app_mib"], m1["app_mib"], hn_mib, a.sessions, len(hn)))
             snap1 = len(json.dumps(arm.call({"op": "snapshot"})))
             figs["snapshot_kib_per_session"].append(round((snap1 - snap0) / a.sessions / 1024, 2))
             figs["sessions_json_kib_per_session"].append(round(((sj.stat().st_size if sj.exists() else 0) - sj0) / a.sessions / 1024, 2))
@@ -810,6 +813,15 @@ def run_cmd(a):
     print(f"wrote {path.relative_to(ROOT) if path.is_relative_to(ROOT) else path}")
     if touched or owner_before != owner_after:
         raise SystemExit(f"owner check FAILED: {out['owner_check']}")
+
+
+def mib_per_session(base_mib, after_mib, holders_mib, sessions, holders):
+    """MiB one session adds, holder included; None when a holder was not found or the sum is negative (a session
+    cannot free memory, so a negative figure means the base was not a settled window)."""
+    if holders != sessions:
+        return None
+    per = round((after_mib + holders_mib - base_mib) / sessions, 2)
+    return per if per >= 0 else None
 
 
 def holders_of(arm):
