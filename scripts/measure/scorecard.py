@@ -1281,7 +1281,9 @@ def main():
     w.add_argument("--out")
     a, rest = ap.parse_known_args()
     if a.cmd in ("accuracy", "waits", "record"):
-        a.args = a.args + rest  # accuracy.py's own options, --help too
+        # accuracy.py's own options, --help too, in the order given: parse_known_args splits "--days 7" into
+        # rest ["--days"] and args ["7"], so the raw argv after the command is passed on instead
+        a.args = sys.argv[sys.argv.index(a.cmd) + 1:]
     elif rest:
         ap.error("unrecognized arguments: " + " ".join(rest))
     {"run": run_cmd, "ops": ops_cmd, "dev": dev_cmd, "merge": merge_cmd, "check": check_cmd, "page": page_cmd,

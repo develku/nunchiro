@@ -223,14 +223,16 @@ def lock(path):
 
 
 def headroom():
-    """Codex 5h usage below 95% on the default home, from the shared usage script; unknown counts as none."""
+    """Codex 5h and 7d usage below 95% on the default home, from the shared usage script; unknown counts as none."""
     try:
         text = subprocess.run(["bash", os.path.expanduser("~/.agents/policies/usage.sh")], capture_output=True, text=True, timeout=60).stdout
     except Exception:
         return False, "usage.sh failed"
     line = next((l for l in text.splitlines() if l.startswith("codex .codex")), "")
     m = re.search(r"5h (\d+)%", line)
-    return (bool(m) and int(m.group(1)) < 95), line.strip() or "no codex line"
+    # the weekly window empties too: a 7d at 100 % fails every turn even with 5h at 0 %
+    used = [int(p) for p in re.findall(r"(?:5h|7d) (\d+)%", line)]
+    return (bool(m) and all(p < 95 for p in used)), line.strip() or "no codex line"
 
 
 def chat_codex(root):
