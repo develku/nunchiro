@@ -118,7 +118,34 @@ jobs:
           cargo nextest run --archive-file nextest-archive.tar.zst --workspace-remap . --extract-to . --extract-overwrite
           --config-file scripts/nextest.toml --no-tests fail --partition count:${{ matrix.partition }}/${{ strategy.job-total }}
 
+  # Pull requests skip the app check when no app input changed (scripts/check-app.sh APP_INPUTS); it saves a macOS
+  # runner, of which the free plan has 5. Main and merge-queue runs always check the app.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      app: ${{ steps.app.outputs.needed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: app
+        run: |
+          # Only exit 1 means "unchanged"; any other failure (a bad ref, a broken script) fails this job and so gate.
+          needed=true
+          if [ "$EVENT" = pull_request ]; then
+            rc=0
+            scripts/check-app.sh --needed "origin/$BASE" || rc=$?
+            case $rc in 0) ;; 1) needed=false ;; *) echo "check-app.sh --needed exited $rc" >&2; exit 1 ;; esac
+          fi
+          echo "needed=$needed" >> "$GITHUB_OUTPUT"
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+
   app:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -172,10 +199,11 @@ jobs:
       - run: .github/scripts/web-core.sh
 
   # The one required check of the merge queue. `always()`: a skipped or cancelled job must still fail it (T3 Code
-  # ci.yml:660-696; Orca pr.yml:1279). Add every new job to `needs`.
+  # ci.yml:660-696; Orca pr.yml:1279). Add every new job to `needs`. The one allowed skip: `app` when `changes`
+  # succeeded and said no app input changed.
   gate:
     if: always()
-    needs: [lint, rust-build, rust-test, app, web]
+    needs: [lint, changes, rust-build, rust-test, app, web]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -183,4 +211,5 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' > /dev/null
+          echo "$RESULTS" | jq -e '.changes.outputs.app as $app | all(to_entries[];
+            .value.result == "success" or (.key == "app" and .value.result == "skipped" and $app == "false"))' > /dev/null
