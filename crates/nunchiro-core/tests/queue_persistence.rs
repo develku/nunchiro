@@ -2561,3 +2561,248 @@ fn a_local_slash_command_ends_its_turn_without_a_stop() {
     assert!(queue.attention("s").working, "the model turn still works");
     let _ = fs::remove_dir_all(&home);
 }
+
+/// One permission request is one card with one id. Claude runs its PreToolUse hook, draws its dialog, then runs the
+/// held PermissionRequest hook: a screen read in between used to raise a screen card, and the hook's item replaced it
+/// under a new id (a prompt the screen cannot prove, here a frame with no dashed body rules, never merges), so the
+/// owner's answer on the first card found nothing. With no hook after the window, the screen card still comes.
+#[test]
+fn a_dialog_drawn_before_its_held_hook_is_one_card_with_one_id() {
+    use nunchiro_core::waiting::screen::Screen;
+    let frame = {
+        let mut screen = Screen::new(160, 50);
+        screen.feed(
+            "\x1b[2J\x1b[H> [trial perm 1] make a folder\r\n\u{25cf} Bash(mkdir trial-1)\r\nBash command\r\n  mkdir trial-1\r\n Do you want to proceed?\r\n \u{276f} 1. Yes\r\n   2. No\r\n\r\n Esc to cancel\r\n"
+                .as_bytes(),
+        );
+        screen.detect(AgentKind::Claude).unwrap()
+    };
+    assert_eq!(frame.kind, nunchiro_core::queue::Kind::Permission);
+    let call = json!({"tool_name":"Bash","tool_input":{"command":"mkdir trial-1"}});
+    let dir = home("dialog-before-hook");
+    let mut q = Queue::open(&dir).unwrap();
+    q.register("s", AgentKind::Claude, 0).unwrap();
+    q.observe(
+        "s",
+        "UserPromptSubmit",
+        &json!({"prompt":"[trial perm 1] make a folder"}),
+        "hook",
+        10,
+    )
+    .unwrap();
+    q.observe("s", "PreToolUse", &call, "hook", 20).unwrap();
+    let mut ids = std::collections::BTreeSet::new();
+    for at in [30, 60, 90] {
+        q.screen(
+            "s",
+            frame.kind.clone(),
+            frame.text.clone(),
+            frame.choices.clone(),
+            at,
+        )
+        .unwrap();
+        ids.extend(q.items_of("s").into_iter().map(|i| i.id));
+    }
+    let mut held = call.clone();
+    held["nunchiro_event_id"] = json!("e1");
+    q.observe("s", "PermissionRequest", &held, "hook", 120)
+        .unwrap();
+    q.screen(
+        "s",
+        frame.kind.clone(),
+        frame.text.clone(),
+        frame.choices.clone(),
+        150,
+    )
+    .unwrap();
+    let items = q.items_of("s");
+    ids.extend(items.iter().map(|i| i.id.clone()));
+    assert_eq!(items.len(), 1, "{items:?}");
+    assert_eq!(ids.len(), 1, "the request showed under {} ids", ids.len());
+    assert_eq!(
+        items[0].hook_event_id.as_deref(),
+        Some("e1"),
+        "the card answers through the hook"
+    );
+    let _ = fs::remove_dir_all(&dir);
+    // A PreToolUse with no PermissionRequest after it (no hook installed, or it failed): the dialog's card comes once
+    // the wait is over.
+    let dir = home("dialog-no-hook");
+    let mut q = Queue::open(&dir).unwrap();
+    q.register("s", AgentKind::Claude, 0).unwrap();
+    q.observe("s", "PreToolUse", &call, "hook", 20).unwrap();
+    q.screen(
+        "s",
+        frame.kind.clone(),
+        frame.text.clone(),
+        frame.choices.clone(),
+        20 + 10_000,
+    )
+    .unwrap();
+    assert_eq!(q.items_of("s").len(), 1);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// The wait for a held hook is bounded from the first frame it hid: tool calls that go on (a subagent's, a sibling
+/// call's PreToolUse every 2 s) never keep a dialog with no hook item from its card. The first read 4 s after the
+/// first hidden frame makes the card; the core's tick reads the screen at that moment, so the card comes within the
+/// 5 s the trial allows a dialog with no card. The wait cannot grow much past this.
+#[test]
+fn a_dialog_with_no_hook_gets_its_card_within_the_bound_while_tools_go_on() {
+    use nunchiro_core::waiting::screen::Screen;
+    let frame = {
+        let mut screen = Screen::new(160, 50);
+        screen.feed(
+            "\x1b[2J\x1b[H\u{25cf} Bash(mkdir x)\r\nBash command\r\n  mkdir x\r\n Do you want to proceed?\r\n \u{276f} 1. Yes\r\n   2. No\r\n\r\n Esc to cancel\r\n"
+                .as_bytes(),
+        );
+        screen.detect(AgentKind::Claude).unwrap()
+    };
+    let dir = home("dialog-busy-tools");
+    let mut q = Queue::open(&dir).unwrap();
+    q.register("s", AgentKind::Claude, 0).unwrap();
+    q.observe("s", "UserPromptSubmit", &json!({"prompt":"go"}), "hook", 1)
+        .unwrap();
+    q.observe(
+        "s",
+        "PreToolUse",
+        &json!({"tool_name":"Bash","tool_input":{"command":"mkdir x"}}),
+        "hook",
+        1000,
+    )
+    .unwrap();
+    let first_frame = 1100;
+    let mut card = None;
+    for at in (first_frame..first_frame + 30_000).step_by(100) {
+        if at % 2000 == 0 {
+            let pre =
+                json!({"tool_name":"Read","tool_input":{"file_path":"/tmp/a"},"agent_id":"bg-1"});
+            q.observe("s", "PreToolUse", &pre, "hook", at).unwrap();
+        }
+        q.screen(
+            "s",
+            frame.kind.clone(),
+            frame.text.clone(),
+            frame.choices.clone(),
+            at,
+        )
+        .unwrap();
+        if !q.items_of("s").is_empty() {
+            card = Some(at);
+            break;
+        }
+    }
+    let card = card.expect("no card in 30 s while tools went on");
+    assert!(
+        card - first_frame <= 4000,
+        "card {} ms after the first hidden frame",
+        card - first_frame
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// A permission item restored from before a restart (reconciled, answers nothing) does not turn the wait off: the
+/// next request is still one card with one id.
+#[test]
+fn a_restored_permission_item_keeps_the_next_request_one_card() {
+    use nunchiro_core::waiting::screen::Screen;
+    let frame = {
+        let mut screen = Screen::new(160, 50);
+        screen.feed(
+            "\x1b[2J\x1b[H\u{25cf} Bash(mkdir new)\r\nBash command\r\n  mkdir new\r\n Do you want to proceed?\r\n \u{276f} 1. Yes\r\n   2. No\r\n\r\n Esc to cancel\r\n"
+                .as_bytes(),
+        );
+        screen.detect(AgentKind::Claude).unwrap()
+    };
+    let dir = home("restored-then-new");
+    let mut q = Queue::open(&dir).unwrap();
+    q.register("s", AgentKind::Claude, 0).unwrap();
+    q.observe(
+        "s",
+        "PermissionRequest",
+        &json!({"tool_name":"Bash","tool_input":{"command":"mkdir old"},"nunchiro_event_id":"old"}),
+        "hook",
+        10,
+    )
+    .unwrap();
+    drop(q);
+    let mut q = Queue::open(&dir).unwrap();
+    assert!(q.items_of("s")[0].reconciled);
+    let call = json!({"tool_name":"Bash","tool_input":{"command":"mkdir new"}});
+    q.observe("s", "PreToolUse", &call, "hook", 1000).unwrap();
+    let mut ids = std::collections::BTreeSet::new();
+    q.screen(
+        "s",
+        frame.kind.clone(),
+        frame.text.clone(),
+        frame.choices.clone(),
+        1050,
+    )
+    .unwrap();
+    let live = |q: &Queue| {
+        q.items_of("s")
+            .into_iter()
+            .filter(|i| !i.reconciled)
+            .map(|i| i.id)
+            .collect::<Vec<_>>()
+    };
+    ids.extend(live(&q));
+    let mut held = call.clone();
+    held["nunchiro_event_id"] = json!("new");
+    q.observe("s", "PermissionRequest", &held, "hook", 1100)
+        .unwrap();
+    ids.extend(live(&q));
+    assert_eq!(
+        ids.len(),
+        1,
+        "the new request showed under {} ids",
+        ids.len()
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// A held hook that starts late (a busy Mac: 3.5 s after its dialog was first read) is still one card with one id,
+/// while the screen is read again and again meanwhile.
+#[test]
+fn a_hook_3_5_s_after_its_dialog_is_still_one_card_with_one_id() {
+    use nunchiro_core::waiting::screen::Screen;
+    let frame = {
+        let mut screen = Screen::new(160, 50);
+        screen.feed(
+            "\x1b[2J\x1b[H\u{25cf} Bash(mkdir x)\r\nBash command\r\n  mkdir x\r\n Do you want to proceed?\r\n \u{276f} 1. Yes\r\n   2. No\r\n\r\n Esc to cancel\r\n"
+                .as_bytes(),
+        );
+        screen.detect(AgentKind::Claude).unwrap()
+    };
+    let call = json!({"tool_name":"Bash","tool_input":{"command":"mkdir x"}});
+    let dir = home("dialog-late-hook");
+    let mut q = Queue::open(&dir).unwrap();
+    q.register("s", AgentKind::Claude, 0).unwrap();
+    q.observe("s", "UserPromptSubmit", &json!({"prompt":"go"}), "hook", 1)
+        .unwrap();
+    q.observe("s", "PreToolUse", &call, "hook", 1000).unwrap();
+    let first_frame = 1100;
+    let mut ids = std::collections::BTreeSet::new();
+    for at in (first_frame..=first_frame + 3500 + 100).step_by(100) {
+        if at == first_frame + 3500 {
+            let mut held = call.clone();
+            held["nunchiro_event_id"] = json!("late");
+            q.observe("s", "PermissionRequest", &held, "hook", at)
+                .unwrap();
+        }
+        q.screen(
+            "s",
+            frame.kind.clone(),
+            frame.text.clone(),
+            frame.choices.clone(),
+            at,
+        )
+        .unwrap();
+        ids.extend(q.items_of("s").into_iter().map(|i| i.id));
+    }
+    let items = q.items_of("s");
+    assert_eq!(items.len(), 1, "{items:?}");
+    assert_eq!(ids.len(), 1, "the request showed under {} ids", ids.len());
+    assert_eq!(items[0].hook_event_id.as_deref(), Some("late"));
+    let _ = fs::remove_dir_all(&dir);
+}
