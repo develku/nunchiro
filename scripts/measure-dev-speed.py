@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
-"""Development speed for the scorecard (ticket 1127, part p30): the DORA four keys, adapted to this repo.
+"""Development speed for the scorecard (part p30): the DORA four keys, adapted to this repo.
 
-  python3 -B scripts/measure-dev-speed.py [--days 7] [--out FILE] [--tasks FILE] [--prs FILE] [--events FILE] [--main-log FILE]
+  python3 -B scripts/measure-dev-speed.py [--days 7] [--out FILE] [--tasks FILE] [--prs FILE] [--runs FILE] [--main-log FILE]
   python3 -B scripts/measure-dev-speed.py --selftest
 
 Read only. Sources:
-- merged pull requests (ticket 1148, the PR flow, every landing since 2026-11-26): one GitHub search of MEASURE_REPO
-  (default develku/nunchiro) through "gh api graphql", read only, or --prs FILE with the JSON of "gh pr list --state
-  merged --json ...".
-- git log of origin/main: "Merge lane <lane> (<branch> <sha>)" commits, the landings of the local gate before the PR
-  flow. The lane's own commits are <merge>^1..<merge>^2. Both kinds are counted.
+- pull requests into main (every landing is a merged one): one GitHub search of MEASURE_REPO (default
+  develku/nunchiro) through "gh api graphql", read only, or --prs FILE with the same fields as JSON: head branch,
+  title, opening and merge times, first commit, the checks of the last commit and the auto-merge enable times.
+- the CI runs of ci.yml on pull requests ("gh api .../actions/workflows/ci.yml/runs", every attempt of a rerun through
+  ".../attempts/<n>"), or --runs FILE: gate rejects, reruns and rework. When they cannot be read those figures are
+  null, not 0.
 - the main CI log (scripts/measure/ci-log.py: Actions runs on main and owner installs; scorecard.CI_LOG, --main-log or
-  MEASURE_CI_LOG): red episodes, culprit lanes (in its history part), owner installs.
-- for days before the PR flow only: the local gate's event file (--events FILE or MEASURE_EVENTS; none by default):
-  enqueue, gate_result, landed, eject, kick, receipt. The PR flow has no such events, so gate rejects, review rounds,
-  first pass and rework are not measured without it (null).
+  MEASURE_CI_LOG): red episodes, culprit commits (in its history part), owner installs.
 - the task ledger: --tasks FILE (the JSON of "nunchiro task list --all --json"); without it the script runs that command
   when NUNCHIRO_SESSION is set (it only lists), else it skips the ledger.
 - the core's event journal ("nunchiro events --history", read from the day files; the owner's shell only) and the agents'
@@ -22,20 +20,20 @@ Read only. Sources:
   MEASURE_CODEX_SESSIONS (default ~/.codex/sessions).
 
 The four keys:
-1. Deployment frequency: lanes landed on main per day (and landings, a landing being one merge time that can carry
-   several lanes), and owner installs per day ("owner install ...: installed" in the main CI log).
-2. Lead time for changes: first lane commit (author date) to the merge on main, median and p90 (the DORA definition);
-   also task created (ledger) to the merge, for lanes whose branch matches a task's worktree folder.
-3. Change failure rate: landed lanes later reverted (a "fable-revert-<lane>" merge, a "lead-revert<ticket>" merge
-   (the lane of that ticket), a lane whose own commits are all reverts ("Revert ..."), or a merged pull request from a
-   "revert-<number>-<branch>" branch, GitHub's Revert button) or named culprit in the main CI log, over lanes landed.
-   Gate rejects (eject and kick events) are shown beside it: they never reached main.
+1. Deployment frequency: pull requests landed on main per day (and landings, a landing being one merge time), owner
+   installs per day ("owner install ...: installed" in the main CI log), and nights (local 00:00-07:00) with a landing.
+2. Lead time for changes: first commit (author date) to the merge on main, median and p90 (the DORA definition); also
+   task created (ledger) to the merge, for branches that match a task's worktree folder.
+3. Change failure rate: landed pull requests later reverted (GitHub's "revert-<number>-<branch>" branch, a title
+   'Revert "<title>"', git's default subject, which names the reverted pull request by its title, or a branch named
+   as a revert by scorecard.REVERT_LANE) or named culprit in the main CI log, over those landed.
+   Gate rejects are shown beside it: a pull request is rejected when an attempt of a CI run on it that started at or
+   after its first auto-merge enable ended in failure or timed out (reds before that are the builder's own checks,
+   counted apart). Rejects over landed plus rejected.
 4. Time to restore: main red to green again (the main CI log), median.
 Flow split, where data exists: task created to the Reviewer seat, the Reviewer seat to its pass, the pass to the enqueue,
-the gate queue (last enqueue to landed, less the gate runs) and the gate runs (gate_result durations of the landed
-candidate). Review rounds per lane: distinct reviewed patches (receipt events of kind review). For a pull request the
-enqueue is its opening, the gate run its last CI run (first job start to the end of `gate`) and the gate queue the rest
-of the time to the merge.
+the gate queue and the gate run. The enqueue is the last auto-merge enable before the merge (none: the queue is not
+known), the gate run the last CI run (first job start to the end of `gate`) and the gate queue the rest of the time.
 """
 import argparse, datetime, json, os, re, statistics, subprocess, sys, time
 from pathlib import Path
@@ -44,9 +42,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts/measure"))
 import scorecard  # noqa: E402  (CI_LOG, its date and the red-episode parser of part p27)
 
-EVENTS = os.environ.get("MEASURE_EVENTS")
-MERGE = re.compile(r"^Merge lane (\S+) \((\S+) [0-9a-f]+\)$")
-REVERT = scorecard.REVERT_LANE  # a local gate or lead revert lane; GitHub's revert branch of a pull request
+REPO = os.environ.get("MEASURE_REPO") or "develku/nunchiro"
+REVERT = scorecard.REVERT_LANE  # an older revert lane name; GitHub's revert branch of a pull request
+REVERT_TITLE = re.compile(r'^Revert "(?!Revert ")(.*)"$')  # git's default subject; a revert of a revert lands it again
+RED = ("failure", "timed_out")
 DAY = 86400
 
 
@@ -78,28 +77,14 @@ def iso(ts):
     return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
 
 
-def merges(since):
-    """[{lane, branch, sha, at, first_commit, subjects}] for the first-parent lane merges on origin/main since an epoch."""
-    out = []
-    for line in git("log", "origin/main", "--first-parent", "--merges", f"--since=@{int(since)}", "--format=%H %ct %s").splitlines():
-        sha, at, subject = line.split(" ", 2)
-        m = MERGE.match(subject)
-        if not m:
-            continue
-        own = [x.split(" ", 1) for x in git("log", "--no-merges", "--format=%at %s", f"{sha}^1..{sha}^2").splitlines()]
-        out.append(dict(lane=m[1], branch=m[2], sha=sha, at=int(at), first_commit=min(int(t) for t, _ in own) if own else None,
-                        subjects=[x for _, x in own]))
-    return out
-
-
 def pr_merges(prs, since):
-    """The rows of merges() for merged pull requests (the JSON of "gh pr list --state merged"): the lane and the branch
-    are the head branch, the sha is the commit on main. 'opened' and 'gate_run_s' (the last CI run, from the first job's
-    start to the end of the `gate` job) feed the flow split.
-    shortcut: the opening stands for the enqueue; read the auto-merge time from the PR timeline when PRs are opened
-    long before they are ready."""
+    """One row per pull request merged since an epoch: the lane and the branch are the head branch, the sha is the
+    commit on main. 'opened', 'enabled' (the auto-merge enable times) and 'gate_run_s' (the last CI run, from the first
+    job's start to the end of the `gate` job) feed the flow split."""
     out = []
     for p in prs:
+        if not p.get("mergedAt"):
+            continue
         at = iso(p["mergedAt"])
         if at < since:
             continue
@@ -107,23 +92,28 @@ def pr_merges(prs, since):
         checks = [c for c in p.get("statusCheckRollup") or [] if c.get("workflowName") == "CI" and c.get("startedAt")]
         gate = next((c for c in checks if c.get("name") == "gate" and c.get("completedAt")), None)
         out.append(dict(lane=p["headRefName"], branch=p["headRefName"], sha=(p.get("mergeCommit") or {}).get("oid"), at=int(at),
-                        first_commit=int(min(own)) if own else None, opened=iso(p["createdAt"]),
+                        first_commit=int(min(own)) if own else None, opened=iso(p["createdAt"]), title=p.get("title") or "",
+                        enabled=sorted(iso(x) for x in p.get("autoMergeEnabledAt") or []),
                         gate_run_s=gate and iso(gate["completedAt"]) - min(iso(c["startedAt"]) for c in checks)))
     return out
 
 
-# One page is 50 pull requests with their first commit and the checks of their last one. "gh pr list --json commits"
+# One page is 50 pull requests with their first commit, the checks of their last one and their last 5 auto-merge enables
+# (GitHub records a squash auto-merge as its own event type). "gh pr list --json commits"
 # asks for every commit and its authors, which GitHub refuses from 50 pull requests up (500,000 nodes).
 PR_QUERY = """query($q: String!, $endCursor: String) { search(query: $q, type: ISSUE, first: 50, after: $endCursor) {
   pageInfo { hasNextPage endCursor }
-  nodes { ... on PullRequest { number headRefName createdAt mergedAt mergeCommit { oid }
+  nodes { ... on PullRequest { number title headRefName headRefOid createdAt mergedAt mergeCommit { oid }
+    timelineItems(itemTypes: [AUTO_MERGE_ENABLED_EVENT, AUTO_SQUASH_ENABLED_EVENT, AUTO_REBASE_ENABLED_EVENT], last: 5) { nodes {
+      ... on AutoMergeEnabledEvent { createdAt } ... on AutoSquashEnabledEvent { createdAt } ... on AutoRebaseEnabledEvent { createdAt } } }
     first: commits(first: 1) { nodes { commit { authoredDate } } }
     last: commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 50) { nodes {
       ... on CheckRun { name startedAt completedAt checkSuite { workflowRun { workflow { name } } } } } } } } } } } } } }"""
 
 
 def gh_prs(q):
-    """Merged pull requests for a search, in the field names of "gh pr list --json" (read only), and where they came from."""
+    """Pull requests for a search, in the field names of "gh pr list --json" plus autoMergeEnabledAt (read only), and
+    where they came from."""
     r = subprocess.run(["gh", "api", "graphql", "--paginate", "--slurp", "-f", "query=" + PR_QUERY, "-f", "q=" + q], capture_output=True, text=True)
     if r.returncode:
         return [], f"not read ({r.stderr.strip()[:80]})"
@@ -132,6 +122,7 @@ def gh_prs(q):
     for n in (n for page in json.loads(r.stdout) for n in page["data"]["search"]["nodes"] if n):
         checks = dig((n.pop("last")["nodes"] or [None])[0], "commit", "statusCheckRollup", "contexts", "nodes") or []
         out.append(dict(n, commits=[c["commit"] for c in n.pop("first")["nodes"]],
+                        autoMergeEnabledAt=[x["createdAt"] for x in n.pop("timelineItems")["nodes"] if x],
                         statusCheckRollup=[dict(c, workflowName=dig(c, "checkSuite", "workflowRun", "workflow", "name")) for c in checks if c]))
     return out, "gh api graphql"
 
@@ -139,8 +130,38 @@ def gh_prs(q):
 def read_prs(path, since):
     if path:
         return json.loads(Path(path).read_text()), f"file {Path(path).name}"
-    return gh_prs(f"repo:{os.environ.get('MEASURE_REPO') or 'develku/nunchiro'} is:pr is:merged base:main "
-                  f"merged:>={datetime.date.fromtimestamp(since - DAY)}")
+    # every state: a pull request closed without merging after a red gate is a reject too
+    return gh_prs(f"repo:{REPO} is:pr base:main updated:>={datetime.date.fromtimestamp(since - DAY)}")
+
+
+def run_row(r):
+    """A REST workflow run in the field names of "gh run list --json" (scorecard.attempts reads them)."""
+    return dict(databaseId=r["id"], attempt=r.get("run_attempt") or 1, headBranch=r["head_branch"], headSha=r["head_sha"],
+                status=r["status"], conclusion=r["conclusion"], createdAt=r["created_at"], startedAt=r["run_started_at"],
+                updatedAt=r["updated_at"])
+
+
+def gh_json(*args):
+    r = subprocess.run(["gh", *args], capture_output=True, text=True)
+    if r.returncode:
+        raise OSError(r.stderr.strip()[:80])
+    return json.loads(r.stdout)
+
+
+def read_runs(path, since):
+    """(one row per attempt of the ci.yml runs on pull requests, where they came from); None for the rows when they
+    cannot be read. Every attempt of a rerun is its own row, as in ci-log.py."""
+    try:
+        if path:
+            runs, src = json.loads(Path(path).read_text()), f"file {Path(path).name}"
+        else:
+            day = datetime.date.fromtimestamp(since - DAY)
+            pages = gh_json("api", "--paginate", "--slurp",
+                            f"repos/{REPO}/actions/workflows/ci.yml/runs?event=pull_request&per_page=100&created=%3E%3D{day}")
+            runs, src = [run_row(r) for page in pages for r in page["workflow_runs"]], "gh api actions runs"
+        return scorecard.attempts(runs, lambda run, n: gh_json("api", f"repos/{REPO}/actions/runs/{run}/attempts/{n}")), src
+    except (OSError, ValueError, KeyError) as e:
+        return None, f"not read ({e})"
 
 
 def stamped(text, start):
@@ -157,17 +178,6 @@ def stamped(text, start):
         last = t
         midnight = datetime.datetime.combine(start + datetime.timedelta(days=day), datetime.time())
         yield midnight.timestamp() + t, line
-
-
-def read_events(path):
-    out = []
-    if path and Path(path).is_file():
-        for line in Path(path).read_text().splitlines():
-            try:
-                out.append(json.loads(line))
-            except ValueError:
-                pass
-    return out
 
 
 def read_tasks(path):
@@ -320,19 +330,25 @@ def seat_time(events, now):
     return states, stalls
 
 
-def measure(days, tasks_file=None, events_path=EVENTS, log_path=scorecard.CI_LOG, now=None, project=None,
-            claude_dirs=(), codex_dir=None, core=None, prs_file=None, prs=None):
+def measure(days, tasks_file=None, log_path=scorecard.CI_LOG, now=None, project=None,
+            claude_dirs=(), codex_dir=None, core=None, prs_file=None, prs=None, runs_file=None, runs=None):
     now = now or time.time()
     start = now - days * DAY
     prs, prs_src = (prs, "given") if prs is not None else read_prs(prs_file, start)
-    ms = merges(start) + pr_merges(prs, start)
-    for m in ms:  # what each reverts (scorecard.revert_of), None for a landing
-        m["reverts"] = scorecard.revert_of(m["lane"], m.get("subjects", ()))
+    runs, runs_src = (runs, "given") if runs is not None else read_runs(runs_file, start)
+    ms = pr_merges(prs, start)
+    by_title = {m["title"]: m["lane"] for m in ms}
+    for m in ms:  # what each reverts (the branch name, else the title naming the reverted pull request), None for a landing
+        m["reverts"] = scorecard.revert_of(m["lane"])
+        named = REVERT_TITLE.match(m["title"])
+        if m["reverts"] is None and named:
+            m["reverts"] = by_title.get(re.sub(r" \(#\d+\)$", "", named[1]), "")  # squash subjects end with " (#n)"
     landed = [m for m in ms if m["reverts"] is None]
-    events = [e for e in read_events(events_path) if e.get("ts") and iso(e["ts"]) >= start - 2 * DAY]
     tasks, tasks_src = read_tasks(tasks_file)
 
     # 1. Deployment frequency
+    if not log_path.is_file():
+        print(f"main CI log missing at {log_path}: run scripts/measure/ci-log.py first", file=sys.stderr)
     mw = log_path.read_text() if log_path.is_file() else ""
     mw_start = scorecard.log_start(mw)
     lines = list(stamped(mw, mw_start)) if mw_start else []
@@ -343,7 +359,9 @@ def measure(days, tasks_file=None, events_path=EVENTS, log_path=scorecard.CI_LOG
                 landings_per_day=round(len(landings) / days, 1), days_with_a_landing=sum(1 for v in lane_days.values() if v),
                 lanes_by_day=lane_days, owner_installs=len(installs), owner_installs_per_day=round(len(installs) / days, 1),
                 days_with_an_install=sum(1 for v in per_day(installs, start, days).values() if v),
-                installs_by_day=per_day(installs, start, days))
+                installs_by_day=per_day(installs, start, days),
+                nights_with_a_landing=len({datetime.datetime.fromtimestamp(m["at"]).date() for m in landed
+                                           if datetime.datetime.fromtimestamp(m["at"]).hour < 7}))
 
     # 2. Lead time
     by_folder = {}
@@ -361,10 +379,13 @@ def measure(days, tasks_file=None, events_path=EVENTS, log_path=scorecard.CI_LOG
             rev = sorted(s["at"] / 1000 for s in task.get("seats", []) if s.get("role") == "reviewer")
             passed = (task.get("review") or {}).get("pass") and task["review"]["at"] / 1000
             row.update(reviewer_seat=rev[0] if rev else None, review_pass=passed or None, created=task["created"] / 1000)
-        if m.get("opened"):  # a pull request
-            row.update(enqueued=m["opened"], first_enqueue=m["opened"])
+        if m["gate_run_s"] is not None:
+            row.update(gate_run_s=m["gate_run_s"])
+        enabled = [t for t in m["enabled"] if t <= m["at"]]
+        if enabled:  # merged by hand (no enable event): the queue is not known, never the time from the opening
+            row.update(enqueued=enabled[-1], first_enqueue=enabled[0])
             if m["gate_run_s"] is not None:
-                row.update(gate_run_s=m["gate_run_s"], gate_queue_s=max(0, m["at"] - m["opened"] - m["gate_run_s"]))
+                row.update(gate_queue_s=max(0, m["at"] - enabled[-1] - m["gate_run_s"]))
         rows.append(row)
     lead = dict(commit_to_main=hours(r["commit_lead_s"] for r in rows), task_to_main=hours(r["task_lead_s"] for r in rows),
                 lanes_with_task=sum(1 for r in rows if r["task"]), tasks_source=tasks_src, pull_requests_source=prs_src)
@@ -375,17 +396,32 @@ def measure(days, tasks_file=None, events_path=EVENTS, log_path=scorecard.CI_LOG
     of_ticket = lambda lane: any(t.isdigit() and lane.endswith(t) for t in reverted)  # noqa: E731
     culprit_shas = set(re.findall(r"^\d\d:\d\d:\d\d culprit ([0-9a-f]{40})", mw, re.M))
     failed = sorted({m["lane"] for m in landed if m["lane"] in reverted or of_ticket(m["lane"]) or m["sha"] in culprit_shas})
-    win = [e for e in events if iso(e["ts"]) >= start]
-    rejects = sorted({e["lane"] for e in win if e["kind"] in ("eject", "kick")})
+    # Gate rejects: a red attempt that started at or after the pull request's first auto-merge enable, merged or not.
+    first_enable = {}
+    for p in prs:
+        for x in p.get("autoMergeEnabledAt") or []:
+            first_enable[p["headRefName"]] = min(first_enable.get(p["headRefName"], iso(x)), iso(x))
+    tried = sorted((r for r in runs or [] if r.get("startedAt") and iso(r["startedAt"]) >= start), key=lambda r: iso(r["startedAt"]))
+    done = [r for r in tried if r["status"] == "completed"]
+    queued = lambda r: r["headBranch"] in first_enable and iso(r["startedAt"]) >= first_enable[r["headBranch"]]  # noqa: E731
+    red = [r for r in done if r["conclusion"] in RED]
+    rejects = sorted({r["headBranch"] for r in red if queued(r)})
     tries = len(landed) + len(rejects)
-    rounds = {}
-    for e in win:
-        if e["kind"] == "receipt" and e.get("review_kind") == "review":
-            rounds.setdefault(e["lane"], set()).add(e["patch_id"])
+    by_sha = {}
+    for r in done:
+        by_sha.setdefault((r["headBranch"], r["headSha"]), []).append(r["conclusion"])
+    # red then green on the same commit: the PR-flow form of a contaminated gate result
+    rerun_green = {k for k, v in by_sha.items() if "success" in v and any(c in RED for c in v[:v.index("success")])}
     landed_names = {m["lane"] for m in landed}
-    rr = [len(v) for k, v in rounds.items() if k in landed_names]
+    rr = []  # review rounds: the PR flow keeps no review record yet
+    read = runs is not None
     cfr = dict(failed_lanes=failed, change_failure_pct=round(100 * len(failed) / len(landed), 1) if landed else None,
-               gate_rejected_lanes=rejects, gate_reject_pct=round(100 * len(rejects) / tries, 1) if tries and win else None,
+               gate_rejected_lanes=rejects, gate_reject_pct=round(100 * len(rejects) / tries, 1) if tries and read else None,
+               rerun_green_lanes=sorted({b for b, _ in rerun_green}), pre_enqueue_red=sum(1 for r in red if not queued(r)),
+               cancelled=sum(1 for r in done if r["conclusion"] == "cancelled"),
+               kicks="not counted: GitHub keeps no event for a pull request set aside by a conflict",
+               gate_results=dict(attempts=len(done), red_pct=round(100 * len(red) / len(done), 1) if done else None,
+                                 rerun_green_pct=round(100 * len(rerun_green) / len(by_sha), 1) if by_sha else None),
                review_rounds=dict(lanes=len(rr), median=statistics.median(rr) if rr else None, max=max(rr, default=None)))
 
     # 4. Time to restore (the p27 parser, cut to the window)
@@ -398,29 +434,11 @@ def measure(days, tasks_file=None, events_path=EVENTS, log_path=scorecard.CI_LOG
 
     # What each source covers: a figure counts only the part of the window its source has.
     stamp = lambda t: t and datetime.datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M")  # noqa: E731
-    coverage = dict(git_merges_from=stamp(min((m["at"] for m in ms if "opened" not in m), default=None)),
-                    pull_requests_from=stamp(min((m["at"] for m in ms if "opened" in m), default=None)),
+    coverage = dict(pull_requests_from=stamp(min((m["at"] for m in ms), default=None)),
+                    pull_request_checks=runs_src, checks_from=stamp(min((iso(r["startedAt"]) for r in tried), default=None)),
                     main_log_from=stamp(lines[0][0]) if lines else None,
-                    events_from=stamp(min((iso(e["ts"]) for e in win), default=None)),
                     task_ledger_from=stamp(min((t["created"] / 1000 for t in tasks), default=None)))
 
-    # Flow split
-    enq, gate_s, landed_ev = {}, {}, {}
-    for e in events:
-        if e["kind"] == "enqueue":
-            enq.setdefault(e["lane"], []).append(iso(e["ts"]))
-        elif e["kind"] == "gate_result" and e.get("duration_s"):
-            gate_s[e["candidate"]] = gate_s.get(e["candidate"], 0) + e["duration_s"]
-        elif e["kind"] == "landed":
-            for lane in e["lanes"]:
-                landed_ev[lane] = (iso(e["ts"]), e["candidate"])
-    for r in rows:
-        if r["lane"] in landed_ev:
-            at, cand = landed_ev[r["lane"]]
-            before = [t for t in enq.get(r["lane"], []) if t <= at]
-            if before:
-                r.update(enqueued=before[-1], first_enqueue=min(t for t in before if t >= before[-1] - 3 * DAY),
-                         gate_run_s=gate_s.get(cand, 0), gate_queue_s=max(0, at - before[-1] - gate_s.get(cand, 0)))
     # 5. Cost per landed lane: every session whose folder is the lane's worktree (Builder, Reviewers, rework)
     # the worktree folder; GitHub's revert branch ends with the branch it reverts and is not a second landing of it
     tail_of = lambda m: m["lane"] if m["reverts"] is not None else m["branch"].split("/", 1)[-1]  # noqa: E731
@@ -474,8 +492,8 @@ def measure(days, tasks_file=None, events_path=EVENTS, log_path=scorecard.CI_LOG
     revert_lanes = len(ms) - len(landed)
     rework = dict(first_pass_pct=round(100 * one / len(rr), 1) if rr else None, reviewed_lanes=len(rr),
                   rejected_then_landed=rejected_landed, repeat_landings=again, revert_landings=revert_lanes,
-                  # without gate events the rejected-then-landed lanes are unknown: rework is not measured
-                  rework_pct=round(100 * (len(rejected_landed) + again + revert_lanes) / len(ms), 1) if ms and win else None)
+                  # without the CI runs the rejected-then-landed pull requests are unknown: rework is not measured
+                  rework_pct=round(100 * (len(rejected_landed) + again + revert_lanes) / len(ms), 1) if ms and read else None)
 
     # 8. Seat utilisation from the core's attention states (live states only: exited and lost seats are gone)
     live = {}
@@ -513,11 +531,12 @@ def report(d):
         f"Development speed, last {d['days']} days (since {d['since']}), origin/main {d['commit']}",
         "Sources from: " + ", ".join(f"{k} {v}" for k, v in d["coverage"].items()),
         f"1 Deployment frequency: {f['lanes']} lanes in {f['landings']} landings ({f['lanes_per_day']} lanes/day, "
-        f"landings on {f['days_with_a_landing']} of {len(f['lanes_by_day'])} calendar days); owner installs {f['owner_installs']} ({f['owner_installs_per_day']}/day, on {f['days_with_an_install']} days)",
+        f"landings on {f['days_with_a_landing']} of {len(f['lanes_by_day'])} calendar days, {f['nights_with_a_landing']} nights); owner installs {f['owner_installs']} ({f['owner_installs_per_day']}/day, on {f['days_with_an_install']} days)",
         f"2 Lead time: first commit to main {h(lt['commit_to_main'])}; task created to main {h(lt['task_to_main'])} "
         f"(task ledger: {lt['tasks_source']})",
         f"3 Change failure rate: {c['change_failure_pct']} % ({len(c['failed_lanes'])} of {f['lanes']}: {', '.join(c['failed_lanes']) or 'none'}); "
-        f"gate rejects {c['gate_reject_pct']} % ({len(c['gate_rejected_lanes'])} lanes); review rounds median {c['review_rounds']['median']}, "
+        f"gate rejects {c['gate_reject_pct']} % ({len(c['gate_rejected_lanes'])} lanes; red before auto-merge {c['pre_enqueue_red']}, "
+        f"red then green on a rerun {len(c['rerun_green_lanes'])}, cancelled {c['cancelled']}; attempts {c['gate_results']}); review rounds median {c['review_rounds']['median']}, "
         f"max {c['review_rounds']['max']} (n {c['review_rounds']['lanes']})",
         f"4 Time to restore: median {rs['median_min']} min, max {rs['max_min']} min over {len(rs['episodes'])} red episodes"
         + (" (main is red now)" if rs["still_red"] else ""),
@@ -543,16 +562,21 @@ def selftest():
     got = [t for t, _ in stamped("23:00:00 a\nnoise\n01:00:00 b\n01:00:00 c\n", start)]
     base = datetime.datetime(2026, 11, 20).timestamp()
     assert got == [base + 23 * 3600, base + DAY + 3600, base + DAY + 3600], got
-    assert MERGE.match("Merge lane lead-x1 (lead/x-1 8f4cac357467)")[2] == "lead/x-1"
-    assert not MERGE.match("Merge remote-tracking branch 'origin/main' into lead/x-1")
+    assert REVERT_TITLE.match('Revert "Composer takes focus (#12)"')[1] == "Composer takes focus (#12)"
+    assert not REVERT_TITLE.match('Revert "Revert "x""') and not REVERT_TITLE.match("Revert button is blue")
+    rest = dict(id=7, run_attempt=2, head_branch="b", head_sha="ab", status="completed", conclusion="success",
+                created_at="c", run_started_at="s", updated_at="u")
+    got = scorecard.attempts([run_row(rest)], lambda run, n: dict(status="completed", conclusion="failure", run_started_at="s1", updated_at="u1"))
+    assert [(r["attempt"], r["conclusion"], r["startedAt"], r["headBranch"]) for r in got] == [(2, "failure", "s1", "b"), (2, "success", "s", "b")], got
     assert REVERT.match("fable-revert-lead-x1")[1] == "lead-x1" and REVERT.match("revert-12-lead/x-1")[1] == "lead/x-1"
     assert not REVERT.match("lead/revert-button-3") and REVERT.match("lead-revert1145")[1] == "1145"
-    pr = dict(headRefName="lead/x-1", createdAt="2026-11-26T01:00:00Z", mergedAt="2026-11-26T02:00:00Z", mergeCommit=dict(oid="ab"),
+    pr = dict(headRefName="lead/x-1", autoMergeEnabledAt=["2026-11-26T01:10:00Z"], createdAt="2026-11-26T01:00:00Z", mergedAt="2026-11-26T02:00:00Z", mergeCommit=dict(oid="ab"),
               commits=[dict(authoredDate="2026-11-25T23:00:00Z")],
               statusCheckRollup=[dict(workflowName="CI", name="lint", startedAt="2026-11-26T01:30:00Z", completedAt="2026-11-26T01:31:00Z"),
                                  dict(workflowName="CI", name="gate", startedAt="2026-11-26T01:49:55Z", completedAt="2026-11-26T01:50:00Z")])
     got = pr_merges([pr, dict(pr, mergedAt="2026-11-20T00:00:00Z")], iso("2026-11-25T00:00:00Z"))
     assert len(got) == 1 and got[0]["gate_run_s"] == 1200 and got[0]["at"] - got[0]["first_commit"] == 3 * 3600, got
+    assert got[0]["enabled"] == [iso("2026-11-26T01:10:00Z")] and not pr_merges([dict(pr, mergedAt=None)], 0)
     assert hours([3600, 7200, None]) == dict(n=2, median_h=1.5, p90_h=2.0)
     assert minutes([60, 180]) == dict(n=2, median_min=2, p90_min=3)
     prices = price_table()
@@ -571,8 +595,8 @@ def main():
     ap.add_argument("--days", type=int, default=7)
     ap.add_argument("--out", help="JSON file (default docs/measure/devspeed-<today>.json)")
     ap.add_argument("--tasks", help='the JSON of "nunchiro task list --all --json"')
-    ap.add_argument("--prs", help='the JSON of "gh pr list --state merged --json headRefName,createdAt,mergedAt,mergeCommit,commits,statusCheckRollup" (default: ask GitHub through gh)')
-    ap.add_argument("--events", default=EVENTS, help="the local gate's event file, for days before the PR flow")
+    ap.add_argument("--prs", help='the JSON of "gh pr list --json number,title,headRefName,headRefOid,createdAt,mergedAt,mergeCommit,commits,statusCheckRollup" plus autoMergeEnabledAt (default: ask GitHub through gh)')
+    ap.add_argument("--runs", help='the JSON of the CI runs on pull requests, one row per attempt in the field names of "gh run list" plus headBranch (default: ask GitHub through gh)')
     ap.add_argument("--main-log", default=str(scorecard.CI_LOG), help="the main CI log (scripts/measure/ci-log.py)")
     ap.add_argument("--project", default=str(Path(scorecard._COMMON).parent) if scorecard._COMMON else None,
                     help="the place whose core events are read (default: the main checkout)")
@@ -582,8 +606,8 @@ def main():
         return selftest()
     claude = list(dict.fromkeys([str(Path.home() / ".claude")] + [p for p in (os.environ.get("MEASURE_CLAUDE_DIRS") or "").split(os.pathsep) if p]))
     codex = os.environ.get("MEASURE_CODEX_SESSIONS") or str(Path.home() / ".codex/sessions")
-    d = measure(a.days, a.tasks, a.events, Path(a.main_log), project=a.project, claude_dirs=claude,
-                codex_dir=codex if Path(codex).is_dir() else None, prs_file=a.prs)
+    d = measure(a.days, a.tasks, Path(a.main_log), project=a.project, claude_dirs=claude,
+                codex_dir=codex if Path(codex).is_dir() else None, prs_file=a.prs, runs_file=a.runs)
     out = Path(a.out) if a.out else ROOT / f"docs/measure/devspeed-{time.strftime('%Y-%m-%d')}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(d, indent=1) + "\n")

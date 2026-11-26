@@ -458,9 +458,9 @@ correctly. MD1-MD5 replaced MX1-MX5 on 2026-11-25; the number figures stay.
 - SC5 Two clean clones of main build the same binary (scripts/update-clone.sh, cargo --release --locked --offline).
 
 ### p30 Development speed (added 2026-11-25 by the owner, ticket 1127)
-Measured by `python3 -B scripts/measure-dev-speed.py [--days 7]` over the last 7 days: git merges on origin/main (the
-ground truth, with the merged pull requests), the main CI log, the task ledger and, for days before the PR flow, the
-local gate's events, all read only; it writes
+Measured by `python3 -B scripts/measure-dev-speed.py [--days 7]` over the last 7 days: the pull requests merged into
+main (the ground truth) with their auto-merge times, the GitHub Actions runs on pull requests (every attempt), the main
+CI log and the task ledger, all read only; it writes
 docs/measure/devspeed-<date>.json. The bands are the DORA ones (State of DevOps reports: elite, high, medium, low).
 pass = 100 points (20 of the part), partial = 50 (10), fail = 0. The IDs are DV, because DS1-DS5 belong to p19.
 - DV1 Deployment frequency (DORA elite: on demand, several a day). pass: a lane lands on main on at least 5 of the 7
@@ -471,7 +471,8 @@ pass = 100 points (20 of the part), partial = 50 (10), fail = 0. The IDs are DV,
   the merge is shown beside it.
 - DV3 Change failure rate: landed lanes later reverted (a revert lane or pull request) or named culprit in the main CI log,
   over lanes landed (elite to medium: 0-15 %). pass: 15 % or less; partial: 30 % or less; fail: more, or not measured.
-  Gate rejects (eject and kick) and review rounds are shown, not scored: a rejected lane never reached main.
+  Gate rejects (a CI run on a pull request that went red after its auto-merge was turned on) and review rounds are
+  shown, not scored: a rejected lane never reached main.
 - DV4 Time to restore main: red to green in the main CI log, median (elite: under 1 h). pass: under 60 min; partial:
   under 24 h (high); fail: 24 h or more, or not measured.
 - DV5 The flow split is measured and its waits are short: build, review, review to enqueue, gate queue, gate run.
@@ -584,6 +585,13 @@ Where v2 differs from the audit's proposal, and why:
   the local main watcher's log; landings are merged pull requests. No anchor, window or method changed. Gate rejects,
   review rounds, first pass and rework need the local gate's events, which the PR flow does not have: they read "not
   measured" for days after 2026-11-26 (rework read 0 rejects before; now it is null, never better).
+- Source names (2026-11-27, PR-flow data): p30 reads pull requests and the Actions runs on them instead of the local
+  gate's events and "Merge lane" merges. A gate reject is a pull request with a red CI attempt that started at or after
+  its first auto-merge enable (reds before it are the builder's own checks, shown apart; a conflict set-aside has no
+  GitHub event and is not counted). The enqueue is the last auto-merge enable before the merge, no longer the opening
+  (the opening put the review wait into the gate queue); without an enable the queue is not known. A pull request
+  titled `Revert "<title>"` reverts the one with that title. No anchor, band or window changed; where the runs cannot
+  be read, rejects and rework read null.
 - Owner decision 2026-11-26 (stricter): p14 adds memory-pressure kills over 7 days and row ML1. The Mac staying responsive is the owner's second priority, and the idle figures alone scored a frozen Mac the same as a calm one.
 
 Not changed in v2 (the audit's lower-priority list, outside the approval of 2026-11-26): the weight of the default
