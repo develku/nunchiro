@@ -13,6 +13,8 @@ type T = (key: Key, args?: Record<string, string | number>) => string;
 const LOW_MEMORY = /^(Your|This) Mac is low on memory, so the new session was not started/;
 /** Whether a start was refused by the low-memory hold, which the owner's "Start anyway" passes. */
 export const isLowMemory = (e: unknown) => LOW_MEMORY.test(rawError(e));
+/** A window start as sent: `anyway` wraps it as the owner's Start anyway, past a low-memory hold. */
+export const startOp = (start: { op: 'start'; [k: string]: unknown }, anyway = false) => (anyway ? { op: 'start_anyway', start } : start);
 
 // [pattern, what happened, what to do]. The web gets only the core's message string (no code), so patterns are the
 // core's own wording. Order matters: the first match wins. A named group (`(?<name>...)`) fills that placeholder.
@@ -264,7 +266,8 @@ export function tipError(t: T, e: unknown, foreign = false): string {
 
 /** A failure: the plain line, `retry` (for a read that left the page with nothing to show), and the raw text under a
  *  closed Details. */
-export function ErrorLine({ t, error, retry, className = 'conflict', foreign, field }: { t: T; error: unknown; retry?: () => void; className?: string; foreign?: boolean; field?: string }) {
+/** `anyway`: a low-memory hold's Start anyway, the same start past the hold. */
+export function ErrorLine({ t, error, retry, anyway, className = 'conflict', foreign, field }: { t: T; error: unknown; retry?: () => void; anyway?: () => void; className?: string; foreign?: boolean; field?: string }) {
   if (!error) return null;
   const { details } = explainError(t, error, foreign);
   return (
@@ -274,6 +277,13 @@ export function ErrorLine({ t, error, retry, className = 'conflict', foreign, fi
         <button type="button" className="btn sretry" onClick={retry}>
           {t('settings.kit.retry')}
         </button>
+      )}
+      {anyway && isLowMemory(error) && (
+        <span className="held-act">
+          <button type="button" className="btn" data-tip={t('err.startAnyway.tip')} onClick={anyway}>
+            {t('err.startAnyway')}
+          </button>
+        </span>
       )}
       <ErrorDetails t={t} details={details} />
     </div>

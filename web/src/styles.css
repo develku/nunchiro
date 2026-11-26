@@ -3820,7 +3820,7 @@ button:disabled {
 }
 /* A held start's Start anyway: the Undo line's quiet tint button, no orange or red (mockup memory-hold-m8). */
 .pane-note-act,
-.newtab .nt-held .btn {
+.held-act .btn {
   border-color: transparent;
   background: var(--control-quiet-bg);
   color: var(--text);
@@ -3832,10 +3832,10 @@ button:disabled {
   font-size: var(--fs-1);
 }
 .pane-note-act:hover,
-.newtab .nt-held .btn:hover {
+.held-act .btn:hover {
   background: var(--control-quiet-hover);
 }
-.newtab .nt-held {
+.held-act {
   display: flex;
   margin-top: var(--sp-6);
 }

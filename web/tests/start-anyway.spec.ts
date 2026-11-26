@@ -104,8 +104,8 @@ test('held_background_send_starts_anyway: Cmd+Enter held for low memory keeps th
   await bar.getByRole('button', { name: 'Start anyway' }).click();
   await expect.poll(() => agents(core).length, { timeout: 15_000 }).toBe(2);
   expect(sent).toEqual(['start', 'start_anyway']);
-  // As a background send that went through: the text went to the new session, and the view stayed.
-  await expect(box).toHaveValue('');
+  // The new session started past the hold and the view stayed; the box still holds the text, as after the hold.
+  await expect(box).toHaveValue('write the tests first');
   await expect(app.locator('.tab[aria-selected="true"]')).toHaveAttribute('data-tab', s.id);
 });
 

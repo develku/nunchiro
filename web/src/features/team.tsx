@@ -160,11 +160,13 @@ function TeamPage({ core, t, projects, closeSettings, toast, sessions }: Pick<Pa
     if (await act(saveOp(draft))) setDraft(null);
   };
   // One seat, one session: the core shows an open seat, or starts one in the teammate's folder with its brief.
-  const open = async (m: Teammate) => {
+  const opening = useRef<Teammate | null>(null); // the teammate a held open's Start anyway opens
+  const open = async (m: Teammate, anyway = false) => {
     setError('');
     setBusy(true);
+    opening.current = m;
     try {
-      const { session, started } = await openSeat(core, m.id);
+      const { session, started } = await openSeat(core, m.id, anyway);
       toast?.(t(started ? 'team.started' : 'team.opened', { name: m.name }));
       flushSync(closeSettings);
       openSession(session.id);
@@ -260,7 +262,7 @@ function TeamPage({ core, t, projects, closeSettings, toast, sessions }: Pick<Pa
       <PageSummary parts={[[t('summary.teammates'), list?.teammates.length], ...(placeSum ? ([[basename(placeSum.project), t(`lead.way.${placeSum.place.way}`)], [t('lead.cap.group'), placeSum.place.cap ?? 4]] as [string, string | number][]) : [])]} />
       {/* Ticket 1099: how each project's lead works, first on the page (mockup panel 1). */}
       <PlaceSection core={core} t={t} projects={projects} sessions={sessions ?? []} onSummary={setPlaceSum} />
-      {!draft && <ErrorLine t={t} error={error ? rawError(error) : ''} />}
+      {!draft && <ErrorLine t={t} error={error ? rawError(error) : ''} anyway={() => opening.current && void open(opening.current, true)} />}
       <Sec
         id="h-team"
         className="team-sec"

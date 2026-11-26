@@ -1,6 +1,6 @@
 // Chat: the composer's send path (split out of App.tsx, needs 183).
 import { markStopped, STOP_RETURN_EVENT } from './stopped';
-import { errorNote, notePlain, plainError, rawError, type Note } from '../errors';
+import { errorNote, heldNote, notePlain, plainError, rawError, startOp, type Note } from '../errors';
 import { useEffect, useRef, useState } from 'react';
 import { AGENT_ENDED, CoreRefusal, CoreClient, NO_INTERRUPT, UNCERTAIN, type Account } from '../api';
 import { sessionName } from '../Sidebar';
@@ -8,7 +8,7 @@ import { bracketedPaste } from '../Terminal';
 import { getDraft, setDraft } from '../composer-drafts';
 import { agentState, status, type Session } from '../types';
 import type { Pending as Handoff, Preview } from './HandoffChip';
-import { HANDOFF_EVENT, REWIND_EVENT, sideContext } from './conversation';
+import { agentName, HANDOFF_EVENT, REWIND_EVENT, sideContext } from './conversation';
 import { show as paneShow } from '../pane/store';
 import { lastAccount, likeNew } from '../NewSession';
 import { useImages } from '../images/attach';
@@ -86,24 +86,27 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
   };
 
   useEffect(() => {
+    // A fork: a new session of the same agent, with the conversation up to `through` to hand over. A low-memory hold's note
+    // offers Start anyway, the same fork past the hold; the composer's text is not touched either way.
+    const fork = async (s: Session, through: string, anyway = false) => {
+      const from = s.id;
+      forking.current = true;
+      try {
+        const preview = (await core.request({ op: 'handoff_preview', id: from, through })) as Preview;
+        const reply = (await core.request(startOp({ op: 'start', session: { kind: s.kind, project: s.cwd, resume: null, ...(s.account ? { account: s.account } : {}), ...(s.acp_agent ? { args: [s.acp_agent] } : {}) } }, anyway))) as { session: Session };
+        setHandoff({ from, fromKind: s.kind, to: s.kind, preview, text: preview.text, error: null, fork: { id: reply.session.id, through } });
+        open(reply.session.id);
+      } catch (err) {
+        setPaneNote(heldNote(t, err, agentName(s.kind, s.acp_agent), () => void fork(s, through, true)) ?? errorNote(t('err.note.notForked', { error: notePlain(t, err) }), err));
+      } finally {
+        forking.current = false;
+      }
+    };
     const on = async (e: Event) => {
       const { from, to, acp, through } = (e as CustomEvent<{ from: string; to?: Handoff['to']; acp?: string; through?: string }>).detail;
       const s = sessions.find((x) => x.id === from);
       if (!s || forking.current) return;
-      if (through !== undefined) {
-        forking.current = true;
-        try {
-          const preview = (await core.request({ op: 'handoff_preview', id: from, through })) as Preview;
-          const reply = (await core.request({ op: 'start', session: { kind: s.kind, project: s.cwd, resume: null, ...(s.account ? { account: s.account } : {}), ...(s.acp_agent ? { args: [s.acp_agent] } : {}) } })) as { session: Session };
-          setHandoff({ from, fromKind: s.kind, to: s.kind, preview, text: preview.text, error: null, fork: { id: reply.session.id, through } });
-          open(reply.session.id);
-        } catch (err) {
-          setPaneNote(errorNote(t('err.note.notForked', { error: notePlain(t, err) }), err));
-        } finally {
-          forking.current = false;
-        }
-        return;
-      }
+      if (through !== undefined) return void (await fork(s, through));
       if (!to || s.side_chat || sideChats.includes(from)) return;
       setHandoff({ from, fromKind: s.kind, to, acp, preview: null, text: '', error: null });
       core.request({ op: 'handoff_preview', id: from }).then(
@@ -471,7 +474,8 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
   };
   // v25-sendkeys: Cmd+Enter starts a session with this text in the agent and folder the New Session dialog would
   // prefill (the same `start` request and its checks) and stays on the current view; the tree shows it working.
-  const backgroundSend = async (el: HTMLTextAreaElement, box: Session | null) => {
+  /** `anyway`: the held start's Start anyway, which sends what the box holds then, past the hold. */
+  const backgroundSend = async (el: HTMLTextAreaElement, box: Session | null, anyway = false) => {
     const text = el.value.trim();
     if (!text) return;
     const project = current?.project ?? ordered.find((s) => s.kind !== 'shell')?.project;
@@ -486,10 +490,9 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
     try {
       const accounts = (await (accountsP.current ?? readAccounts())).filter((a) => a.agent === kind);
       const account = accounts.length < 2 ? null : lastAccount(ordered, kind, project, accounts);
-      const reply = (await core.request({
-        op: 'start',
-        session: { kind, project, ...likeNew(current, ordered, kind, project), resume: null, ...(account ? { account } : {}) },
-      })) as { session?: Session };
+      const reply = (await core.request(
+        startOp({ op: 'start', session: { kind, project, ...likeNew(current, ordered, kind, project), resume: null, ...(account ? { account } : {}) } }, anyway),
+      )) as { session?: Session };
       if (!reply.session) throw new Error('the core started nothing');
       started = reply.session;
       addTab(started.id); // in the tree, the view stays
@@ -502,7 +505,8 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
         if (box) giveBack(el, box, text);
         else (el.value = text), grow(el);
       } else setDraft(started.id, text); // the new session's box holds the text its prompt did not take
-      setPaneNote(errorNote(t('composer.backgroundFailed', { error: notePlain(t, e) }), e));
+      // Held for low memory: the text is back in the box, and Start anyway runs the same send past the hold.
+      setPaneNote((!started && heldNote(t, e, agentName(kind), () => void backgroundSend(el, box, true))) || errorNote(t('composer.backgroundFailed', { error: notePlain(t, e) }), e));
     }
   };
   return { pendingEnter, uncertainSend, pressRow, drafts, setDrafts, givenBack, setGivenBack, grow, stopAgent, send, steerNow, backgroundSend };

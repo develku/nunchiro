@@ -11,7 +11,7 @@ import { chordOf, label, merge, type Bindings } from './keys';
 import { pickFolder } from './pickFolder';
 import { FILE_ACCESS, FolderAccess } from './PermissionNeeded';
 import { makeT, type Lang, type T } from './i18n';
-import { ErrorDetails, errorNote, heldNote, isLowMemory, notePlain, plainError, type Note, rawError } from './errors';
+import { ErrorDetails, errorNote, heldNote, isLowMemory, notePlain, plainError, startOp, type Note, rawError } from './errors';
 import { agentName } from './chat/conversation';
 import { sessionName } from './Sidebar';
 import type { WithLog } from './picker/Picker';
@@ -90,9 +90,6 @@ export async function quickStart(core: CoreClient, ordered: Session[], current: 
   const reply = (await core.request(startOp({ op: 'start', session: { kind, project, ...like, resume: null, ...(account ? { account } : {}) } }, anyway))) as { session?: Session };
   return reply.session;
 }
-
-/** A window start as sent: `anyway` wraps it as the owner's Start anyway, past a low-memory hold. */
-export const startOp = (start: { op: 'start'; [k: string]: unknown }, anyway = false) => (anyway ? { op: 'start_anyway', start } : start);
 
 /** quickStart from the tree's +, the keys and the palette: the started session opens; a refusal is the status bar's note,
  *  and a low-memory hold's note offers Start anyway, which runs the same start past it. */
@@ -543,7 +540,7 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
           <span className="conflict nt-error" role="alert">
             {error}
             {held?.line === error && (
-              <span className="nt-held">
+              <span className="held-act">
                 <button type="button" className="btn" data-tip={t('err.startAnyway.tip')} onClick={held.run}>
                   {t('err.startAnyway')}
                 </button>

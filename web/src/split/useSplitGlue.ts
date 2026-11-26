@@ -1,5 +1,5 @@
 // Splits: the window's split glue (split out of App.tsx, needs 183).
-import { docT, errorNote, heldNote, notePlain, type Note } from '../errors';
+import { docT, errorNote, heldNote, notePlain, startOp, type Note } from '../errors';
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
 import { CoreClient, type Account } from '../api';
 import { startShell } from '../pane/SidePane';
@@ -14,7 +14,7 @@ import { defaultZone, type Dir, type Layout, type Op } from '../layout/model';
 import { LayoutStore } from '../layout/store';
 import type { AgentKind, Session } from '../types';
 import { agentName } from '../chat/conversation';
-import { lastAccount, likeNew, startOp } from '../NewSession';
+import { lastAccount, likeNew } from '../NewSession';
 import { agentOff } from '../settings/agents/newDefaults';
 import { ACCOUNTS_CHANGED } from '../tree';
 import { closeable, closeEnded } from '../chrome/closeEnded';

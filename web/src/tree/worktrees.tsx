@@ -6,7 +6,8 @@
 import { PLAIN } from '../plainText';
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKey, type ReactNode } from 'react';
 import { CoreRefusal, PR_REFUSALS } from '../api';
-import { ErrorDetails, plainError, tipError, rawError } from '../errors';
+import { ErrorDetails, heldNote, isLowMemory, plainError, startOp, tipError, rawError, type Note } from '../errors';
+import { agentName } from '../chat/conversation';
 import { lastAccount, likeNew } from '../NewSession';
 import { AGENTS_OFF, isOff, leadAgent, modelChoices, MODELS_OFF, useCustomModels } from '../settings/agents/newDefaults';
 import { DEFAULT_AGENT } from '../settings/onboarding/state';
@@ -39,7 +40,8 @@ const TOAST_MS = 10_000;
 export const GONE_MS = 5_000;
 
 type Undo = { project: string; path: string; branch: string; label: string };
-export type Toast = { id: number; text: string; undo?: Undo | Undo[]; details?: string };
+/** `action`: one more button (a held start's Start anyway); a press closes the toast and runs it. */
+export type Toast = { id: number; text: string; undo?: Undo | Undo[]; details?: string; action?: { label: string; tip: string; run: () => void } };
 /** V2.5-61 B8: the rect of the worktree button a create was opened from; the card sits under it. */
 export type Anchor = { top: number; bottom: number; left: number; right: number };
 export type Ask = { kind: 'create'; project: string; anchor?: Anchor } | { kind: 'tidy'; project: string | null } | { kind: 'dirty'; path: string; name: string; branch: string; loss: WorktreeLoss }
@@ -76,7 +78,8 @@ export interface Worktrees {
    * what a create with no base starts from (`origin/main`); null is the current branch. Ticket 410: `complete` is false when
    * the core cut the list (over 500 refs, or names unsafe to show), so a name missing from it may still be a branch. */
   branches: (project: string) => Promise<{ refs: BranchRef[]; base: string | null; complete: boolean }>;
-  start: (project: string, path: string, kind: 'claude' | 'codex', model: string | null, account: string | null, failed?: string) => Promise<Session>;
+  /** `anyway`: the owner's Start anyway, past a low-memory hold. */
+  start: (project: string, path: string, kind: 'claude' | 'codex', model: string | null, account: string | null, failed?: string, anyway?: boolean) => Promise<Session>;
   /** Ticket 259: waits while the new worktree's setup tab runs (with "Agent waits for setup" on); false when setup failed or
    *  did not run, after a toast that leaves the agent start to the user; false, with no toast, once `cancelled` says so. */
   setupGate: (path: string, cancelled?: () => boolean) => Promise<boolean>;
@@ -360,9 +363,9 @@ export function useWorktrees(core: CoreClient, connected: boolean, sessions: Ses
     core,
     editor: (path) => void openInEditor(core, path).catch((e) => say(t('files.editorFailed', { error: plainError(t, rawError(e)) }), undefined, rawError(e))),
     accounts: () => core.accounts(),
-    start: async (project, path, kind, model, account, failed) => {
+    start: async (project, path, kind, model, account, failed, anyway) => {
       if (failed) await core.request({ op: 'close', id: failed });
-      const reply = await core.request({ op: 'start', folder: path, session: { kind, project, ...likeNew(null, [], kind, project), ...(model ? { model, effort: null } : {}), resume: null, ...(account ? { account } : {}) } }) as { session: Session };
+      const reply = await core.request(startOp({ op: 'start', folder: path, session: { kind, project, ...likeNew(null, [], kind, project), ...(model ? { model, effort: null } : {}), resume: null, ...(account ? { account } : {}) } }, anyway)) as { session: Session };
       if (reply.session.state === 'running') onStarted?.(reply.session);
       return reply.session;
     },
@@ -404,13 +407,19 @@ export function useWorktrees(core: CoreClient, connected: boolean, sessions: Ses
       if (kind !== 'claude' && kind !== 'codex') return setAsk({ kind: 'create', project });
       const made = await api.create(project, '');
       if (!made || !(await api.setupGate(made.path))) return;
-      try {
-        const accounts = await core.accounts().then((r) => r.accounts, () => [] as Account[]);
-        const s = await api.start(project, made.path, kind, null, lastAccount(sessions, kind, project, accounts));
-        if (s.state !== 'running') throw new CoreRefusal(s.problem?.cause ?? t('dialog.worktree.notRunning'));
-      } catch (e) {
-        say(t('dialog.worktree.startFailed', { error: plainError(t, e) }), undefined, rawError(e));
-      }
+      // A low-memory hold keeps the new worktree; the toast's Start anyway starts the agent in it past the hold.
+      const go = async (anyway = false) => {
+        try {
+          const accounts = await core.accounts().then((r) => r.accounts, () => [] as Account[]);
+          const s = await api.start(project, made.path, kind, null, lastAccount(sessions, kind, project, accounts), undefined, anyway);
+          if (s.state !== 'running') throw new CoreRefusal(s.problem?.cause ?? t('dialog.worktree.notRunning'));
+        } catch (e) {
+          const held = heldNote(t, e, agentName(kind), () => void go(true)) as Exclude<Note, string> | null;
+          if (held) setToast({ id: ++seq.current, text: held.text, details: held.details, action: held.action });
+          else say(t('dialog.worktree.startFailed', { error: plainError(t, e) }), undefined, rawError(e));
+        }
+      };
+      await go();
     },
     undo,
   };
@@ -491,6 +500,7 @@ function CreateDialog({ t, project, anchor, wt, onClose }: { t: T; project: stri
   const [error, setError] = useState('');
   const [details, setDetails] = useState('');
   const [uncertain, setUncertain] = useState(false);
+  const [held, setHeld] = useState(false); // the start was held for low memory: Start anyway shows
   // Q9 es-J13-1: the setup wait (up to 30 min) is a start in flight that Cancel, Esc and a click outside still end.
   const [gating, setGating] = useState(false);
   const flight = useRef(false);
@@ -513,7 +523,8 @@ function CreateDialog({ t, project, anchor, wt, onClose }: { t: T; project: stri
   }, [startAgent]);
   const choices = accounts.filter(a => a.agent === kind);
   const account = choices.length < 2 ? null : picked?.kind === kind ? picked.label : lastAccount(wt.sessions, kind, project, accounts);
-  const submit = async (existing?: BranchRef) => {
+  /** `anyway`: the held start's Start anyway (the worktree is kept, so only the start runs again, past the hold). */
+  const submit = async (existing?: BranchRef, anyway = false) => {
     if (flight.current || uncertain) return;
     // Ticket 410: a base that is not one of the project's branches is refused here, with the reason, before Create.
     // Round 2 (F1): a retry of start after the worktree exists is not judged again.
@@ -549,6 +560,7 @@ function CreateDialog({ t, project, anchor, wt, onClose }: { t: T; project: stri
     setBusy(true);
     setError('');
     setDetails('');
+    setHeld(false);
     try {
       const worktree = created ?? await wt.create(project, from, advancedFields);
       if (!worktree) return;
@@ -558,7 +570,7 @@ function CreateDialog({ t, project, anchor, wt, onClose }: { t: T; project: stri
       setGating(false);
       if (closed.current) return;
       if (!ready) return onClose();
-      const session = await wt.start(project, worktree.path, kind, model, account, started?.id);
+      const session = await wt.start(project, worktree.path, kind, model, account, started?.id, anyway);
       setStarted(session);
       if (session.state !== 'running') throw new CoreRefusal(session.problem?.cause ?? t('dialog.worktree.notRunning'));
       if (session.cwd !== worktree.path || session.project !== project) {
@@ -574,7 +586,9 @@ function CreateDialog({ t, project, anchor, wt, onClose }: { t: T; project: stri
       // A lost start reply may follow a successful launch: never blindly repeat it.
       const unknown = !(e instanceof CoreRefusal);
       setUncertain(unknown);
-      setError(t(unknown ? 'dialog.worktree.unknown' : 'dialog.worktree.startFailed', { error: plainError(t, e) }));
+      // Held for low memory: the hold's own sentence ("... or start it anyway") and its button, nothing started.
+      setHeld(isLowMemory(e));
+      setError(isLowMemory(e) ? plainError(t, e) : t(unknown ? 'dialog.worktree.unknown' : 'dialog.worktree.startFailed', { error: plainError(t, e) }));
       setDetails(rawError(e));
     } finally {
       flight.current = false;
@@ -792,6 +806,13 @@ function CreateDialog({ t, project, anchor, wt, onClose }: { t: T; project: stri
             {error && (
               <div className="conflict" role="alert">
                 {error}
+                {held && (
+                  <span className="held-act">
+                    <button type="button" className="btn" data-tip={t('err.startAnyway.tip')} disabled={busy} onClick={() => void submit(undefined, true)}>
+                      {t('err.startAnyway')}
+                    </button>
+                  </span>
+                )}
                 <ErrorDetails t={t} details={details} />
               </div>
             )}
@@ -928,6 +949,11 @@ function ToastView({ t, toast, onUndo, onDismiss }: { t: T; toast: Toast | null;
           {toast.undo && (
             <button className="wtundo" onClick={onUndo}>
               {t('dialog.undo')}
+            </button>
+          )}
+          {toast.action && (
+            <button className="wtundo" data-tip={toast.action.tip} onClick={() => (onDismiss(), toast.action!.run())}>
+              {toast.action.label}
             </button>
           )}
           <button className="wtdismiss" aria-label={t('tree.dismiss')} onClick={onDismiss}>

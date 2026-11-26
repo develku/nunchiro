@@ -56,8 +56,9 @@ export async function askCore<R>(request: { op: string; [k: string]: unknown }) 
 export const knownPlaces = (team: Team) => [...new Set([...team.teammates.map((m) => m.project ?? ''), ...known.filter((s) => !s.account_tab && !s.machine).map((s) => s.project)])].filter((p) => p && p !== team.home);
 
 /** Ticket 990: the core finds the teammate's seat or starts it with its brief (`team_open`); the caller shows its tab. */
-export async function openSeat(core: CoreClient, id: string) {
-  return (await core.request({ op: 'team_open', id })) as { session: Session; started: boolean };
+/** `anyway`: the owner's Start anyway, past a low-memory hold. */
+export async function openSeat(core: CoreClient, id: string, anyway = false) {
+  return (await core.request({ op: 'team_open', id, ...(anyway ? { anyway } : {}) })) as { session: Session; started: boolean };
 }
 
 /** Ticket 1096, ticket 1130 B-L3: a new conversation as a teammate's seat (never the old one resumed). `now` (owner 11-25,
