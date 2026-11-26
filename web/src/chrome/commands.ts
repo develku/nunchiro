@@ -70,6 +70,7 @@ import type { useAppSettings } from '../settings/useAppSettings';
 import type { useKeySink } from './useGlobalKeys';
 import type { Bars } from '../layout/bars';
 import { askNewBot } from '../bots/bots';
+import { openKnock } from '../queue/Knock';
 
 async function detach() {
   if (!('__TAURI_INTERNALS__' in window)) return;
@@ -313,6 +314,7 @@ export function buildCommands({ resume, ordered, board, ownerList, current, t, o
     // Q7 point 15: the same Sessions search, scoped to the current chat; and the whole chat as text on the clipboard.
     { id: 'chat.find', title: 'Find in this chat', enabled: !!current && hasTranscript(current), run: () => current && (openCmd('search')(), setSessionsAsk((a) => ({ n: a.n + 1, only: current.id }))) },
     { id: 'chat.copyThread', title: 'Copy the whole chat', enabled: !!current && hasTranscript(current), run: () => { if (!current) return; const text = threadText(core, current, t); void Promise.all([text, copyLater(text)]).then(([, ok]) => { if (!ok) throw new Error('the clipboard refused the text'); }).then(() => setPaneNote(t('mw.copied')), (e) => setPaneNote(errorNote(t('err.note.copyThread', { error: notePlain(t, e) }), e))); } },
+    { id: 'knock.open', title: t('settings.kbd.cmd.knock.open'), enabled: !!current, run: () => current && openKnock(current.id) },
     { id: 'focus.composer', title: 'Focus the composer', run: () => (setComposerHidden(false), current && !hasTranscript(current) && setTermComposer((m) => ({ ...m, [current.id]: true })), setTimeout(() => composer.current?.focus(), 0)) },
     { id: 'focus.terminal', title: t('settings.kbd.cmd.focus.terminal'), /* look 1117 v3: the row menu showed it in English */ run: () => (paneSession ? paneShow(paneSession.id, 'pty', true) : active && terminals.get(active)?.focus()) },
     { id: 'terminal.clear', title: 'Clear the terminal (window copy only)', enabled: !!active, run: () => active && terminals.get(active)?.clear() }, // v1a-38

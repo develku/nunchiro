@@ -34,6 +34,8 @@ import { ChromeIcon } from '../chrome/icons';
 import { handOff, rewind, userView } from './conversation';
 import { useSteered } from './queued'; // Q7 point 16
 import { useAppControl } from './commandRecord'; // ticket 1019
+import { SenderFace, useSentBy } from '../queue/Knock';
+import { useTeamNow } from '../lead/lead';
 import { agentState, status } from '../types';
 import { TurnFiles } from './TurnFiles'; // ticket 222
 
@@ -752,11 +754,22 @@ function SteerTag({ session, text }: { session: string; text: string }) {
 
 function RowBody({ row, session, control = false }: { row: Row; session: string; control?: boolean }) {
   const t = useContext(Tr);
+  // The knock: a message another sender's row put in (the send log names it) shows who it is from.
+  const from = useSentBy(useContext(Pending).session, row.kind === 'user' ? row.text : '', useTeamNow());
   switch (row.kind) {
     case 'user': {
       const v = userView(row.text); // B11: what the user typed, a handoff folded
       // Ticket 1019: a command the app typed (the picker's Ultracode toggle) is a quiet line too.
       if (control) return <div className="msg wake" data-control="">{plain(v.text)}</div>;
+      if (from) return (
+        <div className="msg user from" data-from="">
+          <SenderFace who={from} t={t} size={20} />
+          <div>
+            <small>{t('knock.from', { name: from.name })}</small>
+            <div className="ut">{plain(v.text)}</div>
+          </div>
+        </div>
+      );
       return (
         <div className="msg user">
           <SteerTag session={session} text={row.text} />
