@@ -221,6 +221,77 @@ fn scheduled_session_runs_at_time() {
     );
 }
 
+/// A schedule's run while the Mac is low on memory starts no seat and reads "held" in its run record, not failed, with
+/// the reason. The timer holds from warning; Run now, the owner's press in the window with no override yet, only at
+/// critical.
+#[test]
+fn a_schedule_run_is_held_under_memory_pressure() {
+    let (home, proj, path) = setup("sch-mem");
+    let mut core = serve(&home, &path);
+    shell(&home, &proj, "exec cat");
+    core.stop();
+    let made = Schedules::load(&home)
+        .add(
+            run(&proj, "nightly"),
+            "21:00".into(),
+            true,
+            None,
+            &known(&proj),
+            0,
+            UTC,
+        )
+        .unwrap();
+    let pressured = |level: &str| {
+        home::spawn_serve(
+            &home,
+            &[
+                ("PATH", path.as_str()),
+                (
+                    "CLAUDE_CONFIG_DIR",
+                    &home.join("claude-home").to_string_lossy(),
+                ),
+                ("NUNCHIRO_TEST_MEMORY_PRESSURE", level),
+            ],
+        )
+    };
+    let last = || schedules(&home)[0].last.clone();
+    let mut core = pressured("2");
+    wait("the due run left no record", || last().is_some());
+    let held = serde_json::to_value(last().unwrap()).unwrap();
+    assert_eq!(held["result"], "held", "{held}");
+    // A schedule's own words: it names memory and the run, never `agent start --anyway`, which runs no schedule.
+    let reason = held["reason"].as_str().unwrap();
+    assert!(
+        reason.contains("memory") && reason.contains("scheduled run"),
+        "{held}"
+    );
+    assert!(!reason.contains("anyway"), "{held}");
+    assert!(
+        rows(&home).iter().all(|r| r.label != "nightly"),
+        "a held run started a seat"
+    );
+    // Run now at warning: the window's press is held at critical only.
+    let now = Request::ScheduleRunNow {
+        id: made.id.clone(),
+    };
+    call(&home, now.clone()).unwrap();
+    wait("Run now did not start at warning", || {
+        rows(&home).iter().any(|r| r.label == "nightly")
+    });
+    core.stop();
+    let _core = pressured("4");
+    let refused = call(&home, now).unwrap_err();
+    assert!(
+        refused.contains("memory") && refused.contains("scheduled run"),
+        "{refused}"
+    );
+    assert!(!refused.contains("anyway"), "{refused}");
+    assert_eq!(
+        serde_json::to_value(last().unwrap()).unwrap()["result"],
+        "held"
+    );
+}
+
 // Added through the owner socket, the schedule is in schedules.json and the same after a core restart; until it
 // fires it is no row in the tree.
 #[test]

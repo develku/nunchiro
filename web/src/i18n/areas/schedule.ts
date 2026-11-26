@@ -74,6 +74,7 @@ declare module '../index' {
     'schedule.card.onCard': true;
     // Ticket 1002 lane 3: a skipped run, the run log (lane 4 shows it), the paused row's button, the Home brief line.
     'schedule.result.skipped': true;
+    'schedule.result.held': true;
     'schedule.runLog': true;
     'schedule.turnOn': true;
     'home.brief.label': true;
@@ -151,6 +152,8 @@ export const en = {
   'schedule.card.askedBy': "asked by {name}",
   'schedule.card.onCard': "Answer it on its card in Decisions",
   'schedule.result.skipped': "skipped",
+  // English only until release; other languages fall back to it.
+  'schedule.result.held': "held",
   'schedule.runLog': "Run log",
   'schedule.turnOn': "Turn on",
   'home.brief.label': "Brief from {name}, {time}",

@@ -34,7 +34,7 @@ export function ScheduleCard({ d, sessions, core, onAnswer, t }: { d: Decision; 
   const words = useRef<HTMLParagraphElement>(null);
   const failed = failedRunCard(d);
   const row = useScheduleList()?.find((s) => s.id === failed?.schedule);
-  const twice = row?.last?.result === 'failed' && row.earlier?.find((l) => l.result !== 'skipped')?.result === 'failed';
+  const twice = row?.last?.result === 'failed' && row.earlier?.find((l) => l.result !== 'skipped' && l.result !== 'held')?.result === 'failed';
   // A failed run's card says why it failed where a proposal has its task (on a streak, the run's own reason: the
   // card's has the core's English "second time in a row" on it, and the title says it).
   const task = failed ? knownOrRaw(t, twice ? (row?.last?.reason ?? failed.reason) : failed.reason) : plain(ask?.run.task ?? '').trim();

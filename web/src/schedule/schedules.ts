@@ -17,7 +17,7 @@ import type { Decision } from '../types';
 export type Run = { kind: string; project: string; label: string; model?: string; effort?: string; task?: string; teammate?: string; level?: Level };
 /** `session` absent: the run could not start. `result` absent: the session still works on it. `skipped` (ticket 1002):
  *  more than 2 h late, so not run. */
-export type Last = { session?: string; at: number; result?: 'finished' | 'needs_you' | 'failed' | 'skipped'; reason?: string };
+export type Last = { session?: string; at: number; result?: 'finished' | 'needs_you' | 'failed' | 'skipped' | 'held'; reason?: string };
 /** `days`: 0 Sunday to 6 Saturday, only on a repeating one; absent is every day. `next_ms` means nothing while paused.
  *  `earlier` (ticket 1002): the runs before `last`, newest first, for the run log. */
 export type Schedule = { id: string; run: Run; at: string; daily: boolean; next_ms: number; days?: number[]; paused?: boolean; last?: Last; earlier?: Last[] };
@@ -141,7 +141,7 @@ export function dayWords(t: T, ms: number, now = Date.now()): string {
  *  "in 9 hours" (under a day), "in 2 days" (under a week), else the date alone ("Dec 31, 2027"). `nextExact` has the moment. */
 export function nextWords(t: T, s: Schedule, now = Date.now()): string {
   if (s.last && !s.last.result) return t('schedule.running');
-  if (ranOnce(s)) return t(s.last?.result === 'failed' ? 'schedule.result.failed' : s.last?.result === 'skipped' ? 'schedule.result.skipped' : 'look8.ran'); // look v11 Home S3-1: a failed (or skipped) run never reads "ran"
+  if (ranOnce(s)) return t(s.last?.result === 'failed' ? 'schedule.result.failed' : s.last?.result === 'skipped' ? 'schedule.result.skipped' : s.last?.result === 'held' ? 'schedule.result.held' : 'look8.ran'); // look v11 Home S3-1: a failed (or skipped) run never reads "ran"
   if (s.paused) return t('schedule.paused');
   const min = Math.max(1, Math.round((s.next_ms - now) / 60_000));
   if (min < 60) return t('schedule.inMin', { n: min });
