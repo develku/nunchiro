@@ -551,7 +551,13 @@ fn prompt_region(kind: AgentKind, text: &str) -> &str {
         // ("You approved codex to run … this time") is not part of this request.
         // The first question on the screen, not the last: a command can print a second "Would you like to …" row, and
         // starting there would hide the real command above it.
-        return text.find("Would you like to ").map_or(text, |at| {
+        // Its sign-in screen starts at its welcome line: the logo above it is animated for the first seconds.
+        let at = text.find("Would you like to ").or_else(|| {
+            text.contains("Sign in with ChatGPT")
+                .then(|| text.find("Welcome to Codex"))
+                .flatten()
+        });
+        return at.map_or(text, |at| {
             &text[text[..at].rfind('\n').map_or(0, |n| n + 1)..]
         });
     }
