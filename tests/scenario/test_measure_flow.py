@@ -186,18 +186,17 @@ T = "2026-11-27T"
 
 
 class DevSpeed(UtcClock):
-    def measure(self, core=(), more=(), log="", runs=(), prs=None):
+    FLOW_A = [dict(at="2026-11-26T19:00:00Z", kind="task", branch="lead/flow-a-1", note="the ticket line"),
+              dict(at=T + "00:00:00Z", kind="review_start", pr=1), dict(at=T + "00:30:00Z", kind="verdict", pr=1, verdict="accept", by="acceptance")]
+
+    def measure(self, core=(), more=(), log="", runs=(), prs=None, record=None):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__("shutil").rmtree(tmp))
-        ms = lambda at: speed.iso(at) * 1000  # noqa: E731
-        tasks = dict(tasks=[dict(id="t1", created=ms("2026-11-26T19:00:00Z"), updated=ms("2026-11-27T02:00:00Z"),
-                                 review={"pass": True, "at": ms("2026-11-27T00:30:00Z")},
-                                 seats=[dict(session="s1", role="builder", at=ms("2026-11-26T19:00:00Z"), worktree="/w/flow-a-1"),
-                                        dict(session="s2", role="reviewer", at=ms("2026-11-27T00:00:00Z"))])])
-        (tmp / "tasks.json").write_text(json.dumps(tasks))
+        if record is not None:
+            (tmp / "lane-record.jsonl").write_text("".join(json.dumps(x) + "\n" for x in record))
         if prs is None:
             prs = [
-                pr("lead/flow-a-1", T + "01:00:00Z", T + "02:00:00Z", A, first="2026-11-26T20:00:00Z", enabled=[T + "01:00:00Z"], checks=[
+                pr("lead/flow-a-1", T + "01:00:00Z", T + "02:00:00Z", A, first="2026-11-26T20:00:00Z", enabled=[T + "01:00:00Z"], number=1, checks=[
                     check("lint", T + "01:30:00Z", T + "01:32:00Z"), check("gate", T + "01:49:55Z", T + "01:50:00Z"),
                     check("scan", T + "01:00:00Z", T + "01:01:00Z", workflow="Other")]),
                 pr("revert-1-lead/flow-a-1", T + "04:00:00Z", T + "05:00:00Z", B),
@@ -208,7 +207,7 @@ class DevSpeed(UtcClock):
         self.addCleanup(lambda: setattr(speed, "git", keep))
         speed.git = lambda *a: "abc1234\n"
         (tmp / "ci-main.log").write_text(log)
-        return speed.measure(7, tasks_file=tmp / "tasks.json", log_path=tmp / "ci-main.log", now=speed.iso("2026-11-28T12:00:00Z"),
+        return speed.measure(7, record_path=tmp / "lane-record.jsonl", log_path=tmp / "ci-main.log", now=speed.iso("2026-11-28T12:00:00Z"),
                              core=list(core), prs=prs, runs=runs if runs is None else list(runs))
 
     def test_pull_requests_are_the_landings(self):
@@ -308,10 +307,94 @@ class DevSpeed(UtcClock):
         self.assertEqual((r["median_min"], r["still_red"], len(r["episodes"])), (2 * 1440 + 42, False, 1))
 
     def test_the_flow_split_of_a_pull_request(self):
-        f = self.measure()["flow"]
+        f = self.measure(record=self.FLOW_A)["flow"]
         self.assertEqual((f["build"]["median_min"], f["review"]["median_min"], f["review_to_enqueue"]["median_min"]), (300, 30, 30))
         self.assertEqual((f["gate_run"], f["gate_queue"], f["lanes_with_gate_events"]),
                          (dict(n=1, median_min=20, p90_min=20), dict(n=1, median_min=40, p90_min=40), 1))
+
+    # The private review record: one JSON line per fact, outside git.
+    def write(self, path, *args):
+        return subprocess.run([sys.executable, "-B", str(ROOT / "scripts/measure-dev-speed.py"), "--record", *args],
+                              capture_output=True, text=True, env=dict(os.environ, MEASURE_LANE_RECORD=str(path)))
+
+    def test_record_writer_appends_and_refuses_bad_lines(self):
+        path = Path(tempfile.mkdtemp()) / "lane-record.jsonl"
+        self.addCleanup(lambda: __import__("shutil").rmtree(path.parent))
+        r = self.write(path, "verdict", "--pr", "7", "--sha", "abc123", "--verdict", "accept", "--by", "acceptance", "--at", "2026-11-27T01:00:00Z")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(path.read_text()), dict(at="2026-11-27T01:00:00Z", kind="verdict", pr=7, sha="abc123", verdict="accept", by="acceptance"))
+        r = self.write(path, "task", "--branch", "lead/x", "--note", "n")
+        self.assertEqual((r.returncode, json.loads(path.read_text().splitlines()[1])["branch"]), (0, "lead/x"))
+        before = path.read_text()
+        for bad in (["merged", "--pr", "7"], ["verdict", "--pr", "7"], ["look", "--pr", "7", "--sha", "xyz"], ["ask"],
+                    ["ask", "--pr", "7", "--at", "yesterday"], ["ask", "--pr", "7", "--branch", "b"]):
+            self.assertEqual(self.write(path, *bad).returncode, 2, bad)
+        self.assertEqual(path.read_text(), before)
+
+    def three(self, *lines):
+        prs = [pr(f"lead/{x}", T + "00:00:00Z", T + "04:00:00Z", A, number=n) for x, n in (("a", 1), ("b", 2), ("c", 3))]
+        return self.measure(prs=prs, record=list(lines))
+
+    def test_first_pass_is_the_first_verdict(self):
+        v = lambda n, at, verdict, sha: dict(at=T + at, kind="verdict", pr=n, sha=sha, verdict=verdict, by="acceptance")  # noqa: E731
+        d = self.three(v(1, "01:00:00Z", "accept", "a1"), v(2, "01:00:00Z", "reject", "b1"), v(2, "02:00:00Z", "accept", "b2"),
+                       v(3, "01:00:00Z", "accept", "c1"), dict(v(3, "02:00:00Z", "accept", "c2"), by="maintainer"))
+        self.assertEqual((d["rework"]["first_pass_pct"], d["rework"]["reviewed_lanes"]), (66.7, 3))
+        self.assertEqual({r["lane"]: r["review_rounds"] for r in d["lanes"]}, {"lead/a": 1, "lead/b": 2, "lead/c": 2})
+        self.assertEqual(d["change_failure"]["review_rounds"], dict(lanes=3, median=2, max=2, looks=0))
+
+    def test_codex_looks_are_shown_not_rounds(self):
+        d = self.three(dict(at=T + "01:00:00Z", kind="look", pr=1, sha="a1", by="codex"),
+                       dict(at=T + "01:30:00Z", kind="verdict", pr=1, sha="a1", verdict="accept", by="acceptance"))
+        self.assertEqual(d["change_failure"]["review_rounds"], dict(lanes=1, median=1, max=1, looks=1))
+        self.assertEqual([r.get("looks") for r in d["lanes"]], [1, None, None])
+
+    def test_review_time_runs_from_start_to_last_accept(self):
+        gated = pr("lead/r", T + "00:00:00Z", T + "03:00:00Z", A, number=4, enabled=[T + "02:30:00Z"])
+        d = self.measure(prs=[gated], record=[dict(at=T + "01:00:00Z", kind="review_start", pr=4),
+                                               dict(at=T + "01:20:00Z", kind="verdict", pr=4, verdict="reject"),
+                                               dict(at=T + "02:00:00Z", kind="verdict", pr=4, verdict="accept")])
+        f = d["flow"]
+        self.assertEqual((f["review"]["median_min"], f["review_to_enqueue"]["median_min"], f["build"]["n"]), (60, 30, 0))
+        self.assertEqual(d["rework"]["first_pass_pct"], 0.0)
+
+    def test_changed_after_accept(self):
+        prs = [pr("lead/a", T + "00:00:00Z", T + "04:00:00Z", A, number=1, oid="b" * 40),
+               pr("lead/b", T + "00:00:00Z", T + "04:00:00Z", B, number=2, oid="c" * 40)]
+        d = self.measure(prs=prs, record=[dict(at=T + "01:00:00Z", kind="verdict", pr=1, sha="a" * 40, verdict="accept"),
+                                          dict(at=T + "01:00:00Z", kind="verdict", pr=2, sha="c" * 40, verdict="accept")])
+        self.assertEqual(d["rework"]["changed_after_accept"], ["lead/a"])
+
+    def test_owner_touches_and_waits(self):
+        prs = [pr("lead/a", T + "01:00:00Z", T + "04:00:00Z", A, number=1),
+               pr("lead/b", "2026-11-28T09:00:00Z", "2026-11-28T11:00:00Z", B, number=2)]
+        d = self.measure(prs=prs, record=[dict(at=T + "01:00:00Z", kind="ask", pr=1), dict(at=T + "02:30:00Z", kind="answer", pr=1),
+                                          dict(at="2026-11-28T10:00:00Z", kind="ask", branch="lead/b")])
+        self.assertEqual({r["lane"]: (r["owner_touches"], r["owner_wait_min"]) for r in d["lanes"]}, {"lead/a": (1, 90), "lead/b": (1, 120)})
+        o = d["owner"]
+        self.assertEqual((o["max_wait_min"], o["median_per_lane"], o["lanes"], o["measured"]), (120, 1, 2, "part"))
+
+    def test_lanes_before_the_record_are_unknown_not_zero(self):
+        prs = [pr("lead/a", T + "00:00:00Z", T + "01:00:00Z", A, number=1), pr("lead/b", T + "03:00:00Z", T + "04:00:00Z", B, number=2)]
+        d = self.measure(prs=prs, record=[dict(at=T + "02:00:00Z", kind="review_start", pr=2)])
+        self.assertEqual({r["lane"]: r.get("owner_touches") for r in d["lanes"]}, {"lead/a": None, "lead/b": 0})
+        self.assertEqual((d["owner"]["measured"], d["owner"]["lanes"]), ("part", 1))
+        # lines copied in later from older notes say nothing about the asks of their days
+        d = self.measure(prs=prs, record=[dict(at="2026-11-20T00:00:00Z", kind="verdict", pr=1, verdict="accept", note="backfill x"),
+                                          dict(at=T + "02:00:00Z", kind="review_start", pr=2)])
+        self.assertEqual((d["owner"]["measured"], d["coverage"]["record_from"]), ("part", "2026-11-27 02:00"))
+        self.assertIsNone(self.measure(prs=prs)["owner"]["measured"])
+
+    def test_task_line_by_branch_gives_task_to_main(self):
+        d = self.measure(record=self.FLOW_A)
+        self.assertEqual((d["lead_time"]["task_to_main"], d["lead_time"]["lanes_with_task"]), (dict(n=1, median_h=7.0, p90_h=7.0), 1))
+        self.assertEqual([r["task"] for r in d["lanes"]], [None, None])
+
+    def test_the_public_json_carries_no_record_text(self):
+        d = self.measure(record=self.FLOW_A + [dict(at=T + "00:40:00Z", kind="ask", pr=1, note="PRIVATE-NOTE")])
+        text = json.dumps(d)
+        self.assertNotIn("PRIVATE-NOTE", text)
+        self.assertNotIn("the ticket line", text)
 
     def test_journal_events_feed_seat_time_and_say_what_they_lack(self):
         at = lambda t: speed.iso(t) * 1000  # noqa: E731
