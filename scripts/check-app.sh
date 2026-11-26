@@ -8,14 +8,17 @@ set -eu
 cd "$(dirname "$0")/.."
 APP_INPUTS="app/ scripts/check-app.sh scripts/gen-notices.sh Cargo.toml Cargo.lock rust-toolchain.toml
 licenses/ LICENSE THIRD_PARTY_NOTICES.md web/package.json pnpm-lock.yaml pnpm-workspace.yaml"
-if [ "${1:-}" = --affected ]; then
-  ref=${2:?usage: check-app.sh [--affected <ref>]}
+# --needed <ref>: only answer that question, exit 0 when the check would run and 1 when it would be skipped (CI).
+if [ "${1:-}" = --affected ] || [ "${1:-}" = --needed ]; then
+  ref=${2:?usage: check-app.sh [--affected|--needed <ref>]}
   base=$(git merge-base "$ref" HEAD)
   # shellcheck disable=SC2086 # the list is word-split on purpose
   if git diff --quiet "$base" -- $APP_INPUTS && [ -z "$(git ls-files --others --exclude-standard -- $APP_INPUTS)" ]; then
+    [ "$1" = --needed ] && exit 1
     echo "check-app: no app input changed since $ref; skipped"
     exit 0
   fi
+  [ "$1" = --needed ] && exit 0
 fi
 unset CARGO_TARGET_DIR
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
