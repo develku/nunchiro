@@ -1337,5 +1337,12 @@ mod tests {
         ] {
             assert!(fed(&text).detect(kind).is_none(), "{text}");
         }
+        // A permission prompt whose preview holds those words (an edit to the fixtures above) stays a permission.
+        let create = " Create file\n claude-2.1.332-security-notes.txt\n\n Security notes:\n\n Press Enter to continue\n\n Do you want to create claude-2.1.332-security-notes.txt?\n \u{276f} 1. Yes\n   2. No\n\n Esc to cancel\n";
+        let d = fed(create).detect(AgentKind::Claude).expect("permission");
+        assert_eq!(d.kind, Kind::Permission);
+        // Words inside a row (a diff, a line of code) are no start dialog.
+        let diff = "  12 +        || has(&[\"security notes:\", \"press enter to continue\"])\n  13 +  Welcome to Codex, Sign in with ChatGPT, Press enter to continue\n";
+        assert!(fed(diff).detect(AgentKind::Codex).is_none());
     }
 }
