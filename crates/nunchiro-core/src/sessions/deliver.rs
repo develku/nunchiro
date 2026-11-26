@@ -320,9 +320,12 @@ impl Sessions {
                 self.hand_sent.remove(&id);
             }
             if queued && started {
-                // The delivery record: his Enter sent it, so it needed a person and is no resend by the core.
+                // The delivery record: his Enter sent it, so it needed a person (counted already if the core had
+                // given up on it) and is no resend by the core.
                 self.drops.remove(&send);
-                crate::record::count(&self.home, false, false, true);
+                if !self.spent.contains(&send) {
+                    crate::record::count(&self.home, false, false, true);
+                }
                 self.finish_send(&id, &send, "delivered")?;
             }
         }
@@ -617,9 +620,8 @@ impl Sessions {
                     // A row of its own once dropped goes again only into an empty box: Codex's box held the owner's
                     // half-typed words and the copy behind them, read as free of the copy, and took it twice more.
                     let clean = !copy && shown.is_some() && (n == 0 || self.box_empty(&id));
-                    if n > REPASTES {
-                        self.spent.insert(send_id.clone());
-                    } else if !clean {
+                    let mut give_up = n > REPASTES;
+                    if !give_up && !clean {
                         // The wait counts while the row keeps reaching this guard; a pause (a turn, a dialog) starts it again.
                         let now = std::time::Instant::now();
                         let wait = self.clean_wait.entry(send_id.clone()).or_insert((now, now));
@@ -628,9 +630,11 @@ impl Sessions {
                         } else {
                             (wait.0, now)
                         };
-                        if now.duration_since(wait.0) >= CLEAN_WAIT {
-                            self.spent.insert(send_id.clone());
-                        }
+                        give_up = now.duration_since(wait.0) >= CLEAN_WAIT;
+                    }
+                    // The delivery record: the core gives up on it, so it needs a person, once.
+                    if give_up && self.spent.insert(send_id.clone()) {
+                        crate::record::count(&self.home, false, false, true);
                     }
                     if self.spent.contains(&send_id) && automatic {
                         self.mark_send(&id, &send_id, "failed")?;

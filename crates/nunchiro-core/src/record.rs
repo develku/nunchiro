@@ -1,7 +1,8 @@
 //! A record of delivery and core restarts for `nunchiro serve status`: per local day, prompts delivered, prompts the
 //! core sent again by itself after a dropped Enter, and prompts that needed a person; per core start that found
-//! running sessions, how many ran before and how many came back. Counts only, never message text. A missing or broken
-//! file reads as empty, and a write that fails is logged: the record never stops a delivery or a start.
+//! running sessions, how many ran before and how many came back. Counts only, never message text. A missing file reads
+//! as empty; an unreadable one is moved aside (its history kept) and a new one started; a write that fails is logged:
+//! the record never stops a delivery or a start.
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -10,8 +11,11 @@ pub const FILE: &str = "record.json";
 /// Days kept, and shown.
 pub const DAYS: u64 = 30;
 const DAY_MS: u64 = 86_400_000;
-/// Restart rows kept at most, whatever their age.
+/// Restart rows, and lost agents remembered, kept at most, whatever their age.
 const RESTARTS: usize = 200;
+/// Unreadable records kept aside at most; past it the record is left as it is and nothing more is counted.
+const ASIDE: usize = 5;
+const BROKEN: &str = "record.broken-";
 static CHANGE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,6 +39,9 @@ pub struct Record {
     /// Local `YYYY-MM-DD` to that day's counts.
     pub days: BTreeMap<String, Day>,
     pub restarts: Vec<Restart>,
+    /// Agents (`pid:start`) a restart counted lost. A core killed before its next save leaves them named running in
+    /// sessions.json; the next start does not count them again.
+    pub lost: Vec<String>,
 }
 
 /// The record of the last `DAYS` days in `home`; empty when the file is missing or unreadable.
@@ -54,11 +61,68 @@ fn trim(record: &mut Record, now: u64) {
     record.restarts.retain(|r| r.at_ms >= since);
     let over = record.restarts.len().saturating_sub(RESTARTS);
     record.restarts.drain(..over);
+    let over = record.lost.len().saturating_sub(RESTARTS);
+    record.lost.drain(..over);
+}
+
+/// The record to change: `None` when it must be left as it is (not a plain file, or unreadable and not moved aside).
+fn load(home: &Path) -> Option<Record> {
+    let path = home.join(FILE);
+    match std::fs::symlink_metadata(&path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(Record::default()),
+        Ok(m) if m.is_file() => {}
+        Ok(_) => {
+            eprintln!(
+                "delivery record not kept: {} is not a plain file",
+                path.display()
+            );
+            return None;
+        }
+        Err(e) => {
+            eprintln!("delivery record not kept: {e}");
+            return None;
+        }
+    }
+    if let Some(record) = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+    {
+        return Some(record);
+    }
+    let kept = std::fs::read_dir(home).map_or(ASIDE, |d| {
+        d.filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().starts_with(BROKEN))
+            .count()
+    });
+    if kept >= ASIDE {
+        eprintln!(
+            "delivery record not kept: {} is unreadable and {kept} are set aside already",
+            path.display()
+        );
+        return None;
+    }
+    let aside = home.join(format!("{BROKEN}{}.json", crate::queue::now_ms()));
+    match std::fs::rename(&path, &aside) {
+        Ok(()) => {
+            eprintln!(
+                "delivery record unreadable: moved to {}; a new one starts",
+                aside.display()
+            );
+            Some(Record::default())
+        }
+        Err(e) => {
+            eprintln!("delivery record not kept: unreadable and not moved aside: {e}");
+            None
+        }
+    }
 }
 
 fn change(home: &Path, f: impl FnOnce(&mut Record)) {
     let _one = CHANGE.lock().unwrap_or_else(|e| e.into_inner());
-    let mut record = read(home);
+    let Some(mut record) = load(home) else {
+        return;
+    };
+    trim(&mut record, crate::queue::now_ms());
     f(&mut record);
     let written = serde_json::to_vec(&record)
         .map_err(|e| e.to_string())
@@ -76,25 +140,48 @@ pub(crate) fn count(home: &Path, delivered: bool, resent: bool, person: bool) {
             .days
             .entry(crate::loops::today(crate::queue::now_ms()))
             .or_default();
-        day.delivered += u64::from(delivered);
-        day.resent += u64::from(resent);
-        day.person += u64::from(person);
+        day.delivered = day.delivered.saturating_add(u64::from(delivered));
+        day.resent = day.resent.saturating_add(u64::from(resent));
+        day.person = day.person.saturating_add(u64::from(person));
     });
 }
 
-/// A core start found `before` sessions the last core ran, and `after` of them came back.
-pub(crate) fn restart(home: &Path, before: usize, after: usize) {
+/// A core start: each agent (`pid:start`) the last core ran, and whether it came back. One counted lost before is
+/// left out; with none left no row is written.
+pub(crate) fn restart(home: &Path, running: &[(String, bool)]) {
+    if running.is_empty() {
+        return;
+    }
     change(home, |r| {
+        let ran: Vec<_> = running
+            .iter()
+            .filter(|(a, _)| !r.lost.contains(a))
+            .collect();
+        if ran.is_empty() {
+            return;
+        }
         r.restarts.push(Restart {
             at_ms: crate::queue::now_ms(),
-            before,
-            after,
-        })
+            before: ran.len(),
+            after: ran.iter().filter(|(_, back)| *back).count(),
+        });
+        r.lost
+            .extend(ran.iter().filter(|(_, back)| !back).map(|(a, _)| a.clone()));
     });
 }
 
-/// Removes temporary files of the record a killed core left.
-pub(crate) fn sweep(_home: &Path) {}
+/// Removes the record's temporary files a killed core left (`store::atomic_write` names them `record.<id>.tmp`).
+pub(crate) fn sweep(home: &Path) {
+    let Ok(dir) = std::fs::read_dir(home) else {
+        return;
+    };
+    for e in dir.filter_map(|e| e.ok()) {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if name.starts_with("record.") && name.ends_with(".tmp") {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+}
 
 /// `YYYY-MM-DD HH:MM` local time, for the CLI.
 pub fn when(at_ms: u64) -> String {
@@ -135,7 +222,7 @@ mod tests {
         let base = home("gone");
         let home = base.join("not-there");
         count(&home, true, true, false);
-        restart(&home, 1, 1);
+        restart(&home, &[("1:1".into(), true)]);
         assert_eq!(read(&home), Record::default());
         let _ = std::fs::remove_dir_all(base);
     }

@@ -62,11 +62,15 @@ core runs, and every live session holder in this data folder with the session th
 when no core runs or no session record names it (an unknown holder, which a core never adopts). Never starts a core.
 
 `record` is the delivery record of the last 30 days (`record.json` in the data folder, counts only, never message
-text): `days` maps each local date to `delivered` (prompts that reached the agent), `resent` (of those, prompts the core
-sent again by itself after a dropped Enter) and `person` (prompts that needed a person: his own Enter in the terminal
-sent one, or the core gave one up after a dropped Enter); `restarts` lists each core start that found running sessions,
-with `at_ms`, `before` (sessions the last core ran) and `after` (sessions that came back). A missing or broken record
-reads as empty; the record never stops a delivery or a start.
+text): `days` maps each local date to `delivered` (queued prompts that reached the agent with their Enter: `agent prompt`,
+other senders' lines, and composer sends the core queued; keys, text without Enter, card answers and model switches are
+no prompt, and the window's own composer writes that go straight to the terminal have no queue row and are not
+counted), `resent` (of those, prompts the core sent again by itself after a dropped Enter) and `person` (prompts that
+needed a person, once each: his own Enter in the terminal sent one, he canceled one after a dropped Enter, or the core
+gave one up); `restarts` lists each core start that found agents the last core ran, with `at_ms`, `before` (those
+agents) and `after` (those that came back), and `lost` names the agents a restart counted lost (by process id and start
+time) so a later start does not count them again. A missing record reads as empty; an unreadable one is moved to
+`record.broken-<time>.json` (at most 5 kept) and a new one starts; the record never stops a delivery or a start.
 
 On a terminal, without `--json`, the same is printed as text: a line per day and a line per restart. Piped, it prints
 the JSON as before.
