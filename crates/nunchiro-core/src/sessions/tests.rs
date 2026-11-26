@@ -5598,13 +5598,15 @@ fn t1094_every_saved_mark_opens_after_a_restart() {
 fn t1094_a_dropped_message_is_not_pasted_again_behind_hand_typed_words() {
     let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi\r\n{RULE}\r\n");
     let own = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} my own words\r\n{RULE}\r\n");
+    let empty = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
     let mut f = flood_script(
         "t1094-hand",
         boxed.as_bytes(),
         &format!(
-            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
+            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f sent ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
             PROMPT.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
-            own.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
+            own.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            empty.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
         ),
     );
     wait_end(&f, PROMPT.len());
@@ -5647,8 +5649,11 @@ fn t1094_a_dropped_message_is_not_pasted_again_behind_hand_typed_words() {
         "not pasted again while his words sit in the box"
     );
     assert_eq!(send_row(&f, &send.id).status, "queued");
-    // His own Enter sent his words; the message goes now.
+    // His own Enter sent his words and the agent drew its box empty; the message goes now.
     f.core.entries.get_mut(&f.id).unwrap().input = Default::default();
+    fs::write(f.home.join("sent"), "").unwrap();
+    wait_end(&f, PROMPT.len() + boxed.len() + own.len() + empty.len());
+    catch_up(&mut f);
     f.core.flush_delivery().unwrap();
     assert_eq!(
         copies(&f),
@@ -5741,14 +5746,16 @@ fn t1094_a_proven_box_without_a_turn_goes_again() {
     let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi\r\n{RULE}\r\n");
     let dialog = " Pick one\r\n \u{276f} 1. Yes\r\n   2. No\r\n";
     let typed_box = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi x\r\n{RULE}\r\n");
+    let empty = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
     let mut f = flood_script(
         "t1094-own-enter-no-turn",
         boxed.as_bytes(),
         &format!(
-            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f again ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
+            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f again ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f sent ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
             PROMPT.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
             dialog.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
-            typed_box.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
+            typed_box.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            empty.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
         ),
     );
     wait_end(&f, PROMPT.len());
@@ -5795,6 +5802,13 @@ fn t1094_a_proven_box_without_a_turn_goes_again() {
     f.core.flush_delivery().unwrap();
     assert_eq!(copies(&f), first, "not pasted again behind his words");
     raw(&mut f, "\r");
+    // The agent drew its box empty after his Enter.
+    fs::write(f.home.join("sent"), "").unwrap();
+    wait_end(
+        &f,
+        PROMPT.len() + boxed.len() + dialog.len() + typed_box.len() + empty.len(),
+    );
+    catch_up(&mut f);
     f.core.flush_delivery().unwrap();
     assert_eq!(
         send_row(&f, &send.id).status,
@@ -5816,14 +5830,16 @@ fn t1094_his_enter_on_words_that_only_look_like_the_message() {
     let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi\r\n{RULE}\r\n");
     let dialog = " Pick one\r\n \u{276f} 1. Yes\r\n   2. No\r\n";
     let own = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} this works\r\n{RULE}\r\n");
+    let empty = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
     let mut f = flood_script(
         "t1094-look-alike",
         boxed.as_bytes(),
         &format!(
-            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f again ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
+            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f again ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f sent ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
             PROMPT.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
             dialog.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
-            own.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
+            own.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            empty.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
         ),
     );
     wait_end(&f, PROMPT.len());
@@ -5868,6 +5884,13 @@ fn t1094_his_enter_on_words_that_only_look_like_the_message() {
         !f.core.hand_sent.contains_key(&f.id),
         "no proof from a look-alike box"
     );
+    // The agent drew its box empty after his Enter.
+    fs::write(f.home.join("sent"), "").unwrap();
+    wait_end(
+        &f,
+        PROMPT.len() + boxed.len() + dialog.len() + own.len() + empty.len(),
+    );
+    catch_up(&mut f);
     hook(&mut f, "UserPromptSubmit");
     f.core.flush_delivery().unwrap();
     assert_eq!(send_row(&f, &send.id).status, "queued");

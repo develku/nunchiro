@@ -595,7 +595,9 @@ impl Sessions {
                         self.entry(&id)?.observer.clear_box = true;
                         self.clear_box_first(&id)?;
                     }
-                    let clean = shown.is_some() && !copy;
+                    // A row of its own once dropped goes again only into an empty box: Codex's box held the owner's
+                    // half-typed words and the copy behind them, read as free of the copy, and took it twice more.
+                    let clean = !copy && shown.is_some_and(|c| n == 0 || c.trim().is_empty());
                     if n > REPASTES {
                         self.spent.insert(send_id.clone());
                     } else if !clean {
