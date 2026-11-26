@@ -1,9 +1,4 @@
 # scripts/file-size-ratchet.sh: source files over 2,000 lines as the scorecard counts them; numbers may only fall.
-3007 app/src-tauri/src/browser/agent.rs
-2332 crates/nunchiro-core/src/api.rs
-3193 crates/nunchiro-core/src/http/mod.rs
-3419 crates/nunchiro-core/src/ledger.rs
-4573 crates/nunchiro-core/src/queue/mod.rs
-2251 crates/nunchiro-core/src/server.rs
-15074 crates/nunchiro-core/src/sessions.rs
+4563 crates/nunchiro-core/src/queue/mod.rs
+1632 crates/nunchiro-core/src/sessions.rs
 3839 web/src/styles.css

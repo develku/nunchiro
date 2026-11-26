@@ -1,0 +1,30 @@
+{
+ "app": "T3 Code (Beta).app",
+ "version": "0.1.6",
+ "date": "2026-11-26 10:50",
+ "host": "Mac16,10",
+ "macos": "27.2.1 26B131",
+ "launch": {
+  "first_ms": 3503,
+  "warm_median_ms": 1390,
+  "warm_ms": [
+   1390,
+   1374,
+   1458
+  ],
+  "missed": 0
+ },
+ "idle": {
+  "processes": 7,
+  "footprint_mib": 620.3,
+  "rss_mib": 957.8,
+  "idle_cpu_pct": 0.75,
+  "settle_s": 45,
+  "cpu_secs": 60,
+  "load": 2.61
+ },
+ "profile": "the owner's own profile as it was; nothing clicked, no agent session started by this run",
+ "ran_before_and_left_alone": [],
+ "our_pids_left": [],
+ "started_during_the_run_and_still_running": []
+}

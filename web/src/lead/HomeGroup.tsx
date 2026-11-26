@@ -71,7 +71,7 @@ export function HomeGroup({ t, core, team, sessions, current, onOpen }: { t: T; 
               <span className="wtwrap">
                 <WtRow
                   name={m.name}
-                  tag={m.lead ? t('lead.tag') : undefined}
+                  tag={m.lead ? t('bots.seat.chief') : undefined} // ticket 1168: the office's lead is the Chief; the section keeps its name
                   note={seat ? undefined : t(restKey(sessions, m.id))}
                   seat={seat ?? undefined}
                   cacheIds={seat ? [seat.id] : undefined}

@@ -272,6 +272,7 @@ export const AREA: Record<string, Area> = {
   'bars.autohide': VIEWS,
   'tree.clear-finished': VIEWS,
   'history.open': VIEWS,
+  'bots.open': VIEWS, // ticket 1168: the Bots view
   'usage.page': WINDOW,
   'team.page': WINDOW,
   'assistants.page': WINDOW,

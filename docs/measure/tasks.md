@@ -26,19 +26,42 @@ Fixed list: the same tasks on every app, so a later run compares like with like.
 - Chat polish and first use: Claude Desktop, ChatGPT desktop.
 - Agent baseline: Claude Code CLI, Codex CLI.
 
-## How a cell is measured (this round)
+## How a cell is measured (rubric v2, ticket 1171)
 
-- Steps from docs/code: every click, key chord or typed string the user makes, counted from the app's source (Orca, T3
-  Code, herdr, Nunchiro) or public docs (Claude Desktop, ChatGPT, Claude Code, Codex). The closed apps (Claude Desktop,
-  ChatGPT) are scored from their public docs only.
-- "no" when the app cannot do the task; "partial" when it does part of it (the note says which part).
-- Timed: Nunchiro only, from the measure scripts on the isolated RC (launch and restart). No GUI drive of any app this
-  round: the measuring seat is Code Mode (no computer use) and its process has no Accessibility grant, so
-  scripts/app-click was not run (lead, m1192).
-- Shots: Nunchiro from the gate-run page picture of the isolated RC (`<NUNCHIRO_HOME>/gate-shot.png`, no grant needed);
-  peers from the 2026-11-02 timed run (peer-compare-1102), named with their date and app version.
+A cell is one task driven in the running app on this Mac. A cell counted from docs or code is not a measurement.
+
+- One path rule for every app: the default GUI path a new user finds. Only controls that are on screen at that moment
+  count: buttons, menus, fields, and a key the screen itself shows at that point. No CLI, no pasted command, no
+  shortcut the screen does not show, no setting changed beforehand. For the CLIs (Claude Code, Codex) and the herdr
+  TUI the default path is what their first screen and its on-screen hints offer.
+- Seconds are compared between apps, so every app of a run is driven the same way: by the owner's hand with a screen
+  recording, or by computer use for all of them. The typed text is the same in every app.
+- Recorded per drive: steps (every click, key chord or typed field) and seconds from the first input to the "done
+  when" state on screen, read from the recording. Three drives, the median of each.
+- T1 starts at the place the app's public page sends a new user: its download button, or the README's build steps
+  when there is no download. It runs on a macOS user account that never ran the app, with an agent CLI already
+  signed in. Download, unpacking, the Gatekeeper dialog and onboarding all count.
+- "no" when the app cannot do the task on that path; "partial" when it does part of it (the note says which part).
+- In tasks.json a driven cell carries `driven` (the date), `steps`, `seconds`, `path` and its shots or recording.
+  `run` at the top of the file is the date of the run whose Nunchiro cells count.
+- Nunchiro runs as an isolated RC. scripts/app-click is for rehearsing its path, not for the timed drive (it is not
+  how the peers are driven). Computer use needs the owner to answer its access dialog, so the drives are an owner-run
+  step. Never sign in to a peer for a drive and never press anything in it that sends data outward.
 
 ## Score
 
-For each task: 100 x (fewest steps of any app that does it) / (this app's steps). "partial" counts half of that; "no"
-counts 0. An app's task score is the mean over the 12 tasks.
+For each task: the lower of 100 x (fewest steps of any driven app) / (this app's steps) and 100 x (fastest seconds
+of any driven app) / (this app's seconds). "partial" counts half of that; "no" counts 0. A short path with long
+waits does not win.
+
+- A Nunchiro cell that was not driven in this run scores 0 (not measured).
+- A peer cell stays valid while that peer's version is the one recorded; a peer cell that was never driven is left
+  out of that peer's mean and cannot be the best.
+- A task counts only when at least two peers were driven on it; otherwise Nunchiro's score for it is 0.
+
+An app's part score is the mean over the part's tasks.
+
+## v1 (kept for history)
+
+Until 2026-11-26 the cells were steps counted from source and docs, Nunchiro on its best path. The step counts still
+in tasks.json are those readings; they are notes for the first drive, not scores.

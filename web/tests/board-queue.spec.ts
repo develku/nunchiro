@@ -1,5 +1,5 @@
 // v1b-18: needs-decision board cards in the strip and the tree action rows, against a real core with a file
-// integration source (no agent). Timing over 30 runs is scripts/scenario/v1b-board-queue.sh.
+// integration source (no agent).
 import type { Page } from '@playwright/test';
 import fs from 'node:fs';
 import net from 'node:net';

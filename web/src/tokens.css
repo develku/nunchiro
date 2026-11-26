@@ -316,6 +316,25 @@
   --fs-2: var(--fs-13); /* derived: approved mockup docs/design/polish-1121/index.html .win --f2: the body size */
   --fs-3: var(--fs-15); /* derived: approved mockup docs/design/polish-1121/index.html .win --f3: chat text and the palette input */
 
+  /* Ticket 1168: a bot's face (bots/Face.tsx). The drawing's own colours, the same in a light and a dark window: the
+     mockup has no dark set, it dims the whole drawing there (bots.css). A tile and the head colour that goes with it. */
+  --face-tile-lilac: #ddd4f3; /* derived: approved mockup docs/design/bots-1166.html WHO.mina, the tile */
+  --face-ink-lilac: #51356b; /* derived: approved mockup docs/design/bots-1166.html WHO.mina, the head */
+  --face-tile-sky: #cfe4f7; /* derived: approved mockup docs/design/bots-1166.html WHO.dalsu, the tile */
+  --face-ink-sky: #27365f; /* derived: approved mockup docs/design/bots-1166.html WHO.dalsu, the head */
+  --face-tile-mint: #cdebd7; /* derived: approved mockup docs/design/bots-1166.html WHO.ori, the tile */
+  --face-ink-mint: #2a5a45; /* derived: approved mockup docs/design/bots-1166.html WHO.ori, the head */
+  --face-tile-peach: #f9dcc4; /* derived: approved mockup docs/design/bots-1166.html WHO.bom, the tile */
+  --face-ink-peach: #8a4526; /* derived: approved mockup docs/design/bots-1166.html WHO.bom, the head */
+  --face-tile-teal: #c7e9e5; /* derived: approved mockup docs/design/bots-1166.html WHO.sol, the tile */
+  --face-ink-teal: #1f5d68; /* derived: approved mockup docs/design/bots-1166.html WHO.sol, the head */
+  --face-tile-slate: #dbe0e7; /* derived: approved mockup docs/design/bots-1166.html WHO.nuni, the tile */
+  --face-ink-slate: #414b5a; /* derived: approved mockup docs/design/bots-1166.html WHO.nuni, the head */
+  --face-skin: #fff5e2; /* derived: approved mockup docs/design/bots-1166.html CREAM, the face patch */
+  --face-eye: #141a2a; /* derived: approved mockup docs/design/bots-1166.html DARK, eyes, brows and mouth */
+  --face-shine: #ffffff; /* derived: approved mockup docs/design/bots-1166.html eye(), the light in an eye */
+  --face-blush: #f2a093; /* derived: approved mockup docs/design/bots-1166.html the cheeks, drawn at 55% */
+
   /* R8 names the rules still read; each points at a role. */
   --bg: var(--panel); /* derived: R8 alias, the window surface */
   --g0: var(--panel); /* derived: R8 alias, sidebars sit on the panel like ko/ .pane */

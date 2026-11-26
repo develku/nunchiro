@@ -8,12 +8,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { type Core, expect, nunchiro, openWindow, test } from './fixtures';
-import { asSeat, mateMenu, mates, openSeat, openTeam, tokenClaude, tokenOf } from './leader-990';
+import { asSeat, mateMenu, mates, openSeat, openTeam, roster, tokenClaude, tokenOf } from './leader-990';
 import { acpAgent, acpSets, fakeCodex, setLevels } from './levels-seed';
 import { add, openWidget } from './schedules-seed';
 import { closeSettings, openSettings } from './settings-modal';
 
-const team = (core: Core) => (fs.existsSync(path.join(core.home, 'team', 'team.json')) ? (JSON.parse(fs.readFileSync(path.join(core.home, 'team', 'team.json'), 'utf8')).teammates as { name: string; kind: string; agent?: string; level?: string }[]) : []);
+const team = (core: Core) => roster<{ name: string; kind: string; agent?: string; level?: string }>(core); // ticket 1168: the roster as the core keeps it
 const features = (core: Core) => (JSON.parse(fs.readFileSync(path.join(core.home, 'settings.json'), 'utf8')).features ?? {}) as Record<string, unknown>;
 const schedules = (core: Core) => (JSON.parse(fs.readFileSync(path.join(core.home, 'schedules.json'), 'utf8')).schedules as { run: { label: string; level?: string } }[]).map((s) => s.run);
 async function teamPage(app: Page) {

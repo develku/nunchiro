@@ -1,0 +1,363 @@
+/* Ticket 1168 (mockup docs/design/bots-1166.html): the face, and the Bots view (the roster and one bot's page). */
+.face {
+  --s: 40px;
+  display: inline-block;
+  flex: none;
+  width: var(--s);
+  height: var(--s);
+  border-radius: 27%;
+  position: relative;
+  vertical-align: middle;
+}
+.face svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 27%;
+}
+/* The drawing's colours are tokens (tokens.css --face-*): the tile picks its pair; one a later build added draws as slate. */
+.face {
+  --face-tile: var(--face-tile-slate);
+  --face-ink: var(--face-ink-slate);
+}
+.face[data-tile='lilac'] {
+  --face-tile: var(--face-tile-lilac);
+  --face-ink: var(--face-ink-lilac);
+}
+.face[data-tile='sky'] {
+  --face-tile: var(--face-tile-sky);
+  --face-ink: var(--face-ink-sky);
+}
+.face[data-tile='mint'] {
+  --face-tile: var(--face-tile-mint);
+  --face-ink: var(--face-ink-mint);
+}
+.face[data-tile='peach'] {
+  --face-tile: var(--face-tile-peach);
+  --face-ink: var(--face-ink-peach);
+}
+.face[data-tile='teal'] {
+  --face-tile: var(--face-tile-teal);
+  --face-ink: var(--face-ink-teal);
+}
+.face .f-tile {
+  fill: var(--face-tile);
+}
+.face .f-ink {
+  fill: var(--face-ink);
+}
+.face .f-inks {
+  stroke: var(--face-ink);
+}
+.face .f-skin {
+  fill: var(--face-skin);
+}
+.face .f-eye {
+  fill: var(--face-eye);
+}
+.face .f-shine {
+  fill: var(--face-shine);
+}
+.face .f-blush {
+  fill: var(--face-blush);
+  opacity: 0.55;
+}
+.face .f-line {
+  fill: none;
+  stroke: var(--face-eye);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+/* Needs you: the ring says it at every size (under about 20 px the eyes cannot be read). Orange is "your turn" only. */
+.face[data-you] {
+  outline: max(1.5px, calc(var(--s) / 20)) solid var(--you);
+  outline-offset: max(1.5px, calc(var(--s) / 20));
+}
+/* A working face reads: its eyes move slowly from side to side. */
+.face .scan {
+  animation: face-scan 2.6s ease-in-out infinite;
+}
+@keyframes face-scan {
+  0%,
+  100% {
+    transform: translateX(-1.4px);
+  }
+  50% {
+    transform: translateX(1.4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .face .scan {
+    animation: none;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .face svg {
+    filter: saturate(0.92) brightness(0.9);
+  }
+}
+:root[data-theme='dark'] .face svg {
+  filter: saturate(0.92) brightness(0.9);
+}
+/* The lead's header: the face stands where the letter circle stood. */
+.shead .face {
+  margin-right: var(--sp-2, 2px);
+}
+
+.botsv {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: var(--sp-16) var(--sp-24, 24px) var(--sp-24, 24px);
+}
+.botsv-in {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-16);
+}
+.bots-top {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-12);
+}
+.bots-top h2 {
+  margin: 0;
+  font-size: var(--fs-18);
+}
+.bots-top .dim,
+.bots-g > header small,
+.bot-row .dim,
+.bot-card header small {
+  color: var(--muted);
+  font-size: var(--fs-12);
+  font-weight: 400;
+}
+.bots-top .sp {
+  flex: 1;
+}
+.bots-g {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+.bots-g > header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-8);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  padding: 0 var(--sp-4);
+}
+.bots-list {
+  border: 1px solid var(--line);
+  border-radius: var(--r-12);
+  overflow: hidden;
+}
+.bot-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.9fr);
+  align-items: center;
+  gap: var(--sp-12);
+  width: 100%;
+  padding: var(--sp-12) var(--sp-16);
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.bot-row:first-child {
+  border-top: 0;
+}
+.bot-row:hover {
+  background: var(--tint-1);
+}
+.bot-row:focus-visible,
+.botsv button:focus-visible,
+.botsv summary:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.bot-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.bot-row .wordcut,
+.bot-head .wordcut {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bot-name {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+.bot-seat {
+  flex: none;
+  font-style: normal;
+  border: 1px solid var(--line);
+  border-radius: var(--r-12);
+  padding: 0 var(--sp-8);
+  font-size: var(--fs-11);
+  font-weight: 500;
+  color: var(--muted);
+  line-height: 18px;
+}
+.bot-now {
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+.bot-now[data-eyes='look'] {
+  color: var(--you);
+}
+.bot-now[data-eyes='work'] {
+  color: var(--run);
+}
+.bot-now[data-eyes='rest'] {
+  color: var(--muted);
+  font-weight: 400;
+}
+.bots-none {
+  padding: var(--sp-16);
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+
+/* One bot. */
+.bot-back {
+  align-self: flex-start;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-12);
+  cursor: pointer;
+  padding: 2px var(--sp-4);
+  border-radius: var(--r-6);
+}
+.bot-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-16);
+  padding: var(--sp-16);
+  border-radius: var(--r-12);
+  background: var(--tint-1);
+}
+.bot-head > div {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.bot-head h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  font-size: var(--fs-18);
+}
+.bot-head p {
+  margin: 0;
+  font-size: var(--fs-13);
+}
+.bot-head .dim {
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.bot-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-12);
+  padding: var(--sp-12) var(--sp-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+}
+.bot-card header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-8);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+.bot-card header .sp {
+  flex: 1;
+}
+.bot-soul {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: var(--fs-13);
+  line-height: 1.5;
+}
+.bot-card textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 140px;
+  resize: vertical;
+  font: inherit;
+  font-size: var(--fs-13);
+  line-height: 1.5;
+}
+.bot-acts {
+  display: flex;
+  gap: var(--sp-8);
+}
+.bot-sched {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-8);
+  font-size: var(--fs-13);
+}
+.bot-sched .dim {
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+/* Models and limits: closed until asked for. The one line beside the title says the default. */
+.bot-models > summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-8);
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+.bot-models > summary::-webkit-details-marker {
+  display: none;
+}
+.bot-models > summary small {
+  color: var(--muted);
+  font-weight: 400;
+}
+.bot-models > summary .icon {
+  align-self: center;
+  transition: transform 0.12s;
+}
+.bot-models[open] > summary .icon {
+  transform: rotate(90deg);
+}
+.bot-models form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-12);
+  padding-top: var(--sp-12);
+}
+/* Today's controls (features/team.tsx) outside the Settings form they were drawn for: one line each, with room between. */
+.bot-models .team-picks,
+.bot-models .team-level {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-8) var(--sp-16);
+}
