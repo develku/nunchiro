@@ -77,6 +77,8 @@ ANCHORS = {
     "change_failure_pct": (5, 30), "restore_median_min": (60, 1440),
     # p08 field figures (7 days)
     "seats_lost_per_restart": (0, 1), "missed_prompts_per_1000": (0, 5), "soak_clean_hours": (24, 0),
+    # p14 field figure (7 days): low-memory kills while the core held a seat
+    "jetsam_kills_7d": (0, 3),
     # p33 real-use speed and weight
     "chat_open_5000_ms": (100, 1000), "stream8_worst_frame_ms": (200, 2000), "mem_growth_24h_ratio": (1.0, 1.5),
     "prompt_delivery_ms": (1000, 10000),
@@ -90,7 +92,8 @@ NUMBER_PARTS = {
     "p05": ["installs_ok_pct", "owner_installs_landed_pct"],
     "p08": ["seats_lost_per_restart", "missed_prompts_per_1000", "soak_clean_hours", "gate_green_pct"],
     "p12": ["gate_green_pct", "gate_median_min"],
-    "p14": ["idle_cpu_pct_5", "idle_mib_5", "mib_per_session", "sessions_json_kib_per_session", "snapshot_kib_per_session"],
+    "p14": ["idle_cpu_pct_5", "idle_mib_5", "mib_per_session", "sessions_json_kib_per_session", "snapshot_kib_per_session",
+            "jetsam_kills_7d"],
     "p15": ["launch_restored_s", "launch_cold_s", "core_start_s", "term_paint_p95_ms"],
     "p18": ["locale_coverage_pct"],
     "p26": ["build_cold_min", "build_warm_s", "web_build_s", "test_stage_min", "gate_median_min",
@@ -103,7 +106,7 @@ NUMBER_PARTS = {
 # Figures no script measures yet (rubric.md, "Owner-run steps"): read from docs/measure/manual-<date>.json, where each
 # carries its evidence; without an entry they are "not measured" and score 0.
 MANUAL = {"term_paint_p95_ms", "idle_cpu_pct_5", "idle_mib_5", "seats_lost_per_restart", "missed_prompts_per_1000",
-          "soak_clean_hours", *NUMBER_PARTS["p33"], *NUMBER_PARTS["p34"], "bot_task_success_pct", "bot_owner_touches"}
+          "soak_clean_hours", "jetsam_kills_7d", *NUMBER_PARTS["p33"], *NUMBER_PARTS["p34"], "bot_task_success_pct", "bot_owner_touches"}
 # Figures of `run` whose method changed in v2: a v1 results file's value of them is not scored.
 V2_RUN = {"mib_per_session"}
 # Checks whose wording rests on a test or spec: pass or partial only when a command named under the check's "tests"
