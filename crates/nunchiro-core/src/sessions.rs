@@ -1439,15 +1439,20 @@ impl Sessions {
         // a frame read half-drawn) is read again each second: the screen is fed only on new output, and a waiting
         // dialog draws none, so it would read as an idle row for ever and the composer would type into it.
         for (id, entry) in self.entries.iter_mut() {
+            // One request, one card: a permission frame hidden while its held hook was expected is read again the
+            // moment that wait is over, whatever the second and the stillness below say. Another agent's tool calls
+            // (a hook every second or less) kept the session from ever being still, and the dialog had no card.
+            let due = self.queue.hide_over(id, queue::now_ms());
             if entry.meta.state != SessionState::Running
                 || entry.agent_ended
                 || entry.switch.is_some()
                 || entry.observer.own_folder_since.is_some()
                 || !matches!(entry.meta.kind, AgentKind::Claude | AgentKind::Codex)
-                || entry
-                    .observer
-                    .reread
-                    .is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(1))
+                || !due
+                    && entry
+                        .observer
+                        .reread
+                        .is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(1))
             {
                 continue;
             }
@@ -1457,7 +1462,9 @@ impl Sessions {
             // been still for a second: a prompt just answered through its hook is redrawn sooner than that, and is
             // not made a card again in between.
             let a = self.queue.attention(id);
-            if (!a.working || queue::now_ms().saturating_sub(a.last_activity) >= REREAD_STILL_MS)
+            if (due
+                || !a.working
+                || queue::now_ms().saturating_sub(a.last_activity) >= REREAD_STILL_MS)
                 && !crate::delivery::blocked(&self.queue.items_of(id))
                 && entry
                     .observer

@@ -2644,8 +2644,9 @@ fn a_dialog_drawn_before_its_held_hook_is_one_card_with_one_id() {
 }
 
 /// The wait for a held hook is bounded from the first frame it hid: tool calls that go on (a subagent's, a sibling
-/// call's PreToolUse every 2 s) never keep a dialog with no hook item from its card. The card comes within 3.9 s of
-/// the first hidden frame; this bound is the trial's limit for a dialog with no card, so the wait cannot grow past it.
+/// call's PreToolUse every 2 s) never keep a dialog with no hook item from its card. The first read 4 s after the
+/// first hidden frame makes the card; the core's tick reads the screen at that moment, so the card comes within the
+/// 5 s the trial allows a dialog with no card. The wait cannot grow much past this.
 #[test]
 fn a_dialog_with_no_hook_gets_its_card_within_the_bound_while_tools_go_on() {
     use nunchiro_core::waiting::screen::Screen;
@@ -2693,7 +2694,7 @@ fn a_dialog_with_no_hook_gets_its_card_within_the_bound_while_tools_go_on() {
     }
     let card = card.expect("no card in 30 s while tools went on");
     assert!(
-        card - first_frame <= 3900,
+        card - first_frame <= 4000,
         "card {} ms after the first hidden frame",
         card - first_frame
     );

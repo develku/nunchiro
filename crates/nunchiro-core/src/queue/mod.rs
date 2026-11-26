@@ -1005,6 +1005,14 @@ impl Queue {
             Ok(())
         })
     }
+    /// Whether the wait that hid the session's permission frame is over (`hook_hidden`). The tick then reads the
+    /// screen again at once: the next read would otherwise wait for a second with no event, and the hooks of another
+    /// agent's tool calls keep that second from coming.
+    pub fn hide_over(&self, id: &str, now: u64) -> bool {
+        self.hook_hidden
+            .get(id)
+            .is_some_and(|since| now.saturating_sub(*since) >= HOOK_EXPECTED_MS)
+    }
     pub fn activity(&mut self, id: &str, now: u64) -> Result<(), String> {
         let state = self.disk.sessions.get(id).ok_or("queue session missing")?;
         self.activity
@@ -1860,8 +1868,8 @@ impl Queue {
         }
         // One request, one card: a permission frame drawn between Claude's PreToolUse hook and its held
         // PermissionRequest hook makes no card of its own; the hook's item is the card, and its later frames pair with
-        // it. With no permission item yet and the hook still expected, wait: the observer reads the still screen again
-        // each second, so the frame becomes a card once the wait is over (no hook installed, or it failed).
+        // it. With no permission item yet and the hook still expected, wait: the tick reads the screen again when the
+        // wait is over (`hide_over`), so the frame becomes a card then (no hook installed, or it failed).
         let live_permission = self
             .disk
             .sessions
@@ -2701,10 +2709,10 @@ pub const HOLD_MS: u64 = 1_800_000;
 const HOLDS: usize = 8;
 /// How long after Claude's PreToolUse hook its PermissionRequest hook is expected (`hook_expected`), and the most a
 /// permission frame stays hidden from its first hidden read (`hook_hidden`).
-// shortcut: a fixed wait, measured on the trial agent only. It cannot pass ~3.9 s: the accuracy trial counts a dialog
-// with no card for longer as a miss, and `a_dialog_with_no_hook_gets_its_card_within_the_bound_while_tools_go_on`
-// goes red.
-const HOOK_EXPECTED_MS: u64 = 3000;
+// shortcut: a fixed wait, measured on the trial agent only. Long enough for a hook a busy Mac starts 3.5 s late; with
+// the tick's re-read when it ends (`hide_over`), short enough that a dialog with no hook is a card within the 5 s the
+// accuracy trial allows. A hook later than this still makes a second card when the screen cannot prove the request.
+const HOOK_EXPECTED_MS: u64 = 4000;
 
 /// v1b-30: more than one hook permission pending in this session: the screen shows one prompt while the card may
 /// show another request (each hook still answers for its own request).
