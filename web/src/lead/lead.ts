@@ -41,6 +41,20 @@ export function useTeam(core: CoreClient, connected: boolean): Team {
   );
 }
 
+/** The team as the window has it now, for a piece that gets no client of its own (the chat's cards). */
+export const useTeamNow = (): Team =>
+  useSyncExternalStore(
+    (f) => (subs.add(f), () => subs.delete(f)),
+    () => state,
+  );
+/** One request on the window's core, for the same pieces. */
+export async function askCore<R>(request: { op: string; [k: string]: unknown }) {
+  if (!client) throw new Error('core disconnected');
+  return (await client.request(request)) as R;
+}
+/** The projects the window knows a session of (Home's own folder is no project), for a list to pick one from. */
+export const knownPlaces = (team: Team) => [...new Set([...team.teammates.map((m) => m.project ?? ''), ...known.filter((s) => !s.account_tab && !s.machine).map((s) => s.project)])].filter((p) => p && p !== team.home);
+
 /** Ticket 990: the core finds the teammate's seat or starts it with its brief (`team_open`); the caller shows its tab. */
 export async function openSeat(core: CoreClient, id: string) {
   return (await core.request({ op: 'team_open', id })) as { session: Session; started: boolean };

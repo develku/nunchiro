@@ -46,7 +46,9 @@ import { useWorktrees, WorktreeLayer } from './tree/worktrees'; // V2-8a
 import { leadSeatMate, useTeam } from './lead/lead'; // ticket 990
 import { LeaderDialog } from './lead/LeaderDialog'; // ticket 990
 import { BotsView } from './bots/BotsView'; // ticket 1168
-import { onOpenBots } from './bots/bots';
+import { askNewBot, onOpenBots } from './bots/bots';
+import { HandBot } from './bots/HandBot';
+import { NewBot } from './bots/NewBot';
 import { useProjectTree } from './tree/state';
 import { useDiffStat } from './chrome/SessionFacts'; // CHROME
 import { agentState, type BoardDecision, type Decision, type Session } from './types';
@@ -708,8 +710,7 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
       {overlay && (
         <Overlay kind={overlay} label={overlay === 'settings' ? t('settings.region') : overlay === 'bots' ? t('bots.title') : t('board.region')} onClose={() => setOverlay(null)}>
           {overlay === 'bots' ? (
-            // Lane 1: "New bot" opens today's form (Settings > Team, its Add button); lane 2 brings the one-minute dialog.
-            <BotsView key={botFirst ?? ''} core={core} t={t} sessions={sessions} first={botFirst} open={open} onNew={() => (setSettings((s) => ({ ...s, settingsPage: 'team' })), setOverlay('settings'), setSettingsFocus((d) => ({ key: 'team', n: (d?.n ?? 0) + 1 })))} />
+            <BotsView key={botFirst ?? ''} core={core} t={t} sessions={sessions} first={botFirst} open={open} onNew={askNewBot} />
           ) : overlay === 'settings' ? (
             <SettingsView core={core} settings={settings} commands={commands.filter((c) => !c.id.startsWith('session.open.') && !fieldCommand(c.id))} update={update} focus={settingsFocus} agent={agentSheet} toast={arrange.notify} hasProject={projectList.length > 0} projects={projectList.map((g) => g.project)} sessions={sessions} current={current} project={projectList[0] ? { path: projectList[0].project, name: projectList[0].name } : null} onClose={() => setOverlay(null)} />
           ) : (
@@ -718,6 +719,8 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
           )}
         </Overlay>
       )}
+      <NewBot core={core} t={t} projects={projectList.map((g) => g.project)} front={current?.project ?? null} open={open} />
+      <HandBot core={core} t={t} list={wt.list} sessions={sessions} team={wt.team} open={open} />
       {palette && <Palette commands={commands} recent={recent.current.filter((id) => id !== active)} bindings={bindings} onClose={() => setPalette(false)} t={t} />}
       {quickOpen && <QuickOpen core={core} root={filesSession?.id ?? null} bindings={bindings} onClose={() => setQuickOpen(false)} t={t} />}
       <PairSheet core={core} /> {/* V2.5-15 */}

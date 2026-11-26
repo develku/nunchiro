@@ -359,3 +359,375 @@
   align-items: center;
   gap: var(--sp-8) var(--sp-16);
 }
+
+/* A bot in one minute (mockup docs/design/bots-1166.html, panel 3): the dialog. A band in the face's own tile colour
+   fades down from its top edge; fields are bare or one tint step, and the buttons are quiet. */
+.newbot {
+  --face-tile: var(--face-tile-slate);
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, round(nearest, -50%, 1px));
+  width: 372px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-12);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-float);
+  outline: 1px solid var(--tint-2);
+  font-size: var(--fs-13);
+  line-height: 1.5;
+}
+.newbot[data-tile='lilac'] {
+  --face-tile: var(--face-tile-lilac);
+}
+.newbot[data-tile='sky'] {
+  --face-tile: var(--face-tile-sky);
+}
+.newbot[data-tile='mint'] {
+  --face-tile: var(--face-tile-mint);
+}
+.newbot[data-tile='peach'] {
+  --face-tile: var(--face-tile-peach);
+}
+.newbot[data-tile='teal'] {
+  --face-tile: var(--face-tile-teal);
+}
+.newbot::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 84px;
+  border-radius: var(--r-12) var(--r-12) 0 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--face-tile) 46%, transparent), transparent);
+  pointer-events: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .newbot::before {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--face-tile) 20%, transparent), transparent);
+  }
+}
+:root[data-theme='dark'] .newbot::before {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--face-tile) 20%, transparent), transparent);
+}
+.newbot.handbot::before {
+  display: none;
+}
+.newbot > * {
+  position: relative;
+}
+.newbot h2 {
+  margin: 0;
+  padding: 14px 18px 0;
+  font-size: var(--fs-13);
+  font-weight: 600;
+}
+.nb-id {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px var(--sp-4);
+}
+.nb-id > div {
+  flex: 1;
+  min-width: 0;
+}
+.nb-face {
+  flex: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  border-radius: var(--r-16);
+  cursor: pointer;
+}
+.nb-face:hover .face {
+  transform: rotate(-4deg);
+}
+.nb-face .face {
+  transition: transform 0.12s;
+}
+.nb-name {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: calc(var(--fs-18) + 2px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  caret-color: var(--run);
+  outline: none;
+}
+.nb-name::placeholder,
+.nb-job::placeholder {
+  color: var(--faint);
+}
+.nb-hint {
+  font-size: var(--fs-11);
+  color: var(--faint);
+}
+.nb-job {
+  margin: var(--sp-8) 18px 0;
+  padding: var(--sp-8) 10px;
+  min-height: 54px;
+  border: 0;
+  border-radius: var(--r-8);
+  background: var(--tint-1);
+  color: var(--text);
+  font: inherit;
+  resize: none;
+  field-sizing: content;
+}
+.nb-lab {
+  margin: 14px 18px var(--sp-6);
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.nb-tpl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-6);
+  padding: 0 18px;
+}
+.nb-tpl button {
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--tint-1);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-12);
+  font-weight: 500;
+  cursor: pointer;
+}
+.nb-tpl button:hover {
+  background: var(--tint-2);
+}
+.nb-tpl button[aria-pressed='true'] {
+  background: var(--text);
+  color: var(--panel);
+}
+.nb-runs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-6);
+  margin: 14px 18px 0;
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.nb-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--run);
+  font: inherit;
+  cursor: pointer;
+}
+.nb-link:hover {
+  text-decoration: underline;
+}
+.nb-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-8) var(--sp-12);
+  margin: var(--sp-8) 18px 0;
+  font-size: var(--fs-12);
+}
+.nb-picks label {
+  display: grid;
+  gap: var(--sp-2);
+  color: var(--muted);
+}
+.nb-picks .ssel svg {
+  display: none;
+}
+.nb-picks .ssel select {
+  font: inherit;
+  color: var(--text);
+}
+.newbot > .conflict {
+  margin: var(--sp-8) 18px 0;
+}
+.nb-note {
+  margin: var(--sp-4) 18px 0;
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.nb-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-6);
+  padding: 14px 18px var(--sp-16);
+}
+.nb-btn,
+.bw-acts button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-6);
+  height: 28px;
+  padding: 0 var(--sp-12);
+  border: 0;
+  border-radius: var(--r-6);
+  background: var(--tint-1);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.nb-btn:hover,
+.bw-acts button:hover {
+  background: var(--tint-2);
+}
+.nb-btn.quiet,
+.bw-acts button.quiet {
+  background: none;
+  color: var(--muted);
+}
+.nb-btn.quiet:hover,
+.bw-acts button.quiet:hover {
+  background: var(--tint-1);
+  color: var(--text);
+}
+.nb-btn.primary,
+.bw-acts button.primary {
+  background: var(--text);
+  color: var(--panel);
+}
+.nb-btn.primary:hover,
+.bw-acts button.primary:hover {
+  opacity: 0.88;
+}
+.nb-btn:disabled,
+.bw-acts button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.nb-btn kbd {
+  font-family: var(--font-code);
+  font-size: var(--fs-11);
+  opacity: 0.7;
+}
+.newbot :is(button, input, textarea, select):focus-visible,
+.bot-wrote :is(button, select):focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.newbot .nb-name:focus-visible {
+  outline: none;
+}
+/* Hand to a bot: the same window, with the bots as a list to pick one from. */
+.hb-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: var(--sp-8) 18px 0;
+  max-height: 240px;
+  overflow: auto;
+}
+.hb-list label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--sp-6) var(--sp-8);
+  border-radius: var(--r-8);
+  cursor: pointer;
+}
+.hb-list label:hover,
+.hb-list label:has(input:checked) {
+  background: var(--tint-1);
+}
+.hb-list label > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.hb-list small {
+  color: var(--muted);
+  font-size: var(--fs-12);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The first chat's cards, in the chat's own column (mockup panel 3, `.syscard`). */
+.bot-first {
+  gap: var(--sp-12);
+  padding-bottom: var(--sp-12);
+  font-family: inherit;
+  font-size: var(--fs-13);
+}
+.bot-wrote {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 10px var(--sp-12);
+  border-radius: var(--r-10);
+  background: var(--tint-1);
+}
+.bw-h {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  font-weight: 600;
+}
+.bw-h span {
+  color: var(--muted);
+  font-weight: 400;
+}
+.bot-wrote pre {
+  margin: var(--sp-8) 0;
+  padding: var(--sp-8) 10px;
+  border-radius: var(--r-6);
+  background: var(--panel);
+  color: var(--muted);
+  font-family: var(--font-code);
+  font-size: var(--fs-12);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.bot-wrote textarea {
+  /* size and spacing only: the shared field rule (styles.css) draws the look, as for the SOUL box of a bot's page */
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 140px;
+  margin: var(--sp-8) 0;
+  line-height: 1.5;
+}
+.bot-wrote p {
+  margin: var(--sp-6) 0;
+  color: var(--muted);
+}
+.bot-wrote .ssel {
+  align-self: flex-start;
+  margin: var(--sp-8) 0;
+}
+/* The select outside Settings: the system menu, without the Settings chevron beside its own. */
+.bot-wrote .ssel svg {
+  display: none;
+}
+.bot-wrote .ssel select {
+  font: inherit;
+  color: var(--text);
+}
+/* A card in a chat with no row yet stands in place of the empty chat's headline. */
+.cscroll:has(> .bot-first) > .empty {
+  display: none;
+}
+.bw-acts {
+  display: flex;
+  gap: var(--sp-6);
+}
+.bw-acts button {
+  height: 24px;
+  padding: 0 9px;
+  font-size: var(--fs-12);
+}
