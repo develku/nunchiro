@@ -650,6 +650,8 @@ pub(crate) fn remote_from_owner(
             | Request::SendAttach { .. }
             | Request::SendDetach { .. }
             | Request::Direct { .. }
+            | Request::DraftTaken { .. }
+            | Request::DraftPutBack { .. }
             | Request::TeamOpen { .. } // ticket 990: a seat opens on this Mac, for its own lead
             | Request::Task { .. } // ticket 990 slice g: the ledger is this core's
             | Request::Note { .. } // ticket 990 slice h

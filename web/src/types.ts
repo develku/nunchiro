@@ -198,6 +198,8 @@ export interface Session {
   send_waits?: Record<string, string>;
   /** The agent's input box is on a current screen and nothing asks (api.rs `at_box`, snapshot only). */
   at_box?: boolean;
+  /** Words the core took out of the agent's box for this composer (api.rs `draft_home`); answered with `draft_taken`. */
+  draft_home?: { words: string; at: number };
 }
 /** One row of a session's send queue or log (delivery.rs `Send`). `sender` is `user`, a session id, `core` or `widget:<name>`. */
 export type SendRow = { id: string; sender: string; at: number; content: string; status: string; submit?: boolean; settle?: string | null };

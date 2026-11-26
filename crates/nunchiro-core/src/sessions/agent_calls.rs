@@ -171,6 +171,8 @@ impl Sessions {
             | Request::SendAttach { .. }
             | Request::SendDetach { .. }
             | Request::Direct { .. }
+            | Request::DraftTaken { .. }
+            | Request::DraftPutBack { .. }
             | Request::ImagePut { .. }
             | Request::WidgetList
             | Request::WidgetRun { .. }

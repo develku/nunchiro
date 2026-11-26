@@ -38,6 +38,7 @@ mod close;
 mod codex_config;
 mod deliver;
 mod handoff;
+mod home;
 mod launch;
 mod machines;
 mod model_mode;
@@ -354,6 +355,12 @@ pub struct Sessions {
     attached: std::collections::BTreeSet<String>,
     /// Type in terminal: by session, until when the owner types in the agent's own box (`Direct`, renewed by his keys).
     direct_until: BTreeMap<String, std::time::Instant>,
+    /// Text left in the terminal comes home (home.rs): the clears written and not seen yet, the words the composer has
+    /// not taken (also on disk), the sessions whose Type in terminal just went off, and each session's still output.
+    homing: BTreeMap<String, home::Homing>,
+    drafts_home: BTreeMap<String, home::DraftHome>,
+    home_ask: std::collections::BTreeSet<String>,
+    home_quiet: BTreeMap<String, (u64, std::time::Instant)>,
     /// Home view change 4: the leads (teammate id, prompt) a goal the user sent must reach; `team::wake_goals` opens
     /// each seat off the registry lock and hands it the goal.
     pub(crate) goal_wakes: Vec<(String, String)>,
@@ -1096,11 +1103,13 @@ impl Sessions {
                 if on {
                     self.direct_until
                         .insert(id, std::time::Instant::now() + DIRECT_QUIET);
-                } else {
-                    self.direct_until.remove(&id);
+                } else if self.direct_until.remove(&id).is_some() {
+                    self.home_ask.insert(id); // what he left in the box comes home once he stops
                 }
                 Ok(Reply::Ack)
             }
+            Request::DraftTaken { id, at } => self.draft_taken(&id, at),
+            Request::DraftPutBack { id, words } => self.draft_put_back(&id, words),
             // Ticket 990: the server serves it before this point (the start runs off the registry lock).
             Request::TeamOpen { .. } => Err("team open is for a lead's session".into()),
             Request::Task { .. } => Err("task requests run off the registry lock".into()), // `ledger::serve`

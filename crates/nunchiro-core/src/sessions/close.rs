@@ -110,6 +110,7 @@ impl Sessions {
     /// close marks the row `closed_by_command` (ticket 1013 F6).
     pub(crate) fn close(&mut self, id: &str, owner: bool, window: bool) -> Response {
         self.held_enter.remove(id);
+        self.forget_home(id); // words left in its box that never came home
         self.composed.remove(id); // ticket 990: typed and never entered; nothing keeps it after the close
         self.touched.remove(id);
         self.acp_loading.remove(id); // a resume closed before its load ended: the rows it continued stay

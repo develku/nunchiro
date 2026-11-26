@@ -93,6 +93,7 @@ fn chat_release_100mb_poll_and_memory_budget() {
         permission_mode: None,
         starting: false,
         at_box: false,
+        draft_home: None,
         ran_mode: None,
         mode_state: None, // CHAT-MODELIST
         parent: None,

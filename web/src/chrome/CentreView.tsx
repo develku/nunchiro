@@ -40,6 +40,7 @@ import { ImportedChat } from '../firstrun/ImportedChat';
 import { useTabs } from './useTabs';
 import { RoomView } from '../room/RoomView'; // ticket 571
 import { COMPOSE, directOnly, type Compose } from '../terminal/direct';
+import { takeDraftsHome } from '../chat/draftHome';
 import { getDraft, setDraft } from '../composer-drafts';
 import { isRoomTab, roomOfTab, roomTabId, useRoom } from '../room/room';
 import { leadOf, leadSeatMate, placeOfMate, seatOf, useTeam, workingFor } from '../lead/lead'; // ticket 990
@@ -344,6 +345,8 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
   useScrollKeep(paneEl); // ticket 282 item 1: the chat's place comes back with the window
   // Type in terminal goes off when another session comes to the front.
   useEffect(() => directOnly(core, current?.id ?? null), [current?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Words the core took out of an agent's box come to that session's composer (chat/draftHome.ts).
+  useEffect(() => takeDraftsHome(core, sessions, composer), [sessions]); // eslint-disable-line react-hooks/exhaustive-deps
   // Letters typed in an agent's terminal come here (terminal/direct.ts): into that session's composer, at its caret.
   useEffect(() => {
     const put = (id: string, text: string) => {

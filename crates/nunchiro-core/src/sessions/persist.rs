@@ -290,6 +290,10 @@ impl Sessions {
             later_rows: BTreeMap::new(),
             attached: std::collections::BTreeSet::new(),
             direct_until: BTreeMap::new(),
+            homing: BTreeMap::new(),
+            drafts_home: home::load_aside(home),
+            home_ask: std::collections::BTreeSet::new(),
+            home_quiet: BTreeMap::new(),
             goal_wakes: vec![],
             loops_checked: 0,
             removing_worktrees: std::collections::BTreeSet::new(),
@@ -367,6 +371,7 @@ impl Sessions {
             }
         }
         sessions.end_pre_lock_home_seats();
+        sessions.drop_orphan_asides(); // a closed session's words that never came home
         Ok(sessions)
     }
     pub(super) fn save(&self) -> Result<(), String> {
