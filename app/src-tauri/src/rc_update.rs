@@ -651,26 +651,45 @@ mod tests {
         fn whole(stream: &mut std::os::unix::net::UnixStream) {
             let _ = stream.write_all(THREE.as_bytes());
         }
+        // A whole reply well inside ASK_LIMIT but late by a busy host's scheduling, as a loaded test runner answers.
+        fn whole_but_slow(stream: &mut std::os::unix::net::UnixStream) {
+            std::thread::sleep(Duration::from_millis(400));
+            let _ = stream.write_all(THREE.as_bytes());
+        }
         fn oversized(stream: &mut std::os::unix::net::UnixStream) {
             let _ = stream.write_all(" ".repeat(ASK_BYTES as usize + 1).as_bytes());
             let _ = stream.write_all(THREE.as_bytes());
         }
+        // A byte every 100 ms for 3 s, then the reply: a read that each byte renewed would end only at 3 s.
         fn drip_then_late(stream: &mut std::os::unix::net::UnixStream) {
-            for _ in 0..6 {
-                let _ = stream.write_all(b" ");
+            for _ in 0..30 {
+                if stream.write_all(b" ").is_err() {
+                    return;
+                }
                 std::thread::sleep(Duration::from_millis(100));
             }
             let _ = stream.write_all(THREE.as_bytes());
         }
-        let limit = Duration::from_millis(300);
+        // Whole replies get the app's own limit: a busy host may take a few hundred ms to answer.
         let (home, _) = odd_core("ask-whole", whole);
-        assert_eq!(ask(&home, limit), Some(3));
+        assert_eq!(ask(&home, ASK_LIMIT), Some(3));
+        let (home, _) = odd_core("ask-slow", whole_but_slow);
+        assert_eq!(
+            ask(&home, ASK_LIMIT),
+            Some(3),
+            "a whole reply inside ASK_LIMIT"
+        );
         let (home, _) = odd_core("ask-big", oversized);
-        assert_eq!(ask(&home, limit), None, "a reply past ASK_BYTES");
+        assert_eq!(ask(&home, ASK_LIMIT), None, "a reply past ASK_BYTES");
         let (home, _) = odd_core("ask-late", drip_then_late);
         let start = std::time::Instant::now();
-        assert_eq!(ask(&home, limit), None, "a reply after the limit");
-        assert!(start.elapsed() < Duration::from_millis(550));
+        assert_eq!(
+            ask(&home, Duration::from_millis(300)),
+            None,
+            "a reply after the limit"
+        );
+        // Ended by the 300 ms deadline, not by the drip's end at 3 s; the slack is for a busy host.
+        assert!(start.elapsed() < Duration::from_millis(2000));
     }
 
     // Ticket 1130 A-D3 round 2 (Codex MUST): cancelling the install while a progress read runs ends that read within

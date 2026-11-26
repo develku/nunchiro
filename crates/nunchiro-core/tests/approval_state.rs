@@ -936,12 +936,16 @@ mod agent_command {
         let script = s.home.join("token.sh");
         fs::write(
             &script,
-            "printf %s \"$NUNCHIRO_TOKEN\" > \"$NUNCHIRO_HOME/session.token\"\nexec sleep 60\n",
+            // The shell's redirect makes the file before printf writes it; the pause stands in for a busy host.
+            ": > \"$NUNCHIRO_HOME/session.token\"\nsleep 0.3\nprintf %s \"$NUNCHIRO_TOKEN\" >> \"$NUNCHIRO_HOME/session.token\"\nexec sleep 60\n",
         )
         .unwrap();
         let started = s.owner(json!({"op":"start","session":{"kind":"shell","project":s.home,"label":"s","args":["/bin/sh",script]}}));
         assert_eq!(started["Ok"]["type"], "started", "{started}");
-        wait("session token", || s.home.join("session.token").exists());
+        // The whole token, not just the file: the shell creates it before it writes it (as acp.rs waits).
+        wait("session token", || {
+            fs::read_to_string(s.home.join("session.token")).is_ok_and(|t| t.len() > 20)
+        });
         let session = fs::read_to_string(s.home.join("session.token")).unwrap();
         for request in [
             json!({"op":"agent_command_status","agent":"claude"}),

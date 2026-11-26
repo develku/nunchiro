@@ -343,15 +343,21 @@ fn slow_window_does_not_block_fast() {
         }
         frames
     });
+    let went = Instant::now();
     core.go(&id);
     let (held, end) = core.finish(&id, &mut slow);
+    let streamed = went.elapsed();
     let fast = fast.join().unwrap();
     // The fast window reached the end of the stream (its last frame ends with DONE at the session's end cursor) while
     // the slow one was held: had the slow window paced it, it would have stopped at the slow one's cap.
     let last = fast.last().unwrap();
+    // Where it stopped tells a stalled window (far behind the end) from a slow host (the stream itself near 30 s).
     assert!(
         last.data.ends_with(b"DONE"),
-        "the fast window never saw DONE"
+        "the fast window never saw DONE: it got to {} of {end} in {} frames ({} skips); the PTY read it all in {streamed:?}",
+        last.end,
+        fast.len(),
+        fast.iter().filter(|f| f.truncated).count()
     );
     assert_eq!(last.end, end);
     // Every byte in order, once. A reader the host starved for more than a replay is skipped ahead, marked as a skip
