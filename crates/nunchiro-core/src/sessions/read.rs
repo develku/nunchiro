@@ -451,6 +451,15 @@ impl Sessions {
         .collect();
         // Gap rule: why each queued row waits. Shown only, like `stopped_sends`.
         let blocked = crate::delivery::blocked(&meta.pending);
+        // Type in terminal: the agent's box is on a current screen and nothing asks.
+        meta.at_box = live
+            && !blocked
+            && self.entries.get(&meta.id).is_some_and(|e| {
+                e.acp.is_none()
+                    && matches!(e.meta.kind, AgentKind::Claude | AgentKind::Codex)
+                    && !e.observer.behind
+                    && composer(&e.observer.screen.text(), e.meta.kind).is_some()
+            });
         meta.send_waits = (meta.send_queue.iter())
             .filter(|s| s.status == "queued")
             .filter_map(|s| {

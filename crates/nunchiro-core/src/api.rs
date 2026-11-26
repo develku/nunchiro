@@ -257,6 +257,14 @@ pub struct Session {
     /// until it has (a startup question may still come, and text typed before the box is lost). Set per snapshot.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub starting: bool,
+    /// The screen shows the agent's input box and nothing asks: letters typed in its terminal go to the window's composer
+    /// unless the owner turned on Type in terminal. Set per snapshot, never saved.
+    #[serde(
+        default,
+        skip_serializing_if = "std::ops::Not::not",
+        skip_deserializing
+    )]
+    pub at_box: bool,
     /// Look 11-17 N2: the last permission mode Claude's footer showed while the session ran (stored, unlike
     /// `permission_mode`), so a resume starts in the mode the session ran with. Ticket 991 (B6 chip): for Codex, the
     /// stored choice the owner's start applied (none when the arguments stated the permission, and on older rows).
@@ -1470,6 +1478,12 @@ pub enum Request {
     SendDetach {
         id: String,
         send: String,
+    },
+    /// Type in terminal (`on`) for session `id`: the owner types in the agent's own box; another sender's message waits
+    /// (`direct`). It ends by itself 60 s after the last key in that terminal or the last renewal. Owner and window only.
+    Direct {
+        id: String,
+        on: bool,
     },
     /// Ticket 990: a lead opens the seat of a teammate of its place, by name (`nunchiro team open <name>`). Only the
     /// place's lead seat may; the seat starts as its worker, with the teammate's own brief as its first prompt.

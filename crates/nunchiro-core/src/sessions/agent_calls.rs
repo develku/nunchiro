@@ -170,6 +170,7 @@ impl Sessions {
             | Request::SendLater { .. }
             | Request::SendAttach { .. }
             | Request::SendDetach { .. }
+            | Request::Direct { .. }
             | Request::ImagePut { .. }
             | Request::WidgetList
             | Request::WidgetRun { .. }

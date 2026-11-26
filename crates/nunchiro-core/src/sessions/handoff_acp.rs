@@ -242,6 +242,7 @@ impl Sessions {
             home_mode: None,
             permission_mode: None, // CHAT-PERMCHIP
             starting: false,
+            at_box: false,
             ran_mode: None,
             mode_state: None, // CHAT-MODELIST
             parent: None,     // V2.5-30
@@ -419,6 +420,7 @@ impl Sessions {
             home_mode: None,
             permission_mode: None, // CHAT-PERMCHIP
             starting: false,
+            at_box: false,
             ran_mode: None,
             mode_state: None, // CHAT-MODELIST
             parent: None,     // V2.5-30

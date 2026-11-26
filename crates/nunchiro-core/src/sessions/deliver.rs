@@ -487,6 +487,7 @@ impl Sessions {
         self.attached.retain(waits);
         let now = std::time::Instant::now();
         self.typing_until.retain(|_, t| now < *t);
+        self.direct_until.retain(|_, t| now < *t);
         // Round 6: in-flight times of sessions that are gone (one per session ever started otherwise).
         let live = &self.entries;
         self.inflight_at.retain(|id, _| live.contains_key(id));
@@ -841,6 +842,17 @@ impl Sessions {
             || self.steers.contains(send)
             || self.deny_notes.contains(send)
             || crate::delivery::widget_sender(sender);
+        // Type in terminal: the owner is in the agent's own box.
+        if other
+            && !exempt
+            && !content.trim().is_empty()
+            && self
+                .direct_until
+                .get(id)
+                .is_some_and(|t| std::time::Instant::now() < *t)
+        {
+            return Some("direct");
+        }
         // Keys alone (an Esc, a digit) keep their own checks: a box edited by hand refuses another sender's Enter.
         if other
             && !exempt
@@ -1000,6 +1012,8 @@ pub(super) enum Knock {
 }
 /// Gap rule: another sender's line waits this long after the owner's last key for the session.
 pub(super) const TYPING_QUIET: std::time::Duration = std::time::Duration::from_secs(5);
+/// Type in terminal ends by itself this long after the last key in that terminal or the window's last renewal.
+pub(super) const DIRECT_QUIET: std::time::Duration = std::time::Duration::from_secs(60);
 // A step reads the screen only after the agent redrew it and then stayed quiet, never a stale frame. v1a-24 r3:
 // an echoed Enter waits for the same quiet.
 pub(super) const SWITCH_SETTLE: std::time::Duration = std::time::Duration::from_millis(100);

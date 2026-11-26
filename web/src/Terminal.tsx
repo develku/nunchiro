@@ -1,6 +1,7 @@
 // One xterm.js per session tab that is on screen or was a moment ago. A tab never shown has none, and a tab hidden for
 // 30 s (warm.ts) drops its xterm and its watch: the core keeps the full log and showing the tab again replays it from byte 0
 // (reattach), so only the window's copy (scrollback buffers, parser state) is released. Memory ticket light-2.
+import { composerText, setDirect, toComposer, useDirect } from './terminal/direct';
 import { useEffect, useRef, useState } from 'react';
 import { Terminal as XTerm, type IMarker, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -130,11 +131,19 @@ interface Props {
    *  agent's screen: the grid takes the PTY's own sizes from the holder's marks and the box scrolls. No keys reach the
    *  session, and the session's tab keeps its place in \`terminals\`. */
   peek?: boolean;
+  /** The agent's input box is on its screen and nothing asks (the core's `at_box`): letters go to the composer then. */
+  atBox?: boolean;
 }
 
-export function TerminalView({ core, id, active, fontSize, fontFamily, theme, connected, name, kind, copyOnSelect, osc52, peek = false }: Props) {
+export function TerminalView({ core, id, active, fontSize, fontFamily, theme, connected, name, kind, copyOnSelect, osc52, peek = false, atBox = false }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const words = useHtmlLangT(); // ticket 492
+  // Type in terminal (terminal/direct.ts): a Claude or Codex terminal sends its letters to the composer unless it is on.
+  const agentBox = !peek && (kind === 'claude' || kind === 'codex');
+  const direct = useDirect(id);
+  const route = useRef({ agentBox, direct, atBox, noted: false });
+  route.current = { ...route.current, agentBox, direct, atBox };
+  const [note, setNote] = useState(false);
   const fit = useRef<FitAddon | null>(null);
   const own = useRef<XTerm | null>(null);
   const writer = useRef<Writer | null>(null);
@@ -333,6 +342,14 @@ export function TerminalView({ core, id, active, fontSize, fontFamily, theme, co
     // Keystrokes, IME commits and pastes all arrive here once; the core writes them to this PTY only.
     const input = term.onData((d) => {
       if (peek) return;
+      const r = route.current;
+      const text = r.agentBox && !r.direct && r.atBox ? composerText(d) : null;
+      if (text !== null) {
+        // Letters and pastes go to the session's composer; keys (Esc, arrows, Enter, Ctrl+C) still reach the agent.
+        toComposer(id, text);
+        if (!r.noted) (r.noted = true, setNote(true), window.setTimeout(() => setNote(false), 4000));
+        return;
+      }
       out.key();
       void core.sendText(id, d).catch(() => {});
     });
@@ -569,7 +586,40 @@ export function TerminalView({ core, id, active, fontSize, fontFamily, theme, co
   }, [id, active, peek]);
 
   return (
-    <div className="term" ref={host} hidden={!active} data-session={id} data-peek={peek || undefined} data-renderer={renderer} style={{ paddingLeft: tp.padLeft, paddingTop: tp.padTop }}>
+    <div
+      className="term"
+      ref={host}
+      hidden={!active}
+      data-session={id}
+      data-peek={peek || undefined}
+      data-renderer={renderer}
+      data-direct={direct || undefined}
+      style={{ paddingLeft: tp.padLeft, paddingTop: tp.padTop }}
+      onFocus={() => (route.current.noted = false)}
+      onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setDirect(core, id, false)}
+    >
+      {agentBox && connected && (
+        <button
+          type="button"
+          className="tdir-btn"
+          aria-pressed={direct}
+          title={words(direct ? 'direct.doneTip' : 'direct.onTip')}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => (setDirect(core, id, !direct), own.current?.focus())}
+        >
+          {words(direct ? 'direct.done' : 'direct.on')}
+        </button>
+      )}
+      {agentBox && direct && (
+        <p className="tdir-line" role="status">
+          {words('direct.line')}
+        </p>
+      )}
+      {agentBox && !direct && note && (
+        <p className="tdir-line" role="status">
+          {words('direct.note')}
+        </p>
+      )}
       {search && findNonce > 0 && <FindBar term={search.term} search={search.addon} nonce={findNonce} onClose={() => setFindNonce(0)} />}
       {/* Never focused on arrival, so a key typed into the terminal cannot press Copy; the text is never shown. */}
       {ask && (

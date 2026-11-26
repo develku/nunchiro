@@ -589,6 +589,7 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | SendLater { .. }
         | SendAttach { .. }
         | SendDetach { .. }
+        | Direct { .. }
         | TeamOpen { .. } // ticket 990: a lead's session only
         | Task { .. } // ticket 990 slice g: the owner's window and sessions, never a page
         | Note { .. } // ticket 990 slice h
