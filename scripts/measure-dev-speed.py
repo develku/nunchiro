@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Development speed for the scorecard (part p30): the DORA four keys, adapted to this repo.
 
-  python3 -B scripts/measure-dev-speed.py [--days 7] [--out FILE] [--tasks FILE] [--prs FILE] [--runs FILE] [--main-log FILE]
+  python3 -B scripts/measure-dev-speed.py [--days 7] [--out FILE] [--prs FILE] [--runs FILE] [--main-log FILE]
+  python3 -B scripts/measure-dev-speed.py --record KIND (--pr N | --branch NAME) [--sha SHA] [--verdict accept|reject] [--by WHO] [--at ISO] [--note TEXT]
   python3 -B scripts/measure-dev-speed.py --selftest
 
 Read only. Sources:
@@ -13,8 +14,11 @@ Read only. Sources:
   null, not 0.
 - the main CI log (scripts/measure/ci-log.py: Actions runs on main and owner installs; scorecard.CI_LOG, --main-log or
   MEASURE_CI_LOG): red episodes, culprit commits (in its history part), owner installs.
-- the task ledger: --tasks FILE (the JSON of "nunchiro task list --all --json"); without it the script runs that command
-  when NUNCHIRO_SESSION is set (it only lists), else it skips the ledger.
+- the review record: a private JSON-lines file outside git (MEASURE_LANE_RECORD, default lane-record.jsonl beside the
+  main CI log), written with --record when a fact happens: task (work item created), review_start, verdict (accept or
+  reject, by acceptance or maintainer), look (a Codex look: shown, not a round), ask and answer (the owner asked for
+  something the pull request waits on). Its notes are never read into the output. Lanes that started before its first
+  line (lines marked "backfill" do not count) have no owner figures: unknown, not 0.
 - the core's event journal ("nunchiro events --history", read from the day files; the owner's shell only) and the agents'
   own transcripts: ~/.claude, the folders in MEASURE_CLAUDE_DIRS (other accounts, ':' between them) and
   MEASURE_CODEX_SESSIONS (default ~/.codex/sessions).
@@ -23,7 +27,7 @@ The four keys:
 1. Deployment frequency: pull requests landed on main per day (and landings, a landing being one merge time), owner
    installs per day ("owner install ...: installed" in the main CI log), and nights (local 00:00-07:00) with a landing.
 2. Lead time for changes: first commit (author date) to the merge on main, median and p90 (the DORA definition); also
-   task created (ledger) to the merge, for branches that match a task's worktree folder.
+   task created (the record's task line) to the merge.
 3. Change failure rate: landed pull requests later reverted (GitHub's "revert-<number>-<branch>" branch, a title
    'Revert "<title>"', git's default subject, which names the reverted pull request by its title, or a branch named
    as a revert by scorecard.REVERT_LANE) or named culprit in the main CI log, over those landed.
@@ -31,8 +35,8 @@ The four keys:
    after its first auto-merge enable ended in failure or timed out (reds before that are the builder's own checks,
    counted apart). Rejects over landed plus rejected.
 4. Time to restore: main red to green again (the main CI log), median.
-Flow split, where data exists: task created to the Reviewer seat, the Reviewer seat to its pass, the pass to the enqueue,
-the gate queue and the gate run. The enqueue is the last auto-merge enable before the merge (none: the queue is not
+Flow split, where data exists: task created to the first review start (build), the first review start to the last
+accept (review), the last accept to the first auto-merge enable after it, the gate queue and the gate run. The enqueue is the last auto-merge enable before the merge (none: the queue is not
 known), the gate run the last CI run (first job start to the end of `gate`) and the gate queue the rest of the time.
 """
 import argparse, datetime, json, os, re, statistics, subprocess, sys, time
@@ -92,6 +96,7 @@ def pr_merges(prs, since):
         checks = [c for c in p.get("statusCheckRollup") or [] if c.get("workflowName") == "CI" and c.get("startedAt")]
         gate = next((c for c in checks if c.get("name") == "gate" and c.get("completedAt")), None)
         out.append(dict(lane=p["headRefName"], branch=p["headRefName"], sha=(p.get("mergeCommit") or {}).get("oid"), at=int(at),
+                        number=p.get("number"), head_oid=p.get("headRefOid"),
                         first_commit=int(min(own)) if own else None, opened=iso(p["createdAt"]), title=p.get("title") or "",
                         enabled=sorted(iso(x) for x in p.get("autoMergeEnabledAt") or []),
                         gate_run_s=gate and iso(gate["completedAt"]) - min(iso(c["startedAt"]) for c in checks)))
@@ -180,14 +185,73 @@ def stamped(text, start):
         yield midnight.timestamp() + t, line
 
 
-def read_tasks(path):
-    if path:
-        return json.loads(Path(path).read_text()).get("tasks", []), f"file {Path(path).name}"
-    if os.environ.get("NUNCHIRO_SESSION"):
-        r = subprocess.run(["nunchiro", "task", "list", "--all", "--json"], capture_output=True, text=True)
-        if r.returncode == 0:
-            return json.loads(r.stdout).get("tasks", []), "nunchiro task list --all --json"
-    return [], "not read"
+RECORD = Path(os.environ.get("MEASURE_LANE_RECORD") or scorecard.CI_LOG.parent / "lane-record.jsonl")
+KINDS = ("task", "review_start", "verdict", "look", "ask", "answer")
+
+
+def write_record(a, ap):
+    """--record: append one line to the private review record (RECORD, outside git). Refuses a bad line whole."""
+    if not (a.pr or a.branch):
+        ap.error("--record needs --pr or --branch")
+    if (a.record == "verdict") != bool(a.verdict):
+        ap.error("--verdict goes with --record verdict, and only with it")
+    if a.sha and not re.fullmatch(r"[0-9a-f]{4,40}", a.sha):
+        ap.error(f"--sha {a.sha!r} is not a hex commit")
+    try:
+        at = a.at and datetime.datetime.fromisoformat(a.at.replace("Z", "+00:00"))
+    except ValueError:
+        ap.error(f"--at {a.at!r} is not an ISO time")
+    if at and at.tzinfo is None:
+        ap.error("--at needs a zone (Z or +hh:mm)")
+    at = a.at or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    line = {k: v for k, v in dict(at=at, kind=a.record, pr=a.pr, branch=a.branch, sha=a.sha, verdict=a.verdict, by=a.by,
+                                  note=a.note).items() if v is not None}
+    RECORD.parent.mkdir(parents=True, exist_ok=True)
+    with open(RECORD, "a") as f:
+        f.write(json.dumps(line) + "\n")
+    print(f"recorded {a.record} in {RECORD}")
+
+
+def read_record(path):
+    """The record's lines with their time as 't' (bad lines and unknown kinds are skipped), oldest first."""
+    out = []
+    if path and Path(path).is_file():
+        for line in Path(path).read_text().splitlines():
+            try:
+                x = json.loads(line)
+                x["t"] = iso(x["at"])
+            except (ValueError, KeyError, TypeError, AttributeError):
+                continue
+            if x.get("kind") in KINDS and (x.get("pr") or x.get("branch")):
+                out.append(x)
+    return sorted(out, key=lambda x: x["t"])
+
+
+def review_facts(lines, enabled):
+    """Per pull request, from its record lines: review rounds (distinct commits given a verdict by a reviewer; Codex
+    looks are shown apart), the first verdict, the review and build times and the owner's asks."""
+    verdicts = [x for x in lines if x["kind"] == "verdict" and x.get("by") != "codex"]
+    accepts = [x for x in verdicts if x.get("verdict") == "accept"]
+    first = lambda kind: next((x["t"] for x in lines if x["kind"] == kind), None)  # noqa: E731
+    f = dict(task_at=first("task"), review_start=first("review_start"), last_accept=accepts[-1]["t"] if accepts else None,
+             looks=sum(1 for x in lines if x["kind"] == "look" or (x["kind"] == "verdict" and x.get("by") == "codex")))
+    if verdicts:
+        f.update(rounds=len({x.get("sha") or x["at"] for x in verdicts}), first_accept=verdicts[0].get("verdict") == "accept",
+                 accepted_sha=next((x.get("sha") for x in reversed(accepts) if x.get("sha")), None))
+    if accepts:
+        f["enqueue_after_accept"] = next((t for t in enabled if t >= accepts[-1]["t"]), None)
+    return f
+
+
+def owner_waits(lines, now):
+    """Seconds each ask waited for its answer (the first answer after it); an open ask runs to now."""
+    answers, out = sorted(x["t"] for x in lines if x["kind"] == "answer"), []
+    for ask in (x["t"] for x in lines if x["kind"] == "ask"):
+        end = next((a for a in answers if a >= ask), None)
+        if end is not None:
+            answers.remove(end)
+        out.append((end if end is not None else now) - ask)
+    return out
 
 
 def per_day(times, start, days):
@@ -330,7 +394,7 @@ def seat_time(events, now):
     return states, stalls
 
 
-def measure(days, tasks_file=None, log_path=scorecard.CI_LOG, now=None, project=None,
+def measure(days, record_path=None, log_path=scorecard.CI_LOG, now=None, project=None,
             claude_dirs=(), codex_dir=None, core=None, prs_file=None, prs=None, runs_file=None, runs=None):
     now = now or time.time()
     start = now - days * DAY
@@ -344,7 +408,10 @@ def measure(days, tasks_file=None, log_path=scorecard.CI_LOG, now=None, project=
         if m["reverts"] is None and named:
             m["reverts"] = by_title.get(re.sub(r" \(#\d+\)$", "", named[1]), "")  # squash subjects end with " (#n)"
     landed = [m for m in ms if m["reverts"] is None]
-    tasks, tasks_src = read_tasks(tasks_file)
+    record = read_record(RECORD if record_path is None else record_path)
+    # lines copied in later from older notes (note "backfill ...") carry verdicts, never the asks of their days
+    live = [x["t"] for x in record if not str(x.get("note") or "").startswith("backfill")]
+    record_from = min(live, default=None)
 
     # 1. Deployment frequency
     if not log_path.is_file():
@@ -363,32 +430,35 @@ def measure(days, tasks_file=None, log_path=scorecard.CI_LOG, now=None, project=
                 nights_with_a_landing=len({datetime.datetime.fromtimestamp(m["at"]).date() for m in landed
                                            if datetime.datetime.fromtimestamp(m["at"]).hour < 7}))
 
-    # 2. Lead time
-    by_folder = {}
-    for t in tasks:
-        for s in t.get("seats", []):
-            if s.get("worktree"):
-                by_folder.setdefault(Path(s["worktree"]).name, t)
+    # 2. Lead time, and each pull request's lines of the review record (by its number or its branch)
     rows = []
     for m in landed:
-        task = by_folder.get(m["branch"].split("/", 1)[-1])
-        row = dict(lane=m["lane"], landed=m["at"], first_commit=m["first_commit"], task=task and task["id"],
+        mine = [x for x in record if (x.get("pr") and x["pr"] == m["number"]) or (x.get("branch") and x["branch"] == m["branch"])]
+        f = review_facts(mine, m["enabled"])
+        row = dict(lane=m["lane"], landed=m["at"], first_commit=m["first_commit"], task=None,  # a ticket name stays private
                    commit_lead_s=m["at"] - m["first_commit"] if m["first_commit"] else None,
-                   task_lead_s=m["at"] - task["created"] / 1000 if task else None)
-        if task:
-            rev = sorted(s["at"] / 1000 for s in task.get("seats", []) if s.get("role") == "reviewer")
-            passed = (task.get("review") or {}).get("pass") and task["review"]["at"] / 1000
-            row.update(reviewer_seat=rev[0] if rev else None, review_pass=passed or None, created=task["created"] / 1000)
+                   task_lead_s=m["at"] - f["task_at"] if f["task_at"] else None,
+                   created=f["task_at"], reviewer_seat=f["review_start"], review_pass=f["last_accept"],
+                   first_enqueue=f.get("enqueue_after_accept"))
+        if "rounds" in f:
+            row.update(review_rounds=f["rounds"], first_accept=f["first_accept"],
+                       changed_after_accept=bool(f["accepted_sha"] and m["head_oid"] and f["accepted_sha"] != m["head_oid"]))
+        if f["looks"]:
+            row["looks"] = f["looks"]
+        started = m["first_commit"] or m["opened"]
+        if record_from is not None and started >= record_from:  # earlier lanes may have had asks the record never saw
+            waits = owner_waits(mine, now)
+            row.update(owner_touches=len(waits), owner_wait_min=round(sum(waits) / 60), owner_max_wait_s=max(waits, default=0))
         if m["gate_run_s"] is not None:
             row.update(gate_run_s=m["gate_run_s"])
         enabled = [t for t in m["enabled"] if t <= m["at"]]
         if enabled:  # merged by hand (no enable event): the queue is not known, never the time from the opening
-            row.update(enqueued=enabled[-1], first_enqueue=enabled[0])
+            row.update(enqueued=enabled[-1])
             if m["gate_run_s"] is not None:
                 row.update(gate_queue_s=max(0, m["at"] - enabled[-1] - m["gate_run_s"]))
         rows.append(row)
     lead = dict(commit_to_main=hours(r["commit_lead_s"] for r in rows), task_to_main=hours(r["task_lead_s"] for r in rows),
-                lanes_with_task=sum(1 for r in rows if r["task"]), tasks_source=tasks_src, pull_requests_source=prs_src)
+                lanes_with_task=sum(1 for r in rows if r["task_lead_s"] is not None), pull_requests_source=prs_src)
 
     # 3. Change failure rate
     reverted = {m["reverts"] for m in ms if m["reverts"]}
@@ -413,7 +483,7 @@ def measure(days, tasks_file=None, log_path=scorecard.CI_LOG, now=None, project=
     # red then green on the same commit: the PR-flow form of a contaminated gate result
     rerun_green = {k for k, v in by_sha.items() if "success" in v and any(c in RED for c in v[:v.index("success")])}
     landed_names = {m["lane"] for m in landed}
-    rr = []  # review rounds: the PR flow keeps no review record yet
+    rr = [r["review_rounds"] for r in rows if "review_rounds" in r]
     read = runs is not None
     cfr = dict(failed_lanes=failed, change_failure_pct=round(100 * len(failed) / len(landed), 1) if landed else None,
                gate_rejected_lanes=rejects, gate_reject_pct=round(100 * len(rejects) / tries, 1) if tries and read else None,
@@ -422,7 +492,8 @@ def measure(days, tasks_file=None, log_path=scorecard.CI_LOG, now=None, project=
                kicks="not counted: GitHub keeps no event for a pull request set aside by a conflict",
                gate_results=dict(attempts=len(done), red_pct=round(100 * len(red) / len(done), 1) if done else None,
                                  rerun_green_pct=round(100 * len(rerun_green) / len(by_sha), 1) if by_sha else None),
-               review_rounds=dict(lanes=len(rr), median=statistics.median(rr) if rr else None, max=max(rr, default=None)))
+               review_rounds=dict(lanes=len(rr), median=statistics.median(rr) if rr else None, max=max(rr, default=None),
+                                  looks=sum(r.get("looks", 0) for r in rows)))
 
     # 4. Time to restore (the p27 parser, cut to the window)
     deploy = scorecard.parse_deploys(mw, mw_start)
@@ -436,8 +507,8 @@ def measure(days, tasks_file=None, log_path=scorecard.CI_LOG, now=None, project=
     stamp = lambda t: t and datetime.datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M")  # noqa: E731
     coverage = dict(pull_requests_from=stamp(min((m["at"] for m in ms), default=None)),
                     pull_request_checks=runs_src, checks_from=stamp(min((iso(r["startedAt"]) for r in tried), default=None)),
-                    main_log_from=stamp(lines[0][0]) if lines else None,
-                    task_ledger_from=stamp(min((t["created"] / 1000 for t in tasks), default=None)))
+                    main_log_from=stamp(lines[0][0]) if lines else None, record_from=stamp(record_from),
+                    record_lines=len(record))
 
     # 5. Cost per landed lane: every session whose folder is the lane's worktree (Builder, Reviewers, rework)
     # the worktree folder; GitHub's revert branch ends with the branch it reverts and is not a second landing of it
@@ -457,40 +528,32 @@ def measure(days, tasks_file=None, log_path=scorecard.CI_LOG, now=None, project=
                 sources=[str(Path(d).name) for d in claude_dirs] + ([Path(codex_dir).name] if codex_dir else []),
                 price_source="crates/nunchiro-core/src/usage.rs PRICES (public list prices, an estimate)")
 
-    # 6. Owner touches: ledger accept conditions that need the owner and merge waits; the core's event journal
+    # 6. Owner touches: the record's asks per pull request and their waits; the core's event journal for Nunchiro seats
     # (permission waits; asks to the person only when the events carry room data, which the journal does not keep).
     core = core if core is not None else (core_events(project, days) if project else [])
     if core and not any(e.get("type") == "room_message" and e.get("data") for e in core):
         coverage["room_messages"] = "not in the journal: asks to the owner, core cards and stall nudges read 0"
     states, stalls = seat_time(core, now)
-    seat_task = {s["session"]: t for t in tasks for s in t.get("seats", [])}
-    task_of = {r["lane"]: next((t for t in tasks if t["id"] == r["task"]), None) for r in rows if r["task"]}
     asks = [e for e in core if e.get("type") == "room_message" and (e.get("data") or {}).get("to") == "person"
             and e["data"].get("kind") in ("ask", "question", "card")]
     perm = {s: v.get("permission", 0) + v.get("blocked", 0) for s, v in states.items() if v.get("permission") or v.get("blocked")}
-    for r in rows:
-        t = task_of.get(r["lane"])
-        if not t:
-            continue
-        sess = {s["session"] for s in t.get("seats", [])}
-        r["owner_touches"] = (sum(1 for a in t.get("accept", []) if re.search(r"\b(owner|user)\b", a, re.I))
-                              + (t.get("waits") == "merge") + sum(1 for s in sess if s in perm)
-                              + sum(1 for a in asks if a["data"].get("from") in sess)
-                              + sum(1 for x in stalls if x["kind"] in ("card",) and x["seat"] in sess))
     touches = [r["owner_touches"] for r in rows if "owner_touches" in r]
-    waiting_merge = [dict(task=t["id"], hours=round((now - t["updated"] / 1000) / 3600, 1)) for t in tasks
-                     if t.get("waits") == "merge" and t.get("state") != "done"]
-    owner = dict(lanes=len(touches), touches=sum(touches), median_per_lane=pct(touches, 50), max_per_lane=max(touches, default=None),
-                 lanes_with_a_touch=sum(1 for x in touches if x), asks_to_owner=len(asks),
+    max_wait = max((r["owner_max_wait_s"] for r in rows if "owner_max_wait_s" in r), default=None)
+    owner = dict(measured=None if record_from is None else "whole" if record_from <= start else "part",
+                 lanes=len(touches), touches=sum(touches), median_per_lane=pct(touches, 50), max_per_lane=max(touches, default=None),
+                 lanes_with_a_touch=sum(1 for x in touches if x), max_wait_min=None if max_wait is None else round(max_wait / 60),
+                 asks_to_owner=len(asks),
                  core_cards=sum(1 for x in stalls if x["kind"] == "card"), permission_waits=len(perm), permission_wait_min=round(sum(perm.values()) / 60),
-                 waiting_for_merge_now=waiting_merge, core_events_from=stamp(min((e["at"] / 1000 for e in core if e.get("at")), default=None)))
+                 core_events_from=stamp(min((e["at"] / 1000 for e in core if e.get("at")), default=None)))
 
     # 7. First-pass and rework (DORA 2024 rework rate: deployments that were not planned, made to fix a problem)
-    one = sum(1 for x in rr if x == 1)
+    reviewed = [r for r in rows if "review_rounds" in r]
+    one = sum(1 for r in reviewed if r["first_accept"])  # passes its first review: the first verdict is an accept
     again = sum(len(v) - 1 for v in merged.values())  # a second landing of the same branch is a fix of the first
     rejected_landed = sorted(set(rejects) & landed_names)
     revert_lanes = len(ms) - len(landed)
     rework = dict(first_pass_pct=round(100 * one / len(rr), 1) if rr else None, reviewed_lanes=len(rr),
+                  changed_after_accept=sorted(r["lane"] for r in reviewed if r["changed_after_accept"]),
                   rejected_then_landed=rejected_landed, repeat_landings=again, revert_landings=revert_lanes,
                   # without the CI runs the rejected-then-landed pull requests are unknown: rework is not measured
                   rework_pct=round(100 * (len(rejected_landed) + again + revert_lanes) / len(ms), 1) if ms and read else None)
@@ -533,7 +596,7 @@ def report(d):
         f"1 Deployment frequency: {f['lanes']} lanes in {f['landings']} landings ({f['lanes_per_day']} lanes/day, "
         f"landings on {f['days_with_a_landing']} of {len(f['lanes_by_day'])} calendar days, {f['nights_with_a_landing']} nights); owner installs {f['owner_installs']} ({f['owner_installs_per_day']}/day, on {f['days_with_an_install']} days)",
         f"2 Lead time: first commit to main {h(lt['commit_to_main'])}; task created to main {h(lt['task_to_main'])} "
-        f"(task ledger: {lt['tasks_source']})",
+        f"(review record: {d['coverage']['record_lines']} lines from {d['coverage']['record_from']})",
         f"3 Change failure rate: {c['change_failure_pct']} % ({len(c['failed_lanes'])} of {f['lanes']}: {', '.join(c['failed_lanes']) or 'none'}); "
         f"gate rejects {c['gate_reject_pct']} % ({len(c['gate_rejected_lanes'])} lanes; red before auto-merge {c['pre_enqueue_red']}, "
         f"red then green on a rerun {len(c['rerun_green_lanes'])}, cancelled {c['cancelled']}; attempts {c['gate_results']}); review rounds median {c['review_rounds']['median']}, "
@@ -542,10 +605,11 @@ def report(d):
         + (" (main is red now)" if rs["still_red"] else ""),
         f"5 Cost per landed lane: median {d['cost']['median_usd']} USD, p90 {d['cost']['p90_usd']} USD over {d['cost']['lanes_with_cost']} lanes "
         f"(total {d['cost']['total_usd']} USD, {d['cost']['total_tokens']} tokens; unpriced {d['cost']['unpriced_tokens']})",
-        f"6 Owner touches: {d['owner']['touches']} over {d['owner']['lanes']} lanes with a task (median {d['owner']['median_per_lane']}, "
+        f"6 Owner touches: {d['owner']['touches']} over {d['owner']['lanes']} lanes the record covers ({d['owner']['measured']}; median {d['owner']['median_per_lane']}, "
         f"max {d['owner']['max_per_lane']}); asks to the owner {d['owner']['asks_to_owner']}; permission waits {d['owner']['permission_waits']} "
-        f"({d['owner']['permission_wait_min']} min); waiting for a merge yes now: {d['owner']['waiting_for_merge_now']}; core events from {d['owner']['core_events_from']}",
-        f"7 First pass {d['rework']['first_pass_pct']} % of {d['rework']['reviewed_lanes']} reviewed lanes; rework {d['rework']['rework_pct']} % "
+        f"({d['owner']['permission_wait_min']} min); longest owner wait {d['owner']['max_wait_min']} min; core events from {d['owner']['core_events_from']}",
+        f"7 First pass {d['rework']['first_pass_pct']} % of {d['rework']['reviewed_lanes']} reviewed lanes "
+        f"(changed after accept {len(d['rework']['changed_after_accept'])}); rework {d['rework']['rework_pct']} % "
         f"({len(d['rework']['rejected_then_landed'])} rejected then landed, {d['rework']['repeat_landings']} repeat landings, {d['rework']['revert_landings']} reverts)",
         f"8 Seat use: {d['seat_use']['seat_hours']} seat hours over {d['seat_use']['seats']} seats, {d['seat_use']['share_pct']}; "
         f"stall nudges {d['seat_use']['stall_nudges']} ({d['seat_use']['stalled_min']} quiet min before them), moved again {d['seat_use']['moved_again']}, "
@@ -594,19 +658,30 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--days", type=int, default=7)
     ap.add_argument("--out", help="JSON file (default docs/measure/devspeed-<today>.json)")
-    ap.add_argument("--tasks", help='the JSON of "nunchiro task list --all --json"')
     ap.add_argument("--prs", help='the JSON of "gh pr list --json number,title,headRefName,headRefOid,createdAt,mergedAt,mergeCommit,commits,statusCheckRollup" plus autoMergeEnabledAt (default: ask GitHub through gh)')
     ap.add_argument("--runs", help='the JSON of the CI runs on pull requests, one row per attempt in the field names of "gh run list" plus headBranch (default: ask GitHub through gh)')
     ap.add_argument("--main-log", default=str(scorecard.CI_LOG), help="the main CI log (scripts/measure/ci-log.py)")
     ap.add_argument("--project", default=str(Path(scorecard._COMMON).parent) if scorecard._COMMON else None,
                     help="the place whose core events are read (default: the main checkout)")
     ap.add_argument("--selftest", action="store_true")
+    w = ap.add_argument_group("--record: add one line to the private review record (MEASURE_LANE_RECORD, outside git) and stop")
+    w.add_argument("--record", choices=KINDS, metavar="KIND", help="one of " + ", ".join(KINDS))
+    key = w.add_mutually_exclusive_group()
+    key.add_argument("--pr", type=int, help="the pull request number")
+    key.add_argument("--branch", help="the head branch (a task line comes before its pull request)")
+    w.add_argument("--sha", help="the head commit reviewed")
+    w.add_argument("--verdict", choices=("accept", "reject"))
+    w.add_argument("--by", choices=("acceptance", "maintainer", "codex"), help="who gave the verdict (codex: a look, not a round)")
+    w.add_argument("--at", help="ISO time with a zone (default now)")
+    w.add_argument("--note", help="private text; never read into the published figures")
     a = ap.parse_args()
     if a.selftest:
         return selftest()
+    if a.record:
+        return write_record(a, ap)
     claude = list(dict.fromkeys([str(Path.home() / ".claude")] + [p for p in (os.environ.get("MEASURE_CLAUDE_DIRS") or "").split(os.pathsep) if p]))
     codex = os.environ.get("MEASURE_CODEX_SESSIONS") or str(Path.home() / ".codex/sessions")
-    d = measure(a.days, a.tasks, Path(a.main_log), project=a.project, claude_dirs=claude,
+    d = measure(a.days, None, Path(a.main_log), project=a.project, claude_dirs=claude,
                 codex_dir=codex if Path(codex).is_dir() else None, prs_file=a.prs, runs_file=a.runs)
     out = Path(a.out) if a.out else ROOT / f"docs/measure/devspeed-{time.strftime('%Y-%m-%d')}.json"
     out.parent.mkdir(parents=True, exist_ok=True)

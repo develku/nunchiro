@@ -292,7 +292,8 @@ card for it), with `scorecard.py waits`.
    10. Find a free hour in a fixture calendar and propose it (the hour is free in the fixture).
    The fixtures (repository, mails, calendar) do not exist yet; making them is the first step of the first run.
 2. Owner touches per task in that set, median.
-3. First-pass review rate of the real lanes of the last 7 days (`scripts/measure-dev-speed.py`, rework.first_pass_pct).
+3. First-pass review rate of the real lanes of the last 7 days (`scripts/measure-dev-speed.py`, rework.first_pass_pct,
+   from the verdicts in the private review record).
 
 ### p37 Reach (new)
 
@@ -460,7 +461,8 @@ correctly. MD1-MD5 replaced MX1-MX5 on 2026-11-25; the number figures stay.
 ### p30 Development speed (added 2026-11-25 by the owner, ticket 1127)
 Measured by `python3 -B scripts/measure-dev-speed.py [--days 7]` over the last 7 days: the pull requests merged into
 main (the ground truth) with their auto-merge times, the GitHub Actions runs on pull requests (every attempt), the main
-CI log and the task ledger, all read only; it writes
+CI log and a private review record (verdicts, review starts and owner asks, one line per fact, outside git), all
+read only; it writes
 docs/measure/devspeed-<date>.json. The bands are the DORA ones (State of DevOps reports: elite, high, medium, low).
 pass = 100 points (20 of the part), partial = 50 (10), fail = 0. The IDs are DV, because DS1-DS5 belong to p19.
 - DV1 Deployment frequency (DORA elite: on demand, several a day). pass: a lane lands on main on at least 5 of the 7
@@ -484,7 +486,8 @@ pass = 100 points (20 of the part), partial = 50 (10), fail = 0. The IDs are DV,
   at least 80 % of landed lanes and the median under 20 USD (a first budget; the owner may change it); partial: known
   for some lanes, median under 60 USD; fail: otherwise or not measured.
 - DV7 Owner touches per lane and owner wait: questions, cards and answers the owner had to give (accept conditions
-  that need the owner, merge-yes waits, asks to the person, permission waits) and the time lanes waited on them. pass:
+  that need the owner, merge-yes waits, asks to the person, permission waits; read from the review record's asks and
+  the core journal's permission waits) and the time lanes waited on them. pass:
   measured over the whole window, median at most 1 touch per lane and no wait over 1 h; partial: measured in part,
   median at most 1; fail: median over 3 or not measured.
 - DV8 First-pass and rework rate (DORA 2024 rework rate). pass: at least 80 % of reviewed lanes pass their first review
@@ -592,6 +595,13 @@ Where v2 differs from the audit's proposal, and why:
   (the opening put the review wait into the gate queue); without an enable the queue is not known. A pull request
   titled `Revert "<title>"` reverts the one with that title. No anchor, band or window changed; where the runs cannot
   be read, rejects and rework read null.
+  Review rounds, first pass, the build and review times and owner touches read a private review record (one JSON line
+  per verdict, review start, ask or answer, written when it happens; GitHub cannot hold them: an author cannot review
+  their own pull request, and pull-request text is public). Rounds are the distinct commits given a verdict; Codex
+  looks are shown, not rounds. First pass now means the first verdict is an accept (before: one round, which counted a
+  rejected-then-fixed single round as a pass; stricter). Lanes that started before the record's first live line have
+  no owner figures (unknown, not 0), so DV7 reads "measured in part" until the record is older than the window. The
+  task ledger is no longer read: it never saw the pull-request lanes.
 - Owner decision 2026-11-26 (stricter): p14 adds memory-pressure kills over 7 days and row ML1. The Mac staying responsive is the owner's second priority, and the idle figures alone scored a frozen Mac the same as a calm one.
 
 Not changed in v2 (the audit's lower-priority list, outside the approval of 2026-11-26): the weight of the default

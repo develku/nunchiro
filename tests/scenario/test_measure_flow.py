@@ -389,6 +389,7 @@ class DevSpeed(UtcClock):
         d = self.measure(record=self.FLOW_A)
         self.assertEqual((d["lead_time"]["task_to_main"], d["lead_time"]["lanes_with_task"]), (dict(n=1, median_h=7.0, p90_h=7.0), 1))
         self.assertEqual([r["task"] for r in d["lanes"]], [None, None])
+        self.assertIn("review record: 3 lines from 2026-11-26 19:00", speed.report(d))  # the printed summary reads every field
 
     def test_the_public_json_carries_no_record_text(self):
         d = self.measure(record=self.FLOW_A + [dict(at=T + "00:40:00Z", kind="ask", pr=1, note="PRIVATE-NOTE")])
