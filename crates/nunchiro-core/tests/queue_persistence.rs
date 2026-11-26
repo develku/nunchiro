@@ -2642,3 +2642,120 @@ fn a_dialog_drawn_before_its_held_hook_is_one_card_with_one_id() {
     assert_eq!(q.items_of("s").len(), 1);
     let _ = fs::remove_dir_all(&dir);
 }
+
+/// The wait for a held hook is bounded from the first frame it hid: tool calls that go on (a subagent's, a sibling
+/// call's PreToolUse every 2 s) never keep a dialog with no hook item from its card. The card comes within 3.9 s of
+/// the first hidden frame; this bound is the trial's limit for a dialog with no card, so the wait cannot grow past it.
+#[test]
+fn a_dialog_with_no_hook_gets_its_card_within_the_bound_while_tools_go_on() {
+    use nunchiro_core::waiting::screen::Screen;
+    let frame = {
+        let mut screen = Screen::new(160, 50);
+        screen.feed(
+            "\x1b[2J\x1b[H\u{25cf} Bash(mkdir x)\r\nBash command\r\n  mkdir x\r\n Do you want to proceed?\r\n \u{276f} 1. Yes\r\n   2. No\r\n\r\n Esc to cancel\r\n"
+                .as_bytes(),
+        );
+        screen.detect(AgentKind::Claude).unwrap()
+    };
+    let dir = home("dialog-busy-tools");
+    let mut q = Queue::open(&dir).unwrap();
+    q.register("s", AgentKind::Claude, 0).unwrap();
+    q.observe("s", "UserPromptSubmit", &json!({"prompt":"go"}), "hook", 1)
+        .unwrap();
+    q.observe(
+        "s",
+        "PreToolUse",
+        &json!({"tool_name":"Bash","tool_input":{"command":"mkdir x"}}),
+        "hook",
+        1000,
+    )
+    .unwrap();
+    let first_frame = 1100;
+    let mut card = None;
+    for at in (first_frame..first_frame + 30_000).step_by(100) {
+        if at % 2000 == 0 {
+            let pre =
+                json!({"tool_name":"Read","tool_input":{"file_path":"/tmp/a"},"agent_id":"bg-1"});
+            q.observe("s", "PreToolUse", &pre, "hook", at).unwrap();
+        }
+        q.screen(
+            "s",
+            frame.kind.clone(),
+            frame.text.clone(),
+            frame.choices.clone(),
+            at,
+        )
+        .unwrap();
+        if !q.items_of("s").is_empty() {
+            card = Some(at);
+            break;
+        }
+    }
+    let card = card.expect("no card in 30 s while tools went on");
+    assert!(
+        card - first_frame <= 3900,
+        "card {} ms after the first hidden frame",
+        card - first_frame
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// A permission item restored from before a restart (reconciled, answers nothing) does not turn the wait off: the
+/// next request is still one card with one id.
+#[test]
+fn a_restored_permission_item_keeps_the_next_request_one_card() {
+    use nunchiro_core::waiting::screen::Screen;
+    let frame = {
+        let mut screen = Screen::new(160, 50);
+        screen.feed(
+            "\x1b[2J\x1b[H\u{25cf} Bash(mkdir new)\r\nBash command\r\n  mkdir new\r\n Do you want to proceed?\r\n \u{276f} 1. Yes\r\n   2. No\r\n\r\n Esc to cancel\r\n"
+                .as_bytes(),
+        );
+        screen.detect(AgentKind::Claude).unwrap()
+    };
+    let dir = home("restored-then-new");
+    let mut q = Queue::open(&dir).unwrap();
+    q.register("s", AgentKind::Claude, 0).unwrap();
+    q.observe(
+        "s",
+        "PermissionRequest",
+        &json!({"tool_name":"Bash","tool_input":{"command":"mkdir old"},"nunchiro_event_id":"old"}),
+        "hook",
+        10,
+    )
+    .unwrap();
+    drop(q);
+    let mut q = Queue::open(&dir).unwrap();
+    assert!(q.items_of("s")[0].reconciled);
+    let call = json!({"tool_name":"Bash","tool_input":{"command":"mkdir new"}});
+    q.observe("s", "PreToolUse", &call, "hook", 1000).unwrap();
+    let mut ids = std::collections::BTreeSet::new();
+    q.screen(
+        "s",
+        frame.kind.clone(),
+        frame.text.clone(),
+        frame.choices.clone(),
+        1050,
+    )
+    .unwrap();
+    let live = |q: &Queue| {
+        q.items_of("s")
+            .into_iter()
+            .filter(|i| !i.reconciled)
+            .map(|i| i.id)
+            .collect::<Vec<_>>()
+    };
+    ids.extend(live(&q));
+    let mut held = call.clone();
+    held["nunchiro_event_id"] = json!("new");
+    q.observe("s", "PermissionRequest", &held, "hook", 1100)
+        .unwrap();
+    ids.extend(live(&q));
+    assert_eq!(
+        ids.len(),
+        1,
+        "the new request showed under {} ids",
+        ids.len()
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
