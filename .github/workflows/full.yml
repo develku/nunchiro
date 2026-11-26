@@ -59,6 +59,9 @@ jobs:
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ matrix.project }}
       - run: pnpm exec playwright install ${{ matrix.project }}
         working-directory: web
+      # The hosted macOS image turns Reduce transparency on (runner-images configure-system.sh), and Chromium follows it, so
+      # glass layers would draw without their blur. The specs expect a Mac's default, as on a developer's machine.
+      - run: defaults write com.apple.universalaccess reduceTransparency -bool false || echo "::warning::could not turn Reduce transparency off"
       # --retries=1 as the gate and the old nightly: a test that passes on its retry counts as flaky, not passed.
       - name: playwright test (${{ matrix.project }} ${{ matrix.shard }}/${{ env.WEB_SHARDS }})
         working-directory: web
@@ -102,6 +105,7 @@ jobs:
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
       - run: pnpm exec playwright install chromium
         working-directory: web
+      - run: defaults write com.apple.universalaccess reduceTransparency -bool false || echo "::warning::could not turn Reduce transparency off"
       - name: playwright test (shots)
         working-directory: web
         env:
