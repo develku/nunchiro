@@ -189,7 +189,7 @@ class DevSpeed(UtcClock):
     FLOW_A = [dict(at="2026-11-26T19:00:00Z", kind="task", branch="lead/flow-a-1", note="the ticket line"),
               dict(at=T + "00:00:00Z", kind="review_start", pr=1), dict(at=T + "00:30:00Z", kind="verdict", pr=1, verdict="accept", by="acceptance")]
 
-    def measure(self, core=(), more=(), log="", runs=(), prs=None, record=None):
+    def measure(self, core=(), more=(), log="", runs=(), prs=None, record=None, **dirs):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__("shutil").rmtree(tmp))
         if record is not None:
@@ -208,7 +208,7 @@ class DevSpeed(UtcClock):
         speed.git = lambda *a: "abc1234\n"
         (tmp / "ci-main.log").write_text(log)
         return speed.measure(7, record_path=tmp / "lane-record.jsonl", log_path=tmp / "ci-main.log", now=speed.iso("2026-11-28T12:00:00Z"),
-                             core=list(core), prs=prs, runs=runs if runs is None else list(runs))
+                             core=list(core), prs=prs, runs=runs if runs is None else list(runs), **dirs)
 
     def test_pull_requests_are_the_landings(self):
         d = self.measure()
@@ -396,6 +396,103 @@ class DevSpeed(UtcClock):
         text = json.dumps(d)
         self.assertNotIn("PRIVATE-NOTE", text)
         self.assertNotIn("the ticket line", text)
+
+    # Transcripts joined to pull requests (a temp Claude folder and a temp Codex folder).
+    def costs(self, claude=None, codex=None, prs=None):
+        """claude: {path under projects/: [entries]}; codex: {cwd: [(model, input, cached, output)]}."""
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(tmp))
+        for rel, entries in (claude or {}).items():
+            f = tmp / "claude/projects" / rel
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text("".join(json.dumps(e) + "\n" for e in entries))
+        day = tmp / "codex" / time.strftime("%Y/%m/%d")
+        day.mkdir(parents=True)
+        for i, (cwd, turns) in enumerate((codex or {}).items()):
+            lines = [dict(type="session_meta", payload=dict(id=f"x{i}", cwd=cwd))]
+            total = 0
+            for model, inp, cached, out in turns:
+                total += inp + out
+                lines += [dict(type="turn_context", payload=dict(model=model)),
+                          dict(type="event_msg", payload=dict(type="token_count", info=dict(total_token_usage=dict(total_tokens=total),
+                               last_token_usage=dict(input_tokens=inp, cached_input_tokens=cached, output_tokens=out))))]
+            (day / f"rollout-{i}.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+        prs = prs or [pr("flow-a", T + "00:00:00Z", T + "06:00:00Z", A, number=7), pr("flow-b", T + "00:00:00Z", T + "06:00:00Z", B, number=8)]
+        return self.measure(prs=prs, claude_dirs=[tmp / "claude"], codex_dir=tmp / "codex")
+
+    @staticmethod
+    def said(text, at=T + "00:10:00Z", **more):
+        return dict(dict(type="user", timestamp=at, message=dict(role="user", content=text)), **more)
+
+    @staticmethod
+    def did(mid, model="claude-opus-5-5", command=None, at=T + "00:20:00Z", **usage):
+        content = [dict(type="tool_use", name="Bash", input=dict(command=command))] if command else [dict(type="text", text="ok")]
+        return dict(type="assistant", timestamp=at, message=dict(id=mid, model=model, content=content, usage=usage))
+
+    ADD = "git -C /src fetch -q origin && git -C /src worktree add -b flow-a ~/nunchiro/worktrees/nunchiro-pub/wa origin/main"
+
+    def test_a_builder_subagent_is_joined_by_its_worktree_add(self):
+        d = self.costs({"-src/s1/subagents/agent-a.jsonl": [self.said("Build the thing.", at=T + "01:00:00Z"),
+                                                            self.did("m1", command=self.ADD, at=T + "01:05:00Z", cache_read_input_tokens=1_000_000)]})
+        lanes = {r["lane"]: r.get("usd") for r in d["lanes"]}
+        self.assertEqual(lanes, {"flow-a": 0.2, "flow-b": None})
+        self.assertEqual(d["lead_time"]["lane_start_to_main"], dict(n=1, median_h=5.0, p90_h=5.0))
+
+    def test_an_acceptance_seat_is_joined_by_its_one_pr_number(self):
+        d = self.costs({"-src/s1/subagents/agent-b.jsonl": [self.said("Accept PR #8 (https://github.com/o/r/pull/8) on its head."),
+                                                            self.did("m1", output_tokens=1_000_000)]})
+        self.assertEqual({r["lane"]: r.get("usd") for r in d["lanes"]}, {"flow-a": None, "flow-b": 20.0})
+
+    def test_a_brief_naming_two_prs_is_not_joined_by_number(self):
+        d = self.costs({"-src/s1/subagents/agent-c.jsonl": [self.said("Compare PR #7 with PR #8."), self.did("m1", output_tokens=1_000_000)]})
+        self.assertEqual(d["cost"]["lanes_with_cost"], 0)
+        self.assertEqual(d["cost"]["unassigned"]["usd"], 20.0)
+
+    def test_a_session_joined_to_two_prs_is_split(self):
+        both = "git worktree add -b flow-a /w/wa origin/main; git push -u origin flow-b"
+        d = self.costs({"-src/s1/subagents/agent-d.jsonl": [self.said("Two fixes."), self.did("m1", command=both, output_tokens=1_000_000)]})
+        self.assertEqual({r["lane"]: r.get("usd") for r in d["lanes"]}, {"flow-a": 10.0, "flow-b": 10.0})
+
+    def test_codex_rollout_follows_the_folder_map(self):
+        d = self.costs({"-src/s1/subagents/agent-a.jsonl": [self.said("Build."), self.did("m1", command=self.ADD, input_tokens=1000)]},
+                       codex={"/x/worktrees/nunchiro-pub/wa": [("gpt-6.1-sol", 5000, 1000, 500)]})
+        c = d["cost"]
+        self.assertEqual(c["unpriced_by_model"], {"gpt-6.1-sol": 5500})
+        self.assertEqual(({r["lane"]: r.get("tokens") for r in d["lanes"]}, c["unpriced_tokens"]), ({"flow-a": 6500, "flow-b": None}, 5500))
+
+    def test_one_hour_writes_cost_twice_input(self):
+        d = self.costs({"-src/s1/subagents/agent-a.jsonl": [self.said("Build."), self.did(
+            "m1", command=self.ADD, cache_creation_input_tokens=1_000_000, cache_creation=dict(ephemeral_1h_input_tokens=1_000_000))]})
+        self.assertEqual(d["lanes"][0]["usd"], 8.0)
+
+    def test_unjoined_sessions_are_unassigned_not_dropped(self):
+        d = self.costs({
+            "-src/top.jsonl": [self.said("Plan the week."), self.did("m1", model="claude-sonnet-5-5", output_tokens=1_000_000),
+                               self.did("m2", model="<synthetic>", output_tokens=5)],
+            # the session that runs the others (it has subagents) is never split onto a pull request, even when it pushes
+            "-src/main.jsonl": [self.said("Go."), self.did("m3", command="git push -u origin flow-a", output_tokens=1_000_000)],
+            "-src/main/subagents/agent-z.jsonl": [self.said("Review the plan."), self.did("m4", output_tokens=0)]})
+        u = d["cost"]["unassigned"]
+        self.assertEqual((u["usd"], u["tokens"], d["cost"]["lanes_with_cost"]), (30.0, 2_000_000, 0))
+        self.assertEqual(sorted(u["by_model"]), ["claude-opus-5-5", "claude-sonnet-5-5"])
+
+    def test_owner_messages_count_typed_text_only(self):
+        d = self.costs({"-src/main.jsonl": [
+            self.said("Start the two fixes."),
+            self.said([dict(type="text", text="And the docs.")], at="2026-11-28T09:00:00Z"),
+            self.said([dict(type="tool_result", tool_use_id="t", content="ok")]),
+            self.said("Caveat: meta", isMeta=True), self.said("side", isSidechain=True),
+            self.said("<command-name>/clear</command-name>"), dict(self.said("done"), toolUseResult={})],
+            "-src/main/subagents/agent-z.jsonl": [self.said("A brief, not the owner.")]})
+        self.assertEqual(d["owner"]["chat_messages_by_day"], {"2026-11-27": 1, "2026-11-28": 1})
+
+    def test_no_transcript_text_in_output(self):
+        d = self.costs({"-src/s1/subagents/agent-secret9.jsonl": [self.said("SECRET-BRIEF PR #7"), self.did("m1", command="echo SECRET-CMD", output_tokens=10)],
+                        "-src/main.jsonl": [self.said("SECRET-OWNER")], "-src/main/subagents/agent-q.jsonl": [self.said("x")]})
+        text = json.dumps(d)
+        for secret in ("SECRET", "agent-secret9", "m1"):
+            self.assertNotIn(secret, text)
+        self.assertEqual(d["cost"]["lanes_with_cost"], 1)
 
     def test_journal_events_feed_seat_time_and_say_what_they_lack(self):
         at = lambda t: speed.iso(t) * 1000  # noqa: E731
