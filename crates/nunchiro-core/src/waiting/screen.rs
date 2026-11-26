@@ -1224,4 +1224,60 @@ mod tests {
             assert_eq!(a.is_none(), screen == "just prose\r\n");
         }
     }
+
+    fn fed(text: &str) -> Screen {
+        let mut s = Screen::new(200, 60);
+        s.feed(text.replace('\n', "\r\n").as_bytes());
+        s
+    }
+
+    /// Start dialogs other than folder trust, as real agents drew them on a Mac with empty config folders (Claude
+    /// 2.1.332's theme picker and security notes, Codex 0.162.1's sign-in screen): each waits for the user before the
+    /// session starts, so each is a dialog card. Codex's own trust question was a card already and stays one.
+    #[test]
+    fn start_dialogs_of_real_agents_are_cards() {
+        for (kind, text) in [
+            (
+                AgentKind::Claude,
+                include_str!("../../tests/fixtures/start-screens/claude-2.1.332-theme.txt"),
+            ),
+            (
+                AgentKind::Claude,
+                include_str!(
+                    "../../tests/fixtures/start-screens/claude-2.1.332-security-notes.txt"
+                ),
+            ),
+            (
+                AgentKind::Codex,
+                include_str!("../../tests/fixtures/start-screens/codex-0.162.1-sign-in.txt"),
+            ),
+            (
+                AgentKind::Codex,
+                include_str!("../../tests/fixtures/start-screens/codex-0.162.1-trust.txt"),
+            ),
+        ] {
+            let d = fed(text)
+                .detect(kind)
+                .unwrap_or_else(|| panic!("no card for: {text}"));
+            assert_eq!(d.kind, Kind::Dialog, "{text}");
+        }
+        // Claude's sign-in question, as Claude Code draws it with no account (not drawn on this Mac: Claude found its
+        // sign-in with an empty config folder too).
+        let login = " Claude Code can be used with your Claude subscription or billed based on API usage through your Console\n account.\n\n Select login method:\n\n \u{276f} 1. Claude account with subscription \u{b7} Pro, Max, Team, or Enterprise\n\n   2. Anthropic Console account \u{b7} API usage billing\n\n   3. 3rd-party platform \u{b7} Amazon Bedrock, Microsoft Foundry, or Vertex AI\n";
+        let d = fed(login).detect(AgentKind::Claude).expect("login");
+        assert_eq!((d.kind, d.choices.len()), (Kind::Dialog, 3));
+    }
+
+    /// The same words in an agent's own output, with its input box on the screen, are no card: a start dialog is drawn
+    /// before the box.
+    #[test]
+    fn start_dialog_words_in_normal_output_are_no_card() {
+        let rule = "\u{2500}".repeat(40);
+        for (kind, text) in [
+            (AgentKind::Claude, format!("\u{23fa} The onboarding says \"Choose the text style that looks best with your terminal\", then Security notes: and Press Enter to continue.\n Select login method: is next.\n{rule}\n\u{276f} \n{rule}\n")),
+            (AgentKind::Codex, "\u{2022} Codex printed: Welcome to Codex. Sign in with ChatGPT, Provide your own API key, Press enter to continue.\n\n\u{203a} Ask Codex to do anything\n".to_string()),
+        ] {
+            assert!(fed(&text).detect(kind).is_none(), "{text}");
+        }
+    }
 }
