@@ -64,17 +64,18 @@ fn mcp_list_is_read_only_and_hides_env_values() {
 fn mcp_add_goes_per_session_via_mcp_config() {
     let home = tmp("home");
     let user = tmp("user");
-    assert!(claude_flags(&home, &enabled(None)).is_empty());
+    assert!(claude_flags(&home, &enabled(None), Path::new("/p")).is_empty());
     let add = Request::ExtensionsMcpAdd {
         name: "files".into(),
         command: vec!["files-mcp".into(), "--root".into(), "/tmp/x".into()],
+        project: None,
     };
     let Reply::Extensions { own, .. } = handle(&home, &user, Caller::Window, add).unwrap() else {
         panic!()
     };
     assert_eq!(own.len(), 1);
     // Claude gets the verified servers inline, never the path of a file an agent can write.
-    let flags = claude_flags(&home, &enabled(None));
+    let flags = claude_flags(&home, &enabled(None), Path::new("/p"));
     assert_eq!(flags.len(), 1, "{flags:?}");
     let inline = flags[0].to_str().unwrap().strip_prefix("--mcp-config=");
     let inline: serde_json::Value = serde_json::from_str(inline.unwrap()).unwrap();
@@ -85,7 +86,7 @@ fn mcp_add_goes_per_session_via_mcp_config() {
     let file: serde_json::Value =
         serde_json::from_slice(&std::fs::read(home.join("extensions/mcp.json")).unwrap()).unwrap();
     assert_eq!(file["mcpServers"]["files"]["command"], "files-mcp");
-    let codex: Vec<String> = codex_flags(&home)
+    let codex: Vec<String> = codex_flags(&home, Path::new("/p"))
         .into_iter()
         .map(|o| o.into_string().unwrap())
         .collect();
@@ -99,8 +100,8 @@ fn mcp_add_goes_per_session_via_mcp_config() {
         ]
     );
     // A name that would break out of the TOML key is refused.
-    assert!(mcp_add(&home, "a.b=1", &["x".into()]).is_err());
-    assert!(mcp_add(&home, "ok", &[]).is_err());
+    assert!(mcp_add(&home, "a.b=1", &["x".into()], None).is_err());
+    assert!(mcp_add(&home, "ok", &[], None).is_err());
     // Remove drops it from the next launch; nothing went into the user's home.
     handle(
         &home,
@@ -111,7 +112,7 @@ fn mcp_add_goes_per_session_via_mcp_config() {
         },
     )
     .unwrap();
-    assert!(claude_flags(&home, &enabled(None)).is_empty());
+    assert!(claude_flags(&home, &enabled(None), Path::new("/p")).is_empty());
     assert_eq!(std::fs::read_dir(&user).unwrap().count(), 0);
 }
 
@@ -134,8 +135,8 @@ fn hand_written_or_edited_own_server_never_reaches_a_launch() {
         r#"{"mcpServers":{"x":{"command":"sh","args":["-c","evil"]}}}"#,
     )
     .unwrap();
-    assert!(claude_flags(&home, &enabled(None)).is_empty());
-    assert!(codex_flags(&home).is_empty());
+    assert!(claude_flags(&home, &enabled(None), Path::new("/p")).is_empty());
+    assert!(codex_flags(&home, Path::new("/p")).is_empty());
     assert!(
         own_servers(&home)
             .iter()
@@ -145,9 +146,10 @@ fn hand_written_or_edited_own_server_never_reaches_a_launch() {
     let add = Request::ExtensionsMcpAdd {
         name: "files".into(),
         command: vec!["files-mcp".into(), "-v".into()],
+        project: None,
     };
     handle(&home, &user, Caller::Window, add).unwrap();
-    let claude = names(claude_flags(&home, &enabled(None)));
+    let claude = names(claude_flags(&home, &enabled(None), Path::new("/p")));
     assert_eq!(claude.len(), 1);
     assert!(
         claude[0].contains("files-mcp") && !claude[0].contains("evil"),
@@ -159,7 +161,7 @@ fn hand_written_or_edited_own_server_never_reaches_a_launch() {
         "-c",
         "mcp_servers.files.args=[\"-v\"]",
     ];
-    assert_eq!(names(codex_flags(&home)), files_only);
+    assert_eq!(names(codex_flags(&home, Path::new("/p"))), files_only);
     let mut listed: Vec<(String, bool)> = own_servers(&home)
         .into_iter()
         .map(|s| (s.name, s.changed))
@@ -173,14 +175,14 @@ fn hand_written_or_edited_own_server_never_reaches_a_launch() {
     let mut v: serde_json::Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
     v["mcpServers"]["files"]["args"] = serde_json::json!(["-c", "evil"]);
     std::fs::write(&file, serde_json::to_vec(&v).unwrap()).unwrap();
-    assert!(claude_flags(&home, &enabled(None)).is_empty());
-    assert!(codex_flags(&home).is_empty());
+    assert!(claude_flags(&home, &enabled(None), Path::new("/p")).is_empty());
+    assert!(codex_flags(&home, Path::new("/p")).is_empty());
     assert!(own_servers(&home).iter().all(|s| s.changed));
     // A seal copied onto another name does not verify either; the restored original does.
     v["mcpServers"]["files"]["args"] = serde_json::json!(["-v"]);
     v["mcpServers"]["other"] = v["mcpServers"]["files"].clone();
     std::fs::write(&file, serde_json::to_vec(&v).unwrap()).unwrap();
-    assert_eq!(names(codex_flags(&home)), files_only);
+    assert_eq!(names(codex_flags(&home, Path::new("/p"))), files_only);
     let _ = std::fs::remove_dir_all(home);
     let _ = std::fs::remove_dir_all(user);
 }
@@ -204,7 +206,7 @@ fn unreadable_own_mcp_json_is_never_rewritten() {
         std::fs::write(&file, &body).unwrap();
         std::fs::set_permissions(&file, std::fs::Permissions::from_mode(mode)).unwrap();
         assert_eq!(
-            mcp_add(&home, "files", &["files-mcp".into()]).unwrap_err(),
+            mcp_add(&home, "files", &["files-mcp".into()], None).unwrap_err(),
             "mcp.json could not be read; nothing was changed",
             "{what}"
         );
@@ -218,7 +220,7 @@ fn unreadable_own_mcp_json_is_never_rewritten() {
     }
     // Absent is not an error: the first Add writes it.
     std::fs::remove_file(&file).unwrap();
-    mcp_add(&home, "files", &["files-mcp".into()]).unwrap();
+    mcp_add(&home, "files", &["files-mcp".into()], None).unwrap();
     let _ = std::fs::remove_dir_all(home);
 }
 
@@ -276,10 +278,10 @@ fn concurrent_add_and_remove_lose_nothing_and_resurrect_nothing() {
     let home = tmp("race");
     let add = |name: String| {
         let home = home.clone();
-        std::thread::spawn(move || mcp_add(&home, &name, &["x-mcp".into()]).unwrap())
+        std::thread::spawn(move || mcp_add(&home, &name, &["x-mcp".into()], None).unwrap())
     };
     for i in 0..40 {
-        mcp_add(&home, "gone", &["gone-mcp".into()]).unwrap();
+        mcp_add(&home, "gone", &["gone-mcp".into()], None).unwrap();
         let h = home.clone();
         let remove = std::thread::spawn(move || mcp_remove(&h, "gone").unwrap());
         let (a, b) = (add(format!("a{i}")), add(format!("b{i}")));
@@ -305,7 +307,7 @@ fn symlinked_extensions_folder_or_mcp_json_is_refused() {
     let agent = tmp("agent-home");
     std::fs::create_dir_all(agent.join("plug")).unwrap();
     std::os::unix::fs::symlink(&agent, home.join("extensions")).unwrap();
-    let err = mcp_add(&home, "files", &["files-mcp".into()]).unwrap_err();
+    let err = mcp_add(&home, "files", &["files-mcp".into()], None).unwrap_err();
     assert_eq!(err, LINKED);
     assert_eq!(mcp_remove(&home, "files").unwrap_err(), LINKED);
     let left: Vec<_> = std::fs::read_dir(&agent)
@@ -315,7 +317,7 @@ fn symlinked_extensions_folder_or_mcp_json_is_refused() {
     assert_eq!(left, ["plug"], "a write went into the agent home");
     // The linked folder's subfolders are not items, so no launch gets `--plugin-dir` into it.
     assert_eq!(items(&home).len(), 1);
-    assert!(claude_flags(&home, &[format!("{CUSTOM}plug")]).is_empty());
+    assert!(claude_flags(&home, &[format!("{CUSTOM}plug")], Path::new("/p")).is_empty());
 
     // A real folder with `mcp.json` linked to a file elsewhere: refused, the target untouched.
     std::fs::remove_file(home.join("extensions")).unwrap();
@@ -324,7 +326,7 @@ fn symlinked_extensions_folder_or_mcp_json_is_refused() {
     std::fs::write(&target, r#"{"mcpServers":{}}"#).unwrap();
     std::os::unix::fs::symlink(&target, home.join("extensions/mcp.json")).unwrap();
     assert_eq!(
-        mcp_add(&home, "files", &["files-mcp".into()]).unwrap_err(),
+        mcp_add(&home, "files", &["files-mcp".into()], None).unwrap_err(),
         LINKED
     );
     assert_eq!(
@@ -358,9 +360,12 @@ fn fifo_in_place_of_mcp_json_never_hangs() {
     let (tx, rx) = std::sync::mpsc::channel();
     let h = home.clone();
     std::thread::spawn(move || {
-        let add = mcp_add(&h, "files", &["files-mcp".into()]);
+        let add = mcp_add(&h, "files", &["files-mcp".into()], None);
         let list = handle(&h, &h, Caller::Window, Request::ExtensionsList).map(|_| ());
-        let flags = (claude_flags(&h, &enabled(None)), codex_flags(&h));
+        let flags = (
+            claude_flags(&h, &enabled(None), Path::new("/p")),
+            codex_flags(&h, Path::new("/p")),
+        );
         tx.send((add, list, flags)).unwrap();
     });
     let (add, list, flags) = rx
@@ -407,6 +412,7 @@ fn extension_ops_refused_from_agent_remote_and_widget() {
             Request::ExtensionsMcpAdd {
                 name: "evil".into(),
                 command: vec!["sh".into()],
+                project: None,
             },
             Request::ExtensionsMcpRemove {
                 name: "evil".into(),
@@ -866,7 +872,7 @@ fn new_skill_is_made_listed_and_left_off() {
             .unwrap();
     assert_eq!(manifest["name"], "review");
     // Off: no launch flag for it with the default enabled list.
-    assert!(claude_flags(&home, &enabled(None)).is_empty());
+    assert!(claude_flags(&home, &enabled(None), Path::new("/p")).is_empty());
     // An existing name in any form, a bad name or a bad description: refused.
     assert!(
         new("review", "again")
@@ -950,7 +956,7 @@ fn new_hook_is_made_listed_with_its_command_and_left_off() {
     assert_eq!(item.hook_lines[0].event, "Stop");
     assert!(item.skills.is_empty());
     assert_eq!(item.files, 2);
-    assert!(claude_flags(&home, &enabled(None)).is_empty());
+    assert!(claude_flags(&home, &enabled(None), Path::new("/p")).is_empty());
     let _ = std::fs::remove_dir_all(home);
 }
 
@@ -1021,7 +1027,7 @@ fn claude_flags_never_open_an_item_file() {
     std::fs::create_dir_all(&item).unwrap();
     let fifo = c(item.join("hooks.json").as_os_str()).unwrap();
     assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
-    let flags = claude_flags(&home, &["custom:held".into()]);
+    let flags = claude_flags(&home, &["custom:held".into()], Path::new("/p"));
     assert_eq!(
         flags,
         [
@@ -1029,5 +1035,235 @@ fn claude_flags_never_open_an_item_file() {
             home.join("extensions/held").into_os_string()
         ]
     );
+    let _ = std::fs::remove_dir_all(home);
+}
+
+fn strings(flags: Vec<OsString>) -> Vec<String> {
+    flags
+        .into_iter()
+        .map(|o| o.into_string().unwrap())
+        .collect()
+}
+/// The server names one Claude launch in `project` gets (from its inline `--mcp-config`).
+fn claude_names(home: &Path, project: &str) -> Vec<String> {
+    let flags = strings(claude_flags(home, &enabled(None), Path::new(project)));
+    let Some(inline) = flags.iter().find_map(|f| f.strip_prefix("--mcp-config=")) else {
+        return vec![];
+    };
+    let v: serde_json::Value = serde_json::from_str(inline).unwrap();
+    v["mcpServers"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .cloned()
+        .collect()
+}
+/// The server names one Codex launch in `project` gets.
+fn codex_names(home: &Path, project: &str) -> Vec<String> {
+    strings(codex_flags(home, Path::new(project)))
+        .iter()
+        .filter_map(|f| f.strip_prefix("mcp_servers.")?.split_once(".command="))
+        .map(|(name, _)| name.to_string())
+        .collect()
+}
+
+// A server added for one project reaches that project's sessions only, Claude and Codex alike; listed with its project;
+// removed like any other.
+#[test]
+fn mcp_for_one_project_reaches_only_that_projects_sessions() {
+    let home = tmp("home");
+    let user = tmp("user");
+    let add = |name: &str, project: Option<&str>| {
+        handle(
+            &home,
+            &user,
+            Caller::Window,
+            Request::ExtensionsMcpAdd {
+                name: name.into(),
+                command: vec![format!("{name}-mcp")],
+                project: project.map(PathBuf::from),
+            },
+        )
+    };
+    add("all", None).unwrap();
+    let Reply::Extensions { own, .. } = add("mine", Some("/work/a")).unwrap() else {
+        panic!()
+    };
+    let mut listed: Vec<(String, Option<String>)> =
+        own.into_iter().map(|s| (s.name, s.project)).collect();
+    listed.sort();
+    assert_eq!(
+        listed,
+        [
+            ("all".to_string(), None),
+            ("mine".to_string(), Some("/work/a".to_string()))
+        ]
+    );
+    assert_eq!(claude_names(&home, "/work/a"), ["all", "mine"]);
+    assert_eq!(codex_names(&home, "/work/a"), ["all", "mine"]);
+    assert_eq!(claude_names(&home, "/work/b"), ["all"]);
+    assert_eq!(codex_names(&home, "/work/b"), ["all"]);
+    // A folder inside the project or one that only starts with its name is another project.
+    assert_eq!(claude_names(&home, "/work/ab"), ["all"]);
+    // The same name for all projects and for one project, either way round, is refused with one plain line.
+    let both = add("all", Some("/work/a")).unwrap_err();
+    assert_eq!(
+        both,
+        "a server named all is already added for all projects; remove it first or pick another name"
+    );
+    let both = add("mine", None).unwrap_err();
+    assert_eq!(
+        both,
+        "a server named mine is already added for /work/a; remove it first or pick another name"
+    );
+    assert!(add("mine", Some("/work/b")).is_err());
+    assert!(!both.contains('\n'));
+    // Added again for the same project: replaced, as a global one is.
+    add("mine", Some("/work/a")).unwrap();
+    // A project must be a full path.
+    assert!(add("rel", Some("work/a")).is_err());
+    // Remove takes it out of that project's next launch.
+    handle(
+        &home,
+        &user,
+        Caller::Window,
+        Request::ExtensionsMcpRemove {
+            name: "mine".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(claude_names(&home, "/work/a"), ["all"]);
+    assert_eq!(codex_names(&home, "/work/a"), ["all"]);
+    let _ = std::fs::remove_dir_all(home);
+    let _ = std::fs::remove_dir_all(user);
+}
+
+// The seal covers the project: an entry whose project was edited by hand (moved, added, dropped) is never started.
+#[test]
+fn an_own_server_whose_project_was_edited_is_not_started() {
+    let home = tmp("home");
+    let file = home.join("extensions/mcp.json");
+    mcp_add(
+        &home,
+        "mine",
+        &["mine-mcp".into()],
+        Some(Path::new("/work/a")),
+    )
+    .unwrap();
+    mcp_add(&home, "all", &["all-mcp".into()], None).unwrap();
+    let original: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    let edits: [(&str, serde_json::Value); 4] = [
+        ("mine", serde_json::json!("/work/b")), // moved to another project
+        ("mine", serde_json::Value::Null),      // made "all projects" by a null
+        ("all", serde_json::json!("/work/a")),  // a global one pinned to a project
+        ("mine", serde_json::json!(7)),         // not a path
+    ];
+    for (name, project) in edits {
+        let mut v = original.clone();
+        v["mcpServers"][name]["project"] = project.clone();
+        std::fs::write(&file, serde_json::to_vec(&v).unwrap()).unwrap();
+        for p in ["/work/a", "/work/b"] {
+            assert!(
+                !claude_names(&home, p).contains(&name.to_string())
+                    && !codex_names(&home, p).contains(&name.to_string()),
+                "{name} with project {project} started in {p}"
+            );
+        }
+        assert!(
+            own_servers(&home)
+                .iter()
+                .any(|s| s.name == name && s.changed)
+        );
+    }
+    // The project key taken away: the entry reads as global, and its seal (made with the project) fails.
+    let mut v = original.clone();
+    v["mcpServers"]["mine"]
+        .as_object_mut()
+        .unwrap()
+        .remove("project");
+    std::fs::write(&file, serde_json::to_vec(&v).unwrap()).unwrap();
+    assert_eq!(claude_names(&home, "/work/a"), ["all"]);
+    assert_eq!(codex_names(&home, "/work/b"), ["all"]);
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// The seal today's released build checks (before servers had a project), kept here word for word so the new file is
+/// checked against it.
+fn older_build_seal(key: &[u8], name: &str, command: &str, args: &[String]) -> String {
+    let msg = serde_json::to_vec(&("extensions.mcp", name, command, args)).unwrap_or_default();
+    crate::schedule::hmac(key, &msg)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+// Backward reading both ways: a file of three global servers in the older format reads and starts the same, Add writes
+// a global entry in exactly that format, and the older build's seal check passes every global entry of a file the new
+// build wrote while it fails (so never starts) the one-project entry.
+#[test]
+fn global_servers_keep_the_older_format_both_ways() {
+    let home = tmp("home");
+    let file = home.join("extensions/mcp.json");
+    let key = crate::schedule::key(&home.join(KEY_FILE)).unwrap();
+    let older = |names: &[&str]| -> serde_json::Value {
+        let servers: serde_json::Map<String, serde_json::Value> = names
+            .iter()
+            .map(|n| {
+                let command = format!("{n}-mcp");
+                let args = vec!["--stdio".to_string()];
+                let seal = older_build_seal(&key, n, &command, &args);
+                (
+                    n.to_string(),
+                    serde_json::json!({ "command": command, "args": args, "seal": seal }),
+                )
+            })
+            .collect();
+        serde_json::json!({ "mcpServers": servers })
+    };
+    std::fs::create_dir_all(home.join("extensions")).unwrap();
+    std::fs::write(
+        &file,
+        serde_json::to_vec_pretty(&older(&["a", "b", "c"])).unwrap(),
+    )
+    .unwrap();
+    for p in ["/work/a", "/anything"] {
+        assert_eq!(claude_names(&home, p), ["a", "b", "c"]);
+        assert_eq!(codex_names(&home, p), ["a", "b", "c"]);
+    }
+    assert!(
+        own_servers(&home)
+            .iter()
+            .all(|s| !s.changed && s.project.is_none())
+    );
+    // Written again by Add (global): byte for byte what the older build writes.
+    std::fs::remove_file(&file).unwrap();
+    for n in ["a", "b", "c"] {
+        mcp_add(&home, n, &[format!("{n}-mcp"), "--stdio".into()], None).unwrap();
+    }
+    assert_eq!(
+        std::fs::read(&file).unwrap(),
+        serde_json::to_vec_pretty(&older(&["a", "b", "c"])).unwrap()
+    );
+    // A one-project entry beside them: the older build's check passes a, b, c and fails it, so it never starts there.
+    mcp_add(
+        &home,
+        "mine",
+        &["mine-mcp".into()],
+        Some(Path::new("/work/a")),
+    )
+    .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    let older_starts: Vec<&String> = v["mcpServers"]
+        .as_object()
+        .unwrap()
+        .iter()
+        .filter(|(name, e)| {
+            let args: Vec<String> = serde_json::from_value(e["args"].clone()).unwrap();
+            e["seal"] == older_build_seal(&key, name, e["command"].as_str().unwrap(), &args)
+        })
+        .map(|(name, _)| name)
+        .collect();
+    assert_eq!(older_starts, ["a", "b", "c"]);
     let _ = std::fs::remove_dir_all(home);
 }

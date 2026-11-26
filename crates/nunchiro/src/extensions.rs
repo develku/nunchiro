@@ -8,7 +8,7 @@ use nunchiro_core::{
 };
 use std::path::Path;
 
-const USAGE: &str = "usage: nunchiro extensions list [--json] | show <id> [<path>] | new <name> --about \"<one line>\" [--hook] | on <id> [--yes] | off <id>";
+const USAGE: &str = "usage: nunchiro extensions list [--json] | show <id> [<path>] | new <name> --about \"<one line>\" [--hook] | on <id> [--yes] | off <id> | mcp | mcp add <name> [--project <dir>] -- <command> [<arg>...] | mcp remove <name>";
 
 /// Nunchiro's own two switches (stored in settings.json, not in the `extensions.enabled` list).
 const HOOKS: &str = "nunchiro-hooks";
@@ -24,6 +24,23 @@ pub fn run(
     let words: Vec<&str> = args.iter().map(String::as_str).collect();
     if matches!(words.as_slice(), [] | ["--help"]) {
         println!("{USAGE}");
+        return Ok(());
+    }
+    if words.first() == Some(&"mcp") {
+        let request = mcp_request(&words[1..])?;
+        ensure_core(home)?;
+        let Reply::Extensions { own, .. } = super::call(home, request)? else {
+            return Err("unexpected reply".into());
+        };
+        for s in own {
+            let changed = if s.changed {
+                "\t(changed outside Nunchiro: no session gets it)"
+            } else {
+                ""
+            };
+            let only = s.project.as_deref().unwrap_or("all projects");
+            println!("{}\t{only}\t{}{changed}", s.name, s.command.join(" "));
+        }
         return Ok(());
     }
     if !matches!(
@@ -240,6 +257,33 @@ pub fn run(
     Ok(())
 }
 
+/// `mcp`, `mcp add <name> [--project <dir>] -- <command>...` or `mcp remove <name>`; a relative project is from here.
+fn mcp_request(words: &[&str]) -> Result<Request, String> {
+    let (name, project, command) = match words {
+        [] => return Ok(Request::ExtensionsList),
+        ["remove", name] => {
+            return Ok(Request::ExtensionsMcpRemove {
+                name: name.to_string(),
+            });
+        }
+        ["add", name, "--", command @ ..] => (name, None, command),
+        ["add", name, "--project", dir, "--", command @ ..] => (name, Some(*dir), command),
+        _ => return Err(USAGE.into()),
+    };
+    if command.is_empty() {
+        return Err(USAGE.into());
+    }
+    let project = match project {
+        Some(dir) => Some(std::fs::canonicalize(dir).map_err(|e| format!("project {dir}: {e}"))?),
+        None => None,
+    };
+    Ok(Request::ExtensionsMcpAdd {
+        name: name.to_string(),
+        command: command.iter().map(|w| w.to_string()).collect(),
+        project,
+    })
+}
+
 /// The extensions folder, its items, and Nunchiro's own hook lines.
 fn listing(home: &Path) -> Result<(String, Vec<Item>, Vec<HookLine>), String> {
     match super::call(home, Request::ExtensionsList)? {
@@ -361,7 +405,39 @@ fn confirm() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::cut;
+    use super::{Request, cut, mcp_request};
+
+    #[test]
+    fn mcp_words_make_add_list_and_remove_requests() {
+        let dir = std::env::temp_dir().canonicalize().unwrap();
+        let d = dir.to_str().unwrap();
+        let req = |w: &[&str]| serde_json::to_value(mcp_request(w).unwrap()).unwrap();
+        assert_eq!(
+            req(&[]),
+            serde_json::to_value(Request::ExtensionsList).unwrap()
+        );
+        assert_eq!(
+            req(&["add", "db", "--", "db-mcp", "-v"]),
+            serde_json::json!({"op": "extensions_mcp_add", "name": "db", "command": ["db-mcp", "-v"]})
+        );
+        assert_eq!(
+            req(&["add", "db", "--project", d, "--", "db-mcp"]),
+            serde_json::json!({"op": "extensions_mcp_add", "name": "db", "command": ["db-mcp"], "project": d})
+        );
+        assert_eq!(
+            req(&["remove", "db"]),
+            serde_json::json!({"op": "extensions_mcp_remove", "name": "db"})
+        );
+        for bad in [
+            &["add", "db"][..],
+            &["add", "db", "--"],
+            &["add", "db", "db-mcp"],
+            &["rm", "db"],
+        ] {
+            assert!(mcp_request(bad).is_err(), "{bad:?}");
+        }
+        assert!(mcp_request(&["add", "db", "--project", "/no/such/folder/x", "--", "x"]).is_err());
+    }
 
     #[test]
     fn cut_keeps_a_short_line_and_ends_a_long_one_at_a_word() {

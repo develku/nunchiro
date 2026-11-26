@@ -7903,7 +7903,7 @@ fn ext_settings(on: Option<&[&str]>) -> Settings {
     s
 }
 fn flag_strings(home: &Path, s: &Settings, kind: AgentKind) -> Vec<String> {
-    extension_flags(home, s, kind, false)
+    extension_flags(home, s, kind, false, Path::new("/p"))
         .unwrap()
         .into_iter()
         .map(|o| o.into_string().unwrap())
@@ -7992,7 +7992,7 @@ fn extensions_never_write_claude_or_codex_home() {
     let before = snapshot(&user);
     // Every item on: the shipped skill, a custom folder, an own MCP server, orchestration's Codex pointer.
     fs::create_dir_all(home.join("extensions/mine/skills")).unwrap();
-    crate::extensions::mcp_add(&home, "files", &["files-mcp".into()]).unwrap();
+    crate::extensions::mcp_add(&home, "files", &["files-mcp".into()], None).unwrap();
     let mut s = ext_settings(Some(&["nunchiro", "custom:mine"]));
     s.orchestration.enabled = true;
     for kind in [AgentKind::Claude, AgentKind::Codex] {
@@ -8072,6 +8072,7 @@ fn extension_ops_refused_to_session_callers() {
         Request::ExtensionsMcpAdd {
             name: "evil".into(),
             command: vec!["sh".into()],
+            project: None,
         },
         Request::ExtensionsMcpRemove {
             name: "evil".into(),
