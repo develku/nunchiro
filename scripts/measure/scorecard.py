@@ -863,8 +863,9 @@ def restored_launch(cli, app, sessions, home, check):
     """(seconds, {"sessions", "chat_events"}): the second launch of the window on a home whose core holds `sessions`
     shell sessions and one fixture agent session with the 5,000-event conversation (workload_v1b.py, no model), to
     the first drawn snapshot; the first launch on that home warms WebKit. check(app pid, core pid) is the owner check.
-    shortcut: DRAWN is the first snapshot drawn, not the conversation's own first paint (chat_open_5000_ms, p33);
-    upgrade when the page reports that paint."""
+    shortcut: DRAWN is the first snapshot drawn, not the conversation's own first paint (chat_open_5000_ms, p33). The
+    page reports that paint (chat-drawn mark, read by measurelib.chat_open), but this gate window is hidden and draws
+    no frames; upgrade when a run shows the window."""
     import measurelib as ml
     import release as rel
     import startup as su

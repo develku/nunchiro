@@ -80,7 +80,7 @@ ourselves, is 521 MiB.
 | Locale key coverage, 7 other languages (%) | 100 | 80 | v1, unchanged | run |
 | Cold debug build, warm rebuild, web build, Rust test stage, largest file, files over 2,000 lines, files shared by open lanes | | | v1, unchanged (3..20 min, 15..180 s, 15..120 s, 3..20 min, 2,000..15,000, 0..20, 0..10) | dev |
 | Change failure rate (%), time to restore (min) | 5, 60 | 30, 1440 | v1, unchanged (DORA) | ops |
-| Open a 5,000-event conversation: select it to its newest message painted (ms) | 100 | 1000 | Nielsen's limits: 0.1 s feels instant, 1 s keeps the flow (nngroup.com/articles/response-times-3-important-limits). Peer practice: T3 Code bounds a cold open to 75 rows and about 1 MiB (t3code docs/internals/performance-regressions.md:15) | not yet (the page does not report this paint) |
+| Open a 5,000-event conversation: select it to its newest message painted (ms) | 100 | 1000 | Nielsen's limits: 0.1 s feels instant, 1 s keeps the flow (nngroup.com/articles/response-times-3-important-limits). Peer practice: T3 Code bounds a cold open to 75 rows and about 1 MiB (t3code docs/internals/performance-regressions.md:15) | not yet: the page reports this paint (`nunchiro:chat-drawn <session>` mark) and `measurelib.chat_open` reads it, but no runner draws frames: a gate window is hidden (no animation frames), and Playwright gets no window token from a release core |
 | 8 terminals streaming 20 MiB each: worst frame, WebKit (ms) | 200 | 2000 | 100: the stall bar of measurelib.py:397 (a stall a user sees). 0: the 2 s after which the same scripts call a key missed (measurelib.py:405). We read 1,453-1,843 ms on 10-25 (docs/v1/figures.md `stream-8-webkit`) | owner-run: `paint.sh --only stream --sizes 8 --engines webkit --no-record` |
 | Memory after 24 h over memory at minute 2, 5 real sessions (ratio) | 1.0 | 1.5 | own bar from the soak bar 1.25 (measurelib.py:400), which is 50 points here | owner-run with the 24 h soak |
 | Prompt delivery: `agent prompt` to the text submitted in a real agent's screen, median (ms) | 1000 | 10000 | Nielsen: 1 s keeps the flow, 10 s loses attention. Our path waits by design (crates/nunchiro-core/src/sessions/deliver.rs: the settle before Enter); cmux delivers through hooks with no wait for a screen | not yet |
@@ -325,7 +325,7 @@ sandboxes. A phone client is row M2 of p01.
 | Bot task set | p35 above | bot_task_success_pct, bot_owner_touches |
 | Reach | p37 above | RE1-RE5 |
 
-Not yet measurable, with what is missing: opening a 5,000-event conversation (the page does not report that paint); prompt delivery time to a real agent (no script).
+Not yet measurable, with what is missing: opening a 5,000-event conversation (the paint mark and its reader exist; no release-core runner draws frames, see p33's row); prompt delivery time to a real agent (no script).
 
 ## Rubric checks
 
