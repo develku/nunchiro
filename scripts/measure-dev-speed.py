@@ -21,7 +21,9 @@ Read only. Sources:
   line (lines marked "backfill" do not count) have no owner figures: unknown, not 0.
 - the core's event journal ("nunchiro events --history", read from the day files; the owner's shell only) and the agents'
   own transcripts: ~/.claude, the folders in MEASURE_CLAUDE_DIRS (other accounts, ':' between them) and
-  MEASURE_CODEX_SESSIONS (default ~/.codex/sessions).
+  MEASURE_CODEX_SESSIONS (default ~/.codex/sessions). A session is joined to the pull requests it worked on (join()):
+  the branches it made a worktree for or pushed, else the one pull request its first message names, else its folder.
+  Only token counts, models and times are read into the output, never text.
 
 The four keys:
 1. Deployment frequency: pull requests landed on main per day (and landings, a landing being one merge time), owner
@@ -271,9 +273,11 @@ def price_table():
     return [(m[1], [int(x) for x in m[2].split(",")]) for m in re.finditer(r'\("([^"]+)", \[([\d, ]+)\]\)', body)]
 
 
-def usd(parts, model, prices):
+def usd(parts, model, prices, one_hour=0):
+    """List-price dollars of [input, output, cache write, cache read] tokens; 'one_hour' of the cache writes were 1-hour
+    writes, which cost twice the base input (the price page) instead of the 5-minute write price."""
     row = next((p for name, p in prices if model and model.startswith(name)), None)
-    return None if row is None else sum(a * b for a, b in zip(parts, row)) / 1e9
+    return None if row is None else (sum(a * b for a, b in zip(parts, row)) + one_hour * (2 * row[0] - row[2])) / 1e9
 
 
 def folder_key(name):
@@ -281,52 +285,93 @@ def folder_key(name):
     return re.sub(r"[^A-Za-z0-9]", "-", name)
 
 
-def lane_costs(tails, claude_dirs, codex_dir, since):
-    """{worktree folder: {tokens, usd, unpriced_tokens, sessions}} over the agents' own transcripts (read only): Claude
-    project folders whose name ends with the worktree folder (messages counted once by message id, as the core does),
-    and Codex rollouts since the window start whose session_meta cwd is the worktree or under it."""
-    prices, out, seen = price_table(), {}, set()
-    def add(tail, parts, model, session):
-        o = out.setdefault(tail, dict(tokens=0, usd=0.0, unpriced_tokens=0, sessions=set()))
-        o["tokens"] += sum(parts)
-        cost = usd(parts, model, prices)
-        if cost is None:
-            o["unpriced_tokens"] += sum(parts)
-        else:
-            o["usd"] += cost
-        o["sessions"].add(session)
-    keys = {"-" + folder_key(t): t for t in tails}
+WORKTREE_ADD = re.compile(r"worktree add (?:-[bB]) ['\"]?([^\s'\";&|]+)['\"]? ['\"]?([^\s'\";&|]+)")
+PUSH = re.compile(r"push (?:-u )?origin ['\"]?([^\s'\";&|]+)")
+PR_NUMBER = re.compile(r"PR #(\d+)|/pull/(\d+)")
+
+
+def text_of(content):
+    """The typed text of a message's content, or None for a tool result."""
+    if isinstance(content, str):
+        return content
+    blocks = content if isinstance(content, list) else []
+    if any(isinstance(b, dict) and b.get("type") == "tool_result" for b in blocks):
+        return None
+    return " ".join(b.get("text") or "" for b in blocks if isinstance(b, dict) and b.get("type") == "text") or None
+
+
+def sessions(claude_dirs, codex_dir, since, seen):
+    """Every agent session of the window, read only: Claude session files (projects/*/*.jsonl and their
+    */subagents/*.jsonl) changed since the window start, and Codex rollouts of its days. Per session: tokens by model
+    ([input, output, cache write, cache read, of them 1-hour writes]; a Claude message id counted once, as the core
+    does), its first time, the branches it made a worktree for or pushed, the worktree folders it made, the one pull
+    request number its first message names, and for a top-level Claude session the owner's typed messages per day.
+    'usage' is the whole session (a lane's cost includes its days before the window), 'in_window' its messages since.
+    No text leaves this function."""
+    out = []
     for root in claude_dirs:
         proj = Path(root) / "projects"
-        for d in (proj.iterdir() if proj.is_dir() else []):
-            tail = next((t for k, t in keys.items() if d.name.endswith(k)), None)
-            if not tail or not d.is_dir():
+        for d in sorted(proj.iterdir() if proj.is_dir() else []):
+            if not d.is_dir():
                 continue
-            for f in d.rglob("*.jsonl"):
+            files = [(f, False) for f in d.glob("*.jsonl")] + [(f, True) for f in d.glob("*/subagents/*.jsonl")]
+            for f, sub in files:
+                if f.stat().st_mtime < since:
+                    continue
+                s = dict(kind="claude", folder=d.name, subagent=sub, runs_others=not sub and (d / f.stem / "subagents").is_dir(),
+                         usage={}, in_window={}, first=None, branches=set(), made={}, pr=None, typed={})
+                asked = False
                 with open(f, errors="replace") as fh:
                     for line in fh:
-                        if '"usage"' not in line or '"assistant"' not in line:
+                        if '"assistant"' not in line and '"user"' not in line:
                             continue
+                        if '"tool_result"' in line and '"usage"' not in line:
+                            continue  # shortcut: a tool result is never typed text; a typed line naming "tool_result" is missed
                         try:
                             v = json.loads(line)
                         except ValueError:
                             continue
+                        if v.get("type") not in ("user", "assistant"):
+                            continue
+                        at = v.get("timestamp") and iso(v["timestamp"])
+                        if at and (s["first"] is None or at < s["first"]):
+                            s["first"] = at
                         msg = v.get("message") or {}
-                        u, mid = msg.get("usage") or {}, msg.get("id")
-                        if v.get("type") != "assistant" or not mid or mid in seen:
+                        if v["type"] == "user":
+                            typed = text_of(msg.get("content"))
+                            if typed is not None and not asked:
+                                asked, nums = True, {a or b for a, b in PR_NUMBER.findall(typed)}
+                                s["pr"] = int(nums.pop()) if len(nums) == 1 else None
+                            if (not sub and typed and at and at >= since and not typed.startswith("<") and not v.get("isMeta")
+                                    and not v.get("isSidechain") and "toolUseResult" not in v):
+                                k = datetime.date.fromtimestamp(at).isoformat()
+                                s["typed"][k] = s["typed"].get(k, 0) + 1
+                            continue
+                        for b in msg.get("content") or []:
+                            cmd = isinstance(b, dict) and b.get("type") == "tool_use" and (b.get("input") or {}).get("command")
+                            if isinstance(cmd, str):
+                                for branch, path in WORKTREE_ADD.findall(cmd):
+                                    s["branches"].add(branch)
+                                    s["made"][Path(path.rstrip("/")).name] = branch
+                                s["branches"].update(PUSH.findall(cmd))
+                        u, mid, model = msg.get("usage") or {}, msg.get("id"), msg.get("model")
+                        if not u or not mid or mid in seen or model == "<synthetic>":
                             continue
                         seen.add(mid)
                         parts = [u.get(k) or 0 for k in ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")]
-                        add(tail, parts, msg.get("model"), v.get("sessionId"))
+                        one_hour = min((u.get("cache_creation") or {}).get("ephemeral_1h_input_tokens") or 0, parts[2])
+                        for o in [s["usage"].setdefault(model, [0] * 5)] + ([s["in_window"].setdefault(model, [0] * 5)] if at and at >= since else []):
+                            for i, x in enumerate(parts + [one_hour]):
+                                o[i] += x
+                out.append(s)
     day = datetime.date.fromtimestamp(since)
     while codex_dir and day <= datetime.date.today():
         for f in sorted((Path(codex_dir) / f"{day:%Y/%m/%d}").glob("*.jsonl")):
             with open(f, errors="replace") as fh:
                 meta = json.loads(fh.readline() or "{}").get("payload") or {}
-                parts_of = Path(meta.get("cwd") or "/").parts
-                tail = next((t for t in tails if t in parts_of), None)
+                s = dict(kind="codex", cwd_parts=Path(meta.get("cwd") or "/").parts, usage={}, first=None)
                 model, previous = None, None
-                for line in fh if tail else []:
+                for line in fh:
                     if '"turn_context"' in line:
                         model = (json.loads(line).get("payload") or {}).get("model") or model
                     elif '"token_count"' in line:
@@ -337,9 +382,44 @@ def lane_costs(tails, claude_dirs, codex_dir, since):
                         previous, last = total, info.get("last_token_usage") or {}
                         inp, outp = last.get("input_tokens") or 0, last.get("output_tokens") or 0
                         cached = min(last.get("cached_input_tokens") or 0, inp)
-                        add(tail, [inp - cached, outp, 0, cached], model, meta.get("id"))
+                        o = s["usage"].setdefault(model, [0] * 5)
+                        for i, x in enumerate([inp - cached, outp, 0, cached, 0]):
+                            o[i] += x
+                s["in_window"] = s["usage"]  # a rollout's day is in the window
+                out.append(s)
         day += datetime.timedelta(days=1)
-    return {t: dict(o, usd=round(o["usd"], 2), sessions=len(o["sessions"])) for t, o in out.items()}
+    return out
+
+
+def join(ss, landed):
+    """For each session, the indexes of the landed pull requests it worked on, by the first rule that joins it:
+    a. the branches it made a worktree for or pushed; b. the one pull request number its first message names;
+    c. (Codex) its cwd folder, through the folders of rule a, else the branch's last part; d. (Claude) a project folder
+    named after the worktree folder (a seat whose cwd is the worktree). A session that runs others (it has subagents) is
+    never joined: its cost is design, research and running the work. Returns [(session, [indexes], by rule a)]."""
+    by_branch, by_number, tails = {}, {}, {}
+    for i, m in enumerate(landed):
+        by_branch.setdefault(m["branch"], []).append(i)
+        by_number.setdefault(m["number"], []).append(i)
+        tails.setdefault(m["branch"].split("/", 1)[-1], []).append(i)
+    made = {k: v for s in ss if s["kind"] == "claude" for k, v in s["made"].items()}
+    out = []
+    for s in ss:
+        got, builder = [], False
+        if s["kind"] == "codex":
+            for part in reversed(s["cwd_parts"]):
+                got = by_branch.get(made.get(part), []) or tails.get(part, [])
+                if got:
+                    break
+        elif not s["runs_others"]:
+            got = sorted({i for b in s["branches"] for i in by_branch.get(b, [])})
+            builder = bool(got)
+            if not got and s["pr"] is not None:
+                got = by_number.get(s["pr"], [])
+            if not got:
+                got = next((v for k, v in tails.items() if s["folder"].endswith("-" + folder_key(k))), [])
+        out.append((s, got, builder))
+    return out
 
 
 def core_events(project, days):
@@ -510,23 +590,44 @@ def measure(days, record_path=None, log_path=scorecard.CI_LOG, now=None, project
                     main_log_from=stamp(lines[0][0]) if lines else None, record_from=stamp(record_from),
                     record_lines=len(record))
 
-    # 5. Cost per landed lane: every session whose folder is the lane's worktree (Builder, Reviewers, rework)
-    # the worktree folder; GitHub's revert branch ends with the branch it reverts and is not a second landing of it
-    tail_of = lambda m: m["lane"] if m["reverts"] is not None else m["branch"].split("/", 1)[-1]  # noqa: E731
-    merged = {}
-    for m in ms:
-        merged.setdefault(tail_of(m), []).append(m)
-    costs = lane_costs(sorted({tail_of(m) for m in landed}), claude_dirs, codex_dir, start)
-    for r, m in zip(rows, landed):
-        c_ = costs.get(tail_of(m))
-        if c_:  # a branch that landed twice in the window shares its cost between its landings
-            r.update(usd=round(c_["usd"] / len(merged[tail_of(m)]), 2), tokens=c_["tokens"] // len(merged[tail_of(m)]))
+    # 5. Cost per landed lane: every session joined to it (builder, review seats, fixes, Codex looks); a session joined
+    # to n pull requests is split 1/n; the rest is summed as unassigned, by model.
+    prices, unassigned, unpriced = price_table(), dict(tokens=0, usd=0.0, by_model={}), {}
+    ss = sessions(claude_dirs, codex_dir, start, set())
+    for s, got, builder in join(ss, landed):
+        # a joined session counts whole; an unjoined one (a long design or running session) only inside the window
+        for model, (inp, outp, cw, cr, one_hour) in s["usage" if got else "in_window"].items():
+            tokens, cost = inp + outp + cw + cr, usd([inp, outp, cw, cr], model, prices, one_hour)
+            if cost is None:
+                unpriced[model] = unpriced.get(model, 0) + tokens
+            for i in got:
+                rows[i]["tokens"] = rows[i].get("tokens", 0) + tokens / len(got)
+                key = "unpriced_tokens" if cost is None else "usd"  # a lane with only unpriced tokens has no cost, not 0
+                rows[i][key] = rows[i].get(key, 0) + (tokens if cost is None else cost) / len(got)
+            if not got:
+                unassigned["tokens"] += tokens
+                unassigned["usd"] += cost or 0
+                b = unassigned["by_model"].setdefault(model, dict(tokens=0, usd=0.0))
+                b["tokens"], b["usd"] = b["tokens"] + tokens, round(b["usd"] + (cost or 0), 2)
+        for i in got if builder and s["first"] else []:
+            rows[i]["lane_start"] = min(rows[i].get("lane_start", s["first"]), s["first"])
+    for r in rows:
+        r.update({k: round(r[k], 2 if k == "usd" else None) for k in ("usd", "tokens", "unpriced_tokens") if k in r})
     priced = [r["usd"] for r in rows if "usd" in r]
     cost = dict(lanes_with_cost=len(priced), median_usd=pct(priced, 50), p90_usd=pct(priced, 90),
                 total_usd=round(sum(priced), 2), total_tokens=sum(r.get("tokens", 0) for r in rows),
-                unpriced_tokens=sum(c_["unpriced_tokens"] for c_ in costs.values()),
+                unpriced_tokens=sum(unpriced.values()), unpriced_by_model=unpriced,
+                unassigned=dict(unassigned, usd=round(unassigned["usd"], 2)),
                 sources=[str(Path(d).name) for d in claude_dirs] + ([Path(codex_dir).name] if codex_dir else []),
-                price_source="crates/nunchiro-core/src/usage.rs PRICES (public list prices, an estimate)")
+                price_source="crates/nunchiro-core/src/usage.rs PRICES (public list prices, an estimate; 1-hour cache writes at 2x input)")
+    lead["lane_start_to_main"] = hours(r["landed"] - r["lane_start"] for r in rows if "lane_start" in r)
+    # shown, not scored: the owner's typed messages per day in the folders of the sessions that run others
+    runs_others = {s["folder"] for s in ss if s.get("runs_others")}
+    chat = {}
+    for s in ss:
+        if s.get("folder") in runs_others and not s["subagent"]:
+            for k, n in s["typed"].items():
+                chat[k] = chat.get(k, 0) + n
 
     # 6. Owner touches: the record's asks per pull request and their waits; the core's event journal for Nunchiro seats
     # (permission waits; asks to the person only when the events carry room data, which the journal does not keep).
@@ -544,11 +645,15 @@ def measure(days, record_path=None, log_path=scorecard.CI_LOG, now=None, project
                  lanes_with_a_touch=sum(1 for x in touches if x), max_wait_min=None if max_wait is None else round(max_wait / 60),
                  asks_to_owner=len(asks),
                  core_cards=sum(1 for x in stalls if x["kind"] == "card"), permission_waits=len(perm), permission_wait_min=round(sum(perm.values()) / 60),
-                 core_events_from=stamp(min((e["at"] / 1000 for e in core if e.get("at")), default=None)))
+                 core_events_from=stamp(min((e["at"] / 1000 for e in core if e.get("at")), default=None)),
+                 chat_messages_by_day=dict(sorted(chat.items())))
 
     # 7. First-pass and rework (DORA 2024 rework rate: deployments that were not planned, made to fix a problem)
     reviewed = [r for r in rows if "review_rounds" in r]
     one = sum(1 for r in reviewed if r["first_accept"])  # passes its first review: the first verdict is an accept
+    merged = {}
+    for m in ms:
+        merged.setdefault(m["branch"], []).append(m)
     again = sum(len(v) - 1 for v in merged.values())  # a second landing of the same branch is a fix of the first
     rejected_landed = sorted(set(rejects) & landed_names)
     revert_lanes = len(ms) - len(landed)
@@ -595,7 +700,8 @@ def report(d):
         "Sources from: " + ", ".join(f"{k} {v}" for k, v in d["coverage"].items()),
         f"1 Deployment frequency: {f['lanes']} lanes in {f['landings']} landings ({f['lanes_per_day']} lanes/day, "
         f"landings on {f['days_with_a_landing']} of {len(f['lanes_by_day'])} calendar days, {f['nights_with_a_landing']} nights); owner installs {f['owner_installs']} ({f['owner_installs_per_day']}/day, on {f['days_with_an_install']} days)",
-        f"2 Lead time: first commit to main {h(lt['commit_to_main'])}; task created to main {h(lt['task_to_main'])} "
+        f"2 Lead time: first commit to main {h(lt['commit_to_main'])}; task created to main {h(lt['task_to_main'])}; "
+        f"builder start to main {h(lt['lane_start_to_main'])} "
         f"(review record: {d['coverage']['record_lines']} lines from {d['coverage']['record_from']})",
         f"3 Change failure rate: {c['change_failure_pct']} % ({len(c['failed_lanes'])} of {f['lanes']}: {', '.join(c['failed_lanes']) or 'none'}); "
         f"gate rejects {c['gate_reject_pct']} % ({len(c['gate_rejected_lanes'])} lanes; red before auto-merge {c['pre_enqueue_red']}, "
@@ -604,10 +710,11 @@ def report(d):
         f"4 Time to restore: median {rs['median_min']} min, max {rs['max_min']} min over {len(rs['episodes'])} red episodes"
         + (" (main is red now)" if rs["still_red"] else ""),
         f"5 Cost per landed lane: median {d['cost']['median_usd']} USD, p90 {d['cost']['p90_usd']} USD over {d['cost']['lanes_with_cost']} lanes "
-        f"(total {d['cost']['total_usd']} USD, {d['cost']['total_tokens']} tokens; unpriced {d['cost']['unpriced_tokens']})",
+        f"(total {d['cost']['total_usd']} USD, {d['cost']['total_tokens']} tokens; unpriced {d['cost']['unpriced_by_model']}; "
+        f"not joined to a landed pull request {d['cost']['unassigned']['usd']} USD, {d['cost']['unassigned']['tokens']} tokens)",
         f"6 Owner touches: {d['owner']['touches']} over {d['owner']['lanes']} lanes the record covers ({d['owner']['measured']}; median {d['owner']['median_per_lane']}, "
         f"max {d['owner']['max_per_lane']}); asks to the owner {d['owner']['asks_to_owner']}; permission waits {d['owner']['permission_waits']} "
-        f"({d['owner']['permission_wait_min']} min); longest owner wait {d['owner']['max_wait_min']} min; core events from {d['owner']['core_events_from']}",
+        f"({d['owner']['permission_wait_min']} min); longest owner wait {d['owner']['max_wait_min']} min; owner chat messages by day {d['owner']['chat_messages_by_day']}; core events from {d['owner']['core_events_from']}",
         f"7 First pass {d['rework']['first_pass_pct']} % of {d['rework']['reviewed_lanes']} reviewed lanes "
         f"(changed after accept {len(d['rework']['changed_after_accept'])}); rework {d['rework']['rework_pct']} % "
         f"({len(d['rework']['rejected_then_landed'])} rejected then landed, {d['rework']['repeat_landings']} repeat landings, {d['rework']['revert_landings']} reverts)",
@@ -646,6 +753,8 @@ def selftest():
     prices = price_table()
     assert len(prices) > 10 and usd([1000, 0, 0, 0], "claude-opus-5-5-x", prices) == 0.004, prices[:3]
     assert usd([1, 1, 1, 1], "unknown-model", prices) is None and folder_key("a.b/c-1") == "a-b-c-1"
+    assert WORKTREE_ADD.findall("git -C /r worktree add -b x/y ~/w/z origin/main") == [("x/y", "~/w/z")]
+    assert PUSH.findall("git push -u origin x/y && gh pr create") == ["x/y"] and text_of([dict(type="tool_result")]) is None
     ev = [dict(type="session_started", at=0, session="s", state="working"), dict(type="state", at=60_000, session="s", state="waiting"),
           dict(type="room_message", at=180_000, data=dict(kind="team", body="core nudged B (quiet 21 min)", team=dict(what="advance", seat="s"))),
           dict(type="state", at=240_000, session="s", state="working")]

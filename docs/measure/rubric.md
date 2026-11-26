@@ -602,6 +602,12 @@ Where v2 differs from the audit's proposal, and why:
   rejected-then-fixed single round as a pass; stricter). Lanes that started before the record's first live line have
   no owner figures (unknown, not 0), so DV7 reads "measured in part" until the record is older than the window. The
   task ledger is no longer read: it never saw the pull-request lanes.
+  DV6 finds a lane's sessions by what they did, not by their folder (agent subagents run in the main checkout): the
+  branches a session made a worktree for or pushed, else the one pull request its first message names, else, for
+  Codex, its worktree folder; a session joined to several pull requests is split between them, and the session that
+  runs the others is never put on a lane. Sessions joined to none are summed apart as unassigned. 1-hour cache writes
+  are priced at twice the input price (the price page). Lanes built on another machine have no cost here (not
+  measured, not 0); models with no published token price stay unpriced, listed by model.
 - Owner decision 2026-11-26 (stricter): p14 adds memory-pressure kills over 7 days and row ML1. The Mac staying responsive is the owner's second priority, and the idle figures alone scored a frozen Mac the same as a calm one.
 
 Not changed in v2 (the audit's lower-priority list, outside the approval of 2026-11-26): the weight of the default

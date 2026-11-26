@@ -459,6 +459,9 @@ class DevSpeed(UtcClock):
         c = d["cost"]
         self.assertEqual(c["unpriced_by_model"], {"gpt-6.1-sol": 5500})
         self.assertEqual(({r["lane"]: r.get("tokens") for r in d["lanes"]}, c["unpriced_tokens"]), ({"flow-a": 6500, "flow-b": None}, 5500))
+        # a lane with only unpriced tokens has no cost (not 0 USD), and lowers no median
+        d = self.costs(codex={"/x/worktrees/nunchiro-pub/flow-b": [("gpt-6.1-sol", 5000, 1000, 500)]})
+        self.assertEqual((d["cost"]["lanes_with_cost"], [r.get("usd") for r in d["lanes"]], d["lanes"][1]["unpriced_tokens"]), (0, [None, None], 5500))
 
     def test_one_hour_writes_cost_twice_input(self):
         d = self.costs({"-src/s1/subagents/agent-a.jsonl": [self.said("Build."), self.did(
