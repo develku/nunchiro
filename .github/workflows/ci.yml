@@ -95,10 +95,12 @@ jobs:
     needs: rust-build
     runs-on: macos-latest
     timeout-minutes: 45
+    # Two partitions at 6 test threads each, not three at the runner's 3: most tests wait on a spawned core or a timeout,
+    # not on the CPU, and the free plan runs only 5 macOS jobs at once, so one fewer job per run shortens the queue.
     strategy:
       fail-fast: false
       matrix:
-        partition: [1, 2, 3]
+        partition: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install
@@ -116,7 +118,7 @@ jobs:
       - name: cargo nextest run (partition ${{ matrix.partition }}/${{ strategy.job-total }})
         run: >-
           cargo nextest run --archive-file nextest-archive.tar.zst --workspace-remap . --extract-to . --extract-overwrite
-          --config-file scripts/nextest.toml --no-tests fail --partition count:${{ matrix.partition }}/${{ strategy.job-total }}
+          --config-file scripts/nextest.toml --no-tests fail --test-threads 6 --partition count:${{ matrix.partition }}/${{ strategy.job-total }}
 
   # Pull requests skip the app check when no app input changed (scripts/check-app.sh APP_INPUTS); it saves a macOS
   # runner, of which the free plan has 5. Main and merge-queue runs always check the app.
@@ -184,10 +186,8 @@ jobs:
           cache: pnpm
       - run: scripts/setup-worktree.sh
       - run: git config --global user.name ci && git config --global user.email ci@localhost
-      - run: scripts/check-cli-docs.sh
-      - run: scripts/scenario-tests.sh
-        env:
-          SCENARIO_JOBS: 2
+      # Playwright first: its global setup compiles the core from this checkout (with the fixture web/dist it embeds), and
+      # check-cli-docs reads --help from that binary instead of compiling the core a second time.
       - id: pw
         run: echo "version=$(cd web && pnpm exec playwright --version)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -197,6 +197,12 @@ jobs:
       - run: pnpm exec playwright install chromium
         working-directory: web
       - run: .github/scripts/web-core.sh
+      - run: scripts/check-cli-docs.sh
+        env:
+          NUNCHIRO_BIN: target/debug/nunchiro
+      - run: scripts/scenario-tests.sh
+        env:
+          SCENARIO_JOBS: 2
 
   # The one required check of the merge queue. `always()`: a skipped or cancelled job must still fail it (T3 Code
   # ci.yml:660-696; Orca pr.yml:1279). Add every new job to `needs`. The one allowed skip: `app` when `changes`
