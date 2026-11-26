@@ -5,7 +5,8 @@ scripts/scenario/v1b-full.sh (lib.snapshot/guard_check and the ~/.claude, ~/.cod
 
 1. Delivery: `nunchiro agent prompt` sends `reply ok #<n>` to each seat in turn (100 per seat); every second send goes
    while the seat's box holds half-typed words (`session send-text`). Submitted = the exact text shows on the agent's
-   own screen (`agent read`) above its input box; not within 30 s = missed.
+   own screen (`agent read`) above its input box; not within 30 s = missed. The time from the send to that first
+   reading is p33's prompt delivery time (median and p95 of the delivered sends; the screen is read every ~0.1 s).
 2. Shown state: at 100 random moments one seat's `status` in `agent list --json` against the state its own screen
    shows (read just before and just after the list): a dialog = needs you, "esc to interrupt" = working, else idle or
    done (a screen does not tell those two apart).
@@ -39,7 +40,7 @@ Each sample is appended to the raw file, so `--report FILE` gives the figure of 
 Usage: scorecard.py accuracy --machine ALIAS --remote-project DIR [--project-root DIR] [--nunchiro BIN] [--out FILE]
        scorecard.py accuracy --self-test [--nunchiro BIN]
        scorecard.py waits [--days 7] [--every 30] [--nunchiro BIN] | --report FILE"""
-import argparse, base64, collections, hashlib, json, os, random, re, shutil, socket, subprocess, sys, tempfile, threading, time
+import argparse, base64, collections, hashlib, json, math, os, random, re, shutil, socket, statistics, subprocess, sys, tempfile, threading, time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -95,7 +96,11 @@ def _figures(rec):
     sends, reads, cards, outs = rec["sends"], rec["readings"], rec["cards"], rec["outward"]
     starts = [r for r in rec.get("startup", []) if r["raised"]]
     missed = sum(1 for s in sends if not s["submitted"])
-    return dict(missed_with_draft=sum(1 for s in sends if not s["submitted"] and s["draft"]),
+    ms = sorted(s["delivered_ms"] for s in sends if s.get("delivered_ms") is not None)
+    return dict(
+        # p33's prompt delivery: the send to its exact text above the input box; p95 by nearest rank
+        delivery_median_ms=round(statistics.median(ms)) if ms else None,
+        delivery_p95_ms=ms[math.ceil(0.95 * len(ms)) - 1] if ms else None,missed_with_draft=sum(1 for s in sends if not s["submitted"] and s["draft"]),
         delivery_missed_per_1000=round(1000 * missed / len(sends), 1) if sends else None,
         state_match_pct=round(100 * sum(1 for r in reads if SHOWN.get(r["shown"]) in r["true"]) / len(reads), 1) if reads else None,
         cards_shown_pct=round(100 * sum(1 for c in cards if c["latency_s"] is not None and c["latency_s"] <= 5 and c["ids"] == 1)
@@ -409,6 +414,7 @@ def delivery(t, label, ks, rec):
         def check():
             seen["screen"] = t.screen(label)
             seen["exact"], seen["glued"] = submitted(seen["screen"], text)
+            seen["at"] = time.time()
             return seen["exact"]
         ok = until(check, 30)
         sender.join()
@@ -416,6 +422,7 @@ def delivery(t, label, ks, rec):
         with t.lock:
             rec["sends"].append(dict(seat=label, where=seat["where"], k=k, draft=draft, submitted=ok, rc=rc,
                                      err=err.strip()[:200], seconds=round(time.time() - t0, 2), glued=seen.get("glued", [])[:1],
+                                     delivered_ms=round(1000 * (seen["at"] - t0)) if ok else None,
                                      box=None if ok else box_line(seen.get("screen", ""))))
         if ok:
             t.wait_done(label)
