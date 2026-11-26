@@ -414,6 +414,10 @@ fn a_bot_offers_a_new_bot_and_nothing_is_made_before_the_owners_yes() {
                 .contains("only a bot")
         );
         assert!(cards(&s.reg).is_empty());
+        // A name may hold a character that reorders what follows it on a line: the card shows who offers without it.
+        let mut named = team.seat(&s.helper).unwrap().0;
+        named.name = "Helper\u{202e}".into();
+        team.save(Some(s.helper.clone()), named).unwrap();
         // The offer is one card, however often it is made, and makes nothing.
         ask_as(&helper, offer(" Notes ", counted)).unwrap();
         ask_as(&helper, offer("notes", counted)).unwrap();
