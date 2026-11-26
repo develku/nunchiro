@@ -95,8 +95,9 @@ jobs:
     needs: rust-build
     runs-on: macos-latest
     timeout-minutes: 45
-    # Two partitions at 6 test threads each, not three at the runner's 3: most tests wait on a spawned core or a timeout,
+    # Two partitions at 4 test threads each, not three at the runner's 3: most tests wait on a spawned core or a timeout,
     # not on the CPU, and the free plan runs only 5 macOS jobs at once, so one fewer job per run shortens the queue.
+    # At 6 threads a core's 2-5 s probe limits ran out under load (a Codex start probe on main), so 4.
     strategy:
       fail-fast: false
       matrix:
@@ -118,7 +119,7 @@ jobs:
       - name: cargo nextest run (partition ${{ matrix.partition }}/${{ strategy.job-total }})
         run: >-
           cargo nextest run --archive-file nextest-archive.tar.zst --workspace-remap . --extract-to . --extract-overwrite
-          --config-file scripts/nextest.toml --no-tests fail --test-threads 6 --partition count:${{ matrix.partition }}/${{ strategy.job-total }}
+          --config-file scripts/nextest.toml --no-tests fail --test-threads 4 --partition count:${{ matrix.partition }}/${{ strategy.job-total }}
 
   # Pull requests skip the app check when no app input changed (scripts/check-app.sh APP_INPUTS); it saves a macOS
   # runner, of which the free plan has 5. Main and merge-queue runs always check the app.
