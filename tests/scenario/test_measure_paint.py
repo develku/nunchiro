@@ -333,3 +333,24 @@ PINNED_256K = "518f32c401419696924ee7aa57f6e0c15c68e4a49be2ea5d52f85377e8bf1e08"
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ChatOpen(unittest.TestCase):
+    """The long-chat open figure (p33): open request to the page's chat-drawn mark, both in page clock."""
+
+    def test_known_marks_give_median_and_p95(self):
+        opens = [[1000.0, 1042.0], [2000.0, 2050.0], [3000.0, 3030.0], [4000.0, 4100.0], [5000.0, 5040.0]]
+        r = ml.chat_open(opens)
+        self.assertEqual((r["n"], r["misses"], r["median_ms"], r["p95_ms"], r["max_ms"]), (5, 0, 42.0, 100.0, 100.0))
+
+    def test_an_open_with_no_mark_is_a_miss_not_a_time(self):
+        r = ml.chat_open([[0.0, 80.0], [100.0, None]])
+        self.assertEqual((r["n"], r["misses"], r["median_ms"]), (1, 1, 80.0))
+
+    def test_no_mark_at_all_is_no_figure(self):
+        self.assertEqual(ml.chat_open([[0.0, None]])["median_ms"], None)
+
+    def test_a_mark_before_its_request_is_refused(self):
+        # The chat was already drawn when the open was asked: that run measured nothing.
+        with self.assertRaises(ValueError):
+            ml.chat_open([[100.0, 90.0]])
