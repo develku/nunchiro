@@ -7,9 +7,8 @@
 #   floods   2 socket floods (owner_hardening refill); skipped when the 1-minute load is 15 or more (V1A-17 host rule)
 #   live     3 real-agent and real-gh tests (agent_canary real_fresh_start, pr real_gh, artifact_skill deny rules):
 #            need a signed-in claude, codex and gh and the network; one cheap Haiku call. Skipped when one is missing.
-#            search_sessions_perf_500mb serves an optimised nunchiro with debug assertions on (see `hook` below), so its
-#            result is pass/fail only; for the shipped figure, run it by hand with NUNCHIRO_BIN at a release nunchiro
-#            and the window test hook of peer.rs is_app in mind.
+#            idle_cpu and search_sessions_perf_500mb serve an optimised nunchiro with debug assertions on (see `hook`
+#            below), so their figures are close to, not exactly, the shipped build's.
 # Exit 1 when a group failed, else 0. EXTENDED_DRY=1 prints the commands and runs nothing (the scenario test reads it).
 # Schedule (the lead installs it; this script installs nothing): a LaunchAgent made like the supply-chain one,
 #   Label com.me.nunchiro-extended-tests, ProgramArguments /bin/sh __REPO__/scripts/extended-tests.sh,
@@ -37,16 +36,16 @@ group() { # name, then one command per argument (each a whole shell command)
 }
 
 core='cargo test --release -p nunchiro-core --features measure'
-# search_sessions_perf_500mb opens a window connection, which a release core grants only to the app's own binary
-# (peer.rs is_app); a core built with debug assertions grants it to any owner peer on a test home. So that one test serves
-# an optimised core with debug assertions on, built in its own target folder so the release build above stays as it is.
+# idle_cpu and search_sessions_perf_500mb open a window connection, which a release core grants only to the app's own
+# binary (peer.rs is_app); a core built with debug assertions grants it to any owner peer on a test home. So those two
+# serve an optimised core with debug assertions on, built in its own target folder so the release build stays as it is.
 window=target/window-test-hook
 hook="CARGO_TARGET_DIR=$window CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true"
 # search_sessions_perf_500mb starts the nunchiro CLI (tests/fixtures/cli.rs: next to the test binary, so the release
 # one); `cargo test -p nunchiro-core` never builds another package's binary, so a fresh checkout needs it built first.
 group measure \
   'cargo build --release --locked -p nunchiro' \
-  'cargo test --release -p nunchiro --features measure --test idle_cpu -- --nocapture --test-threads=1' \
+  "$hook cargo test --release -p nunchiro --features measure --test idle_cpu -- --nocapture --test-threads=1" \
   "$core --test chat_performance -- --nocapture" \
   "$hook cargo build --release --locked -p nunchiro && NUNCHIRO_BIN=\"\$PWD/$window/release/nunchiro\" $core --test search_sessions search_sessions_perf_500mb -- --nocapture" \
   "$core --test observe_lock measure_snapshot_latency_during_a_bounded_firehose -- --nocapture"
