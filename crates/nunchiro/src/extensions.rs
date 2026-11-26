@@ -405,7 +405,28 @@ fn confirm() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{Request, cut, mcp_request};
+    use super::{Request, cut, mcp_line, mcp_request};
+    use nunchiro_core::extensions::McpServer;
+
+    #[test]
+    fn mcp_line_marks_control_characters_so_nothing_draws_over_the_changed_mark() {
+        let s = McpServer {
+            agent: "nunchiro".into(),
+            name: "x".into(),
+            command: vec!["evil\r\u{1b}[2K".into(), "a\nb\tc".into()],
+            env: vec![],
+            changed: true,
+            project: Some("/w\r\u{1b}[1A".into()),
+        };
+        let line = mcp_line(&s);
+        assert!(!line.chars().any(|c| c.is_control() && c != '\t'), "{line:?}");
+        assert_eq!(
+            line,
+            "x\t/w\u{FFFD}\u{FFFD}[1A\tevil\u{FFFD}\u{FFFD}[2K a\u{FFFD}b\u{FFFD}c\t(changed outside Nunchiro: no session gets it)"
+        );
+        let plain = McpServer { changed: false, project: None, command: vec!["db-mcp".into()], ..s };
+        assert_eq!(mcp_line(&plain), "x\tall projects\tdb-mcp");
+    }
 
     #[test]
     fn mcp_words_make_add_list_and_remove_requests() {

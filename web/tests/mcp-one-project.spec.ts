@@ -40,3 +40,31 @@ test('mcp_for_one_project: the For select sends the project, the row names it, a
   await expect(app.getByText(`a server named mine is already added for ${demo}; remove it first or pick another name`)).toBeVisible();
   expect(file().mine.project).toBe(demo);
 });
+
+test('mcp_added_line_for_one_project: names the project, offers Restart only for a session in it, and the For select resets', async ({ app, core }) => {
+  const api = core.project('api-server');
+  const web = core.project('web');
+  core.shell(web, 'term');
+  core.cli('session', 'start', '--kind', 'claude', '--project', api, '--label', 'api-server');
+  await openWindow(app, {}, core);
+  await openExtensions(app);
+  const own = app.locator('[data-mcp="own"]');
+  const pick = own.getByRole('combobox', { name: 'Sessions that get the server' });
+  const restart = own.getByRole('button', { name: /^Restart .* with it$/ });
+  const add = async (name: string, project: string) => {
+    await own.getByRole('textbox', { name: 'Command' }).fill(`${name}-mcp`);
+    await own.getByRole('textbox', { name: 'Server name' }).fill(name);
+    await pick.selectOption(project);
+    await own.getByRole('button', { name: 'Add for Nunchiro sessions' }).click();
+  };
+  // For another project than the open session's: its name, no Restart of that session; the select is back on all.
+  await add('other', web);
+  await expect(own.getByRole('status')).toHaveText('Added other. Sessions in web started from now on get it.');
+  await expect(restart).toHaveCount(0);
+  await expect(own.getByRole('button', { name: 'New session' })).toBeVisible();
+  await expect(pick).toHaveValue('');
+  // For the open session's project: Restart is offered.
+  await add('same', api);
+  await expect(own.getByRole('status')).toHaveText('Added same. Sessions in api-server started from now on get it.');
+  await expect(restart).toHaveCount(1);
+});
