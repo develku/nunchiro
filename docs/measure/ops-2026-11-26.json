@@ -1,8 +1,8 @@
 {
- "date": "2026-11-26 06:48",
- "commit": "a04c8ec8f",
+ "date": "2026-11-26 12:19",
+ "commit": "c5cd98879",
  "deploy": {
-  "tested": 140,
+  "tested": 141,
   "episodes": [
    {
     "sha": "85e89f6b6",
@@ -74,14 +74,14 @@
   "npm_packages": 247,
   "clean_clone": {
    "a": {
-    "commit": "a04c8ec8f",
-    "build_min": 3.82,
-    "sha256": "d9ebb7fedae9108510d2223c0071ac0b6399fc5aa6a1c672c585661dd1c7e799"
+    "commit": "c5cd98879",
+    "build_min": 3.44,
+    "sha256": "ba6fb1fc7b418c2f50b7ca08a07b976166e908a18b512857baa53f3fbc880293"
    },
    "b": {
-    "commit": "a04c8ec8f",
-    "build_min": 3.15,
-    "sha256": "d9ebb7fedae9108510d2223c0071ac0b6399fc5aa6a1c672c585661dd1c7e799"
+    "commit": "c5cd98879",
+    "build_min": 2.7,
+    "sha256": "ba6fb1fc7b418c2f50b7ca08a07b976166e908a18b512857baa53f3fbc880293"
    },
    "same_binary": true
   }
