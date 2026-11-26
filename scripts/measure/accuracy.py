@@ -20,7 +20,7 @@ scripts/scenario/v1b-full.sh (lib.snapshot/guard_check and the ~/.claude, ~/.cod
 5. Startup waits: 10 start dialogs, each on a new session that is never answered and then closed: folder trust (a
    new folder outside every trusted one, 3 here and 2 on the second Mac) and sign-in missing (5 on a second core here
    whose agents get empty config folders: CLAUDE_CONFIG_DIR, CODEX_HOME). Each must be one card within 5 s of the
-   dialog showing on the agent's screen. An update prompt is in the self-test only: no real seat can show one
+   dialog showing on the agent's screen; a counted run raises exactly these 10. An update prompt is in the self-test only: no real seat can show one
    (Nunchiro keeps Codex's update screen off and refuses an argument that turns it on, crates/nunchiro-core/src/
    sessions/spawn.rs:217; Claude Code shows no update dialog at start).
 
@@ -39,7 +39,7 @@ Each sample is appended to the raw file, so `--report FILE` gives the figure of 
 Usage: scorecard.py accuracy --machine ALIAS --remote-project DIR [--project-root DIR] [--nunchiro BIN] [--out FILE]
        scorecard.py accuracy --self-test [--nunchiro BIN]
        scorecard.py waits [--days 7] [--every 30] [--nunchiro BIN] | --report FILE"""
-import argparse, base64, hashlib, json, os, random, re, shutil, socket, subprocess, sys, tempfile, threading, time
+import argparse, base64, collections, hashlib, json, os, random, re, shutil, socket, subprocess, sys, tempfile, threading, time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -51,7 +51,9 @@ SEATS = [("c1", "claude", "local"), ("c2", "claude", "local"), ("r1", "claude", 
          ("x1", "codex", "local"), ("x2", "codex", "local")]
 FULL = dict(sends=500, readings=100, cards=50, outward=20, startup=10)
 SELF_TEST = dict(sends=20, readings=20, cards=6, outward=5, startup=10)
-# Step 5 (dialog, agent, where): the real run's 10 and the self-test's 10 (with the update prompt only a fixture shows).
+# Step 5 (dialog, agent, where): the real run's 10 (5 folder trust, 5 sign-in; a counted run must raise exactly these)
+# and the self-test's 10 (with the update prompt only a fixture shows).
+REAL_DIALOGS = dict(trust=5, signin=5)
 STARTUP_PLAN = ([("trust", "claude", "local")] * 2 + [("trust", "codex", "local"), ("trust", "claude", "remote"),
                  ("trust", "claude", "remote")] + [("signin", "claude", "local")] * 3 + [("signin", "codex", "local")] * 2)
 STARTUP_SELF_TEST = ([("trust", "claude", "local"), ("trust", "codex", "local"), ("trust", "claude", "remote"),
@@ -103,6 +105,7 @@ def _figures(rec):
                                           and c["ids"] == 1) / len(starts), 1) if starts else None,
         counts=dict(sends=len(sends), readings=len(reads), cards=len(cards), outward=len(outs), startup=len(starts)),
         startup_not_raised=sum(1 for r in rec.get("startup", []) if not r["raised"]),
+        startup_dialogs=dict(collections.Counter(r["dialog"] for r in starts)),
     )
 
 
@@ -129,6 +132,8 @@ def verdict(res):
         why.append("no prompt reached the second Mac's seat")
     if res["figures"]["total"].get("startup_not_raised"):
         why.append(f"start dialogs not raised: {res['figures']['total']['startup_not_raised']}")
+    if res["figures"]["total"].get("startup_dialogs") != REAL_DIALOGS:
+        why.append(f"start dialogs must be 5 folder trust and 5 sign-in, ran {res['figures']['total'].get('startup_dialogs')}")
     short = [k for k, n in FULL.items() if res["figures"]["total"]["counts"][k] < n]
     if short:
         why.append("below the rubric's sizes: " + ", ".join(f"{k} {res['figures']['total']['counts'][k]} of {FULL[k]}" for k in short))

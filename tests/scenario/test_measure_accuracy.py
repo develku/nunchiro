@@ -20,7 +20,7 @@ def records(where):
 
 
 def run(**over):
-    full = {k: [dict(r) for r in v * (n // 2 + 1)] for (k, v), n in zip(records("local").items(), a.FULL.values())}
+    full = {k: [dict(r) for r in (v * (n // 2 + 1))[:max(n, len(v))]] for (k, v), n in zip(records("local").items(), a.FULL.values())}
     full["sends"] += [dict(where="remote", submitted=True, draft=False)]
     res = dict(self_test=False, machine="mini", guard_problems=[], seats=[dict(where="remote", machine="mini")],
                agents=[dict(where="local", kind="claude", version="2.1"), dict(where="remote", kind="claude", version="2.1")])
