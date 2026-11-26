@@ -368,10 +368,9 @@ def main(root):
     sc = str(root / "scripts/scenario")
     plan = [
         ("script-widget-act", [["sh", f"{sc}/v1b-script-widget.sh"], ["sh", f"{sc}/v1b-widget-act.sh"]], {}, None),
-        ("board-queue", [["sh", f"{sc}/v1b-board-queue.sh"]], {}, None),
         ("web-widget-act", [["pnpm", "exec", "playwright", "test", "web-widgets.spec.ts", "--project", "chromium", "--workers", "1", "--reporter", "line"]],
          {"cwd": root / "web", "needs": [str(root / "web/tests/web-widgets.spec.ts"), str(root / "web/node_modules")]}, None),
-        ("diff-card", [["sh", f"{sc}/v1b-diff.sh"], ["sh", f"{sc}/v1b-diff-card.sh"]], {}, None),
+        ("diff-card", [["sh", f"{sc}/v1b-diff.sh"]], {}, None),
         ("chat-claude", [["sh", f"{sc}/v1b-chat.sh"]], {}, None),
         ("chat-codex", [[sys.executable, "-B", f"{sc}/v1b_full.py", "chat-codex"]], {}, "codex"),
         ("images-claude", [["sh", f"{sc}/v1b-images.sh"]], {"env": {"ROWS": "claude-image"}}, None),

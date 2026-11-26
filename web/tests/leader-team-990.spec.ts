@@ -5,11 +5,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { type Core, expect, openWindow, REPO, test } from './fixtures';
-import { mateMenu } from './leader-990';
+import { mateMenu, roster } from './leader-990';
 import { openSettings } from './settings-modal';
 
 const fake = (core: Core) => fs.writeFileSync(path.join(core.home, 'bin', 'claude'), fs.readFileSync(path.join(REPO, 'crates/nunchiro-core/tests/fixtures/claude-mode')), { mode: 0o700 });
-const stored = (core: Core) => (fs.existsSync(path.join(core.home, 'team', 'team.json')) ? JSON.parse(fs.readFileSync(path.join(core.home, 'team', 'team.json'), 'utf8')).teammates : []) as { id: string; name: string; job: string; kind: string; project?: string; lead?: boolean; model?: string }[];
+const stored = (core: Core) => roster<{ id: string; name: string; job: string; kind: string; project?: string; lead?: boolean; model?: string }>(core); // ticket 1168: the roster as the core keeps it
 const sessions = (core: Core) => core.cli('snapshot', '--json').sessions as { id: string; label: string; project: string; kind: string; teammate?: string }[];
 async function openTeam(app: Page) {
   await openSettings(app);

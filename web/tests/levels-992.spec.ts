@@ -8,11 +8,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { type Core, expect, openWindow, test } from './fixtures';
-import { asSeat, mateMenu, mates, openSeat, openTeam, tokenClaude, tokenOf } from './leader-990';
+import { asSeat, mateMenu, mates, openSeat, openTeam, roster, tokenClaude, tokenOf } from './leader-990';
 import { openSettings } from './settings-modal';
 import { openWidget } from './schedules-seed';
 
-const team = (core: Core) => JSON.parse(fs.readFileSync(path.join(core.home, 'team', 'team.json'), 'utf8')).teammates as { name: string; level?: string; level_max?: string; next_level?: string; model?: string }[];
+const team = (core: Core) => roster<{ name: string; level?: string; level_max?: string; next_level?: string; model?: string }>(core); // ticket 1168: the roster as the core keeps it
 const notes = (core: Core) => (fs.existsSync(path.join(core.home, 'notes.json')) ? (JSON.parse(fs.readFileSync(path.join(core.home, 'notes.json'), 'utf8')).notes as { text: string; scope: { kind: string; project?: string } }[]) : []);
 const features = (core: Core) => (JSON.parse(fs.readFileSync(path.join(core.home, 'settings.json'), 'utf8')).features ?? {}) as Record<string, unknown>;
 async function page(app: Page, id: string) {

@@ -9,7 +9,36 @@ import { openSettings } from './settings-modal';
 type Mate = { id: string; name: string; job?: string; kind?: string; project?: string; lead?: boolean };
 export function mates(core: Core, list: Mate[]) {
   fs.mkdirSync(path.join(core.home, 'team'), { recursive: true });
+  fs.rmSync(path.join(core.home, 'team', 'bots.json'), { force: true }); // ticket 1168: a home from before the move reads team.json
   fs.writeFileSync(path.join(core.home, 'team', 'team.json'), JSON.stringify({ version: 1, teammates: list.map((m) => ({ job: `${m.name}'s job.`, kind: 'claude', ...m })) }));
+}
+type StoredBot = { id: string; name: string; job: string; seat: { kind: string; project?: string }; agent: string; model: { rule: string; model?: string; effort?: string }; v1?: { project?: string; effort?: string; level?: string; level_max?: string; next_level?: string } };
+/** The roster as the core keeps it (ticket 1168): `team/bots.json` once a change moved it there, read as the teammates
+ *  `team_list` answers (team/bots.rs `Bot::teammate`); `team/team.json` before that; none: no teammate yet. */
+export function roster<M = Mate>(core: Core): M[] {
+  const read = (file: string) => JSON.parse(fs.readFileSync(path.join(core.home, 'team', file), 'utf8'));
+  const has = (file: string) => fs.existsSync(path.join(core.home, 'team', file));
+  if (!has('bots.json')) return has('team.json') ? read('team.json').teammates : [];
+  return (read('bots.json').bots as StoredBot[]).map((b) => {
+    const acp = b.agent.startsWith('acp:');
+    const pin = b.model.rule === 'pinned';
+    const { level, level_max, next_level } = b.v1 ?? {};
+    const out = {
+      id: b.id,
+      name: b.name,
+      job: b.job,
+      kind: acp ? 'acp' : b.agent,
+      model: pin ? b.model.model : undefined,
+      effort: pin ? b.model.effort : b.v1?.effort,
+      project: b.seat.kind === 'lead' ? b.seat.project : b.v1?.project,
+      lead: b.seat.kind !== 'none' || undefined,
+      level,
+      level_max,
+      next_level,
+      agent: acp ? b.agent.slice(4) : undefined,
+    };
+    return JSON.parse(JSON.stringify(out)) as M; // as the file would hold it: an unset field is absent
+  });
 }
 export const sessions = (core: Core) => core.cli('snapshot', '--json').sessions as { id: string; label: string; project: string; cwd: string; kind: string; state: string; teammate?: string }[];
 /** Settings > Team: an item of a teammate row's "⋯" menu (ticket 993: Edit and Remove live there). */

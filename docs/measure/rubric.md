@@ -1,96 +1,323 @@
-# Scorecard rubric (ticket 1098)
+# Scorecard rubric v2 (ticket 1171)
 
-Every part of the scorecard is scored 0 to 100 by one of three methods. The method and the checks are fixed, so a later
-run (after each phase) is comparable. A new check is added only when a real gap is found, never to raise a score;
-a change to this file is named in the next scorecard's notes.
+Approved by the owner on 2026-11-26 after the audit of ticket 1170 (official mean 82.2, fair reading about 69). v1 is
+kept as [rubric-v1.md](rubric-v1.md). v2 only tightens; the one place where an anchor is easier in a narrow range
+(idle CPU under 0.43 %) is named with the other changes. Every change and its reason is in "What changed from v1" at
+the end, and in the notes of parts.json, which the page prints.
 
-- number: measured by `scripts/measure/scorecard.py run` on an isolated RC; the anchors below turn a figure into points.
-- peer: the fixed tasks in [tasks.md](tasks.md) or the capability rows named below, against the peer apps; 100 = the
-  best app.
+Every part is scored 0 to 100. The method and the checks are fixed between runs. A new check is added only when a real
+gap is found, never to raise a score; a change to this file is named in the next scorecard's notes.
+
+## Rules for every part
+
+1. **Not measured is 0.** A figure, a cell or a check that was not measured in this run, the way this file names,
+   scores 0. It is never skipped and never carried over from an earlier run. The page counts these.
+2. **An easier condition is not the figure.** A figure read under an easier condition than its anchor names (shell
+   sessions where the anchor says real agent sessions, an empty home where it says restored sessions) is shown as a
+   floor and scores 0.
+3. **A test counts only when it ran green in this run.** A check that rests on a test or spec (RR3, ST1, ST2, AC1,
+   AC2, AC3, DS3, DS4, DE3, DE4, IN2) keeps its verdict only when parts.json names the test
+   commands under the check's `tests` and `scorecard.py tests` ran each of them green, with at least one test run, at
+   the commit that was measured. "A test file exists" is fail.
+4. **Every anchor names its source**: a peer measurement, a file and line, or a public page. An anchor with no peer
+   figure says "own bar" and gives the reason. Nothing is a guess.
+5. **Only tighten.** An anchor moves toward the best peer or stays; it is never moved to raise a score.
+
+## Methods
+
+- number: measured by `scripts/measure/scorecard.py run` on an isolated RC; the anchors turn a figure into points
+  (linear between the 0 point and the 100 point, clamped). A part is the mean of its figures' points.
+- field: a figure of the owner's own running app over 7 days, or read on it (`scorecard.py weigh`). Scored by anchors
+  like a number.
+- trial: a fixed set of real agent sessions or tasks run by the owner (it needs the owner's sign-ins and tokens).
+  Scored by anchors like a number.
+- peer tasks: the fixed tasks in [tasks.md](tasks.md), driven and timed in the running apps; 100 = the best app.
+- peer rows: capability rows against the best peer, with breadth counts (see "Capability rows").
 - rubric: five checks of 20 points each, applied to origin/main with file:line evidence. pass = 20, partial = 10,
   fail = 0. A check without evidence is fail.
 
-## Number anchors (score = linear between the 0 point and the 100 point, clamped to 0..100)
+A part with numbers and checks is the mean over its items (each figure and each check is one item).
 
-| Figure | 100 at | 0 at | Why these anchors |
-|---|---|---|---|
-| Window launch, warm, to the first drawn snapshot (s) | 0.5 | 3.0 | macOS guidance: an app is usable within about 1 s; 3 s feels broken |
-| Window launch, cold (s) | 1.0 | 5.0 | the first launch may load WebKit and the core |
-| Core start to the first answer (s) | 0.1 | 2.0 | the CLI starts a core on demand; a person waits for it |
-| Send to agent: CLI call to the bytes in the agent's terminal, median (ms) | 50 | 1000 | 1 s is the limit for "immediate" (Nielsen) |
-| Idle CPU, core + window (%) | 0.2 | 5.0 | an idle app must not drain the battery |
-| Memory, core + window + WebKit, idle (MiB) | 150 | 1100 | 1,091 MB is Orca's measured RSS (ADR 0001); 150 MiB is a light native app |
-| Memory added per session, 20 shell sessions (MiB) | 1 | 20 | |
-| Growth of sessions.json per session (KiB) | 1 | 50 | |
-| Snapshot reply per session (KiB) | 2 | 50 | the window takes the whole snapshot on every connect |
-| Install on a fresh folder: copy, signature check, start, drawn (success of 5) | 5 of 5 | 0 of 5 | |
-| Owner installs that landed, last 20 green mainwatch runs (%) | 100 | 0 | read only from the mainwatch log |
-| Gate green rate on main, last 30 mainwatch runs (%) | 100 | 70 | |
-| Gate duration, median of the last 30 runs (min) | 5 | 30 | |
-| Locale key coverage, 7 other languages (%) | 100 | 80 | |
-| Cold debug build of the Rust workspace, fresh target (min) | 3 | 20 | `scorecard.py dev` |
-| Warm rebuild after a one-file change in the core crate (s) | 15 | 180 | the edit-build loop a lane repeats |
-| Web build (s) | 15 | 120 | |
-| The gate's Rust test stage, scripts/cargo-test-gate.sh (min) | 3 | 20 | |
-| Largest source file, not tests or catalogues (lines) | 2000 | 15000 | sessions.rs is about 14k |
-| Source files over 2,000 lines | 0 | 20 | |
-| Files that two or more open lanes change today | 0 | 10 | open lane = a local branch with a commit today that origin/main lacks |
-| Change failure rate: landings that broke main / tested main tips (%) | 5 | 30 | DORA: elite 0-5 %, low performers above 30 % |
-| Time to restore: minutes main stayed red, median over red episodes | 60 | 1440 | DORA: elite under 1 hour, low over a day |
+## Peer measurements behind the anchors
 
-A part measured by numbers is the mean of its figures' points.
+Measured on this Mac (Mac16,10, 16 GiB, macOS 27.2.1) on 2026-11-26 with `scripts/measure/peers.py`, read only, on
+the owner's own profile, nothing clicked. Raw: evidence/peers-2026-11-26-orca.json and -t3code.json.
+
+| App | First launch to a window | Later launches, median (range) | Idle memory (footprint) | Idle CPU | State |
+|---|---|---|---|---|---|
+| Orca 1.4.256 | 1.71 s | 1.05 s (1.03-1.07) | 521 MiB (RSS 1,107 MiB), 13 processes | 1.75 % | its daemon (not in the sum, up 6 d 23 h) held 4 terminals, one a Claude session, while the app was closed and through this run's launches |
+| T3 Code 0.1.6 | 3.50 s | 1.39 s (1.37-1.46) | 620 MiB (RSS 958 MiB), 7 processes | 0.75 % | no session started |
+| herdr 0.9.5 | 0.28 s (273-278 ms) | | 22 MiB; 155-165 MiB with one Ghostty window | 0.33 % at 5 sessions | docs/research/perf/baseline-2026-10-31.md:74-76, docs/v1/figures.md:424-425 (not re-measured) |
+
+Limits of these figures: "to a window" is the first on-screen window, earlier than Nunchiro's "first snapshot
+drawn", so the peers' launch figures are floors. "First launch" is the first launch of the run (the app was not running), not a launch after a
+reboot. Orca and T3 Code ran no agent session of ours, so their memory and CPU are floors too. Both are signed and
+notarized Developer ID builds with an updater feed (`spctl -a -vv`: accepted, Notarized Developer ID;
+Contents/Resources/app-update.yml). Orca's 1,091 MB in ADR 0001 was RSS; its footprint, the figure we use for
+ourselves, is 521 MiB.
+
+## Number anchors
+
+| Figure | 100 at | 0 at | Source of the anchors | Measured by |
+|---|---|---|---|---|
+| Restored launch: the window's second launch on a home with 20 sessions and a 5,000-event conversation, to the first drawn snapshot (s) | 0.3 | 1.5 | 100: herdr 0.28 s (baseline-2026-10-31.md:74; an empty start, so this is stricter than the peer's own condition). 0: just past the slowest peer, T3 Code 1.39 s; Orca 1.05 s (peers.py 11-26) | run |
+| Window launch, cold, fresh install (s) | 1.0 | 3.5 | 100: v1 (macOS guidance, usable in about 1 s). 0: T3 Code's first launch 3.50 s; Orca 1.71 s (peers.py 11-26). v1 was 5.0 | run |
+| Core start to the first answer (s) | 0.1 | 2.0 | v1, unchanged; no peer has a like figure (herdr's 0.28 s is its whole start) | run |
+| Terminal key to paint, p95, 3 busy sessions, WebKit (ms) | 16 | 50 | 100: one 60 Hz frame, our own target (baseline-2026-10-31.md:11; we measured 33-35 ms, :72); herdr's key to echo p95 is 6.19 ms (docs/v1/figures.md:441). 0: the paint bar of scripts/measure/measurelib.py:401 (p95 < 50 ms) | owner-run: `paint.sh --only echo --engines webkit --repeats 5 --no-record`, then the manual file |
+| Idle CPU, core + window + WebKit + holders, 5 real agent sessions waiting, window open (%) | 0.3 | 3.0 | 100: herdr 0.33 % at 5 sessions (baseline-2026-10-31.md:75). 0: the audit's 3 %; on it T3 Code (0.75 %) scores 83 and Orca (1.75 %) 46 (peers.py 11-26). v1 was 0.2..5.0 with no session | owner-run: `scorecard.py weigh` |
+| Idle memory, the same processes and state (MiB) | 150 | 600 | 100: herdr with one Ghostty window 155-165 MiB (docs/v1/figures.md:424-425). 0: between Orca 521 MiB and T3 Code 620 MiB idle with no session of ours (peers.py 11-26). v1's 0 point was 1,100 | owner-run: `scorecard.py weigh` |
+| Memory added per session, 20 shell sessions, holders counted (MiB) | 1 | 20 | 100: herdr adds 0.9 MiB per session ((31.1 - 24.5) / 7, docs/v1/figures.md:424-425). 0: v1. New: each session's `nunchiro hold` process is counted (v1 read -0.83 MiB) | run |
+| Growth of sessions.json per session (KiB) | 1 | 50 | v1, unchanged | run |
+| Snapshot reply per session (KiB) | 2 | 50 | v1, unchanged | run |
+| Seats lost per restart, 7 days (field) | 0 | 1 | 100: a peer loses none: Orca's daemon kept its 4 sessions while the app was closed and through four launches and quits of the app (peers.py 11-26). 0: one seat per restart, the UO4 fail line | owner-run, see p08 |
+| Missed prompts per 1,000 delivered, 7 days (field) | 0 | 5 | 100: cmux never types into the terminal, so it has no dropped Enter (cmux docs/agent-messages.md:3). 0: own bar: at a few hundred prompts a day, 5 per 1,000 is a miss the person must fix every day, the UO2 fail line | not yet, see p08 |
+| Clean hours of a 24 h soak with 20 real sessions | 24 | 0 | own bar from scripts/measure/measurelib.py:397-409 (0 crashes, 0 stuck terminals, footprint at the end at most 1.25 x minute 2), run for 24 h instead of 10 min | owner-run, see p08 |
+| Install on a fresh folder (success of 5) | 5 of 5 | 0 of 5 | v1, unchanged | run |
+| Owner installs that landed, last 20 green mainwatch runs (%) | 100 | 0 | v1, unchanged | run |
+| Gate green rate on main, last 30 mainwatch runs (%) | 100 | 70 | v1, unchanged | run |
+| Gate duration, median of the last 30 runs (min) | 5 | 30 | v1, unchanged | run |
+| Locale key coverage, 7 other languages (%) | 100 | 80 | v1, unchanged | run |
+| Cold debug build, warm rebuild, web build, Rust test stage, largest file, files over 2,000 lines, files shared by open lanes | | | v1, unchanged (3..20 min, 15..180 s, 15..120 s, 3..20 min, 2,000..15,000, 0..20, 0..10) | dev |
+| Change failure rate (%), time to restore (min) | 5, 60 | 30, 1440 | v1, unchanged (DORA) | ops |
+| Open a 5,000-event conversation: select it to its newest message painted (ms) | 100 | 1000 | Nielsen's limits: 0.1 s feels instant, 1 s keeps the flow (nngroup.com/articles/response-times-3-important-limits). Peer practice: T3 Code bounds a cold open to 75 rows and about 1 MiB (t3code docs/internals/performance-regressions.md:15) | not yet (the page does not report this paint) |
+| 8 terminals streaming 20 MiB each: worst frame, WebKit (ms) | 200 | 2000 | 100: the stall bar of measurelib.py:397 (a stall a user sees). 0: the 2 s after which the same scripts call a key missed (measurelib.py:405). We read 1,453-1,843 ms on 10-25 (docs/v1/figures.md `stream-8-webkit`) | owner-run: `paint.sh --only stream --sizes 8 --engines webkit --no-record` |
+| Memory after 24 h over memory at minute 2, 5 real sessions (ratio) | 1.0 | 1.5 | own bar from the soak bar 1.25 (measurelib.py:400), which is 50 points here | owner-run with the 24 h soak |
+| Prompt delivery: `agent prompt` to the text submitted in a real agent's screen, median (ms) | 1000 | 10000 | Nielsen: 1 s keeps the flow, 10 s loses attention. Our path waits by design (crates/nunchiro-core/src/sessions/deliver.rs: the settle before Enter); cmux delivers through hooks with no wait for a screen | not yet |
+| Delivery trial: prompts not submitted per 1,000 sent (500 sends) | 0 | 5 | as "missed prompts" above | owner-run trial, see p34 |
+| Shown state matches the true state, 100 readings (%) | 100 | 90 | own bar: with six seats on the board, 90 % is one wrong seat in most looks; no peer publishes a figure | owner-run trial |
+| Requests that became a card within 5 s, 50 requests (%) | 100 | 95 | own bar: docs/product.md "nothing missed" | owner-run trial |
+| Outward actions that left without an approval, 20 tries on a fake mail server | 0 | 1 | docs/product.md "nothing sent outward without the owner": one is a fail | owner-run trial |
+| Bot task set: runs that pass their acceptance without owner input (%) | 100 | 0 | the percent itself; the same set run in Orca and T3 Code is shown beside it when run | owner-run trial, see p35 |
+| Owner touches per task in that set, median | 0 | 3 | the bands of DV7 below (pass at most 1, fail over 3) | owner-run trial |
+| First-pass review rate of real lanes, 7 days (%) | 100 | 50 | the bands of DV8 below (partial from 50 %); DORA 2024 rework rate | scripts/measure-dev-speed.py |
+
+"Measured by": run, dev, ops = `scorecard.py run|dev|ops`. "owner-run" and "not yet" figures enter through
+docs/measure/manual-<date>.json: `{"date": "2026-11-27", "figures": {"<name>": {"value": 31.5, "evidence": "how and
+where it was measured, with the raw file"}}}`. An entry without evidence, or a file older than 7 days before the run,
+is ignored. The figure names are the keys of ANCHORS in scripts/measure/scorecard.py.
 
 ## Parts and methods
 
-| ID | Part | Method | Inputs |
-|---|---|---|---|
-| p01 | Integrations | peer | capability rows G2, G3, G6, X1, X8, B1, B2, M1, M2 of docs/peers/inventory-1115.md and task T10 |
-| p02 | Release readiness | rubric | RR1-RR5 |
-| p03 | Cost and token efficiency | rubric | CT1-CT5 |
-| p04 | Usability | peer | tasks T1-T12, mean |
-| p05 | Update and install reliability | number | install of 5, owner installs landed |
-| p06 | Agent compatibility | peer + check | capability rows A1-A5, C4, S3, S4, S5; VC1 (rows and VC1 are 10 equal items) |
-| p07 | License and trademark | rubric | LI1-LI5 |
-| p08 | Stability | number + rubric | launches drawn of all launches, sessions alive after the run, gate green rate; ST1-ST2 |
-| p09 | Task handoff quality | rubric | TH1-TH5 |
-| p10 | Accessibility | rubric | AC1-AC5 |
-| p11 | Feature cohesion | peer | tasks T6, T7, T8, T12 (each crosses two features), mean |
-| p12 | Test reliability | number + rubric | gate green rate, gate duration; TR1-TR3 |
-| p13 | First use | peer | tasks T1, T2, T10, mean |
-| p14 | Optimization and resources | number | idle CPU, idle memory, memory per session, sessions.json and snapshot growth |
-| p15 | Speed | number | warm and cold launch, core start, send to agent |
-| p16 | Bot and team operation | rubric | BT1-BT5 |
-| p17 | Docs accuracy | rubric | DA1-DA5 |
-| p18 | Internationalization (8 languages) | number + rubric | locale key coverage; IN1-IN2 |
-| p19 | Data safety and recovery | rubric | DS1-DS5 |
-| p20 | Observability and diagnostics | rubric | OB1-OB5 |
-| p21 | Code quality | rubric | CQ1-CQ5 |
-| p22 | Extensibility | rubric | EX1-EX5 |
-| p23 | Design | rubric | DE1-DE5 (consistency checks, not taste; see the limit on the page) |
-| p24 | Interface (CLI, API, MCP) | peer | interface rows I1-I5 below, against Orca, T3 Code, herdr, Claude Code, Codex |
-| p25 | Security and privacy | rubric | SE1-SE5 |
-| p26 | Maintainability for agent development | number + rubric | cold and warm build, web build, Rust test stage, gate median, largest file, files over 2,000 lines, files shared by open lanes; MD1-MD5 (agent development) |
-| p27 | Deploy stability | number + rubric | change failure rate, time to restore (mainwatch and landloop logs, read only); DP1-DP3 |
-| p28 | Product direction and differentiation (judgment) | rubric | PD1-PD5; a judgment part: the checks read docs and tickets, nothing is measured |
-| p29 | Dependencies and supply chain | rubric | SC1-SC5 (scorecard.py ops) |
-| p30 | Development speed | rubric | DV1-DV9: the DORA four keys, the flow split, cost, owner touches, rework, seat use (scripts/measure-dev-speed.py, read only) |
-| p31 | Skills and agent guidance quality | rubric | SK1-SK5: the skills Nunchiro ships and the guidance agents get |
-| p32 | Unattended operation | rubric | UO1-UO5: how far an agent team runs without the person |
+| ID | Part | Method | Inputs | Today |
+|---|---|---|---|---|
+| p01 | Integrations (coding tools) | peer rows | rows G2, G3, G6, X1, X8, B1, B2, M1, M2, T10; count: issue and task sources with a page | script and reading |
+| p02 | Release readiness | rubric | RR1-RR5 | reading; RR3 needs its test green |
+| p03 | Cost and token efficiency | rubric | CT1-CT5 | reading |
+| p04 | Usability | peer tasks | T1-T12, driven and timed | owner-run, not yet |
+| p05 | Update and install reliability | number | install of 5, owner installs landed | script |
+| p06 | Agent compatibility | peer rows | rows A1-A5, C4, S3, S4, S5, VC1; count: agent kinds with a real turn | reading; the count is owner-run |
+| p07 | License and trademark | rubric | LI1-LI5 | reading |
+| p08 | Stability | field + trial + number + rubric | seats lost per restart, missed prompts per 1,000, 24 h soak, gate green rate; ST1-ST2 | gate: script; ST: tests; the rest owner-run or not yet |
+| p09 | Task handoff quality | rubric | TH1-TH5 | reading |
+| p10 | Accessibility | rubric | AC1-AC5 | reading; AC1-AC3 need their specs green |
+| p11 | Feature cohesion | peer tasks | T6, T7, T8, T12, driven and timed | owner-run, not yet |
+| p12 | Test reliability | number + rubric | gate green rate, gate duration; TR1-TR3 | script and reading |
+| p13 | First use | peer tasks | T1 from the download page, T2, T10, driven and timed | owner-run, not yet |
+| p14 | Optimization and resources | field + number | idle CPU and memory at 5 real agent sessions with holders; memory per session, sessions.json and snapshot growth | growth: script; idle: owner-run (`weigh`) |
+| p15 | Speed | number | restored launch, cold launch, core start, terminal key to paint | script; key to paint owner-run |
+| p16 | Bot and team operation | peer rows | rows BT1-BT7 | reading; BT2 needs a look at the running app |
+| p17 | Docs accuracy | rubric | DA1-DA5 | reading |
+| p18 | Internationalization (8 languages) | number + rubric | locale key coverage; IN1-IN2 | script; IN2 needs its spec green |
+| p19 | Data safety and recovery | rubric | DS1-DS5 | reading; DS3, DS4 need their tests green |
+| p20 | Observability and diagnostics | rubric | OB1-OB5 | reading |
+| p21 | Code quality | rubric | CQ1-CQ5 | reading |
+| p22 | Extensibility | peer rows | rows EX1-EX5; count: kinds of extension a user can add | reading |
+| p23 | Design | rubric | DE1-DE5 | reading; DE3, DE4 need their specs green |
+| p24 | Interface (CLI, API, MCP) | peer rows | I1-I5 against Orca, T3 Code, herdr, Claude Code, Codex (v1, unchanged) | reading |
+| p25 | Security and privacy | rubric | SE1-SE5 | reading |
+| p26 | Maintainability for agent development | number + rubric | build and test times, file sizes, lane overlap; MD1-MD5 | script and reading |
+| p27 | Deploy stability | number + rubric | change failure rate, time to restore; DP1-DP3 | script and reading |
+| p28 | Product direction and differentiation (judgment) | rubric | PD1-PD5 | reading |
+| p29 | Dependencies and supply chain | rubric | SC1-SC5 | script and reading |
+| p30 | Development speed | rubric | DV1-DV9 | script |
+| p31 | Skills and agent guidance quality | rubric | SK1-SK5 | reading |
+| p32 | Unattended operation | rubric | UO1-UO5 | reading |
+| p33 | Real-use speed and weight (new) | number + trial | open a 5,000-event conversation, 8 terminals streaming, memory growth over 24 h, prompt delivery | owner-run (2), not yet (2) |
+| p34 | Multi-agent accuracy (new) | trial | delivery, shown state, cards, outward gate | owner-run, not yet |
+| p35 | Bot quality (new) | trial + field | task set success, owner touches, first-pass review rate | first-pass: script; task set owner-run, not yet |
+| p36 | Extensibility for others (new) | peer rows | rows XO1-XO5 | reading |
+| p37 | Reach (new) | rubric | RE1-RE5, each done in the run | reading and doing |
 
-A part with "number + rubric" is the mean of its number points and its rubric points, weighted by their count (each
-figure and each check is one item).
+"Today" says how an item can be measured now: script = a command of this repo; reading = a judge reads origin/main;
+owner-run = a documented step that needs the owner's app, sign-ins or tokens; not yet = no way exists yet. An item
+that is owner-run or not yet scores 0 until it is measured (rule 1).
 
-Peer capability rows: yes = 1, partial = 0.5, no = 0; part score = 100 x Nunchiro's sum / the best app's sum.
+## Peer tasks (p04, p11, p13)
 
-### Interface rows (p24)
+The tasks, the path rule and the score are in [tasks.md](tasks.md). In short: every cell is one task driven in the
+running app, the same way in every app, on the default GUI path a new user finds; the steps and the seconds are
+recorded; three drives, the median. The task score is the lower of the step score and the time score. T1 starts at
+the app's public download page. A Nunchiro cell not driven in this run scores 0. A task counts only when at least two
+peers were driven on it.
 
-- I1 A CLI starts an agent session in a folder.
-- I2 A CLI sends a prompt and reads the agent's output or state.
-- I3 A CLI or API waits for a state (done, needs input) without polling by hand.
-- I4 A local API (socket or HTTP) other programs can call, documented.
-- I5 An MCP server or tool surface that the agents themselves use to control the app.
+## Capability rows (p01, p06, p16, p22, p36)
+
+- A row is yes (1), partial (0.5) or no (0) for Nunchiro and for each peer. depth = 100 x Nunchiro's sum / the best
+  peer's sum.
+- The rows are what any peer has, not the rows where Nunchiro has something. A row is added when a peer has a thing
+  the rows do not show, with the peer's file and line.
+- Yes means the app itself does it. A button that sends a fixed prompt to the agent is partial. A capability proven
+  only against a fake (an ACP agent that never ran a real turn) is partial.
+- A peer cell is "no" only with a record of the search. A peer cell nobody searched counts yes. A Nunchiro cell
+  nobody checked counts no.
+- A breadth count is a number of things (agent kinds, services, kinds of extension): 100 x log2(1 + ours) /
+  log2(1 + the best peer's). Ours counts only what was proven in this run. A part with counts is the mean of depth
+  and breadth.
+
+Why a log scale and not a plain ratio: Orca lists 45 agent ids and Nunchiro runs 2. A plain ratio says Nunchiro has
+4 % of Orca's agent support, as if the 45th command-line agent mattered as much as Claude Code. Each further agent or
+service serves fewer people, so the count is scored on a log scale (2 of 45 = 29, 8 of 45 = 57, 20 of 45 = 80). The
+audit proposed "breadth against the best peer" without a formula; this is the fair version of it, and the plain
+ratio is shown beside it on the page.
+
+The best peer for a count is the best of the same-kind apps of tasks.md (Orca, T3 Code, herdr), the apps the other
+rows use. Other apps have more (emdash has 13 issue-tracker integrations, packages/plugins/src/integrations/impl/)
+and are named as notes, not as the anchor.
+
+### p01 Integrations (coding tools)
+
+Rows (docs/peers/inventory-1115.md): G2 push and create a PR, G3 PR status and CI checks, G6 AI commit message and
+PR text, X1 start work from an issue list, X8 pull requests page, B1 in-app browser pane, B2 the agent drives the
+browser, M1 work on a remote machine over SSH, M2 use from a phone or another device, T10 add an MCP server or skill
+in the app. Count: issue and task sources with a page in the app (best: Orca 4, GitHub, GitLab, Jira and Linear,
+src/renderer/src/components/task-page/).
+Assistant-type integrations (mail, calendar, chat apps) are not counted for any app.
+
+### p06 Agent compatibility
+
+Rows: A1 Claude Code, A2 Codex, A3 other agents (ACP and named CLIs), A4 several agents at once listed by state, A5 an
+agent delegates to child agents, C4 agent binary path, args and env, S3 model per session, S4 reasoning effort, S5
+plan mode, VC1 (below). Count: agent kinds that completed a real turn in this run (best: Orca 45 launch ids,
+src/shared/agent-launch/catalog/tui-agent.ts:2-46; T3 Code adds any agent of the ACP registry,
+docs/user/providers-acp.md:1-6). Ours: Claude and Codex count when `sh scripts/scenario/v1b-full.sh` passed its chat
+rows in this run; an ACP agent counts only with a real agent turn on record (a prompt sent, an answer read, the turn
+end seen), never with tests/fixtures/acp/fake_agent.py. The peer's count is its catalogue, which we cannot run in
+full; that favours the peer and is the strict direction.
+
+- VC1 A new Claude Code or Codex version is checked for delivery (a typed message lands, Enter submits, the composer
+  and turn end are read) before seats use it. yes: a check runs on each new version and blocks or warns before a seat
+  uses it; partial: the version is detected and only some readers are checked; no: nothing is checked.
+
+### p16 Bot and team operation
+
+- BT1 Standing agent seats (a lead and its workers) with a room to talk.
+- BT2 The board shows each seat's state truthfully (fresh, working, needs you, done). yes needs a look at the running
+  app in this run; code and specs alone are partial.
+- BT3 A lead seat is replaced on a budget without losing its work.
+- BT4 Scheduled work runs without the owner (schedules).
+- BT5 A stuck seat gets a fresh conversation with the same role (task T12).
+- BT6 A task graph: tasks with dependencies and gates that the team works through (Orca skill-guides/orchestration.md:6,162).
+- BT7 A bot acts on its own when a watched pull request changes: checks fail, a review arrives (T3 Code
+  apps/server/src/orchestration-v2/PullRequestWatchReactor.ts).
+
+Whether the team does the work right is p35.
+
+### p22 Extensibility
+
+- EX1 Skills can be seen, made and switched from the app and the CLI.
+- EX2 Hooks can be seen and edited.
+- EX3 MCP servers can be added per project or globally.
+- EX4 Widgets or artifacts can be added without changing the app.
+- EX5 Other agents plug in through a standard (ACP). yes needs a real ACP agent turn in this run.
+
+Count: kinds of extension a user can add without changing the app (best: Orca 18: the 16 plugin shapes of
+skill-guides/orca-plugin-authoring.md:32-47, plus skills and MCP servers). Ours: one per row above that is not "no".
+What a third-party developer gets is p36, so it is not counted twice here.
+
+### p36 Extensibility for others (new)
+
+What someone who is not us can build on the app.
+
+- XO1 A documented plugin API: third-party code adds a panel, a command or a setting, or changes or refuses an action
+  (Orca skill-guides/orca-plugin-authoring.md:32-47).
+- XO2 A scaffold and types for plugin authors: one command makes a plugin that builds (Orca `ORCA plugin create` and
+  `ORCA plugin types`, the same guide :20-22; bb packages/plugin-sdk).
+- XO3 A catalogue lists extensions and installs one from inside the app.
+- XO4 A trigger others can call: a webhook or an event from GitHub, Slack or Linear starts agent work (Orca
+  src/main/automations/; T3 Code orchestration-v2/PullRequestWatchReactor.ts).
+- XO5 The local API is published as a schema or a typed client (herdr docs/next/api/herdr-api.schema.json).
+
+A yes for Nunchiro needs a working example made in this run (a sample plugin loaded, a trigger fired at an isolated
+core).
+
+## New parts
+
+### p33 Real-use speed and weight (new)
+
+The four figures of the table above. The launch with a full tree is in p15 and the idle weight in p14; this part is
+what the app costs while it is used: a long conversation, many terminals streaming, a day of running, a prompt on its
+way to a real agent.
+
+### p34 Multi-agent accuracy (new)
+
+One trial, run by the owner: a core on its own NUNCHIRO_HOME with 5 real agent sessions (3 Claude, 2 Codex, the
+cheapest models) on the owner's sign-ins, inside the config guard that scripts/scenario/v1b-full.sh uses:
+
+1. Delivery: 500 prompts sent with `nunchiro agent prompt` (100 per session, a one-line "reply ok" task), 250 of
+   them while the session's composer holds half-typed text. Not submitted within 30 s without a person = missed.
+2. Shown state: at 100 random moments one seat's shown state (working, needs you, done, idle) is read from
+   `nunchiro agent list` and compared with what the agent's own screen shows at that moment.
+3. Cards: 50 requests are raised (25 permission requests, 25 questions); each must be a card within 5 s.
+4. Outward gate: 20 outward actions are tried through a fake mail MCP server (never a real account); each must wait
+   for the approval card.
+
+### p35 Bot quality (new)
+
+1. Task set (trial, owner-run): ten fixed tasks, three runs each, given to a lead seat with two workers (tasks 1-7)
+   or to the Assistant (tasks 8-10). A run passes when the acceptance holds and the owner gave no input after the
+   first message. The set, kept the same between runs:
+   1. Fix a failing unit test in a small fixture repository (the test suite is green).
+   2. Add a CLI flag with its test and its help line (the new test is green, the help shows the flag).
+   3. Rename a function across five files (the build is green, the old name is gone).
+   4. Split one task between two workers in two worktrees and merge both (both changes are on the branch, tests green).
+   5. Review a diff that hides one planted bug (the review names the bug's line).
+   6. Recover from a worker that stops answering (the task still ends; a fresh conversation was started).
+   7. Open a pull request with a summary of the change (the PR exists on a local bare remote, the summary names the files).
+   8. Sort ten fixture mails into three labels (at least nine of ten right).
+   9. Draft a reply to a fixture mail and stop at the approval card (a draft exists, nothing was sent).
+   10. Find a free hour in a fixture calendar and propose it (the hour is free in the fixture).
+   The fixtures (repository, mails, calendar) do not exist yet; making them is the first step of the first run.
+2. Owner touches per task in that set, median.
+3. First-pass review rate of the real lanes of the last 7 days (`scripts/measure-dev-speed.py`, rework.first_pass_pct).
+
+### p37 Reach (new)
+
+Each check is done in this run, not read from a script.
+
+- RE1 A signed build can be downloaded from a public page (the file was downloaded in this run; its URL is the evidence).
+- RE2 macOS opens the downloaded build without a warning: `spctl -a -vv` says accepted, Notarized Developer ID, as it
+  does for Orca and T3 Code (measured 11-26).
+- RE3 The installed app updates itself from one release to the next without a reinstall (done once in this run; the
+  peers ship an updater feed, Contents/Resources/app-update.yml).
+- RE4 A public docs site covers install, first run and each of the twelve peer tasks (URL and the page of each task).
+- RE5 A public release in the last 30 days with user-facing notes.
+
+Not scored, by the owner's direction in docs/product.md ("who it is not for"): Windows and Linux builds, cloud
+sandboxes. A phone client is row M2 of p01.
+
+## Owner-run steps
+
+| Step | Command or method | Feeds |
+|---|---|---|
+| Tests of this run | `python3 -B scripts/measure/scorecard.py tests --target <cargo target>` (writes tests-<date>.json) | rule 3 |
+| Idle weight with real agents | with at least 5 Claude or Codex sessions waiting at their prompts and the window open: `python3 -B scripts/measure/scorecard.py weigh` (read only; writes the manual file) | idle_mib_5, idle_cpu_pct_5 |
+| Terminal paint and streaming | `sh scripts/measure/build.sh`, then the two `paint.sh` commands of the anchor table; copy p95_ms and the worst frame into the manual file | term_paint_p95_ms, stream8_worst_frame_ms |
+| Real agent turns | `sh scripts/scenario/v1b-full.sh` (Claude and Codex rows), one real ACP agent turn by hand | the count of p06, EX5, A3 |
+| Peer tasks | drive T1-T12 in Nunchiro (an isolated RC), Orca and T3 Code the same way (by hand with a recording, or computer use for all; the owner answers its access dialog); record steps, seconds and the date in tasks.json | p04, p11, p13 |
+| Seats lost per restart | over 7 days, for each restart of the owner's app (update, serve restart, relaunch): seats held before minus seats back after, from `nunchiro agent list` before and after; the mean | seats_lost_per_restart |
+| 24 h soak | 20 real agent sessions on a core with its own NUNCHIRO_HOME for 24 h with a heartbeat prompt every 10 min; clean hours until the first crash, stuck terminal or lost session; footprint at the end over minute 2 | soak_clean_hours, mem_growth_24h_ratio |
+| Accuracy trial | p34 above | the four p34 figures |
+| Bot task set | p35 above | bot_task_success_pct, bot_owner_touches |
+| Reach | p37 above | RE1-RE5 |
+
+Not yet measurable, with what is missing: missed prompts per 1,000 (the core logs each dropped Enter,
+crates/nunchiro-core/src/sessions/deliver.rs:154, but no count of delivered prompts to divide by); opening a
+5,000-event conversation (the page does not report that paint); prompt delivery time to a real agent (no script).
 
 ## Rubric checks
+
+Unchanged from v1 unless marked. Under rule 3 these checks count only when their tests ran green in this run: RR3,
+ST1, ST2, AC1, AC2, AC3, DS3, DS4, DE3, DE4, IN2. The checks of p06, p16 and p22 are rows now (see "Capability rows").
 
 ### p02 Release readiness
 - RR1 A signed and notarized build is produced by a script in the repo.
@@ -114,7 +341,7 @@ Peer capability rows: yes = 1, partial = 0.5, no = 0; part score = 100 x Nunchir
 - LI4 Dependency licenses are checked against an allow list (deny copyleft where not allowed).
 - LI5 The name "Nunchiro" has a recorded trademark search or decision.
 
-### p08 Stability (rubric part)
+### p08 Stability (rubric part; the tests must run green in this run)
 - ST1 A core swap keeps running sessions (test).
 - ST2 A crash while drawing shows a way back, not a white window (test).
 
@@ -136,13 +363,6 @@ Peer capability rows: yes = 1, partial = 0.5, no = 0; part score = 100 x Nunchir
 - TR1 Quarantined or skipped tests: 5 or fewer = pass, 20 or fewer = partial.
 - TR2 The last full nightly web run had 0 failed and 0 flaky.
 - TR3 Fixes are proven red first: 8 or more of the last 10 closed tickets name a test that was red before.
-
-### p16 Bot and team operation
-- BT1 Standing agent seats (a lead and its workers) with a room to talk.
-- BT2 The board shows each seat's state truthfully (fresh, working, needs you, done).
-- BT3 A lead seat is replaced on a budget without losing its work.
-- BT4 Scheduled work runs without the owner (schedules).
-- BT5 A stuck seat gets a fresh conversation with the same role (task T12).
 
 ### p17 Docs accuracy
 - DA1 The CLI reference is checked against the CLI by a script.
@@ -175,13 +395,6 @@ Peer capability rows: yes = 1, partial = 0.5, no = 0; part score = 100 x Nunchir
 - CQ3 unwrap()/expect( in non-test Rust code per 1,000 lines: under 2 = pass, under 5 = partial.
 - CQ4 `any` in non-test TypeScript (": any", "as any"): under 20 = pass, under 100 = partial.
 - CQ5 A gate check guards duplicate or dead code (duplicate surfaces, dead clicks) with a baseline that may only fall.
-
-### p22 Extensibility
-- EX1 Skills can be seen, made and switched from the app and the CLI.
-- EX2 Hooks can be seen and edited.
-- EX3 MCP servers can be added per project or globally.
-- EX4 Widgets or artifacts can be added without changing the app.
-- EX5 Other agents plug in through a standard (ACP).
 
 ### p23 Design
 - DE1 Colours, sizes and radii come from tokens (the raw-literal ratchet at its floor).
@@ -262,11 +475,6 @@ pass = 100 points (20 of the part), partial = 50 (10), fail = 0. The IDs are DV,
   stall nudges). pass: working at least 70 % and stalled minutes under 5 % of seat time; partial: working at least
   40 %; fail: otherwise or not measured.
 
-### p06 Agent compatibility, version check (added 2026-11-25 by the owner)
-- VC1 A new Claude Code or Codex version is checked for delivery (a typed message lands, Enter submits, the composer and
-  turn end are read) before seats use it. pass: a check runs on each new version and blocks or warns before a seat
-  uses it; partial: the version is detected and only some readers are checked; fail: nothing is checked.
-
 ### p31 Skills and agent guidance quality (added 2026-11-25 by the owner)
 The skills Nunchiro ships (plugin/skills: nunchiro, orchestration, artifacts) and the guidance agents get (the seat
 prompt, briefs, AGENTS.md).
@@ -302,3 +510,44 @@ How far a user's agent team runs without the person stepping in.
 - SE3 Outward actions (send mail, publish) need an explicit approval.
 - SE4 No secret or personal path is in the repo (scan in the gate or before publish).
 - SE5 Dependencies are audited for known vulnerabilities by a script or the gate.
+
+## What changed from v1, and why
+
+1. Rules 1 to 3 (not measured is 0, an easier condition is a floor, a test counts only when green in this run).
+   Reason: v1 passed checks on "a test exists" and "a script exists", and measured an empty app.
+2. Peer tasks (p04, p11, p13): driven and timed in the running apps, one path rule, the lower of the step score and
+   the time score, T1 from the download page. Reason: v1 counted steps from code, Nunchiro on its best path and the
+   peers on their default path; one more step per task moved Usability from 86 to 53.
+3. Speed (p15): the warm launch is measured on a home with 20 sessions and a 5,000-event conversation, 100 at 0.3 s
+   and 0 at 1.5 s (v1: 0.5 and 3.0 on an empty home); the cold launch's 0 point moves from 5.0 to 3.5 s; terminal key
+   to paint p95 replaces "send to agent", which every local socket passed. "Send to agent" is still measured and shown.
+4. Optimization (p14): idle memory and CPU are read with 5 real agent sessions and holders, 150..600 MiB and
+   0.3..3 % (v1: 150..1100 MiB and 0.2..5 % with no session). One anchor is easier in a narrow range: the 100 point
+   of idle CPU is 0.3 % (the approved figure, herdr's measured 0.33 % with 5 sessions) where v1 had 0.2 %, so a
+   reading under 0.43 % earns up to 2 points more than in v1; above 0.43 % it earns fewer, and the reading is now
+   taken with 5 real sessions. We measure 2.5 to 4 %.
+5. Capability parts (p01, p06, p16, p22): rows are what any peer has, a prompt button is partial, an unsearched peer
+   cell counts yes, and breadth counts are scored on a log scale. Bot and team and Extensibility move from five
+   existence checks to rows against the peers.
+6. Stability (p08): field figures and a 24 h soak replace "launches drawn" and "idle shells alive" (both 100 for any
+   app). The gate green rate stays, so a low item was not dropped.
+7. New parts p33 to p37 (the audit's five blind spots). They count in the mean from the first v2 run.
+
+Where v2 differs from the audit's proposal, and why:
+
+- Breadth on a log scale, not a plain ratio (see "Capability rows"): fair to an app that supports the two agents
+  most people use.
+- The best peer for a count is one of the same-kind apps the card already compares (Orca, T3 Code, herdr), not the
+  largest figure found by grep in any repository (emdash 13 trackers, 37 agents): those apps are not on the card.
+- A third-party plugin SDK and a catalogue are scored once, in p36, not also as rows of p22.
+- First use with no download: T1 follows whatever the public page tells a new user (today the README's build
+  steps), timed like any other path, instead of a fixed 0. It will score near 0 on time, but it is measured.
+- "Crashes in 7 days" is not a figure: no crash report of Nunchiro, Orca or T3 Code is on this Mac, every app would
+  score 100, and a window crash leaves no report (OB3). That is the kind of anchor the audit asked to remove.
+- "Take the best of the three peers as 100" for launch: kept as the approved 0.3 s (herdr), although herdr's figure
+  is an empty start and ours is a restored one. Stricter than the peer's own condition; kept because it was approved.
+- Reach leaves out Windows, Linux and cloud sandboxes: docs/product.md says who the app is not for.
+
+Not changed in v2 (the audit's lower-priority list, outside the approval of 2026-11-26): the weight of the default
+permission in Security, the time-to-restore anchor, three runs per skill trial, and the samples the judge picks in
+Docs accuracy.

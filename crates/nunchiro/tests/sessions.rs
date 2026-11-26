@@ -1,3 +1,6 @@
+#[allow(dead_code)]
+#[path = "../../nunchiro-core/tests/fixtures/hold.rs"]
+mod hold;
 #[path = "../../nunchiro-core/tests/fixtures/home.rs"]
 mod home;
 use nunchiro_core::{api::*, server::call};
@@ -1900,39 +1903,33 @@ fn t1150_codex_that_does_not_answer_is_not_started() {
     h.request(Request::Close { id: session.id });
 }
 
-/// Ticket 1150 round 2 (Codex look P2): Codex is asked off the registry lock. While a Codex that takes 3 s to answer
-/// is being asked, every other request is served at once (before, the question ran under the lock and held all
-/// sessions for as long as that Codex took); the start then goes through.
+/// Ticket 1150 round 2 (Codex look P2): Codex is asked off the registry lock. While the asked Codex is parked on a hold
+/// file, a snapshot is served and the start is still waiting (before, the question ran under the lock, so the
+/// snapshot came back only once the ask had ended); once released, the start goes through. Ticket 1155: held, not
+/// timed, so a busy machine cannot fail it.
 #[test]
 fn t1150_asking_codex_does_not_hold_the_registry_lock() {
     let h = Harness::new();
-    let all = serde_json::json!({"behave": 3, "initialize": {}, "hooks/list": {"data": [{"hooks": [{
+    let parked = hold::Hold::new(h.home.join("codex-hold"), "");
+    let all = serde_json::json!({"behave": "hold", "initialize": {}, "hooks/list": {"data": [{"hooks": [{
         "key": "/<session-flags>/config.toml:pre_tool_use:0:0", "enabled": true, "trustStatus": "trusted"}]}]}});
     codex_answers(&h, all);
-    let began = Instant::now();
-    let slowest = thread::scope(|scope| {
+    thread::scope(|scope| {
         let start = scope.spawn(|| start_codex(&h));
-        let mut slowest = Duration::ZERO;
-        while !start.is_finished() {
-            let asked = Instant::now();
-            h.request(Request::Snapshot);
-            slowest = slowest.max(asked.elapsed());
-            thread::sleep(Duration::from_millis(20));
-        }
+        hold::reached(&h.home.join("codex-asked"), "the start never asked Codex");
+        let Reply::Snapshot { .. } = h.request(Request::Snapshot) else {
+            panic!("no snapshot");
+        };
+        assert!(
+            !start.is_finished(),
+            "the snapshot came back only after the ask had ended"
+        );
+        parked.release();
         let Ok(Ok(Reply::Started { session })) = start.join() else {
-            panic!("the slow Codex did not start");
+            panic!("the held Codex did not start once released");
         };
         h.request(Request::Close { id: session.id });
-        slowest
     });
-    assert!(
-        slowest < Duration::from_millis(500),
-        "a snapshot waited {slowest:?} while Codex was asked"
-    );
-    assert!(
-        began.elapsed() >= Duration::from_secs(3),
-        "the fixture did not wait"
-    );
 }
 
 #[test]

@@ -45,6 +45,8 @@ import { ProjectDialogs } from './tree/Dialogs';
 import { useWorktrees, WorktreeLayer } from './tree/worktrees'; // V2-8a
 import { leadSeatMate, useTeam } from './lead/lead'; // ticket 990
 import { LeaderDialog } from './lead/LeaderDialog'; // ticket 990
+import { BotsView } from './bots/BotsView'; // ticket 1168
+import { onOpenBots } from './bots/bots';
 import { useProjectTree } from './tree/state';
 import { useDiffStat } from './chrome/SessionFacts'; // CHROME
 import { agentState, type BoardDecision, type Decision, type Session } from './types';
@@ -181,6 +183,9 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
   const [overlay, setOverlay] = useState<OverlayKind>(loadOverlay);
   useEffect(() => saveOverlay(overlay), [overlay]); // a reload of this window keeps the modal open
   const openSettings = useCallback(() => setOverlay('settings'), []);
+  // Ticket 1168: the Bots view, asked for from a Settings page, the lead's header or the palette; `botFirst` is the bot whose page it opens on.
+  const [botFirst, setBotFirst] = useState<string | null>(null);
+  useEffect(() => onOpenBots((id) => (setBotFirst(id ?? null), setOverlay('bots'))), []);
   const manageAccounts = useCallback(() => (setSettings((x) => ({ ...x, settingsPage: 'providers' })), setOverlay('settings')), []); // ticket 451
   const toggleSettings = () => setOverlay((o) => (o === 'settings' ? null : 'settings'));
   const [hints, setHints] = useState<false | 'open' | 'copy'>(false);
@@ -701,8 +706,11 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
       <WorktreeLayer t={t} wt={wt} />
       <LeaderDialog core={core} t={t} />
       {overlay && (
-        <Overlay kind={overlay} label={overlay === 'settings' ? t('settings.region') : t('board.region')} onClose={() => setOverlay(null)}>
-          {overlay === 'settings' ? (
+        <Overlay kind={overlay} label={overlay === 'settings' ? t('settings.region') : overlay === 'bots' ? t('bots.title') : t('board.region')} onClose={() => setOverlay(null)}>
+          {overlay === 'bots' ? (
+            // Lane 1: "New bot" opens today's form (Settings > Team, its Add button); lane 2 brings the one-minute dialog.
+            <BotsView key={botFirst ?? ''} core={core} t={t} sessions={sessions} first={botFirst} open={open} onNew={() => (setSettings((s) => ({ ...s, settingsPage: 'team' })), setOverlay('settings'), setSettingsFocus((d) => ({ key: 'team', n: (d?.n ?? 0) + 1 })))} />
+          ) : overlay === 'settings' ? (
             <SettingsView core={core} settings={settings} commands={commands.filter((c) => !c.id.startsWith('session.open.') && !fieldCommand(c.id))} update={update} focus={settingsFocus} agent={agentSheet} toast={arrange.notify} hasProject={projectList.length > 0} projects={projectList.map((g) => g.project)} sessions={sessions} current={current} project={projectList[0] ? { path: projectList[0].project, name: projectList[0].name } : null} onClose={() => setOverlay(null)} />
           ) : (
             // A card's session opens as its tab; `open` closes the modal for it.

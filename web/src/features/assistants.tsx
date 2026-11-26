@@ -15,6 +15,7 @@ import { PageSummary } from '../settings/shell/PageActions';
 import { useCoreFeature } from '../settings/useFeatureSetting';
 import { registerSettingsPage, type PageContext } from './registry';
 import { draftOf, saveOp } from './team';
+import { BotsMoved } from '../bots/BotsMoved'; // ticket 1168
 
 const PAGE = 'assistants';
 type Mode = 'ask' | 'accept-edits' | 'full-access' | 'full-access-shell';
@@ -68,6 +69,7 @@ function AssistantsPage({ core, t, reveal, closeSettings }: Pick<PageContext, 'c
   return (
     <div>
       <PageSummary parts={[[t('summary.assistant'), lead ? lead.name : team && t('summary.noAssistant')], [t('summary.mode'), modeRead && names[value]]]} />
+      <BotsMoved t={t} />
       <Sec label={t('assistants.title')}>
         {/* Ticket 1034 (mockup bot-statusbar-1121 3-5): the main assistant's name and job; with none yet, its set-up. */}
         {lead ? (

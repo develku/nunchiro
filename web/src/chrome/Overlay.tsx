@@ -5,14 +5,14 @@ import { Icon } from '../icons/Icon';
 import { composing } from '../keys';
 import { useHtmlLangT } from '../i18n/lib/useHtmlLangT';
 
-export type OverlayKind = 'settings' | 'board' | null;
+export type OverlayKind = 'settings' | 'board' | 'bots' | null; // ticket 1168: the Bots view
 
 // Per window (sessionStorage, as chrome/windowState.ts keeps its id): a reload keeps the modal that was open.
 const KEY = 'nunchiro.overlay';
 export const loadOverlay = (): OverlayKind => {
   try {
     const v = sessionStorage.getItem(KEY);
-    return v === 'settings' || v === 'board' ? v : null;
+    return v === 'settings' || v === 'board' || v === 'bots' ? v : null;
   } catch {
     return null;
   }

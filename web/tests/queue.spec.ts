@@ -1,5 +1,5 @@
 // Ticket 08: the answer strip, the strip-off answer card, OS notifications per session level and stale
-// flags, against a real core with fake agents (real agents: queue.real.spec.ts).
+// flags, against a real core with fake agents (real agents: scripts/scenario/matrix.sh).
 import type { Page } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
