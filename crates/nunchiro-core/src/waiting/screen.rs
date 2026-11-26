@@ -461,11 +461,12 @@ impl Screen {
                 && ["do you want to make this edit to", "do you want to create", "do you want to overwrite"]
                     .iter()
                     .any(|p| normalized.contains(p));
-        // A permission prompt whose preview shows a start dialog's words (an edit to a file holding them) stays one.
-        // A start dialog only before the input box ever showed, never over a permission prompt (an edit to a file
-        // holding its words), and only as the last fallback: it never changes a question, a plan or a notice.
+        // A start dialog only before the start is over, never over a permission prompt (an edit to a file holding its
+        // words), and only as the last fallback: it never changes a question, a plan or a notice.
         let boxed = self.note_box(kind, text);
-        let start = !permission && !boxed && !self.started() && start_dialog(text);
+        let start = (!permission && !boxed && !self.started())
+            .then(|| start_dialog(text))
+            .flatten();
         let plan = choices.len() >= 2 && plan_dialog(&normalized);
         // Look 1117 v13 N13-S3-4: Codex's rate-limit nudge only switches this session's model or keeps it (its "never show
         // again" changes settings and stays terminal-only), so it is a question. Its list takes the digit alone: a digit
@@ -506,10 +507,15 @@ impl Screen {
             Kind::Question
         } else if background {
             Kind::Background
-        } else if unclassified_prompt || start {
+        } else if unclassified_prompt || start.is_some() {
             Kind::Dialog
         } else {
             return None;
+        };
+        // A start dialog's card is its own rows (`start_dialog`); any other prompt keeps its region.
+        let region = match start {
+            Some(rows) if item_kind == Kind::Dialog && !trust => rows,
+            _ => prompt_region(kind, text),
         };
         // V2.5-87: no focus report reaches the card; the answer check compares this same text.
         for choice in &mut choices {
@@ -517,7 +523,7 @@ impl Screen {
         }
         Some(Detection {
             kind: item_kind,
-            text: without_focus_reports(prompt_region(kind, text)),
+            text: without_focus_reports(region),
             choices,
         })
     }
@@ -580,13 +586,7 @@ fn prompt_region(kind: AgentKind, text: &str) -> &str {
         // ("You approved codex to run … this time") is not part of this request.
         // The first question on the screen, not the last: a command can print a second "Would you like to …" row, and
         // starting there would hide the real command above it.
-        // Its sign-in screen starts at its welcome line: the logo above it is animated for the first seconds.
-        let at = text.find("Would you like to ").or_else(|| {
-            text.contains("Sign in with ChatGPT")
-                .then(|| text.find("Welcome to Codex"))
-                .flatten()
-        });
-        return at.map_or(text, |at| {
+        return text.find("Would you like to ").map_or(text, |at| {
             &text[text[..at].rfind('\n').map_or(0, |n| n + 1)..]
         });
     }
@@ -701,25 +701,70 @@ fn start_rows(text: &str) -> bool {
 }
 
 /// A start dialog other than folder trust that waits for the user before the session starts: Claude's theme picker,
-/// sign-in question and security notes, Codex's sign-in and update screens. Each is read by its heading row and a row of
-/// its own below it (a numbered option or its hint), each a whole row: words inside a row of a diff or of code, or a
-/// heading quoted without its dialog, are no start dialog. `detect_in` reads it only before the input box ever showed.
-fn start_dialog(text: &str) -> bool {
-    let rows: Vec<&str> = text.lines().map(str::trim).collect();
-    let row = |r: &str| rows.iter().any(|l| l.eq_ignore_ascii_case(r));
-    let starts = |r: &str| rows.iter().any(|l| l.starts_with(r));
-    let option = |r: &str| {
-        text.lines()
-            .filter_map(choice_row)
-            .any(|(_, label, _)| label.trim_start().starts_with(r))
+/// sign-in question and security notes, Codex's sign-in and update screens. Each is read by its heading row and rows of
+/// its own below it (a numbered option, its hint), each a whole row: words inside a row of a diff or of code, or a
+/// heading quoted without its dialog, are no start dialog. `detect_in` reads it only before the start is over.
+///
+/// The dialog's rows from its heading to its last whole row (`end`), the card's text: what is drawn above it (Codex's
+/// animated logo) or after it (Claude draws its screens in pieces) never changes the card, so it keeps one id.
+fn start_dialog(text: &str) -> Option<&str> {
+    let rows: Vec<(usize, &str)> = text
+        .split('\n')
+        .scan(0, |at, l| {
+            let row = (*at, l);
+            *at += l.len() + 1;
+            Some(row)
+        })
+        .collect();
+    let has = |row: &str, want: Row| match want {
+        Row::Is(r) => row.trim().eq_ignore_ascii_case(r),
+        Row::Starts(r) => row.trim().starts_with(r),
+        Row::Option(r) => {
+            choice_row(row).is_some_and(|(_, label, _)| label.trim_start().starts_with(r))
+        }
     };
-    let next = row("Press enter to continue");
-    row("Choose the text style that looks best with your terminal")
-        && row("To change this later, run /theme")
-        || row("Select login method:") && option("Claude account with subscription")
-        || row("Security notes:") && next && option("Claude can make mistakes.")
-        || starts("Welcome to Codex") && next && option("Sign in with ChatGPT")
-        || starts("\u{2728} Update available!") && next && option("Update now")
+    let enter = Row::Is("Press enter to continue");
+    let theme = Row::Is("To change this later, run /theme");
+    [
+        (
+            Row::Is("Choose the text style that looks best with your terminal"),
+            theme,
+            theme,
+        ),
+        (
+            Row::Is("Select login method:"),
+            Row::Option("Claude account with subscription"),
+            Row::Is("Select login method:"),
+        ),
+        (
+            Row::Is("Security notes:"),
+            Row::Option("Claude can make mistakes."),
+            enter,
+        ),
+        (
+            Row::Starts("Welcome to Codex"),
+            Row::Option("Sign in with ChatGPT"),
+            enter,
+        ),
+        (
+            Row::Starts("\u{2728} Update available!"),
+            Row::Option("Update now"),
+            enter,
+        ),
+    ]
+    .into_iter()
+    .find_map(|(heading, own, end)| {
+        let top = rows.iter().position(|(_, l)| has(l, heading))?;
+        rows[top..].iter().any(|(_, l)| has(l, own)).then_some(())?;
+        let (at, last) = rows[top..].iter().find(|(_, l)| has(l, end))?;
+        Some(&text[rows[top].0..at + last.len()])
+    })
+}
+#[derive(Clone, Copy)]
+enum Row {
+    Is(&'static str),
+    Starts(&'static str),
+    Option(&'static str),
 }
 
 /// w25-s: a start question's "No, exit" row is still on the screen, read across rows a narrow window split: the question
