@@ -133,13 +133,15 @@ interface Props {
   peek?: boolean;
   /** The agent's input box is on its screen and nothing asks (the core's `at_box`): letters go to the composer then. */
   atBox?: boolean;
+  /** A session on another Mac: its terminal sends every key, as before (no Type in terminal there yet). */
+  remote?: boolean;
 }
 
-export function TerminalView({ core, id, active, fontSize, fontFamily, theme, connected, name, kind, copyOnSelect, osc52, peek = false, atBox = false }: Props) {
+export function TerminalView({ core, id, active, fontSize, fontFamily, theme, connected, name, kind, copyOnSelect, osc52, peek = false, atBox = false, remote = false }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const words = useHtmlLangT(); // ticket 492
   // Type in terminal (terminal/direct.ts): a Claude or Codex terminal sends its letters to the composer unless it is on.
-  const agentBox = !peek && (kind === 'claude' || kind === 'codex');
+  const agentBox = !peek && !remote && (kind === 'claude' || kind === 'codex');
   const direct = useDirect(id);
   const route = useRef({ agentBox, direct, atBox, noted: false });
   route.current = { ...route.current, agentBox, direct, atBox };

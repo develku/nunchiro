@@ -18,7 +18,8 @@ export function setDirect(core: CoreClient, id: string, value: boolean) {
   client = core;
   if (value) on.add(id);
   else on.delete(id);
-  void core.request({ op: 'direct', id, on: value }).catch(() => {});
+  // A core that refuses it (an older one, a remote session) holds nothing: the switch goes off again.
+  void core.request({ op: 'direct', id, on: value }).catch(() => value && on.delete(id) && (window.clearInterval(renew), emit()));
   window.clearInterval(renew);
   if (on.size) renew = window.setInterval(tick, 30_000);
   emit();
@@ -42,4 +43,6 @@ export function composerText(data: string): string | null {
 
 /** The terminal hands its text to the session's composer (CentreView puts it at the caret). */
 export const COMPOSE = 'nunchiro:compose';
-export const toComposer = (id: string, text: string) => window.dispatchEvent(new CustomEvent(COMPOSE, { detail: { id, text } }));
+export type Compose = { id: string; text: string; taken?: boolean };
+/** One listener takes each piece (`taken`), however many views listen. */
+export const toComposer = (id: string, text: string) => window.dispatchEvent(new CustomEvent<Compose>(COMPOSE, { detail: { id, text } }));

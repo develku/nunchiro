@@ -39,7 +39,7 @@ import { importedOfTab, importedTitle, isImportedTab } from '../firstrun/importe
 import { ImportedChat } from '../firstrun/ImportedChat';
 import { useTabs } from './useTabs';
 import { RoomView } from '../room/RoomView'; // ticket 571
-import { COMPOSE, directOnly } from '../terminal/direct';
+import { COMPOSE, directOnly, type Compose } from '../terminal/direct';
 import { getDraft, setDraft } from '../composer-drafts';
 import { isRoomTab, roomOfTab, roomTabId, useRoom } from '../room/room';
 import { leadOf, leadSeatMate, placeOfMate, seatOf, useTeam, workingFor } from '../lead/lead'; // ticket 990
@@ -355,7 +355,10 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
       return true;
     };
     const on = (e: Event) => {
-      const { id, text } = (e as CustomEvent<{ id: string; text: string }>).detail;
+      const piece = (e as CustomEvent<Compose>).detail;
+      if (piece.taken) return; // another view took it
+      piece.taken = true;
+      const { id, text } = piece;
       if (put(id, text)) return;
       run('focus.composer'); // a terminal tab shows its composer on this
       requestAnimationFrame(() => requestAnimationFrame(() => put(id, text) || setDraft(id, getDraft(id) + text)));
@@ -366,7 +369,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
   const paneTerm = (id: string, on: boolean, peek = false) => {
     const t = byId.get(id);
     if (!t) return null; // a session that left the snapshot between two renders
-    return <TerminalView key={id} core={core} id={id} active={on} fontSize={settings.termFontSize} fontFamily={settings.termFont} theme={termTheme} connected={connected} name={sessionName(t)} kind={t.kind} copyOnSelect={settings.copyOnSelect} osc52={settings.osc52} peek={peek} atBox={!!t.at_box} />;
+    return <TerminalView key={id} core={core} id={id} active={on} fontSize={settings.termFontSize} fontFamily={settings.termFont} theme={termTheme} connected={connected} name={sessionName(t)} kind={t.kind} copyOnSelect={settings.copyOnSelect} osc52={settings.osc52} peek={peek} atBox={!!t.at_box} remote={!!t.machine} />;
   };
   // needs 171: arrows move to the neighbour and activate it (wrap), Home/End the first/last. Ticket 571: the project's Room tab is
   // the last stop of the walk.
@@ -751,7 +754,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
           {s ? <i className="st" data-s={shownStatus(s)} /> : null}
           <span className="dim">{s ? `${base(s.project)} · ${t(statusKey(s))}` : t('rest.st.notRunning')}</span>
         </div>
-        <div className="pane">{s?.state === 'running' ? <TerminalView core={core} id={s.id} active fontSize={settings.termFontSize} fontFamily={settings.termFont} theme={termTheme} connected={connected} name={sessionName(s)} kind={s.kind} copyOnSelect={settings.copyOnSelect} osc52={settings.osc52} atBox={!!s.at_box} /> : <div className="empty">{t('rest.st.pinNotRunning', { name: pin })}</div>}</div>
+        <div className="pane">{s?.state === 'running' ? <TerminalView core={core} id={s.id} active fontSize={settings.termFontSize} fontFamily={settings.termFont} theme={termTheme} connected={connected} name={sessionName(s)} kind={s.kind} copyOnSelect={settings.copyOnSelect} osc52={settings.osc52} atBox={!!s.at_box} remote={!!s.machine} /> : <div className="empty">{t('rest.st.pinNotRunning', { name: pin })}</div>}</div>
       </div>
     );
   };
