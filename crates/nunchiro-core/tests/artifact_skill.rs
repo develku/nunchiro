@@ -927,6 +927,7 @@ fn variadic_launch_flags_never_swallow_the_prompt() {
         Request::ExtensionsMcpAdd {
             name: "files".into(),
             command: vec!["files-mcp".into()],
+            project: None,
         },
     )
     .unwrap();

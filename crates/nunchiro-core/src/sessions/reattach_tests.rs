@@ -205,6 +205,98 @@ fn reattach_keeps_scrollback_and_writes() {
     let _ = fs::remove_dir_all(home);
 }
 
+/// The delivery record: a core restart with 4 running sessions writes 4 before and 4 back; a first start, with none
+/// running before, writes no restart row.
+#[test]
+fn a_restart_with_four_sessions_records_four_before_and_four_after() {
+    let home = scratch("record");
+    let mut core = Sessions::open(&home).unwrap();
+    assert!(
+        crate::record::read(&home).restarts.is_empty(),
+        "a first start is no restart"
+    );
+    for _ in 0..4 {
+        shell(&mut core, &home, &["/bin/cat"]);
+    }
+    core.leave().unwrap();
+    drop(core);
+    let mut core = Sessions::open(&home).unwrap();
+    let restarts = crate::record::read(&home).restarts;
+    assert_eq!(restarts.len(), 1, "{restarts:?}");
+    assert_eq!((restarts[0].before, restarts[0].after), (4, 4));
+    core.handle(Request::Stop).unwrap();
+    drop(core);
+    let _ = fs::remove_dir_all(home);
+}
+
+fn restarts(home: &Path) -> Vec<(usize, usize)> {
+    crate::record::read(home)
+        .restarts
+        .iter()
+        .map(|r| (r.before, r.after))
+        .collect()
+}
+/// The delivery record: a session whose agent ended while the core ran was not running when the core went down.
+#[test]
+fn a_session_that_ended_earlier_is_not_counted_at_the_restart() {
+    let home = scratch("record-ended");
+    let mut core = Sessions::open(&home).unwrap();
+    let ids: Vec<String> = (0..4)
+        .map(|_| shell(&mut core, &home, &["/bin/cat"]).id)
+        .collect();
+    let pid = core.entries[&ids[0]].meta.pid.unwrap();
+    unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+    wait("the agent's end seen", || {
+        core.tick().unwrap();
+        core.entries[&ids[0]].meta.state != SessionState::Running
+    });
+    core.leave().unwrap();
+    drop(core);
+    let mut core = Sessions::open(&home).unwrap();
+    assert_eq!(restarts(&home), vec![(3, 3)]);
+    core.handle(Request::Stop).unwrap();
+    drop(core);
+    let _ = fs::remove_dir_all(home);
+}
+/// The delivery record: a session lost at one restart is not lost again at the next. The core that lost it ended
+/// before any save (a kill -9), so sessions.json still names it running.
+#[test]
+fn a_session_lost_once_is_not_counted_again() {
+    let home = scratch("record-lost");
+    let mut core = Sessions::open(&home).unwrap();
+    let ids: Vec<String> = (0..4)
+        .map(|_| shell(&mut core, &home, &["/bin/cat"]).id)
+        .collect();
+    core.leave().unwrap();
+    drop(core);
+    // Its holder ended while no core ran (as `a_holder_gone_while_no_core_ran_is_not_running` makes it).
+    let mut store: serde_json::Value =
+        serde_json::from_slice(&fs::read(home.join("sessions.json")).unwrap()).unwrap();
+    let socket = store["live"][&ids[0]]["holder"]["socket"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    fs::remove_file(socket).unwrap();
+    let mut gone = std::process::Command::new("/usr/bin/true").spawn().unwrap();
+    let pid = gone.id();
+    let started = crate::peer::started(pid).unwrap_or(1);
+    gone.wait().unwrap();
+    store["live"][&ids[0]]["holder"]["pid"] = pid.into();
+    store["live"][&ids[0]]["holder"]["started"] = started.into();
+    let crashed = serde_json::to_vec(&store).unwrap();
+    fs::write(home.join("sessions.json"), &crashed).unwrap();
+    let mut core = Sessions::open(&home).unwrap();
+    assert_eq!(restarts(&home), vec![(4, 3)]);
+    core.leave().unwrap();
+    drop(core);
+    fs::write(home.join("sessions.json"), &crashed).unwrap();
+    let mut core = Sessions::open(&home).unwrap();
+    assert_eq!(restarts(&home), vec![(4, 3), (3, 3)]);
+    core.handle(Request::Stop).unwrap();
+    drop(core);
+    let _ = fs::remove_dir_all(home);
+}
+
 /// Ticket 512 (505 review): where this run's output starts survives a core restart, so a resumed session's card
 /// never reads the earlier run's end mark from its seed. The seed here is a stand-in: `run_start` set as a resume's
 /// seed length sets it.

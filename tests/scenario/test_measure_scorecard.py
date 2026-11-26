@@ -160,6 +160,10 @@ class RubricV2(unittest.TestCase):
         self.assertEqual(s.manual_figures(doc, "2026-12-09 10:00"), {})  # older than the 7 days before the run
         self.assertEqual(s.manual_figures(None, "2026-11-28"), {})
 
+    def test_the_delivery_record_reader(self):
+        import record
+        record.self_test()
+
     def test_holders_by_session_id_or_by_the_core_binary(self):
         a, b = "11111111-a6f0-4d70-ae77-123456789abc", "22222222-a6f0-4d70-ae77-123456789abc"
         args = {1: "/x/Nunchiro RC.app/Contents/MacOS/nunchiro serve", 2: f"/x/Nunchiro RC.app/Contents/MacOS/nunchiro hold {a}",

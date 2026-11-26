@@ -1151,6 +1151,9 @@ pub enum Request {
     ExtensionsMcpAdd {
         name: String,
         command: Vec<String>,
+        /// Only sessions of this project folder get it; absent (an older window or CLI too), every project.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        project: Option<PathBuf>,
     },
     ExtensionsMcpRemove {
         name: String,

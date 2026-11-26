@@ -697,6 +697,13 @@ impl Sessions {
                 if row.status != "queued" {
                     return Err("send is not queued".into());
                 }
+                // The delivery record: a prompt canceled after a dropped Enter needed a person (once: a row the core
+                // gave up on was counted then).
+                if (self.drops.contains_key(&send) || self.retried.contains(&send))
+                    && !self.spent.contains(&send)
+                {
+                    crate::record::count(&self.home, false, false, true);
+                }
                 self.finish_send(&id, &send, "canceled")?;
                 Ok(Reply::Ack)
             }
@@ -1477,6 +1484,10 @@ impl Sessions {
             self.touch_input(id);
         }
         let attention = self.queue.attention(id);
+        // The delivery record: a row whose Enter was dropped before went again by the core's own hand; one the core gave
+        // up on (`spent`) was counted as needing a person then.
+        let dropped = self.drops.contains_key(send) || self.retried.contains(send);
+        let spent = self.spent.contains(send);
         let meta = &mut self.entries.get_mut(id).ok_or("session not found")?.meta;
         let index = meta
             .send_queue
@@ -1487,6 +1498,7 @@ impl Sessions {
             let row = meta.send_queue.remove(index);
             let agent = row.sender != "user";
             let owner_sent = !agent && row.submit && status == "delivered";
+            let prompt = row.submit; // keys, text without Enter, answers and model switches are no prompt
             retire_send(meta, &mut self.widget_hashes, row, status);
             // Ticket 1089: the room shows when a seat's line reached this seat. The time goes to the room's
             // cursors.json, never onto the send row: an older core refuses a store with a key it does not know.
@@ -1511,6 +1523,14 @@ impl Sessions {
             }
             if owner_sent {
                 self.owner_submitted(id); // gap rule: a Later goes after the turn this prompt starts
+            }
+            match status {
+                "delivered" if prompt => crate::record::count(&self.home, true, dropped, false),
+                // A row it once dropped failed: a person must see to it.
+                "failed" if dropped && !spent => {
+                    crate::record::count(&self.home, false, false, true)
+                }
+                _ => {}
             }
             return Ok(());
         }

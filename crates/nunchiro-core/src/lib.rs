@@ -47,6 +47,7 @@ mod codex_sandbox; // v1b-38
 mod peer;
 mod pty;
 pub mod queue;
+pub mod record; // counts of delivered and resent prompts and of core restarts
 pub mod room; // ticket 571
 pub mod server;
 mod sessions;

@@ -2250,6 +2250,16 @@ fn wait_end(f: &Flood, bytes: usize) {
 fn behind(f: &Flood) -> bool {
     offset(f) < f.core.entries[&f.id].pty.as_ref().unwrap().end()
 }
+/// The delivery record's counts over every day it holds (a test may cross midnight).
+fn recorded(home: &Path) -> crate::record::Day {
+    let mut sum = crate::record::Day::default();
+    for d in crate::record::read(home).days.values() {
+        sum.delivered += d.delivered;
+        sum.resent += d.resent;
+        sum.person += d.person;
+    }
+    sum
+}
 fn send_row(f: &Flood, send: &str) -> crate::delivery::Send {
     let meta = &f.core.entries[&f.id].meta;
     meta.send_queue
@@ -5545,6 +5555,21 @@ fn t1094_a_users_message_dropped_by_the_picker_waits_again() {
     let row = send_row(&f, &send.id);
     assert_eq!(row.status, "queued", "{row:?}");
     assert_eq!(row.settle.as_deref(), Some("enter_dropped_picker"));
+    // The delivery record: he cancels his dropped prompt; it needed a person.
+    f.core
+        .handle(Request::CancelSend {
+            id: f.id.clone(),
+            send: send.id.clone(),
+        })
+        .unwrap();
+    assert_eq!(
+        recorded(&f.home),
+        crate::record::Day {
+            delivered: 0,
+            resent: 0,
+            person: 1
+        }
+    );
 }
 /// Ticket 1094 (review r1 point 1): a delivery the agent took no turn from (its Enter dropped, a submit refused) is
 /// in flight only until the idle agent shows its input box INFLIGHT_IDLE later: an idle agent never holds every
@@ -5750,6 +5775,15 @@ fn t1094_his_own_enter_sends_the_dropped_copy_once() {
         f.core.tick().unwrap();
     }
     assert_eq!(copies(&f), first, "one copy: the one his Enter sent");
+    assert_eq!(
+        recorded(&f.home),
+        crate::record::Day {
+            delivered: 1,
+            resent: 0,
+            person: 1
+        },
+        "his Enter sent it: delivered once, needed a person, not resent"
+    );
 }
 /// Ticket 1094 r6 (lead): the box proves the copy, but no turn starts after his Enter (Claude did not take it). The row
 /// is never shown delivered: once the idle agent showed no turn for HAND_PROOF, it goes again.
@@ -7903,7 +7937,7 @@ fn ext_settings(on: Option<&[&str]>) -> Settings {
     s
 }
 fn flag_strings(home: &Path, s: &Settings, kind: AgentKind) -> Vec<String> {
-    extension_flags(home, s, kind, false)
+    extension_flags(home, s, kind, false, Path::new("/p"))
         .unwrap()
         .into_iter()
         .map(|o| o.into_string().unwrap())
@@ -7992,7 +8026,7 @@ fn extensions_never_write_claude_or_codex_home() {
     let before = snapshot(&user);
     // Every item on: the shipped skill, a custom folder, an own MCP server, orchestration's Codex pointer.
     fs::create_dir_all(home.join("extensions/mine/skills")).unwrap();
-    crate::extensions::mcp_add(&home, "files", &["files-mcp".into()]).unwrap();
+    crate::extensions::mcp_add(&home, "files", &["files-mcp".into()], None).unwrap();
     let mut s = ext_settings(Some(&["nunchiro", "custom:mine"]));
     s.orchestration.enabled = true;
     for kind in [AgentKind::Claude, AgentKind::Codex] {
@@ -8072,6 +8106,7 @@ fn extension_ops_refused_to_session_callers() {
         Request::ExtensionsMcpAdd {
             name: "evil".into(),
             command: vec!["sh".into()],
+            project: None,
         },
         Request::ExtensionsMcpRemove {
             name: "evil".into(),
@@ -11188,6 +11223,15 @@ fn t1085_a_dropped_automatic_line_is_cleared_and_goes_after_the_owner() {
                 "{text}"
             );
             assert_eq!(auto(&f).status, "delivered", "{text}");
+            assert_eq!(
+                recorded(&f.home),
+                crate::record::Day {
+                    delivered: 1,
+                    resent: 1,
+                    person: 0
+                },
+                "{text}: the dropped line the core sent again (his words went as keys, not a queued row)"
+            );
         } else {
             assert_eq!(
                 String::from_utf8_lossy(&got(&f)),
@@ -11584,6 +11628,23 @@ fn t1121_repastes_are_bounded() {
         "pasted past the bound"
     );
     assert_eq!(send_row(&f, &row.id).status, "queued");
+    // The delivery record: the core gave up on his prompt, so it needs a person, once (his cancel counts no more).
+    let person = crate::record::Day {
+        delivered: 0,
+        resent: 0,
+        person: 1,
+    };
+    assert_eq!(recorded(&f.home), person, "given up: needs a person");
+    for _ in 0..3 {
+        f.core.tick().unwrap();
+    }
+    f.core
+        .handle(Request::CancelSend {
+            id: id.clone(),
+            send: row.id.clone(),
+        })
+        .unwrap();
+    assert_eq!(recorded(&f.home), person, "counted once");
 }
 /// A dropped row goes again only into an empty box. Codex's box held the owner's half-typed words with the row's copy
 /// behind them (`› half typed reply ok #9`): read as free of the copy, the row was pasted behind it two more times. A
@@ -11765,6 +11826,15 @@ fn t1121_a_stopped_automatic_line_fails() {
     f.core.tick().unwrap();
     assert_eq!(send_row(&f, &row.id).status, "failed");
     assert!(!got(&f).windows(11).any(|w| w == b"room notice"));
+    assert_eq!(
+        recorded(&f.home),
+        crate::record::Day {
+            delivered: 0,
+            resent: 0,
+            person: 1
+        },
+        "an automatic line given up on needs a person, once"
+    );
 }
 /// Ticket 1121 review r2: the box proof never writes the Enter past output not read yet. A dialog drawn after the box
 /// showed the paste would take it.
