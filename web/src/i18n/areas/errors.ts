@@ -67,6 +67,8 @@ declare module '../index' {
     'err.note.handoffRead': true;
     'err.note.handoffSent': true;
     'err.note.undo': true;
+    'err.lowMemory': true;
+    'err.lowMemory.todo': true;
   }
 }
 
@@ -137,6 +139,9 @@ export const en = {
   'err.note.handoffRead': 'Handoff not read: {error}',
   'err.note.handoffSent': 'Not handed off: {error}',
   'err.note.undo': 'Could not undo: {error}',
+  // English only until release; other languages fall back to these.
+  'err.lowMemory': 'Your Mac is low on memory, so the new session was not started.',
+  'err.lowMemory.todo': 'Close something and try again, or run nunchiro agent start --anyway.',
 };
 
 export const ko = {

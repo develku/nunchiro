@@ -1248,7 +1248,11 @@ pub(crate) fn open_seat(
                 .launch_as(None, start.clone(), false)?
                 .owner_start(),
             Opener::Schedule(_) => sessions.launch_as(None, start.clone(), false)?,
-            Opener::Lead(caller) => sessions.launch_as(Some(caller), start.clone(), false)?,
+            Opener::Lead(caller) => {
+                // Only a seat that would start now is held; an open seat took the task above.
+                crate::pressure::check(crate::pressure::Who::Session, false, "team open")?;
+                sessions.launch_as(Some(caller), start.clone(), false)?
+            }
         }
     };
     // As the owner's Start: a missing agent still opens a tab, with its card.

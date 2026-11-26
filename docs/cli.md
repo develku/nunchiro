@@ -57,9 +57,11 @@ restart` and the plain `exit` request have no blockers: they end ACP chats, sign
 sends. Both wait up to 40 s for the old core to wind down (a blocked hook or a worktree removal can hold it that long).
 
 ### `nunchiro serve status [--json]`
-Prints `{"core": <bool>, "holders": [{"socket", "session", "orphaned"}], "record": {"days", "restarts"}}`: whether a
-core runs, and every live session holder in this data folder with the session that records it. A holder is `orphaned`
-when no core runs or no session record names it (an unknown holder, which a core never adopts). Never starts a core.
+Prints `{"core": <bool>, "holders": [{"socket", "session", "orphaned"}], "record": {"days", "restarts"},
+"low_memory_kills_7d": <n>}`: whether a core runs, and every live session holder in this data folder with the session
+that records it. A holder is `orphaned` when no core runs or no session record names it (an unknown holder, which a core
+never adopts). `low_memory_kills_7d` counts the low-memory kills macOS reported in the last 7 days (its JetsamEvent
+reports; `null` when they cannot be listed). Never starts a core.
 
 `record` is the delivery record of the last 30 days (`record.json` in the data folder, counts only, never message
 text): `days` maps each local date to `delivered` (queued prompts that reached the agent with their Enter: `agent prompt`,
@@ -266,7 +268,12 @@ with what it asks in `pending`, and stderr says `agent_blocked: ...`. Per verb:
 `nunchiro agent` alone, or any agent verb with `--help` among its options (before `--`), prints every agent and room
 verb's usage and exits 0; it starts nothing and sends nothing.
 
-### `nunchiro agent start <name> --kind claude|codex --project <dir> [--worktree] [--model <m>] [--effort <level>] [--env <KEY=VALUE>]... [--receipt <id>] [-- <args>...]`
+### `nunchiro agent start <name> --kind claude|codex --project <dir> [--worktree] [--model <m>] [--effort <level>] [--env <KEY=VALUE>]... [--receipt <id>] [--anyway] [-- <args>...]`
+While macOS reports memory pressure (warning or critical), a new agent session is not started and the command says so
+in one sentence that names memory (one reading at the start; running sessions, resumed conversations, model switches
+and sessions a core brings back are never held; a reading that fails allows the start). `--anyway` starts it all the
+same; only the owner can, never a session. A start from the window is held at critical pressure only. Each hold writes
+one line to the core's log.
 Starts a session labeled `<name>`; a name that starts with `-` is refused with a usage error (`agent start --help` prints the usage and starts nothing). (`--agent acp:<name>` in place of `--kind` starts an ACP agent). Same options and reply as `session start`, in any project, from inside a session
 too. The reply carries a `receipt` (24 hex characters, made up when `--receipt` is not given). A receipt is 1-128
 printable ASCII characters without spaces; any other value (an empty one too) is refused with `start_receipt_invalid`.
