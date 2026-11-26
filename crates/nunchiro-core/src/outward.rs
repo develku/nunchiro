@@ -317,9 +317,8 @@ fn codex_hook_listed(list: &Value) -> bool {
 /// policy read that only picks the refusal's words). Measured 2026-11-26 on an Apple-silicon Mac while 2 rustc ran: live
 /// Codex 0.161.0 answered both in 98 to 357 ms (20 cold starts, median 149), the tests' Python fake in at most 263 ms.
 /// 10 s is about 28 times the slowest, and twice the 5 s a loaded CI runner's fake once took (the old bound per
-/// question). It stays under the 15 s a CLI caller waits for the core's reply (`server::call`), leaving 5 s for the
-/// rest of the start, so a start is never refused to its caller while the core goes on with it. A Codex still silent
-/// at the deadline is refused, never taken as a yes. The wait is off the registry lock (`Launch::ask_codex`), so it
+/// question). A caller waits longer for a start's reply than the whole start may take (`server::START_REPLY_WAIT`).
+/// A Codex still silent at the deadline is refused, never taken as a yes. The wait is off the registry lock (`Launch::ask_codex`), so it
 /// holds that one start only.
 pub(crate) const CODEX_ASK_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
 
