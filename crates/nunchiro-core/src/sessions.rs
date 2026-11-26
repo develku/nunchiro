@@ -750,7 +750,9 @@ impl Sessions {
                 self.tree = Ok(next.clone());
                 Ok(Reply::Tree { tree: next })
             }
-            Request::Start { .. } => Err("start requires launch preparation".into()),
+            Request::Start { .. } | Request::StartAnyway { .. } => {
+                Err("start requires launch preparation".into())
+            }
             Request::List | Request::Snapshot => self.snapshot(),
             // V2.5-30: the owner outside every session has no children of its own.
             Request::AgentList { mine: true } => Err("agent list --mine runs inside a session".into()),

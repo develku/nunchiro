@@ -781,7 +781,12 @@ fn serve_status(home: &Path) -> Result<(), String> {
             })
         })
         .collect();
-    println!("{}", serde_json::json!({"core": core, "holders": holders}));
+    // The low-memory kills macOS reported over the last 7 days (null when its reports cannot be listed).
+    let kills = nunchiro_core::pressure::kills(7);
+    println!(
+        "{}",
+        serde_json::json!({"core": core, "holders": holders, "low_memory_kills_7d": kills})
+    );
     Ok(())
 }
 // v1a-09: from a terminal, ask once, listing what the full quit ends. Scripts (no tty) and `--yes` skip it.
@@ -1388,6 +1393,7 @@ fn parse(args: &[String]) -> Result<Request, String> {
             let mut acp = None; // V2-4a
             let mut env = std::collections::BTreeMap::new(); // ticket 573; the core checks the names
             let mut receipt = None; // ticket 573 slice 2
+            let mut anyway = false; // the owner's start past a memory-pressure hold
             let mut i = 0;
             while i < tail.len() {
                 match tail[i] {
@@ -1396,6 +1402,7 @@ fn parse(args: &[String]) -> Result<Request, String> {
                         break;
                     }
                     "--worktree" => session.worktree = true,
+                    "--anyway" => anyway = true,
                     option => {
                         i += 1;
                         let value = *tail
@@ -1453,11 +1460,17 @@ fn parse(args: &[String]) -> Result<Request, String> {
                 session.kind = AgentKind::Acp;
                 session.args = vec![name];
             }
-            Ok(Request::Start {
+            let start = Request::Start {
                 session,
                 folder: None,
                 env,
                 receipt,
+            };
+            Ok(match anyway {
+                true => Request::StartAnyway {
+                    start: Box::new(start),
+                },
+                false => start,
             })
         }
         _ => Err("unknown command; use --help".into()),
@@ -1882,6 +1895,22 @@ mod tests {
         ] {
             assert!(parse_args(&[&start[..], bad].concat()).is_err(), "{bad:?}");
         }
+    }
+
+    // `--anyway` wraps the start, which the core lets past a memory-pressure hold for the owner only.
+    #[test]
+    fn session_start_anyway_wraps_the_start() {
+        let parse_args = |a: &[&str]| parse(&a.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        let Ok(Request::StartAnyway { start }) =
+            parse_args(&["session", "start", "--anyway", "--project", "/tmp"])
+        else {
+            panic!("not a start anyway");
+        };
+        assert!(matches!(*start, Request::Start { .. }));
+        assert!(matches!(
+            parse_args(&["session", "start", "--project", "/tmp"]),
+            Ok(Request::Start { .. })
+        ));
     }
 
     // V2-4a

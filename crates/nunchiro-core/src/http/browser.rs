@@ -628,6 +628,7 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | BoardSelf
         | TreeEdit { .. }
         | Start { .. }
+        | StartAnyway { .. }
         | SendKeys { .. }
         | Resize { .. }
         | Close { .. }

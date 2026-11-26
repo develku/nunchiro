@@ -972,6 +972,11 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         receipt: Option<String>,
     },
+    /// `agent start --anyway`: the owner's `Start` (the only request it carries) that a memory-pressure hold lets
+    /// through (`pressure::check`). A session's own token asking it is refused.
+    StartAnyway {
+        start: Box<Request>,
+    },
     List,
     Snapshot,
     Read {

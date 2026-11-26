@@ -97,6 +97,7 @@ pub mod roles; // ticket 990 slice i: the user's roles
 pub mod firstrun;
 pub mod import; // V2.5-12
 // v2-5b
+pub mod pressure; // a new seat waits while the Mac is low on memory
 pub mod problems;
 #[cfg(test)]
 mod worktree_base_tests; // ticket 374

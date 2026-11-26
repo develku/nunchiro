@@ -68,7 +68,9 @@ const REPLY_WAIT: Duration = Duration::from_secs(15);
 const START_REPLY_WAIT: Duration = Duration::from_secs(120);
 fn reply_wait(request: &Request) -> Duration {
     match request {
-        Request::Remote { request, .. } => reply_wait(request),
+        Request::Remote { request, .. } | Request::StartAnyway { start: request } => {
+            reply_wait(request)
+        }
         Request::Start { .. } | Request::TeamOpen { .. } | Request::SwitchModel { .. } => {
             START_REPLY_WAIT
         }
@@ -753,6 +755,17 @@ fn connection(
         if !owner {
             presented = Some(env.token.clone());
         }
+        // `agent start --anyway`: the owner's start past a memory-pressure hold; never a session's.
+        let anyway = matches!(env.request, Request::StartAnyway { .. });
+        if let Request::StartAnyway { start } = env.request {
+            if !owner {
+                return Err(crate::pressure::OWNER_ONLY.into());
+            }
+            let Request::Start { .. } = *start else {
+                return Err("start_anyway carries a start only".into());
+            };
+            env.request = *start;
+        }
         if let Request::WindowAuth = env.request {
             // Ticket 1002 (Fable lane 2 review M1): the window's token (which answers Outbox cards) goes to the app only.
             let app = peer.as_ref().is_ok_and(|p| crate::peer::is_app(p, home));
@@ -1221,6 +1234,7 @@ fn connection(
                 "team open is for a lead's session; the owner opens a teammate in Settings > Team",
             )?;
             let id = sessions.lead_may_open(caller, name)?;
+            crate::pressure::check(false)?;
             drop(sessions);
             return crate::team::open_seat(
                 registry,
@@ -1281,6 +1295,10 @@ fn connection(
                     }
                 }
                 claim.0 = Some(key);
+            }
+            // A new agent seat waits while the Mac is low on memory; a plain terminal is no seat.
+            if session.kind != AgentKind::Shell {
+                crate::pressure::check(anyway)?;
             }
             let mut launch = sessions
                 .launch_as(caller.as_ref(), session.clone(), false)?

@@ -2064,6 +2064,116 @@ fn a_new_seat_is_held_under_memory_pressure() {
     }
 }
 
+/// The owner starts a held seat anyway; a session's own token cannot, even with the owner's word for it.
+#[test]
+fn only_the_owner_starts_a_held_seat_anyway() {
+    let h = under_pressure("4");
+    let start = |anyway: bool| {
+        let start = Request::Start {
+            receipt: None,
+            env: Default::default(),
+            folder: None,
+            session: StartSession {
+                account: None,
+                kind: AgentKind::Codex,
+                project: h.home.clone(),
+                worktree: false,
+                label: String::new(),
+                args: vec![],
+                model: None,
+                effort: None,
+                resume: None,
+            },
+        };
+        match anyway {
+            true => Request::StartAnyway {
+                start: Box::new(start),
+            },
+            false => start,
+        }
+    };
+    let Ok(Reply::Started { session }) = call(&h.home, start(true)) else {
+        panic!("the owner's start anyway was held");
+    };
+    h.request(Request::Close { id: session.id });
+    // A session's token (a plain terminal, which is no seat and opens under pressure).
+    let s = print_env(&h, &["NUNCHIRO_TOKEN"]);
+    h.wait_text(&s.id, "NUNCHIRO_TOKEN:");
+    let out = h.read(&s.id);
+    let token = out
+        .split("NUNCHIRO_TOKEN:")
+        .nth(1)
+        .and_then(|t| t.lines().next())
+        .map(|t| t.trim_end().to_string())
+        .unwrap_or_else(|| panic!("no token in {out:?}"));
+    let raw = |request: &Request| {
+        use std::io::{BufRead, Write};
+        let mut stream = std::os::unix::net::UnixStream::connect(h.home.join("core.sock")).unwrap();
+        let line = serde_json::json!({"token": token, "request": request});
+        writeln!(stream, "{line}").unwrap();
+        let mut reply = String::new();
+        std::io::BufReader::new(stream)
+            .read_line(&mut reply)
+            .unwrap();
+        reply
+    };
+    let refused = raw(&start(true));
+    assert!(
+        refused.contains("Only you can start a session anyway"),
+        "{refused}"
+    );
+    let refused = raw(&start(false));
+    assert!(refused.contains("memory"), "{refused}");
+    let Reply::Snapshot { sessions, .. } = h.request(Request::Snapshot) else {
+        panic!("no snapshot");
+    };
+    let open = sessions.iter().filter(|s| s.state != SessionState::Closed);
+    assert_eq!(open.count(), 1, "only the terminal runs: {sessions:?}");
+    h.request(Request::Close { id: s.id });
+}
+
+/// A core that restarts while the Mac is low on memory brings back every saved session: only new seats are held.
+#[test]
+fn a_core_restart_under_memory_pressure_brings_every_session_back() {
+    let mut h = under_pressure("1");
+    let Ok(Reply::Started { session }) = start_codex(&h) else {
+        panic!("no seat");
+    };
+    let _ = call(&h.home, Request::Exit);
+    h.core.wait().unwrap();
+    let mut command = home::git_env::scrubbed(env!("CARGO_BIN_EXE_nunchiro"));
+    command
+        .arg("serve")
+        .env("NUNCHIRO_TEST_MEMORY_PRESSURE", "4")
+        .env("NUNCHIRO_HOME", &h.home)
+        .env("CODEX_HOME", h.home.join("codex-home"))
+        .env("HOME", h.home.join("user"))
+        .env("SHELL", "/bin/sh")
+        .env(
+            "PATH",
+            format!(
+                "{}/tests/fixtures:{}",
+                env!("CARGO_MANIFEST_DIR"),
+                std::env::var("PATH").unwrap()
+            ),
+        );
+    h.core = command.spawn().unwrap();
+    let until = Instant::now() + Duration::from_secs(30);
+    loop {
+        if let Ok(Reply::Snapshot { sessions, .. }) = call(&h.home, Request::Snapshot)
+            && let Some(back) = sessions.iter().find(|s| s.id == session.id)
+        {
+            assert_eq!(back.state, SessionState::Running, "{back:?}");
+            break;
+        }
+        assert!(Instant::now() < until, "the session did not come back");
+        thread::sleep(Duration::from_millis(50));
+    }
+    // A new seat on the restarted core is held.
+    assert!(start_codex(&h).unwrap_err().contains("memory"));
+    h.request(Request::Close { id: session.id });
+}
+
 #[test]
 fn gated_version_fixture_has_a_deadline_even_when_home_remains() {
     let h = Harness::new();

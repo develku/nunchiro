@@ -63,6 +63,7 @@ export const KNOWN: [RegExp, Key, Key?][] = [
   [/^too many grouped projects$/, 'err.groupedMax', 'err.groupedMax.todo'], // tree.rs:179
   [/^session holder did not answer; the agent still runs$/, 'err.holderSilent', 'err.later.todo'], // sessions.rs:4189
   [/^codex did not answer in time$/, 'err.codexSlow', 'err.later.todo'], // codex_reset.rs:219
+  [/^Your Mac is low on memory, so the new session was not started/, 'err.lowMemory', 'err.lowMemory.todo'], // pressure.rs HELD
   [/^too many themes loading; try again$/, 'err.themesBusy', 'err.later.todo'], // themes_online.rs:318
   // Ticket 551: files/search.rs:63 and :66, the two refusals a search shows.
   [/^search busy: try again in a moment$/, 'err.searchBusy', 'err.later.todo'],
