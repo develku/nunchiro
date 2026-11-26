@@ -773,6 +773,7 @@ fn usage_link_scan_is_capped() {
 // hit, output; footnote 2 there: cache hits on Opus 5.5 and Sonnet 5.5 cost 0.05x input, Fable 5.1 0.025x). They are
 // parsed here, not copied from `PRICES`, so a wrong literal in the code cannot agree with itself.
 const PRICE_PAGE_ROWS: &str = "\
+| Claude Fable 5.2 | $8 / MTok | $10 / MTok | $16 / MTok | $0.20 / MTok | $40 / MTok |
 | Claude Fable 5.1 | $10 / MTok | $12.50 / MTok | $20 / MTok | $0.25 / MTok | $50 / MTok |
 | Claude Fable 5 | $10 / MTok | $12.50 / MTok | $20 / MTok | $1 / MTok | $50 / MTok |
 | Claude Opus 5.5 | $4 / MTok | $5 / MTok | $8 / MTok | $0.20 / MTok | $20 / MTok |
@@ -835,7 +836,7 @@ fn usage_price_table_has_5x_and_fable_rows_with_dated_source() {
         );
         rows += 1;
     }
-    assert_eq!(rows, 17);
+    assert_eq!(rows, 18);
     assert_eq!(usage::price_of("claude-mystery-9"), None);
     let source = usage::PRICE_SOURCE;
     assert!(
