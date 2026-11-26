@@ -1064,6 +1064,10 @@ impl Sessions {
                 "a schedule is proposed from a lead's session; the user adds and changes one in the Schedules widget"
                     .into(),
             ),
+            // An offer is a bot's ask for the owner's card; the owner needs none.
+            Request::BotOffer { .. } => {
+                Err("a bot is offered from a bot's session; the user makes one in the Bots view".into())
+            }
             // Ticket 1002 lane 2: the user writes their own mail; a card is the Home lead's ask, spent by its seat.
             Request::OutboxStage { .. } | Request::OutboxSpend { .. } => {
                 Err("an Outbox card is staged and sent from the Home lead's session".into())

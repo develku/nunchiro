@@ -65,6 +65,7 @@ fn never(request: &Request) -> bool {
             | Request::ScheduleList // ticket 993: a lead's seat reads and proposes these, never a token
             | Request::SchedulePropose { .. }
             | Request::ScheduleChange { .. }
+            | Request::BotOffer { .. } // a bot's seat offers a bot, never a token
             | Request::OutboxStage { .. } // ticket 1002: a token never stages or spends an outward action
             | Request::OutboxSpend { .. }
     )
