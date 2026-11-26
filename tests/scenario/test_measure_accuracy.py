@@ -58,6 +58,57 @@ class Figures(unittest.TestCase):
     def test_a_side_with_no_records_has_no_figure(self):
         self.assertIsNone(a.figures(records("local"))["remote"]["delivery_missed_per_1000"])
 
+    def test_delivery_time_median_and_p95_per_side_and_in_the_total(self):
+        sends = [dict(where="local", submitted=True, draft=False, delivered_ms=ms) for ms in (300, 100, 400, 200)]
+        sends += [dict(where="local", submitted=False, draft=True, delivered_ms=None),  # a missed send has no time
+                  dict(where="remote", submitted=True, draft=False, delivered_ms=1000)]
+        f = a.figures(dict(sends=sends, readings=[], cards=[], outward=[], startup=[]))
+        self.assertEqual((f["local"]["delivery_median_ms"], f["local"]["delivery_p95_ms"]), (250, 400))
+        self.assertEqual((f["remote"]["delivery_median_ms"], f["remote"]["delivery_p95_ms"]), (1000, 1000))
+        self.assertEqual((f["total"]["delivery_median_ms"], f["total"]["delivery_p95_ms"]), (300, 1000))
+        self.assertIsNone(a.figures(records("local"))["remote"]["delivery_median_ms"])
+
+
+class Scorecard(unittest.TestCase):
+    """`scorecard.py accuracy` writes p33's prompt delivery time next to p34's figures, on a counted run only."""
+
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        import scorecard
+        self.s, self.dir = scorecard, Path(tempfile.mkdtemp(prefix="acc-test-"))
+        self.addCleanup(__import__("shutil").rmtree, self.dir, True)
+        patch = mock.patch.object(scorecard, "OUT_DIR", self.dir)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.mock = mock
+
+    def written(self, res):
+        with self.mock.patch.object(a, "main", return_value=(res, self.dir / "accuracy-x.json")):
+            self.s.accuracy_cmd(type("A", (), dict(args=[]))())
+        files = list(self.dir.glob("manual-*.json"))
+        return __import__("json").loads(files[0].read_text())["figures"] if files else None
+
+    def res(self, **over):
+        res = run(started="2026-11-27 10:00", minutes=90, prompts=500, **over)
+        for side, (med, p95) in dict(total=(1200, 3400), local=(1100, 3000), remote=(1500, 3900)).items():
+            res["figures"].setdefault(side, dict(res["figures"]["total"]))
+            res["figures"][side].update(delivery_median_ms=med, delivery_p95_ms=p95)
+        res["counted"], res["not_counted"] = a.verdict(res)
+        res["mode"] = "counted" if res["counted"] else "self-test, not counted"
+        return res
+
+    def test_a_counted_run_writes_the_total_median_with_each_side_in_its_evidence(self):
+        got = self.written(self.res())["prompt_delivery_ms"]
+        self.assertEqual(got["value"], 1200)
+        for part in ("median 1200 ms, p95 3400 ms in total", "this Mac median 1100 ms, p95 3000 ms",
+                     "second Mac median 1500 ms, p95 3900 ms"):
+            self.assertIn(part, got["evidence"])
+
+    def test_a_self_test_writes_no_delivery_time(self):
+        self.assertIsNone(self.written(self.res(self_test=True)))
+
 
 class Counted(unittest.TestCase):
     def test_a_full_real_run_with_the_second_mac_counts(self):
