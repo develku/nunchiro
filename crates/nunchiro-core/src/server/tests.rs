@@ -161,3 +161,22 @@ fn flock_failure_names_a_non_contention_errno() {
         "{other}"
     );
 }
+
+/// A core that writes its reply and hangs up before the client's first read: macOS refuses SO_RCVTIMEO on that
+/// socket with EINVAL, and the reply must still be read, not turned into a refusal.
+#[test]
+fn reply_is_read_after_the_core_hung_up() {
+    let (client, core) = UnixStream::pair().unwrap();
+    (&core).write_all(b"{\"ok\":true}\n").unwrap();
+    core.shutdown(std::net::Shutdown::Both).unwrap();
+    drop(core);
+    let until = Some(Instant::now() + Duration::from_secs(5));
+    let mut line = String::new();
+    BufReader::new(Until {
+        stream: client,
+        until,
+    })
+    .read_line(&mut line)
+    .unwrap();
+    assert_eq!(line, "{\"ok\":true}\n");
+}
