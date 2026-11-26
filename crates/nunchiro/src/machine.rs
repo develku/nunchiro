@@ -123,7 +123,9 @@ fn stream(home: &Path) -> Result<(), String> {
         let Reply::Snapshot { sessions, .. } = super::call(home, Request::List)? else {
             return Err("unexpected list reply".into());
         };
-        let line = serde_json::json!({"type":"sessions","sessions":sessions}).to_string();
+        // `ssh_login`: this core cannot read the login keychain; the other side tells the owner (it is read each
+        // time, since a restart may have moved the core into the login session).
+        let line = serde_json::json!({"type":"sessions","sessions":sessions,"ssh_login":machines::core_in_ssh_login(home)}).to_string();
         if line != last {
             writeln!(out, "{line}")
                 .and_then(|()| out.flush())

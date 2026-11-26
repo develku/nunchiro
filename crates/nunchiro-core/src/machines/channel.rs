@@ -27,6 +27,39 @@ pub fn accepts(remote: u32) -> bool {
     remote == PROTOCOL || remote == PROTOCOL - 1
 }
 /// The relay's side of the same window: the newer local core decides, so a relay takes its own protocol and the next.
+/// What sshd sets for every login and its children.
+const SSH_LOGIN_ENV: [&str; 3] = ["SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"];
+/// This process runs inside an SSH login.
+pub fn ssh_login() -> bool {
+    SSH_LOGIN_ENV.iter().any(|k| std::env::var_os(k).is_some())
+}
+/// Whether the session a core is born in matters for `home`: on macOS, where it decides if the login keychain can be
+/// read. A run told which keychain to use (`NUNCHIRO_KEYCHAIN`: every test and scenario, through cargo's and the
+/// scenarios' environment) is left out, and so is a home under the temp folder (a test binary started by hand), as
+/// neither gets a login keychain item (`start_secrets`): a test run inside an SSH login starts its cores as everywhere
+/// else. A fixture that names its `launchctl` opts in.
+pub fn login_session_matters(home: &Path) -> bool {
+    cfg!(target_os = "macos")
+        && (std::env::var_os("NUNCHIRO_LAUNCHCTL").is_some()
+            || std::env::var_os("NUNCHIRO_KEYCHAIN").is_none()
+                && !crate::start_secrets::temp_home(home))
+}
+/// The core of `home` was started inside an SSH login (its start record keeps its environment): it lives in that
+/// login's security session, where the login keychain cannot be read, and so does every agent it starts.
+pub fn core_in_ssh_login(home: &Path) -> bool {
+    login_session_matters(home)
+        && crate::start_secrets::read_record(&home.join("core.start.json"))
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .is_some_and(|v| SSH_LOGIN_ENV.iter().any(|k| v["env"][k].is_string()))
+}
+/// What the driving machine says for a remote core that `core_in_ssh_login`.
+fn ssh_login_note(alias: &str) -> String {
+    format!(
+        "{alias}: agents there may not be signed in. Nunchiro on that Mac was started inside an SSH login, where the \
+         login keychain cannot be read. Log in at that Mac's screen, then run `nunchiro --machine {alias} serve \
+         restart` and start its sessions again."
+    )
+}
 pub fn relay_accepts(local: u32) -> bool {
     local == PROTOCOL || local == PROTOCOL + 1
 }
@@ -60,6 +93,7 @@ pub enum ChannelState {
 pub struct Channel {
     pub state: ChannelState,
     pub since_ms: u64,
+    /// Why the channel is not up; while it is up, what the owner must do on that machine (`ssh_login_note`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub local_protocol: u32,
@@ -519,8 +553,16 @@ fn stream(
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum Line {
-    Hello { protocol: u32, version: String },
-    Sessions { sessions: Vec<Session> },
+    Hello {
+        protocol: u32,
+        version: String,
+    },
+    Sessions {
+        sessions: Vec<Session>,
+        /// The relay's `core_in_ssh_login`; absent from a relay that does not say.
+        #[serde(default)]
+        ssh_login: bool,
+    },
 }
 fn greet(line: &[u8]) -> Result<(u32, String), String> {
     match serde_json::from_slice(line) {
@@ -538,7 +580,11 @@ fn greet(line: &[u8]) -> Result<(u32, String), String> {
 }
 // A malformed, unknown or repeated-hello line is dropped; a sessions line replaces this alias' rows.
 fn accept(registry: &Mutex<Sessions>, alias: &str, stopping: &Stop, line: &[u8]) {
-    let Ok(Line::Sessions { sessions }) = serde_json::from_slice(line) else {
+    let Ok(Line::Sessions {
+        sessions,
+        ssh_login,
+    }) = serde_json::from_slice(line)
+    else {
         return;
     };
     let mut rows = clean(alias, sessions);
@@ -579,6 +625,12 @@ fn accept(registry: &Mutex<Sessions>, alias: &str, stopping: &Stop, line: &[u8])
             row.pending.retain(|d| !answered.contains_key(&d.id));
         }
         s.remote.cache.insert(alias.into(), rows);
+        // The flag only chooses this side's own sentence; no text of the relay's is shown.
+        if let Some(channel) = s.remote.channels.get_mut(alias)
+            && channel.state == ChannelState::Up
+        {
+            channel.error = ssh_login.then(|| ssh_login_note(alias));
+        }
     }
 }
 /// Rows keep only well-formed, unique ids, and only the decisions of their own session.
