@@ -1,0 +1,36 @@
+{
+ "app": "Orca.app",
+ "version": "1.4.256",
+ "date": "2026-11-26 10:52",
+ "host": "Mac16,10",
+ "macos": "27.2.1 26B131",
+ "launch": {
+  "first_ms": 1709,
+  "warm_median_ms": 1053,
+  "warm_ms": [
+   1027,
+   1066,
+   1053
+  ],
+  "missed": 0
+ },
+ "idle": {
+  "processes": 13,
+  "footprint_mib": 521.3,
+  "rss_mib": 1106.6,
+  "idle_cpu_pct": 1.75,
+  "settle_s": 45,
+  "cpu_secs": 60,
+  "load": 2.56
+ },
+ "profile": "the owner's own profile as it was; nothing clicked, no agent session started by this run",
+ "ran_before_and_left_alone": [
+  {
+   "pid": 65902,
+   "command": "orca-terminal-host",
+   "still_running": true
+  }
+ ],
+ "our_pids_left": [],
+ "started_during_the_run_and_still_running": []
+}

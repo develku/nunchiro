@@ -1,8 +1,9 @@
 # The weekly full run (ticket 1152; scorecard p12 TR2): every web spec on both Playwright projects, and the Rust tests
 # that leave the default suite through the `measure` feature (scripts/extended-tests.sh). It replaces the MacBook
 # nightly (scripts/web-nightly.sh), whose result stayed in that machine's .scratch. Owner rule (owner 11-25): the full web
-# suite runs weekly, not per change; an out-of-date spec is deleted, not fixed. The opt-in projects @shots and @live are
-# not run: they need the owner's machine or live accounts (web/playwright.config.ts adds them only under PW_OPT_IN).
+# suite runs weekly, not per change; an out-of-date spec is deleted, not fixed. The opt-in @shots project (pictures,
+# sweeps, measures; no accounts) runs here too (ticket 1161). @live is not run: it needs real Claude and Codex
+# accounts, which hosted runners never get; it runs by hand on the owner's Mac before a release (docs/measure/README.md).
 # The `summary` job writes the counts to the run summary and to the `full-run-result` artifact (docs/measure/README.md):
 #   gh run list --workflow full.yml --limit 1   then   gh run download <id> -n full-run-result
 name: Full
@@ -21,16 +22,17 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  WEB_SHARDS: 4 # keep equal to the length of the web job's `shard` list; summary expects twice this many reports (2 projects)
+  WEB_SHARDS: 4 # keep equal to the length of the web job's `shard` list; summary expects twice this many reports (2 projects) plus shots-1
 
 jobs:
-  # At most 3 web shards and the Rust job at once: 4 macOS jobs, one of the free plan's 5 left for pull requests.
+  # At most 2 web shards, the shots job and the Rust job at once: 4 macOS jobs, one of the free plan's 5 left for pull
+  # requests.
   web:
     runs-on: macos-latest
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 2
       matrix:
         project: [chromium, webkit]
         shard: [1, 2, 3, 4]
@@ -73,6 +75,54 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # The opt-in @shots tests (ticket 1161): the theme sweep's pictures (.scratch/sweep) are kept as the `shots` artifact.
+  shots:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      # Setup as the web job, Chromium only.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: macos-dev
+          save-if: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: scripts/setup-worktree.sh
+      - run: git config --global user.name ci && git config --global user.email ci@localhost
+      - id: pw
+        run: echo "version=$(cd web && pnpm exec playwright --version)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+      - run: pnpm exec playwright install chromium
+        working-directory: web
+      - name: playwright test (shots)
+        working-directory: web
+        env:
+          PW_OPT_IN: shots
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/pw-json/shots-1.json
+        run: pnpm exec playwright test --project=shots --workers=2 --retries=1 --reporter=list,json
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pw-json-shots
+          path: pw-json/
+          retention-days: 7
+          if-no-files-found: ignore
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: shots
+          path: .scratch/sweep/
+          retention-days: 30
+          if-no-files-found: ignore
+
   # The weekly Rust set (measure; floods unless the host is loaded; live skips itself here: no claude or codex).
   rust-extended:
     runs-on: macos-latest
@@ -99,7 +149,7 @@ jobs:
 
   summary:
     if: always()
-    needs: [web, rust-extended]
+    needs: [web, shots, rust-extended]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -120,9 +170,10 @@ jobs:
       - env:
           WEB_RESULT: ${{ needs.web.result }}
           RUST_RESULT: ${{ needs.rust-extended.result }}
+          SHOTS_RESULT: ${{ needs.shots.result }}
         run: >-
-          python3 -I .github/scripts/full-counts.py pw-json "$((WEB_SHARDS * 2))" rust-extended/log.txt "$GITHUB_SHA"
-          "$(date -u +%F)" "$GITHUB_RUN_ID" "$WEB_RESULT" "$RUST_RESULT" full-run.json >> "$GITHUB_STEP_SUMMARY"
+          python3 -I .github/scripts/full-counts.py pw-json "$((WEB_SHARDS * 2 + 1))" rust-extended/log.txt "$GITHUB_SHA"
+          "$(date -u +%F)" "$GITHUB_RUN_ID" "$WEB_RESULT" "$RUST_RESULT" "$SHOTS_RESULT" full-run.json >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: full-run-result

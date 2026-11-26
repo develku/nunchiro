@@ -1,12 +1,23 @@
-"""Ticket 1098: the scorecard's measured figures on an isolated RC, and the scorecard page.
+"""Ticket 1098: the scorecard's measured figures on an isolated RC, and the scorecard page. Rubric v2 (ticket 1171):
+a figure that was not measured the way docs/measure/rubric.md names scores 0, and a check that rests on a test counts
+only when that test ran green in the same run (`tests`).
 
 Usage:
   scorecard.py run [--repeats 5] [--sessions 20] [--no-build] [--out FILE]
       Builds (or reuses, --no-build) the RC bundle of startup.py, then per repeat: an install of that bundle into a fresh
       throwaway folder and its cold launch, a warm launch, the core start, idle memory and CPU of core + window + WebKit
-      at 0 and at --sessions shell sessions, sessions.json and snapshot growth, and the send-to-agent latency. Then the
-      gate and owner-install figures from the mainwatch log (read only) and the locale key coverage. Writes
+      + holders at 0, 5 and --sessions shell sessions, sessions.json and snapshot growth, the send-to-agent latency, and
+      a launch of the window on that home with its sessions and a 5,000-event conversation (the restored launch). Then
+      the gate and owner-install figures from the mainwatch log (read only) and the locale key coverage. Writes
       docs/measure/results-<date>.json (or --out).
+  scorecard.py tests [--target DIR] [--out FILE]
+      Runs every command a check in parts.json names under "tests" (detached, as `dev` runs the gate's test stage) and
+      writes docs/measure/tests-<date>.json: the commit, and per command whether it ended 0 with at least one test run.
+  scorecard.py weigh [--secs 60] [--out FILE]
+      Read only, the owner-run step for idle memory and CPU with real agent sessions: the owner's running Nunchiro
+      (core, window, WebKit helpers, holders) by ps and footprint, with the number of Claude and Codex sessions it
+      holds. Opens no file of the owner's home and sends the core nothing. Writes its two figures into
+      docs/measure/manual-<date>.json. Run it while the agents wait at their prompts.
   scorecard.py dev [--target DIR] [--out FILE]
       Maintainability figures (part p26): a cold and a warm debug build of the Rust workspace in DIR (a fresh cargo
       target, removed first), the web build, the gate's Rust test stage (scripts/cargo-test-gate.sh) on that target,
@@ -35,7 +46,7 @@ or ~/.codex; it also fails if the owner's core is not the same process at the en
 moment only, not a file opened and closed in between. Runs before 2026-11-24 run 4 gave the window phase the real HOME.
 Stops only the PIDs it started. MEASURE_TARGET (see startup.py) puts the cargo target on another disk.
 Stdlib only; the pure parts are tested by tests/scenario/test_measure_scorecard.py."""
-import argparse, html, json, os, re, shutil, socket, statistics, subprocess, sys, tempfile, time
+import argparse, html, json, math, os, re, shutil, socket, statistics, subprocess, sys, tempfile, time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -54,30 +65,51 @@ OWNER_HOME = Path.home() / ".nunchiro"
 OWNER_DIRS = [OWNER_HOME, Path.home() / ".claude", Path.home() / ".codex"]
 LANGS = ("ko", "ja", "zh-Hans", "zh-Hant", "es", "fr", "pt")
 
-# Anchors: (100 at, 0 at). The same table is in docs/measure/rubric.md; change both together.
+RUBRIC = 2  # docs/measure/rubric.md; v1 is rubric-v1.md. A results file without "rubric": 2 was measured the v1 way.
+# Anchors: (100 at, 0 at). The same table, with each anchor's source, is in docs/measure/rubric.md; change both together.
 ANCHORS = {
-    "launch_warm_s": (0.5, 3.0), "launch_cold_s": (1.0, 5.0), "core_start_s": (0.1, 2.0), "send_ms": (50, 1000),
-    "idle_cpu_pct": (0.2, 5.0), "idle_mib": (150, 1100), "mib_per_session": (1, 20), "sessions_json_kib_per_session": (1, 50),
+    "launch_restored_s": (0.3, 1.5), "launch_cold_s": (1.0, 3.5), "core_start_s": (0.1, 2.0), "term_paint_p95_ms": (16, 50),
+    "idle_cpu_pct_5": (0.3, 3.0), "idle_mib_5": (150, 600), "mib_per_session": (1, 20), "sessions_json_kib_per_session": (1, 50),
     "snapshot_kib_per_session": (2, 50), "installs_ok_pct": (100, 0), "owner_installs_landed_pct": (100, 0),
     "gate_green_pct": (100, 70), "gate_median_min": (5, 30), "locale_coverage_pct": (100, 80),
+    "build_cold_min": (3, 20), "build_warm_s": (15, 180), "web_build_s": (15, 120), "test_stage_min": (3, 20),
+    "largest_file_lines": (2000, 15000), "files_over_2000": (0, 20), "shared_files_open_lanes": (0, 10),
+    "change_failure_pct": (5, 30), "restore_median_min": (60, 1440),
+    # p08 field figures (7 days)
+    "seats_lost_per_restart": (0, 1), "missed_prompts_per_1000": (0, 5), "soak_clean_hours": (24, 0),
+    # p33 real-use speed and weight
+    "chat_open_5000_ms": (100, 1000), "stream8_worst_frame_ms": (200, 2000), "mem_growth_24h_ratio": (1.0, 1.5),
+    "prompt_delivery_ms": (1000, 10000),
+    # p34 multi-agent accuracy (trial)
+    "delivery_missed_per_1000": (0, 5), "state_match_pct": (100, 90), "cards_shown_pct": (100, 95), "outward_unapproved": (0, 1),
+    # p35 bot quality
+    "bot_task_success_pct": (100, 0), "bot_owner_touches": (0, 3), "first_pass_review_pct": (100, 50),
 }
 # Which figures make each number part (rubric.md, "Parts and methods").
 NUMBER_PARTS = {
     "p05": ["installs_ok_pct", "owner_installs_landed_pct"],
-    "p08": ["launches_drawn_pct", "sessions_alive_pct", "gate_green_pct"],
+    "p08": ["seats_lost_per_restart", "missed_prompts_per_1000", "soak_clean_hours", "gate_green_pct"],
     "p12": ["gate_green_pct", "gate_median_min"],
-    "p14": ["idle_cpu_pct", "idle_mib", "mib_per_session", "sessions_json_kib_per_session", "snapshot_kib_per_session"],
-    "p15": ["launch_warm_s", "launch_cold_s", "core_start_s", "send_ms"],
+    "p14": ["idle_cpu_pct_5", "idle_mib_5", "mib_per_session", "sessions_json_kib_per_session", "snapshot_kib_per_session"],
+    "p15": ["launch_restored_s", "launch_cold_s", "core_start_s", "term_paint_p95_ms"],
     "p18": ["locale_coverage_pct"],
+    "p26": ["build_cold_min", "build_warm_s", "web_build_s", "test_stage_min", "gate_median_min",
+            "largest_file_lines", "files_over_2000", "shared_files_open_lanes"],
+    "p27": ["change_failure_pct", "restore_median_min"],
+    "p33": ["chat_open_5000_ms", "stream8_worst_frame_ms", "mem_growth_24h_ratio", "prompt_delivery_ms"],
+    "p34": ["delivery_missed_per_1000", "state_match_pct", "cards_shown_pct", "outward_unapproved"],
+    "p35": ["bot_task_success_pct", "bot_owner_touches", "first_pass_review_pct"],
 }
-ANCHORS.update(launches_drawn_pct=(100, 80), sessions_alive_pct=(100, 80),
-               build_cold_min=(3, 20), build_warm_s=(15, 180), web_build_s=(15, 120), test_stage_min=(3, 20),
-               largest_file_lines=(2000, 15000), files_over_2000=(0, 20), shared_files_open_lanes=(0, 10))
-ANCHORS.update(change_failure_pct=(5, 30), restore_median_min=(60, 1440))
-NUMBER_PARTS["p27"] = ["change_failure_pct", "restore_median_min"]
+# Figures no script measures yet (rubric.md, "Owner-run steps"): read from docs/measure/manual-<date>.json, where each
+# carries its evidence; without an entry they are "not measured" and score 0.
+MANUAL = {"term_paint_p95_ms", "idle_cpu_pct_5", "idle_mib_5", "seats_lost_per_restart", "missed_prompts_per_1000",
+          "soak_clean_hours", *NUMBER_PARTS["p33"], *NUMBER_PARTS["p34"], "bot_task_success_pct", "bot_owner_touches"}
+# Figures of `run` whose method changed in v2: a v1 results file's value of them is not scored.
+V2_RUN = {"mib_per_session"}
+# Checks whose wording rests on a test or spec: pass or partial only when a command named under the check's "tests"
+# ran green in this run (scorecard.py tests), at the commit the results were measured on.
+TEST_CHECKS = {"RR3", "ST1", "ST2", "AC1", "AC2", "AC3", "DS3", "DS4", "DE3", "DE4", "IN2"}
 LANDLOOP = MAINWATCH.parent / "landloop.log"
-NUMBER_PARTS["p26"] = ["build_cold_min", "build_warm_s", "web_build_s", "test_stage_min", "gate_median_min",
-                       "largest_file_lines", "files_over_2000", "shared_files_open_lanes"]
 SOURCE = re.compile(r"\.(rs|ts|tsx|css|py|sh)$")
 NOT_SOURCE = re.compile(r"(^|/)(tests?|fixtures)/|_tests?\.rs$|/tests\.rs$|\.spec\.ts$|\.test\.m?[jt]sx?$|(^|/)i18n/areas/")
 
@@ -177,11 +209,40 @@ def parse_deploys(text, start=None):
                 restore_median_min=statistics.median(mins) if mins else None, restore_max_min=max(mins, default=None))
 
 
-def reverts_landed(text):
-    """Lanes named fable-revert-* in the landloop log's landed lists."""
+# A revert lane: bin/land's fable-revert-<lane>, GitHub's revert-<n>-<branch> and a lead's lead-revert<ticket> (ticket 1157).
+REVERT_LANE = re.compile(r"^(?:fable-revert-|revert-\d+-|lead-revert-?)(.+)$")
+REVERT_SUBJECT = re.compile(r'^Revert (?!"Revert )')  # git's default subject; a revert of a revert lands the change again
+
+
+def revert_of(lane, subjects=()):
+    """What a landed lane reverts, or None when it is no revert. Its name says so (REVERT_LANE), or every commit of its
+    own is a revert (subject 'Revert ...'); git's `Revert "Merge lane <lane> (...)"` names the lane, else "" (unknown)."""
+    m = REVERT_LANE.match(lane)
+    if m:
+        return m[1]
+    if subjects and all(REVERT_SUBJECT.match(x) for x in subjects):
+        named = re.match(r'Revert "Merge lane (\S+) ', subjects[0])
+        return named[1] if named else ""
+    return None
+
+
+def lane_subjects(since=None):
+    """{lane: [own commit subjects]} for the first-parent "Merge lane" merges on origin/main (since a date)."""
+    out = {}
+    args = ["--since", since] if since else []
+    for line in git("log", "origin/main", "--first-parent", "--merges", *args, "--format=%H %s").splitlines():
+        sha, subject = line.split(" ", 1)
+        m = re.match(r"Merge lane (\S+) \(", subject)
+        if m:
+            out[m[1]] = git("log", "--no-merges", "--format=%s", f"{sha}^1..{sha}^2").splitlines()
+    return out
+
+
+def reverts_landed(text, subjects=None):
+    """Revert lanes (revert_of) in the landloop log's landed lists; subjects: {lane: own commit subjects}."""
     out = []
     for m in re.finditer(r'"landed": \[([^\]]*)\]', text):
-        out += [x for x in re.findall(r'"([^"]+)"', m[1]) if x.startswith("fable-revert-")]
+        out += [x for x in re.findall(r'"([^"]+)"', m[1]) if revert_of(x, (subjects or {}).get(x, ())) is not None]
     return out
 
 
@@ -347,7 +408,7 @@ def ops_cmd(a):
     ll = LANDLOOP.read_text() if LANDLOOP.is_file() else ""
     first = re.search(r'"ts": "(\d{4}-\d\d-\d\d)T', ll)  # the landloop and mainwatch logs start in the same minute
     deploy = parse_deploys(mw, datetime.date.fromisoformat(first[1]) if first else None)
-    deploy["reverts_landed"] = reverts_landed(ll) if ll else None
+    deploy["reverts_landed"] = reverts_landed(ll, lane_subjects(first and first[1])) if ll else None
     deploy["revert_holds"] = len(re.findall(r"HOLD: [0-9a-f]{40}: the revert of", mw))
     deploy["reverts_queued"] = len(re.findall(r"revert lane \S+ queued for", mw))
     out["deploy"] = deploy
@@ -417,6 +478,7 @@ def merge(runs):
                installs={k: sum(r["installs"][k] for r in runs) for k in ("ok", "of")},
                launches={k: sum(r["launches"][k] for r in runs) for k in ("drawn", "of")},
                sessions_alive_pct=stats([v for r in runs for v in r["sessions_alive_pct"]["values"]]),
+               restored=[x for r in runs for x in r.get("restored", [])],
                owner_check=dict(same=all(r["owner_check"]["same"] for r in runs),
                                 owner_files_open_by_our_processes=[h for r in runs for h in r["owner_check"]["owner_files_open_by_our_processes"]],
                                 owner_core=sorted({p for r in runs for p in r["owner_check"]["owner_core_before"] or []})),
@@ -439,23 +501,105 @@ def combine(number_rows, checks):
     return round(sum(items) / len(items)) if items else 0
 
 
-def peer_scores(tasks, apps):
-    """tasks: {task: {app: {"result", "steps"}}}. Per task: 100 x fewest steps / app steps, partial halves, no = 0,
-    unknown (the feature is documented but its steps were not found) = None, left out of the means and of the best.
-    Returns {app: {task: score}}."""
+def peer_scores(tasks, apps, run=None, us="Nunchiro"):
+    """tasks: {task: {app: {"result", "steps", "seconds", "driven"}}}. Rubric v2: a cell counts only when the task was
+    driven in the running app, ours in this run (driven == run), a peer's on any recorded date. Per task the score is
+    the lower of 100 x fewest steps / steps and 100 x fastest seconds / seconds (partial halves it, no = 0). A task
+    with fewer than two driven peers has no best to compare with. Ours not driven, or without two peers: 0 (not
+    measured, never skipped). A peer not driven: None, left out of its mean and of the best. Returns {app: {task: score}}."""
     out = {a: {} for a in apps}
     for t, by in tasks.items():
-        done = [c["steps"] for c in by.values() if c.get("result") in ("yes", "partial") and c.get("steps")]
-        best = min(done) if done else None
+        cell = lambda a: by.get(a) or {}  # noqa: E731
+        driven = {a for a in apps if cell(a).get("driven") and (a != us or (run and cell(a)["driven"] == run))}
+        done = {a: cell(a) for a in driven if cell(a).get("result") in ("yes", "partial") and cell(a).get("steps") and cell(a).get("seconds")}
+        enough = len(driven - {us}) >= 2 and bool(done)
         for a in apps:
-            c = by.get(a) or {}
-            if c.get("result") == "unknown":
-                out[a][t] = None
-            elif c.get("result") not in ("yes", "partial") or not c.get("steps") or best is None:
+            c = cell(a)
+            if a not in driven or not enough:
+                out[a][t] = 0 if a == us else None
+            elif a not in done:
                 out[a][t] = 0
             else:
-                out[a][t] = round(100 * best / c["steps"] * (0.5 if c["result"] == "partial" else 1))
+                ratio = min(min(d["steps"] for d in done.values()) / c["steps"], min(d["seconds"] for d in done.values()) / c["seconds"])
+                out[a][t] = round(100 * ratio * (0.5 if c["result"] == "partial" else 1))
     return out
+
+
+ROW = {"yes": 1, "partial": 0.5, "no": 0}
+
+
+def rows_score(rows, peers, counts=(), us="Nunchiro"):
+    """Capability parts (rubric.md, "Capability rows"): (score, depth, breadth). depth = 100 x our row sum / the best
+    peer's row sum; a peer cell nobody searched counts yes, ours counts no. breadth = the mean over the counts of
+    100 x log2(1 + ours) / log2(1 + the best peer's count): each further agent or service serves fewer people, and a
+    count of ours that was not proven in this run is 0. With counts the score is the mean of depth and breadth."""
+    ours = sum(ROW[r.get(us, "no")] for r in rows.values())
+    best = max((sum(ROW[r.get(p, "yes")] for r in rows.values()) for p in peers), default=0)
+    depth = round(min(1.0, ours / best) * 100) if best else 0
+    if not counts:
+        return depth, depth, None
+    breadth = round(statistics.mean(min(1.0, math.log2(1 + (c.get(us) or 0)) / math.log2(1 + c["best"])) for c in counts) * 100)
+    return round((depth + breadth) / 2), depth, breadth
+
+
+def ran_green(rc, output):
+    """(green, tests run) for one test command: exit 0 is not enough, a filter that matches nothing also ends 0.
+    Counts cargo's "test result: ok. N passed", Playwright's "N passed" and unittest's "Ran N tests"."""
+    n = sum(int(x) for x in re.findall(r"test result: ok\. (\d+) passed", output))
+    n = n or sum(int(x) for x in re.findall(r"^\s*(\d+) passed\b", output, re.M))
+    n = n or sum(int(x) for x in re.findall(r"^Ran (\d+) tests? in", output, re.M))
+    flaky = re.search(r"^\s*\d+ flaky\b", output, re.M)  # Playwright: passed only on a retry
+    return rc == 0 and n > 0 and not flaky, n
+
+
+def green_commands(doc, commit):
+    """The commands of a tests-<date>.json that ran green, as joined strings; none when it is of another commit."""
+    if not doc or not commit or not str(doc.get("commit", "")).startswith(commit[:7]):
+        return set()
+    return {" ".join(r["cmd"]) for r in doc.get("results", []) if r.get("green")}
+
+
+def effective(check, green):
+    """A check as scored: one of TEST_CHECKS keeps its verdict only when it names tests and each ran green in this run."""
+    if check["id"] not in TEST_CHECKS or check["verdict"] == "fail":
+        return check
+    cmds = [" ".join(c) for c in check.get("tests", [])]
+    if cmds and all(c in green for c in cmds):
+        return check
+    why = "names no test command" if not cmds else "its tests did not run green in this run: " + "; ".join(c for c in cmds if c not in green)
+    return dict(check, verdict="fail", evidence=f"NOT COUNTED ({why}; the reading was {check['verdict']}). {check['evidence']}")
+
+
+def manual_figures(doc, res_date, days=7):
+    """{figure: value} from a manual-<date>.json: only the figures no script measures (MANUAL), only entries that say
+    how they were measured, and only a file dated in the `days` before the results or after them."""
+    import datetime
+    if not doc:
+        return {}
+    day = lambda x: datetime.date.fromisoformat(str(x)[:10])  # noqa: E731
+    if (day(res_date) - day(doc["date"])).days > days:
+        return {}
+    return {k: v["value"] for k, v in doc.get("figures", {}).items()
+            if k in MANUAL and isinstance(v.get("value"), (int, float)) and str(v.get("evidence", "")).strip()}
+
+
+HOLD = re.compile(r"^(.*) hold ([0-9a-f]{8}-[0-9a-f-]{27})\s*$")
+
+
+def holder_pids(args, exe=None, ids=None):
+    """The `nunchiro hold <session id>` processes (crates/nunchiro-core/src/holder/mod.rs:1) in {pid: command line}: of
+    the given session ids, or of the core binary `exe`. A holder outlives its core, so it is not found under it."""
+    out = []
+    for pid, line in args.items():
+        m = HOLD.match(line)
+        if m and (m[2] in ids if ids is not None else m[1] == exe):
+            out.append(pid)
+    return sorted(out)
+
+
+def ps_args():
+    out = subprocess.run(["ps", "-A", "-o", "pid=,args="], capture_output=True, text=True).stdout
+    return {int(l.split(None, 1)[0]): l.split(None, 1)[1] for l in out.splitlines() if len(l.split(None, 1)) == 2}
 
 
 # ---------------------------------------------------------------- run (needs the RC build and macOS)
@@ -525,10 +669,10 @@ def run_cmd(a):
         raise SystemExit(f"no build at {app}; run without --no-build")
     owner_before = owner_core_pid()
     base_env = {k: v for k, v in clean_env().items() if not k.startswith("NUNCHIRO_")}
-    figs = {k: [] for k in ("launch_cold_s", "launch_warm_s", "core_start_s", "send_ms", "idle_cpu_pct", "idle_mib",
-                            "mib_per_session", "sessions_json_kib_per_session", "snapshot_kib_per_session", "cpu_pct_sessions",
-                            "mib_sessions")}
-    installs, drawn, launches, alive, touched, loads, checked, homes_ok = 0, 0, 0, [], [], [], [], []
+    figs = {k: [] for k in ("launch_cold_s", "launch_warm_s", "launch_restored_s", "core_start_s", "send_ms", "idle_cpu_pct",
+                            "idle_mib", "idle_mib_5_shell", "idle_cpu_pct_5_shell", "mib_per_session",
+                            "sessions_json_kib_per_session", "snapshot_kib_per_session", "cpu_pct_sessions", "mib_sessions")}
+    installs, drawn, launches, alive, touched, loads, checked, homes_ok, restores = 0, 0, 0, [], [], [], [], [], []
     SHOTS.mkdir(parents=True, exist_ok=True)
     for r in range(a.repeats):
         loads.append(rel.load())
@@ -594,15 +738,28 @@ def run_cmd(a):
             time.sleep(a.idle_secs)
             figs["idle_cpu_pct"].append(round((bl.cputime(pids()) - c0) / (time.monotonic() - t1) * 100, 2))
             figs["idle_mib"].append(m0["app_mib"])
-            sids = [arm.cli("session", "start", "--kind", "shell", "--project", str(arm.home), "--label", f"s{i}", "--",
-                            "/bin/cat")["session"]["id"] for i in range(a.sessions)]
+            start = lambda i: arm.cli("session", "start", "--kind", "shell", "--project", str(arm.home), "--label", f"s{i}",  # noqa: E731
+                                      "--", "/bin/cat")["session"]["id"]
+            # Five sessions first: the floor of the scored idle figures (rubric v2 names five real agent sessions,
+            # which an isolated home cannot sign in; `weigh` reads those on the owner's app). Holders are counted.
+            sids = [start(i) for i in range(min(5, a.sessions))]
             time.sleep(a.settle)
-            m1 = rel.sample(arm, "idleN", True, rec)
-            c0, t1 = bl.cputime(pids()), time.monotonic()
+            h5, h5_mib = holders_of(arm)
+            m5 = rel.sample(arm, "idle5", True, rec)
+            c0, t1 = bl.cputime(pids() + h5), time.monotonic()
             time.sleep(a.idle_secs)
-            figs["cpu_pct_sessions"].append(round((bl.cputime(pids()) - c0) / (time.monotonic() - t1) * 100, 2))
-            figs["mib_sessions"].append(m1["app_mib"])
-            figs["mib_per_session"].append(round((m1["app_mib"] - m0["app_mib"]) / a.sessions, 2))
+            figs["idle_cpu_pct_5_shell"].append(round((bl.cputime(pids() + h5) - c0) / (time.monotonic() - t1) * 100, 2))
+            figs["idle_mib_5_shell"].append(round(m5["app_mib"] + h5_mib, 1))
+            sids += [start(i) for i in range(len(sids), a.sessions)]
+            time.sleep(a.settle)
+            hn, hn_mib = holders_of(arm)
+            m1 = rel.sample(arm, "idleN", True, rec)
+            c0, t1 = bl.cputime(pids() + hn), time.monotonic()
+            time.sleep(a.idle_secs)
+            figs["cpu_pct_sessions"].append(round((bl.cputime(pids() + hn) - c0) / (time.monotonic() - t1) * 100, 2))
+            figs["mib_sessions"].append(round(m1["app_mib"] + hn_mib, 1))
+            # A session's holder is part of what it costs; a sum that found no holder per session is refused.
+            figs["mib_per_session"].append(round((m1["app_mib"] + hn_mib - m0["app_mib"]) / a.sessions, 2) if len(hn) == a.sessions else None)
             snap1 = len(json.dumps(arm.call({"op": "snapshot"})))
             figs["snapshot_kib_per_session"].append(round((snap1 - snap0) / a.sessions / 1024, 2))
             figs["sessions_json_kib_per_session"].append(round(((sj.stat().st_size if sj.exists() else 0) - sj0) / a.sessions / 1024, 2))
@@ -621,12 +778,23 @@ def run_cmd(a):
         finally:
             arm.stop()
             shutil.rmtree(home2, ignore_errors=True)
+        def check(app_pid, core_pid):
+            checked.append(len(set(our_pids(app_pid, core_pid))))
+            touched.extend(touches_owner(our_pids(app_pid, core_pid)))
+        try:
+            secs, restored = restored_launch(cli, app, a.sessions, fresh("ns-sh-"), check)
+        except Exception as error:  # noqa: BLE001 - this figure stays "not measured"; the other figures are kept
+            secs, restored = None, dict(sessions=0, chat_events=0, error=str(error)[:300])
+        figs["launch_restored_s"].append(secs)
+        restores.append(restored)
         print(f"repeat {r + 1}: core {figs['core_start_s'][-1]} s, idle {figs['idle_mib'][-1]} MiB {figs['idle_cpu_pct'][-1]} %, "
-              f"{a.sessions} sessions {figs['mib_sessions'][-1]} MiB, send {figs['send_ms'][-1]} ms", flush=True)
+              f"5 sessions {figs['idle_mib_5_shell'][-1]} MiB, {a.sessions} sessions {figs['mib_sessions'][-1]} MiB, "
+              f"send {figs['send_ms'][-1]} ms, restored launch {secs} s {restored}", flush=True)
     loads.append(rel.load())
     owner_after = owner_core_pid()
     mw = parse_mainwatch(MAINWATCH.read_text()) if MAINWATCH.is_file() else None
     out = dict(
+        rubric=RUBRIC, agents="shell", restored=restores,
         date=time.strftime("%Y-%m-%d %H:%M"), commit=rel.versions()["commit"], host=rel.versions()["host"],
         macos=rel.versions()["macos"], repeats=a.repeats, sessions=a.sessions, load=ml.load_range(loads),
         figures={k: stats(v) for k, v in figs.items()},
@@ -642,6 +810,60 @@ def run_cmd(a):
     print(f"wrote {path.relative_to(ROOT) if path.is_relative_to(ROOT) else path}")
     if touched or owner_before != owner_after:
         raise SystemExit(f"owner check FAILED: {out['owner_check']}")
+
+
+def holders_of(arm):
+    """(pids, MiB) of the holders of the core's sessions."""
+    import release as rel
+    pids = holder_pids(ps_args(), ids={s["id"] for s in arm.call({"op": "snapshot"})["sessions"]})
+    return pids, (rel.mib(sum(rel.footprint(pids).values())) if pids else 0.0)
+
+
+def restored_launch(cli, app, sessions, home, check):
+    """(seconds, {"sessions", "chat_events"}): the second launch of the window on a home whose core holds `sessions`
+    shell sessions and one fixture agent session with the 5,000-event conversation (workload_v1b.py, no model), to
+    the first drawn snapshot; the first launch on that home warms WebKit. check(app pid, core pid) is the owner check.
+    shortcut: DRAWN is the first snapshot drawn, not the conversation's own first paint (chat_open_5000_ms, p33);
+    upgrade when the page reports that paint."""
+    import measurelib as ml
+    import release as rel
+    import startup as su
+    from lib import clean_env
+    rel.CORE, rel.APP = cli, app
+    rel.clean_env = lambda extra=None: clean_env(dict(extra or {}, HOME=str(home)))
+    try:
+        arm = rel.Nunchiro(v1b="chat")
+    finally:
+        rel.clean_env = clean_env
+    own = None
+    try:
+        chat = arm.start(0)
+        arm.wait_ready([chat], timeout=60)
+        arm.after_ready([chat])  # refuses unless the core serves all 5,000 events
+        for i in range(sessions):
+            arm.cli("session", "start", "--kind", "shell", "--project", str(arm.home), "--label", f"s{i}", "--", "/bin/cat")
+        live = len(arm.call({"op": "snapshot"})["sessions"])
+        own = ml.OwnApp(app)
+        secs = None
+        with open(arm.home / "app.log", "ab") as log:
+            for _ in range(2):
+                run = su.Run(own.exe, dict(arm.env, NUNCHIRO_GATE_RUN="1"), log)
+                try:
+                    secs = run.wait()
+                    check(run.proc.pid, arm.core.pid)
+                finally:
+                    run.proc.terminate()
+                    try:
+                        run.proc.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        run.proc.kill()
+                        run.proc.wait()
+        return secs, dict(sessions=live - 1, chat_events=arm.served["events"])
+    finally:
+        arm.stop()
+        if own is not None:
+            own.remove()
+        shutil.rmtree(home, ignore_errors=True)
 
 
 def shot(home, name):
@@ -690,10 +912,19 @@ def locale_coverage():
 
 # ---------------------------------------------------------------- page
 
-def flat(res, dev=None):
-    """The figure values the anchors read, from one results file (and the newest dev file, for p26)."""
+def flat(res, dev=None, manual=None):
+    """The figure values the anchors read, from one results file (the newest dev file for p26, the manual file for the
+    figures no script measures). A figure measured under an easier condition than rubric.md names is None here: the
+    page shows it as a floor and it scores 0."""
     f = {k: v["median"] for k, v in res["figures"].items()}
+    if res.get("rubric") != RUBRIC:
+        f.update({k: None for k in V2_RUN})
+    restored = res.get("restored") or []
+    if not restored or any(r.get("sessions", 0) < 20 or r.get("chat_events", 0) < 5000 for r in restored):
+        f["launch_restored_s"] = None
     f.update((dev or {}).get("figures", {}))
+    f["first_pass_review_pct"] = (((dev or {}).get("devspeed") or {}).get("rework") or {}).get("first_pass_pct")
+    f.update(manual_figures(manual, res["date"]))
     mw = res.get("mainwatch") or {}
     f.update(installs_ok_pct=round(100 * res["installs"]["ok"] / res["installs"]["of"], 1), owner_installs_landed_pct=(mw.get("installs") or {}).get("landed_pct"),
              gate_green_pct=mw.get("green_pct"), gate_median_min=mw.get("median_min"),
@@ -716,23 +947,40 @@ def page_cmd(a):
         dev.setdefault("figures", {})
         dev["figures"] = dict(dev["figures"], change_failure_pct=ops["deploy"]["change_failure_pct"],
                               restore_median_min=ops["deploy"]["restore_median_min"])
-    (OUT_DIR / "scorecard.html").write_text(render(res, parts, tasks, results.name, dev))
+    newest = lambda pattern: json.loads(max(OUT_DIR.glob(pattern)).read_text()) if list(OUT_DIR.glob(pattern)) else None  # noqa: E731
+    if newest("devspeed-*.json"):  # first-pass review rate (p35) from scripts/measure-dev-speed.py
+        dev = dict(dev or {}, devspeed=newest("devspeed-*.json"))
+    (OUT_DIR / "scorecard.html").write_text(render(res, parts, tasks, results.name, dev, newest("manual-*.json"), newest("tests-*.json")))
     print(f"wrote {OUT_DIR.relative_to(ROOT)}/scorecard.html from {results.name}")
 
 
-def render(res, parts, tasks, results_name, dev=None):
+FLOOR = {"idle_mib_5": "idle_mib_5_shell", "idle_cpu_pct_5": "idle_cpu_pct_5_shell", "launch_restored_s": "launch_restored_s",
+         "mib_per_session": "mib_per_session"}
+
+
+def figure_line(name, value, pts, res):
+    """One evidence line of a number part; a missing figure says so, with the easier-condition floor when one was read."""
+    if value is not None:
+        return f"{name} = {value} ({pts} pts)"
+    floor = (res["figures"].get(FLOOR.get(name, "")) or {}).get("median")
+    return f"{name}: not measured (0 pts)" + (f"; floor under an easier condition than the rubric names: {floor}" if floor is not None else "")
+
+
+def render(res, parts, tasks, results_name, dev=None, manual=None, tests=None):
     e = html.escape
-    figs = flat(res, dev)
+    figs = flat(res, dev, manual)
     nums = score_numbers(figs)
     apps = tasks["apps"]
-    peer = peer_scores(tasks["tasks"], apps)
-    rows = []
+    peer = peer_scores(tasks["tasks"], apps, tasks.get("run"))
+    green = green_commands(tests, res.get("commit"))
+    rows, unmeasured = [], 0
     for p in parts["parts"]:
         pid, method = p["id"], p["method"]
-        checks = p.get("checks", [])
+        checks = [effective(c, green) for c in p.get("checks", [])]
         ev = []
         if pid in nums:
-            ev += [f"{n} = {v} ({pt} pts)" for n, v, pt in nums[pid][1]]
+            ev += [figure_line(n, v, pt, res) for n, v, pt in nums[pid][1]]
+            unmeasured += sum(v is None for _, v, _ in nums[pid][1])
         if method == "peer-tasks":
             sc = mean_known(peer["Nunchiro"][t] for t in p["tasks"])
             best = max(apps, key=lambda x: mean_known(peer[x][t] for t in p["tasks"]))
@@ -742,6 +990,11 @@ def render(res, parts, tasks, results_name, dev=None):
                 top = max(apps, key=lambda x: peer[x][t] or 0)
                 ev.append(f"{t} {tasks['names'][t]}: Nunchiro {peer['Nunchiro'][t]} ({c.get('result')}, {c.get('steps')} steps: "
                           f"{c.get('path')}; {c.get('evidence')}); best {top}, {tasks['tasks'][t][top].get('steps')} steps")
+        elif method == "peer-rows" and p.get("rows"):
+            sc, depth, breadth = rows_score(p["rows"], p["peers"], p.get("counts", ()))
+            ev.append(f"rows against {', '.join(p['peers'])}: depth {depth}" + ("" if breadth is None else f", breadth {breadth} (counts, log scale)"))
+            ev += [f"{k}: " + "; ".join(f"{a} {v}" for a, v in r.items()) for k, r in p["rows"].items()]
+            ev += [f"count {c['id']}: Nunchiro {c.get('Nunchiro') or 0}, best {c['best']} ({c['source']})" for c in p.get("counts", ())]
         elif method == "peer-rows":
             sc = p["score"]
         elif pid in nums and checks:
@@ -809,10 +1062,12 @@ td.s{{text-align:center;font-variant-numeric:tabular-nums}}td.c{{text-align:cent
 figure{{display:inline-block;margin:6px;width:300px;vertical-align:top}}img{{width:100%;border:1px solid #8e8e93}}figcaption{{font-size:12px}}</style></head><body>
 <h1>Nunchiro scorecard</h1><div class=n>Measured {e(res['date'])} on commit {e(res['commit'])} ({e(res['host'])}, macOS {e(res['macos'])}, 1-min load {res['load'][0]}-{res['load'][1]}),
 {res['repeats']} repeats{f" over {res['runs']} runs" if res.get('runs') else ''}; figures from {e(results_name)}. Each part 0-100 on its own. Method and checks: rubric.md; tasks: tasks.md.
-"was" = the lead's estimate of 2026-11-24 (before measuring).</div>
+"was" = the lead's estimate of 2026-11-24 (before measuring). Rubric v{parts.get('version', 1)}: a figure not measured the way the rubric
+names scores 0 ({unmeasured} figures here), and a check that rests on a test counts only when the test ran green in this run.</div>
 <h2>All {len(rows)} parts, average {avg}</h2><table><tr><th>Part</th><th>Score</th><th></th><th>Method</th><th>was</th><th>Evidence</th></tr>{trs}</table>
 <h2>Limits of this scorecard</h2><ul>{"".join(f"<li>{e(x)}</li>" for x in parts.get("limits", []))}</ul>
-<h2>Peer tasks (100 = the best app on that task)</h2>
+<h2>Rubric changes</h2><ul>{"".join(f"<li>{e(x)}</li>" for x in parts.get("notes", []))}</ul>
+<h2>Peer tasks (100 = the best app on that task; a cell counts only when driven in the running app)</h2>
 <div class=n>{e(tasks['note'])}</div>
 <table><tr><th>Task</th>{head}</tr>{trows}<tr><td><b>Mean</b></td>{means}</tr></table>
 <h2>Shots</h2>{shots}
@@ -824,6 +1079,66 @@ figure{{display:inline-block;margin:6px;width:300px;vertical-align:top}}img{{wid
 Locale: {e(json.dumps(res.get('locale'), ensure_ascii=False))}<br>Owner check: {e(json.dumps(res['owner_check']))}</div>
 </body></html>
 """
+
+
+def tests_cmd(a):
+    from lib import clean_env
+    cmds = []
+    for p in json.loads((OUT_DIR / "parts.json").read_text())["parts"]:
+        for c in p.get("checks", []):
+            cmds += [cmd for cmd in c.get("tests", []) if cmd not in cmds]
+    env = {k: v for k, v in clean_env().items() if not k.startswith("NUNCHIRO_")}
+    if a.target:
+        env["CARGO_TARGET_DIR"] = str(Path(a.target).resolve())
+    results = []
+    for cmd in cmds:
+        secs, rc, out = outside_holder(cmd, env)
+        ok, n = ran_green(rc, out)
+        results.append(dict(cmd=cmd, green=ok, tests=n, exit=rc, seconds=secs, tail="" if ok else out[-400:]))
+        print(f"{'green' if ok else 'NOT GREEN'} ({n} tests, exit {rc}, {secs} s): {' '.join(cmd)}", flush=True)
+    doc = dict(date=time.strftime("%Y-%m-%d %H:%M"), commit=git("rev-parse", "--short", "HEAD").strip(), results=results)
+    path = Path(a.out) if a.out else OUT_DIR / f"tests-{time.strftime('%Y-%m-%d')}.json"
+    path.write_text(json.dumps(doc, indent=1) + "\n")
+    print(f"wrote {path}: {sum(r['green'] for r in results)} of {len(results)} green")
+
+
+def weigh_cmd(a):
+    import baseline as bl
+    import measurelib as ml
+    import peers
+    import release as rel
+    core = owner_core_pid() or []
+    if len(core) != 1:
+        raise SystemExit(f"needs the owner's Nunchiro running: one process on {OWNER_HOME / 'core.sock'}, found {core}")
+    core, args, table = int(core[0]), ps_args(), peers.ps_table()
+    exe = table[core][1]
+    holders = holder_pids(args, exe=exe)
+    under = {h: [p for p in peers.tree(table, h)[1:]] for h in holders}
+    agents = [h for h, kids in under.items() if any(os.path.basename(table[p][1]).startswith(("claude", "codex")) for p in kids)]
+    window = [p for p, (_, cmd) in table.items() if cmd == exe + "-app"]
+    if len(window) != 1:
+        raise SystemExit(f"needs the owner's window open: one {exe}-app, found {window}")
+    procs = {p: cmd for p, (_, cmd) in table.items()}
+    helpers = ml.attribute(procs, {p: ml.responsible_pid(p) for p in procs}, window[0], set(holders) | {core})[0]
+    pids, kids = [core, window[0], *helpers, *holders], [p for ks in under.values() for p in ks]
+    mib = rel.mib(sum(rel.footprint(pids).values()))
+    c0, k0, t0 = bl.cputime(pids), bl.cputime(kids) if kids else 0.0, time.monotonic()
+    time.sleep(a.secs)
+    dt = time.monotonic() - t0
+    cpu, agent_cpu = round((bl.cputime(pids) - c0) / dt * 100, 2), round(((bl.cputime(kids) if kids else 0.0) - k0) / dt * 100, 2)
+    now = time.strftime("%Y-%m-%d %H:%M")
+    evidence = (f"scorecard.py weigh {now}: the owner's running app ({exe}), window open, {len(holders)} sessions held, {len(agents)} with a "
+                f"Claude or Codex process; {len(pids)} processes (core, window, {len(helpers)} helpers, holders); the agents' own CPU in the "
+                f"same {a.secs} s was {agent_cpu} % (idle means near 0); 1-min load {rel.load()}")
+    print(json.dumps(dict(idle_mib=mib, idle_cpu_pct=cpu, sessions=len(holders), agent_sessions=len(agents), agents_cpu_pct=agent_cpu), indent=1))
+    if len(agents) < 5:
+        print(f"not written: the rubric's figure needs at least 5 Claude or Codex sessions, this app holds {len(agents)}")
+        return
+    path = Path(a.out) if a.out else OUT_DIR / f"manual-{time.strftime('%Y-%m-%d')}.json"
+    doc = json.loads(path.read_text()) if path.is_file() else dict(date=time.strftime("%Y-%m-%d"), figures={})
+    doc["figures"].update(idle_mib_5=dict(value=mib, evidence=evidence), idle_cpu_pct_5=dict(value=cpu, evidence=evidence))
+    path.write_text(json.dumps(doc, indent=1) + "\n")
+    print(f"wrote idle_mib_5 and idle_cpu_pct_5 to {path}")
 
 
 def merge_cmd(a):
@@ -864,8 +1179,15 @@ def main():
     c.add_argument("second")
     p = sub.add_parser("page")
     p.add_argument("results", nargs="?")
+    t = sub.add_parser("tests")
+    t.add_argument("--target", help="CARGO_TARGET_DIR for the cargo test commands")
+    t.add_argument("--out")
+    w = sub.add_parser("weigh")
+    w.add_argument("--secs", type=int, default=60)
+    w.add_argument("--out")
     a = ap.parse_args()
-    {"run": run_cmd, "ops": ops_cmd, "dev": dev_cmd, "merge": merge_cmd, "check": check_cmd, "page": page_cmd}[a.cmd](a)
+    {"run": run_cmd, "ops": ops_cmd, "dev": dev_cmd, "merge": merge_cmd, "check": check_cmd, "page": page_cmd,
+     "tests": tests_cmd, "weigh": weigh_cmd}[a.cmd](a)
 
 
 if __name__ == "__main__":

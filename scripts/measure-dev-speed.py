@@ -25,7 +25,8 @@ The four keys:
    several lanes), and owner installs per day ("owner install ...: installed" in the mainwatch log).
 2. Lead time for changes: first lane commit (author date) to the merge on main, median and p90 (the DORA definition);
    also task created (ledger) to the merge, for lanes whose branch matches a task's worktree folder.
-3. Change failure rate: landed lanes later reverted (a "fable-revert-<lane>" merge, or a merged pull request from a
+3. Change failure rate: landed lanes later reverted (a "fable-revert-<lane>" merge, a "lead-revert<ticket>" merge
+   (the lane of that ticket), a lane whose own commits are all reverts ("Revert ..."), or a merged pull request from a
    "revert-<number>-<branch>" branch, GitHub's Revert button) or named culprit by mainwatch, over
    lanes landed. Gate rejects (eject and kick events) are shown beside it: they never reached main.
 4. Time to restore: main red to green again (mainwatch), median.
@@ -44,7 +45,7 @@ import scorecard  # noqa: E402  (MAINWATCH, LANDLOOP and the red-episode parser 
 
 EVENTS = Path(os.environ.get("MEASURE_EVENTS") or scorecard.MAINWATCH.parent.parent / "build-loop/events.jsonl")
 MERGE = re.compile(r"^Merge lane (\S+) \((\S+) [0-9a-f]+\)$")
-REVERT = re.compile(r"^(?:fable-revert-|revert-\d+-)(.+)$")  # a bin/land revert lane; GitHub's revert branch of a pull request
+REVERT = scorecard.REVERT_LANE  # a bin/land or lead revert lane; GitHub's revert branch of a pull request
 DAY = 86400
 
 
@@ -77,15 +78,16 @@ def iso(ts):
 
 
 def merges(since):
-    """[{lane, branch, sha, at, first_commit}] for the first-parent lane merges on origin/main since an epoch."""
+    """[{lane, branch, sha, at, first_commit, subjects}] for the first-parent lane merges on origin/main since an epoch."""
     out = []
     for line in git("log", "origin/main", "--first-parent", "--merges", f"--since=@{int(since)}", "--format=%H %ct %s").splitlines():
         sha, at, subject = line.split(" ", 2)
         m = MERGE.match(subject)
         if not m:
             continue
-        own = git("log", "--no-merges", "--format=%at", f"{sha}^1..{sha}^2").split()
-        out.append(dict(lane=m[1], branch=m[2], sha=sha, at=int(at), first_commit=min(map(int, own)) if own else None))
+        own = [x.split(" ", 1) for x in git("log", "--no-merges", "--format=%at %s", f"{sha}^1..{sha}^2").splitlines()]
+        out.append(dict(lane=m[1], branch=m[2], sha=sha, at=int(at), first_commit=min(int(t) for t, _ in own) if own else None,
+                        subjects=[x for _, x in own]))
     return out
 
 
@@ -323,7 +325,9 @@ def measure(days, tasks_file=None, events_path=EVENTS, mainwatch_path=scorecard.
     start = now - days * DAY
     prs, prs_src = (prs, "given") if prs is not None else read_prs(prs_file, start)
     ms = merges(start) + pr_merges(prs, start)
-    landed = [m for m in ms if not REVERT.match(m["lane"])]
+    for m in ms:  # what each reverts (scorecard.revert_of), None for a landing
+        m["reverts"] = scorecard.revert_of(m["lane"], m.get("subjects", ()))
+    landed = [m for m in ms if m["reverts"] is None]
     events = [e for e in read_events(events_path) if e.get("ts") and iso(e["ts"]) >= start - 2 * DAY]
     tasks, tasks_src = read_tasks(tasks_file)
 
@@ -367,9 +371,11 @@ def measure(days, tasks_file=None, events_path=EVENTS, mainwatch_path=scorecard.
                 lanes_with_task=sum(1 for r in rows if r["task"]), tasks_source=tasks_src, pull_requests_source=prs_src)
 
     # 3. Change failure rate
-    reverted = {r[1] for r in (REVERT.match(m["lane"]) for m in ms) if r}
+    reverted = {m["reverts"] for m in ms if m["reverts"]}
+    # lead-revert<ticket> names a ticket: the reverted lane is the one named with that number at its end
+    of_ticket = lambda lane: any(t.isdigit() and lane.endswith(t) for t in reverted)  # noqa: E731
     culprit_shas = set(re.findall(r"^\d\d:\d\d:\d\d culprit ([0-9a-f]{40})", mw, re.M))
-    failed = sorted({m["lane"] for m in landed if m["lane"] in reverted or m["sha"] in culprit_shas})
+    failed = sorted({m["lane"] for m in landed if m["lane"] in reverted or of_ticket(m["lane"]) or m["sha"] in culprit_shas})
     win = [e for e in events if iso(e["ts"]) >= start]
     rejects = sorted({e["lane"] for e in win if e["kind"] in ("eject", "kick")})
     tries = len(landed) + len(rejects)
@@ -418,7 +424,7 @@ def measure(days, tasks_file=None, events_path=EVENTS, mainwatch_path=scorecard.
                          gate_run_s=gate_s.get(cand, 0), gate_queue_s=max(0, at - before[-1] - gate_s.get(cand, 0)))
     # 5. Cost per landed lane: every session whose folder is the lane's worktree (Builder, Reviewers, rework)
     # the worktree folder; GitHub's revert branch ends with the branch it reverts and is not a second landing of it
-    tail_of = lambda m: m["lane"] if REVERT.match(m["lane"]) else m["branch"].split("/", 1)[-1]  # noqa: E731
+    tail_of = lambda m: m["lane"] if m["reverts"] is not None else m["branch"].split("/", 1)[-1]  # noqa: E731
     merged = {}
     for m in ms:
         merged.setdefault(tail_of(m), []).append(m)
@@ -540,7 +546,7 @@ def selftest():
     assert MERGE.match("Merge lane lead-x1 (lead/x-1 8f4cac357467)")[2] == "lead/x-1"
     assert not MERGE.match("Merge remote-tracking branch 'origin/main' into lead/x-1")
     assert REVERT.match("fable-revert-lead-x1")[1] == "lead-x1" and REVERT.match("revert-12-lead/x-1")[1] == "lead/x-1"
-    assert not REVERT.match("lead/revert-button-3")
+    assert not REVERT.match("lead/revert-button-3") and REVERT.match("lead-revert1145")[1] == "1145"
     pr = dict(headRefName="lead/x-1", createdAt="2026-11-26T01:00:00Z", mergedAt="2026-11-26T02:00:00Z", mergeCommit=dict(oid="ab"),
               commits=[dict(authoredDate="2026-11-25T23:00:00Z")],
               statusCheckRollup=[dict(workflowName="CI", name="lint", startedAt="2026-11-26T01:30:00Z", completedAt="2026-11-26T01:31:00Z"),

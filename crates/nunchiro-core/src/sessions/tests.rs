@@ -4876,17 +4876,18 @@ fn v21b_an_undrawn_resize_never_proves_a_restored_item() {
 /// it is still answered by the core (its give-up clock starts with that question, not with the trust question).
 #[test]
 fn v5_10_a_late_trust_answer_keeps_the_core_answering_the_artifact_question() {
+    // The trust question is the script's `burst` file, written before the session starts: a file written after the
+    // start could come after the script's one read of it, and then no card ever came.
     let mut f = flood_script(
         "v5-late-trust",
-        b"",
-        "cat > got <&0 &\ncat q\nwhile [ ! -f go ]; do sleep 0.05; done; cat p\n",
+        V5_TRUST.as_bytes(),
+        "cat > got <&0 &\ncat burst\nwhile [ ! -f go ]; do sleep 0.05; done; cat p\n",
     );
     let id = f.id.clone();
     let folder = f.home.join("artifacts").join(&id);
     fs::create_dir_all(&folder).unwrap();
     let folder = fs::canonicalize(&folder).unwrap();
     f.core.entries.get_mut(&id).unwrap().observer.own_folder = Some(std::time::Instant::now());
-    fs::write(f.home.join("q"), V5_TRUST).unwrap();
     fs::write(
             f.home.join("p"),
             format!("\x1b[2J\x1b[H Adding a new directory:\r\n {}\r\n\r\n This session hasn't worked here before. Is this a directory you created or one you trust?\r\n\r\n \u{276f} No, exit\r\n   Yes, add it\r\n\r\n Enter to confirm \u{b7} Esc to cancel\r\n", folder.display()),

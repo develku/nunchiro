@@ -3,8 +3,8 @@
 //! first write, and a step that fails puts them all back.
 //!
 //! Moved: tree.toml (group, pin, added, name), the icon file, settings.json (`worktree.scripts`, `worktree.shared`),
-//! sessions.json (project, and a folder under it), worktrees.json, ledger.json, notes.json, team/team.json and the
-//! room's folder.
+//! sessions.json (project, and a folder under it), worktrees.json, ledger.json, notes.json, the team (team/bots.json;
+//! team/team.json before ticket 1168's move) and the room's folder.
 //! Never moved, they fail closed (coordinator 2026-11-22): what the owner granted for the old folder is dropped and
 //! asked again at the new one: `permission_answers` (verified-yes), the repo setup script's approval and the API tokens
 //! limited to the project. The project's schedules move switched off, so nothing runs until the owner turns them on.
@@ -17,13 +17,14 @@ use std::sync::Mutex;
 pub(crate) const ALREADY: &str = "That folder is already a project in Nunchiro.";
 pub(crate) const RUNNING: &str = "Stop this project's sessions, then try again.";
 /// The stores Locate may write, under the core's home.
-const STORES: [&str; 10] = [
+const STORES: [&str; 11] = [
     "tree.toml",
     "sessions.json",
     "settings.json",
     "ledger.json",
     "notes.json",
     "team/team.json",
+    "team/bots.json", // ticket 1168: where a located project's bots are written
     "worktrees.json",
     "approvals.json",
     "tokens.json",

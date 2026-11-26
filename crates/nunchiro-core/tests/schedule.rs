@@ -105,7 +105,8 @@ fn schedules(home: &Path) -> Vec<nunchiro_core::schedule::Entry> {
     }
 }
 fn wait(what: &str, mut done: impl FnMut() -> bool) {
-    let until = Instant::now() + Duration::from_secs(10);
+    // 30 s, not 10: a hosted CI runner ran this in over 10 s where a Mac takes 2 s; the wait is on a condition.
+    let until = Instant::now() + Duration::from_secs(30);
     while !done() {
         assert!(Instant::now() < until, "{what}");
         thread::sleep(Duration::from_millis(20));

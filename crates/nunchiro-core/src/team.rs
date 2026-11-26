@@ -256,6 +256,17 @@ pub enum Op {
         #[serde(default)]
         level: Option<Level>,
     },
+    /// Ticket 1168: a bot takes a seat, or leaves it (`Team::sit`).
+    BotSeat {
+        id: String,
+        seat: Seat,
+    },
+    /// Ticket 1168: the bot's SOUL file. With `text`, the owner's edit is saved first.
+    BotSoul {
+        id: String,
+        #[serde(default)]
+        text: Option<String>,
+    },
 }
 
 /// Window ops run on their own threads (http/mod.rs): a save and a remove each read, change and write the whole list,
@@ -289,7 +300,16 @@ impl Team {
         self.dir.join("USER.md")
     }
 
+    /// The roster as teammates: a view over the bots once `bots.json` exists (ticket 1168, `bots.rs`), `team.json`
+    /// itself before that.
     pub fn list(&self) -> Result<Vec<Teammate>, String> {
+        match self.stored_bots()? {
+            Some(bots) => bots.iter().map(Bot::teammate).collect(),
+            None => self.list_v1(),
+        }
+    }
+    /// `team.json`, read as every build so far reads it.
+    fn list_v1(&self) -> Result<Vec<Teammate>, String> {
         let bytes = match store::read_regular(&self.file()) {
             Ok(b) => b,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
@@ -339,6 +359,10 @@ impl Team {
     }
 
     fn write(&self, teammates: Vec<Teammate>) -> Result<(), String> {
+        self.write_bots(&teammates)
+    }
+    /// `team.json` in the shape every build so far writes; only `bots::mirror_new` writes it now.
+    fn write_v1(&self, teammates: Vec<Teammate>) -> Result<(), String> {
         store::private_dir(&self.dir)?;
         let bytes = serde_json::to_vec_pretty(&Stored {
             version: 1,
@@ -348,17 +372,20 @@ impl Team {
         store::atomic_write(&self.file(), &bytes)
     }
 
-    /// The memory file and the shared user file exist after this; an existing one is never rewritten.
-    fn ensure_files(&self, id: &str) -> Result<(), String> {
+    /// The memory file, the SOUL file (ticket 1168: seeded from the job) and the shared user file exist after this; an
+    /// existing one is never rewritten.
+    fn ensure_files(&self, mate: &Teammate) -> Result<(), String> {
+        let id = mate.id.as_str();
         store::private_dir(&self.dir)?;
         store::private_dir(&self.dir.join(id))?;
         store::private_dir(&self.home())?;
         for (path, body) in [
             (
                 self.memory(id),
-                "# Memory\n\n## Rules and preferences\n\n## Log\n",
+                "# Memory\n\n## Rules and preferences\n\n## Log\n".to_string(),
             ),
-            (self.user(), "# About the user\n"),
+            (self.soul(id), format!("{}\n", mate.job)),
+            (self.user(), "# About the user\n".to_string()),
         ] {
             if path.symlink_metadata().is_err() {
                 store::atomic_write(&path, body.as_bytes())?;
@@ -367,10 +394,15 @@ impl Team {
         Ok(())
     }
 
-    pub fn save(&self, id: Option<String>, mut next: Teammate) -> Result<Vec<Teammate>, String> {
+    pub fn save(&self, id: Option<String>, next: Teammate) -> Result<Vec<Teammate>, String> {
         let _one = CHANGE
             .lock()
             .map_err(|_| "team store unavailable".to_string())?;
+        self.save_locked(id, next)
+    }
+    /// `save`, for a change that already holds `CHANGE` because it read the roster to decide (`bots::sit`): the read,
+    /// the check and the write are one step, so no other change lands between them.
+    fn save_locked(&self, id: Option<String>, mut next: Teammate) -> Result<Vec<Teammate>, String> {
         next.name = next.name.trim().to_string();
         next.job = next.job.trim().to_string();
         check(&next)?;
@@ -410,7 +442,7 @@ impl Team {
                 }
             }
         }
-        self.ensure_files(&next.id)?;
+        self.ensure_files(&next)?;
         self.write(all.clone())?;
         Ok(all)
     }
@@ -498,7 +530,7 @@ impl Team {
             .find(|t| t.id == id)
             .ok_or_else(|| format!("no teammate {id}"))?
             .clone();
-        self.ensure_files(&mate.id)?;
+        self.ensure_files(&mate)?;
         let project = mate.project.clone().unwrap_or_else(|| self.home());
         // The room is the project's: only teammates of the same scope can be reached from it.
         let others: Vec<&Teammate> = all
@@ -809,6 +841,7 @@ fn brief_text(
          \n\
          ## Your job\n\
          {job}\n\
+         Who you are, in a few lines, is in your SOUL file: {soul}. Read it before your first reply.\n\
          \n\
          ## Your memory\n\
          - Your memory file: {memory}. It holds the user's rules and preferences for you and a short dated log of important work.\n\
@@ -828,6 +861,8 @@ fn brief_text(
          {last}",
         name = t.name,
         job = t.job,
+        // Ticket 1168: beside the memory file (`Team::soul`).
+        soul = memory.with_file_name("SOUL.md").display(),
         memory = memory.display(),
         user = user.display(),
     )
@@ -1502,9 +1537,12 @@ pub fn window(
     op: Op,
 ) -> Result<Reply, String> {
     let team = Team::open(home);
-    let listed = |teammates: Vec<Teammate>| Reply::Team {
-        teammates,
-        home: team.home(),
+    let listed = |teammates: Vec<Teammate>| {
+        Ok(Reply::Team {
+            teammates,
+            bots: team.bots()?,
+            home: team.home(),
+        })
     };
     match op {
         // Ticket 1130 C7: Quick setup on a Mac with no agent history starts the first session in this folder, before any
@@ -1512,7 +1550,7 @@ pub fn window(
         Op::TeamList => store::private_dir(&team.dir)
             .and_then(|_| store::private_dir(&team.home()))
             .and_then(|_| team.list())
-            .map(listed),
+            .and_then(listed),
         Op::TeamSave {
             id,
             name,
@@ -1565,7 +1603,7 @@ pub fn window(
                     .map_err(|_| "session registry unavailable".to_string())?
                     .teammate_renamed(&old.id, &old.name, &new.name)?;
             }
-            Ok(listed(all))
+            listed(all)
         }
         Op::TeamRemove { id } => {
             let name = team
@@ -1578,9 +1616,15 @@ pub fn window(
                 .lock()
                 .map_err(|_| "session registry unavailable".to_string())?
                 .teammate_removed(&id, name.as_deref().unwrap_or_default())?;
-            Ok(listed(left))
+            listed(left)
         }
-        Op::TeamLevel { id, level } => team.set_next_level(&id, level).map(listed),
+        Op::TeamLevel { id, level } => team.set_next_level(&id, level).and_then(listed),
+        Op::BotSeat { id, seat } => team.sit(&id, seat).and_then(|_| listed(team.list()?)),
+        Op::BotSoul { id, text } => match text {
+            Some(text) => team.soul_save(&id, &text),
+            None => team.soul_text(&id),
+        }
+        .map(|text| Reply::BotSoul { id, text }),
         Op::TeamOpen {
             id,
             undo: Some(old),
@@ -1608,6 +1652,9 @@ pub fn window(
         }
     }
 }
+
+mod bots;
+pub use bots::{Bot, Face, ModelRule, Seat, V1, face_of};
 
 #[cfg(test)]
 mod tests;
