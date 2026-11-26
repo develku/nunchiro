@@ -33,8 +33,20 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read # the message check below reads the pull request
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # A step, not a job: a job that runs on pull requests only would be skipped on main and fail `gate`. The text is
+      # read live from the API, never from the event, so after fixing a title or body `gh run rerun --failed` is enough.
+      - name: Pull request title, body and commit messages (scripts/check-messages.sh)
+        if: github.event_name == 'pull_request'
+        run: scripts/check-messages.sh --pr "$PR"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
       - run: rustup toolchain install # the version and components in rust-toolchain.toml
       - run: cargo fmt --all --check
       - name: sh -n scripts/scenario/*.sh
