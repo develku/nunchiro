@@ -33,6 +33,7 @@ const GREYED: Record<string, string> = {
   'project.rename': 'acts on a project (tree row menu); none is shown in the walk window',
   'session.settle': 'needs a settleable (done) session; the walk window has none',
   'worktree.open': 'acts on a worktree row (tree row menu); the walk window has none',
+  'worktree.hand': 'acts on a worktree row (tree row menu); the walk window has none',
   'worktree.copy-path': 'acts on a worktree row (tree row menu); the walk window has none',
   'worktree.reveal': 'acts on a worktree row (tree row menu); the walk window has none',
   'worktree.rename': 'acts on a worktree row (tree row menu); the walk window has none',
