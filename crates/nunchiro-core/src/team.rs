@@ -1367,10 +1367,10 @@ pub enum Fresh {
 pub(crate) const HANDOVER_WAIT: std::time::Duration = std::time::Duration::from_secs(5 * 60);
 pub(crate) const HANDOVER: &str = "The user is starting a fresh Lead conversation for this project; this conversation \
      is closed when this turn ends. Start no new work. In this turn only: write what is unfinished (open tasks, workers \
-     still running, questions waiting for the user, decisions not yet recorded) into .scratch/build-loop/handoff.md, \
+     still running, questions waiting for the user, decisions not yet recorded) into .scratch/lead/handoff.md, \
      then send the same summary to the room for the new Lead: `nunchiro agent send --thread lead-handover \"<summary>\"`.";
 const TAKEOVER: &str = "## You take over\n\
-     You are a fresh Lead conversation that takes over from an earlier one. When .scratch/build-loop/handoff.md exists, \
+     You are a fresh Lead conversation that takes over from an earlier one. When .scratch/lead/handoff.md exists, \
      read it first and take over from it. The earlier Lead's last report, if it sent one, is in the room: \
      `nunchiro agent thread read lead-handover`.";
 /// The leads with a fresh open on its way: a second press while the first waits would send a second handover prompt.
