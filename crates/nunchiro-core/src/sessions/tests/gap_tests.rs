@@ -77,6 +77,35 @@ fn an_agent_line_waits_while_the_owner_types() {
     assert_eq!(status(&f, &line.id), "delivered");
 }
 
+/// The delivery record: a line that waited for a gap and then went is one prompt delivered, never a miss or a resend.
+#[test]
+fn a_line_that_waited_for_a_gap_counts_once_as_delivered() {
+    let mut f = seat("gap-record", AgentKind::Claude, &claude_box(""));
+    typing(&mut f);
+    let line = agent_line(&mut f, "agent line");
+    for _ in 0..3 {
+        f.core.flush_delivery().unwrap();
+    }
+    assert_eq!(status(&f, &line.id), "queued");
+    assert_eq!(
+        recorded(&f.home),
+        crate::record::Day::default(),
+        "waiting is not a miss"
+    );
+    quiet(&mut f);
+    f.core.flush_delivery().unwrap();
+    enter_1085(&mut f);
+    assert_eq!(status(&f, &line.id), "delivered");
+    assert_eq!(
+        recorded(&f.home),
+        crate::record::Day {
+            delivered: 1,
+            resent: 0,
+            person: 0
+        }
+    );
+}
+
 #[test]
 fn the_owners_prompt_does_not_wait_for_his_typing() {
     let mut f = seat("gap-own", AgentKind::Claude, &claude_box(""));

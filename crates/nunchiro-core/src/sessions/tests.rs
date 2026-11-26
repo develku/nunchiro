@@ -2250,6 +2250,16 @@ fn wait_end(f: &Flood, bytes: usize) {
 fn behind(f: &Flood) -> bool {
     offset(f) < f.core.entries[&f.id].pty.as_ref().unwrap().end()
 }
+/// The delivery record's counts over every day it holds (a test may cross midnight).
+fn recorded(home: &Path) -> crate::record::Day {
+    let mut sum = crate::record::Day::default();
+    for d in crate::record::read(home).days.values() {
+        sum.delivered += d.delivered;
+        sum.resent += d.resent;
+        sum.person += d.person;
+    }
+    sum
+}
 fn send_row(f: &Flood, send: &str) -> crate::delivery::Send {
     let meta = &f.core.entries[&f.id].meta;
     meta.send_queue
@@ -5750,6 +5760,15 @@ fn t1094_his_own_enter_sends_the_dropped_copy_once() {
         f.core.tick().unwrap();
     }
     assert_eq!(copies(&f), first, "one copy: the one his Enter sent");
+    assert_eq!(
+        recorded(&f.home),
+        crate::record::Day {
+            delivered: 1,
+            resent: 0,
+            person: 1
+        },
+        "his Enter sent it: delivered once, needed a person, not resent"
+    );
 }
 /// Ticket 1094 r6 (lead): the box proves the copy, but no turn starts after his Enter (Claude did not take it). The row
 /// is never shown delivered: once the idle agent showed no turn for HAND_PROOF, it goes again.
@@ -11188,6 +11207,15 @@ fn t1085_a_dropped_automatic_line_is_cleared_and_goes_after_the_owner() {
                 "{text}"
             );
             assert_eq!(auto(&f).status, "delivered", "{text}");
+            assert_eq!(
+                recorded(&f.home),
+                crate::record::Day {
+                    delivered: 2,
+                    resent: 1,
+                    person: 0
+                },
+                "{text}: the owner's prompt, and the dropped line the core sent again"
+            );
         } else {
             assert_eq!(
                 String::from_utf8_lossy(&got(&f)),

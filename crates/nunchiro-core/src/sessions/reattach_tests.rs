@@ -205,6 +205,30 @@ fn reattach_keeps_scrollback_and_writes() {
     let _ = fs::remove_dir_all(home);
 }
 
+/// The delivery record: a core restart with 4 running sessions writes 4 before and 4 back; a first start, with none
+/// running before, writes no restart row.
+#[test]
+fn a_restart_with_four_sessions_records_four_before_and_four_after() {
+    let home = scratch("record");
+    let mut core = Sessions::open(&home).unwrap();
+    assert!(
+        crate::record::read(&home).restarts.is_empty(),
+        "a first start is no restart"
+    );
+    for _ in 0..4 {
+        shell(&mut core, &home, &["/bin/cat"]);
+    }
+    core.leave().unwrap();
+    drop(core);
+    let mut core = Sessions::open(&home).unwrap();
+    let restarts = crate::record::read(&home).restarts;
+    assert_eq!(restarts.len(), 1, "{restarts:?}");
+    assert_eq!((restarts[0].before, restarts[0].after), (4, 4));
+    core.handle(Request::Stop).unwrap();
+    drop(core);
+    let _ = fs::remove_dir_all(home);
+}
+
 /// Ticket 512 (505 review): where this run's output starts survives a core restart, so a resumed session's card
 /// never reads the earlier run's end mark from its seed. The seed here is a stand-in: `run_start` set as a resume's
 /// seed length sets it.
