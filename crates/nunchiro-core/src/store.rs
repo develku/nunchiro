@@ -59,6 +59,10 @@ pub struct Live {
     /// a core restart; none for a start with `--env`. Kept here, never on a session row a window or another session reads.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub launch_args: Option<Vec<String>>,
+    /// The session's start was over when its row was saved (`waiting::screen::Screen::started`): the core that
+    /// reattaches it makes no card from a start dialog's rows on its screen.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub past_start: bool,
     /// V2-1b: the agent's pid when its row was saved running (the row's `pid`, which loading clears); not stored here.
     #[serde(skip)]
     pub agent_pid: Option<u32>,
@@ -1129,6 +1133,7 @@ mod tests {
             agent_started: Some(11),
             run_start: 0,
             launch_args: None,
+            past_start: true,
             // V2-1b: the running row's pid, which loading clears from the row.
             agent_pid: Some(7),
         };

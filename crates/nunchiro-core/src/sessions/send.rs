@@ -44,6 +44,7 @@ impl Sessions {
             waiting::screen::Screen::new(cols as usize, rows as usize),
         );
         entry.observer.screen.alt = old.alt; // a resize leaves the program in front where it was
+        entry.observer.screen.started = old.started().into(); // and a started session past its start dialogs
         // Seventh look (B S1-1): kept for `tick`. A second resize before any redraw keeps the first's screen.
         let last = if old.drawn() {
             Some(old)

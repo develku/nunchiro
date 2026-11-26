@@ -41,6 +41,11 @@ pub struct Screen {
     /// Look 1117 v11 A-S3-7: the program in front switched to the alternate screen (`CSI ? 1049 h`, 1047, 47): a
     /// full-screen program (vim, less) waiting for keys. Kept through a resize by its caller.
     pub(crate) alt: bool,
+    /// The session's start is over (`note_box`, `mark_started`): so a start dialog's rows read
+    /// later (a transcript view, a redraw caught before its box) are no card. Kept through a reset and a resize.
+    pub(crate) started: std::sync::atomic::AtomicBool,
+    /// A start dialog was read on this screen and made a card (`detect_in`): Codex's composer after it ends the start.
+    asked: std::sync::atomic::AtomicBool,
     // Rendered text, dropped by `feed`; the idle tick reads an unchanged screen every 50 ms.
     text_cache: std::sync::OnceLock<String>,
     // S9: what `read_once` read from this text (the permission mode footer), dropped with `text_cache`.
@@ -65,6 +70,8 @@ impl Screen {
             faint: false,
             drawn: false,
             alt: false,
+            started: std::sync::atomic::AtomicBool::new(false),
+            asked: std::sync::atomic::AtomicBool::new(false),
             text_cache: std::sync::OnceLock::new(),
             read_cache: std::sync::OnceLock::new(),
             fast_cache: std::sync::OnceLock::new(),
@@ -398,7 +405,37 @@ impl Screen {
             .get_or_init(|| boxed(&self.text()).then(|| self.fast_mark()))
     }
     pub fn reset(&mut self) {
+        let started = self.started();
         *self = Self::new(self.cols, self.rows);
+        self.started = started.into();
+    }
+    /// The session's start is over (its first hook after SessionStart, `note_box`, or a start that was over before
+    /// the core restarted): start dialogs make no card from here.
+    pub(crate) fn mark_started(&self) {
+        self.started
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+    pub(crate) fn started(&self) -> bool {
+        self.started.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    /// Notes the agent's input box in `text` (this screen's text): a row from the first column that starts with `❯`
+    /// (Claude) or `›` (Codex) and is no numbered choice. True when it is there. Claude's box ends its start. Codex's
+    /// alone does not (Codex 0.162.1 draws its composer for a moment before its sign-in screen): a Codex start ends
+    /// with its composer once a start dialog was read (it was answered, or it never was one), with a running turn on
+    /// the screen, or with its first hook after SessionStart (`mark_started`; a Codex with a hooks file of its own
+    /// runs none of the core's general hooks).
+    /// shortcut: Codex's update screen answered, a composer for a moment, then its sign-in screen: that sign-in screen
+    /// gets no card. Nunchiro keeps the update screen off; if that changes, let the composer end the start only when
+    /// no key went to the agent since the dialog was read.
+    pub(crate) fn note_box(&self, kind: AgentKind, text: &str) -> bool {
+        let boxed = text
+            .lines()
+            .any(|l| l.starts_with(['\u{276f}', '\u{203a}']) && choice_row(l).is_none());
+        let asked = self.asked.load(std::sync::atomic::Ordering::Relaxed);
+        if boxed && (kind == AgentKind::Claude || asked) || text.contains("esc to interrupt") {
+            self.mark_started();
+        }
+        boxed
     }
     pub fn detect(&self, kind: AgentKind) -> Option<Detection> {
         if kind == AgentKind::Shell {
@@ -434,6 +471,12 @@ impl Screen {
                 && ["do you want to make this edit to", "do you want to create", "do you want to overwrite"]
                     .iter()
                     .any(|p| normalized.contains(p));
+        // A start dialog only before the start is over, never over a permission prompt (an edit to a file holding its
+        // words), and only as the last fallback: it never changes a question, a plan or a notice.
+        let boxed = self.note_box(kind, text);
+        let start = (!permission && !boxed && !self.started())
+            .then(|| start_dialog(text))
+            .flatten();
         let plan = choices.len() >= 2 && plan_dialog(&normalized);
         // Look 1117 v13 N13-S3-4: Codex's rate-limit nudge only switches this session's model or keeps it (its "never show
         // again" changes settings and stays terminal-only), so it is a question. Its list takes the digit alone: a digit
@@ -466,6 +509,12 @@ impl Screen {
             ]
             .iter()
             .any(|hint| normalized.contains(hint));
+        // Any other prompt on the screen is the card, with its own text (Codex's edit approval under a start dialog's
+        // rows that the agent printed).
+        let start = start.filter(|_| !(trust || question || background || unclassified_prompt));
+        if start.is_some() {
+            self.asked.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
         let item_kind = if trust {
             Kind::Dialog
         } else if permission {
@@ -474,18 +523,20 @@ impl Screen {
             Kind::Question
         } else if background {
             Kind::Background
-        } else if unclassified_prompt {
+        } else if unclassified_prompt || start.is_some() {
             Kind::Dialog
         } else {
             return None;
         };
+        // A start dialog's card is its own rows (`start_dialog`); any other prompt keeps its region.
+        let region = start.unwrap_or_else(|| prompt_region(kind, text));
         // V2.5-87: no focus report reaches the card; the answer check compares this same text.
         for choice in &mut choices {
             choice.label = without_focus_reports(&choice.label);
         }
         Some(Detection {
             kind: item_kind,
-            text: without_focus_reports(prompt_region(kind, text)),
+            text: without_focus_reports(region),
             choices,
         })
     }
@@ -660,6 +711,73 @@ fn start_rows(text: &str) -> bool {
         && rows
             .iter()
             .any(|r| *r == "Yes, I trust this folder" || *r == "Yes, add it")
+}
+
+/// A start dialog other than folder trust that waits for the user before the session starts: Claude's theme picker,
+/// sign-in question and security notes, Codex's sign-in and update screens. Each is read by its heading row and rows of
+/// its own below it (a numbered option, its hint), each a whole row: words inside a row of a diff or of code, or a
+/// heading quoted without its dialog, are no start dialog. `detect_in` reads it only before the start is over.
+///
+/// The dialog's rows from its heading to its last whole row (`end`), the card's text: what is drawn above it (Codex's
+/// animated logo) or after it (Claude draws its screens in pieces) never changes the card, so it keeps one id.
+fn start_dialog(text: &str) -> Option<&str> {
+    let rows: Vec<(usize, &str)> = text
+        .split('\n')
+        .scan(0, |at, l| {
+            let row = (*at, l);
+            *at += l.len() + 1;
+            Some(row)
+        })
+        .collect();
+    let has = |row: &str, want: Row| match want {
+        Row::Is(r) => row.trim().eq_ignore_ascii_case(r),
+        Row::Starts(r) => row.trim().starts_with(r),
+        Row::Option(r) => {
+            choice_row(row).is_some_and(|(_, label, _)| label.trim_start().starts_with(r))
+        }
+    };
+    let enter = Row::Is("Press enter to continue");
+    let theme = Row::Is("To change this later, run /theme");
+    [
+        (
+            Row::Is("Choose the text style that looks best with your terminal"),
+            theme,
+            theme,
+        ),
+        (
+            Row::Is("Select login method:"),
+            Row::Option("Claude account with subscription"),
+            Row::Is("Select login method:"),
+        ),
+        (
+            Row::Is("Security notes:"),
+            Row::Option("Claude can make mistakes."),
+            enter,
+        ),
+        (
+            Row::Starts("Welcome to Codex"),
+            Row::Option("Sign in with ChatGPT"),
+            enter,
+        ),
+        (
+            Row::Starts("\u{2728} Update available!"),
+            Row::Option("Update now"),
+            enter,
+        ),
+    ]
+    .into_iter()
+    .find_map(|(heading, own, end)| {
+        let top = rows.iter().position(|(_, l)| has(l, heading))?;
+        rows[top..].iter().any(|(_, l)| has(l, own)).then_some(())?;
+        let (at, last) = rows[top..].iter().find(|(_, l)| has(l, end))?;
+        Some(&text[rows[top].0..at + last.len()])
+    })
+}
+#[derive(Clone, Copy)]
+enum Row {
+    Is(&'static str),
+    Starts(&'static str),
+    Option(&'static str),
 }
 
 /// w25-s: a start question's "No, exit" row is still on the screen, read across rows a narrow window split: the question
@@ -1222,6 +1340,253 @@ mod tests {
                 .map(|d| (d.kind, d.text, d.choices.len()));
             assert_eq!(a, b);
             assert_eq!(a.is_none(), screen == "just prose\r\n");
+        }
+    }
+
+    fn fed(text: &str) -> Screen {
+        let mut s = Screen::new(200, 60);
+        s.feed(text.replace('\n', "\r\n").as_bytes());
+        s
+    }
+
+    /// Start dialogs other than folder trust, as real agents drew them on a Mac with empty config folders (Claude
+    /// 2.1.332's theme picker and security notes, Codex 0.162.1's sign-in screen): each waits for the user before the
+    /// session starts, so each is a dialog card. Codex's own trust question was a card already and stays one.
+    #[test]
+    fn start_dialogs_of_real_agents_are_cards() {
+        for (kind, text) in [
+            (
+                AgentKind::Claude,
+                include_str!("../../tests/fixtures/start-screens/claude-2.1.332-theme.txt"),
+            ),
+            (
+                AgentKind::Claude,
+                include_str!(
+                    "../../tests/fixtures/start-screens/claude-2.1.332-security-notes.txt"
+                ),
+            ),
+            (
+                AgentKind::Codex,
+                include_str!("../../tests/fixtures/start-screens/codex-0.162.1-sign-in.txt"),
+            ),
+            (
+                AgentKind::Codex,
+                include_str!("../../tests/fixtures/start-screens/codex-0.162.1-trust.txt"),
+            ),
+        ] {
+            let d = fed(text)
+                .detect(kind)
+                .unwrap_or_else(|| panic!("no card for: {text}"));
+            assert_eq!(d.kind, Kind::Dialog, "{text}");
+        }
+        // Claude's sign-in question, as Claude Code draws it with no account (not drawn on this Mac: Claude found its
+        // sign-in with an empty config folder too).
+        let login = " Claude Code can be used with your Claude subscription or billed based on API usage through your Console\n account.\n\n Select login method:\n\n \u{276f} 1. Claude account with subscription \u{b7} Pro, Max, Team, or Enterprise\n\n   2. Anthropic Console account \u{b7} API usage billing\n\n   3. 3rd-party platform \u{b7} Amazon Bedrock, Microsoft Foundry, or Vertex AI\n";
+        let d = fed(login).detect(AgentKind::Claude).expect("login");
+        assert_eq!((d.kind, d.choices.len()), (Kind::Dialog, 3));
+        // Codex's update screen, which Nunchiro keeps off (sessions/spawn.rs): a card if it ever shows.
+        let update = "\u{2728} Update available! 0.161.0 -> 0.170.0\n\n\u{203a} 1. Update now\n  2. Skip\n  3. Skip until next version\n\n  Press enter to continue\n";
+        let d = fed(update).detect(AgentKind::Codex).expect("update");
+        assert_eq!((d.kind, d.choices.len()), (Kind::Dialog, 3));
+    }
+
+    /// Codex animates its logo above the sign-in screen for about ten seconds: the card's text starts at its welcome
+    /// line, so each frame keeps the same card (a changed text would make a new card every frame).
+    #[test]
+    fn codex_sign_in_card_leaves_out_the_animated_logo() {
+        let text = include_str!("../../tests/fixtures/start-screens/codex-0.162.1-sign-in.txt");
+        let logo = text
+            .lines()
+            .find(|l| l.contains('\u{28ff}'))
+            .expect("logo row");
+        let other = text.replace(logo, &logo.replace('\u{28ff}', "\u{2800}"));
+        let a = fed(text).detect(AgentKind::Codex).expect("card");
+        let b = fed(&other).detect(AgentKind::Codex).expect("card");
+        assert_eq!(a.text, b.text);
+        assert!(
+            a.text.trim_start().starts_with("Welcome to Codex"),
+            "{}",
+            a.text
+        );
+    }
+
+    /// The same words in an agent's own output, with its input box on the screen, are no card: a start dialog is drawn
+    /// before the box.
+    #[test]
+    fn start_dialog_words_in_normal_output_are_no_card() {
+        let rule = "\u{2500}".repeat(40);
+        for (kind, text) in [
+            (AgentKind::Claude, format!("\u{23fa} The onboarding says \"Choose the text style that looks best with your terminal\", then Security notes: and Press Enter to continue.\n Select login method: is next.\n{rule}\n\u{276f} \n{rule}\n")),
+            (AgentKind::Codex, "\u{2022} Codex printed: Welcome to Codex. Sign in with ChatGPT, Provide your own API key, Press enter to continue.\n\n\u{203a} Ask Codex to do anything\n".to_string()),
+        ] {
+            assert!(fed(&text).detect(kind).is_none(), "{text}");
+        }
+        // A permission prompt whose preview holds those words (an edit to the fixtures above) stays a permission.
+        let create = " Create file\n claude-2.1.332-security-notes.txt\n\n Security notes:\n\n Press Enter to continue\n\n Do you want to create claude-2.1.332-security-notes.txt?\n \u{276f} 1. Yes\n   2. No\n\n Esc to cancel\n";
+        let d = fed(create).detect(AgentKind::Claude).expect("permission");
+        assert_eq!(d.kind, Kind::Permission);
+        // Words inside a row (a diff, a line of code) are no start dialog.
+        let diff = "  12 +        || has(&[\"security notes:\", \"press enter to continue\"])\n  13 +  Welcome to Codex, Sign in with ChatGPT, Press enter to continue\n";
+        assert!(fed(diff).detect(AgentKind::Codex).is_none());
+    }
+
+    const CLAUDE_NOTES: &str =
+        include_str!("../../tests/fixtures/start-screens/claude-2.1.332-security-notes.txt");
+    const CODEX_SIGN_IN: &str =
+        include_str!("../../tests/fixtures/start-screens/codex-0.162.1-sign-in.txt");
+
+    /// A start dialog's rows on the screen (an agent showing one of the files above) never change what another prompt
+    /// reads as: a question, a plan approval, Codex's rate-limit question and the shells notice keep their kind, so
+    /// their cards can still be answered.
+    #[test]
+    fn start_dialog_rows_never_change_another_prompt() {
+        let rule = "\u{2500}".repeat(40);
+        for (kind, quoted, tail) in [
+            (AgentKind::Claude, CLAUDE_NOTES, format!("{rule}\n \u{2610} Colour\n\nWhich colour?\n\n\u{276f} 1. red\n  2. blue\n{rule}\n\nEnter to select \u{b7} Esc to cancel\n")),
+            (AgentKind::Claude, CLAUDE_NOTES, format!("{rule}\n Ready to code?\n\n Claude has written up a plan and is ready to execute. Would you like to proceed?\n\n \u{276f} 1. Yes, and auto-accept edits\n   2. Yes, and manually approve edits\n   3. No, keep planning\n")),
+            (AgentKind::Claude, CLAUDE_NOTES, " Background shells still running\n \u{276f} 1. Kill and exit\n   2. Keep waiting\n".to_string()),
+            (AgentKind::Codex, CODEX_SIGN_IN, "  Approaching rate limits\n  Switch to a smaller model?\n\n\u{203a} 1. Switch\n  2. Keep current model\n\n  Press enter to confirm or esc to go back\n".to_string()),
+        ] {
+            let alone = fed(&tail).detect(kind).map(|d| d.kind);
+            let with = fed(&format!("{quoted}{tail}")).detect(kind).map(|d| d.kind);
+            assert!(alone.is_some(), "{tail}");
+            assert_eq!(with, alone, "{tail}");
+        }
+    }
+
+    /// Once the agent's input box has shown, the session is past its start: a redraw that shows a start dialog's rows
+    /// with no box (a transcript view, a frame read between the transcript and the box) is no card.
+    #[test]
+    fn start_dialog_rows_after_the_input_box_are_no_card() {
+        let rule = "\u{2500}".repeat(40);
+        for (kind, quoted, the_box) in [
+            (
+                AgentKind::Claude,
+                CLAUDE_NOTES,
+                format!("{rule}\n\u{276f} \n{rule}\n"),
+            ),
+            (
+                AgentKind::Codex,
+                CODEX_SIGN_IN,
+                "\n\u{203a} Ask Codex to do anything\n".to_string(),
+            ),
+        ] {
+            assert!(
+                fed(quoted).detect(kind).is_some(),
+                "a start screen before the box is a card"
+            );
+            let mut s = fed(&the_box);
+            assert!(s.detect(kind).is_none());
+            if kind == AgentKind::Codex {
+                s.mark_started(); // Codex's start ends with its first hook, not its composer
+            }
+            s.feed(format!("\x1b[2J\x1b[H{}", quoted.replace('\n', "\r\n")).as_bytes());
+            assert!(s.detect(kind).is_none(), "{quoted}");
+        }
+        // Heading rows alone, without the dialog's own options, are no start dialog either.
+        let rows = " Select login method:\n\n Choose the text style that looks best with your terminal\n\n Security notes:\n\n Press Enter to continue\n";
+        assert!(fed(rows).detect(AgentKind::Claude).is_none());
+        let rows = "  Welcome to Codex, OpenAI's command-line coding agent\n\n  \u{2728} Update available! 0.161.0 -> 0.170.0\n\n  Press enter to continue\n";
+        assert!(fed(rows).detect(AgentKind::Codex).is_none());
+    }
+
+    /// Codex 0.162.1 started by the core draws its composer ("› Ask Codex to do anything") for a moment before its
+    /// sign-in screen: that composer does not end Codex's start, so the sign-in screen after it is still a card.
+    /// Codex's start ends with its first hook after SessionStart (`mark_started`).
+    #[test]
+    fn codex_composer_before_its_sign_in_screen_does_not_end_the_start() {
+        let mut s = fed("\n\u{203a} Ask Codex to do anything\n");
+        assert!(s.detect(AgentKind::Codex).is_none());
+        s.feed(format!("\x1b[2J\x1b[H{}", CODEX_SIGN_IN.replace('\n', "\r\n")).as_bytes());
+        assert_eq!(
+            s.detect(AgentKind::Codex).map(|d| d.kind),
+            Some(Kind::Dialog)
+        );
+        s.mark_started();
+        assert!(s.detect(AgentKind::Codex).is_none());
+    }
+
+    /// A Codex that runs none of Nunchiro's general hooks (its own hooks file keeps them out) ends its start too: by
+    /// a running turn on its screen, or by its composer once a start dialog was read (it was answered, or it never was
+    /// one). After that a start dialog's rows with no composer (its transcript view, a redraw read before its
+    /// composer) are no card.
+    #[test]
+    fn codex_start_ends_without_a_hook() {
+        let redraw = |s: &mut Screen, text: &str| {
+            s.feed(format!("\x1b[2J\x1b[H{}", text.replace('\n', "\r\n")).as_bytes());
+        };
+        let composer =
+            "\n\u{203a} Ask Codex to do anything\n\n  gpt-5-codex medium \u{b7} /tmp/x\n";
+        let view = format!(
+            "{CODEX_SIGN_IN}\n  \u{2191}/\u{2193} to scroll   pgup/pgdn to page   home/end to jump\n  q to quit   esc to edit prev\n"
+        );
+        // A turn ran, then its transcript view shows a start dialog's rows.
+        let mut s = fed(composer);
+        assert!(s.detect(AgentKind::Codex).is_none());
+        redraw(
+            &mut s,
+            &format!("\u{2022} Working (1s \u{2022} esc to interrupt)\n{composer}"),
+        );
+        assert!(s.detect(AgentKind::Codex).is_none());
+        redraw(&mut s, &view);
+        assert!(s.detect(AgentKind::Codex).is_none(), "after a turn");
+        // A resumed session's rows read before its composer is drawn under them: a card for that read, as for a real
+        // sign-in screen, and none once the composer showed.
+        let mut s = fed(CODEX_SIGN_IN);
+        assert_eq!(
+            s.detect(AgentKind::Codex).map(|d| d.kind),
+            Some(Kind::Dialog)
+        );
+        redraw(&mut s, &format!("{CODEX_SIGN_IN}{composer}"));
+        assert!(s.detect(AgentKind::Codex).is_none());
+        redraw(&mut s, CODEX_SIGN_IN);
+        assert!(s.detect(AgentKind::Codex).is_none(), "after the composer");
+    }
+
+    /// Before the start is over too, another prompt's card is that prompt: Codex's edit approval under a start
+    /// dialog's rows (the agent showed one of the files above) keeps its own text.
+    #[test]
+    fn a_prompt_under_start_dialog_rows_keeps_its_own_text() {
+        let edit = "  Would you like to make the following edits?\n\n  crates/x.rs (+1 -0)\n    1 +fn a() {}\n\n\u{203a} 1. Yes, proceed (y)\n  2. Yes, and don't ask again for these files (a)\n  3. No, and tell Codex what to do differently (esc)\n\n  Press enter to confirm or esc to cancel\n";
+        let d = fed(&format!("{CODEX_SIGN_IN}\n{edit}"))
+            .detect(AgentKind::Codex)
+            .expect("card");
+        assert_eq!(d.kind, Kind::Dialog);
+        assert!(
+            d.text
+                .trim_start()
+                .starts_with("Would you like to make the following edits?"),
+            "{}",
+            d.text
+        );
+    }
+
+    /// Claude draws its start screens in pieces (rows arrive in more than one read). From the first read that shows
+    /// the dialog, its card text stays the same while the rest arrives, so the card keeps one id.
+    #[test]
+    fn a_start_dialog_drawn_in_pieces_keeps_one_card_text() {
+        let login = " Select login method:\n\n \u{276f} 1. Claude account with subscription \u{b7} Pro, Max, Team, or Enterprise\n\n   2. Anthropic Console account \u{b7} API usage billing\n\n   3. 3rd-party platform \u{b7} Amazon Bedrock, Microsoft Foundry, or Vertex AI\n";
+        let update = "\u{2728} Update available! 0.161.0 -> 0.170.0\n\n\u{203a} 1. Update now\n  2. Skip\n  3. Skip until next version\n\n  Press enter to continue\n";
+        for (kind, text) in [
+            (
+                AgentKind::Claude,
+                include_str!("../../tests/fixtures/start-screens/claude-2.1.332-theme.txt"),
+            ),
+            (AgentKind::Claude, CLAUDE_NOTES),
+            (AgentKind::Claude, login),
+            (AgentKind::Codex, CODEX_SIGN_IN),
+            (AgentKind::Codex, update),
+        ] {
+            let mut s = Screen::new(200, 60);
+            let mut texts = vec![];
+            for row in text.lines() {
+                s.feed(format!("{row}\r\n").as_bytes());
+                if let Some(d) = s.detect(kind) {
+                    texts.push(d.text);
+                }
+            }
+            texts.dedup();
+            assert_eq!(texts.len(), 1, "{texts:#?}");
         }
     }
 }

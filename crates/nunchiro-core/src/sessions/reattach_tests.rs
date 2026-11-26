@@ -336,6 +336,30 @@ fn reattach_keeps_run_start() {
     let _ = fs::remove_dir_all(home);
 }
 
+/// A session past its start is still past it after a core restart, and after the next one: a start dialog's rows on
+/// its screen (a transcript view the restart found standing) make no card. One still at its start stays there.
+#[test]
+fn reattach_keeps_a_start_that_is_over() {
+    let home = scratch("pastart");
+    let mut core = Sessions::open(&home).unwrap();
+    let past = shell(&mut core, &home, &["/bin/cat"]);
+    let fresh = shell(&mut core, &home, &["/bin/cat"]);
+    core.entries[&past.id].observer.screen.mark_started();
+    for _ in 0..2 {
+        core.leave().unwrap();
+        drop(core);
+        core = Sessions::open(&home).unwrap();
+        assert!(core.entries[&past.id].pty.is_some(), "reattached");
+        assert!(core.entries[&past.id].observer.screen.started());
+        assert!(!core.entries[&fresh.id].observer.screen.started());
+    }
+    for id in [past.id, fresh.id] {
+        core.handle(Request::Close { id }).unwrap();
+    }
+    drop(core);
+    let _ = fs::remove_dir_all(home);
+}
+
 /// A holder of another protocol: it answers only the frozen hello (with `version`) and `stop`, which it records and
 /// answers by ending `agent`.
 struct Fake {
@@ -404,6 +428,7 @@ fn recorded(name: &str, version: u16) -> (PathBuf, std::process::Child, Fake, St
         agent_started: Some(started),
         run_start: 0,
         launch_args: None,
+        past_start: false,
         agent_pid: None,
     };
     store::save(&home, vec![row], BTreeMap::from([(id.clone(), live)])).unwrap();
@@ -857,6 +882,7 @@ fn a_pre_lock_home_seat_behind_a_refusing_holder_ends_at_start() {
         agent_started: Some(started),
         run_start: 0,
         launch_args: None,
+        past_start: false,
         agent_pid: None,
     };
     store::save(&home, vec![row], BTreeMap::from([(id.clone(), live)])).unwrap();

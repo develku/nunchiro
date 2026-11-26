@@ -173,6 +173,7 @@ fn decision(lines: &[&str]) -> Option<waiting::screen::Detection> {
     let detect = |lines: &[&str]| {
         let mut part = waiting::screen::Screen::new(500, lines.len().max(1)); // wider than any observer row
         part.feed(lines.join("\r\n").as_bytes());
+        part.started = true.into(); // a picker or a box was up: this session is past its start dialogs
         part.detect(AgentKind::Claude).filter(|d| {
             matches!(
                 d.kind,
