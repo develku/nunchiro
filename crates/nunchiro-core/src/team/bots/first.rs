@@ -5,7 +5,7 @@
 //! know), so a home with a new bot still opens in an earlier build, where the bot is a teammate like any other.
 //! - The file is written once, when the bot is made, with the SOUL text it was made with.
 //! - The first chat lasts until the SOUL file differs from that text; Undo writes that text back.
-//! - The file goes when the bot's next conversation starts after that (`first_over`). One this build cannot read is
+//! - The file goes when the bot's next conversation starts after that (`first_end`). One this build cannot read is
 //!   no first chat: it never stops a seat from opening.
 use super::{Bot, Face, SHAPES, TILES};
 use crate::api::AgentKind;
@@ -150,10 +150,12 @@ impl Team {
         }
     }
 
-    /// A new conversation of the bot starts: a first chat that wrote its SOUL file is over.
-    pub(crate) fn first_over(&self, id: &str) {
-        if self.first(id).is_some_and(|f| f.wrote)
-            && let Err(e) = std::fs::remove_file(self.first_file(id))
+    /// The bot's first chat is over (`open_seat`: a new conversation started after it wrote its SOUL file). Under
+    /// the store's lock, as every change of this file: a seat answer that read it just before does not write it back.
+    pub(crate) fn first_end(&self, id: &str) {
+        let Ok(_one) = CHANGE.lock() else { return };
+        if let Err(e) = std::fs::remove_file(self.first_file(id))
+            && e.kind() != std::io::ErrorKind::NotFound
         {
             eprintln!("bot {id}: first.json stays: {e}");
         }
@@ -189,15 +191,15 @@ pub(crate) fn offered(name: String, job: String, project: Option<PathBuf>) -> Te
     }
 }
 impl Team {
-    /// A bot's offer of a new bot as its card will show it (name, job, why), checked as the yes will check it: an
-    /// offer the owner could not say yes to is refused here, where the bot still hears why.
+    /// A bot's offer of a new bot as its card will show it (name, job, why, who offers), checked as the yes will check
+    /// it: an offer the owner could not say yes to is refused here, where the bot still hears why.
     pub(crate) fn offer(
         &self,
         from: &Teammate,
         name: &str,
         job: &str,
         why: &str,
-    ) -> Result<(String, String, String), String> {
+    ) -> Result<(String, String, String, String), String> {
         let why = line(why, 300);
         if why.is_empty() {
             return Err("say why in a line: what you counted (--why)".into());
@@ -214,7 +216,7 @@ impl Team {
         if self.list()?.iter().any(taken) {
             return Err(format!("a teammate named {} already exists", new.name));
         }
-        Ok((new.name, new.job, why))
+        Ok((new.name, new.job, why, line(&from.name, NAME_MAX)))
     }
 }
 

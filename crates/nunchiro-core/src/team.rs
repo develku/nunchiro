@@ -567,6 +567,16 @@ impl Team {
         id: &str,
         task: Option<&str>,
     ) -> Result<(Teammate, PathBuf, String), String> {
+        self.brief_seat(id, task)
+            .map(|(mate, project, prompt, _)| (mate, project, prompt))
+    }
+    /// `brief`, and whether the bot's first chat was over when the brief was written (it had written its SOUL file):
+    /// the open that sends this brief ends the first chat by that, not by a later look at the file (`open_seat`).
+    pub(crate) fn brief_seat(
+        &self,
+        id: &str,
+        task: Option<&str>,
+    ) -> Result<(Teammate, PathBuf, String, bool), String> {
         let all = self.list()?;
         let mate = all
             .iter()
@@ -581,7 +591,9 @@ impl Team {
             .filter(|t| t.id != mate.id && t.project == mate.project)
             .collect();
         // A new bot's first chat, until it wrote its SOUL file (`bots::first`); a scheduled run is never one.
-        let first = self.first(&mate.id).filter(|f| task.is_none() && !f.wrote);
+        let first = self.first(&mate.id);
+        let over = first.as_ref().is_some_and(|f| f.wrote);
+        let first = first.filter(|f| task.is_none() && !f.wrote);
         let prompt = brief_text(
             &mate,
             &self.memory(&mate.id),
@@ -619,7 +631,7 @@ impl Team {
             block if block.is_empty() => prompt,
             block => format!("{prompt}\n\n{block}"),
         };
-        Ok((mate, project, prompt))
+        Ok((mate, project, prompt, over))
     }
 }
 
@@ -910,7 +922,6 @@ fn brief_text(
          \n\
          ## Rules\n\
          - Ask the user before anything that cannot be undone: sending messages, publishing, deleting, paying.\n\
-         - When the same kind of work keeps coming back and no teammate's job covers it, offer the user a bot for it: `nunchiro bot offer \"<name>\" --job \"<one sentence>\" --why \"<what you counted>\"`. The user gets a card; nothing is made before they press Create.\n\
          {last}",
         name = t.name,
         job = t.job,
@@ -1058,7 +1069,7 @@ pub(crate) fn open_seat(
     let team = Team::open(&home);
     // Ticket 1005: the memory is masked on disk before the brief quotes it; the room and a card say what was found.
     let memory = team.check_memory(id);
-    let (mate, project, prompt) = team.brief(id, task)?;
+    let (mate, project, prompt, first_over) = team.brief_seat(id, task)?;
     let prompt = match opener {
         // Ticket 1130 B-L3: only a lead takes over a handover; another teammate's new conversation gets its brief alone.
         Opener::Fresh(_) if mate.lead => format!("{prompt}\n\n{TAKEOVER}"),
@@ -1316,9 +1327,10 @@ pub(crate) fn open_seat(
         (Some(_), None) => {}
     }
     drop(sessions);
-    // A conversation that starts with the brief is a new one: a first chat that wrote its SOUL file is over.
-    if start.resume.is_none() {
-        team.first_over(&mate.id);
+    // A conversation that starts with the brief is a new one: a first chat that had written its SOUL file when that
+    // brief was read is over (an edit of the file since then ends nothing).
+    if start.resume.is_none() && first_over {
+        team.first_end(&mate.id);
     }
     // The level picked on the row applied to this seat: it is used up.
     if let Some(used) = mate.next_level

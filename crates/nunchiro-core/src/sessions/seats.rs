@@ -500,7 +500,7 @@ impl Sessions {
             .filter(|id| self.seat_of(id).as_deref() == Some(caller.id.as_str()))
             .and_then(|id| team.list().ok()?.into_iter().find(|t| t.id == id))
             .ok_or("only a bot offers a bot: a worker says it to its lead")?;
-        let (name, job, why) = team.offer(&from, name, job, why)?;
+        let (name, job, why, by) = team.offer(&from, name, job, why)?;
         let place = from.project.clone().unwrap_or_else(|| team.home());
         self.queue.ask_owner(
             &caller.id,
@@ -508,7 +508,7 @@ impl Sessions {
                 name,
                 job,
                 why,
-                from: from.name,
+                from: by,
                 place,
             },
         )?;
