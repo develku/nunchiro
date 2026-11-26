@@ -2,8 +2,11 @@
 // docs/design/memory-hold-m8/index.html, panel 2). The core's hold is faked here: its `start` of an agent answers the
 // window's hold sentence, and a `start_anyway` goes through as its start (crates/nunchiro/tests/sessions.rs checks the
 // core's side, at a faked critical reading).
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { expect, openWindow, test, type Core } from './fixtures';
+import { expect, openWindow, REPO, test, type Core } from './fixtures';
 import { openQuiet } from './tree-seed';
 
 const HELD = 'Your Mac is low on memory, so the new session was not started. Close something and try again, or start it anyway';
@@ -83,4 +86,48 @@ test('held_start_in_new_tab_menu_starts_anyway: the + menu says the hold in its 
   await expect.poll(() => agents(core).map((s) => s.project), { timeout: 15_000 }).toEqual([p]);
   expect(sent).toEqual(['start', 'start_anyway']);
   await expect(pop).toHaveCount(0);
+});
+
+test('held_background_send_starts_anyway: Cmd+Enter held for low memory keeps the text in the box; Start anyway sends it to a new session', async ({ app, core }) => {
+  fs.writeFileSync(path.join(core.home, 'bin/claude'), fs.readFileSync(path.join(REPO, 'crates/nunchiro-core/tests/fixtures/claude-mode')), { mode: 0o700 });
+  const p = core.project('api-server');
+  const s = core.agent(p, 'alpha', 'x');
+  const sent = await holdStarts(app);
+  await openWindow(app);
+  await app.locator(`.tab[data-tab="${s.id}"]`).click();
+  const box = app.locator('.composer textarea');
+  await box.fill('write the tests first');
+  await box.press('Meta+Enter');
+  const bar = app.locator('.pane-status');
+  await expect(bar).toContainText('Your Mac is low on memory, so Claude was not started.');
+  await expect(box).toHaveValue('write the tests first');
+  await bar.getByRole('button', { name: 'Start anyway' }).click();
+  await expect.poll(() => agents(core).length, { timeout: 15_000 }).toBe(2);
+  expect(sent).toEqual(['start', 'start_anyway']);
+  // As a background send that went through: the text went to the new session, and the view stayed.
+  await expect(box).toHaveValue('');
+  await expect(app.locator('.tab[aria-selected="true"]')).toHaveAttribute('data-tab', s.id);
+});
+
+test('held_worktree_dialog_starts_anyway: the New worktree card says the hold in its own words, and Start anyway starts the agent in the kept worktree', async ({ app, core }) => {
+  const p = core.project('api-server');
+  const git = (...a: string[]) => execFileSync('git', ['-C', p, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...a]);
+  git('init', '-q', '-b', 'main');
+  git('commit', '-q', '--allow-empty', '-m', 'init');
+  core.shell(p, 'main-shell');
+  openQuiet(core);
+  const sent = await holdStarts(app);
+  await openWindow(app);
+  await app.keyboard.press('Meta+KeyN');
+  const card = app.getByRole('dialog', { name: 'New worktree', exact: true });
+  await card.getByRole('button', { name: '⌥↵ Advanced: base and branch' }).click();
+  await card.getByRole('checkbox', { name: 'Start an agent here' }).check();
+  await card.getByRole('button', { name: 'Create and start' }).click();
+  const alert = card.getByRole('alert');
+  await expect(alert).toContainText('Your Mac is low on memory, so the new session was not started. Close something and try again, or start it anyway.');
+  await expect(alert).not.toContainText('Could not start the agent');
+  await alert.getByRole('button', { name: 'Start anyway' }).click();
+  await expect.poll(() => agents(core).map((s) => s.project), { timeout: 15_000 }).toEqual([p]);
+  expect(sent).toEqual(['start', 'start_anyway']);
+  await expect(card).toHaveCount(0);
 });
