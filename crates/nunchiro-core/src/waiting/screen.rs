@@ -422,7 +422,10 @@ impl Screen {
             || normalized.contains("is this a directory you created or one you trust")
             || normalized.contains("allow external claude.md file imports?");
         // w25-m: the same questions cut off by a short window (`cut_off`): no options to read, still the user's.
-        let trust = trust || normalized.contains(CUT_OFF) || start_rows(text);
+        let trust = trust
+            || normalized.contains(CUT_OFF)
+            || start_rows(text)
+            || start_dialog(&normalized, text);
         let (mut choices, cursors) = Self::choices(text);
         let permission = normalized.contains("do you want to proceed?")
             || normalized.contains("would you like to run the following command")
@@ -660,6 +663,26 @@ fn start_rows(text: &str) -> bool {
         && rows
             .iter()
             .any(|r| *r == "Yes, I trust this folder" || *r == "Yes, add it")
+}
+
+/// A start dialog other than folder trust that waits for the user before the session starts: Claude's theme picker,
+/// sign-in question and security notes, Codex's sign-in screen. Each is read by its own heading words, and only with no
+/// input box on the screen (a row from the first column that starts with `❯` or `›` and is no numbered choice), so the
+/// same words in an agent's output are no card.
+fn start_dialog(normalized: &str, text: &str) -> bool {
+    let has = |words: &[&str]| words.iter().all(|w| normalized.contains(w));
+    let dialog = has(&["choose the text style that looks best with your terminal"])
+        || has(&["select login method:", "claude account with subscription"])
+        || has(&["security notes:", "press enter to continue"])
+        || has(&[
+            "welcome to codex",
+            "sign in with chatgpt",
+            "press enter to continue",
+        ]);
+    dialog
+        && !text
+            .lines()
+            .any(|l| l.starts_with(['\u{276f}', '\u{203a}']) && choice_row(l).is_none())
 }
 
 /// w25-s: a start question's "No, exit" row is still on the screen, read across rows a narrow window split: the question
@@ -1266,6 +1289,26 @@ mod tests {
         let login = " Claude Code can be used with your Claude subscription or billed based on API usage through your Console\n account.\n\n Select login method:\n\n \u{276f} 1. Claude account with subscription \u{b7} Pro, Max, Team, or Enterprise\n\n   2. Anthropic Console account \u{b7} API usage billing\n\n   3. 3rd-party platform \u{b7} Amazon Bedrock, Microsoft Foundry, or Vertex AI\n";
         let d = fed(login).detect(AgentKind::Claude).expect("login");
         assert_eq!((d.kind, d.choices.len()), (Kind::Dialog, 3));
+    }
+
+    /// Codex animates its logo above the sign-in screen for about ten seconds: the card's text starts at its welcome
+    /// line, so each frame keeps the same card (a changed text would make a new card every frame).
+    #[test]
+    fn codex_sign_in_card_leaves_out_the_animated_logo() {
+        let text = include_str!("../../tests/fixtures/start-screens/codex-0.162.1-sign-in.txt");
+        let logo = text
+            .lines()
+            .find(|l| l.contains('\u{28ff}'))
+            .expect("logo row");
+        let other = text.replace(logo, &logo.replace('\u{28ff}', "\u{2800}"));
+        let a = fed(text).detect(AgentKind::Codex).expect("card");
+        let b = fed(&other).detect(AgentKind::Codex).expect("card");
+        assert_eq!(a.text, b.text);
+        assert!(
+            a.text.trim_start().starts_with("Welcome to Codex"),
+            "{}",
+            a.text
+        );
     }
 
     /// The same words in an agent's own output, with its input box on the screen, are no card: a start dialog is drawn
