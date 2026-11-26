@@ -2134,6 +2134,59 @@ fn only_the_owner_starts_a_held_seat_anyway() {
     h.request(Request::Close { id: s.id });
 }
 
+/// One request over the window's WebSocket (the owner's app): its `response`.
+fn window_request(h: &Harness, request: serde_json::Value) -> serde_json::Value {
+    use tungstenite::{Message, client::IntoClientRequest, http::HeaderValue};
+    let Ok(Reply::WindowAuth { port, token }) = call(&h.home, Request::WindowAuth) else {
+        panic!("no window_auth reply");
+    };
+    let mut req = format!("ws://127.0.0.1:{port}/ws")
+        .into_client_request()
+        .unwrap();
+    let headers = req.headers_mut();
+    headers.insert("Origin", HeaderValue::from_static("tauri://localhost"));
+    headers.insert(
+        "Sec-WebSocket-Protocol",
+        HeaderValue::from_str(&format!("nunchiro.v1, nunchiro.token.{token}")).unwrap(),
+    );
+    let stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .unwrap();
+    let (mut ws, _) = tungstenite::client(req, stream).unwrap();
+    let frame = serde_json::json!({"id": 7, "request": request});
+    ws.send(Message::Text(frame.to_string().into())).unwrap();
+    loop {
+        if let Message::Text(t) = ws.read().unwrap() {
+            let v: serde_json::Value = serde_json::from_str(&t).unwrap();
+            if v["id"] == 7 {
+                return v["response"].clone();
+            }
+        }
+    }
+}
+
+/// The window's start is held at critical with its own words (no CLI command); its "Start anyway" starts it, as the
+/// owner. At warning the window starts as before.
+#[test]
+fn the_window_starts_a_held_seat_anyway() {
+    let h = under_pressure("4");
+    let start = serde_json::json!({"op": "start", "session": {"kind": "codex", "project": h.home, "resume": null}});
+    let held = window_request(&h, start.clone());
+    let refused = held["Err"].as_str().unwrap_or_else(|| panic!("{held}"));
+    assert!(refused.contains("memory"), "{refused}");
+    assert!(refused.ends_with("or start it anyway"), "{refused}");
+    let anyway = window_request(&h, serde_json::json!({"op": "start_anyway", "start": start}));
+    assert_eq!(anyway["Ok"]["type"], "started", "{anyway}");
+    let id = anyway["Ok"]["session"]["id"].as_str().unwrap().to_string();
+    h.request(Request::Close { id });
+    let h = under_pressure("2");
+    let started = window_request(&h, start);
+    assert_eq!(started["Ok"]["type"], "started", "{started}");
+    let id = started["Ok"]["session"]["id"].as_str().unwrap().to_string();
+    h.request(Request::Close { id });
+}
+
 /// Resuming a saved conversation is never held: after a full quit it is a plain start, and the window has no override.
 #[test]
 fn resuming_a_saved_session_is_not_held() {
