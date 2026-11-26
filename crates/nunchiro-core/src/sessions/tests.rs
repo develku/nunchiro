@@ -5555,6 +5555,21 @@ fn t1094_a_users_message_dropped_by_the_picker_waits_again() {
     let row = send_row(&f, &send.id);
     assert_eq!(row.status, "queued", "{row:?}");
     assert_eq!(row.settle.as_deref(), Some("enter_dropped_picker"));
+    // The delivery record: he cancels his dropped prompt; it needed a person.
+    f.core
+        .handle(Request::CancelSend {
+            id: f.id.clone(),
+            send: send.id.clone(),
+        })
+        .unwrap();
+    assert_eq!(
+        recorded(&f.home),
+        crate::record::Day {
+            delivered: 0,
+            resent: 0,
+            person: 1
+        }
+    );
 }
 /// Ticket 1094 (review r1 point 1): a delivery the agent took no turn from (its Enter dropped, a submit refused) is
 /// in flight only until the idle agent shows its input box INFLIGHT_IDLE later: an idle agent never holds every
@@ -11612,6 +11627,23 @@ fn t1121_repastes_are_bounded() {
         "pasted past the bound"
     );
     assert_eq!(send_row(&f, &row.id).status, "queued");
+    // The delivery record: the core gave up on his prompt, so it needs a person, once (his cancel counts no more).
+    let person = crate::record::Day {
+        delivered: 0,
+        resent: 0,
+        person: 1,
+    };
+    assert_eq!(recorded(&f.home), person, "given up: needs a person");
+    for _ in 0..3 {
+        f.core.tick().unwrap();
+    }
+    f.core
+        .handle(Request::CancelSend {
+            id: id.clone(),
+            send: row.id.clone(),
+        })
+        .unwrap();
+    assert_eq!(recorded(&f.home), person, "counted once");
 }
 /// A dropped row goes again only into an empty box. Codex's box held the owner's half-typed words with the row's copy
 /// behind them (`› half typed reply ok #9`): read as free of the copy, the row was pasted behind it two more times. A
@@ -11793,6 +11825,15 @@ fn t1121_a_stopped_automatic_line_fails() {
     f.core.tick().unwrap();
     assert_eq!(send_row(&f, &row.id).status, "failed");
     assert!(!got(&f).windows(11).any(|w| w == b"room notice"));
+    assert_eq!(
+        recorded(&f.home),
+        crate::record::Day {
+            delivered: 0,
+            resent: 0,
+            person: 1
+        },
+        "an automatic line given up on needs a person, once"
+    );
 }
 /// Ticket 1121 review r2: the box proof never writes the Enter past output not read yet. A dialog drawn after the box
 /// showed the paste would take it.

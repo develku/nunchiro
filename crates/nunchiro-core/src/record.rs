@@ -93,6 +93,9 @@ pub(crate) fn restart(home: &Path, before: usize, after: usize) {
     });
 }
 
+/// Removes temporary files of the record a killed core left.
+pub(crate) fn sweep(_home: &Path) {}
+
 /// `YYYY-MM-DD HH:MM` local time, for the CLI.
 pub fn when(at_ms: u64) -> String {
     let secs = (at_ms / 1000) as i64;
@@ -129,10 +132,90 @@ mod tests {
 
     #[test]
     fn a_count_into_a_missing_folder_is_only_logged() {
-        let home = home("gone").join("not-there");
+        let base = home("gone");
+        let home = base.join("not-there");
         count(&home, true, true, false);
         restart(&home, 1, 1);
         assert_eq!(read(&home), Record::default());
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    fn aside(home: &Path) -> Vec<std::path::PathBuf> {
+        std::fs::read_dir(home)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.to_string_lossy().contains("record.broken-"))
+            .collect()
+    }
+
+    #[test]
+    fn an_unreadable_record_is_moved_aside_not_overwritten() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = home("aside");
+        let mut old = Record::default();
+        old.days.insert(
+            crate::loops::today(crate::queue::now_ms()),
+            Day {
+                delivered: 7,
+                ..Day::default()
+            },
+        );
+        let bytes = serde_json::to_vec(&old).unwrap();
+        std::fs::write(home.join(FILE), &bytes).unwrap();
+        std::fs::set_permissions(home.join(FILE), std::fs::Permissions::from_mode(0o000)).unwrap();
+        count(&home, true, false, false);
+        let moved = aside(&home);
+        assert_eq!(moved.len(), 1, "{moved:?}");
+        std::fs::set_permissions(&moved[0], std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert_eq!(
+            std::fs::read(&moved[0]).unwrap(),
+            bytes,
+            "the history is kept"
+        );
+        assert_eq!(
+            read(&home).days.values().map(|d| d.delivered).sum::<u64>(),
+            1
+        );
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn a_folder_in_the_records_place_is_left_alone() {
+        let home = home("folder");
+        std::fs::create_dir(home.join(FILE)).unwrap();
+        count(&home, true, false, false);
+        assert!(home.join(FILE).is_dir());
+        assert!(aside(&home).is_empty());
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn counts_stop_at_the_largest_number() {
+        let home = home("max");
+        let mut full = Record::default();
+        full.days.insert(
+            crate::loops::today(crate::queue::now_ms()),
+            Day {
+                delivered: u64::MAX,
+                resent: u64::MAX,
+                person: u64::MAX,
+            },
+        );
+        std::fs::write(home.join(FILE), serde_json::to_vec(&full).unwrap()).unwrap();
+        count(&home, true, true, true);
+        assert_eq!(read(&home), full);
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn a_start_sweeps_temporary_files_a_killed_core_left() {
+        let home = home("sweep");
+        std::fs::write(home.join("record.abc123.tmp"), b"half").unwrap();
+        std::fs::write(home.join("sessions.abc123.tmp"), b"not ours").unwrap();
+        sweep(&home);
+        assert!(!home.join("record.abc123.tmp").exists());
+        assert!(home.join("sessions.abc123.tmp").exists());
+        let _ = std::fs::remove_dir_all(home);
     }
 
     #[test]

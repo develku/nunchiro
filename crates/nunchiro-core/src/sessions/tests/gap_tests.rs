@@ -106,6 +106,28 @@ fn a_line_that_waited_for_a_gap_counts_once_as_delivered() {
     );
 }
 
+/// The delivery record counts prompts only: keys, text without Enter, and a card answer are no prompt.
+#[test]
+fn keys_and_text_without_enter_are_no_prompt_delivered() {
+    let mut f = seat("gap-record-keys", AgentKind::Claude, &claude_box(""));
+    let id = f.id.clone();
+    let keys = sent(
+        f.core
+            .send("user", &id, String::new(), vec!["down".into()], false),
+    );
+    let text = sent(f.core.handle(Request::AgentSend {
+        id: id.clone(),
+        text: "abc".into(),
+    }));
+    for _ in 0..3 {
+        f.core.flush_delivery().unwrap();
+    }
+    for row in [&keys, &text] {
+        assert_ne!(status(&f, &row.id), "queued", "{row:?} went");
+    }
+    assert_eq!(recorded(&f.home), crate::record::Day::default());
+}
+
 #[test]
 fn the_owners_prompt_does_not_wait_for_his_typing() {
     let mut f = seat("gap-own", AgentKind::Claude, &claude_box(""));
