@@ -672,7 +672,7 @@ fn start_rows(text: &str) -> bool {
 }
 
 /// A start dialog other than folder trust that waits for the user before the session starts: Claude's theme picker,
-/// sign-in question and security notes, Codex's sign-in screen. Each is read by its own heading words, and only with no
+/// sign-in question and security notes, Codex's sign-in and update screens. Each is read by its own heading words, and only with no
 /// input box on the screen (a row from the first column that starts with `❯` or `›` and is no numbered choice), so the
 /// same words in an agent's output are no card.
 fn start_dialog(normalized: &str, text: &str) -> bool {
@@ -683,6 +683,11 @@ fn start_dialog(normalized: &str, text: &str) -> bool {
         || has(&[
             "welcome to codex",
             "sign in with chatgpt",
+            "press enter to continue",
+        ])
+        || has(&[
+            "update available!",
+            "skip until next version",
             "press enter to continue",
         ]);
     dialog
