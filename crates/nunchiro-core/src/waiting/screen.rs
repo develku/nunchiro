@@ -41,7 +41,7 @@ pub struct Screen {
     /// Look 1117 v11 A-S3-7: the program in front switched to the alternate screen (`CSI ? 1049 h`, 1047, 47): a
     /// full-screen program (vim, less) waiting for keys. Kept through a resize by its caller.
     pub(crate) alt: bool,
-    /// The agent's input box has shown on this screen (`note_box`): its start is over, so a start dialog's rows read
+    /// The session's start is over (`note_box`, `mark_started`): so a start dialog's rows read
     /// later (a transcript view, a redraw caught before its box) are no card. Kept through a reset and a resize.
     pub(crate) started: std::sync::atomic::AtomicBool,
     // Rendered text, dropped by `feed`; the idle tick reads an unchanged screen every 50 ms.
@@ -415,14 +415,15 @@ impl Screen {
         self.started.load(std::sync::atomic::Ordering::Relaxed)
     }
     /// Notes the agent's input box in `text` (this screen's text): a row from the first column that starts with `❯`
-    /// (Claude) or `›` (Codex) and is no numbered choice. True when it is there.
-    pub(crate) fn note_box(&self, text: &str) -> bool {
+    /// (Claude) or `›` (Codex) and is no numbered choice. True when it is there. Claude's box ends its start; Codex's
+    /// does not (started by the core, Codex 0.162.1 draws its composer for a moment before its sign-in screen), so a
+    /// Codex start ends with its first hook after SessionStart (`mark_started`).
+    pub(crate) fn note_box(&self, kind: AgentKind, text: &str) -> bool {
         let boxed = text
             .lines()
             .any(|l| l.starts_with(['\u{276f}', '\u{203a}']) && choice_row(l).is_none());
-        if boxed {
-            self.started
-                .store(true, std::sync::atomic::Ordering::Relaxed);
+        if boxed && kind == AgentKind::Claude {
+            self.mark_started();
         }
         boxed
     }
@@ -463,7 +464,7 @@ impl Screen {
         // A permission prompt whose preview shows a start dialog's words (an edit to a file holding them) stays one.
         // A start dialog only before the input box ever showed, never over a permission prompt (an edit to a file
         // holding its words), and only as the last fallback: it never changes a question, a plan or a notice.
-        let boxed = self.note_box(text);
+        let boxed = self.note_box(kind, text);
         let start = !permission && !boxed && !self.started() && start_dialog(text);
         let plan = choices.len() >= 2 && plan_dialog(&normalized);
         // Look 1117 v13 N13-S3-4: Codex's rate-limit nudge only switches this session's model or keeps it (its "never show

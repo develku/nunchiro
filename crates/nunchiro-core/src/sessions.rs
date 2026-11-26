@@ -1203,7 +1203,9 @@ impl Sessions {
                 // Look 11-17 v8 N1: not SessionStart. Claude 2.1.327 fires it before it draws its input box (and, on a
                 // slow start, before it reads keys at all): the window sent its held first message at that moment.
                 if event != "SessionStart" {
-                    self.entry(&id)?.observer.before_box = false;
+                    let entry = self.entry(&id)?;
+                    entry.observer.before_box = false;
+                    entry.observer.screen.mark_started(); // start dialogs make no card from here
                 }
                 // Peer item 2 (ticket 991): an unnamed agent session takes its title from its first prompt; a name the
                 // user gave (any label) is never replaced.
