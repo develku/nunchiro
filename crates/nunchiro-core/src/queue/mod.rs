@@ -478,6 +478,9 @@ pub struct Queue {
     // v1b-32 r2: the tool of each hook item (memory only, like `stacked`): the tool, not its input fields, decides
     // which question its prompt asks.
     tools: BTreeMap<String, String>,
+    /// One request, one card: until when a Claude session's permission frame waits for its held PermissionRequest
+    /// hook, set by the PreToolUse hook before it (memory only). Claude draws its dialog before that hook runs.
+    hook_expected: BTreeMap<String, u64>,
     // Ticket 1030 (look v33 R1): a hook item's tool, its input and Claude's own `permission_suggestions`, from which
     // "Allow for this session" forwards only those no broader than the request (`session_scope`; memory only).
     session_rules: BTreeMap<String, (String, Value, Vec<Value>)>,
@@ -720,6 +723,7 @@ impl Queue {
             responses: BTreeMap::new(),
             stacked: BTreeSet::new(),
             tools: BTreeMap::new(),
+            hook_expected: BTreeMap::new(),
             session_rules: BTreeMap::new(),
             resized: BTreeMap::new(),
             graced: BTreeSet::new(),
@@ -1030,6 +1034,7 @@ impl Queue {
     }
     pub fn close(&mut self, id: &str, failed: bool) -> Result<(), String> {
         self.resized.remove(id);
+        self.hook_expected.remove(id);
         self.change(|q| {
             if let Some(s) = q.disk.sessions.get_mut(id) {
                 s.attention.failed = failed;
@@ -1400,6 +1405,9 @@ impl Queue {
                         hook: None,
                     },
                 )?;
+            }
+            "PreToolUse" if source == "hook" && s.kind == AgentKind::Claude => {
+                self.hook_expected.insert(id.into(), now + HOOK_EXPECTED_MS);
             }
             _ => {}
         }
@@ -1841,6 +1849,23 @@ impl Queue {
             })
         {
             return self.activity(id, now);
+        }
+        // One request, one card: a permission frame drawn between Claude's PreToolUse hook and its held
+        // PermissionRequest hook makes no card of its own; the hook's item is the card, and its later frames pair with
+        // it. With no permission item yet and the hook still expected, wait: the observer reads the still screen again
+        // each second, so the frame becomes a card once the wait is over (no hook installed, or it failed).
+        if kind == Kind::Permission
+            && self.hook_expected.get(id).is_some_and(|until| *until > now)
+            && !self
+                .disk
+                .sessions
+                .get(id)
+                .ok_or("queue session missing")?
+                .items
+                .iter()
+                .any(|i| i.kind == Kind::Permission)
+        {
+            return Ok(());
         }
         self.change(|q| {
             q.disk
@@ -2661,6 +2686,9 @@ pub const SESSION_ALLOW: &str = "Yes, allow for this session";
 /// answer). The hold still ends when the window goes (`hook_waits`) or the terminal answers (`peer_gone`).
 pub const HOLD_MS: u64 = 1_800_000;
 const HOLDS: usize = 8;
+/// How long after Claude's PreToolUse hook its PermissionRequest hook is expected (`hook_expected`).
+// shortcut: a fixed wait, measured on the trial agent only; raise it if real Claude's hook lands later under load.
+const HOOK_EXPECTED_MS: u64 = 3000;
 
 /// v1b-30: more than one hook permission pending in this session: the screen shows one prompt while the card may
 /// show another request (each hook still answers for its own request).
