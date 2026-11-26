@@ -829,6 +829,14 @@ are lessons the user accepted; only the user keeps, edits and removes them (the 
 `nunchiro role propose "<name>" --job "<what it does>" --why "<what you counted>" [--kind claude|codex] [--model M] [--reviews]`
 is for a place's lead: the user is asked on a card, and only a yes adds the role.
 
+### `nunchiro bot offer "<name>" --job "<one sentence>" --why "<what you counted>"`
+For a bot's own session (the seat of a teammate, a lead included): when the same kind of work keeps coming back and
+no teammate's job covers it, the bot offers the user a new bot for it. `--why` says what it counted ("3 of the last 5
+tasks were release notes"). The user gets a card with the name, the job and the reason; nothing is made before
+their yes, which makes the bot in the offering bot's place (its project, or Home) with no seat. A second offer of the
+same name replaces the first card. Refused to any other caller ("only a bot offers a bot"), without a reason, and for
+a name a teammate of the place already has.
+
 ## Schedules
 
 Ticket 993. A schedule starts a session, or wakes a teammate with a task, at a set local time: once, every day, or

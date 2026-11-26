@@ -381,7 +381,13 @@ impl Team {
     /// `bots.json`. A crash between them leaves a row in `team.json` for a bot this build never got, which costs
     /// nothing; the other order left a bot here that an older build could not find. A `bots.json` write that fails
     /// puts `team.json` back as it was, so a change that did not happen changed no file.
-    pub(super) fn write_bots(&self, teammates: &[Teammate]) -> Result<(), String> {
+    /// `wish`: the face the owner picked for the bot of this id, a new one (`first::make`). It is kept when no bot of
+    /// the home has it; a face is never taken from a bot, so a taken one falls back to a free one.
+    pub(super) fn write_bots(
+        &self,
+        teammates: &[Teammate],
+        wish: Option<(&str, &Face)>,
+    ) -> Result<(), String> {
         store::private_dir(&self.dir)?;
         let old = match self.stored_bots()? {
             Some(bots) => bots,
@@ -390,7 +396,12 @@ impl Team {
                 self.bots()?
             }
         };
-        let kept = |id: &str| old.iter().find(|b| b.id == id).map(|b| b.face.clone());
+        let kept = |id: &str| match old.iter().find(|b| b.id == id) {
+            Some(bot) => Some(bot.face.clone()),
+            None => wish
+                .filter(|(new, face)| *new == id && !old.iter().any(|b| b.face == **face))
+                .map(|(_, face)| face.clone()),
+        };
         let bots = with_faces(teammates, kept);
         let bytes =
             serde_json::to_vec_pretty(&Stored { version: 1, bots }).map_err(|e| e.to_string())?;
@@ -525,6 +536,8 @@ impl Team {
             arrives();
         }
         self.save_locked(Some(id.into()), next)?;
+        // The owner answered where the bot sits (a seat, or "not now"): a template's seat card is over.
+        self.seat_answered(id);
         self.bots()
     }
 
@@ -560,6 +573,11 @@ impl Team {
         Ok(text)
     }
 }
+
+mod first;
+pub use first::First;
+pub(super) use first::hand_text;
+pub(crate) use first::offered;
 
 #[cfg(test)]
 mod tests;

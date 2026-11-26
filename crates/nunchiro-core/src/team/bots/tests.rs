@@ -1070,7 +1070,7 @@ fn a_soul_is_seeded_from_the_job_edited_by_the_owner_and_named_in_the_brief() {
             serde_json::from_value(serde_json::json!({"op": "bot_soul", "id": BOM, "text": text}))
                 .unwrap();
         match window(&reg, &home, op) {
-            Ok(Reply::BotSoul { id, text }) => Ok((id, text)),
+            Ok(Reply::BotSoul { id, text, .. }) => Ok((id, text)),
             Ok(_) => panic!("not a SOUL reply"),
             Err(e) => Err(e),
         }

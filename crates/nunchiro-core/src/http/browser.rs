@@ -692,6 +692,7 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | SchedulePause { .. }
         | SchedulePropose { .. }
         | ScheduleChange { .. }
+        | BotOffer { .. } // a bot's seat only
         | OutboxStage { .. } // ticket 1002
         | OutboxSpend { .. }
         | SessionTidy { .. } => false, // ticket 1113: local lead CLI only

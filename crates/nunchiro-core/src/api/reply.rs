@@ -475,11 +475,16 @@ pub enum Reply {
         bots: Vec<crate::team::Bot>,
         /// The folder every Home teammate works in.
         home: PathBuf,
+        /// The id of the bot this request made (`bot_new`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        made: Option<String>,
     },
-    /// Ticket 1168: a bot's SOUL file as it is now.
+    /// Ticket 1168: a bot's SOUL file as it is now. `first`: its first chat, while that lasts.
     BotSoul {
         id: String,
         text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        first: Option<crate::team::First>,
     },
     /// Ticket 990 slice i: the user's roles.
     Roles {

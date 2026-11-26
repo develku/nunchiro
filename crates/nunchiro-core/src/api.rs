@@ -1397,6 +1397,14 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         level: Option<crate::team::Level>,
     },
+    /// A bot's seat offers the user a new bot for work it saw come back (`nunchiro bot offer`): `why` is what it
+    /// counted. Nothing is made: the user gets a card (`queue::OwnerAsk::Bot`) and only its yes makes the bot, in the
+    /// offering bot's place. Refused to every caller that is no bot's seat.
+    BotOffer {
+        name: String,
+        job: String,
+        why: String,
+    },
     /// Ticket 993: a lead asks to `pause`, `resume` or `remove` (`change`) a schedule it may read; a card, as above.
     ScheduleChange {
         id: String,

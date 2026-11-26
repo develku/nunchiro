@@ -285,6 +285,52 @@ impl Sessions {
                 }
                 return Ok(Reply::Ack);
             }
+            // A bot's offer of a new bot. Only this yes makes the bot, in the offering bot's place, with its first chat
+            // ahead of it; a yes that cannot be applied (the name was taken meanwhile) is an error and the card
+            // stays, as the role card's. The place's lead hears the answer.
+            if let Some(queue::OwnerAsk::Bot {
+                name, job, place, ..
+            }) = &item.owner
+            {
+                let yes = match &answer {
+                    queue::Answer::AllowOnce => true,
+                    queue::Answer::Deny | queue::Answer::DenyWith { .. } => false,
+                    _ => return Err("a bot card takes allow_once or deny".into()),
+                };
+                let team = crate::team::Team::open(&self.home);
+                if yes {
+                    team.make(
+                        crate::team::offered(name.clone(), job.clone(), team.place(place)),
+                        None,
+                        None,
+                    )?;
+                }
+                self.queue.answer_owner(|i| i.id == id)?;
+                if let Some(lead) = team.lead_of(team.place(place).as_deref()) {
+                    let body = if yes {
+                        format!(
+                            "The user made the bot {name}: open it with `nunchiro team open \"{name}\"`."
+                        )
+                    } else {
+                        format!("The user said not now to the bot {name}.")
+                    };
+                    self.team_note(
+                        place,
+                        &lead.id,
+                        None,
+                        body,
+                        crate::room::TeamNote {
+                            what: if yes { "bot_yes" } else { "bot_no" }.into(),
+                            worktree: None,
+                            name: Some(name.clone()),
+                            branch: None,
+                            merged: None,
+                            seat: None,
+                        },
+                    );
+                }
+                return Ok(Reply::Ack);
+            }
             // Ticket 1099 panel 4: the live-seat card. The yes writes the cap as Settings > Team does (`Ledger::set_cap`);
             // a yes that cannot be written keeps the card, as the role card's. The lead hears the answer.
             if let Some(queue::OwnerAsk::Cap { place, cap, .. }) = &item.owner {

@@ -37,6 +37,7 @@ use std::{
 pub(crate) const WAITING: &str = "waiting for the owner in the Nunchiro window";
 // v1a-23: set on the helper that finishes a `serve restart` asked from inside a session (the asking process's pid).
 const RESTARTER: &str = "NUNCHIRO_RESTARTER";
+const BOT_USAGE: &str = "nunchiro bot offer \"<name>\" --job \"<one sentence>\" --why \"<what you counted>\" (inside a bot's session: asks the user on a card for a new bot)";
 /// F24: `scripts/build-rc.sh` stamps each RC; a build without a stamp (cargo, the owner's) never replaces a core.
 const BUILD: Option<&str> = option_env!("NUNCHIRO_BUILD");
 /// `scripts/build-release.sh` stamps each official release. It orders cores for `serve update` as `BUILD` does, but it
@@ -150,6 +151,7 @@ fn run() -> Result<(), String> {
         println!(
             "nunchiro team open <name> [--level light|standard|deep] (inside a lead's session: opens a teammate of its place)"
         ); // ticket 990
+        println!("{BOT_USAGE}");
         println!("{}", task::USAGE); // ticket 990 slice g
         println!("{}", schedule::USAGE); // ticket 993
         println!("{}", outbox::USAGE); // ticket 1002 lane 2
@@ -221,6 +223,38 @@ fn run() -> Result<(), String> {
         println!(
             "{}",
             serde_json::to_string(&reply).map_err(|e| e.to_string())?
+        );
+        return Ok(());
+    }
+    // A bot's seat offers the user a new bot; the user's card makes it.
+    if args.first().map(String::as_str) == Some("bot") {
+        let usage = format!("usage: {BOT_USAGE}");
+        let [_, verb, name, rest @ ..] = args.as_slice() else {
+            return Err(usage);
+        };
+        let (mut job, mut why) = (None, None);
+        let mut words = rest.iter();
+        while let Some(word) = words.next() {
+            match (word.as_str(), words.next()) {
+                ("--job", Some(value)) => job = Some(value.clone()),
+                ("--why", Some(value)) => why = Some(value.clone()),
+                _ => return Err(usage),
+            }
+        }
+        let (true, Some(job), Some(why)) = (verb == "offer", job, why) else {
+            return Err(usage);
+        };
+        ensure_core(&home)?;
+        call(
+            &home,
+            Request::BotOffer {
+                name: name.clone(),
+                job,
+                why,
+            },
+        )?;
+        println!(
+            "The user is asked on a card. Nothing is made before their yes; go on with your work."
         );
         return Ok(());
     }

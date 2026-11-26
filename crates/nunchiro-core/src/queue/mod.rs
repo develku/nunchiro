@@ -236,6 +236,15 @@ pub enum OwnerAsk {
         cap: u32,
         why: String,
     },
+    /// A bot (`from`) offers a new bot for work it saw come back (`why`). Nothing is made before the yes, which makes
+    /// the bot in the offering bot's `place` (`team::Team::make`).
+    Bot {
+        name: String,
+        job: String,
+        why: String,
+        from: String,
+        place: PathBuf,
+    },
 }
 /// Ticket 1002 lane 2: every `OwnerAsk` tag this core reads. A stored owner item of another tag (a newer core's kind)
 /// is left out at load, so a downgrade keeps the rest of the store.
@@ -256,6 +265,7 @@ const OWNER_KINDS: &[&str] = &[
     "tidy",          // ticket 1005
     "session_close", // ticket 1113
     "cap",           // ticket 1099
+    "bot",
 ];
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Choice {
@@ -2139,6 +2149,13 @@ impl Queue {
             ) => teammate == m && file == f,
             // Ticket 1099: one card per place; a newer ask replaces the one not yet answered.
             (Some(OwnerAsk::Cap { place, .. }), OwnerAsk::Cap { place: p, .. }) => place == p,
+            // One card per offered name and place; a reworded offer replaces it.
+            (
+                Some(OwnerAsk::Bot { name, place, .. }),
+                OwnerAsk::Bot {
+                    name: n, place: p, ..
+                },
+            ) => place == p && name.to_lowercase() == n.to_lowercase(),
             (
                 Some(OwnerAsk::SessionClose { target, .. }),
                 OwnerAsk::SessionClose { target: t, .. },
@@ -2259,6 +2276,13 @@ impl Queue {
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_default()
             ),
+            OwnerAsk::Bot {
+                name,
+                job,
+                why,
+                from,
+                ..
+            } => format!("{from} offers a new bot, {name} ({job}): {why}"),
             OwnerAsk::Tidy { name, file, .. } => format!(
                 "{name}'s {file} is over the 6 KB its brief quotes, so the rest does not reach {name}: let {name} tidy it?"
             ),

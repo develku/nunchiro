@@ -261,12 +261,46 @@ pub enum Op {
         id: String,
         seat: Seat,
     },
-    /// Ticket 1168: the bot's SOUL file. With `text`, the owner's edit is saved first.
+    /// Ticket 1168: the bot's SOUL file. With `text`, the owner's edit is saved first. `undo`: the text the bot was
+    /// made with is put back (while its first chat lasts).
     BotSoul {
         id: String,
         #[serde(default)]
         text: Option<String>,
+        #[serde(default)]
+        undo: bool,
     },
+    /// A new bot in one step (`bots::first`): a name and one sentence. The rest has a default the owner may change:
+    /// Claude on its newest model, in Home, a free face, no seat. `seat`: the seat its template asks for.
+    BotNew {
+        name: String,
+        job: String,
+        #[serde(default = "claude")]
+        kind: AgentKind,
+        #[serde(default)]
+        agent: Option<String>,
+        #[serde(default)]
+        model: Option<String>,
+        #[serde(default)]
+        effort: Option<String>,
+        #[serde(default)]
+        project: Option<PathBuf>,
+        #[serde(default)]
+        face: Option<Face>,
+        #[serde(default)]
+        seat: Option<String>,
+    },
+    /// The owner hands a worktree to a bot: its seat opens (as `team_open`) and reads the hand-over as its next
+    /// prompt (`bots::hand_text`). `goal`: what to do with it, in the owner's words; without one the bot asks.
+    BotHand {
+        id: String,
+        worktree: PathBuf,
+        #[serde(default)]
+        goal: Option<String>,
+    },
+}
+fn claude() -> AgentKind {
+    AgentKind::Claude
 }
 
 /// Window ops run on their own threads (http/mod.rs): a save and a remove each read, change and write the whole list,
@@ -359,7 +393,7 @@ impl Team {
     }
 
     fn write(&self, teammates: Vec<Teammate>) -> Result<(), String> {
-        self.write_bots(&teammates)
+        self.write_bots(&teammates, None)
     }
     /// `team.json` in the shape every build so far writes; only `bots::mirror_new` writes it now.
     fn write_v1(&self, teammates: Vec<Teammate>) -> Result<(), String> {
@@ -402,7 +436,16 @@ impl Team {
     }
     /// `save`, for a change that already holds `CHANGE` because it read the roster to decide (`bots::sit`): the read,
     /// the check and the write are one step, so no other change lands between them.
-    fn save_locked(&self, id: Option<String>, mut next: Teammate) -> Result<Vec<Teammate>, String> {
+    fn save_locked(&self, id: Option<String>, next: Teammate) -> Result<Vec<Teammate>, String> {
+        self.save_faced(id, next, None)
+    }
+    /// `save_locked`, with the face the owner picked for a new bot (`bots::first`).
+    fn save_faced(
+        &self,
+        id: Option<String>,
+        mut next: Teammate,
+        face: Option<&Face>,
+    ) -> Result<Vec<Teammate>, String> {
         next.name = next.name.trim().to_string();
         next.job = next.job.trim().to_string();
         check(&next)?;
@@ -443,7 +486,7 @@ impl Team {
             }
         }
         self.ensure_files(&next)?;
-        self.write(all.clone())?;
+        self.write_bots(&all, face.map(|face| (next.id.as_str(), face)))?;
         Ok(all)
     }
 
@@ -537,6 +580,8 @@ impl Team {
             .iter()
             .filter(|t| t.id != mate.id && t.project == mate.project)
             .collect();
+        // A new bot's first chat, until it wrote its SOUL file (`bots::first`); a scheduled run is never one.
+        let first = self.first(&mate.id).filter(|f| task.is_none() && !f.wrote);
         let prompt = brief_text(
             &mate,
             &self.memory(&mate.id),
@@ -544,7 +589,7 @@ impl Team {
             &quote(&self.memory(&mate.id)),
             &quote(&self.user()),
             &others,
-            task,
+            &brief_end(task, first.as_ref(), &self.soul(&mate.id)),
         );
         // Ticket 990 slice h: the notes the user accepted that this teammate reads (about the user, its place's, and
         // its role's: the lead's, or its own name as a role).
@@ -758,6 +803,20 @@ fn check(t: &Teammate) -> Result<(), String> {
     Ok(())
 }
 
+/// How a brief ends: with the scheduled task, with a new bot's first chat (`bots::first`), or "say you are ready".
+fn brief_end(task: Option<&str>, first: Option<&First>, soul: &Path) -> String {
+    match (task, first) {
+        (Some(task), _) => format!(
+            "- The user's schedule started this session. Do the task below now, then report in a few lines.\n\n## Scheduled task\n{task}"
+        ),
+        (None, Some(first)) => first.rules(soul),
+        (None, None) => {
+            "- Reply now with one short line that says you are ready, then wait for the user."
+                .into()
+        }
+    }
+}
+
 fn brief_text(
     t: &Teammate,
     memory: &Path,
@@ -765,15 +824,8 @@ fn brief_text(
     mem: &str,
     user_facts: &str,
     others: &[&Teammate],
-    task: Option<&str>,
+    last: &str,
 ) -> String {
-    let last = match task {
-        Some(task) => format!(
-            "- The user's schedule started this session. Do the task below now, then report in a few lines.\n\n## Scheduled task\n{task}"
-        ),
-        None => "- Reply now with one short line that says you are ready, then wait for the user."
-            .into(),
-    };
     // Ticket 990: who leads and who is led. A lead reads its team with each one's job; the others read who leads.
     let lead = others.iter().find(|o| o.lead).map(|o| o.name.as_str());
     let role = if t.lead {
@@ -858,6 +910,7 @@ fn brief_text(
          \n\
          ## Rules\n\
          - Ask the user before anything that cannot be undone: sending messages, publishing, deleting, paying.\n\
+         - When the same kind of work keeps coming back and no teammate's job covers it, offer the user a bot for it: `nunchiro bot offer \"<name>\" --job \"<one sentence>\" --why \"<what you counted>\"`. The user gets a card; nothing is made before they press Create.\n\
          {last}",
         name = t.name,
         job = t.job,
@@ -1263,6 +1316,10 @@ pub(crate) fn open_seat(
         (Some(_), None) => {}
     }
     drop(sessions);
+    // A conversation that starts with the brief is a new one: a first chat that wrote its SOUL file is over.
+    if start.resume.is_none() {
+        team.first_over(&mate.id);
+    }
     // The level picked on the row applied to this seat: it is used up.
     if let Some(used) = mate.next_level
         && let Err(e) = team.use_next_level(&mate.id, used)
@@ -1537,13 +1594,15 @@ pub fn window(
     op: Op,
 ) -> Result<Reply, String> {
     let team = Team::open(home);
-    let listed = |teammates: Vec<Teammate>| {
+    let listed_with = |teammates: Vec<Teammate>, made: Option<String>| {
         Ok(Reply::Team {
             teammates,
             bots: team.bots()?,
             home: team.home(),
+            made,
         })
     };
+    let listed = |teammates: Vec<Teammate>| listed_with(teammates, None);
     match op {
         // Ticket 1130 C7: Quick setup on a Mac with no agent history starts the first session in this folder, before any
         // teammate made it.
@@ -1620,11 +1679,54 @@ pub fn window(
         }
         Op::TeamLevel { id, level } => team.set_next_level(&id, level).and_then(listed),
         Op::BotSeat { id, seat } => team.sit(&id, seat).and_then(|_| listed(team.list()?)),
-        Op::BotSoul { id, text } => match text {
-            Some(text) => team.soul_save(&id, &text),
-            None => team.soul_text(&id),
+        Op::BotSoul { id, text, undo } => match (text, undo) {
+            (_, true) => team.soul_undo(&id),
+            (Some(text), _) => team.soul_save(&id, &text),
+            (None, _) => team.soul_text(&id),
         }
-        .map(|text| Reply::BotSoul { id, text }),
+        .map(|text| Reply::BotSoul {
+            first: team.first(&id),
+            id,
+            text,
+        }),
+        Op::BotNew {
+            name,
+            job,
+            kind,
+            agent,
+            model,
+            effort,
+            project,
+            face,
+            seat,
+        } => {
+            let new = Teammate {
+                id: String::new(),
+                name,
+                job,
+                kind,
+                model,
+                effort,
+                project,
+                lead: false,
+                level: None,
+                level_max: None,
+                next_level: None,
+                agent,
+            };
+            let bot = team.make(new, face, seat)?;
+            listed_with(team.list()?, Some(bot.id))
+        }
+        Op::BotHand { id, worktree, goal } => {
+            // Checked before the seat opens: a refused hand-over starts nothing.
+            let text = bots::hand_text(&worktree, goal.as_deref())?;
+            let opened = open_seat(registry, &id, None, None, Opener::Window)?;
+            registry
+                .lock()
+                .map_err(|_| "session registry unavailable".to_string())?
+                .prompt_as_user(&opened.session.id, text)?;
+            Ok(opened.reply())
+        }
         Op::TeamOpen {
             id,
             undo: Some(old),
@@ -1654,7 +1756,8 @@ pub fn window(
 }
 
 mod bots;
-pub use bots::{Bot, Face, ModelRule, Seat, V1, face_of};
+pub(crate) use bots::offered;
+pub use bots::{Bot, Face, First, ModelRule, Seat, V1, face_of};
 
 #[cfg(test)]
 mod tests;

@@ -483,6 +483,37 @@ impl Sessions {
         self.queue
             .ask_owner(session, queue::OwnerAsk::Role { role, why, place })
     }
+    /// A bot offers the user a new bot, as a card for the owner. Only the session the core itself marked as a bot's
+    /// seat may: a worker says it to its lead, and a session that only carries a bot's name is no seat.
+    pub(super) fn bot_offer(
+        &mut self,
+        caller: &crate::grants::Caller,
+        name: &str,
+        job: &str,
+        why: &str,
+    ) -> Response {
+        let team = crate::team::Team::open(&self.home);
+        let from = self
+            .entries
+            .get(&caller.id)
+            .and_then(|e| e.meta.teammate.clone())
+            .filter(|id| self.seat_of(id).as_deref() == Some(caller.id.as_str()))
+            .and_then(|id| team.list().ok()?.into_iter().find(|t| t.id == id))
+            .ok_or("only a bot offers a bot: a worker says it to its lead")?;
+        let (name, job, why) = team.offer(&from, name, job, why)?;
+        let place = from.project.clone().unwrap_or_else(|| team.home());
+        self.queue.ask_owner(
+            &caller.id,
+            queue::OwnerAsk::Bot {
+                name,
+                job,
+                why,
+                from: from.name,
+                place,
+            },
+        )?;
+        Ok(Reply::Ack)
+    }
     /// Ticket 1099 panel 4: a lead's ask to change its place's live seats, as a card for the owner.
     pub(crate) fn ask_cap(
         &mut self,
