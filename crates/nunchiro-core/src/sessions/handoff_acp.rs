@@ -244,6 +244,7 @@ impl Sessions {
             starting: false,
             at_box: false,
             draft_home: None,
+            take_back: false,
             ran_mode: None,
             mode_state: None, // CHAT-MODELIST
             parent: None,     // V2.5-30
@@ -423,6 +424,7 @@ impl Sessions {
             starting: false,
             at_box: false,
             draft_home: None,
+            take_back: false,
             ran_mode: None,
             mode_state: None, // CHAT-MODELIST
             parent: None,     // V2.5-30

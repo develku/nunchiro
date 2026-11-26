@@ -43,6 +43,7 @@ import { restartStart } from '../PermissionNeeded';
 import { escaped, joinWords } from '../settings/agents/words';
 import { AttachedChips, typingPing } from '../queue/Knock';
 import { clearHomed, useHomed } from './draftHome';
+import { noteWrite, takeWrite } from './nunchiroWrites';
 import { useTeamNow } from '../lead/lead';
 
 /** A pane terminal's selection goes to the composer as a quote; nothing is sent. */
@@ -106,10 +107,43 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
   const queued = useQueue(target?.id);
   const team = useTeamNow();
   const homed = useHomed(target?.id); // words that came home from the terminal (draftHome.ts)
+  // ⌘Z (nunchiroWrites.ts): the line a take-back leaves, by session.
+  const [undone, setUndone] = useState<{ id: string; text: string } | null>(null);
+  const setBox = (box: HTMLTextAreaElement, value: string) => {
+    if (!target) return;
+    box.value = value;
+    grow(box);
+    setDrafts((d) => ({ ...d, [target.id]: !!value }));
+    setDraft(target.id, value);
+  };
+  /** ⌘Z: Nunchiro's newest write into this box while the box still shows it, else a message of another sender in the agent's
+   *  box (an empty composer only); false leaves the key to the textarea's own undo. */
+  const undoWrite = (box: HTMLTextAreaElement) => {
+    if (!target) return false;
+    const w = takeWrite(target.id, box.value);
+    if (w) {
+      const id = target.id;
+      const done = () => {
+        setBox(box, w.before);
+        clearHomed(id);
+        setUndone(w.line ? { id, text: w.line } : null);
+      };
+      const asked = w.undo?.();
+      // Words going back to the terminal leave the box only once the core put them there; refused, they stay.
+      if (asked instanceof Promise) void asked.then(done, (e) => (noteWrite(id, w), setPaneNote(errorNote(notePlain(t, e), e))));
+      else done();
+      return true;
+    }
+    if (box.value || !target.take_back) return false;
+    void core.request({ op: 'take_back', id: target.id }).catch((e) => setPaneNote(errorNote(notePlain(t, e), e)));
+    return true;
+  };
   /** Words coming back to the box go ahead of whatever it already holds. */
   const toBox = (box: HTMLTextAreaElement, text: string) => {
     if (!target) return;
+    const before = box.value;
     box.value = box.value ? `${text}\n${box.value}` : text;
+    noteWrite(target.id, { before, after: box.value }); // ⌘Z: words given back by a canceled send
     grow(box);
     setDrafts((d) => ({ ...d, [target.id]: true }));
     setDraft(target.id, box.value);
@@ -320,7 +354,12 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
         {target && <AttachedChips session={target} team={team} core={core} t={t} />}
         {target && homed && (
           <p className="chint" role="status" data-homed="">
-            {t('home.note')}
+            {t('home.note')} <kbd className="kbd">⌘Z</kbd> {t('home.undo')}
+          </p>
+        )}
+        {target && undone?.id === target.id && (
+          <p className="chint" role="status" data-undone="">
+            {undone.text}
           </p>
         )}
         {target && held !== undefined && (
@@ -387,6 +426,7 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
             const el = e.currentTarget; // read now: the updater below runs after the event is gone
             typingPing(core, target); // the gap rule: another sender's message waits while the owner types
             if (target) clearHomed(target.id); // his own edit: the line about the words from the terminal goes
+            if (undone) setUndone(null);
             grow(el);
             if (offer && offer.sid === target?.id && !el.value.includes(offer.line)) setOffer(null); // the pasted line was edited away
             if (!target) return;
@@ -396,6 +436,8 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
             setDraft(target.id, el.value);
           }}
           onKeyDown={(e) => {
+            // ⌘Z takes out what Nunchiro put in (nunchiroWrites.ts); otherwise it is the box's own undo.
+            if (e.code === 'KeyZ' && e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.nativeEvent.isComposing && undoWrite(e.currentTarget)) return e.preventDefault();
             // Ticket 1030: Shift+Tab goes to the card above (its first safe action), where 1 and 3 answer.
             if (e.key === 'Tab' && e.shiftKey && !e.nativeEvent.isComposing && dockAsks.length && focusCard(e.currentTarget.closest('.composer')?.querySelector('.deccard.docked'))) return e.preventDefault();
             // Ticket 1097: in an empty box a digit answers the card above, as Claude Code's own prompt takes it (T3 Code and Orca

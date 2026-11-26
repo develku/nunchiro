@@ -559,7 +559,9 @@ session would take it now, or Type in terminal just went off, and the box holds 
 `draft_home` hands the words to the window's composer, which answers `draft_taken` (the file goes); with no window it
 waits for the next one, also over a restart. A box not empty 1.5 s after the clear gets nothing more (the row keeps
 waiting as `terminal_text`, and the file goes while the box still shows the words). `draft_put_back` pastes words back
-into an empty box with no Enter. Spaces at the very end of the line are not kept (the screen does not hold them). The marks live in memory: queued rows never outlive a core. Other
+into an empty box with no Enter. `take_back` (owner and window only) is ⌘Z on another sender's message in the box waiting for its Enter
+(pasted, or left after a dropped Enter): no Enter goes, the box is cleared (two Ctrl+U per row and one more) and the
+row waits as Later; the snapshot's `take_back` says one is there. A message the agent already took is not undone. Spaces at the very end of the line are not kept (the screen does not hold them). The marks live in memory: queued rows never outlive a core. Other
 `send_waits` reasons: `turn`, `dialog`, `later`, `attached`.
 
 Text, settle, Enter (V1A-15): a submit send (`agent prompt`, the window's composer) to a Claude or Codex agent that

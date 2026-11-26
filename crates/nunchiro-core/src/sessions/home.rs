@@ -256,6 +256,58 @@ impl Sessions {
         }
         Ok(wrote)
     }
+    /// Another sender's row whose words sit in session `id`'s box waiting for an Enter: pasted with its Enter pending, or
+    /// left typed after a dropped Enter (`left_typed`). The box must show them.
+    pub(super) fn taken_back_row(&self, id: &str) -> Option<String> {
+        let e = self.entries.get(id)?;
+        // His own edit since the paste (a key, words typed) makes the box his: nothing in it is cleared.
+        if e.acp.is_some() || e.observer.behind || e.input.edited() {
+            return None;
+        }
+        // Every row of the box, and exactly the message's words (not a prefix of them, nothing more).
+        let shown = box_text(&e.observer.screen.text(), e.meta.kind)?;
+        let rows = &e.meta.send_queue;
+        let mine = |s: &crate::delivery::Send| s.sender != "user" && same_words(&shown, &s.content);
+        if let Some(enter) = self.pending_enter.get(id) {
+            return rows
+                .iter()
+                .find(|s| s.id == enter.send && mine(s))
+                .map(|s| s.id.clone());
+        }
+        self.left_typed
+            .contains(id)
+            .then(|| rows.iter().find(|s| s.status == "queued" && mine(s)))
+            .flatten()
+            .map(|s| s.id.clone())
+    }
+    /// ⌘Z on another sender's message in session `id`'s box: no Enter goes, the box is cleared (two Ctrl+U per row and
+    /// one more), and the row waits as Later. A message the agent already took is not here to take back.
+    pub(super) fn take_back(&mut self, id: &str) -> Response {
+        self.refresh()?;
+        self.observe()?;
+        self.current(id)?;
+        let send = self
+            .taken_back_row(id)
+            .ok_or("no message of another sender is waiting in the agent's box")?;
+        if self.pending_enter.get(id).is_some_and(|p| p.send == send) {
+            self.pending_enter.remove(id);
+        }
+        let entry = self.entry(id)?;
+        let screen = entry.observer.screen.text();
+        let rows = match entry.meta.kind {
+            AgentKind::Claude => box_rows(&screen),
+            _ => 1,
+        }
+        .max(1);
+        self.live(id)?.write(&b"\x15".repeat(2 * rows + 1))?;
+        self.left_typed.remove(id);
+        self.copy_gone(id);
+        self.submitted.remove(id);
+        self.entry(id)?.input = Default::default();
+        self.finish_send(id, &send, "queued")?;
+        self.later_rows.insert(send, None);
+        Ok(Reply::Ack)
+    }
     /// The output offset each session last showed and since when (the homecoming reads a still screen only).
     pub(super) fn note_quiet(&mut self) {
         let now = std::time::Instant::now();

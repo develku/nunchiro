@@ -42,7 +42,7 @@ test('the_composer_takes_the_words_once: appended after a line break, the line s
   w.home = { words: 'check the tokenizer aga', at: 5 };
   w.again();
   await expect(box).toHaveValue('mine\ncheck the tokenizer aga');
-  await expect(app.locator('.composer [data-homed]')).toHaveText('Your text from the terminal is now in the composer.');
+  await expect(app.locator('.composer [data-homed]')).toContainText('Your text from the terminal is now in the composer.');
   await expect.poll(() => w.taken).toBeGreaterThan(0);
   await app.screenshot({ path: `../.scratch/shots/draft-home-${test.info().project.name}.png` });
   // The same hand-over again (the core has not seen the answer yet): taken once.

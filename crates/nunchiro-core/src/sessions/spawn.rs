@@ -593,6 +593,7 @@ impl Sessions {
             starting: false,
             at_box: false,
             draft_home: None,
+            take_back: false,
             ran_mode: None,
             mode_state: None, // CHAT-MODELIST
             // V2.5-30: a resumed run keeps the session that started the run it continues.
