@@ -186,8 +186,8 @@ jobs:
           cache: pnpm
       - run: scripts/setup-worktree.sh
       - run: git config --global user.name ci && git config --global user.email ci@localhost
-      # Playwright first: its web server rebuilds web/dist with the test fixtures, which the core embeds, so its global
-      # setup compiles the core; check-cli-docs and the scenario suite then reuse that binary instead of a second build.
+      # Playwright first: its global setup compiles the core from this checkout (with the fixture web/dist it embeds), and
+      # check-cli-docs reads --help from that binary instead of compiling the core a second time.
       - id: pw
         run: echo "version=$(cd web && pnpm exec playwright --version)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -198,6 +198,8 @@ jobs:
         working-directory: web
       - run: .github/scripts/web-core.sh
       - run: scripts/check-cli-docs.sh
+        env:
+          NUNCHIRO_BIN: target/debug/nunchiro
       - run: scripts/scenario-tests.sh
         env:
           SCENARIO_JOBS: 2
