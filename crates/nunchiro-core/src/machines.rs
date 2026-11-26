@@ -8,7 +8,8 @@ pub mod share; // ticket 1050
 mod transport;
 use crate::{api::*, grants, sessions::Sessions, store};
 pub use channel::{
-    Channel, ChannelState, PROTOCOL, accepts, control_path, private_dir, relay_accepts,
+    Channel, ChannelState, PROTOCOL, accepts, control_path, core_in_ssh_login,
+    login_session_matters, private_dir, relay_accepts, ssh_login,
 };
 use serde::{Deserialize, Serialize};
 use std::{

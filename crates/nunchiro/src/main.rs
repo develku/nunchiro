@@ -404,6 +404,13 @@ fn run() -> Result<(), String> {
     }
     let user_home = env::var_os("HOME").map(PathBuf::from);
     refuse_rc_on_owner_home(BUILD, &home, user_home.as_deref(), &args)?;
+    // Internal: what the launchd job of `start_in_login_session` runs. It is already in the login session, so the
+    // core starts as its child.
+    if args == ["serve", "start", "--here"] {
+        // launchd names its job here; the core's sessions should see what a terminal's shell sees. Single-threaded.
+        unsafe { env::set_var("XPC_SERVICE_NAME", "0") };
+        return ensure_core_via(&home, None, CoreStart::Direct);
+    }
     if args == ["serve", "restart"] {
         // v1a-23: inside a session, a helper finishes the restart once this process has exited and the helper has
         // left the session's process tree (reparented). V2-1b r3: it starts a session of its own (setsid) and asks as
@@ -895,7 +902,108 @@ fn wait_out_lock(
     }
     false
 }
+/// How a missing core is started. macOS ties the login keychain to the security session a process was born in: a core
+/// started as the child of an SSH login, and every agent it starts, cannot read it (`claude` says "Not logged in",
+/// `gh` that its token is invalid). So from an SSH login the core is started by the user's login (GUI) session.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum CoreStart {
+    Direct,
+    LoginSession,
+}
+/// `matters`: `machines::login_session_matters`. `recorded`: a start from `core.start.json` (a restart asked from
+/// inside a session) keeps the old core's environment and place, as before.
+fn core_start(matters: bool, ssh_login: bool, recorded: bool) -> CoreStart {
+    if matters && ssh_login && !recorded {
+        CoreStart::LoginSession
+    } else {
+        CoreStart::Direct
+    }
+}
+/// The one-shot launchd job that starts the core: `nunchiro serve start --here` with the home, run once at load.
+/// It holds no secret, and no `KeepAlive`: the job ends as soon as the core answers.
+fn login_job(label: &str, exe: &str, home: &str) -> String {
+    let xml = |text: &str| {
+        text.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+    };
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\"><dict>\n<key>Label</key><string>{}</string>\n<key>ProgramArguments</key><array><string>{}</string><string>serve</string><string>start</string><string>--here</string></array>\n<key>EnvironmentVariables</key><dict><key>NUNCHIRO_HOME</key><string>{}</string></dict>\n<key>RunAtLoad</key><true/>\n</dict></plist>\n",
+        xml(label),
+        xml(exe),
+        xml(home)
+    )
+}
+/// Starts the core from the user's login session: a job loaded into launchd's `gui/<uid>` domain (the way an app's
+/// helper starts; herdr and Orca start their local servers so) runs this program there, and that run starts the core
+/// as any terminal's would. The job and its file are removed again before this returns: nothing stays loaded, and the
+/// core stops as every core does (`serve stop`). `Ok(false)`: no login session took the job (nobody is logged in at
+/// this Mac's screen), so the caller starts the core itself.
+fn start_in_login_session(home: &Path) -> Result<bool, String> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let exe = env::current_exe().map_err(|e| e.to_string())?;
+    let home = home.canonicalize().map_err(|e| e.to_string())?;
+    let (Some(exe), Some(home_text)) = (exe.to_str(), home.to_str()) else {
+        return Ok(false);
+    };
+    // Safety: getuid has no preconditions.
+    let domain = format!("gui/{}", unsafe { libc::getuid() });
+    let label = format!("dev.nunchiro.core-start.{}", std::process::id());
+    // In the temp folder: launchd refuses a job file on an external volume, where a home may be.
+    let file = env::temp_dir().join(format!("{label}.plist"));
+    let _ = std::fs::remove_file(&file);
+    let launchctl = |args: &[&std::ffi::OsStr]| {
+        // `NUNCHIRO_LAUNCHCTL` names the program for fixtures, as `NUNCHIRO_SSH` does for ssh.
+        Command::new(env::var_os("NUNCHIRO_LAUNCHCTL").unwrap_or_else(|| "/bin/launchctl".into()))
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
+    };
+    let loaded = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&file)
+        .and_then(|mut f| {
+            use std::io::Write;
+            f.write_all(login_job(&label, exe, home_text).as_bytes())
+        })
+        .is_ok()
+        && launchctl(&["bootstrap".as_ref(), domain.as_ref(), file.as_os_str()]);
+    let _ = std::fs::remove_file(&file);
+    if !loaded {
+        return Ok(false);
+    }
+    // The job's own run waits 5 s for the core, after launchd started it.
+    let until = Instant::now() + Duration::from_secs(10);
+    let sock = home.join("core.sock");
+    let mut up = false;
+    while !up && Instant::now() < until {
+        up = std::os::unix::net::UnixStream::connect(&sock).is_ok();
+        if !up {
+            thread::sleep(Duration::from_millis(20));
+        }
+    }
+    // The core left the job as it started (its own session, `spawn_detached`), so removing the job stops nothing.
+    launchctl(&["bootout".as_ref(), format!("{domain}/{label}").as_ref()]);
+    if up {
+        Ok(true)
+    } else {
+        Err("core startup timed out in the login session; see logs/core.log".into())
+    }
+}
 fn ensure_core_from(home: &Path, start: Option<&Start>) -> Result<(), String> {
+    let via = core_start(
+        nunchiro_core::machines::login_session_matters(home),
+        nunchiro_core::machines::ssh_login(),
+        start.is_some(),
+    );
+    ensure_core_via(home, start, via)
+}
+fn ensure_core_via(home: &Path, start: Option<&Start>, via: CoreStart) -> Result<(), String> {
     if std::os::unix::net::UnixStream::connect(home.join("core.sock")).is_ok() {
         return Ok(());
     }
@@ -911,6 +1019,11 @@ fn ensure_core_from(home: &Path, start: Option<&Start>) -> Result<(), String> {
     let user_home = env::var_os("HOME").map(PathBuf::from);
     refuse_rc_core_start(BUILD, home, user_home.as_deref())?;
     std::fs::create_dir_all(home).map_err(|e| e.to_string())?;
+    // With no login session the core starts here as before; it then tells the machine that drives it
+    // (`machine relay --stream`), so that side can say why this Mac's agents may not be signed in.
+    if via == CoreStart::LoginSession && start_in_login_session(home)? {
+        return Ok(());
+    }
     let mut cmd = match start {
         Some(start) => {
             let mut cmd = Command::new(&start.exe);
@@ -1304,6 +1417,41 @@ fn parse(args: &[String]) -> Result<Request, String> {
 
 #[cfg(test)]
 mod tests {
+    // Only a start from an SSH login where the session matters (macOS, no test home) goes through the login session; a
+    // restart from the old core's record keeps its place.
+    #[test]
+    fn a_core_for_an_ssh_login_starts_in_the_login_session() {
+        use super::{CoreStart::*, core_start};
+        assert_eq!(core_start(true, true, false), LoginSession);
+        assert_eq!(core_start(true, false, false), Direct);
+        assert_eq!(core_start(false, true, false), Direct);
+        assert_eq!(core_start(true, true, true), Direct);
+    }
+    // The job runs this program's internal start once, with the home; paths are written as XML text.
+    #[test]
+    fn the_login_job_runs_the_start_once_with_the_home() {
+        let job = super::login_job(
+            "dev.nunchiro.core-start.7",
+            "/opt/a&b/nunchiro",
+            "/Users/me/<home>",
+        );
+        assert!(
+            job.contains("<key>Label</key><string>dev.nunchiro.core-start.7</string>"),
+            "{job}"
+        );
+        assert!(
+            job.contains("<array><string>/opt/a&amp;b/nunchiro</string><string>serve</string><string>start</string><string>--here</string></array>"),
+            "{job}"
+        );
+        assert!(
+            job.contains("<key>NUNCHIRO_HOME</key><string>/Users/me/&lt;home&gt;</string>"),
+            "{job}"
+        );
+        assert!(
+            job.contains("<key>RunAtLoad</key><true/>") && !job.contains("KeepAlive"),
+            "{job}"
+        );
+    }
     // Ticket 1154 round 2 (Codex P2): the group a detached start is asked and stopped by stays this start's own. The
     // middle process is kept as a zombie (its pid, the group's id, cannot go to another process) while the program
     // is not this process's child; it reads as gone only once the program ended, and is reaped when the handle goes.

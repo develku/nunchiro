@@ -91,6 +91,28 @@ installs, enables and restarts nothing there.
   `reconnecting`, `down`, `version_mismatch`), `since_ms`, `error`, `local_protocol`, `remote_protocol` and
   `remote_version`, without another SSH request. Settings > Advanced > Machines (V2-12m-b) reads the same.
 
+## Core start from an SSH login (macOS)
+
+macOS ties the login keychain to the session a process was started in. A core started as the child of an SSH login,
+and every agent it starts, cannot read it: Claude Code says "Not logged in" and `gh` says its token is invalid. So a
+`nunchiro` command that runs inside an SSH login (the relay included) and finds no core does not start one itself:
+
+- **With someone logged in at that Mac's screen.** It loads a one-shot launchd job into that user's login session
+  (`launchctl bootstrap gui/<uid>`, label `dev.nunchiro.core-start.<pid>`), which runs `nunchiro serve start --here`
+  there with `NUNCHIRO_HOME` and launchd's own environment, as the app starts its core. When the core answers (or
+  after 10 seconds) the job is removed again (`launchctl bootout`), and its file, written to the temp folder with
+  mode 0600, is deleted right after loading. Nothing is added to `~/Library/LaunchAgents`, nothing stays loaded, and
+  the core stops as any core does (`nunchiro serve stop`).
+- **With nobody logged in.** launchd has no login session, so the core starts inside the SSH login as before. The
+  relay then tells the machine that drives it, and `nunchiro machine status` and Settings > Advanced > Machines
+  there say that the other Mac's agents may not be signed in. Log in at that Mac's screen, run
+  `nunchiro --machine <m> serve restart` (the next core starts in the login session), and start its sessions again:
+  agents that were already running stay where they were started.
+
+A restart asked from inside a session still starts the next core from the old core's record, in the same place.
+Other systems start the core directly, and so does a home under the temp folder (a test's), unless
+`NUNCHIRO_LAUNCHCTL` names the `launchctl` executable for a fixture.
+
 ## Version window
 
 Local and remote compare the relay protocol (`nunchiro_core::machines::PROTOCOL`, now 2; 1 was the v1a relay), not

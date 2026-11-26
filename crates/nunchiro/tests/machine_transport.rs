@@ -1744,14 +1744,16 @@ fn relay_in_an_ssh_login_starts_the_core_through_the_login_session() {
         "{job}"
     );
     assert!(p.started_env()["SSH_CONNECTION"].is_null());
-    // Nothing stays behind in launchd, nor the job file in the home.
+    // Nothing stays behind: the job is removed from launchd, and its file is gone.
     wait_for("the job's removal", || {
         p.launchctl_log()
             .contains(&format!("bootout gui/{uid}/dev.nunchiro.core-start."))
     });
-    assert!(fs::read_dir(&p.remote_home).unwrap().flatten().all(|e| {
-        !e.file_name().to_string_lossy().ends_with(".plist") || e.file_name() == "job.plist"
-    }));
+    let file = log.lines().next().unwrap().rsplit(' ').next().unwrap();
+    assert!(
+        file.ends_with(".plist") && !std::path::Path::new(file).exists(),
+        "{log}"
+    );
     // The rows arrive and the machine reads as usual.
     wait_for("the channel", || {
         machine(&p.local, "other")["channel"]["state"] == "up"
@@ -1773,5 +1775,8 @@ fn core_started_inside_an_ssh_login_is_reported_on_the_driving_machine() {
     assert_eq!(last["channel"]["state"], "up", "{last}");
     assert_eq!(last["status"], "reachable", "{last}");
     let note = last["channel"]["error"].as_str().unwrap();
-    assert!(note.contains("other") && note.contains("serve restart"), "{note}");
+    assert!(
+        note.contains("other") && note.contains("serve restart"),
+        "{note}"
+    );
 }

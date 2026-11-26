@@ -25,6 +25,9 @@ What changed for people who use Nunchiro. Newest first. Nunchiro is in developme
   waits for a card in Nunchiro, also in full access, and runs only when you allow it. For ACP agents this covers
   commands the agent asks Nunchiro to run; a tool an agent runs inside itself is outside Nunchiro's reach.
 - A Codex start whose extra arguments set hooks is refused; keep your own hooks in Codex's config file.
+- Fixed: on a second Mac driven over SSH, agents said "Not logged in" (and `gh` that its token was invalid) when
+  Nunchiro's background service had been started by the SSH connection. It is now started in that Mac's login
+  session. When nobody is logged in there, the Machines page says that its agents may not be signed in and what to do.
 
 ## 2026-11-25
 
