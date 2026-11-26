@@ -1,4 +1,4 @@
-"""Ticket 1148, the flow record on the PR flow: scripts/measure/ci-log.py (Actions runs and owner installs in the
+"""The flow record on the PR flow: scripts/measure/ci-log.py (Actions runs and owner installs in the
 main CI log) and the pull-request and journal parts of scripts/measure-dev-speed.py. Fixtures only: no gh, no
 nunchiro command, no owner file."""
 import datetime
@@ -166,8 +166,9 @@ class CiLog(UtcClock):
             cilog.install_line("abc1234", 0, "owner-install: installed", datetime.datetime(2026, 11, 26))
 
 
-def pr(head, created, merged, sha, first=None, checks=()):
-    return dict(headRefName=head, createdAt=created, mergedAt=merged, mergeCommit=dict(oid=sha),
+def pr(head, created, merged, sha, first=None, checks=(), title=None, number=None, enabled=(), oid=None):
+    return dict(headRefName=head, createdAt=created, mergedAt=merged, mergeCommit=merged and dict(oid=sha), title=title or head,
+                number=number, headRefOid=oid, autoMergeEnabledAt=list(enabled),
                 commits=[dict(authoredDate=first or created)], statusCheckRollup=list(checks))
 
 
@@ -175,8 +176,17 @@ def check(name, start, end, workflow="CI"):
     return dict(workflowName=workflow, name=name, startedAt=start, completedAt=end)
 
 
+def attempt(branch, sha, start, end, conclusion, run_id=1, n=1):
+    """One attempt of a CI run on a pull request, in the form read_runs gives."""
+    return dict(databaseId=run_id, attempt=n, headBranch=branch, headSha=sha, status="completed", conclusion=conclusion,
+                createdAt=start, startedAt=start, updatedAt=end)
+
+
+T = "2026-11-27T"
+
+
 class DevSpeed(UtcClock):
-    def measure(self, core=(), more=(), log="", events=None):
+    def measure(self, core=(), more=(), log="", runs=(), prs=None):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__("shutil").rmtree(tmp))
         ms = lambda at: speed.iso(at) * 1000  # noqa: E731
@@ -185,46 +195,109 @@ class DevSpeed(UtcClock):
                                  seats=[dict(session="s1", role="builder", at=ms("2026-11-26T19:00:00Z"), worktree="/w/flow-a-1"),
                                         dict(session="s2", role="reviewer", at=ms("2026-11-27T00:00:00Z"))])])
         (tmp / "tasks.json").write_text(json.dumps(tasks))
-        prs = [
-            pr("lead/flow-a-1", "2026-11-27T01:00:00Z", "2026-11-27T02:00:00Z", A, first="2026-11-26T20:00:00Z", checks=[
-                check("lint", "2026-11-27T01:30:00Z", "2026-11-27T01:32:00Z"), check("gate", "2026-11-27T01:49:55Z", "2026-11-27T01:50:00Z"),
-                check("scan", "2026-11-27T01:00:00Z", "2026-11-27T01:01:00Z", workflow="Other")]),
-            pr("revert-1-lead/flow-a-1", "2026-11-27T04:00:00Z", "2026-11-27T05:00:00Z", B),
-            pr("lead/flow-b-2", "2026-11-27T15:00:00Z", "2026-11-27T16:00:00Z", C),
-            pr("lead/too-old-3", "2026-11-01T15:00:00Z", "2026-11-01T16:00:00Z", D),
-        ]
-        old = [dict(lane="lead-old9", branch="lead/old-9", sha=E, at=int(speed.iso("2026-11-25T10:00:00Z")),
-                    first_commit=int(speed.iso("2026-11-25T08:00:00Z")))] + list(more)
-        keep = (speed.merges, speed.git)
-        self.addCleanup(lambda: (setattr(speed, "merges", keep[0]), setattr(speed, "git", keep[1])))
-        speed.merges, speed.git = (lambda since: old), (lambda *a: "abc1234\n")
+        if prs is None:
+            prs = [
+                pr("lead/flow-a-1", T + "01:00:00Z", T + "02:00:00Z", A, first="2026-11-26T20:00:00Z", enabled=[T + "01:00:00Z"], checks=[
+                    check("lint", T + "01:30:00Z", T + "01:32:00Z"), check("gate", T + "01:49:55Z", T + "01:50:00Z"),
+                    check("scan", T + "01:00:00Z", T + "01:01:00Z", workflow="Other")]),
+                pr("revert-1-lead/flow-a-1", T + "04:00:00Z", T + "05:00:00Z", B),
+                pr("lead/flow-b-2", T + "15:00:00Z", T + "16:00:00Z", C),
+                pr("lead/too-old-3", "2026-11-01T15:00:00Z", "2026-11-01T16:00:00Z", D),
+            ] + list(more)
+        keep = speed.git
+        self.addCleanup(lambda: setattr(speed, "git", keep))
+        speed.git = lambda *a: "abc1234\n"
         (tmp / "ci-main.log").write_text(log)
-        if events is not None:
-            (tmp / "events.jsonl").write_text("".join(json.dumps(e) + "\n" for e in events))
-        return speed.measure(7, tasks_file=tmp / "tasks.json", events_path=events is not None and tmp / "events.jsonl",
-                             log_path=tmp / "ci-main.log", now=speed.iso("2026-11-28T12:00:00Z"), core=list(core), prs=prs)
+        return speed.measure(7, tasks_file=tmp / "tasks.json", log_path=tmp / "ci-main.log", now=speed.iso("2026-11-28T12:00:00Z"),
+                             core=list(core), prs=prs, runs=runs if runs is None else list(runs))
 
-    def test_pull_requests_are_landings_beside_the_old_merges(self):
+    def test_pull_requests_are_the_landings(self):
         d = self.measure()
-        self.assertEqual(sorted(r["lane"] for r in d["lanes"]), ["lead-old9", "lead/flow-a-1", "lead/flow-b-2"])
-        self.assertEqual(d["deployment_frequency"]["lanes"], 3)
-        self.assertEqual(d["lead_time"]["commit_to_main"], dict(n=3, median_h=2.0, p90_h=6.0))
-        self.assertEqual((d["coverage"]["git_merges_from"], d["coverage"]["pull_requests_from"]), ("2026-11-25 10:00", "2026-11-27 02:00"))
+        self.assertEqual(sorted(r["lane"] for r in d["lanes"]), ["lead/flow-a-1", "lead/flow-b-2"])
+        self.assertEqual(d["deployment_frequency"]["lanes"], 2)
+        self.assertEqual(d["lead_time"]["commit_to_main"], dict(n=2, median_h=3.5, p90_h=6.0))
+        self.assertEqual(d["coverage"]["pull_requests_from"], "2026-11-27 02:00")
+        self.assertNotIn("git_merges_from", d["coverage"])
 
     def test_a_github_revert_marks_the_lane_and_is_not_a_second_landing(self):
         d = self.measure()
-        self.assertEqual((d["change_failure"]["failed_lanes"], d["change_failure"]["change_failure_pct"]), (["lead/flow-a-1"], 33.3))
+        self.assertEqual((d["change_failure"]["failed_lanes"], d["change_failure"]["change_failure_pct"]), (["lead/flow-a-1"], 50.0))
         self.assertEqual((d["rework"]["revert_landings"], d["rework"]["repeat_landings"]), (1, 0))
-        # the PR flow has no gate events: rejects and rework are not measured, not 0
-        self.assertEqual((d["change_failure"]["gate_reject_pct"], d["rework"]["rework_pct"]), (None, None))
+        # the checks were read and none went red: 0 rejects, rework is the revert alone over 3 merges
+        self.assertEqual((d["change_failure"]["gate_reject_pct"], d["rework"]["rework_pct"]), (0.0, 33.3))
 
-    def test_history_gate_events_still_count(self):
-        ev = [dict(ts="2026-11-25T09:00:00Z", kind="eject", lane="lead-old9"),
-              dict(ts="2026-11-25T09:30:00Z", kind="receipt", review_kind="review", lane="lead-old9", patch_id="p1")]
-        d = self.measure(events=ev)
-        self.assertEqual(d["change_failure"]["gate_rejected_lanes"], ["lead-old9"])
-        self.assertEqual((d["rework"]["rejected_then_landed"], d["rework"]["first_pass_pct"]), (["lead-old9"], 100.0))
-        self.assertEqual(d["rework"]["rework_pct"], 50.0)  # 1 rejected then landed + 1 revert over 4 merges
+    GATE_A = pr("lead/gate-a", T + "00:00:00Z", T + "02:00:00Z", E, enabled=[T + "01:00:00Z"])
+
+    def test_a_red_gate_after_enqueue_is_a_reject(self):
+        d = self.measure(more=[self.GATE_A], runs=[attempt("lead/gate-a", F, T + "01:05:00Z", T + "01:10:00Z", "failure", 9, 1),
+                                                   attempt("lead/gate-a", F, T + "01:20:00Z", T + "01:40:00Z", "success", 9, 2)])
+        c = d["change_failure"]
+        self.assertEqual((c["gate_rejected_lanes"], c["rerun_green_lanes"], d["rework"]["rejected_then_landed"]),
+                         (["lead/gate-a"], ["lead/gate-a"], ["lead/gate-a"]))
+        self.assertEqual(c["gate_reject_pct"], round(100 * 1 / (d["deployment_frequency"]["lanes"] + 1), 1))
+        self.assertEqual(c["gate_results"], dict(attempts=2, red_pct=50.0, rerun_green_pct=100.0))
+
+    def test_a_red_before_enqueue_is_shown_not_counted(self):
+        d = self.measure(more=[self.GATE_A], runs=[attempt("lead/gate-a", F, T + "00:20:00Z", T + "00:30:00Z", "failure"),
+                                                   attempt("lead/gate-a", F, T + "01:05:00Z", T + "01:30:00Z", "success", 2)])
+        c = d["change_failure"]
+        self.assertEqual((c["gate_rejected_lanes"], c["pre_enqueue_red"], c["gate_reject_pct"]), ([], 1, 0.0))
+
+    def test_cancelled_and_skipped_runs_are_not_rejects(self):
+        d = self.measure(more=[self.GATE_A], runs=[attempt("lead/gate-a", F, T + "01:05:00Z", T + "01:10:00Z", "cancelled"),
+                                                   attempt("lead/gate-a", F, T + "01:06:00Z", T + "01:07:00Z", "skipped", 2),
+                                                   attempt("lead/gate-a", F, T + "01:20:00Z", T + "01:40:00Z", "success", 3)])
+        c = d["change_failure"]
+        self.assertEqual((c["gate_rejected_lanes"], c["cancelled"], c["rerun_green_lanes"]), ([], 1, []))
+
+    def test_a_red_after_enqueue_on_a_closed_pr_is_a_reject(self):
+        closed = pr("lead/never", T + "00:00:00Z", None, None, enabled=[T + "01:00:00Z"])
+        d = self.measure(more=[closed], runs=[attempt("lead/never", F, T + "01:05:00Z", T + "01:10:00Z", "timed_out")])
+        self.assertEqual(d["change_failure"]["gate_rejected_lanes"], ["lead/never"])
+        self.assertEqual((d["deployment_frequency"]["lanes"], d["change_failure"]["gate_reject_pct"]), (2, 33.3))
+
+    def test_enqueue_is_the_last_auto_merge_enable(self):
+        gated = pr("lead/q", T + "00:00:00Z", T + "02:00:00Z", E, enabled=[T + "00:10:00Z", T + "01:00:00Z"],
+                   checks=[check("lint", T + "01:30:00Z", T + "01:31:00Z"), check("gate", T + "01:45:00Z", T + "01:50:00Z")])
+        f = self.measure(prs=[gated])["flow"]
+        self.assertEqual((f["gate_queue"], f["gate_run"]), (dict(n=1, median_min=40, p90_min=40), dict(n=1, median_min=20, p90_min=20)))
+
+    def test_no_auto_merge_event_leaves_the_queue_unknown(self):
+        by_hand = pr("lead/hand", T + "00:00:00Z", T + "02:00:00Z", E,
+                     checks=[check("lint", T + "01:30:00Z", T + "01:31:00Z"), check("gate", T + "01:45:00Z", T + "01:50:00Z")])
+        f = self.measure(more=[by_hand])["flow"]
+        self.assertEqual((f["gate_queue"]["n"], f["gate_run"]["n"]), (1, 2))  # only lead/flow-a-1 has an enable event
+
+    def test_a_revert_titled_pr_is_a_revert(self):
+        d = self.measure(more=[
+            pr("lead/focus", "2026-11-26T01:00:00Z", "2026-11-26T01:30:00Z", D, title="Composer takes focus"),
+            pr("lead/undo-focus", "2026-11-26T02:00:00Z", "2026-11-26T02:30:00Z", E, title='Revert "Composer takes focus"'),
+            pr("lead/again", "2026-11-26T03:00:00Z", "2026-11-26T03:30:00Z", F, title='Revert "Revert "Composer takes focus""'),
+            pr("lead-revert1145", "2026-11-26T04:00:00Z", "2026-11-26T04:30:00Z", Z),
+            pr("lead/scroll-1145", "2026-11-26T00:00:00Z", "2026-11-26T00:30:00Z", Z),
+        ])
+        self.assertEqual(d["change_failure"]["failed_lanes"], ["lead/flow-a-1", "lead/focus", "lead/scroll-1145"])
+        # a revert of a revert lands the change again
+        self.assertEqual((d["deployment_frequency"]["lanes"], d["rework"]["revert_landings"]), (5, 3))
+
+    def test_runs_not_read_means_not_measured(self):
+        keep = speed.subprocess.run
+        self.addCleanup(lambda: setattr(speed.subprocess, "run", keep))
+        speed.subprocess.run = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "gh: not logged in")
+        d = self.measure(runs=None)
+        self.assertEqual((d["change_failure"]["gate_reject_pct"], d["rework"]["rework_pct"]), (None, None))
+        self.assertTrue(d["coverage"]["pull_request_checks"].startswith("not read"))
+
+    def test_night_landings(self):
+        nights = [pr(f"lead/n{d}", f"2026-11-2{d}T01:00:00Z", f"2026-11-2{d}T02:00:00Z", A) for d in (2, 3, 4)]
+        d = self.measure(prs=nights + [pr("lead/day", "2026-11-25T07:00:00Z", "2026-11-25T08:00:00Z", B)])
+        self.assertEqual(d["deployment_frequency"]["nights_with_a_landing"], 3)
+
+    def test_no_gate_events_option(self):
+        r = subprocess.run([sys.executable, "-B", str(ROOT / "scripts/measure-dev-speed.py"), "--events", "x", "--selftest"],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertFalse(hasattr(speed, "read_events") or hasattr(speed, "merges"))
 
     def test_installs_and_restore_come_from_the_main_ci_log(self):
         d = self.measure(log=CiLog.text(CiLog()))
@@ -233,20 +306,6 @@ class DevSpeed(UtcClock):
         self.assertEqual((f["owner_installs"], f["installs_by_day"]["2026-11-26"]), (1, 1))
         r = d["time_to_restore"]
         self.assertEqual((r["median_min"], r["still_red"], len(r["episodes"])), (2 * 1440 + 42, False, 1))
-
-    def test_a_lead_revert_lane_and_a_plain_git_revert_are_reverts(self):
-        # Ticket 1157: lane lead-revert1145 reverted ticket 1145 with "Revert ticket 1145 ..."; a lane whose own
-        # commits are all git's default revert names the lane; a revert of a revert lands the change again.
-        merge = lambda lane, at, *subjects: dict(lane=lane, branch="lead/" + lane, sha=None, at=int(speed.iso(at)),  # noqa: E731
-                                                 first_commit=int(speed.iso(at)), subjects=list(subjects))
-        d = self.measure(more=[
-            merge("lead-focus1145", "2026-11-26T01:00:00Z", "composer: takes focus (ticket 1145)"),
-            merge("lead-revert1145", "2026-11-26T02:00:00Z", "Revert ticket 1145 (composer takes focus): it steals focus"),
-            merge("lead-undo", "2026-11-26T03:00:00Z", 'Revert "Merge lane lead-old9 (lead/old-9 8f4cac357467)"'),
-            merge("lead-again", "2026-11-26T04:00:00Z", 'Revert "Revert lane lead-old9: red main"', "lead-old9 with its fix"),
-        ])
-        self.assertEqual(d["change_failure"]["failed_lanes"], ["lead-focus1145", "lead-old9", "lead/flow-a-1"])
-        self.assertEqual((d["deployment_frequency"]["lanes"], d["rework"]["revert_landings"]), (5, 3))
 
     def test_the_flow_split_of_a_pull_request(self):
         f = self.measure()["flow"]
