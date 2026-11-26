@@ -171,6 +171,12 @@ the remote core; startup dialogs remain deny/Esc-only. Agents never receive a re
 The existing same-user threat model remains: these grants govern callers using session tokens,
 and do not contain a hostile process with the user's filesystem/SSH authority.
 
+A remote session that waits at a start question (Claude's folder trust) shows on the driving machine as that
+question's card on the session's row, like a local one; the card sends none of its choices. A prompt the owner sends
+it (`nunchiro --machine <m> agent prompt`) is kept in the session's queue until the question is answered in the
+session's terminal, or `agent cancel` drops it; the command says which session waits, on which machine, and what to
+do. Trusting the folder once in a terminal on that Mac avoids the question at later starts.
+
 Remote child grants are in memory and drop on a local core restart; remote workers continue
 running. The owner can inspect and close them explicitly over SSH. A restarted local session
 cannot reclaim them. A remote core restart also drops its defensive parent records; the local

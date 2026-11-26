@@ -87,6 +87,8 @@ ourselves, is 521 MiB.
 | Delivery trial: prompts not submitted per 1,000 sent (500 sends) | 0 | 5 | as "missed prompts" above | owner-run trial, see p34 |
 | Shown state matches the true state, 100 readings (%) | 100 | 90 | own bar: with six seats on the board, 90 % is one wrong seat in most looks; no peer publishes a figure | owner-run trial |
 | Requests that became a card within 5 s, 50 requests (%) | 100 | 95 | own bar: docs/product.md "nothing missed" | owner-run trial |
+| Start dialogs that became a card within 5 s, 10 dialogs (%) | 100 | 95 | the bar of the requests above, so one start dialog of the 10 without its card scores 0 | owner-run trial |
+| Minutes per day a session waited with no card, 7 days (min) | 0 | 12 | the delivery figure's rule (0 at 5 missed in 1,000) applied to time: 0.5 % of a working day of the trial's 5 sessions (5 x 8 h = 2,400 session minutes) is 12 min. No peer publishes a figure | owner-run, 7 days (`scorecard.py waits`) |
 | Outward actions that left without an approval, 20 tries on a fake mail server | 0 | 1 | docs/product.md "nothing sent outward without the owner": one is a fail | owner-run trial |
 | Bot task set: runs that pass their acceptance without owner input (%) | 100 | 0 | the percent itself; the same set run in Orca and T3 Code is shown beside it when run | owner-run trial, see p35 |
 | Owner touches per task in that set, median | 0 | 3 | the bands of DV7 below (pass at most 1, fail over 3) | owner-run trial |
@@ -134,7 +136,7 @@ is ignored. The figure names are the keys of ANCHORS in scripts/measure/scorecar
 | p31 | Skills and agent guidance quality | rubric | SK1-SK5 | reading |
 | p32 | Unattended operation | rubric | UO1-UO5 | reading |
 | p33 | Real-use speed and weight (new) | number + trial | open a 5,000-event conversation, 8 terminals streaming, memory growth over 24 h, prompt delivery | owner-run (2), not yet (2) |
-| p34 | Multi-agent accuracy (new) | trial | delivery, shown state, cards, outward gate | owner-run, not yet |
+| p34 | Multi-agent accuracy (new) | trial | delivery, shown state, cards, outward gate, start dialogs, waits with no card | owner-run, not yet |
 | p35 | Bot quality (new) | trial + field | task set success, owner touches, first-pass review rate | first-pass: script; task set owner-run, not yet |
 | p36 | Extensibility for others (new) | peer rows | rows XO1-XO5 | reading |
 | p37 | Reach (new) | rubric | RE1-RE5, each done in the run | reading and doing |
@@ -252,7 +254,9 @@ way to a real agent.
 ### p34 Multi-agent accuracy (new)
 
 One trial, run by the owner: a core on its own NUNCHIRO_HOME with 5 real agent sessions (3 Claude, 2 Codex, the
-cheapest models) on the owner's sign-ins, inside the config guard that scripts/scenario/v1b-full.sh uses:
+cheapest models) on the owner's sign-ins, inside the config guard that scripts/scenario/v1b-full.sh uses. One of the
+5 (one Claude) runs on a second Mac through `nunchiro --machine <alias>`; its figures are reported on their own and are
+in the totals, and a run without the second Mac is not counted:
 
 1. Delivery: 500 prompts sent with `nunchiro agent prompt` (100 per session, a one-line "reply ok" task), 250 of
    them while the session's composer holds half-typed text. Not submitted within 30 s without a person = missed.
@@ -261,6 +265,15 @@ cheapest models) on the owner's sign-ins, inside the config guard that scripts/s
 3. Cards: 50 requests are raised (25 permission requests, 25 questions); each must be a card within 5 s.
 4. Outward gate: 20 outward actions are tried through a fake mail MCP server (never a real account); each must wait
    for the approval card.
+5. Startup waits: 10 start dialogs are raised (folder trust, sign-in missing, an update prompt), each on a new session
+   that is never answered and then closed; each must become an owner card within 5 s of showing on the agent's screen.
+   An update prompt is raised only where an agent can show one: today none can, because Nunchiro keeps Codex's update
+   screen off and refuses an argument that turns it on (crates/nunchiro-core/src/sessions/spawn.rs:217), and Claude
+   Code shows no update dialog at start; the 10 are then folder trust and sign-in missing.
+
+Beside the trial, a field figure (owner-run, 7 days): the minutes per day a session waited with no card, read from the
+owner's own app every 30 s (each agent session's screen shows a dialog or a start question while the core holds no
+card for it), with `scorecard.py waits`.
 
 ### p35 Bot quality (new)
 
@@ -307,7 +320,8 @@ sandboxes. A phone client is row M2 of p01.
 | Peer tasks | drive T1-T12 in Nunchiro (an isolated RC), Orca and T3 Code the same way (by hand with a recording, or computer use for all; the owner answers its access dialog); record steps, seconds and the date in tasks.json | p04, p11, p13 |
 | Seats lost per restart | over 7 days, for each restart of the owner's app (update, serve restart, relaunch): seats held before minus seats back after, from `nunchiro agent list` before and after; the mean | seats_lost_per_restart |
 | 24 h soak | 20 real agent sessions on a core with its own NUNCHIRO_HOME for 24 h with a heartbeat prompt every 10 min; clean hours until the first crash, stuck terminal or lost session; footprint at the end over minute 2 | soak_clean_hours, mem_growth_24h_ratio |
-| Accuracy trial | p34 above | the four p34 figures |
+| Accuracy trial | p34 above: `python3 -B scripts/measure/scorecard.py accuracy --machine <alias> --remote-project <dir on the second Mac>` (raw records in accuracy-<date>.json; the figures go into the manual file only when the run is counted; `--self-test` checks the script on a fixture agent and is never counted) | the five p34 trial figures |
+| Waits with no card | p34 above: `python3 -B scripts/measure/scorecard.py waits` on the owner's Mac for 7 days (read only; samples in waits-<date>.jsonl; `--report <file>` gives the figure of a stopped run) | waited_no_card_min_per_day |
 | Bot task set | p35 above | bot_task_success_pct, bot_owner_touches |
 | Reach | p37 above | RE1-RE5 |
 
@@ -537,6 +551,15 @@ How far a user's agent team runs without the person stepping in.
 6. Stability (p08): field figures and a 24 h soak replace "launches drawn" and "idle shells alive" (both 100 for any
    app). The gate green rate stays, so a low item was not dropped.
 7. New parts p33 to p37 (the audit's five blind spots). They count in the mean from the first v2 run.
+8. Multi-agent accuracy (p34) runs 1 of its 5 real sessions (one Claude) on a second Mac through
+   `nunchiro --machine <alias>` (owner decision, stricter). Reason: the path to another Mac (SSH, the remote core's
+   cards and states) is part of running many agents, and a trial on one Mac never touches it; a run without the
+   second Mac is not counted, and the second Mac's figures are shown beside the totals.
+9. Multi-agent accuracy (p34) adds a fifth trial step, start dialogs that must become a card within 5 s (100 to 95 %,
+   the bar of the other cards), and a 7-day field figure, minutes per day a session waited with no card (0 to 12 min)
+   (owner decision, stricter). Reason: a session stuck at a start question with no card is the "missed" that
+   docs/product.md rules out, and the four steps start every session past its start questions. The 12 min 0-point is
+   the delivery figure's 5 in 1,000 applied to a working day of 5 sessions; it rests on 8 hours a day.
 
 Where v2 differs from the audit's proposal, and why:
 

@@ -7,6 +7,7 @@ fn chat_codex_cannot_alias_another_rollout_through_a_symlink() {
         let s = Session {
             side_chat: false,
             stopped_sends: Vec::new(),
+            send_waits: Default::default(),
             side_parent: None,
             teammate: None,
             resumed_from: vec![],
@@ -49,6 +50,7 @@ fn chat_codex_cannot_alias_another_rollout_through_a_symlink() {
             home_mode: None,
             permission_mode: None,
             starting: false,
+            at_box: false,
             ran_mode: None,
             mode_state: None, // CHAT-MODELIST
             parent: None,

@@ -3837,3 +3837,47 @@ html[data-resizing] * {
   -webkit-user-select: none;
   user-select: none;
 }
+
+/* Type in terminal (mockup docs/design/draft-hold/index.html panel 4): the switch over the terminal's top right, the
+   2 px focus ring while it is on, and its one line along the bottom. */
+.tdir-btn {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  z-index: 4;
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-6);
+  background: var(--tint-2);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-12);
+  cursor: pointer;
+}
+.tdir-btn[aria-pressed='true'] {
+  background: var(--text);
+  color: var(--panel);
+}
+.term:has(> .offline, > .tfind, > .osc52) > .tdir-btn {
+  display: none;
+}
+.term[data-direct] {
+  outline: 2px solid var(--ring-focus); /* an outline paints over the xterm canvas; an inset shadow went under it */
+  outline-offset: -2px;
+}
+.tdir-line {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 6px;
+  z-index: 4;
+  margin: 0;
+  padding: 5px 12px;
+  border-radius: var(--r-6);
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--tint-2);
+  color: var(--muted);
+  font-size: var(--fs-12);
+  pointer-events: none;
+}

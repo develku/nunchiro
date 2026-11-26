@@ -162,7 +162,8 @@ while True:
         if '--fixture-keep-composer' not in sys.argv: line=''
     elif ch in '\r\n':
         if mode != 'ready':
-            print('\x1b[2J\x1b[HCHOICE:'+line, flush=True)
+            # --fixture-box-after: as real Claude, the input box is drawn once a start question is answered
+            print('\x1b[2J\x1b[HCHOICE:'+line+('\n'+box() if '--fixture-box-after' in sys.argv else ''), flush=True)
             mode='ready'
             hook('Stop')
         elif line == 'FINISH':

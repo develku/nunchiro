@@ -580,8 +580,9 @@ fn a_locked_seat_takes_input_only_from_the_owner() {
     }
 }
 
-// Look v20 S2 ("send failed" yet typed): a prompt for a box that holds words another send typed without Enter is
-// refused before anything is written; pasted behind them, its Enter was dropped and it went in with the next Enter.
+// Look v20 S2 ("send failed" yet typed): a prompt for a box that holds words another send typed without Enter writes
+// nothing; pasted behind them, its Enter was dropped and it went in with the next Enter. Gap rule: it waits in the
+// queue (`terminal_text`) instead of being refused.
 #[test]
 fn a_prompt_behind_unsent_words_writes_nothing() {
     let mut f = flood_script(
@@ -610,17 +611,18 @@ fn a_prompt_behind_unsent_words_writes_nothing() {
         matches!(&sent, Ok(Reply::Delivery { send }) if send.status == "delivered"),
         "{sent:?}"
     );
-    let e = f
-        .core
-        .handle_agent(
-            &peer,
-            Request::AgentPrompt {
-                id: id.clone(),
-                text: "next".into(),
-            },
-        )
-        .unwrap_err();
-    assert_eq!(e, UNSENT_WORDS);
+    let queued = f.core.handle_agent(
+        &peer,
+        Request::AgentPrompt {
+            id: id.clone(),
+            text: "next".into(),
+        },
+    );
+    let Ok(Reply::Delivery { send }) = queued else {
+        panic!("{queued:?}")
+    };
+    assert_eq!(send.status, "queued");
+    f.core.flush_delivery().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(300));
     assert_eq!(fs::read_to_string(f.home.join("got")).unwrap(), "typed");
 }

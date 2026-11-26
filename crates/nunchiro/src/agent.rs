@@ -15,6 +15,44 @@ fn needs_answer(session: &Session) -> Result<(), String> {
         session.id
     ))
 }
+/// A session that waits at a question in its terminal which no prompt may answer (a start question such as folder
+/// trust): the core keeps a prompt sent to it in the queue.
+fn at_dialog(session: &Session) -> bool {
+    (session.pending.iter()).any(|d| d.kind == nunchiro_core::queue::Kind::Dialog)
+}
+/// Ends with exit 2 for a prompt kept behind such a question: which session waits at what, that the prompt is kept,
+/// what to do, and how to drop the prompt. `machine`: the `--machine` this command ran with.
+fn kept_behind(session: &Session, send: &str, machine: Option<&str>) -> String {
+    let name = match session.label.as_str() {
+        "" => &session.id,
+        label => label,
+    };
+    let choices = (session.pending.iter())
+        .find(|d| d.kind == nunchiro_core::queue::Kind::Dialog)
+        .map(|d| {
+            let labels: Vec<String> = d
+                .choices
+                .iter()
+                .map(|c| format!("\"{}\"", c.label))
+                .collect();
+            labels.join(" / ")
+        })
+        .unwrap_or_default();
+    let (on, cli, trust) = match machine {
+        Some(m) => (
+            format!(" on {m}"),
+            format!("nunchiro --machine {m}"),
+            " To trust a folder for later starts, run the agent once in that folder in a terminal on that Mac.",
+        ),
+        None => (String::new(), "nunchiro".into(), ""),
+    };
+    format!(
+        "{NEEDS_ANSWER}: {name} waits at a question in its terminal{on} ({choices}). The prompt is queued and goes in once \
+         the question is answered there; the Nunchiro window shows the question as a card on that session.{trust} To \
+         drop the prompt: {cli} agent cancel {} {send}",
+        session.id
+    )
+}
 fn resolve(home: &Path, name: &str) -> Result<Session, String> {
     let Reply::Snapshot { mut sessions, .. } = super::call(home, Request::Snapshot)? else {
         return Err("invalid snapshot reply".into());
@@ -500,7 +538,13 @@ fn verb(home: &Path, args: &[String]) -> Result<(), String> {
             let Reply::Delivery { send } = reply else {
                 return Err("invalid send reply".into());
             };
+            let machine = std::env::var("NUNCHIRO_MACHINE").ok();
             if send.status == "queued" && (!wait || *command == "send") {
+                // Kept behind a question: exit 2 with the reason, as for every blocked agent.
+                let session = get(home, &before.id)?;
+                if at_dialog(&session) {
+                    return Err(kept_behind(&session, &send.id, machine.as_deref()));
+                }
                 println!(
                     "{}",
                     serde_json::to_string(&Reply::Delivery { send }).map_err(|e| e.to_string())?
@@ -525,6 +569,10 @@ fn verb(home: &Path, args: &[String]) -> Result<(), String> {
                     return Err(format!("send {}", row.status));
                 }
                 if row.status == "queued" {
+                    // Kept behind a question: no turn will end until someone answers it, so the wait ends now.
+                    if at_dialog(&session) && !until.iter().any(|u| u == "blocked") {
+                        return Err(kept_behind(&session, &row.id, machine.as_deref()));
+                    }
                     if start.elapsed() >= Duration::from_millis(timeout)
                         || wait
                             && status(&session) == "blocked"

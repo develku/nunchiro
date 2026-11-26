@@ -793,6 +793,72 @@ fn remote_queued_send_is_delivered_when_worker_becomes_ready() {
         thread::sleep(Duration::from_millis(30));
     }
 }
+/// A session on another machine that waits at a start question: the machine that drives it shows the question as one
+/// card on that session's row (the window reads this snapshot), the owner's prompt is kept in the row's queue and the
+/// CLI names the machine and how to drop the prompt; answered in the session's terminal, the prompt goes in.
+#[test]
+fn remote_start_question_is_one_card_on_the_driving_machine_and_keeps_the_prompt() {
+    let p = Pair::new();
+    let child = p
+        .call(None, json!({"op":"start","session":{"kind":"claude","project":p.project,"label":"worker","args":["--fixture-dialog","--fixture-box-after"]}}))
+        .unwrap()["session"]
+        .clone();
+    let row = || {
+        p.local.call(None, json!({"op":"snapshot"})).unwrap()["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["id"] == child["id"])
+            .cloned()
+            .unwrap_or_default()
+    };
+    wait_for("the question's card", || {
+        row()["pending"][0]["kind"] == "dialog"
+    });
+    let out = p.local.cli(&[
+        "--machine",
+        "other",
+        "agent",
+        "prompt",
+        "worker",
+        "hello",
+        "--wait",
+        "--until",
+        "done",
+        "--timeout",
+        "4000",
+    ]);
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "{err}");
+    assert!(
+        err.contains("worker waits at a question in its terminal on other")
+            && err.contains("The prompt is queued")
+            && err.contains("nunchiro --machine other agent cancel"),
+        "{err}"
+    );
+    wait_for("the kept prompt on the row", || {
+        row()["send_queue"][0]["status"] == "queued"
+    });
+    let shown = row();
+    assert_eq!(shown["machine"], "other");
+    assert_eq!(shown["label"], "worker");
+    assert_eq!(shown["pending"].as_array().unwrap().len(), 1, "{shown}");
+    assert_eq!(shown["send_queue"][0]["content"], "hello");
+    // The owner answers in the session's terminal; the kept prompt is delivered.
+    p.call(
+        None,
+        json!({"op":"send_keys","id":child["id"],"keys":["1","enter"]}),
+    )
+    .unwrap();
+    wait_for("the delivery", || {
+        p.call(None, json!({"op":"agent_get","id":child["id"]}))
+            .unwrap()["session"]["send_log"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["content"] == "hello" && s["status"] == "delivered")
+    });
+}
 #[test]
 fn stopping_core_reaps_inflight_snapshot_transport() {
     let h = Harness::new("echo $$ > \"$NUNCHIRO_HOME/helper.pid\"; sleep 30");

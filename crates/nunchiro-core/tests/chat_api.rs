@@ -25,6 +25,7 @@ mod no_transcript {
         Session {
             side_chat: false,
             stopped_sends: Vec::new(),
+            send_waits: Default::default(),
             side_parent: None,
             teammate: None,
             resumed_from: vec![],
@@ -67,6 +68,7 @@ mod no_transcript {
             home_mode: None,
             permission_mode: None,
             starting: false,
+            at_box: false,
             ran_mode: None,
             mode_state: None, // CHAT-MODELIST
             parent: None,

@@ -1,0 +1,176 @@
+/* The knock (mockup docs/design/draft-hold/index.html): a waiting message's sender at the row's right end, its popover and
+   the composer's attach chip. Tokens only. */
+.knocks {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.wtwrap:has(> .knocks) > .row.wt2 {
+  padding-right: 64px;
+}
+.wtwrap:has(> .knocks) > :is(.kidcount.over, .wtmore) {
+  right: 72px;
+}
+.knock {
+  display: inline-flex;
+  padding: 1px;
+  border: 0;
+  border-radius: var(--r-4);
+  background: none;
+  cursor: pointer;
+}
+.knock:focus-visible {
+  outline: 2px solid var(--ring-focus);
+}
+.knock[data-later] {
+  opacity: 0.45;
+}
+.knocks .face,
+.kglyph {
+  --s: 16px;
+}
+.knocks .face {
+  width: var(--s);
+  height: var(--s);
+}
+.kmore {
+  color: var(--muted);
+  font-size: var(--fs-10);
+  font-weight: 700;
+}
+.kglyph {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--s);
+  height: var(--s);
+  border-radius: 27%;
+  background: var(--tint-2);
+  color: var(--muted);
+  font-size: calc(var(--s) * 0.55);
+  font-weight: 700;
+  line-height: 1;
+}
+.kpop {
+  position: fixed;
+  z-index: 30;
+  width: 300px;
+  max-width: calc(100vw - 16px);
+  padding: var(--sp-12) 14px;
+  border-radius: var(--r-12);
+  color: var(--text);
+  font-size: var(--fs-13);
+}
+.kpop-h {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  font-weight: 600;
+}
+.kpop-h small {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: var(--fs-11);
+  font-weight: 400;
+}
+.kpop-b {
+  margin: var(--sp-8) 0;
+  padding: var(--sp-8) 10px;
+  border-radius: var(--r-8);
+  background: var(--tint-1);
+  font-size: var(--fs-12);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.kpop-why {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.kdot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--idle);
+  flex: none;
+}
+.kpop-acts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 10px -6px -4px;
+}
+.kpop-acts button {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  height: 30px;
+  padding: 0 var(--sp-8);
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.kpop-acts button:is(:hover, :focus) {
+  background: var(--tint-1);
+  outline: 0;
+}
+.kpop-acts small {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: var(--fs-11);
+}
+.kpop-err {
+  margin: var(--sp-8) 0 0;
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.kchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  margin: var(--sp-8) 0 0 10px;
+}
+.kchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 4px 0 3px;
+  border-radius: 999px;
+  background: var(--tint-2);
+  font-size: var(--fs-12);
+}
+.kchip-x {
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--faint);
+  font: inherit;
+  cursor: pointer;
+}
+.kchip-x:is(:hover, :focus-visible) {
+  color: var(--text);
+}
+/* The chat's delivered message from another sender: its face and "Message from <name>" above the words. */
+.msg.user.from {
+  display: flex;
+  gap: var(--sp-8);
+  align-items: flex-start;
+}
+.msg.user.from small {
+  display: block;
+  color: var(--faint);
+  font-size: var(--fs-11);
+  font-weight: 600;
+}

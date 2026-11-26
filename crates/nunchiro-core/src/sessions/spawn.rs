@@ -538,6 +538,7 @@ impl Sessions {
         let meta = Session {
             side_chat: start.args.iter().any(|arg| arg == SIDE_CHAT_ARG),
             stopped_sends: Vec::new(),
+            send_waits: Default::default(),
             side_parent: side_parent(start),
             side_split: side_split(start),
             machine: None, // v1a-06
@@ -590,6 +591,7 @@ impl Sessions {
             account_tab,
             permission_mode: None, // CHAT-PERMCHIP
             starting: false,
+            at_box: false,
             ran_mode: None,
             mode_state: None, // CHAT-MODELIST
             // V2.5-30: a resumed run keeps the session that started the run it continues.

@@ -287,16 +287,23 @@ fn setup_script_runs_in_visible_tab_not_sandbox() {
     until("exit 0", || core.exit(&path, "setup") == Some(0));
     // The tab is a session the window lists, run by bash in the worktree: never the widget sandbox, never hidden. Its
     // record stays after it ends, with the script's output on its screen.
-    let read = core
-        .json(json!({"op":"read","id":tab["id"],"after":0}))
-        .unwrap();
-    let bytes: Vec<u8> = read["data"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|b| b.as_u64().unwrap() as u8)
-        .collect();
-    let text = String::from_utf8_lossy(&bytes);
+    let screen = || {
+        let read = core
+            .json(json!({"op":"read","id":tab["id"],"after":0}))
+            .unwrap();
+        let bytes: Vec<u8> = read["data"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|b| b.as_u64().unwrap() as u8)
+            .collect();
+        String::from_utf8_lossy(&bytes).into_owned()
+    };
+    // The wrapper writes the exit file before it prints its last line, so the screen may lag the exit by a moment.
+    until("setup finished on screen", || {
+        screen().contains("setup finished")
+    });
+    let text = screen();
     assert!(
         text.contains("visible") && text.contains("setup finished"),
         "{text}"

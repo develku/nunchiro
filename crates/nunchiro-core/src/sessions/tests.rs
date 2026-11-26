@@ -5157,6 +5157,18 @@ fn p3_the_send_after_an_interrupt_clears_the_restored_prompt_first() {
     f.core.entries.get_mut(&f.id).unwrap().observer.clear_box = true;
     send(&mut f);
     assert_eq!(got(&f), b"\x15\x15\x15\x15\x15pong");
+    // The agent took it and drew its box empty (gap rule: nothing is typed behind words in the box).
+    let empty = format!(
+        "\x1b[2J\x1b[H{RULE}{RULE}{RULE}\r\n\u{276f} \r\n{RULE}{RULE}{RULE}\r\n  footer\r\n"
+    );
+    let id = f.id.clone();
+    f.core
+        .entries
+        .get_mut(&id)
+        .unwrap()
+        .observer
+        .screen
+        .feed(empty.as_bytes());
     send(&mut f);
     assert_eq!(
         got(&f),
@@ -5598,13 +5610,15 @@ fn t1094_every_saved_mark_opens_after_a_restart() {
 fn t1094_a_dropped_message_is_not_pasted_again_behind_hand_typed_words() {
     let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi\r\n{RULE}\r\n");
     let own = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} my own words\r\n{RULE}\r\n");
+    let empty = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
     let mut f = flood_script(
         "t1094-hand",
         boxed.as_bytes(),
         &format!(
-            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
+            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f sent ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
             PROMPT.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
-            own.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
+            own.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            empty.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
         ),
     );
     wait_end(&f, PROMPT.len());
@@ -5647,8 +5661,11 @@ fn t1094_a_dropped_message_is_not_pasted_again_behind_hand_typed_words() {
         "not pasted again while his words sit in the box"
     );
     assert_eq!(send_row(&f, &send.id).status, "queued");
-    // His own Enter sent his words; the message goes now.
+    // His own Enter sent his words and the agent drew its box empty; the message goes now.
     f.core.entries.get_mut(&f.id).unwrap().input = Default::default();
+    fs::write(f.home.join("sent"), "").unwrap();
+    wait_end(&f, PROMPT.len() + boxed.len() + own.len() + empty.len());
+    catch_up(&mut f);
     f.core.flush_delivery().unwrap();
     assert_eq!(
         copies(&f),
@@ -5741,14 +5758,16 @@ fn t1094_a_proven_box_without_a_turn_goes_again() {
     let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi\r\n{RULE}\r\n");
     let dialog = " Pick one\r\n \u{276f} 1. Yes\r\n   2. No\r\n";
     let typed_box = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi x\r\n{RULE}\r\n");
+    let empty = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
     let mut f = flood_script(
         "t1094-own-enter-no-turn",
         boxed.as_bytes(),
         &format!(
-            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f again ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
+            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f again ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f sent ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
             PROMPT.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
             dialog.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
-            typed_box.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
+            typed_box.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            empty.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
         ),
     );
     wait_end(&f, PROMPT.len());
@@ -5795,6 +5814,13 @@ fn t1094_a_proven_box_without_a_turn_goes_again() {
     f.core.flush_delivery().unwrap();
     assert_eq!(copies(&f), first, "not pasted again behind his words");
     raw(&mut f, "\r");
+    // The agent drew its box empty after his Enter.
+    fs::write(f.home.join("sent"), "").unwrap();
+    wait_end(
+        &f,
+        PROMPT.len() + boxed.len() + dialog.len() + typed_box.len() + empty.len(),
+    );
+    catch_up(&mut f);
     f.core.flush_delivery().unwrap();
     assert_eq!(
         send_row(&f, &send.id).status,
@@ -5816,14 +5842,16 @@ fn t1094_his_enter_on_words_that_only_look_like_the_message() {
     let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} hi\r\n{RULE}\r\n");
     let dialog = " Pick one\r\n \u{276f} 1. Yes\r\n   2. No\r\n";
     let own = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} this works\r\n{RULE}\r\n");
+    let empty = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
     let mut f = flood_script(
         "t1094-look-alike",
         boxed.as_bytes(),
         &format!(
-            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f again ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
+            "printf '{}'\nhead -c 1 >/dev/null\ncat > got <&0 &\ncat burst\nj=0; while [ ! -f more ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f again ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\nj=0; while [ ! -f sent ] && [ $j -lt 3000 ]; do sleep 0.01; j=$((j+1)); done\nprintf '{}'\n",
             PROMPT.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
             dialog.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
-            own.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
+            own.replace('\x1b', "\\033").replace("\r\n", "\\r\\n"),
+            empty.replace('\x1b', "\\033").replace("\r\n", "\\r\\n")
         ),
     );
     wait_end(&f, PROMPT.len());
@@ -5868,6 +5896,13 @@ fn t1094_his_enter_on_words_that_only_look_like_the_message() {
         !f.core.hand_sent.contains_key(&f.id),
         "no proof from a look-alike box"
     );
+    // The agent drew its box empty after his Enter.
+    fs::write(f.home.join("sent"), "").unwrap();
+    wait_end(
+        &f,
+        PROMPT.len() + boxed.len() + dialog.len() + own.len() + empty.len(),
+    );
+    catch_up(&mut f);
     hook(&mut f, "UserPromptSubmit");
     f.core.flush_delivery().unwrap();
     assert_eq!(send_row(&f, &send.id).status, "queued");
@@ -6093,6 +6128,33 @@ fn t1094_an_empty_box_releases_the_dropped_message() {
     catch_up(&mut f);
     f.core.flush_delivery().unwrap();
     assert_eq!(copies(&f), first + 1, "the empty box takes it");
+}
+/// A send that finds the agent ready while an earlier row still waits in the queue goes behind that row, never ahead
+/// of it. A seat opened by a schedule queued its brief before the agent drew its box; the next scheduled task found
+/// the box drawn, was typed at once, and the brief (with the first task in it) was never typed.
+#[test]
+fn a_ready_send_never_overtakes_a_queued_one() {
+    let boxed = format!("\x1b[2J\x1b[H{RULE}\r\n\u{276f} \r\n{RULE}\r\n");
+    let mut f = unobserved("queued-first", boxed.as_bytes());
+    catch_up(&mut f);
+    let id = f.id.clone();
+    // Not ready yet: the brief waits in the queue.
+    hook(&mut f, "UserPromptSubmit");
+    f.core.prompt_as_user(&id, "the brief".into()).unwrap();
+    assert_eq!(rows(&f)[0].status, "queued");
+    // Ready now; the next task arrives before a delivery pass took the brief.
+    hook(&mut f, "Stop");
+    f.core.prompt_as_user(&id, "the task".into()).unwrap();
+    for _ in 0..5 {
+        f.core.tick().unwrap();
+    }
+    let got = got(&f);
+    let at = |w: &[u8]| got.windows(w.len()).position(|x| x == w);
+    assert!(at(b"the brief").is_some(), "the brief was never typed");
+    assert!(
+        at(b"the task").is_none_or(|t| t > at(b"the brief").unwrap()),
+        "the task went ahead of the brief"
+    );
 }
 /// Ticket 1094 r3 (review r2 NIT 1): the retry time of a message dropped again holds that message only; the owner's
 /// newer message goes at once.
@@ -10330,6 +10392,7 @@ fn approved_arguments_reach_owner_starts_only() {
 
 // Ticket 1002 lane 1: the Home seat lock's tests (kept apart: this file passed the publish scan's 1 MiB line).
 mod advance_start_tests; // ticket 1081 part B security round
+mod gap_tests; // the gap rule
 mod home_lock_tests;
 mod lock_followups_tests; // S-m1, Q9 en-b-J7-2, ticket 1002
 // Ticket 39: a core that starts stopping after the first decision (set by the hook) refuses the hand-off under
@@ -11520,6 +11583,68 @@ fn t1121_repastes_are_bounded() {
         "pasted past the bound"
     );
     assert_eq!(send_row(&f, &row.id).status, "queued");
+}
+/// A dropped row goes again only into an empty box. Codex's box held the owner's half-typed words with the row's copy
+/// behind them (`› half typed reply ok #9`): read as free of the copy, the row was pasted behind it two more times. A
+/// box whose first row is blank and whose words are below is not empty either (Codex look).
+#[test]
+fn a_dropped_row_is_never_pasted_again_behind_other_words() {
+    for (name, frame) in [
+        ("drop-glued", "\u{203a} half typed reply ok #9\r\n"),
+        ("drop-below", "\u{203a} \r\n  half typed\r\n"),
+    ] {
+        let screen = format!("\x1b[2J\x1b[H{frame}\r\n  gpt-5-codex medium · /p\r\n");
+        let mut f = unobserved(name, screen.as_bytes());
+        f.core.entries.get_mut(&f.id).unwrap().meta.kind = AgentKind::Codex;
+        catch_up(&mut f);
+        let id = f.id.clone();
+        hook(&mut f, "UserPromptSubmit");
+        f.core.prompt_as_user(&id, "reply ok #9".into()).unwrap();
+        let row = rows(&f)
+            .into_iter()
+            .find(|s| s.content == "reply ok #9")
+            .unwrap();
+        f.core.drops.insert(row.id.clone(), 1);
+        f.core.left_typed.insert(id.clone());
+        hook(&mut f, "Stop");
+        for _ in 0..5 {
+            f.core.tick().unwrap();
+        }
+        assert!(
+            !got(&f).windows(11).any(|w| w == b"reply ok #9"),
+            "{name}: pasted again behind other words"
+        );
+        assert_eq!(send_row(&f, &row.id).status, "queued", "{name}");
+    }
+}
+/// Words typed by hand into Codex's box mark it edited, as Claude's, until the owner's Enter sends them or the box
+/// reads empty (a Stop's Esc marks it too, and Codex's box is not cleared after a Stop).
+#[test]
+fn hand_typed_words_mark_a_codex_box_edited() {
+    let codex = |name: &str, row: &str| {
+        let screen = format!("\x1b[2J\x1b[H\u{203a} {row}\r\n\r\n  gpt-5-codex medium · /p\r\n");
+        let mut f = unobserved(name, screen.as_bytes());
+        f.core.entries.get_mut(&f.id).unwrap().meta.kind = AgentKind::Codex;
+        catch_up(&mut f);
+        f
+    };
+    let mut f = codex("codex-edited", "half typed");
+    let id = f.id.clone();
+    f.core
+        .handle(text_request(&f, "half typed ", false, &[]))
+        .unwrap();
+    assert!(f.core.box_edited(&id), "typed text");
+    f.core.handle(text_request(&f, "\r", false, &[])).unwrap();
+    assert!(!f.core.box_edited(&id), "his Enter sent it");
+    stop_keys(&mut f, &["backspace"], &[]).unwrap();
+    assert!(f.core.box_edited(&id), "a key");
+    stop_keys(&mut f, &["enter"], &[]).unwrap();
+    assert!(!f.core.box_edited(&id), "his Enter key");
+    let mut f = codex("codex-stopped", "");
+    let id = f.id.clone();
+    stop_keys(&mut f, &["esc"], &[]).unwrap();
+    assert!(f.core.entries[&id].input.edited(), "the Stop marks it");
+    assert!(!f.core.box_edited(&id), "an empty box holds no words");
 }
 /// Ticket 1121 (review r1): at exactly REPASTES drops the row still goes into an empty box, once; one drop more stops it
 /// and the snapshot names it, so the composer can say it will not go again.

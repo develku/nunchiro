@@ -83,6 +83,11 @@ fn typed_error(error: String, uncertain: bool) -> String {
         error
     }
 }
+/// The agents whose input box the core follows: keys or words typed there by hand mark it edited (`Input::edited`)
+/// until the owner's Enter, and a dropped prompt is never pasted behind them.
+fn hand_edits(kind: AgentKind) -> bool {
+    matches!(kind, AgentKind::Claude | AgentKind::Codex)
+}
 #[derive(Clone, Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
@@ -337,6 +342,18 @@ pub struct Sessions {
     /// and working at his Enter, its time in ms and as an Instant). It is delivered once a turn starts after that
     /// Enter (`settle_hand_sent`); until then the core does not paste it, and with no turn it goes again.
     hand_sent: BTreeMap<String, (String, u64, bool, u64, std::time::Instant)>,
+    /// Gap rule: by session, until when the owner counts as typing there (`Typing`, a key in its terminal). Another
+    /// sender's line waits until then (in memory, as every mark below: queued rows never outlive a core).
+    typing_until: BTreeMap<String, std::time::Instant>,
+    /// Gap rule: rows (send id) the owner said to send now: no wait for his typing, no Later.
+    now_rows: std::collections::BTreeSet<String>,
+    /// Gap rule: rows the owner put off until after his next prompt, by send id: `None` until a submit of his went in,
+    /// then the turns finished at that moment; the row waits until a turn ends after it.
+    later_rows: BTreeMap<String, Option<u64>>,
+    /// Gap rule: rows the owner attached to his next prompt; they go in with it, under his words.
+    attached: std::collections::BTreeSet<String>,
+    /// Type in terminal: by session, until when the owner types in the agent's own box (`Direct`, renewed by his keys).
+    direct_until: BTreeMap<String, std::time::Instant>,
     /// Home view change 4: the leads (teammate id, prompt) a goal the user sent must reach; `team::wake_goals` opens
     /// each seat off the registry lock and hands it the goal.
     pub(crate) goal_wakes: Vec<(String, String)>,
@@ -442,8 +459,6 @@ struct Closing {
 }
 /// V2-6d: how long a closed stopped or done session can be brought back.
 pub(crate) const CLOSE_UNDO_MS: u64 = 10_000;
-/// Look v20 S2: a prompt for a box that holds words another send typed and nobody submitted. Nothing was written.
-pub(crate) const UNSENT_WORDS: &str = "refused: the input box holds words typed without Enter (send-keys enter submits them); nothing was typed";
 /// Look v20 S1: an Outbox card's Undo after the core approved it.
 pub(crate) const OUTBOX_TOO_LATE: &str =
     "too late to undo: it was already approved, and the chief of staff is sending it";
@@ -631,7 +646,22 @@ impl Sessions {
             }
             Request::AgentSend { id, text } => self.send("user", &id, text, vec![], false),
             Request::AgentPrompt { id, text } => {
-                let reply = self.send("user", &id, text.clone(), vec![], true)?;
+                let reply = match self.send("user", &id, text.clone(), vec![], true) {
+                    // The owner's words to a session that waits at a question in its terminal (a start question such
+                    // as folder trust) are kept, not refused: typed now they would answer the question, so they wait
+                    // in the session's queue, go in once it is answered there, and are dropped like any queued send.
+                    // The question's own card says which session waits; a session's prompt is still refused.
+                    Err(e)
+                        if e == "agent_blocked"
+                            && (self.queue.items_of(&id).iter())
+                                .any(|item| item.kind == queue::Kind::Dialog) =>
+                    {
+                        Reply::Delivery {
+                            send: self.begin_send("user", &id, text.clone(), vec![], true, "queued")?,
+                        }
+                    }
+                    sent => sent?,
+                };
                 self.told(&id, &text); // ticket 990: a sub-bot's lead learns what the user said to it
                 Ok(reply)
             }
@@ -792,6 +822,20 @@ impl Sessions {
                         self.held_enter.insert(id);
                         return Ok(Reply::Ack);
                     }
+                    // Gap rule: nothing is typed behind text in the agent's box, and a prompt that takes attached
+                    // messages is joined with them by the delivery walk: queued as his prompt, as above.
+                    let plain = text.replace("\x1b[200~", "").replace("\x1b[201~", "");
+                    let words = plain.strip_suffix('\r').unwrap_or(&plain).to_string();
+                    if !words.trim().is_empty()
+                        && (self.owner_text(&id) || joinable(&words) && self.has_attached(&id))
+                    {
+                        crate::delivery::check_text(self.entry(&id)?.meta.kind, &words)?;
+                        self.begin_send("user", &id, words, vec![], true, "queued")?;
+                        if !plain.ends_with('\r') {
+                            self.held_enter.insert(id);
+                        }
+                        return Ok(Reply::Ack);
+                    }
                     self.held_enter.remove(&id);
                     self.clear_box_first(&id)?;
                 }
@@ -807,11 +851,24 @@ impl Sessions {
                 // Look 11-17 v6r B6-S2-1: nor do they edit Claude's input box. A lead's terminal shown for a question
                 // sent its focus reports; marked as edited by hand, the box refused every worker's finish line and room
                 // notice (`Input::submit`), and the lead heard nothing until the user wrote to it.
+                if !report && !composer && !text.ends_with('\r') {
+                    self.typing(&id); // gap rule: a key in the terminal is the owner typing there
+                }
+                // Type in terminal: his keys there keep it on.
+                if !report
+                    && !composer
+                    && let Some(until) = self.direct_until.get_mut(&id)
+                {
+                    *until = std::time::Instant::now() + DIRECT_QUIET;
+                }
+                if !report && text.ends_with('\r') {
+                    self.owner_submitted(&id); // gap rule: his Enter there releases a Later after its turn
+                }
                 if !report {
                     self.submitted.remove(&id); // the box holds the user's own words from here
                     self.left_typed.remove(&id); // ticket 1085: so nothing in it is cleared as the core's own
                 }
-                let uncertain = !report && self.entry(&id)?.meta.kind == AgentKind::Claude;
+                let uncertain = !report && hand_edits(self.entry(&id)?.meta.kind);
                 if uncertain {
                     self.entry(&id)?.input.mark_uncertain();
                 }
@@ -839,7 +896,7 @@ impl Sessions {
                 self.live(&id)?
                     .write(text.as_bytes())
                     .map_err(|error| typed_error(error, uncertain))?;
-                if text.ends_with('\r') && self.entry(&id)?.meta.kind == AgentKind::Claude {
+                if text.ends_with('\r') && hand_edits(self.entry(&id)?.meta.kind) {
                     self.entry(&id)?.input = Default::default();
                 }
                 if text.ends_with('\r') {
@@ -935,7 +992,7 @@ impl Sessions {
                         return Err("agent_blocked: a question is on the screen; answer it first".into());
                     }
                 }
-                let uncertain = self.entry(&id)?.meta.kind == AgentKind::Claude;
+                let uncertain = hand_edits(self.entry(&id)?.meta.kind);
                 if uncertain {
                     self.entry(&id)?.input.mark_uncertain();
                 }
@@ -957,7 +1014,7 @@ impl Sessions {
                 if interrupt_key(&keys) {
                     self.interrupted(&id)?;
                 }
-                if data.ends_with(b"\r") && self.entry(&id)?.meta.kind == AgentKind::Claude {
+                if data.ends_with(b"\r") && hand_edits(self.entry(&id)?.meta.kind) {
                     self.entry(&id)?.input = Default::default();
                 }
                 if data.ends_with(b"\r") {
@@ -975,6 +1032,9 @@ impl Sessions {
                             std::time::Instant::now(),
                         ),
                     );
+                }
+                if data.ends_with(b"\r") {
+                    self.owner_submitted(&id); // gap rule: his Enter releases a Later after its turn
                 }
                 // Ticket 990: the composer's Enter sends what it typed: a sub-bot's lead learns it in one line.
                 if composer && let Some(text) = self.composed.remove(&id) {
@@ -1022,6 +1082,25 @@ impl Sessions {
                 self.close(&id, true, false)
             }
             Request::LimitResume { id, on } => self.limit_resume(&id, on, queue::now_ms() as i64 / 1000), // ticket 372
+            Request::Typing { id } => {
+                self.entry(&id)?;
+                self.typing(&id);
+                Ok(Reply::Ack)
+            }
+            Request::SendNow { id, send } => self.knock_choice(&id, &send, Knock::Now),
+            Request::SendLater { id, send } => self.knock_choice(&id, &send, Knock::Later),
+            Request::SendAttach { id, send } => self.knock_choice(&id, &send, Knock::Attach),
+            Request::SendDetach { id, send } => self.knock_choice(&id, &send, Knock::Detach),
+            Request::Direct { id, on } => {
+                self.entry(&id)?;
+                if on {
+                    self.direct_until
+                        .insert(id, std::time::Instant::now() + DIRECT_QUIET);
+                } else {
+                    self.direct_until.remove(&id);
+                }
+                Ok(Reply::Ack)
+            }
             // Ticket 990: the server serves it before this point (the start runs off the registry lock).
             Request::TeamOpen { .. } => Err("team open is for a lead's session".into()),
             Request::Task { .. } => Err("task requests run off the registry lock".into()), // `ledger::serve`
@@ -1395,6 +1474,7 @@ impl Sessions {
         if !matches!(status, "queued" | "attempting") {
             let row = meta.send_queue.remove(index);
             let agent = row.sender != "user";
+            let owner_sent = !agent && row.submit && status == "delivered";
             retire_send(meta, &mut self.widget_hashes, row, status);
             // Ticket 1089: the room shows when a seat's line reached this seat. The time goes to the room's
             // cursors.json, never onto the send row: an older core refuses a store with a key it does not know.
@@ -1416,6 +1496,9 @@ impl Sessions {
                 {
                     self.mark_send(id, &joined, status)?;
                 }
+            }
+            if owner_sent {
+                self.owner_submitted(id); // gap rule: a Later goes after the turn this prompt starts
             }
             return Ok(());
         }

@@ -297,21 +297,8 @@ impl Sessions {
     ) -> Response {
         let said = (!text.trim().is_empty()).then(|| text.clone());
         // Look v20 S2: words another send typed and nobody submitted are in the box. A prompt pasted behind them had its
-        // Enter dropped (the box shows more than the paste), was reported failed, and went in with the next Enter. Now
-        // it is refused before anything is written. (Words typed by hand: `Input::submit` refuses with `EDITED`.)
-        if submit
-            && said.is_some()
-            && sender != "user"
-            && !self.pending_enter.contains_key(id)
-            && self.entries.get(id).is_some_and(|e| {
-                e.acp.is_none()
-                    && e.meta.kind != AgentKind::Shell
-                    && e.input.pending()
-                    && !e.input.edited()
-            })
-        {
-            return Err(UNSENT_WORDS.into());
-        }
+        // Enter dropped and went in with the next Enter. Gap rule: `send_inner` queues it (`terminal_text`), after every
+        // check a written send takes; it goes once the box is free.
         let reply = self.send_inner(sender, id, text, keys, submit, false)?;
         if let Some(said) = said {
             let row = match &reply {
@@ -355,8 +342,8 @@ impl Sessions {
             eprintln!("typed line not kept in the room: {e}");
         }
     }
-    /// A line the core itself types into an agent's input box: a worker's finish line, the room's notice. Claude's box
-    /// refuses another session's line while it holds words or keys typed by hand (`delivery::EDITED`). Such a line is
+    /// A line the core itself types into an agent's input box: a worker's finish line, the room's notice. A Claude or
+    /// Codex box takes no other session's line while it holds words or keys typed by hand (`delivery::EDITED`). Such a line is
     /// never typed there and never lost: it waits in that session's queue, and `deliver` writes it once the mark is
     /// gone (the user's next Enter there, or the box cleared after a Stop).
     pub(crate) fn send_line(&mut self, sender: &str, id: &str, text: String) -> Response {
@@ -367,11 +354,16 @@ impl Sessions {
         let send = self.begin_send(sender, id, text, vec![], true, "queued")?;
         Ok(Reply::Delivery { send })
     }
-    /// A running Claude whose input box is marked as edited by hand.
+    /// A running Claude or Codex whose input box is marked as edited by hand. Codex's mark ends also when its box reads
+    /// empty on a current screen: a Stop (Esc) marks it, and Codex has no box clear after a Stop as Claude has
+    /// (`interrupted`), so a lead's wake lines waited for the owner's next Enter.
     pub(crate) fn box_edited(&self, id: &str) -> bool {
-        self.entries
-            .get(id)
-            .is_some_and(|e| e.meta.kind == AgentKind::Claude && e.agent_live() && e.input.edited())
+        self.entries.get(id).is_some_and(|e| {
+            hand_edits(e.meta.kind)
+                && e.agent_live()
+                && e.input.edited()
+                && !(e.meta.kind == AgentKind::Codex && !e.observer.behind && self.box_empty(id))
+        })
     }
     /// `walking`: this is the mode walk's own Shift+Tab (`set_mode`, `advance_walks`, `end_walk`), the one send a
     /// running walk lets through. Every other send queues behind the walk, as behind a model switch, and a second mode
@@ -436,13 +428,28 @@ impl Sessions {
         // Ticket 1121: nor a paste into a box the screen does not read while the core's dropped copy may be in it (the
         // clear would write no Ctrl+U): it waits in the queue for a read box (the delivery walk's guard).
         let unread = submit && !text.is_empty() && self.unread_copy(id);
+        // Order is kept: with an earlier row still queued this one goes behind it, and the delivery walk writes both
+        // in turn. Written now, it went ahead of a seat's brief queued before the agent drew its box, and the brief
+        // then waited behind its turn for ever.
+        let behind = !mode_key && meta.send_queue.iter().any(|s| s.status == "queued");
+        // Gap rule: nothing is typed behind text in the box, another sender's line waits while the owner types, and
+        // his prompt that takes attached messages is joined with them by the delivery walk.
+        let gap = !interrupt
+            && (self.gap_hold(id, "", sender, submit, &text).is_some()
+                || sender == "user"
+                    && submit
+                    && !text.trim().is_empty()
+                    && joinable(&text)
+                    && self.has_attached(id));
         let ready = interrupt
             || self.send_ready(&meta.id, &snapshot)?
                 && self.delivery_open(id, &snapshot)
                 && self.entry(&meta.id)?.switch.is_none() // v1a-10: no typing into the picker
                 && !held // CHAT-MODELIST r2: nor into a walk's passing modes
                 && !waiting
-                && !unread;
+                && !unread
+                && !behind
+                && !gap;
         if mode_key && !ready {
             return Err("agent is not at its composer (busy); shift+tab not queued".into());
         }

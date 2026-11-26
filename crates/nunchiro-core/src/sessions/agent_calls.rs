@@ -165,6 +165,12 @@ impl Sessions {
             | Request::FirstRun // v2-5a: agent detection
             | Request::ProblemFix { .. } // v2-5b: restarts a session, or starts it without hooks
             | Request::LimitResume { .. } // ticket 372: types the fixed continue text into a session at its reset
+            | Request::Typing { .. } // the owner's typing and his choices on a waiting message are his alone
+            | Request::SendNow { .. }
+            | Request::SendLater { .. }
+            | Request::SendAttach { .. }
+            | Request::SendDetach { .. }
+            | Request::Direct { .. }
             | Request::ImagePut { .. }
             | Request::WidgetList
             | Request::WidgetRun { .. }
