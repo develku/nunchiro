@@ -7903,7 +7903,7 @@ fn ext_settings(on: Option<&[&str]>) -> Settings {
     s
 }
 fn flag_strings(home: &Path, s: &Settings, kind: AgentKind) -> Vec<String> {
-    extension_flags(home, s, kind, false)
+    extension_flags(home, s, kind, false, Path::new("/p"))
         .unwrap()
         .into_iter()
         .map(|o| o.into_string().unwrap())
@@ -8072,6 +8072,7 @@ fn extension_ops_refused_to_session_callers() {
         Request::ExtensionsMcpAdd {
             name: "evil".into(),
             command: vec!["sh".into()],
+            project: None,
         },
         Request::ExtensionsMcpRemove {
             name: "evil".into(),
