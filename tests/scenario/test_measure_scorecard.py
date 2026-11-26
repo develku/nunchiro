@@ -167,6 +167,12 @@ class RubricV2(unittest.TestCase):
         self.assertEqual(s.holder_pids(args, ids={a}), [2])
         self.assertEqual(s.holder_pids(args, exe="/Users/o/Applications/Nunchiro.app/Contents/MacOS/nunchiro"), [3])
 
+    def test_mib_per_session_is_never_negative(self):
+        # the 11-26 run: a baseline sampled before the window settled read higher than 20 sessions later
+        self.assertEqual(s.mib_per_session(280.0, 340.0, 4.0, 20, 20), 3.2)
+        self.assertIsNone(s.mib_per_session(355.0, 340.0, 4.0, 20, 20))  # a negative cost is a bad baseline, refused
+        self.assertIsNone(s.mib_per_session(280.0, 340.0, 4.0, 20, 19))  # a holder not found is refused, as before
+
     RES = {"date": "2026-11-27 10:00", "installs": {"ok": 5, "of": 5}, "launches": {"drawn": 10, "of": 10},
            "sessions_alive_pct": {"median": 100}, "figures": {"launch_restored_s": {"median": 0.6}, "mib_per_session": {"median": 3.0}}}
 

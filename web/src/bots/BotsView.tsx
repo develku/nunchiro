@@ -8,6 +8,7 @@ import type { CoreClient } from '../api';
 import { ErrorLine, rawError } from '../errors';
 import type { T } from '../i18n';
 import { Icon } from '../icons/Icon';
+import { PLAIN } from '../plainText';
 import { draftOf, LevelRule, MatePicks, saveOp, UpTo, type Draft } from '../features/team';
 import { openSeat, setTeam, useTeam, type Team, type Teammate } from '../lead/lead';
 import { isLevel, pairText, slotText, useLevels, type LevelTable } from '../lead/level';
@@ -181,7 +182,7 @@ function Soul({ core, t, bot }: { core: CoreClient; t: T; bot: Bot }) {
         <pre className="bot-soul">{text}</pre>
       ) : (
         <form onSubmit={save}>
-          <textarea className="sinp" aria-label={t('bots.soul.label', { name: bot.name })} value={draft} spellCheck={false} autoFocus onChange={(e) => setDraft(e.target.value)} />
+          <textarea {...PLAIN} className="sinp" aria-label={t('bots.soul.label', { name: bot.name })} value={draft} autoFocus onChange={(e) => setDraft(e.target.value)} />
           <div className="bot-acts">
             <button type="submit" className="btn p" disabled={!draft.trim()}>
               {t('bots.soul.save')}
