@@ -49,6 +49,11 @@ fn never(request: &Request) -> bool {
             | Request::ApprovalGrant { .. }
             | Request::BoardSourceGrant { .. }
             | Request::SetupGrant { .. } // ticket 259
+            | Request::Typing { .. } // the owner's own typing and choices on a waiting message
+            | Request::SendNow { .. }
+            | Request::SendLater { .. }
+            | Request::SendAttach { .. }
+            | Request::SendDetach { .. }
             | Request::CodexResetUse { .. }
             | Request::BoardSelf
             | Request::Browser { .. }

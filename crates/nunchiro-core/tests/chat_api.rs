@@ -25,6 +25,7 @@ mod no_transcript {
         Session {
             side_chat: false,
             stopped_sends: Vec::new(),
+            send_waits: Default::default(),
             side_parent: None,
             teammate: None,
             resumed_from: vec![],

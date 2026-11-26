@@ -5157,6 +5157,18 @@ fn p3_the_send_after_an_interrupt_clears_the_restored_prompt_first() {
     f.core.entries.get_mut(&f.id).unwrap().observer.clear_box = true;
     send(&mut f);
     assert_eq!(got(&f), b"\x15\x15\x15\x15\x15pong");
+    // The agent took it and drew its box empty (gap rule: nothing is typed behind words in the box).
+    let empty = format!(
+        "\x1b[2J\x1b[H{RULE}{RULE}{RULE}\r\n\u{276f} \r\n{RULE}{RULE}{RULE}\r\n  footer\r\n"
+    );
+    let id = f.id.clone();
+    f.core
+        .entries
+        .get_mut(&id)
+        .unwrap()
+        .observer
+        .screen
+        .feed(empty.as_bytes());
     send(&mut f);
     assert_eq!(
         got(&f),
@@ -10380,6 +10392,7 @@ fn approved_arguments_reach_owner_starts_only() {
 
 // Ticket 1002 lane 1: the Home seat lock's tests (kept apart: this file passed the publish scan's 1 MiB line).
 mod advance_start_tests; // ticket 1081 part B security round
+mod gap_tests; // the gap rule
 mod home_lock_tests;
 mod lock_followups_tests; // S-m1, Q9 en-b-J7-2, ticket 1002
 // Ticket 39: a core that starts stopping after the first decision (set by the hook) refuses the hand-off under

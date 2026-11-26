@@ -297,21 +297,8 @@ impl Sessions {
     ) -> Response {
         let said = (!text.trim().is_empty()).then(|| text.clone());
         // Look v20 S2: words another send typed and nobody submitted are in the box. A prompt pasted behind them had its
-        // Enter dropped (the box shows more than the paste), was reported failed, and went in with the next Enter. Now
-        // it is refused before anything is written. (Words typed by hand: `Input::submit` refuses with `EDITED`.)
-        if submit
-            && said.is_some()
-            && sender != "user"
-            && !self.pending_enter.contains_key(id)
-            && self.entries.get(id).is_some_and(|e| {
-                e.acp.is_none()
-                    && e.meta.kind != AgentKind::Shell
-                    && e.input.pending()
-                    && !e.input.edited()
-            })
-        {
-            return Err(UNSENT_WORDS.into());
-        }
+        // Enter dropped and went in with the next Enter. Gap rule: `send_inner` queues it (`terminal_text`), after every
+        // check a written send takes; it goes once the box is free.
         let reply = self.send_inner(sender, id, text, keys, submit, false)?;
         if let Some(said) = said {
             let row = match &reply {
@@ -445,6 +432,15 @@ impl Sessions {
         // in turn. Written now, it went ahead of a seat's brief queued before the agent drew its box, and the brief
         // then waited behind its turn for ever.
         let behind = !mode_key && meta.send_queue.iter().any(|s| s.status == "queued");
+        // Gap rule: nothing is typed behind text in the box, another sender's line waits while the owner types, and
+        // his prompt that takes attached messages is joined with them by the delivery walk.
+        let gap = !interrupt
+            && (self.gap_hold(id, "", sender, submit, &text).is_some()
+                || sender == "user"
+                    && submit
+                    && !text.trim().is_empty()
+                    && joinable(&text)
+                    && self.has_attached(id));
         let ready = interrupt
             || self.send_ready(&meta.id, &snapshot)?
                 && self.delivery_open(id, &snapshot)
@@ -452,7 +448,8 @@ impl Sessions {
                 && !held // CHAT-MODELIST r2: nor into a walk's passing modes
                 && !waiting
                 && !unread
-                && !behind;
+                && !behind
+                && !gap;
         if mode_key && !ready {
             return Err("agent is not at its composer (busy); shift+tab not queued".into());
         }
