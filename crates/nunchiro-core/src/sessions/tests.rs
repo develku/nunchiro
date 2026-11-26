@@ -10394,6 +10394,7 @@ fn approved_arguments_reach_owner_starts_only() {
 mod advance_start_tests; // ticket 1081 part B security round
 mod gap_tests; // the gap rule
 mod home_lock_tests;
+mod home_tests; // text left in the terminal comes home
 mod lock_followups_tests; // S-m1, Q9 en-b-J7-2, ticket 1002
 // Ticket 39: a core that starts stopping after the first decision (set by the hook) refuses the hand-off under
 // the lock, before it starts a target or writes any text, both when the target would be reused and when it
