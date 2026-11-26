@@ -436,13 +436,18 @@ impl Sessions {
         // Ticket 1121: nor a paste into a box the screen does not read while the core's dropped copy may be in it (the
         // clear would write no Ctrl+U): it waits in the queue for a read box (the delivery walk's guard).
         let unread = submit && !text.is_empty() && self.unread_copy(id);
+        // Order is kept: with an earlier row still queued this one goes behind it, and the delivery walk writes both
+        // in turn. Written now, it went ahead of a seat's brief queued before the agent drew its box, and the brief
+        // then waited behind its turn for ever.
+        let behind = !mode_key && meta.send_queue.iter().any(|s| s.status == "queued");
         let ready = interrupt
             || self.send_ready(&meta.id, &snapshot)?
                 && self.delivery_open(id, &snapshot)
                 && self.entry(&meta.id)?.switch.is_none() // v1a-10: no typing into the picker
                 && !held // CHAT-MODELIST r2: nor into a walk's passing modes
                 && !waiting
-                && !unread;
+                && !unread
+                && !behind;
         if mode_key && !ready {
             return Err("agent is not at its composer (busy); shift+tab not queued".into());
         }
