@@ -1,7 +1,7 @@
 # ci-guard: a pull request that changes the gate itself (.github/ or the ratchet scripts) is held until the owner's
 # coordinator has reviewed it and set the `ci-reviewed` label. On `pull_request` GitHub runs the PR's own ci.yml, so a PR
 # could drop a gate step and still pass; `pull_request_target` runs THIS file from main, which a PR cannot edit for its
-# own run (owner decision 2026-11-27, option C). Safe with forks: it checks out no PR code and only reads the file list
+# own run. Safe with forks: it checks out no PR code and only reads the file list
 # with a read-only token.
 name: ci-guard
 
