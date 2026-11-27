@@ -620,3 +620,67 @@ fn an_asking_trigger_keeps_at_most_three_cards_waiting() {
         "{listed}"
     );
 }
+
+#[test]
+fn trigger_cards_together_keep_half_the_owners_queue_free() {
+    let c = core("tgf");
+    // Eleven asking triggers, three cards each, would be 33: the share of all trigger cards is 32.
+    let mut refused = 0;
+    for t in 0..11 {
+        let name = format!("t{t}");
+        add(&c, &name, "cli", false, "");
+        for s in 0..3 {
+            let out = nunchiro(
+                &c.home,
+                None,
+                &["trigger", "fire", &name, "--data", "-"],
+                &format!("{{\"subject\": \"s{s}\"}}"),
+            );
+            if !out.status.success() {
+                assert!(
+                    String::from_utf8_lossy(&out.stderr).contains("trigger cards wait"),
+                    "{}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
+                refused += 1;
+            }
+        }
+    }
+    assert_eq!(refused, 1);
+    // Another kind of owner card still fits: an agent asks the owner to approve a widget.
+    ok(&c.home, &["widget", "new", "w"]);
+    let script = format!(
+        "'{}' widget allow w --read; exec cat",
+        env!("CARGO_BIN_EXE_nunchiro")
+    );
+    ok(
+        &c.home,
+        &[
+            "agent",
+            "start",
+            "asks",
+            "--kind",
+            "shell",
+            "--project",
+            c.project.to_str().unwrap(),
+            "--",
+            "/bin/sh",
+            "-c",
+            &script,
+        ],
+    );
+    let end = Instant::now() + Duration::from_secs(15);
+    loop {
+        let snap = call(&c.home, &c.owner, json!({"op": "snapshot"}));
+        if snap["Ok"]["owner_decisions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["owner"]["type"] == "approval")
+        {
+            break;
+        }
+        assert!(Instant::now() < end, "no approval card was raised");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
