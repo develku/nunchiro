@@ -22,6 +22,7 @@ const TAIL: usize = 20;
 /// Where a push of the checked-out branch goes and how many commits it carries; part of `diff::GitFacts`, so the strip
 /// shows what the core will push.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct PushTo {
     pub remote: String,
     /// The branch name on the remote (`refs/heads/` stripped).
@@ -37,6 +38,7 @@ pub struct PushTo {
 
 /// What the strip showed and the window sends back: the push is refused unless all of it still holds.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Shown {
     #[serde(default)]
     pub head: String,
