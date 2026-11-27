@@ -261,7 +261,7 @@ test('one_view_per_pty', async ({ app, core }) => {
   await record(app);
   await openWindow(app, {}, core);
   await open(app, a.id);
-  await icon(app, 'right', 'Terminal').click(); // the side pane, on the PTY
+  await app.keyboard.press('Meta+KeyJ'); // the side pane, on the PTY (pane.toggle; the Terminal icon shows a shell)
   await expect(app.locator(`${SIDE} .term[data-session="${a.id}"]`)).toBeVisible();
   await dropOn(app, 'Terminal', 'right');
   await expect(splits(app).locator(`.term[data-session="${a.id}"]`)).toBeVisible();
