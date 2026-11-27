@@ -1,0 +1,645 @@
+/* The window's layout parts: zones, gutters, edit mode, drawer, drop preview, edit bar, widget library, toast, drag (split from styles.css, loaded right after it). */
+
+/* layout (v1a-07b): zones, gutters, edit mode, drawer, drop preview */
+.layout {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  position: relative;
+  padding: 3px;
+  /* When the zones' minimum sizes exceed a small window, the layout scrolls instead of painting over the gallery. */
+  overflow: auto;
+}
+.lz-split,
+.lz {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+.lz-split[data-split='row'] {
+  flex-direction: row;
+}
+.lz-split[data-split='column'],
+.lz {
+  flex-direction: column;
+}
+.lz-split[hidden],
+.lz[hidden],
+.wg[hidden] {
+  display: none;
+}
+.wg {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ztabs {
+  height: 22px;
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: 0 6px;
+  background: var(--page);
+}
+.ztabs button {
+  font-size: var(--fs-11);
+  padding: 0 8px;
+  color: var(--muted);
+}
+.ztabs button[aria-selected='true'] {
+  color: var(--text);
+  background: var(--panel);
+}
+.pin {
+  font-size: var(--fs-11);
+  color: var(--text);
+  white-space: nowrap;
+}
+.chip.pin {
+  border-style: solid;
+}
+.gutter {
+  flex: none;
+  position: relative;
+  z-index: 2;
+}
+/* Zero-width: the widgets' own borders draw the line, so the default layout looks as before. The hit area is 7 px. */
+.gutter::before {
+  content: '';
+  position: absolute;
+  inset: 0 -4px 0 -3px;
+}
+.gutter[data-split='row'] {
+  width: 0;
+  cursor: col-resize;
+}
+.gutter[data-split='column'] {
+  height: 0;
+  cursor: row-resize;
+}
+.gutter[data-split='column']::before {
+  inset: -4px 0 -3px;
+}
+/* Next to a zone that shows nothing (Settings, a hidden composer) the gutter ends on the layout's edge: its hit area
+   then stuck out and let a wheel at the end of a pane scroll the whole layout 3 px (V1A-54). */
+.gutter:has(+ .lz > .wg:not([hidden]):empty)::before {
+  display: none;
+}
+/* The empty answer strip in its content-height zone is 0 px (V1A-60b): its gutters have nothing to resize, and their
+   hit area would cover the terminal's last row. A zone the user sized (`flex: 0 0 <n>px`) keeps them; the inline flex
+   value is written by LayoutView.tsx (node()). */
+.gutter:has(+ .lz[style*='0 0 auto'] > .wg:not([hidden]) > .strip > .qstrip[data-empty])::before,
+.lz[style*='0 0 auto']:has(> .wg:not([hidden]) > .strip > .qstrip[data-empty]) + .gutter::before {
+  display: none;
+}
+.gutter:hover::before,
+.gutter:focus-visible::before {
+  background: var(--gutter-focus);
+}
+/* Ticket 1041: a zone in edit mode is a tint over it, the selected zone one step more (no dashed or solid outline). */
+.lz .zedit {
+  position: absolute;
+  inset: 2px;
+  border-radius: var(--r-8);
+  background: var(--tint-1);
+  pointer-events: none;
+  z-index: 3;
+}
+.lz[data-selected='true'] .zedit {
+  background: var(--select-bg);
+}
+.zl {
+  flex: none;
+  position: relative;
+  z-index: 4;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 3px 0;
+  padding: 0 4px 0 6px;
+  font-size: var(--fs-11);
+  background: var(--page);
+  border-radius: var(--r-6);
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: grab;
+}
+.zl button {
+  margin-left: auto;
+  color: var(--muted);
+  padding: 0 3px;
+}
+.zl button:hover {
+  color: var(--text);
+}
+.zwarn {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--you);
+}
+
+/* edit bar (A07): under the title bar while editing. With the title bar auto-hidden it starts where the traffic lights
+   end; Hidden hides the lights too (v25f-title-hidden). Ticket 1041 (owner 2026-11-22, 15.1 items 3 and 5): editing is
+   said by a neutral tint band and its words ("● Editing layout"), not orange, which means your turn only. */
+.estrip {
+  flex: none;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: var(--fs-12);
+  background: var(--page);
+  color: var(--text);
+  position: relative;
+  z-index: 5;
+}
+.win[data-titlebar='auto'] .estrip {
+  padding-left: 84px;
+}
+.estrip .etitle {
+  color: var(--text);
+}
+/* The strip's buttons are the book's small ones. */
+.estrip .btn {
+  flex: none;
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  font-size: var(--fs-sm);
+}
+.estrip .emsg {
+  color: var(--muted);
+}
+.epre {
+  position: relative;
+  flex: none;
+}
+.epre .dirty {
+  color: var(--text);
+}
+.emenu {
+  position: absolute;
+  top: 26px;
+  left: 0;
+  z-index: 60;
+  min-width: 190px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  border-radius: var(--r-12);
+}
+.emenu .mh {
+  padding: 3px 8px;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 700;
+}
+.emenu button[role^='menuitem'] {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: var(--r-6);
+  text-align: left;
+}
+.emenu button[role^='menuitem'] > span {
+  width: 12px;
+}
+.emenu button[role^='menuitem']:hover:not(:disabled) {
+  background: var(--hover);
+}
+.emenu button:disabled {
+  opacity: 0.45;
+}
+.emenu hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 4px 0;
+  width: 100%;
+}
+.emenu form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 8px;
+}
+.emenu input {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+}
+@media (max-width: 900px) {
+  .estrip .lbl,
+  .epath {
+    display: none;
+  }
+}
+.etitle {
+  flex: none;
+  white-space: nowrap;
+  font-size: var(--fs-12);
+  margin-right: 4px;
+  white-space: nowrap;
+}
+.emsg {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 11px 'SF Mono', Menlo, monospace;
+  color: var(--text);
+}
+.estrip .emsg[data-error='true'] {
+  color: var(--error);
+}
+.epath {
+  font-size: var(--fs-11);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* widget library (LAYOUT D5b): a panel at the window's right edge while editing; the centre keeps the rest. */
+.lib {
+  flex: none;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--page);
+}
+.lib .lh {
+  padding: 8px 10px 4px;
+  font-weight: 700;
+}
+.lib .lq {
+  margin: 0 10px 6px;
+  height: 24px;
+  padding: 0 8px;
+}
+.lib .lc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 10px 6px;
+}
+.lib :is(.btn:not(.p), .lq) {
+  border-color: transparent;
+  background: var(--control-quiet-bg);
+}
+.lib .chip {
+  height: 20px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-10);
+  font-size: var(--fs-11);
+  background: var(--control-quiet-bg);
+  color: var(--text);
+}
+.lib .chip[aria-pressed='true'] {
+  background: var(--select-bg);
+  color: var(--select-text);
+  font-weight: 600;
+}
+.lib .ll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 2px 10px 6px;
+}
+.lib .lcard {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  padding: 5px 8px;
+  border-radius: var(--r-8);
+  background: var(--panel);
+  cursor: grab;
+  touch-action: none;
+}
+.lib .lcard:hover {
+  background: var(--tint-1);
+}
+.lib .lcard .ic {
+  font-size: var(--fs-13);
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-6);
+  background: var(--hover);
+}
+.lib .lcard .tx {
+  flex: 1;
+  min-width: 0;
+}
+.lib .lcard .tx b,
+.lib .lcard .tx small {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib .lcard .tx small {
+  color: var(--muted);
+  white-space: normal; /* S7: the note wraps to a second line, never "movabl…" */
+  overflow: visible;
+  text-overflow: clip;
+}
+.lib .lcard .lpl {
+  flex: none;
+  font-size: var(--fs-11);
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.lib .lcard .lneed {
+  flex: none;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: var(--r-8);
+  background: var(--you-bg);
+  color: var(--you);
+  font-size: var(--fs-11);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.lib .lempty {
+  margin: 8px 0;
+}
+.lib .trash {
+  margin: 6px 10px 8px;
+  padding: 10px;
+  border-radius: var(--r-8);
+  background: var(--tint-1);
+  text-align: center;
+  color: var(--muted);
+}
+.lib .lf {
+  padding: 7px 10px;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  line-height: 1.5;
+}
+/* the transient toast: an arrangement change with Undo, or a refusal with its reason */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 70;
+  /* Design book, toasts: a solid --raised pill (never glass), radius 10, 36 high, 13 --text, on the float shadow with a
+     0.5 rim. Its action is a secondary small button (Undo) beside its key chip; the close is a quiet 24 icon button. */
+  display: flex;
+  align-items: center;
+  gap: var(--sp-12);
+  box-sizing: border-box;
+  min-height: var(--toast-h);
+  padding: 0 6px 0 14px;
+  border-radius: var(--toast-r);
+  background: var(--raised);
+  color: var(--text);
+  font-size: var(--fs-ui);
+  box-shadow: var(--shadow-float), 0 0 0 0.5px color-mix(in srgb, var(--text) 12%, transparent);
+}
+.toast button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  border: 0;
+  border-radius: var(--btn-r);
+  background: var(--tint-2);
+  color: var(--text);
+  font: 500 var(--fs-sm) / 1 var(--font-ui);
+}
+.toast button:hover {
+  background: var(--tint-3);
+}
+.toast button:last-child {
+  min-width: var(--hit);
+  padding: 0;
+  background: none;
+  color: var(--muted);
+}
+.toast button:last-child:hover {
+  background: var(--tint-1);
+  color: var(--text);
+}
+.toast .kbd {
+  margin-left: calc(var(--sp-8) * -1);
+}
+.pv {
+  width: 100%;
+  height: 36px;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 3px;
+  padding: 4px;
+  border-radius: var(--r-4);
+  background: var(--page);
+  overflow: hidden;
+}
+.pv i {
+  display: block;
+}
+.pv .bar {
+  width: 3px;
+  height: 26px;
+  background: var(--faint);
+}
+.pv .bar.w,
+.pv .ln.w {
+  background: var(--you);
+}
+.pv .ln {
+  width: 60%;
+  height: 4px;
+  margin-top: 4px;
+  background: var(--line);
+}
+.pv .txt {
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.pv .mono {
+  font-family: 'SF Mono', Menlo, monospace;
+}
+.pv .box {
+  width: 100%;
+  height: 22px;
+  border: 1.5px solid var(--muted);
+  border-radius: var(--r-4);
+}
+
+/* drag */
+.dragl {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+}
+.ghost {
+  position: fixed;
+  padding: 2px 8px;
+  font-size: var(--fs-11);
+  border: 1px solid var(--text);
+  border-radius: var(--r-4);
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+}
+/* ticket 162 (needs 146): no snap grid; while dragging, one translucent landing area, as VS Code, Zed and macOS tiling
+   show (docs/research/settings-polish.md (e)). Ticket 1041: in the neutral ink (blue is working, orange your turn), no
+   border; a refused drop is red (an error, owner 2026-11-22 item 3) and its caption says why. */
+.dropprev {
+  position: fixed;
+  border-radius: var(--r-8);
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  display: grid;
+  place-items: center;
+}
+.dropprev[data-error='true'] {
+  background: color-mix(in srgb, var(--bad) 10%, transparent);
+}
+/* five-way compass (A19): the arm the pointer aims at is filled; a refused drop paints it orange */
+.compass {
+  position: fixed;
+  width: 108px;
+  height: 108px;
+  display: grid;
+  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  gap: 3px;
+  z-index: 2;
+}
+.compass i {
+  border: 1px solid var(--muted);
+  border-radius: var(--r-6);
+  background: var(--panel);
+  opacity: 0.9;
+}
+.compass i[data-arm='up'] {
+  grid-area: 1 / 2;
+}
+.compass i[data-arm='left'] {
+  grid-area: 2 / 1;
+}
+.compass i[data-arm='centre'] {
+  grid-area: 2 / 2;
+}
+.compass i[data-arm='right'] {
+  grid-area: 2 / 3;
+}
+.compass i[data-arm='down'] {
+  grid-area: 3 / 2;
+}
+.compass i[data-on='true'] {
+  background: var(--text);
+  border-color: var(--text);
+}
+.compass i[data-error='true'] {
+  background: var(--bad);
+  border-color: var(--bad);
+}
+.dragl .ins {
+  position: fixed;
+  border-radius: var(--r-6);
+  background: var(--text);
+}
+.dropprev[data-kind='bar'],
+.dropprev[data-kind='remove'],
+.dropprev[data-kind='refuse'] {
+  border: 0;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+.dropprev[data-kind='remove'] {
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
+}
+.dropprev[data-kind='bar'][data-error='true'],
+.dropprev[data-kind='refuse'] {
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
+}
+.dropprev[data-kind='bar'] .dropl,
+.dropprev[data-kind='remove'] .dropl,
+.dropprev[data-kind='refuse'] .dropl {
+  position: fixed;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  max-width: 320px;
+}
+.dropl {
+  display: grid;
+  gap: 2px;
+  max-width: calc(100% - 16px);
+  padding: 6px 10px;
+  font-size: var(--fs-11);
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--faint);
+  border-radius: var(--r-6);
+}
+.dropprev[data-error='true'] .dropl span:first-of-type {
+  color: var(--error);
+}
+.dropl code {
+  font-size: var(--fs-11);
+}
+
+/* waiting-removal notice: an overlay, so nothing below it moves */
+.wnotice {
+  position: fixed;
+  top: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--dialog-w);
+  max-width: calc(100% - 32px);
+  padding: var(--sp-20);
+  background: var(--raised);
+  /* Design book, dialogs: solid --raised, radius 14, padding 20, on the float shadow; the title 15 / 600, the body 13 / 1.5,
+     the buttons at the right, Cancel then the primary. Ticket 1041: no border, no "your turn" edge (N-row 9.1). */
+  border-radius: var(--dialog-r);
+  box-shadow: var(--shadow-float);
+  font-size: var(--fs-ui);
+  z-index: 50;}
+.wnotice > b {
+  font: 600 var(--fs-15) / 1.3 var(--font-display);
+}
+.wnotice p {
+  margin: var(--sp-12) 0 var(--sp-20);
+  color: var(--text);
+  line-height: 1.5;
+}
+.wnotice .row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.lnote {
+  color: var(--text);
+}
+/* Ticket 1041 (15.1 item 3): every error is red. */
+.lerr {
+  color: var(--error);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 50%;
+}
+/* v1a-08's off/signal card is laid over what follows the strip (the composer in the default layout); in a zone
+   the strip is positioned against its own zone, so the card hangs down from the zone's top instead of up. */
+.lz .strip[data-mode='off']:has(.qcard),
+.lz .strip[data-mode='signal']:has(.qcard) {
+  top: 0;
+  bottom: auto;
+}
