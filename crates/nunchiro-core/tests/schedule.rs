@@ -259,13 +259,8 @@ fn a_schedule_run_is_held_under_memory_pressure() {
     wait("the due run left no record", || last().is_some());
     let held = serde_json::to_value(last().unwrap()).unwrap();
     assert_eq!(held["result"], "held", "{held}");
-    // A schedule's own words: it names memory and the run, never `agent start --anyway`, which runs no schedule.
-    let reason = held["reason"].as_str().unwrap();
-    assert!(
-        reason.contains("memory") && reason.contains("scheduled run"),
-        "{held}"
-    );
-    assert!(!reason.contains("anyway"), "{held}");
+    // A due run waits for memory (and runs by itself once it is free); its record says so, never `--anyway`.
+    assert_eq!(held["reason"], "waiting for memory", "{held}");
     assert!(
         rows(&home).iter().all(|r| r.label != "nightly"),
         "a held run started a seat"
@@ -278,6 +273,10 @@ fn a_schedule_run_is_held_under_memory_pressure() {
     wait("Run now did not start at warning", || {
         rows(&home).iter().any(|r| r.label == "nightly")
     });
+    assert!(
+        waiting_list(&home).is_empty(),
+        "Run now took the waiting run's place"
+    );
     core.stop();
     let _core = pressured("4");
     let refused = call(&home, now).unwrap_err();
@@ -1721,6 +1720,10 @@ fn token_of(home: &Path, label: &str) -> String {
     token
 }
 fn leads(tag: &str) -> Leads {
+    leads_with(tag, &[])
+}
+/// `leads`, its core started with `env` as well.
+fn leads_with(tag: &str, env: &[(&str, &str)]) -> Leads {
     use nunchiro_core::team::Team;
     let (home, proj, path) = setup(tag);
     talking_claude(&home);
@@ -1748,7 +1751,13 @@ fn leads(tag: &str) -> Leads {
             .unwrap();
     }
     drop(s);
-    let core = serve(&home, &path);
+    let claude_home = home.join("claude-home").to_string_lossy().into_owned();
+    let mut envs = vec![
+        ("PATH", path.as_str()),
+        ("CLAUDE_CONFIG_DIR", claude_home.as_str()),
+    ];
+    envs.extend_from_slice(env);
+    let core = home::spawn_serve(&home, &envs);
     let (chief, main) = (token_of(&home, "Chief"), token_of(&home, "Main"));
     // The two once entries fired and stay listed (switched off); the tests start from an empty list.
     for e in schedules(&home) {
@@ -2616,4 +2625,593 @@ fn an_edit_of_a_removed_teammates_schedule_saves_and_keeps_its_target() {
         )
         .is_err()
     );
+}
+
+/// Whether the session `label` got `line` through its send queue (written, or queued behind its turn; never canceled).
+fn told(home: &Path, label: &str, line: &str) -> bool {
+    rows(home).iter().filter(|r| r.label == label).any(|r| {
+        r.send_log
+            .iter()
+            .chain(&r.send_queue)
+            .any(|s| s.content.contains(line) && s.status != "canceled")
+    })
+}
+/// A memory reading the test changes (the file `NUNCHIRO_TEST_MEMORY_PRESSURE` names), at `level` now.
+fn level_file(tag: &str, level: &str) -> PathBuf {
+    let file = home::short(tag).join("level");
+    fs::write(&file, level).unwrap();
+    file
+}
+/// The waiting list's times shortened: a read every 200 ms, starts 1 s apart, dropped after `max` ms.
+fn waiting(file: &Path, max: u64) -> [(&'static str, String); 2] {
+    waiting_gap(file, 1000, max)
+}
+/// `waiting` with starts `gap` ms apart.
+fn waiting_gap(file: &Path, gap: u64, max: u64) -> [(&'static str, String); 2] {
+    [
+        (
+            "NUNCHIRO_TEST_MEMORY_PRESSURE",
+            file.to_string_lossy().into_owned(),
+        ),
+        ("NUNCHIRO_TEST_MEMORY_WAIT", format!("200,{gap},{max}")),
+    ]
+}
+fn as_env<'a>(env: &'a [(&'static str, String); 2]) -> [(&'static str, &'a str); 2] {
+    [(env[0].0, env[0].1.as_str()), (env[1].0, env[1].1.as_str())]
+}
+/// A request as the owner (the core's token), its JSON answer.
+fn owner(home: &Path, request: Value) -> Value {
+    let token = fs::read_to_string(home.join("core.token")).unwrap();
+    raw(home, token.trim(), request)
+}
+fn waiting_list(home: &Path) -> Vec<Value> {
+    let list = owner(home, json!({"op":"memory_wait_list"}));
+    list["Ok"]["entries"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{list}"))
+        .clone()
+}
+fn wait_long(what: &str, mut done: impl FnMut() -> bool) {
+    let until = Instant::now() + Duration::from_secs(60);
+    while !done() {
+        assert!(Instant::now() < until, "{what}");
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// A lead's `team open` held at warning waits, and the seat opens by itself once memory is free: it gets its brief,
+/// the lead gets one line, and the list is empty again. The same open asked again adds nothing.
+#[test]
+fn a_leads_held_team_open_waits_and_opens_by_itself() {
+    let file = level_file("lvl-lead", "1");
+    let env = waiting(&file, 600_000);
+    let l = leads_with("sch-wait-lead", &as_env(&env));
+    fs::write(&file, "2").unwrap();
+    let open = || raw(&l.home, &l.main, json!({"op":"team_open","name":"Helper"}));
+    let first = open();
+    assert_eq!(
+        first["Err"],
+        "This Mac is low on memory, so Helper's seat is waiting. The task is kept and goes to Helper when the seat opens. Do not open it again",
+        "{first}"
+    );
+    assert_eq!(open(), first, "asked again: the same sentence");
+    let list = waiting_list(&l.home);
+    assert_eq!(list.len(), 1, "{list:?}");
+    assert_eq!(
+        (&list[0]["asker"], &list[0]["by"]),
+        (&json!("session"), &json!("Main")),
+        "{list:?}"
+    );
+    thread::sleep(Duration::from_millis(1500));
+    assert!(
+        rows(&l.home).iter().all(|r| r.label != "Helper"),
+        "a held seat started"
+    );
+    fs::write(&file, "1").unwrap();
+    let lead = rows(&l.home)
+        .into_iter()
+        .find(|r| r.label == "Main")
+        .unwrap();
+    wait_long("the waiting seat did not open", || {
+        rows(&l.home)
+            .iter()
+            .any(|r| r.label == "Helper" && r.state == SessionState::Running)
+    });
+    let helper = rows(&l.home)
+        .into_iter()
+        .find(|r| r.label == "Helper")
+        .unwrap();
+    assert_eq!(
+        helper.parent.as_deref(),
+        Some(lead.id.as_str()),
+        "opened as the lead's worker"
+    );
+    wait("the seat got no brief", || {
+        output(&l.home, &helper.id).contains("You are Helper")
+    });
+    wait("the lead got no line", || {
+        told(&l.home, "Main", "Helper started after waiting for memory.")
+    });
+    assert!(waiting_list(&l.home).is_empty());
+}
+
+/// Three waiting starts go one at a time, at least the gap apart (5 s here, so a slow start's own preparation does not
+/// blur it), oldest first; warning again in between stops the rest until memory is free again. Each asker hears its
+/// own line. The exact gap is the unit test's (`pressure::wait`); here a seat's start time comes after its preparation.
+#[test]
+fn waiting_starts_go_one_at_a_time() {
+    let file = level_file("lvl-three", "1");
+    let env = waiting_gap(&file, 5000, 600_000);
+    let l = leads_with("sch-wait-three", &as_env(&env));
+    fs::write(&file, "2").unwrap();
+    for label in ["one", "two", "three"] {
+        let start = json!({"op":"start","session":{"account":null,"kind":"claude","project":l.proj,"worktree":false,"label":label,"args":[],"model":null,"effort":null,"resume":null}});
+        let held = raw(&l.home, &l.main, start);
+        assert_eq!(
+            held["Err"],
+            "This Mac is low on memory, so the new session is waiting. It starts by itself when memory is free, and you get a message then. Do not start it again",
+            "{held}"
+        );
+    }
+    assert_eq!(waiting_list(&l.home).len(), 3);
+    let up = |label: &str| rows(&l.home).iter().any(|r| r.label == label);
+    let started = |label: &str| {
+        rows(&l.home)
+            .into_iter()
+            .find(|r| r.label == label)
+            .and_then(|r| r.started_at)
+            .unwrap()
+    };
+    fs::write(&file, "1").unwrap();
+    wait_long("the first did not start", || up("one"));
+    fs::write(&file, "2").unwrap();
+    thread::sleep(Duration::from_millis(6000));
+    assert!(!up("two") && !up("three"), "warning again stops the rest");
+    fs::write(&file, "1").unwrap();
+    wait_long("the second did not start", || up("two"));
+    assert!(!up("three"), "one at a time");
+    wait_long("the third did not start", || up("three"));
+    // Released 5 s apart; a start time follows its preparation, which takes well under 2 s.
+    for (a, b) in [("one", "two"), ("two", "three")] {
+        let apart = started(b).saturating_sub(started(a));
+        assert!(apart >= 3000, "{a} to {b}: {apart} ms");
+    }
+    wait("the asker got no lines", || {
+        ["one", "two", "three"].iter().all(|n| {
+            told(
+                &l.home,
+                "Main",
+                &format!("{n} started after waiting for memory."),
+            )
+        })
+    });
+}
+
+/// A due run held at warning waits, its Last run says so; the owner starts one anyway and cancels another (a cancelled
+/// run is a skipped slot). A session's token can do neither, nor list them.
+#[test]
+fn the_owner_starts_anyway_or_cancels_a_waiting_run_and_a_session_cannot() {
+    let (home, proj, path) = setup("sch-wait-owner");
+    talking_claude(&home);
+    let mut core = serve(&home, &path);
+    shell(&home, &proj, "exec cat");
+    core.stop();
+    let mut s = Schedules::load(&home);
+    for label in ["nightly", "late"] {
+        s.add(
+            run(&proj, label),
+            "21:00".into(),
+            true,
+            None,
+            &known(&proj),
+            0,
+            UTC,
+        )
+        .unwrap();
+    }
+    drop(s);
+    let file = level_file("lvl-owner", "2");
+    let env = waiting(&file, 600_000);
+    let claude_home = home.join("claude-home").to_string_lossy().into_owned();
+    let mut envs = vec![
+        ("PATH", path.as_str()),
+        ("CLAUDE_CONFIG_DIR", claude_home.as_str()),
+    ];
+    envs.extend_from_slice(&as_env(&env));
+    let _core = home::spawn_serve(&home, &envs);
+    wait("the due runs do not wait", || {
+        waiting_list(&home).len() == 2
+    });
+    for e in schedules(&home) {
+        let last = serde_json::to_value(e.last.clone().unwrap()).unwrap();
+        assert_eq!(
+            (&last["result"], &last["reason"]),
+            (&json!("held"), &json!("waiting for memory")),
+            "{last}"
+        );
+    }
+    let list = waiting_list(&home);
+    let id = |label: &str| {
+        list.iter()
+            .find(|e| e["agent"] == label)
+            .and_then(|e| e["id"].as_str())
+            .unwrap_or_else(|| panic!("{list:?}"))
+            .to_string()
+    };
+    assert!(list.iter().all(|e| e["asker"] == "schedule"), "{list:?}");
+    // A session's own token: a plain terminal (never held) that prints it.
+    let printer = shell(&home, &proj, "echo \"TOKEN=$NUNCHIRO_TOKEN.\"; exec cat");
+    let mut token = String::new();
+    wait("no token", || {
+        output(&home, &printer.id)
+            .split("TOKEN=")
+            .nth(1)
+            .and_then(|t| t.split('.').next())
+            .filter(|t| !t.is_empty())
+            .map(|t| token = t.to_string())
+            .is_some()
+    });
+    for request in [
+        json!({"op":"memory_wait_go","id":id("nightly")}),
+        json!({"op":"memory_wait_cancel","id":id("late")}),
+        json!({"op":"memory_wait_list"}),
+    ] {
+        let refused = raw(&home, &token, request.clone());
+        assert!(refused["Err"].is_string(), "{request}: {refused}");
+    }
+    assert_eq!(waiting_list(&home).len(), 2, "a session changed the list");
+    let started = owner(&home, json!({"op":"memory_wait_go","id":id("nightly")}));
+    assert_eq!(started["Ok"]["type"], "memory_wait_started", "{started}");
+    assert_eq!(started["Ok"]["mine"], false);
+    wait("Start anyway started nothing", || {
+        rows(&home).iter().any(|r| r.label == "nightly")
+    });
+    let cancelled = owner(&home, json!({"op":"memory_wait_cancel","id":id("late")}));
+    assert_eq!(cancelled["Ok"]["type"], "ack", "{cancelled}");
+    assert!(waiting_list(&home).is_empty());
+    let late = schedules(&home)
+        .into_iter()
+        .find(|e| e.run.label == "late")
+        .unwrap();
+    let last = serde_json::to_value(late.last.unwrap()).unwrap();
+    assert_eq!(last["result"], "skipped", "{last}");
+    thread::sleep(Duration::from_millis(1500));
+    assert!(
+        rows(&home).iter().all(|r| r.label != "late"),
+        "a cancelled run started"
+    );
+}
+
+/// A start that waits longer than the longest wait (1.5 s here) is dropped: a schedule logs a skipped slot for low
+/// memory, and a lead hears that its seat was not started.
+#[test]
+fn a_start_that_waits_too_long_is_dropped() {
+    let file = level_file("lvl-drop", "1");
+    let env = waiting(&file, 1500);
+    let l = leads_with("sch-wait-drop", &as_env(&env));
+    fs::write(&file, "2").unwrap();
+    let held = raw(&l.home, &l.main, json!({"op":"team_open","name":"Helper"}));
+    assert!(
+        held["Err"].as_str().is_some_and(|e| e.contains("waiting")),
+        "{held}"
+    );
+    wait("the lead was not told", || {
+        told(
+            &l.home,
+            "Main",
+            "Helper was not started: this Mac stayed low on memory for 30 minutes.",
+        )
+    });
+    assert!(rows(&l.home).iter().all(|r| r.label != "Helper"));
+    assert!(waiting_list(&l.home).is_empty());
+    // A due run: its slot is skipped for low memory.
+    let (home, proj, path) = setup("sch-wait-drop2");
+    let mut core = serve(&home, &path);
+    shell(&home, &proj, "exec cat");
+    core.stop();
+    Schedules::load(&home)
+        .add(
+            run(&proj, "nightly"),
+            "21:00".into(),
+            true,
+            None,
+            &known(&proj),
+            0,
+            UTC,
+        )
+        .unwrap();
+    fs::write(&file, "2").unwrap();
+    let claude_home = home.join("claude-home").to_string_lossy().into_owned();
+    let mut envs = vec![
+        ("PATH", path.as_str()),
+        ("CLAUDE_CONFIG_DIR", claude_home.as_str()),
+    ];
+    envs.extend_from_slice(&as_env(&env));
+    let _core = home::spawn_serve(&home, &envs);
+    wait("the run was not dropped", || {
+        schedules(&home)[0].last.as_ref().is_some_and(|l| {
+            let l = serde_json::to_value(l).unwrap();
+            l["result"] == "skipped" && l["reason"] == "low memory"
+        })
+    });
+    assert!(rows(&home).iter().all(|r| r.label != "nightly"));
+}
+
+/// The waiting list lives in the core's memory only: a core restarted while starts wait starts none of them, and
+/// says nothing about them.
+#[test]
+fn a_core_restart_drops_the_waiting_starts() {
+    let (home, proj, path) = setup("sch-wait-restart");
+    let mut core = serve(&home, &path);
+    shell(&home, &proj, "exec cat");
+    core.stop();
+    Schedules::load(&home)
+        .add(
+            run(&proj, "nightly"),
+            "21:00".into(),
+            true,
+            None,
+            &known(&proj),
+            0,
+            UTC,
+        )
+        .unwrap();
+    let file = level_file("lvl-restart", "2");
+    let env = waiting(&file, 600_000);
+    let claude_home = home.join("claude-home").to_string_lossy().into_owned();
+    let mut envs = vec![
+        ("PATH", path.as_str()),
+        ("CLAUDE_CONFIG_DIR", claude_home.as_str()),
+    ];
+    envs.extend_from_slice(&as_env(&env));
+    let mut core = home::spawn_serve(&home, &envs);
+    wait("the due run does not wait", || {
+        waiting_list(&home).len() == 1
+    });
+    core.stop();
+    fs::write(&file, "1").unwrap();
+    let _core = home::spawn_serve(&home, &envs);
+    thread::sleep(Duration::from_millis(2000));
+    assert!(waiting_list(&home).is_empty());
+    assert!(
+        rows(&home).iter().all(|r| r.label != "nightly"),
+        "a start after the restart"
+    );
+}
+
+/// A core at `level` with the due daily run "nightly" (and "late") held when it starts; its home and project.
+fn waiting_runs(tag: &str, labels: &[&str]) -> (PathBuf, PathBuf, PathBuf, home::ServeGuard) {
+    waiting_runs_as(tag, labels, true, 600_000)
+}
+/// `waiting_runs`, daily or once, dropped after `max` ms. A once entry's time is the last whole minute, so it is due
+/// and not late.
+fn waiting_runs_as(
+    tag: &str,
+    labels: &[&str],
+    daily: bool,
+    max: u64,
+) -> (PathBuf, PathBuf, PathBuf, home::ServeGuard) {
+    let (home, proj, path) = setup(tag);
+    let mut core = serve(&home, &path);
+    shell(&home, &proj, "exec cat");
+    core.stop();
+    let minute = (now_ms() - 60_000) / 60_000 * 60_000;
+    let (at, made) = match daily {
+        true => ("21:00".to_string(), 0),
+        false => {
+            let of_day = minute % (24 * HOUR) / 60_000;
+            (format!("{:02}:{:02}", of_day / 60, of_day % 60), minute - 1)
+        }
+    };
+    let mut s = Schedules::load(&home);
+    for label in labels {
+        let e = s
+            .add(
+                run(&proj, label),
+                at.clone(),
+                daily,
+                None,
+                &known(&proj),
+                made,
+                UTC,
+            )
+            .unwrap();
+        assert!(daily || e.next_ms == minute, "{e:?}");
+    }
+    drop(s);
+    let file = level_file(&format!("lvl-{tag}"), "2");
+    let env = waiting(&file, max);
+    let claude_home = home.join("claude-home").to_string_lossy().into_owned();
+    let mut envs = vec![
+        ("PATH", path.as_str()),
+        ("CLAUDE_CONFIG_DIR", claude_home.as_str()),
+    ];
+    envs.extend_from_slice(&as_env(&env));
+    let core = home::spawn_serve(&home, &envs);
+    wait("the due runs do not wait", || {
+        waiting_list(&home).len() == labels.len()
+    });
+    (home, proj, file, core)
+}
+
+/// A waiting run whose schedule is removed, or switched off, leaves the list and never starts when memory is free.
+#[test]
+fn a_removed_or_paused_schedule_does_not_start_after_waiting() {
+    let (home, _proj, file, _core) = waiting_runs("sch-wait-gone", &["nightly", "late"]);
+    let id = |label: &str| {
+        schedules(&home)
+            .into_iter()
+            .find(|e| e.run.label == label)
+            .unwrap()
+            .id
+    };
+    call(&home, Request::ScheduleRemove { id: id("nightly") }).unwrap();
+    call(
+        &home,
+        Request::SchedulePause {
+            id: id("late"),
+            paused: true,
+        },
+    )
+    .unwrap();
+    assert!(waiting_list(&home).is_empty(), "{:?}", waiting_list(&home));
+    let late = serde_json::to_value(entry(&home, &id("late")).last.unwrap()).unwrap();
+    assert_eq!(late["result"], "skipped", "{late}");
+    fs::write(&file, "1").unwrap();
+    thread::sleep(Duration::from_millis(2500));
+    assert!(
+        rows(&home)
+            .iter()
+            .all(|r| r.label != "nightly" && r.label != "late"),
+        "a removed or paused schedule started"
+    );
+}
+
+/// Run now refused by the hold (critical) keeps the due run waiting: it still runs once memory is free. A Run now that
+/// starts takes its place.
+#[test]
+fn run_now_held_keeps_the_waiting_run() {
+    let (home, _proj, file, _core) = waiting_runs("sch-wait-runnow", &["nightly"]);
+    let id = schedules(&home)[0].id.clone();
+    fs::write(&file, "4").unwrap();
+    let refused = call(&home, Request::ScheduleRunNow { id: id.clone() }).unwrap_err();
+    assert!(refused.contains("memory"), "{refused}");
+    assert_eq!(
+        waiting_list(&home).len(),
+        1,
+        "Run now refused lost the waiting run"
+    );
+    let last = serde_json::to_value(entry(&home, &id).last.unwrap()).unwrap();
+    assert_eq!(last["reason"], "waiting for memory", "{last}");
+    fs::write(&file, "1").unwrap();
+    wait_long("the waiting run never ran", || {
+        rows(&home).iter().any(|r| r.label == "nightly")
+    });
+    assert_eq!(
+        rows(&home).iter().filter(|r| r.label == "nightly").count(),
+        1
+    );
+}
+
+/// A waiting start whose asker ended meanwhile (a lead's team open, a session's start) starts nothing.
+#[test]
+fn a_waiting_start_of_an_ended_asker_starts_nothing() {
+    let file = level_file("lvl-ended", "1");
+    let env = waiting(&file, 600_000);
+    let l = leads_with("sch-wait-ended", &as_env(&env));
+    fs::write(&file, "2").unwrap();
+    let held = raw(&l.home, &l.main, json!({"op":"team_open","name":"Helper"}));
+    assert!(
+        held["Err"].as_str().is_some_and(|e| e.contains("waiting")),
+        "{held}"
+    );
+    let start = json!({"op":"start","session":{"account":null,"kind":"claude","project":l.proj,"worktree":false,"label":"one","args":[],"model":null,"effort":null,"resume":null}});
+    assert!(
+        raw(&l.home, &l.main, start)["Err"]
+            .as_str()
+            .is_some_and(|e| e.contains("waiting"))
+    );
+    let lead = rows(&l.home)
+        .into_iter()
+        .find(|r| r.label == "Main")
+        .unwrap();
+    call(&l.home, Request::Close { id: lead.id }).unwrap();
+    fs::write(&file, "1").unwrap();
+    wait_long("the entries did not leave", || {
+        waiting_list(&l.home).is_empty()
+    });
+    thread::sleep(Duration::from_millis(1500));
+    let started: Vec<_> = rows(&l.home)
+        .into_iter()
+        .filter(|r| r.state == SessionState::Running && (r.label == "Helper" || r.label == "one"))
+        .map(|r| r.label)
+        .collect();
+    assert!(started.is_empty(), "{started:?}");
+}
+
+/// How many seats `label` has.
+fn seats(home: &Path, label: &str) -> usize {
+    rows(home).iter().filter(|r| r.label == label).count()
+}
+
+/// A held one-time schedule (switched off as it fired) waits like a daily one and runs exactly once when memory frees.
+#[test]
+fn a_held_once_schedule_runs_once_when_memory_frees() {
+    let (home, _proj, file, _core) = waiting_runs_as("sch-once-go", &["once"], false, 600_000);
+    let id = schedules(&home)[0].id.clone();
+    let last = serde_json::to_value(entry(&home, &id).last.unwrap()).unwrap();
+    assert_eq!(last["reason"], "waiting for memory", "{last}");
+    fs::write(&file, "1").unwrap();
+    wait_long("the waiting once run never ran", || {
+        seats(&home, "once") > 0
+    });
+    thread::sleep(Duration::from_millis(2500));
+    assert_eq!(seats(&home, "once"), 1);
+    assert!(waiting_list(&home).is_empty());
+    let after = entry(&home, &id);
+    assert!(after.paused, "a once schedule stays switched off");
+    assert!(
+        after.last.unwrap().session.is_some(),
+        "its last run names the seat"
+    );
+}
+
+/// A held one-time schedule the owner removes while it waits starts nothing.
+#[test]
+fn a_removed_once_schedule_does_not_start_after_waiting() {
+    let (home, _proj, file, _core) = waiting_runs_as("sch-once-gone", &["once"], false, 600_000);
+    let id = schedules(&home)[0].id.clone();
+    call(&home, Request::ScheduleRemove { id }).unwrap();
+    assert!(waiting_list(&home).is_empty());
+    fs::write(&file, "1").unwrap();
+    thread::sleep(Duration::from_millis(2500));
+    assert_eq!(seats(&home, "once"), 0, "a removed once schedule started");
+}
+
+/// A held one-time schedule whose longest wait (1.5 s here) passes is recorded as skipped, once, and never runs.
+#[test]
+fn a_once_schedule_that_waits_too_long_is_skipped_once() {
+    let (home, _proj, file, _core) = waiting_runs_as("sch-once-drop", &["once"], false, 1500);
+    let id = schedules(&home)[0].id.clone();
+    wait("the once run was not dropped", || {
+        waiting_list(&home).is_empty()
+    });
+    let e = entry(&home, &id);
+    let last = serde_json::to_value(e.last.as_ref().unwrap()).unwrap();
+    assert_eq!(
+        (&last["result"], &last["reason"]),
+        (&json!("skipped"), &json!("low memory")),
+        "{last}"
+    );
+    let skips = e
+        .earlier
+        .iter()
+        .chain(&e.last)
+        .filter(|l| serde_json::to_value(l).unwrap()["result"] == "skipped")
+        .count();
+    assert_eq!(skips, 1, "{e:?}");
+    fs::write(&file, "1").unwrap();
+    thread::sleep(Duration::from_millis(2500));
+    assert_eq!(seats(&home, "once"), 0, "a dropped once run started");
+}
+
+/// Run now on a held one-time schedule, refused at critical, keeps it waiting; it runs once when memory frees.
+#[test]
+fn run_now_held_keeps_a_waiting_once_run() {
+    let (home, _proj, file, _core) = waiting_runs_as("sch-once-runnow", &["once"], false, 600_000);
+    let id = schedules(&home)[0].id.clone();
+    fs::write(&file, "4").unwrap();
+    let refused = call(&home, Request::ScheduleRunNow { id: id.clone() }).unwrap_err();
+    assert!(refused.contains("memory"), "{refused}");
+    assert_eq!(
+        waiting_list(&home).len(),
+        1,
+        "Run now refused lost the waiting run"
+    );
+    fs::write(&file, "1").unwrap();
+    wait_long("the waiting once run never ran", || {
+        seats(&home, "once") > 0
+    });
+    thread::sleep(Duration::from_millis(2500));
+    assert_eq!(seats(&home, "once"), 1);
 }

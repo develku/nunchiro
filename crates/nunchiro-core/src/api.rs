@@ -977,6 +977,21 @@ pub enum Request {
     StartAnyway {
         start: Box<Request>,
     },
+    /// The window's start that waits for memory when it is held (`pressure::wait`), instead of being refused. Window
+    /// only; its other starts keep the refusal and their Start anyway.
+    StartOrWait {
+        start: Box<Request>,
+    },
+    /// The starts waiting for memory (owner only).
+    MemoryWaitList,
+    /// The owner's Start anyway on a waiting start.
+    MemoryWaitGo {
+        id: String,
+    },
+    /// The owner's Cancel of a waiting start.
+    MemoryWaitCancel {
+        id: String,
+    },
     List,
     Snapshot,
     Read {

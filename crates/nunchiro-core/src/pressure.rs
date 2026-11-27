@@ -1,6 +1,8 @@
 //! macOS memory pressure at a seat's start: one `kern.memorystatus_vm_pressure_level` read when a new agent seat is
-//! asked for (no polling). Above normal, the start is held with one plain sentence; the owner can start it anyway
-//! (`agent start --anyway`). Running seats, model-switch restarts and sessions a core brings back are never asked.
+//! asked for. Above normal, the start is held with one plain sentence; the owner can start it anyway
+//! (`agent start --anyway`). A held start of a session, a lead, a due schedule or the window's click waits in a list
+//! and goes by itself once memory is free (`wait`, the only reading while something waits). Running seats,
+//! model-switch restarts and sessions a core brings back are never asked.
 //! Also the low-memory kills macOS recorded (JetsamEvent reports) for `serve status`.
 use std::{
     path::Path,
@@ -18,17 +20,80 @@ pub const HELD_SESSION: &str =
 pub const HELD_SCHEDULE: &str = "This Mac is low on memory, so the scheduled run was not started. Close something, then run it again";
 /// An agent's own token asking to start anyway.
 pub const OWNER_ONLY: &str = "Only you can start a session anyway; a session cannot";
-/// Debug builds only: a test core's faked reading, a level number or "fail". A debug build without it reads normal, so
-/// a test run on a busy machine or CI runner is never held by the host's own pressure.
+/// A session's `agent start` that waits (`wait`).
+pub const WAITING_SESSION: &str = "This Mac is low on memory, so the new session is waiting. It starts by itself when memory is free, and you get a message then. Do not start it again";
+/// A schedule's run that waits: its Last run's reason.
+pub const WAITING_SCHEDULE: &str = "waiting for memory";
+/// A schedule's run dropped after the longest wait: its Last run's reason.
+pub const DROPPED_SCHEDULE: &str = "low memory";
+
+/// A lead's `team open` that waits.
+pub(crate) fn waiting_lead(name: &str) -> String {
+    format!(
+        "This Mac is low on memory, so {name}'s seat is waiting. The task is kept and goes to {name} when the seat opens. Do not open it again"
+    )
+}
+
+/// The line a waiting start's asker gets when it leaves the list.
+pub(crate) fn asker_line(name: &str, done: wait::Done, result: &Result<String, String>) -> String {
+    use wait::Done;
+    match (done, result) {
+        (Done::Released | Done::Anyway, Ok(_)) => {
+            format!("{name} started after waiting for memory.")
+        }
+        (Done::Released | Done::Anyway, Err(e)) => {
+            format!("{name} was not started after waiting for memory: {e}")
+        }
+        (Done::Cancelled, _) => {
+            format!("{name} was not started: the owner cancelled it while it waited for memory.")
+        }
+        (Done::Dropped, _) => {
+            format!("{name} was not started: this Mac stayed low on memory for 30 minutes.")
+        }
+    }
+}
+
+mod wait;
+pub(crate) use wait::{
+    Asker, Done, Go, answer, event, forget, hold, restore, shown, spawn, take_key, version,
+};
+
+/// An agent's name in a waiting start's line.
+pub(crate) fn kind_name(kind: crate::api::AgentKind) -> &'static str {
+    match kind {
+        crate::api::AgentKind::Claude => "Claude",
+        crate::api::AgentKind::Codex => "Codex",
+        crate::api::AgentKind::Acp => "Agent",
+        crate::api::AgentKind::Shell => "Terminal",
+    }
+}
+
+/// A project's name in the window's list: its folder's name.
+pub(crate) fn place_name(project: &Path) -> String {
+    project
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// The level that holds `who`'s new seat: critical for the window, warning for the rest.
+pub(crate) fn from(who: Who) -> i32 {
+    if who == Who::Window { 4 } else { 2 }
+}
+/// Debug builds only: a test core's faked reading, a level number or "fail", or an absolute path to a file holding one
+/// (read at each check, so a test can change it). A debug build without it reads normal, so a test run on a busy
+/// machine or CI runner is never held by the host's own pressure.
 const FAKE: &str = "NUNCHIRO_TEST_MEMORY_PRESSURE";
 
 /// The kernel's level: 1 normal, 2 warning, 4 critical. `None` when it cannot be read.
 fn level() -> Option<i32> {
     if cfg!(debug_assertions) {
-        return match std::env::var_os(FAKE) {
-            Some(fake) => fake.to_str()?.parse().ok(),
-            None => Some(1),
+        let fake = match std::env::var(FAKE) {
+            Ok(fake) if fake.starts_with('/') => std::fs::read_to_string(fake).ok()?,
+            Ok(fake) => fake,
+            Err(_) => return Some(1),
         };
+        return fake.trim().parse().ok();
     }
     read()
 }
@@ -65,7 +130,7 @@ pub(crate) enum Who {
 /// Whether a new seat may start: held from warning (critical for the window) unless the owner said anyway. A failed
 /// reading allows it.
 fn allowed(level: Option<i32>, who: Who, anyway: bool) -> Result<(), &'static str> {
-    let from = if who == Who::Window { 4 } else { 2 };
+    let from = from(who);
     match level {
         Some(level) if level >= from && !anyway => Err(match who {
             Who::Owner => HELD,
@@ -125,7 +190,8 @@ fn checked(
     path: &str,
     key: Option<&str>,
 ) -> Result<(), String> {
-    let result = allowed(level, who, anyway);
+    // A start the waiting list let through (memory free again, or the owner's Start anyway on it) is not held again.
+    let result = allowed(level, who, anyway || wait::passing());
     let level = level.unwrap_or(0);
     let log = key.is_none_or(|key| first_hold(key, result.is_err(), level));
     result.map_err(|held| {

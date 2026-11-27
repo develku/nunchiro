@@ -372,6 +372,12 @@ export function share<T>(prev: T[], next: T[]): T[] {
   return out.length === prev.length && out.every((x, i) => x === prev[i]) ? prev : out;
 }
 
+/** A start waiting for memory (pressure.rs `wait::Shown`): who asked (`you`, a `session` named `by`, a `schedule`), when (ms). */
+export type MemoryWaitEntry = { id: string; agent: string; project: string; asker: 'you' | 'session' | 'schedule'; by?: string; at: number };
+/** A waiting start that left by itself: `n` counts up; `mine`: the owner asked, so it opens as a background tab. */
+export type MemoryWaitNote = { n: number; agent: string; outcome: 'started' | 'dropped' | 'failed'; session?: string; mine: boolean; error?: string };
+export type MemoryWait = { entries: MemoryWaitEntry[]; notes: MemoryWaitNote[] };
+
 export class CoreClient {
   /** V2-8c: the window's own client (set by App.tsx), for views it does not pass one to: the PR chip. */
   static main: CoreClient | null = null;
@@ -419,6 +425,14 @@ export class CoreClient {
     this.schedules.add(f);
     return () => void this.schedules.delete(f);
   }
+  /** The starts waiting for memory and the notes of those that left by themselves (the core's `memory_wait` event,
+   *  sent on each change and when the socket opens). Mac window only. */
+  memoryWait: MemoryWait | null = null;
+  private waits = new Set<(w: MemoryWait) => void>();
+  onMemoryWait(f: (w: MemoryWait) => void) {
+    this.waits.add(f);
+    return () => void this.waits.delete(f);
+  }
   /** V2.5-15: Mac window only. */
   onBrowser: (pending: PairRequest[], notices: BrowserNotice[]) => void = () => {};
   /** 392: connections opened, and the last one whose first snapshot has arrived (`snapped === opened`: drawn), for loads
@@ -465,6 +479,10 @@ export class CoreClient {
       if (msg.event === 'layout_command') this.onLayoutCommand(msg.seq, msg.args, msg.file);
       if (msg.event === 'room') for (const f of this.rooms) f(); // ticket 592
       if (msg.event === 'schedules') for (const f of this.schedules) f();
+      if (msg.event === 'memory_wait') {
+        this.memoryWait = { entries: msg.entries ?? [], notes: msg.notes ?? [] };
+        for (const f of this.waits) f(this.memoryWait);
+      }
       if (msg.event === 'browser') this.onBrowser(msg.pending as PairRequest[], msg.notices as BrowserNotice[]); // V2.5-15
       // V1A-53: the core refused an ack (our count drifted from its own): watch afresh from what we have, so both count again.
       if (msg.event === 'ack_refused' && this.outputs.has(msg.session)) this.watchFrame(msg.session, this.cursors.get(msg.session) ?? 0);

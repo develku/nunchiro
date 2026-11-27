@@ -74,6 +74,19 @@ declare module '../index' {
     'err.startAnyway.tip': true;
     'err.lowMemorySchedule': true;
     'err.lowMemorySchedule.todo': true;
+    'err.memWait.one': true;
+    'err.memWait.tip': true;
+    'err.memWait.many': true;
+    'err.memWait.title': true;
+    'err.memWait.line': true;
+    'err.memWait.you': true;
+    'err.memWait.by': true;
+    'err.memWait.schedule': true;
+    'err.memWait.cancel': true;
+    'err.memWait.started': true;
+    'err.memWait.dropped': true;
+    'err.memWait.failed': true;
+    'err.memWait.gone': true;
   }
 }
 
@@ -152,6 +165,19 @@ export const en = {
   'err.startAnyway.tip': 'Start it now. Your Mac may slow down or close other apps.',
   'err.lowMemorySchedule': 'Your Mac is low on memory, so the scheduled run was not started.',
   'err.lowMemorySchedule.todo': 'Close something, then run it again.',
+  'err.memWait.one': '{agent} is waiting for memory.',
+  'err.memWait.tip': 'Your Mac is low on memory. {agent} starts by itself when memory is free.',
+  'err.memWait.many': '{n} sessions waiting for memory',
+  'err.memWait.title': 'Waiting for memory',
+  'err.memWait.line': 'Your Mac is low on memory. These start by themselves, one at a time, when memory is free.',
+  'err.memWait.you': 'you, {when}',
+  'err.memWait.by': 'asked by {name}, {when}',
+  'err.memWait.schedule': 'schedule, {when}',
+  'err.memWait.cancel': 'Cancel',
+  'err.memWait.started': 'Memory is free again, so {agent} was started.',
+  'err.memWait.dropped': '{agent} was not started: your Mac stayed low on memory for 30 minutes.',
+  'err.memWait.failed': '{agent} was not started: {error}',
+  'err.memWait.gone': 'This start is no longer waiting: it started or was dropped meanwhile.',
 };
 
 export const ko = {
