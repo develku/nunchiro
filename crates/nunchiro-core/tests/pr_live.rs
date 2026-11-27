@@ -1184,6 +1184,12 @@ fn git_push_from_the_window_moves_the_remote() {
     let r = core.window(json!({"op":"git_push","session":s.id}));
     assert_eq!(r["Err"], "push needs the confirmed head commit", "{r}");
     let r = core.window(json!({"op":"git_push","session":s.id,"head":head}));
+    assert_eq!(r["Err"], "push needs what the strip showed", "{r}");
+    // What the strip shows: the Diff list's git facts.
+    let list = core.window(json!({"op":"diff_list","session":s.id,"git":true,"fresh":true}));
+    let to = &list["Ok"]["git"]["push_to"];
+    assert_eq!(list["Ok"]["git"]["head"], head.as_str(), "{list}");
+    let r = core.window(json!({"op":"git_push","session":s.id,"head":head,"remote":to["remote"],"branch":to["branch"],"ahead":to["ahead"],"key":to["key"]}));
     assert_eq!(
         r["Ok"],
         json!({"type":"git_pushed","pushed":2,"remote":"origin","branch":"parser-fix"}),
