@@ -31,6 +31,7 @@ pub(crate) struct Ask {
     pub package: Option<package::Fill>,
     pub why: Option<String>,
     pub account: Option<String>,
+    pub after: Vec<String>,
 }
 
 /// The three requests of slices g to i, for the socket and the window alike.
@@ -58,6 +59,7 @@ pub(crate) fn dispatch(
             package,
             why,
             account,
+            after,
         } => serve(
             registry,
             caller,
@@ -78,6 +80,7 @@ pub(crate) fn dispatch(
                 package,
                 why,
                 account,
+                after,
             },
         ),
         Request::Note {
@@ -127,6 +130,10 @@ pub(crate) fn serve(
                 "only the lead of a place or the user may {what} a task"
             ))
         }
+    };
+    let orderer = match &who.session {
+        None => "the user".to_string(),
+        Some(_) => who.name.clone(),
     };
     // A session reaches the tasks of its own place only.
     let mine = |t: &Task| who.place.as_ref().is_none_or(|p| *p == t.place);
@@ -531,6 +538,7 @@ pub(crate) fn serve(
                 .place
                 .as_deref()
                 .ok_or("name the project with --project")?;
+            ledger.check_new_after(place, &ask.after)?;
             let (task, _) = ledger.make(
                 place,
                 who.lead.as_deref(),
@@ -539,7 +547,17 @@ pub(crate) fn serve(
                 false,
                 now,
             )?;
-            vec![task]
+            if ask.after.is_empty() {
+                vec![task]
+            } else {
+                vec![ledger.set_after(&task.id, &ask.after, &orderer, now)?]
+            }
+        }
+        // What a task waits for, set as a whole; none clears it. The lead of the place and the user.
+        "after" => {
+            decides("change the order of")?;
+            let task = named(&ask.id)?;
+            vec![ledger.set_after(&task.id, &ask.after, &orderer, now)?]
         }
         "attach" => {
             decides("staff")?;

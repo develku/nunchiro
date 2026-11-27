@@ -361,5 +361,43 @@ class FreshWorktree(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
 
+class ChatOpenVerdict(unittest.TestCase):
+    """p33's chatopen writes the figure only when every asked open has its chat-drawn mark."""
+
+    def test_all_opens_marked_is_written(self):
+        r, why = s.chat_open_verdict([[0.0, 120.0], [1000.0, 1080.0], [2000.0, 2100.0]], 3)
+        self.assertEqual((r["median_ms"], r["n"], why), (100.0, 3, None))
+
+    def test_a_miss_refuses(self):
+        r, why = s.chat_open_verdict([[0.0, 120.0], [1000.0, None]], 2)
+        self.assertEqual(r["misses"], 1)
+        self.assertIn("1 opens with no chat-drawn mark", why)
+
+    def test_fewer_opens_than_asked_refuses(self):
+        _, why = s.chat_open_verdict([[0.0, 120.0]], 10)
+        self.assertEqual(why, "1 marked opens of the 10 asked")
+
+
+class Stream8Verdict(unittest.TestCase):
+    """p33's stream8 writes the median of the repeats' worst frames, only from a whole, judged stream-8 row."""
+
+    ROW = dict(terminals=8, painted=[8, 8, 8], worst_frame_ms=[400.0, 250.0, 1900.0], frames_valid=True,
+               skipped_repeats=0)
+
+    def test_a_whole_row_is_written(self):
+        self.assertEqual(s.stream8_verdict(self.ROW), (400.0, None))
+
+    def test_not_run_refuses(self):
+        self.assertEqual(s.stream8_verdict(dict(not_run="not run: load")), (None, "not run: load"))
+
+    def test_a_terminal_not_painted_refuses(self):
+        _, why = s.stream8_verdict(dict(self.ROW, painted=[8, 7, 8]))
+        self.assertIn("end markers painted [8, 7, 8]", why)
+
+    def test_throttled_frames_or_a_skipped_repeat_refuse(self):
+        self.assertIn("frames throttled", s.stream8_verdict(dict(self.ROW, frames_valid=False))[1])
+        self.assertIn("1 repeats not run", s.stream8_verdict(dict(self.ROW, skipped_repeats=1))[1])
+
+
 if __name__ == "__main__":
     unittest.main()

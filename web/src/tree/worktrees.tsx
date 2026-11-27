@@ -54,6 +54,10 @@ export interface Worktrees {
   facts: ReadonlyMap<string, WorktreeFact>;
   /** Creates sent and not answered yet: a progress row each, under their project. */
   creating: { key: number; project: string; name: string }[];
+  /** The worktrees this window made since it loaded: only their setup asks open the setup sheet by themselves. */
+  madeHere: readonly string[];
+  /** A worktree this window made outside `create` (New tab > New worktree): its setup ask opens the sheet too. */
+  made: (path: string) => void;
   /** The worktree row last focused or clicked: what the palette's worktree commands act on. */
   selected: string | null;
   select: (path: string | null) => void;
@@ -122,6 +126,7 @@ export function useWorktrees(core: CoreClient, connected: boolean, sessions: Ses
   const [loaded, setLoaded] = useState(false); // the first full list has come: only then is a folder known to be unmanaged
   const [prs, setPrs] = useState<ReadonlyMap<string, NonNullable<WorktreeFact['pr']>>>(new Map());
   const [creating, setCreating] = useState<Worktrees['creating']>([]);
+  const [madeHere, setMadeHere] = useState<readonly string[]>([]);
   const [selected, select] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renamingSession, setRenamingSession] = useState<string | null>(null);
@@ -268,6 +273,7 @@ export function useWorktrees(core: CoreClient, connected: boolean, sessions: Ses
       // Create appends its record under the worktree lock; the reply preserves that order.
       .then((r) => {
         const made = r.worktrees?.at(-1) as (ListedWorktree & WorktreeStale) | undefined;
+        if (made) setMadeHere((m) => [...m, made.path]);
         if (made?.stale_base) say(t('wtbase.stale', { branch: made.stale_base }));
         if (made?.shared_failed?.length) say(t('wtFiles.failed', { paths: made.shared_failed.join('; ') })); // ticket 253
         return made;
@@ -343,6 +349,8 @@ export function useWorktrees(core: CoreClient, connected: boolean, sessions: Ses
     sessions,
     facts,
     creating,
+    madeHere,
+    made: (path) => setMadeHere((m) => [...m, path]),
     selected,
     select,
     renaming,

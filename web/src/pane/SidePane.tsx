@@ -12,7 +12,7 @@ import { sessionName } from '../Sidebar';
 import { terminals } from '../Terminal';
 import { ptyInSplit, useSplits } from '../split/store';
 import type { Session } from '../types';
-import { CHAT_MIN, FOCUS_FRESH_MS, PANE_MIN, PANE_SHARE, addShell, blocked, clearFocus, isOpen, removeShell, select, setWidth, shellsOf, show, tabKey, tabOf, toggle as paneToggle, usePane, widthKey, type PaneTab } from './store';
+import { CHAT_MIN, FOCUS_FRESH_MS, PANE_MIN, PANE_SHARE, addShell, blocked, clearFocus, isOpen, removeShell, select, setWidth, openNow, shellsOf, show, tabKey, tabNow, tabOf, toggle as paneToggle, usePane, widthKey, type PaneTab } from './store';
 import { keepComposerClear } from './composerRoom';
 import './pane.css';
 
@@ -30,15 +30,35 @@ interface Props {
 
 /** `+ Shell` / pane.shell.new: a shell session in the agent's own folder (its worktree when it has one) through the
  *  existing start op; it shows in the tree like any shell. Returns an error note, or null. */
-export async function startShell(core: CoreClient, session: Session, then?: (shell: string) => void): Promise<Note | null> {
+export async function startShell(core: CoreClient, session: Session, then?: (shell: string, picked: PaneTab, open: boolean) => void): Promise<Note | null> {
   try {
     const label = `shell ${shellsOf(session.id).length + 1}`;
-    const reply = (await core.request({ op: 'start', session: { kind: 'shell', project: session.cwd, label, resume: null } })) as { session?: Session };
-    if (reply.session) (show(session.id, 'pty'), addShell(session.id, reply.session.id), then?.(reply.session.id));
+    // In a worktree: the project with the worktree as `folder`, so the tree keeps the shell under the agent's project.
+    const start = (inFolder: boolean) => core.request({ op: 'start', session: { kind: 'shell', project: inFolder ? session.project : session.cwd, label, resume: null }, ...(inFolder ? { folder: session.cwd } : {}) });
+    // A folder that is no managed worktree of the project (a resumed session's old folder) starts as a folder of its own.
+    const reply = (await (session.cwd === session.project ? start(false) : start(true).catch((e) => (/not a managed worktree/.test(String(e)) ? start(false) : Promise.reject(e))))) as { session?: Session };
+    // `picked` and `open`: the pane's tab and whether it was open when the shell started (a choice made meanwhile is kept).
+    const picked = tabNow(session.id);
+    const open = openNow(session.id);
+    if (reply.session) (show(session.id, 'pty'), addShell(session.id, reply.session.id), then?.(reply.session.id, picked, open));
     return null;
   } catch (e) {
     return errorNote(docT()('err.note.shellNotStarted', { error: notePlain(docT(), e) }), e);
   }
+}
+
+/** Ctrl+` and the Terminal icon (T3 Code's terminal drawer): a running shell of this pane is shown and focused; only with
+ *  none is a new one started. */
+const starting = new Set<string>(); // agents whose shell is on its way: a second press starts no second one
+export function showShell(core: CoreClient, session: Session, all: Session[], note: (n: Note) => void) {
+  const have = shellsOf(session.id).filter((id) => all.some((s) => s.id === id && s.kind === 'shell' && s.state === 'running')).at(-1);
+  if (have) return show(session.id, { shell: have }, true);
+  show(session.id, 'pty'); // the pane opens at the press; the shell takes it once started, unless the pane changed meanwhile
+  if (starting.has(session.id)) return;
+  starting.add(session.id);
+  void startShell(core, session, (shell, picked, open) => (!open ? paneToggle(session.id) : picked === 'pty' ? show(session.id, { shell }, true) : select(session.id, picked)))
+    .then((e) => e && note(e))
+    .finally(() => starting.delete(session.id));
 }
 
 /** The divider's own width beside the chat (5 px, less its two -2 px margins). */
@@ -137,6 +157,8 @@ export function SidePane({ core, session, all, term, insert, t }: Props) {
     if (e.nativeEvent.isComposing || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     const tabs = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')];
     const at = tabs.indexOf(e.target as HTMLElement);
+    const shell = e.key === 'Delete' || e.key === 'Backspace' ? shells.find((s) => (e.target as HTMLElement).id === `ptab-${session.id}-${tabKey({ shell: s.id })}`) : undefined;
+    if (shell) return (e.preventDefault(), closeShell(shell));
     const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: tabs.length - 1 }[e.key];
     if (at < 0 || to === undefined) return;
     e.preventDefault();
@@ -146,7 +168,7 @@ export function SidePane({ core, session, all, term, insert, t }: Props) {
   };
 
   const tabButton = (t: PaneTab, label: ReactNode, name?: string, go = () => select(session.id, t)) => (
-    <button role="tab" id={`ptab-${session.id}-${tabKey(t)}`} aria-selected={same(shown, t)} aria-controls={`pbody-${session.id}`} tabIndex={same(shown, t) ? 0 : -1} className="tt" onClick={go} title={name} data-moved={t === 'pty' && moved ? '' : undefined}>
+    <button role="tab" id={`ptab-${session.id}-${tabKey(t)}`} aria-keyshortcuts={typeof t === 'string' ? undefined : 'Delete'} aria-selected={same(shown, t)} aria-controls={`pbody-${session.id}`} tabIndex={same(shown, t) ? 0 : -1} className="tt" onClick={go} title={name} data-moved={t === 'pty' && moved ? '' : undefined}>
       {label}
     </button>
   );
@@ -163,7 +185,7 @@ export function SidePane({ core, session, all, term, insert, t }: Props) {
       <div className="pdiv" data-pane-divider role="separator" aria-orientation="vertical" aria-label={t('sidePane.resize')} aria-valuenow={width} aria-valuemin={PANE_MIN} tabIndex={0} title={t('sidePane.resizeTip')} onPointerDown={dividerDrag} onKeyDown={dividerKey} onDoubleClick={() => setWidth(shown, null)} />
       <aside ref={setAside} className={`spane${needs ? ' tui light-you light-edge' : ''}`} data-side-pane data-max={max ? '' : undefined} aria-label={t('sidePane.region')} style={max ? undefined : { width: width ?? `${PANE_SHARE * 100}%` }}>
         {/* v25-shell-chrome (ticket 284 item 4): no top strip of "+ Shell", Browser, Preview, a key hint, maximise and close. A new shell and the
-            splits are palette commands (pane.shell.new, split.*); Browser and Preview open from their icons, Terminal brings the PTY back.
+            splits are palette commands (pane.shell.new, split.*); Browser and Preview open from their icons, Terminal shows the pane's shell.
             Only when shells or a PTY shown in a split exist, a slim row keeps them reachable. */}
         {(shells.length > 0 || moved) && (
           <div className="tdh">
@@ -172,7 +194,8 @@ export function SidePane({ core, session, all, term, insert, t }: Props) {
               {shells.map((s) => (
                 <span className="pt" key={s.id}>
                   {tabButton({ shell: s.id }, sessionName(s))}
-                  <button className="px" aria-label={t('sidePane.closeShell', { name: sessionName(s) })} onClick={() => closeShell(s)}>
+                  {/* Out of the accessibility tree: a tablist holds tabs only (axe aria-required-children). Delete on the tab closes it. */}
+                  <button className="px" aria-hidden tabIndex={-1} title={t('sidePane.closeShell', { name: sessionName(s) })} onClick={() => closeShell(s)}>
                     ✕
                   </button>
                 </span>

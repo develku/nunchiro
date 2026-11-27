@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "next": 3,
+  "tasks": [
+    {
+      "id": "t1",
+      "place": "/p",
+      "title": "a",
+      "accept": [
+        "works"
+      ],
+      "lead": "lead",
+      "seats": [
+        {
+          "session": "s1",
+          "name": "Builder · a",
+          "role": "builder",
+          "writes": true,
+          "at": 3
+        }
+      ],
+      "created": 1,
+      "updated": 3
+    },
+    {
+      "id": "t2",
+      "place": "/p",
+      "title": "b",
+      "closed": {
+        "at": 4,
+        "how": "done"
+      },
+      "created": 2,
+      "updated": 4
+    }
+  ]
+}

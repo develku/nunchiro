@@ -31,6 +31,20 @@ Usage:
       record holds prompts delivered and those that needed a person, and the sessions before and after each core
       restart. Writes missed_prompts_per_1000 and seats_lost_per_restart into the manual file once the record holds 7
       days (the seats figure only when a restart fell in them).
+  scorecard.py chatopen [--repeats 10] [--no-build] [--out FILE]
+      The owner-run step for p33's long-chat open. Builds (or reuses) the RC core and interact_window.py's measure app
+      (MEASURE_TARGET), starts that app as a copy under its own bundle id on a fresh HOME and NUNCHIRO_HOME with 20
+      sessions and the 5,000-event fixture chat (no model). The window is visible and takes the front for about a
+      minute: a hidden window draws no frames. --repeats times: another session selected, then the chat's tree row,
+      from the press to the page's nunchiro:chat-drawn mark. Writes chat_open_5000_ms (the median; p95, n and misses
+      in its evidence) into the manual file only when every open has its mark; exit 1 otherwise.
+  scorecard.py stream8 [--no-build] [--out FILE]
+      The owner-run step for p33's streaming figure. Builds (or reuses) the RC core with debug assertions on (a release
+      core gives its window token to the app only, peer.rs is_app; MEASURE_TARGET + "-assert") and
+      runs paint.py's stream phase as the anchor table names it: 8 fake agents stream 20 MiB each into visible
+      terminals of the shipped web bundle in headless WebKit, 3 repeats. Writes stream8_worst_frame_ms (the median of
+      the repeats' worst frames) into the manual file only when every repeat painted all 8 end markers with
+      unthrottled frames; exit 1 otherwise.
   scorecard.py dev [--target DIR] [--out FILE]
       Maintainability figures (part p26): a cold and a warm debug build of the Rust workspace in DIR (a fresh cargo
       target, removed first), the web build, the pull-request gate's Rust test stage (TEST_STAGE) on that target,
@@ -881,7 +895,7 @@ def restored_launch(cli, app, sessions, home, check):
     the first drawn snapshot; the first launch on that home warms WebKit. check(app pid, core pid) is the owner check.
     shortcut: DRAWN is the first snapshot drawn, not the conversation's own first paint (chat_open_5000_ms, p33). The
     page reports that paint (chat-drawn mark, read by measurelib.chat_open), but this gate window is hidden and draws
-    no frames; upgrade when a run shows the window."""
+    no frames; `chatopen` reads that mark in a visible window."""
     import measurelib as ml
     import release as rel
     import startup as su
@@ -1220,6 +1234,111 @@ def record_cmd(a):
                  f"core, {res['person']} needed a person; {res['restarts']} core restarts, {res['lost']} sessions not back")
 
 
+def chat_open_verdict(opens, want):
+    """(measurelib.chat_open figures, why it is not written or None): written only when all `want` opens have a mark."""
+    import measurelib as ml
+    r = ml.chat_open(opens)
+    why = ([f"{r['misses']} opens with no chat-drawn mark in 5 s"] if r["misses"] else []) + \
+          ([f"{r['n']} marked opens of the {want} asked"] if r["n"] < want else [])
+    return r, "; ".join(why) or None
+
+
+def chatopen_cmd(a):
+    """p33's long-chat open in a visible window: interact_window.py's measure app (its driver page, own bundle id)
+    on the RC core, row chat-open-mark; the page clock times leave the page over the driver's 127.0.0.1 sink."""
+    import interact_window as iw
+    import release as rel
+    from lib import clean_env
+    os.environ.setdefault("CARGO_BUILD_JOBS", "2")
+    core = iw.TARGET / "release/nunchiro"
+    if a.no_build:
+        sink = iw.win.Sink(json.loads((iw.Q4W / "sink.json").read_text())["port"])
+    else:
+        # NUNCHIRO_BUILD: an RC CLI, which refuses to start a core on the owner's home (startup.py build).
+        subprocess.run(["cargo", "build", "--release", "--locked", "-p", "nunchiro"], cwd=ROOT, check=True,
+                       env=dict(os.environ, CARGO_TARGET_DIR=str(iw.TARGET), NUNCHIRO_BUILD="1"))
+        sink = iw.win.Sink()
+        iw.build(sink.port)
+    if not (core.is_file() and iw.APP.is_file()):
+        raise SystemExit(f"no build at {core} and {iw.APP}; run without --no-build")
+    rel.CORE = core
+    home = fresh("ns-sh-")  # a fresh HOME too, as restored_launch: the fixture never reads ~/.claude
+    rel.clean_env = lambda extra=None: clean_env(dict(extra or {}, HOME=str(home)))
+    try:
+        res, out = iw.measure(sink, a.repeats, 0, a.max_load, ["chat-open-mark"], tag="chatopen",
+                              timeout=60 + 30 * a.repeats)  # about 5 s per open; a stuck driver ends the run
+    finally:
+        rel.clean_env = clean_env
+    (out / "result.json").write_text(json.dumps(res, indent=1, ensure_ascii=False))
+    row = res["raw"].get("chat-open-mark") or {}
+    if res.get("fatal") or row.get("error") or "opens" not in row:
+        raise SystemExit(f"not written: the driver stopped ({res.get('fatal') or row.get('error') or 'no chat-open-mark row'}); "
+                         f"see {out / 'result.json'}")
+    r, why = chat_open_verdict(row["opens"], a.repeats)
+    print(json.dumps({k: r[k] for k in ("n", "misses", "median_ms", "p95_ms", "max_ms", "values")}))
+    if why:
+        print(f"not written: {why}")
+        sys.exit(1)
+    now = time.strftime("%Y-%m-%d %H:%M")
+    write_manual(a.out, dict(chat_open_5000_ms=r["median_ms"]),
+                 f"scorecard.py chatopen {now}: the measure app's visible window (own bundle id, fresh HOME and NUNCHIRO_HOME) "
+                 f"on the RC core, {res['sessions']} sessions incl. the {iw.ia.LONG_EVENTS}-event fixture chat (no model); "
+                 f"{r['n']} opens (another session selected, then the chat's tree row, its tab closed), press to the page's "
+                 f"nunchiro:chat-drawn mark: median {r['median_ms']} ms, p95 {r['p95_ms']} ms, max {r['max_ms']} ms, "
+                 f"misses {r['misses']}; 1-min load {res['load_start']} to {res['load_end']}; raw {out.name}/result.json")
+
+
+def stream8_verdict(row):
+    """(stream8_worst_frame_ms, why it is not written or None) from paint.py's stream-8-webkit row: the median of the
+    repeats' worst frames, written only when every repeat ran, painted all 8 end markers and drew unthrottled frames."""
+    if row.get("not_run"):
+        return None, row["not_run"]
+    why = ([f"{row['skipped_repeats']} repeats not run"] if row.get("skipped_repeats") else []) + \
+          ([f"end markers painted {row['painted']} of 8"] if any(p != 8 for p in row["painted"]) else []) + \
+          (["frames throttled (idle rAF under the floor), frame figures invalid"] if not row["frames_valid"] else [])
+    return (None, "; ".join(why)) if why else (statistics.median(row["worst_frame_ms"]), None)
+
+
+def stream8_cmd(a):
+    """p33's streaming figure: paint.py's stream phase as the anchor table names it (`--only stream --sizes 8
+    --engines webkit --no-record`, fake agents on an RC core, headless WebKit), its row read back into the manual file."""
+    import interact_window as iw
+    os.environ.setdefault("CARGO_BUILD_JOBS", "2")
+    # The page takes its window token straight from the core, which a release core gives only to the app (peer.rs
+    # is_app); its test seam is debug assertions on a throwaway home. So: release optimisation with debug assertions,
+    # in a target of its own.
+    target = iw.TARGET.with_name(iw.TARGET.name + "-assert")
+    core = target / "release/nunchiro"
+    if not a.no_build:
+        subprocess.run(["cargo", "build", "--release", "--locked", "-p", "nunchiro"], cwd=ROOT, check=True,
+                       env=dict(os.environ, CARGO_TARGET_DIR=str(target), NUNCHIRO_BUILD="1",
+                                CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS="true"))
+    if not core.is_file():
+        raise SystemExit(f"no build at {core}; run without --no-build")
+    runs = ROOT / ".scratch/measure"
+    before = set(runs.glob("*-paint")) if runs.is_dir() else set()
+    env = {k: v for k, v in os.environ.items() if not k.startswith("NUNCHIRO_")}
+    # Detached, as `tests` runs: no Nunchiro holder above the run.
+    secs, rc, log = outside_holder([sys.executable, "-B", str(HERE / "paint.py"), "--only", "stream", "--sizes", "8",
+                                    "--engines", "webkit", "--no-record"], dict(env, NUNCHIRO_MEASURE_CORE=str(core)))
+    print(log[-3000:])
+    if rc:
+        raise SystemExit(f"paint.py ended {rc} after {secs} s; nothing written")
+    out = max(set(runs.glob("*-paint")) - before)
+    res = json.loads((out / "result.json").read_text())
+    row = res["rows"]["stream-8-webkit"]
+    value, why = stream8_verdict(row)
+    if why:
+        print(f"not written: {why}; see {out / 'result.json'}")
+        sys.exit(1)
+    write_manual(a.out, dict(stream8_worst_frame_ms=value),
+                 f"scorecard.py stream8 {time.strftime('%Y-%m-%d %H:%M')}: paint.py --only stream --sizes 8 --engines webkit "
+                 f"on the RC core built with release optimisation and debug assertions (the page's window token; fake agents, 8 terminals x {res['stream_size'] // 2**20} MiB, headless WebKit "
+                 f"{row.get('browser')}); worst frame per repeat {row['worst_frame_ms']} ms, the median written; stalls "
+                 f"{row['stalls']}, probe max {row['probe_max_ms']} ms, wall {row['wall_s']} s; 1-min load "
+                 f"{res['load_start']} to {res['load_end']}; raw {out.relative_to(ROOT)}/result.json")
+
+
 def write_manual(out, values, evidence):
     """An owner-run step's figures into docs/measure/manual-<date>.json (or `out`), other figures kept."""
     path = Path(out) if out else OUT_DIR / f"manual-{time.strftime('%Y-%m-%d')}.json"
@@ -1301,6 +1420,15 @@ def main():
     w = sub.add_parser("weigh")
     w.add_argument("--secs", type=int, default=60)
     w.add_argument("--out")
+    co = sub.add_parser("chatopen", help="p33 long-chat open; the measure app's window shows and takes the front "
+                                         "for about a minute")
+    co.add_argument("--repeats", type=int, default=10)
+    co.add_argument("--max-load", type=float, default=6.0, help="refuse to start above this 1-min load")
+    co.add_argument("--no-build", action="store_true")
+    co.add_argument("--out")
+    st = sub.add_parser("stream8", help="p33 streaming: 8 fake agents stream 20 MiB each into headless WebKit")
+    st.add_argument("--no-build", action="store_true")
+    st.add_argument("--out")
     a, rest = ap.parse_known_args()
     if a.cmd in ("accuracy", "waits", "record"):
         # accuracy.py's own options, --help too, in the order given: parse_known_args splits "--days 7" into
@@ -1310,7 +1438,7 @@ def main():
         ap.error("unrecognized arguments: " + " ".join(rest))
     {"run": run_cmd, "ops": ops_cmd, "dev": dev_cmd, "merge": merge_cmd, "check": check_cmd, "page": page_cmd,
      "tests": tests_cmd, "weigh": weigh_cmd, "accuracy": accuracy_cmd, "waits": waits_cmd,
-     "record": record_cmd}[a.cmd](a)
+     "record": record_cmd, "chatopen": chatopen_cmd, "stream8": stream8_cmd}[a.cmd](a)
 
 
 if __name__ == "__main__":

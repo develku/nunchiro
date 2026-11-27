@@ -300,15 +300,10 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
   setNameScope(ordered); // ticket 491: same-name sessions are numbered by this order, before any child names one
   const byId = useMemo(() => new Map(sessions.map((s) => [s.id, s])), [sessions]);
   // Ticket 259 (real-app look 11-15): a worktree the window made has no session row to carry the setup ask, and the default
-  // layout has no strip, so the ask showed nowhere. The sheet opens once per ask; a strip, if placed, still lists it.
+  // layout has no strip, so the ask showed nowhere. But a sheet over the window at every launch reads as an
+  // error, so it opens by itself only for a worktree this window just made; any other ask waits in Decisions (Review).
   const [setupAsk, setSetupAsk] = useState<string | null>(null);
-  const setupSeen = useRef(new Set<string>());
-  useEffect(() => {
-    const d = ownerList.find((d) => d.owner?.type === 'setup' && !byId.has(d.session_id) && !setupSeen.current.has(d.id));
-    if (d?.owner?.type !== 'setup') return;
-    setupSeen.current.add(d.id);
-    setSetupAsk(d.owner.path);
-  }, [ownerList, byId]);
+  const setupSeen = useRef(new Set<string>()); // the effect is after `wt`, which knows what this window made
   const current = active ? byId.get(active) ?? null : null;
   // AGENTVIEW: the Terminal icon is the current agent session's side pane, not a sidebar.
   const paneSession = current && hasTranscript(current) && current.state === 'running' ? current : null;
@@ -336,6 +331,12 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
   // next snapshot brought it, a key pressed in that gap (⌃⇧` right after ⇧⌘C) found no current session and did nothing.
   const openStarted = (s: Session) => (setSessions((all) => (all.some((x) => x.id === s.id) ? all : [...all, s])), open(s.id));
   const wt = useWorktrees(core, connected, sessions, openStarted, t); // V2-8a; ticket 476: toasts in the chosen language
+  useEffect(() => {
+    const d = ownerList.find((d) => d.owner?.type === 'setup' && wt.madeHere.includes(d.owner.path) && !byId.has(d.session_id) && !setupSeen.current.has(d.id));
+    if (d?.owner?.type !== 'setup') return;
+    setupSeen.current.add(d.id);
+    setSetupAsk(d.owner.path);
+  }, [ownerList, byId, wt.madeHere]);
   const team = useTeam(core, connected); // ticket 990: the teammates and leads, for the tree, the headers and the palette
   /** needs 130: "<project> / <place>" as the header and the composer chip read it (see `place`). */
   /** needs 130: the header's +a −b, the same read the status bar makes (ticket 62 keeps its own copy there). */
@@ -724,7 +725,7 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
       {palette && <Palette commands={commands} recent={recent.current.filter((id) => id !== active)} bindings={bindings} onClose={() => setPalette(false)} t={t} />}
       {quickOpen && <QuickOpen core={core} root={filesSession?.id ?? null} bindings={bindings} onClose={() => setQuickOpen(false)} t={t} />}
       <PairSheet core={core} /> {/* V2.5-15 */}
-      {starting && <NewSession core={core} ordered={ordered} current={current} project={starting.project} machine={starting.machine} prefer={starting.agent} go={starting.go} worktree={starting.worktree} soleProject={projectList.length === 1 ? projectList[0].project : undefined} home={team.home || undefined} bindings={bindings} onStarted={(s, background) => (background ? addTab(s.id) : openStarted(s))} onNote={setPaneNote} onClose={() => setStarting(null)} onReopen={() => void reopen()} /> /* v1a-59 */}
+      {starting && <NewSession core={core} ordered={ordered} current={current} project={starting.project} machine={starting.machine} prefer={starting.agent} go={starting.go} worktree={starting.worktree} soleProject={projectList.length === 1 ? projectList[0].project : undefined} home={team.home || undefined} bindings={bindings} onStarted={(s, background) => (background ? addTab(s.id) : openStarted(s))} onNote={setPaneNote} onClose={() => setStarting(null)} onReopen={() => void reopen()} onWorktree={wt.made} /> /* v1a-59 */}
       {stopping && byId.get(stopping.id) && (
         <StopAsk name={sessionName(byId.get(stopping.id)!)} error={stopping.error} onCancel={() => setStopping(null)} onStop={() => void stopSession(stopping.id, true)} />
       )}

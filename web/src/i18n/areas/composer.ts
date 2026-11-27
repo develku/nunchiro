@@ -42,6 +42,7 @@ declare module '../index' {
     "composer.waitsHint": true;
     "composer.toCard": true;
     "composer.answersCard": true;
+    "composer.digitsCard": true;
     "composer.queue.notSaved": true;
     "composer.agentEnded": true;
     "composer.backgroundSend": true;
@@ -149,6 +150,7 @@ export const en = {
   "composer.waitsHint": "Answer its question first. A message you send now waits until you answer.",
   "composer.toCard": "Shift+Tab: to the card.", // ticket 1030, English only (owner 11-21)
   "composer.answersCard": "What you send answers its question as \"{option}\".", // ticket 1097, English only
+  "composer.digitsCard": "Or press an option's number.", // English only until the translation pass
   "composer.queue.notSaved": "Not queued: the browser storage refused it. Your text is still in the box.",
   "composer.agentEnded": "The agent has ended: type in the terminal.",
   "composer.backgroundSend": "Start a new session with this text and stay here",

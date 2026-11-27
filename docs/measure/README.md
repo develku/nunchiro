@@ -17,6 +17,7 @@ counts only when the test ran green in the same run, and anchors come from measu
   evidence, the capability rows and counts, and the test commands a check rests on.
 - results-<date>.json: the figures of one measure run (median, range and every value).
 - tests-<date>.json: which of those test commands ran green in the run (`scorecard.py tests`).
+- soak-<date>.jsonl: the samples of a 24 h soak (`scripts/measure/soak.py`), one line per heartbeat round.
 - manual-<date>.json: figures no script measures yet, each with how it was measured (rubric.md, "Owner-run steps").
 - evidence/peers-<date>-<app>.json: launch, idle memory and idle CPU of an installed peer (`scripts/measure/peers.py`).
 - shots/: Nunchiro pictures from the run, and peer pictures from the 2026-11-02 timed run.
@@ -67,7 +68,7 @@ alone. Never on a machine whose accounts are not the owner's own.
    the checks name and writes tests-<today>.json; a check whose tests are not green there is not counted. It needs
    `pnpm install` and a web build first (the specs, and the app crate's tests, read web/dist), and runs at the commit
    that `run` measured.
-   The owner-run steps of rubric.md (peer task drives, `scorecard.py weigh`, the paint figures, the trials) fill
+   The owner-run steps of rubric.md (peer task drives, `scorecard.py weigh`, `scorecard.py chatopen`, `scorecard.py stream8`, the paint figures, the trials) fill
    tasks.json and manual-<today>.json; what was not done scores 0.
    `python3 -B scripts/measure/peers.py "/Applications/Orca.app" --out docs/measure/evidence/peers-<today>-orca.json`
    re-measures a peer when its version changed (it refuses when the app already runs and stops only what it started).
