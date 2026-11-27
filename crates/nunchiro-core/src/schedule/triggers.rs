@@ -393,7 +393,18 @@ pub(crate) fn fire(
             let card =
                 super::lock(registry)?.trigger_card(&trigger.name, run, source, about.clone());
             if let Err(e) = card {
+                // Too many cards of this trigger wait (or the owner's queue is full): this fire is held, not queued.
                 give_back(home, name, now, about.as_deref());
+                record(
+                    home,
+                    name,
+                    Last {
+                        session: None,
+                        at: now,
+                        result: Some(Outcome::Held),
+                        reason: Some(e.chars().take(200).collect()),
+                    },
+                )?;
                 return Err(e);
             }
             if let Some(s) = &about {
@@ -433,6 +444,9 @@ pub(crate) fn fire(
     }
 }
 
+/// An asking trigger's cards that may wait at once; a fire past it is held, so one busy trigger never fills the owner's
+/// shared queue of cards.
+pub const CARDS_MAX: usize = 3;
 /// A subject taken by a fire that is still starting, or waiting for the owner's card.
 const PENDING: &str = "";
 const ASKED: &str = "ask";
@@ -496,7 +510,18 @@ pub(crate) fn start_card(
         .iter()
         .any(|t| t.name == name && t.started_cards.iter().any(|c| c == card))
     {
-        return Err(format!("trigger {name}: this card's run already started"));
+        let note = format!("trigger {name}: this card's run already started");
+        record(
+            home,
+            name,
+            Last {
+                session: None,
+                at: crate::queue::now_ms(),
+                result: Some(Outcome::Held),
+                reason: Some(note.clone()),
+            },
+        )?;
+        return Err(note);
     }
     let started = start(
         registry,

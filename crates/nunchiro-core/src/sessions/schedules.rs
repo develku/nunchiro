@@ -280,6 +280,17 @@ impl Sessions {
             crate::schedule::triggers::Source::Cli => "the command line",
             crate::schedule::triggers::Source::Webhook => "a webhook",
         };
+        let waiting = self
+            .queue
+            .owner_items()
+            .iter()
+            .filter(|i| matches!(&i.owner, Some(queue::OwnerAsk::Schedule { change, id: Some(id), .. }) if change == "trigger" && id == name))
+            .count();
+        if waiting >= crate::schedule::triggers::CARDS_MAX {
+            return Err(format!(
+                "trigger {name}: {waiting} cards wait for your answer in Decisions; this fire was not added"
+            ));
+        }
         // One card per subject: a fire about another subject is another card, never one that replaces it (each card's
         // subject is released by its own Start or Not now).
         let card_key = match &subject {

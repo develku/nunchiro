@@ -1210,6 +1210,10 @@
     "Blocker": {
       "description": "A task this one waits for, as a reader gets it.",
       "properties": {
+        "dropped": {
+          "description": "It closed without landing (dropped, or its worktree removed): the waiting task asks instead of waiting.",
+          "type": "boolean"
+        },
         "id": {
           "type": "string"
         },
@@ -3785,6 +3789,13 @@
           "minimum": 0,
           "type": "integer"
         },
+        "early": {
+          "description": "A seat that writes sat on it before it waited: `started before \"<title>\" landed`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "floor": {
           "description": "Ticket 1055 rule 2: a seat that does not write runs its role's own model, so the floor of its Builder's level\ncould not apply. One plain line.",
           "type": [
@@ -3853,6 +3864,13 @@
           "description": "The project root, or the Home folder.",
           "type": "string"
         },
+        "released": {
+          "description": "The tasks of `after` whose landing or drop its lead was told (advance.rs `release`), so a restart tells it once.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "review": {
           "anyOf": [
             {
@@ -3896,6 +3914,13 @@
         "state": {
           "description": "`needs` (a seat waits for the user), `working`, `review` (a reviewer runs, or the files changed after the\nreview), `changes` (the review asked for changes), `approved` (the review passed and nothing changed since),\n`merge` (approved, and the user said yes to merging these files), `asked` (no seat works and one of its room asks\nis open), `idle`, or how it closed.",
           "type": "string"
+        },
+        "stuck": {
+          "description": "A task it waits for was dropped: what the user is asked (the state is then `needs`).",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "title": {
           "description": "The outcome, one line.",
