@@ -569,12 +569,16 @@ fn valid_data(data: &Value) -> bool {
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ChatEvent"))]
 pub struct Event {
     pub schema_version: u32,
     pub cursor: u64,
     pub data: Value,
 }
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ChatPage"))]
 pub struct Page {
     #[serde(default)]
     pub generation: u64,

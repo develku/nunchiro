@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>M6: 다른 사람이 Nunchiro 위에 만들 수 있게</title>
+<style>
+/* Colour and size values copied from web/src/tokens.css (origin/main). Settings shell, rows, chips and tiles follow
+   web/src/styles.css (.settings nav, .sbody, .btn, .palette, .status) and settings/accounts/accounts.css (.prv-row,
+   .prv-mark, .pchip, .prv-tile). Same base as memory-hold-m8.html. No network, no external files. */
+:root,.lt{--page:#f6f6f4;--panel:#ffffff;--text:#1f2328;--muted:#59636e;--faint:#818b98;--line:#d1d9e0;--hover:#f0f2f4;
+--you:#bc4c00;--bad:#cf222e;--warn:#9a6700;--run:#0969da;--ok:#1a7f37;--idle:#8c959f;--ring-focus:#6e7781;
+--tint-1:rgb(15 20 30/.045);--tint-2:rgb(15 20 30/.085);--glass-bg:rgb(255 255 255/.6);--glass-hi:rgb(255 255 255/.85);
+--shadow-card:0 1px 3px #0000001f;--shadow-float:0 12px 32px rgb(0 0 0/.14),0 1px 3px rgb(0 0 0/.08);
+--font-ui:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Segoe UI',sans-serif;--font-code:'SF Mono',Menlo,'D2Coding',monospace;color-scheme:light}
+[data-theme=dark],.dk{--page:#0d1117;--panel:#151b23;--text:#e6edf3;--muted:#9198a1;--faint:#9198a1;--line:#3d444d;--hover:#262c36;
+--you:#f0883e;--bad:#f85149;--warn:#d29922;--run:#4493f8;--ok:#3fb950;--idle:#7d8c86;--ring-focus:#8b949e;
+--tint-1:rgb(255 255 255/.055);--tint-2:rgb(255 255 255/.1);--glass-bg:rgb(48 52 60/.5);--glass-hi:rgb(255 255 255/.14);
+--shadow-card:0 1px 3px #0000005c;--shadow-float:0 12px 32px rgb(0 0 0/.45),0 1px 3px rgb(0 0 0/.3);color-scheme:dark}
+*{box-sizing:border-box}
+html{word-break:keep-all;overflow-wrap:break-word}
+body{margin:0;font:13px/1.55 var(--font-ui);color:var(--text);background:var(--page)}
+h1,h2,h3,h4,p{margin:0}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+code{font:12px var(--font-code);background:var(--tint-1);padding:1px 5px;border-radius:4px}
+a{color:var(--run)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px 80px}
+.nav{position:sticky;top:0;z-index:9;display:flex;gap:4px;align-items:center;padding:8px 0;background:var(--page);box-shadow:0 1px 0 var(--tint-2);overflow-x:auto}
+.nav a{padding:3px 9px;border-radius:6px;color:var(--muted);white-space:nowrap;text-decoration:none}.nav a:hover{background:var(--tint-1);color:var(--text)}
+.nav button{margin-left:auto;border-radius:6px;padding:4px 12px;background:var(--tint-2);white-space:nowrap}
+.top h1{font-size:26px;line-height:1.25;letter-spacing:-.01em;margin:26px 0 8px}
+.top>p{color:var(--muted);max-width:900px;font-size:14px}
+.sum{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;margin-top:18px;align-items:stretch}
+.card{background:var(--panel);border-radius:12px;box-shadow:var(--shadow-card)}
+.sum .card{padding:16px 18px}
+.sum ol{margin:8px 0 0;padding-left:18px}.sum li{margin:0 0 5px}
+.fig b{display:block;font-size:40px;line-height:1;letter-spacing:-.03em;margin:6px 0 6px}
+.fig small{color:var(--muted);display:block}
+.cap{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.panel{margin:46px 0 0;scroll-margin-top:50px}
+.phead{display:flex;gap:14px;align-items:flex-start;margin:0 0 14px}
+.num{font-size:40px;font-weight:700;line-height:1;color:var(--faint);letter-spacing:-.04em;min-width:30px}
+.phead h2{font-size:19px;letter-spacing:-.01em}
+.phead p{color:var(--muted);max-width:880px}
+.rec{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;background:var(--text);color:var(--panel);font-size:11px;font-weight:600;vertical-align:3px}
+.two{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr);gap:18px;align-items:start}
+.half{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+@media(max-width:1000px){.two,.half,.sum{grid-template-columns:1fr}}
+.when{font-size:12px;color:var(--muted);margin:14px 0 6px}.when:first-child{margin-top:0}.when b{color:var(--text)}
+.notes{font-size:13px}.notes ul{margin:6px 0 12px;padding-left:16px}.notes li{margin:0 0 5px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;vertical-align:top;padding:8px 12px}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:700}
+tr+tr td{box-shadow:inset 0 1px 0 var(--tint-1)}
+td small{color:var(--muted);display:block}
+td code{white-space:normal}
+.yes{color:var(--ok);font-weight:600}.no{color:var(--bad);font-weight:600}.mid{color:var(--you);font-weight:600}
+.stack{display:grid;gap:10px}
+.qa{padding:14px 18px;margin:0 0 10px}.qa b{display:block;margin:0 0 4px}.qa small{color:var(--muted)}
+.src{color:var(--faint);font-size:11px}
+/* the app window */
+.win{position:relative;background:var(--page);color:var(--text);border-radius:12px;box-shadow:var(--shadow-float),0 0 0 1px var(--tint-2);overflow:hidden;font:13px/1.4 var(--font-ui)}
+.win.set{display:grid;grid-template-columns:170px minmax(0,1fr);min-height:300px}
+.snav{padding:12px 8px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px;font-size:13px}
+.snav span{padding:5px 10px;border-radius:6px;white-space:nowrap}.snav span.on{background:var(--hover);font-weight:600}
+.snav span.new::after{content:'new';margin-left:6px;font-size:10px;color:var(--faint);font-weight:400}
+.sbody{padding:16px 22px 22px;min-width:0}
+.sbody h3{font-size:18px;margin:0 0 2px}.sbody .lede{color:var(--muted);font-size:13px;margin:0 0 14px;max-width:640px}
+.sbody h4{font-size:13px;font-weight:600;color:var(--muted);margin:16px 0 8px;display:flex;align-items:center;gap:8px}
+.sbody h4 .sp{flex:1}
+.pcard{background:var(--panel);border-radius:10px;box-shadow:var(--shadow-card);overflow:hidden}
+.prow{display:grid;grid-template-columns:24px 128px minmax(0,1fr) auto auto;gap:12px;align-items:center;min-height:46px;padding:8px 14px}
+.prow+.prow,.pexp{box-shadow:inset 0 1px 0 var(--tint-1)}
+.prow.dim{color:var(--muted)}
+.mark{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--tint-2);font-size:11px;font-weight:600;flex:none}
+.pname{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pmeta{color:var(--muted);font-size:12px;min-width:0}.pmeta .mono,.mono{font-family:var(--font-code);font-size:11px;color:var(--text)}
+.pact{display:flex;gap:8px;justify-content:flex-end}
+.pchip{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:999px;background:var(--tint-1);color:var(--muted);font-size:11px;font-weight:500;white-space:nowrap}
+.pchip::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}.pchip.plain::before{display:none}
+.pchip.ok{background:color-mix(in srgb,var(--ok) 10%,transparent);color:color-mix(in srgb,var(--ok) 75%,var(--text))}
+.pchip.warn{background:color-mix(in srgb,var(--warn) 10%,transparent);color:color-mix(in srgb,var(--warn) 75%,var(--text))}
+.pchip.bad{background:color-mix(in srgb,var(--bad) 10%,transparent);color:color-mix(in srgb,var(--bad) 75%,var(--text))}
+.pexp{padding:10px 14px 14px 50px;font-size:12px}
+.ln{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;padding:4px 0;align-items:baseline}.ln>span:first-child{color:var(--muted)}
+.btn{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--faint);border-radius:6px;padding:1px 8px;background:var(--panel);font-size:12px;white-space:nowrap;color:var(--text);line-height:1.5}
+.btn.p{background:var(--text);color:var(--panel);border-color:var(--text)}
+.btn.q{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.t{border-color:transparent;background:var(--tint-1)}
+.inp{display:inline-block;border-radius:6px;background:var(--tint-1);padding:2px 8px;font-size:12px;min-width:120px}
+.inp.mono{font-family:var(--font-code);font-size:11px}
+.sw{display:inline-block;width:26px;height:16px;border-radius:999px;background:var(--tint-2);position:relative;flex:none;vertical-align:-3px}
+.sw::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--panel);box-shadow:0 1px 2px #0003}
+.sw.on{background:var(--text)}.sw.on::after{left:12px}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.tile{display:flex;align-items:center;gap:8px;min-height:40px;padding:4px 8px;border-radius:8px;background:var(--tint-1);font-size:13px;flex-wrap:wrap;row-gap:0}
+.tile .st{margin-left:auto;color:var(--muted);font-size:11px}.tile.on{background:var(--tint-2);font-weight:600}
+.sheet{background:var(--panel);border-radius:12px;box-shadow:var(--shadow-float),0 0 0 1px var(--tint-2);padding:16px 18px;font-size:13px;max-width:560px}
+.sheet h4{font-size:15px;margin:0 0 4px}.sheet p{color:var(--muted);font-size:12px;margin:0 0 10px}
+.sheet .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.term{font:12px/1.55 var(--font-code);padding:10px 12px;border-radius:8px;background:var(--panel);box-shadow:var(--shadow-card);white-space:pre-wrap;overflow-wrap:anywhere}
+.term .dim{color:var(--faint)}.term .ok{color:var(--ok)}.term .k{color:var(--run)}
+.palette{background:var(--panel);border-radius:8px;box-shadow:var(--shadow-float),0 0 0 1px var(--tint-2);font-size:13px;max-width:520px;overflow:hidden}
+.palette .q{padding:8px 12px;color:var(--muted);box-shadow:inset 0 -1px 0 var(--tint-1)}
+.palette .r{display:flex;align-items:center;gap:8px;min-height:30px;padding:0 12px}.palette .r.on{background:var(--hover)}
+.palette .r small{margin-left:auto;color:var(--faint);font-size:11px}
+.status{display:flex;align-items:center;gap:8px;height:24px;padding:0 8px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;box-shadow:inset 0 1px 0 var(--tint-1)}
+.status .note{display:inline-flex;align-items:center;gap:8px;color:var(--text);font-weight:600;min-width:0}
+.status .btn{font-size:11px;padding:0 7px;border-color:transparent;background:var(--tint-1)}
+.usg{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 8px;border-radius:8px;background:var(--tint-1)}
+.spx{flex:1}
+.dcard{background:var(--panel);border-radius:10px;box-shadow:var(--shadow-card);padding:12px 14px;font-size:13px;border-left:3px solid var(--you)}
+.dcard small{color:var(--muted);display:block;margin:2px 0 8px}.dcard .acts{display:flex;gap:8px}
+.quote{font:12px/1.5 var(--font-code);background:var(--tint-1);border-radius:6px;padding:6px 8px;margin:6px 0;white-space:pre-wrap}
+/* a web page in a browser frame (the docs site, the release page) */
+.web{background:var(--panel);border-radius:12px;box-shadow:var(--shadow-float),0 0 0 1px var(--tint-2);overflow:hidden;font-size:13px}
+.web .bar{display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;background:var(--tint-1);font-size:11px;color:var(--muted)}
+.web .bar i{width:9px;height:9px;border-radius:50%;background:var(--tint-2);display:block}
+.web .bar span{flex:1;margin-left:8px;padding:2px 10px;border-radius:6px;background:var(--panel);font-family:var(--font-code);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.web .pg{padding:18px 22px}
+.web h3{font-size:22px;letter-spacing:-.01em;margin:0 0 6px}.web h4{font-size:14px;margin:14px 0 4px}
+.web p{color:var(--muted);margin:0 0 8px}
+.web .cta{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:8px;background:var(--text);color:var(--panel);font-weight:600;font-size:14px}
+.web .docs{display:grid;grid-template-columns:180px minmax(0,1fr);gap:0}
+.web .side{padding:14px 10px;border-right:1px solid var(--line);font-size:12px}
+.web .side b{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:10px 8px 4px}
+.web .side span{display:block;padding:3px 8px;border-radius:6px;color:var(--muted)}.web .side span.on{background:var(--tint-1);color:var(--text);font-weight:600}
+.web ol,.web ul{margin:4px 0 8px;padding-left:18px}
+.mac{width:260px;background:var(--glass-bg);border-radius:14px;box-shadow:var(--shadow-float),0 0 0 1px var(--tint-2);padding:18px 16px 14px;text-align:center;font-size:12px}
+.mac b{display:block;font-size:13px;margin:8px 0 6px}.mac p{color:var(--muted);font-size:11px;margin:0 0 12px}
+.mac .b{display:block;border-radius:7px;padding:5px;background:var(--tint-2);margin-top:6px;font-weight:500}.mac .b.p{background:var(--run);color:#fff}
+.icn{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:11px;background:var(--text);color:var(--panel);font-weight:700;font-size:20px}
+.dmg{display:flex;align-items:center;justify-content:center;gap:34px;padding:26px;background:var(--tint-1);border-radius:10px;font-size:11px;color:var(--muted);text-align:center}
+.dmg .arrow{font-size:22px;color:var(--faint)}
+.bar2{display:flex;align-items:center;gap:8px;font-size:12px;margin:3px 0}.bar2 i{display:block;height:8px;border-radius:4px;background:var(--text)}.bar2 i.g{background:var(--tint-2)}
+.bar2 span{width:150px;color:var(--muted);flex:none}
+.toml{font:12px/1.55 var(--font-code);padding:12px 14px;border-radius:8px;background:var(--panel);box-shadow:var(--shadow-card);white-space:pre;overflow-x:auto}
+.toml .c{color:var(--faint)}.toml .h{color:var(--run);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="nav">
+  <a href="#p1">1 지금</a><a href="#p2">2 A 공개만</a><a href="#p3">3 B 플러그인 = 폴더 (추천)</a><a href="#p4">4 바깥에서 거는 시작</a><a href="#p5">5 C 창 안 코드</a><a href="#p6">6 비교</a><a href="#p7">7 다른 앱</a><a href="#p8">8 점수</a><a href="#p9">9 문구</a><a href="#p10">10 질문</a>
+  <button onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">밝게 / 어둡게</button>
+</div>
+
+<div class="top">
+  <h1>다른 사람이 Nunchiro 위에 만들 수 있게: 공개된 API, 플러그인 폴더, 틀 만들기 명령, 목록, 바깥에서 거는 시작</h1>
+  <p>점수표 p36(다른 사람을 위한 확장성)은 지금 10점입니다. 플러그인 API, 틀 만들기 명령, 목록, 바깥에서 거는 시작이 없고, 소켓 형식도 공개돼 있지 않습니다. 아래는 세 가지 안과 추천안의 화면입니다. 새 문구는 영어만 적었습니다.</p>
+  <div class="sum">
+    <div class="card">
+      <div class="cap">추천: B, 다섯 번에 나눠 만들기</div>
+      <ol>
+        <li><b>API 형식을 공개합니다.</b> 코어의 타입에서 JSON Schema를 만들어 저장소에 두고, 타입이 바뀌면 테스트가 실패합니다. herdr 방식입니다.</li>
+        <li><b>플러그인은 폴더 하나입니다.</b> <code>plugin.toml</code> 한 장이 패널, 명령, 설정, 막기(gate), 스킬, 훅, MCP 서버를 묶습니다. 패널과 스킬은 지금 있는 위젯과 확장 항목을 그대로 씁니다.</li>
+        <li><b>플러그인 코드는 창 안에서 돌지 않습니다.</b> 지금 위젯처럼 샌드박스 안의 명령으로 돌고, 사용자가 내용을 보고 승인해야 켜집니다.</li>
+        <li><b>바깥에서 거는 시작은 예약의 한 종류입니다.</b> 때가 시각이 아니라 사건입니다. GitHub는 사용자의 <code>gh</code>로 읽고, 그 밖의 서비스는 이 Mac의 주소로 받습니다. Nunchiro 서버는 두지 않습니다.</li>
+        <li><b>목록은 고정된 저장소 하나입니다.</b> 테마 고르기와 같은 길로 읽고, 받은 파일의 해시가 목록과 다르면 설치하지 않습니다.</li>
+      </ol>
+    </div>
+    <div class="card fig">
+      <div class="cap">p36 추정</div>
+      <b>10 → 80~100</b>
+      <small>다섯 줄이 모두 "예"면 100입니다. 각 줄은 점수 매기는 날 실제 예제가 돌아야 "예"입니다. 약속이 아니라 추정입니다. 근거는 8번에 있습니다.</small>
+    </div>
+  </div>
+</div>
+
+<section class="panel" id="p1">
+  <div class="phead"><div class="num">1</div><div>
+    <h2>지금: 재료는 있고, 묶음과 공개가 없습니다</h2>
+    <p>Nunchiro에는 이미 스킬과 훅 폴더, MCP 서버, 스크립트 위젯과 웹 위젯, 범위가 있는 토큰, 사건 흐름(<code>nunchiro events</code>), MCP 서버(<code>nunchiro mcp</code>)가 있습니다. 없는 것은 이들을 하나로 묶는 형식, 남이 쓸 문서와 틀, 목록, 바깥 사건입니다.</p>
+  </div></div>
+  <div class="card"><table>
+    <tr><th>줄</th><th>묻는 것</th><th>지금</th><th>가장 앞선 앱</th></tr>
+    <tr><td>XO1</td><td>문서가 있는 플러그인 API: 남의 코드가 패널, 명령, 설정을 더하거나 동작을 바꾸고 막는다</td><td class="no">없음<small>위젯과 확장 항목은 따로따로이고 남을 위한 문서가 없음</small></td><td>Orca: 16가지 모양<small class="src">skill-guides/orca-plugin-authoring.md:32-47</small></td></tr>
+    <tr><td>XO2</td><td>틀 만들기 명령과 타입</td><td class="no">없음<small><code>widget new</code>, <code>extensions new</code>는 종류별로 따로</small></td><td>Orca <code>plugin create</code>, <code>plugin types</code><small class="src">src/cli/plugins/authoring/plugin-create.ts:45-73</small></td></tr>
+    <tr><td>XO3</td><td>앱 안에서 목록을 보고 설치</td><td class="no">없음<small>테마 목록만 있음</small></td><td>Orca <code>orca-catalog.json</code>, 커밋과 해시 고정<small class="src">src/shared/plugins/catalog/plugin-catalog.ts:20-91</small></td></tr>
+    <tr><td>XO4</td><td>남이 부를 수 있는 시작: 웹훅, GitHub·Slack·Linear 사건</td><td class="no">없음<small>예약은 사용자만 추가</small></td><td>Orca 자동화(자기 클라우드 경유), T3 Code PR 지켜보기<small class="src">t3code PullRequestWatchReactor.ts:43</small></td></tr>
+    <tr><td>XO5</td><td>로컬 API가 스키마나 타입 있는 클라이언트로 공개</td><td class="mid">반<small>CLI 문서는 검사되지만 소켓 형식은 비공개</small></td><td>herdr JSON Schema, 테스트로 동기화<small class="src">herdr src/api/schema/tests.rs:182-206</small></td></tr>
+  </table></div>
+</section>
+
+<section class="panel" id="p2">
+  <div class="phead"><div class="num">2</div><div>
+    <h2>A. 공개만: API 스키마와 문서</h2>
+    <p>코어 소켓의 요청과 응답을 스키마로 내고, 문서 한 장과 돌아가는 예제를 둡니다. 플러그인, 목록, 바깥 시작은 만들지 않습니다. B의 첫 PR이 바로 이것입니다.</p>
+  </div></div>
+  <div class="two">
+    <div class="stack">
+      <div class="term"><span class="dim">$ nunchiro api schema | head -6</span>
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Nunchiro local API",
+  "x-protocol": 1,
+  "$defs": { "request": { "oneOf": [ { "properties": { "op": { "const": "agent_list" }, ...
+
+<span class="dim">$ python3 docs/api/examples/agents.py     # 30 lines, standard library only</span>
+<span class="dim">→</span> {"token":"nunchiro_…","request":{"op":"agent_list","mine":false}}
+<span class="dim">←</span> one line of JSON, as the schema's "response" says
+<span class="ok">3 agents: Ada (working), parser-fix (waiting), docs (idle)</span></div>
+      <p class="when"><b>문서 사이트의 API 쪽</b> · M9의 사이트에 들어갑니다</p>
+      <div class="web"><div class="bar"><i></i><i></i><i></i><span>develku.github.io/nunchiro/extend/api</span></div>
+        <div class="docs"><div class="side"><b>Extend</b><span class="on">Local API</span><span>Plugins</span><span>Triggers</span><span>Plugin catalogue</span><b>Reference</b><span>CLI</span><span>API schema</span></div>
+        <div class="pg"><h3>Local API</h3>
+          <p>Nunchiro's background service listens on a unix socket in its data folder. Each request is one line of JSON, and so is each reply. The CLI, the MCP server and the window all use it.</p>
+          <h4>Who you are</h4><p>Without a token you act as the owner. With a token from <code>nunchiro token create</code> you act within its scope: read, supervised or full.</p>
+          <h4>What is stable</h4><p>Operations marked <code>stable</code> in the schema keep their shape within a major version. The rest belong to the window and may change in any release.</p>
+        </div></div></div>
+    </div>
+    <div class="notes">
+      <div class="cap">얻는 것</div>
+      <ul>
+        <li>XO5가 "예"가 됩니다. p24(인터페이스)의 I4도 같은 이유로 "반"이었으니 함께 오릅니다.</li>
+        <li>스키마는 코드에서 만들어지므로 문서가 코드와 어긋날 수 없습니다. 어긋나면 테스트가 빨갛게 됩니다.</li>
+      </ul>
+      <div class="cap">약점</div>
+      <ul>
+        <li>p36은 다섯 줄 가운데 한 줄만 채워 20점쯤입니다.</li>
+        <li>요청이 189가지인데 대부분 창 전용입니다. 그래서 <code>stable</code> 표시를 붙여, 남이 기대도 되는 것과 아닌 것을 가릅니다. 토큰이 부를 수 있는 것(지금 문서의 "Outside callers" 표)만 <code>stable</code>입니다.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p3">
+  <div class="phead"><div class="num">3</div><div>
+    <h2>B. 플러그인 = 폴더 하나 <span class="rec">추천</span></h2>
+    <p>A에 더해, <code>~/.nunchiro/plugins/&lt;id&gt;/</code> 폴더와 <code>plugin.toml</code> 한 장을 플러그인으로 정합니다. 새 실행 방식은 만들지 않습니다. 패널은 지금의 위젯, 스킬·훅·MCP는 지금의 확장 항목이고, 명령·설정·막기만 새로 생깁니다.</p>
+  </div></div>
+
+  <div class="two">
+    <div>
+      <p class="when"><b>플러그인의 모양</b> · 예제 "Quiet hours": 밤에는 에이전트와 예약이 새 세션을 시작하지 못하게 합니다</p>
+      <div class="toml"><span class="c"># ~/.nunchiro/plugins/quiet-hours/plugin.toml</span>
+id = "quiet-hours"
+name = "Quiet hours"
+version = "0.1.0"
+about = "Holds new sessions that agents and schedules start at night."
+author = "you"
+nunchiro = ">=0.2"
+
+<span class="h">[[panel]]</span>            <span class="c"># a widget, exactly as widget.toml today</span>
+name = "Held tonight"
+command = ["./quiet.sh", "panel"]
+interval_secs = 60
+
+<span class="h">[[command]]</span>          <span class="c"># a row in the command palette</span>
+name = "Pause quiet hours until tomorrow"
+command = ["./quiet.sh", "pause"]
+show = "note"        <span class="c"># note | panel | send (to the focused agent)</span>
+
+<span class="h">[[setting]]</span>          <span class="c"># a row under the plugin in Settings</span>
+key = "from"
+label = "Quiet from"
+type = "time"
+default = "23:00"
+
+<span class="h">[[gate]]</span>             <span class="c"># may refuse or change an action</span>
+on = "session.start.before"
+command = ["./quiet.sh", "gate"]
+on_error = "allow"
+
+skills = ["skills/quiet-hours"]   <span class="c"># folders, as extensions today</span></div>
+    </div>
+    <div class="notes">
+      <div class="cap">정한 것</div>
+      <ul>
+        <li><b>일곱 가지를 묶습니다:</b> <code>panel</code>, <code>command</code>, <code>setting</code>, <code>gate</code>, <code>skills</code>, <code>hooks</code>, <code>mcp</code>. 앞의 넷은 플러그인만 할 수 있고, 뒤의 셋은 지금도 따로 추가할 수 있습니다.</li>
+        <li><b>명령은 배열입니다.</b> 셸 문자열이 아닙니다. herdr도 같습니다. 폴더 밖의 파일은 실행하지 못합니다.</li>
+        <li><b>샌드박스 안에서 돕니다.</b> 지금 스크립트 위젯이 쓰는 실행기입니다. 네트워크는 목록에 적은 호스트만, 읽기는 플러그인 폴더와 적어 둔 폴더만 됩니다.</li>
+        <li><b>승인이 있어야 켜집니다.</b> 파일이 한 글자라도 바뀌면 다시 묻습니다. 에이전트는 승인할 수 없습니다.</li>
+        <li><b>막기(gate)는 두 곳에서만:</b> 새 세션 시작 전, 그리고 에이전트·예약·바깥 시작이 보내는 메시지 전. 사용자가 입력칸에 직접 쓴 글은 어떤 플러그인도 건드리지 못합니다.</li>
+        <li><b>막기는 좁히기만 합니다.</b> 권한 요청에 답하거나 외부 전송 카드를 건너뛰게 할 수 없습니다. 5초 안에 답이 없으면 <code>on_error</code>대로 합니다.</li>
+      </ul>
+      <div class="cap">막기가 주고받는 것</div>
+      <div class="term"><span class="dim">stdin</span>
+{"event":"session.start.before","asker":"agent",
+ "session":{"kind":"claude","project":"/…/nunchiro"},
+ "settings":{"from":"23:00","to":"07:00"}}
+<span class="dim">stdout</span>
+{"allow":false,"reason":"Quiet hours until 07:00."}</div>
+    </div>
+  </div>
+
+  <p class="when" style="margin-top:22px"><b>설정 화면: Plugins</b> · 새 쪽입니다. Skills &amp; hooks 쪽은 그대로 두고, 플러그인이 넣은 스킬과 훅은 그쪽에도 보입니다.</p>
+  <div class="win set">
+    <div class="snav"><span>General</span><span>Appearance</span><span>Accounts</span><span>Agents</span><span>Skills &amp; hooks</span><span class="on new">Plugins</span><span>Projects</span><span>Permissions</span><span>About</span></div>
+    <div class="sbody">
+      <h3>Plugins</h3>
+      <p class="lede">A plugin is a folder that adds panels, commands, settings and checks to Nunchiro. Nothing in it runs until you approve it.</p>
+      <h4>Your plugins<span class="sp"></span><button class="btn t">Browse plugins</button><button class="btn t">Add from folder…</button></h4>
+      <div class="pcard">
+        <div class="prow"><span class="mark">Qh</span><span class="pname">Quiet hours</span><span class="pmeta">1 panel · 1 command · 1 check · 2 settings<br><span class="mono">0.1.0</span> · you</span><span class="pchip ok">Approved</span><span class="sw on"></span></div>
+        <div class="pexp">
+          <div class="ln"><span>Quiet from</span><span><span class="inp">23:00</span></span></div>
+          <div class="ln"><span>Quiet until</span><span><span class="inp">07:00</span></span></div>
+          <div class="ln"><span>Checks</span><span>Before a new session starts · <span class="mono">./quiet.sh gate</span> · held 3 starts this week</span></div>
+          <div class="ln"><span>Folder</span><span class="mono">~/.nunchiro/plugins/quiet-hours</span></div>
+          <div class="ln"><span></span><span><button class="btn q">Review what it runs</button> <button class="btn q">Remove</button></span></div>
+        </div>
+        <div class="prow"><span class="mark">Li</span><span class="pname">Linear inbox</span><span class="pmeta">1 panel · 2 commands · 1 MCP server<br><span class="mono">1.2.0</span> · catalogue</span><span class="pchip warn">Changed since approval</span><button class="btn">Review</button></div>
+        <div class="prow dim"><span class="mark">Br</span><span class="pname">Branch notes</span><span class="pmeta">1 command · 1 skill<br><span class="mono">0.3.1</span> · folder</span><span class="pchip">Not approved</span><button class="btn">Review</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="half" style="margin-top:18px">
+    <div>
+      <p class="when"><b>승인</b> · 지금의 권한 시트를 씁니다. 실제로 도는 것을 그대로 보여 줍니다.</p>
+      <div class="sheet">
+        <h4>Review “Quiet hours”</h4>
+        <p>This plugin is not from Nunchiro. Read what it runs before you turn it on.</p>
+        <div class="ln"><span>Runs</span><span class="mono">./quiet.sh panel<br>./quiet.sh pause<br>./quiet.sh gate</span></div>
+        <div class="ln"><span>Can refuse</span><span>A new session that an agent, a schedule or a trigger starts</span></div>
+        <div class="ln"><span>Network</span><span>None</span></div>
+        <div class="ln"><span>Reads</span><span>Its own folder</span></div>
+        <div class="ln"><span>Adds</span><span>1 skill for new sessions</span></div>
+        <div class="acts"><button class="btn q">Open folder</button><button class="btn">Cancel</button><button class="btn p">Approve and turn on</button></div>
+      </div>
+    </div>
+    <div>
+      <p class="when"><b>명령</b> · 명령 팔레트에 플러그인 이름과 함께 나옵니다</p>
+      <div class="palette">
+        <div class="q">quiet</div>
+        <div class="r on">Pause quiet hours until tomorrow<small>Quiet hours</small></div>
+        <div class="r">Open panel: Held tonight<small>Quiet hours</small></div>
+      </div>
+      <p class="when"><b>막혔을 때, 창에서</b> · 사용자의 시작이면 넘길 수 있습니다. M8의 줄과 같은 자리, 같은 모양입니다.</p>
+      <div class="win"><div class="status"><span class="usg">Claude 42%</span><span class="note"><span>Quiet hours stopped this start: Quiet hours until 07:00.</span><button class="btn">Start anyway</button><span style="color:var(--muted)">×</span></span><span class="spx"></span><span>work ▾</span></div></div>
+      <p class="when"><b>막혔을 때, 에이전트에게</b> · 넘길 수 없고 이유를 받습니다</p>
+      <div class="term"><span class="dim">$ nunchiro agent start docs --kind claude --project .</span>
+Not started. The plugin "Quiet hours" refused it: Quiet hours until 07:00. Only the owner can start it anyway.</div>
+    </div>
+  </div>
+
+  <div class="half" style="margin-top:18px">
+    <div>
+      <p class="when"><b>틀 만들기</b> · 명령 하나로 통과하는 플러그인이 생깁니다</p>
+      <div class="term"><span class="dim">$ nunchiro plugin new quiet-hours --with panel,command,setting,gate</span>
+Created ~/.nunchiro/plugins/quiet-hours
+  plugin.toml      the manifest, with a schema line for your editor
+  plugin.sh        one script that answers panel, command and gate
+  sample/          example input for each part
+  README.md        what each part gets and returns
+It is off and not approved. Try it first:
+
+<span class="dim">$ nunchiro plugin check quiet-hours</span>
+<span class="ok">manifest ok</span> · panel printed 2 rows · command exit 0 · gate allowed the sample start
+Turn it on in Settings > Plugins.</div>
+    </div>
+    <div class="notes">
+      <div class="cap">타입</div>
+      <ul>
+        <li>플러그인은 TypeScript가 아니라 명령이므로, "타입"은 JSON Schema 두 장입니다: <code>plugin.schema.json</code>(매니페스트)과 API 스키마 안의 gate 입력·출력. 틀이 넣는 첫 줄 <code>#:schema …</code> 덕에 편집기가 자동 완성과 오류를 보여 줍니다.</li>
+        <li><code>plugin check</code>는 승인 없이 샘플 입력으로 한 번 돌려 봅니다. 진짜 세션은 건드리지 않고, 위젯 검사와 같은 가둔 폴더에서 돕니다.</li>
+        <li>에이전트도 이 명령으로 플러그인을 만들 수 있습니다. 승인은 여전히 사용자의 일입니다.</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="when" style="margin-top:22px"><b>목록에서 고르기</b> · Browse plugins를 누르면 열립니다. 테마 고르기와 같은 길(고정 주소 하나, HTTPS, 크기 제한)로 읽습니다.</p>
+  <div class="win set">
+    <div class="snav"><span>General</span><span>Appearance</span><span>Accounts</span><span>Agents</span><span>Skills &amp; hooks</span><span class="on">Plugins</span><span>Projects</span><span>Permissions</span><span>About</span></div>
+    <div class="sbody">
+      <h3>Browse plugins</h3>
+      <p class="lede">From github.com/develku/nunchiro-plugins. Each entry is pinned to one commit; a download that differs from the list is not installed.</p>
+      <div class="pcard">
+        <div class="prow"><span class="mark">Li</span><span class="pname">Linear inbox</span><span class="pmeta">Your assigned Linear issues as a panel; start an agent on one.<br>1 panel · 2 commands · 1 MCP server · network: api.linear.app</span><span class="pchip ok plain">Installed</span><span></span></div>
+        <div class="prow"><span class="mark">Pr</span><span class="pname">PR size</span><span class="pmeta">Shows how big a branch is before you open a pull request.<br>1 panel · 1 command · no network</span><span></span><button class="btn">Install</button></div>
+        <div class="prow"><span class="mark">Sn</span><span class="pname">Sentry errors</span><span class="pmeta">New errors of this project; a trigger starts an agent on one.<br>1 panel · 1 trigger · network: sentry.io</span><span></span><button class="btn">Install</button></div>
+      </div>
+      <p class="lede" style="margin-top:10px">Installing only downloads the files. A plugin stays off until you review and approve it.</p>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p4">
+  <div class="phead"><div class="num">4</div><div>
+    <h2>B의 넷째 조각: 바깥에서 거는 시작 (Triggers)</h2>
+    <p>예약과 같은 것인데 때가 시각이 아니라 사건입니다. 무엇을 시작할지는 예약처럼 사용자가 미리 정한 닫힌 묶음(누가, 어느 폴더, 무슨 일)이고, 바깥에서 온 글은 지시가 아니라 인용된 자료로만 붙습니다.</p>
+  </div></div>
+  <div class="two">
+    <div>
+      <p class="when"><b>Schedules 화면에 Triggers가 생깁니다</b></p>
+      <div class="win"><div class="sbody">
+        <h4 style="margin-top:0">Triggers<span class="sp"></span><button class="btn t">Add trigger</button></h4>
+        <div class="pcard">
+          <div class="prow" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto auto"><span><span class="pname">Checks fail on my pull request</span><span class="pmeta">GitHub · nunchiro</span></span><span class="pmeta">Bo (Codex) · “Find why the checks failed and fix it.”<br>last fired 2 h ago · finished</span><span class="pchip plain">Ask me first</span><span class="sw on"></span></div>
+          <div class="prow" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto auto"><span><span class="pname">Linear issue labelled “agent”</span><span class="pmeta">Webhook · nunchiro</span></span><span class="pmeta">New session, Claude · “Read the issue and propose a plan.”<br>not fired yet</span><span class="pchip plain">Ask me first</span><span class="sw on"></span></div>
+          <div class="prow" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto auto"><span><span class="pname">Nightly build broke</span><span class="pmeta">Command line · kappa</span></span><span class="pmeta">Ada (lead) · “The nightly build failed. Look at the log below.”<br>last fired yesterday 03:12 · needs you</span><span class="pchip plain">Starts by itself</span><span class="sw on"></span></div>
+        </div>
+      </div></div>
+
+      <p class="when"><b>새 트리거</b> · 예약 폼과 같은 칸에 When만 다릅니다</p>
+      <div class="sheet" style="max-width:none">
+        <h4>New trigger</h4>
+        <div class="ln"><span>When</span><span><span class="inp">A webhook is called ▾</span> <span class="pmeta">GitHub: checks fail on my pull request · a review asks for changes · an issue gets a label · I am mentioned / A webhook is called / A command runs</span></span></div>
+        <div class="ln"><span>Name</span><span><span class="inp">Linear issue labelled “agent”</span></span></div>
+        <div class="ln"><span>Who</span><span><span class="inp">New session… Claude ▾</span></span></div>
+        <div class="ln"><span>Project folder</span><span><span class="inp mono">~/Projects/nunchiro</span></span></div>
+        <div class="ln"><span>Task</span><span><span class="inp" style="display:block">Read the issue and propose a plan.</span><span class="pmeta">What the caller sends is added below your task as quoted data, cut at 4 KB.</span></span></div>
+        <div class="ln"><span>Before it starts</span><span><span class="inp">Ask me first ▾</span> <span class="pmeta">or Start by itself (at most 4 an hour)</span></span></div>
+        <div class="ln"><span>Address</span><span><span class="inp mono">http://127.0.0.1:47800/hooks/tr_8f2c</span> <button class="btn q">Copy</button><br><span class="pmeta">Only this Mac can reach it. To let a service on the internet call it, point your own tunnel at this port.</span></span></div>
+        <div class="ln"><span>Signed by</span><span><span class="inp">Linear ▾</span> <span class="pmeta">GitHub · Slack · Linear · A secret header</span><br><span class="pmeta">The secret is shown once after you press Add.</span></span></div>
+        <div class="acts"><button class="btn">Cancel</button><button class="btn p">Add</button></div>
+      </div>
+
+      <p class="when"><b>걸렸을 때 (Ask me first)</b> · Decisions에 카드 한 장</p>
+      <div class="dcard"><b>Trigger “Checks fail on my pull request” fired</b>
+        <small>GitHub · develku/nunchiro #212 “Fix parser crash” · 3 checks failed</small>
+        Start Bo (Codex) in nunchiro with “Find why the checks failed and fix it.”?
+        <div class="quote">From GitHub, shown as data:
+rust-test (2/3)  failed  parser::tests::unterminated_string
+web              failed  typecheck</div>
+        <div class="acts"><button class="btn p">Start</button><button class="btn">Not this time</button><button class="btn q">Turn this trigger off</button></div></div>
+    </div>
+    <div class="notes">
+      <div class="cap">세 가지 길</div>
+      <ul>
+        <li><b>GitHub:</b> 사용자의 <code>gh</code>로 2분마다 읽습니다. 지금 PR 실시간 확인이 쓰는 실행기 그대로입니다. 터널도 서버도 필요 없습니다. T3 Code가 이 방식입니다.</li>
+        <li><b>Webhook:</b> 이 Mac의 127.0.0.1 주소 하나. 웹훅 트리거가 하나라도 있을 때만 열립니다. 서명이 맞지 않으면 버립니다. Slack·Linear처럼 인터넷에서 부르는 서비스는 사용자의 터널(Tailscale Funnel, cloudflared)이 있어야 닿습니다.</li>
+        <li><b>명령:</b> <code>nunchiro trigger fire &lt;name&gt; --data @file</code>. cron, CI, 다른 도구가 부릅니다. 새 토큰 범위 <code>trigger</code>는 이것 하나만 할 수 있습니다.</li>
+      </ul>
+      <div class="cap">안전</div>
+      <ul>
+        <li>트리거는 사용자만 만듭니다. 에이전트는 예약처럼 제안 카드만 낼 수 있습니다.</li>
+        <li>부르는 쪽은 무엇을 시작할지 정하지 못합니다. 이름을 부를 뿐입니다.</li>
+        <li>같은 PR이나 이슈로는 겹쳐 시작하지 않습니다. 한 시간에 4번까지입니다.</li>
+        <li>메모리 보류(M8), 외부 전송 카드, 권한 방식은 다른 세션과 똑같이 적용됩니다.</li>
+        <li>기본은 <code>Ask me first</code>입니다.</li>
+      </ul>
+      <div class="cap">하지 않는 것</div>
+      <ul><li>Nunchiro가 운영하는 중계 서버. Orca는 자기 클라우드로 사건을 받습니다. Nunchiro는 서버가 없고 "아무것도 밖으로 보내지 않는다"가 약속이라 두지 않습니다.</li></ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p5">
+  <div class="phead"><div class="num">5</div><div>
+    <h2>C. 창 안에서 도는 코드 플러그인 (지금은 아님)</h2>
+    <p>Orca, bb, Paseo의 방식입니다. 플러그인이 TypeScript로 쓰이고, npm으로 내는 SDK 타입을 쓰며, 패널은 창 안의 가둔 틀(iframe)에서, 뒤쪽 코드는 별도 프로세스에서 돕니다.</p>
+  </div></div>
+  <div class="half">
+    <div class="notes"><div class="cap">얻는 것</div><ul>
+      <li>패널을 마음대로 그릴 수 있고, 창의 사건에 바로 반응합니다.</li>
+      <li>Orca의 16가지 모양에 가까워집니다(파일 보기, 상태 막대 항목, 언어 강조).</li>
+    </ul></div>
+    <div class="notes"><div class="cap">드는 것</div><ul>
+      <li>창의 내부를 API로 굳혀야 합니다. 지금은 창을 자주 다시 설계하고 있어서(팀, 봇, 리드) 약속하기 이릅니다.</li>
+      <li>npm 패키지를 내고 버전을 지켜야 합니다. 새 공급망입니다.</li>
+      <li>Paseo는 플러그인을 가두지 않고, bb는 서버 프로세스 안에서 돌립니다. Orca만 틀과 지문 승인을 갖췄고 그 코드가 큽니다.</li>
+      <li>웹 위젯(지금 있음)이 이미 "자기 HTML을 가진 패널"입니다. B의 <code>panel</code>이 <code>kind = "web"</code>을 받으므로, C의 큰 부분은 B에 들어 있습니다.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section class="panel" id="p6">
+  <div class="phead"><div class="num">6</div><div><h2>비교</h2></div></div>
+  <div class="card"><table>
+    <tr><th></th><th>A 공개만</th><th>B 플러그인 = 폴더 (추천)</th><th>C 창 안 코드</th></tr>
+    <tr><td>API 스키마 (XO5)</td><td class="yes">있음</td><td class="yes">있음</td><td class="yes">있음 + npm 타입</td></tr>
+    <tr><td>플러그인 (XO1)</td><td class="no">없음</td><td class="yes">패널, 명령, 설정, 막기</td><td class="yes">그것 + 자유로운 화면</td></tr>
+    <tr><td>틀과 타입 (XO2)</td><td class="no">없음</td><td class="yes"><code>plugin new</code>, <code>plugin check</code>, 스키마</td><td class="yes">그것 + 빌드, 핫 리로드</td></tr>
+    <tr><td>목록 (XO3)</td><td class="no">없음</td><td class="yes">고정 저장소 하나</td><td class="yes">같음</td></tr>
+    <tr><td>바깥 시작 (XO4)</td><td class="no">없음</td><td class="yes">GitHub, 웹훅, 명령</td><td class="yes">같음</td></tr>
+    <tr><td>플러그인 코드가 도는 곳</td><td>—</td><td>샌드박스 안의 명령 (지금 위젯과 같음)</td><td class="mid">창 안의 틀 + 별도 프로세스</td></tr>
+    <tr><td>새 의존성</td><td>테스트에서만 <code>schemars</code></td><td>같음</td><td class="mid">npm SDK 패키지, 번들러</td></tr>
+    <tr><td>만드는 양</td><td>PR 1개</td><td>PR 5개 (첫 번째가 A)</td><td>B 뒤에 큰 PR 여럿</td></tr>
+    <tr><td>p36 추정</td><td>20</td><td>80~100</td><td>B와 같음 (줄은 이미 다 참)</td></tr>
+  </table></div>
+  <p class="when" style="margin-top:12px"><b>고르지 않은 것:</b> 플러그인 설치를 npm으로 받는 안(bb, Paseo). 코어가 npm을 부르게 되고, 설치 스크립트가 승인 전에 돕니다. 목록 저장소의 고정된 파일을 받는 쪽이 지금 테마와 같은 길이고 더 좁습니다.</p>
+</section>
+
+<section class="panel" id="p7">
+  <div class="phead"><div class="num">7</div><div>
+    <h2>다른 앱</h2>
+    <p>소스에서 확인했습니다. 앱을 띄워 보지는 않았습니다.</p>
+  </div></div>
+  <div class="card"><table>
+    <tr><th>앱</th><th>플러그인</th><th>틀</th><th>목록</th><th>바깥 시작</th><th>공개된 API</th></tr>
+    <tr><td>Orca</td><td><code>orca-plugin.json</code>, 16가지 모양, 실행 방식 4단계(data → trusted-worker), 지문 승인<small class="src">src/shared/plugins/manifest/plugin-manifest.ts:82-199</small></td><td><code>plugin create</code> 템플릿 10개, <code>plugin types</code><small class="src">plugin-create.ts:45-73</small></td><td>git 저장소, 커밋 + 해시 고정, 차단 목록<small class="src">plugin-catalog.ts:20-91</small></td><td>Slack·GitHub·Linear·웹훅, 자기 클라우드를 길게 물어봄<small class="src">connector-poll-client.ts:1</small></td><td>매니페스트 스키마만. RPC는 내부용<small class="src">plugin-json-schema.ts:14-19</small></td></tr>
+    <tr><td>bb</td><td>npm SDK, 서버 프로세스 안에서 실행, 가두지 않음<small class="src">plugin-sdk/src/backend-contract.ts:2222-2306</small></td><td><code>bb plugin new</code><small class="src">apps/cli/src/commands/plugin.ts:1454</small></td><td>marketplace.json, npm·git<small class="src">marketplace-manifest.ts:38-40</small></td><td>플러그인이 HTTP 경로를 등록<small class="src">backend-contract.ts:844-859</small></td><td>npm SDK가 곧 타입</td></tr>
+    <tr><td>Paseo</td><td><code>paseo-plugin.json</code>, 가두지 않음, 기본 꺼짐<small class="src">server/plugins/manifest.ts:25-37</small></td><td><code>paseo plugin init</code></td><td>레지스트리, sha512 또는 커밋<small class="src">protocol/src/plugin-registry.ts:14-71</small></td><td>없음</td><td>npm 프로토콜 패키지</td></tr>
+    <tr><td>herdr</td><td><code>herdr-plugin.toml</code>, 명령은 배열, 사건은 알림만(막지 못함)<small class="src">docs/next/website/…/plugins.mdx:54-121</small></td><td>없음</td><td>웹사이트에만</td><td>없음</td><td>JSON Schema 27만 바이트, 동기화 테스트<small class="src">src/api/schema/tests.rs:182-206</small></td></tr>
+    <tr><td>T3 Code</td><td>없음</td><td>없음</td><td>ACP 에이전트만<small class="src">AcpRegistrySupport.ts:50</small></td><td><code>gh</code>로 PR을 2분마다 읽음, 로컬 웹훅 경로<small class="src">PullRequestWatchReactor.ts:43 · environmentHttp.ts:821-843</small></td><td>패키지는 있으나 비공개</td></tr>
+    <tr><td>Superset</td><td>스킬 + 원격 MCP 묶음, 코드 없음<small class="src">plugins/linear/plugin.json:1-29</small></td><td><code>plugins create</code></td><td><code>.agent-marketplace.json</code></td><td>호스팅 API로 받음</td><td>CLI 트리만</td></tr>
+  </table></div>
+  <div class="notes" style="margin-top:12px"><ul>
+    <li><b>업계 표준:</b> 매니페스트 한 장, 틀 만들기 명령, 커밋과 해시로 고정한 목록, 코드를 돌리기 전 승인.</li>
+    <li><b>B가 따르는 것:</b> herdr의 TOML과 배열 명령, Orca의 고정 목록과 승인, T3 Code의 <code>gh</code> 읽기와 로컬 웹훅, herdr의 스키마 동기화 테스트.</li>
+    <li><b>Nunchiro가 다른 점:</b> 플러그인 코드가 창이나 서버 프로세스 안에서 돌지 않고, 모든 실행이 샌드박스 안입니다. 바깥 사건을 받는 서버가 없습니다. 막기는 사용자의 입력을 건드리지 못합니다.</li>
+  </ul></div>
+</section>
+
+<section class="panel" id="p8">
+  <div class="phead"><div class="num">8</div><div>
+    <h2>점수에 주는 것 (추정)</h2>
+    <p>p36은 다섯 줄을 가장 앞선 앱의 합과 견줍니다. Orca는 XO5를 뒤지지 않아 "예"로 치므로 합이 5입니다. Nunchiro의 "예"는 점수 매기는 날 예제가 실제로 돌아야 합니다(샘플 플러그인을 띄우고, 격리된 코어에 트리거를 건다).</p>
+  </div></div>
+  <div class="half">
+    <div class="card" style="padding:14px 18px">
+      <div class="cap">p36 다른 사람을 위한 확장성</div>
+      <div class="bar2"><span>지금 (합 0.5)</span><i style="width:10%"></i><b>10</b></div>
+      <div class="bar2"><span>PR 1 뒤 (XO5)</span><i style="width:20%"></i><b>20</b></div>
+      <div class="bar2"><span>PR 2 뒤 (+XO1 반, XO2)</span><i style="width:50%"></i><b>50</b></div>
+      <div class="bar2"><span>PR 3 뒤 (XO1 예)</span><i style="width:60%"></i><b>60</b></div>
+      <div class="bar2"><span>PR 4 뒤 (+XO4)</span><i style="width:80%"></i><b>80</b></div>
+      <div class="bar2"><span>PR 5 뒤 (+XO3)</span><i style="width:100%"></i><b>100</b></div>
+      <p class="when">목록에 Nunchiro가 만든 예제뿐이면 심사자가 XO3를 "반"으로 볼 수 있습니다. 그러면 90입니다.</p>
+    </div>
+    <div class="notes">
+      <div class="cap">p22 확장성 (지금 70)</div>
+      <ul>
+        <li>p22는 깊이(EX1~EX5)와 넓이(확장 종류 수, Orca 18)의 평균입니다. 넓이는 규칙상 "아니오가 아닌 줄 하나당 하나"라서 지금 줄로는 5가 끝이고, 넓이는 61에서 더 오르지 않습니다.</li>
+        <li>그래서 p22가 80을 넘는 길은 EX3(프로젝트별 MCP, 이미 들어온 듯함)와 EX5(진짜 ACP 턴, M7)입니다. 둘 다 "예"면 80.4입니다.</li>
+        <li>M6가 더하는 종류(패널 묶음, 명령, 설정, 막기, 트리거)는 지금 규칙으로는 세지지 않습니다. 세려면 Orca의 모양에서 줄을 더해야 하고, 더한 줄은 만들기 전까지 "아니오"라 점수가 먼저 내려갑니다. 줄을 더할지는 10번 질문입니다.</li>
+      </ul>
+      <div class="cap">함께 오르는 것</div>
+      <ul>
+        <li>p24 인터페이스 I4: 소켓 형식 공개로 "반"에서 "예" (90 → 100 추정).</li>
+        <li>p16 BT7 (지켜보던 PR이 바뀌면 봇이 스스로 움직임): GitHub 트리거가 같은 일을 합니다.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p9">
+  <div class="phead"><div class="num">9</div><div><h2>문구 (영어만, 출시 전까지)</h2></div></div>
+  <div class="card"><table>
+    <tr><th>자리</th><th>문구</th><th>PR</th></tr>
+    <tr><td>설정 쪽 이름과 설명</td><td><code>Plugins</code><br><code>A plugin is a folder that adds panels, commands, settings and checks to Nunchiro. Nothing in it runs until you approve it.</code></td><td>2</td></tr>
+    <tr><td>목록 머리와 버튼</td><td><code>Your plugins</code> · <code>Browse plugins</code> · <code>Add from folder…</code> · <code>No plugins yet.</code></td><td>2, 5</td></tr>
+    <tr><td>줄의 요약</td><td><code>{n} panel</code> · <code>{n} command</code> · <code>{n} check</code> · <code>{n} setting</code> · <code>{n} skill</code> · <code>{n} MCP server</code> · <code>{n} trigger</code></td><td>2</td></tr>
+    <tr><td>상태</td><td><code>Approved</code> · <code>Not approved</code> · <code>Changed since approval</code> (지금 있는 말)</td><td>2</td></tr>
+    <tr><td>버튼</td><td><code>Review</code> · <code>Review what it runs</code> · <code>Remove</code> · <code>Open folder</code> · <code>Approve and turn on</code></td><td>2</td></tr>
+    <tr><td>승인 시트</td><td><code>Review “{name}”</code><br><code>This plugin is not from Nunchiro. Read what it runs before you turn it on.</code><br><code>Runs</code> · <code>Can refuse</code> · <code>Can change</code> · <code>Network</code> · <code>Reads</code> · <code>Adds</code> · <code>None</code> · <code>Its own folder</code></td><td>2, 3</td></tr>
+    <tr><td>막기의 설명</td><td><code>A new session that an agent, a schedule or a trigger starts</code><br><code>A message that an agent, a schedule or a trigger sends</code><br><code>Before a new session starts</code> · <code>Before a message is sent</code></td><td>3</td></tr>
+    <tr><td>막혔을 때, 창</td><td><code>{plugin} stopped this start: {reason}</code> + <code>Start anyway</code></td><td>3</td></tr>
+    <tr><td>막혔을 때, 에이전트</td><td><code>Not started. The plugin "{plugin}" refused it: {reason} Only the owner can start it anyway.</code><br><code>Not sent. The plugin "{plugin}" refused it: {reason}</code></td><td>3</td></tr>
+    <tr><td>막기가 답하지 않음</td><td><code>{plugin} did not answer in 5 seconds, so the start was refused.</code> / <code>… so the start went ahead.</code></td><td>3</td></tr>
+    <tr><td>목록 화면</td><td><code>Browse plugins</code><br><code>From {source}. Each entry is pinned to one commit; a download that differs from the list is not installed.</code><br><code>Install</code> · <code>Installed</code><br><code>Installing only downloads the files. A plugin stays off until you review and approve it.</code><br><code>The download does not match the list, so {name} was not installed.</code></td><td>5</td></tr>
+    <tr><td>트리거 목록</td><td><code>Triggers</code> · <code>Add trigger</code> · <code>No triggers yet.</code> · <code>Ask me first</code> · <code>Starts by itself</code> · <code>last fired {when}</code> · <code>not fired yet</code></td><td>4</td></tr>
+    <tr><td>트리거 폼</td><td><code>New trigger</code> · <code>When</code> · <code>Before it starts</code> · <code>Address</code> · <code>Signed by</code> · <code>A secret header</code><br><code>GitHub: checks fail on my pull request</code> · <code>GitHub: a review asks for changes</code> · <code>GitHub: an issue gets a label</code> · <code>GitHub: I am mentioned</code> · <code>A webhook is called</code> · <code>A command runs</code><br><code>What the caller sends is added below your task as quoted data, cut at 4 KB.</code><br><code>Only this Mac can reach it. To let a service on the internet call it, point your own tunnel at this port.</code><br><code>The secret is shown once after you press Add.</code></td><td>4</td></tr>
+    <tr><td>걸렸을 때의 카드</td><td><code>Trigger “{name}” fired</code><br><code>Start {who} in {project} with “{task}”?</code><br><code>From {source}, shown as data:</code><br><code>Start</code> · <code>Not this time</code> · <code>Turn this trigger off</code></td><td>4</td></tr>
+    <tr><td>트리거가 쉬었을 때</td><td><code>Trigger “{name}” fired 4 times this hour, so it waits until {time}.</code></td><td>4</td></tr>
+  </table></div>
+  <p class="when" style="margin-top:12px">"gate"는 매니페스트의 말이고, 화면에서는 <code>check</code>라고 씁니다. 화면에 "gate", "hook", "sandbox"는 나오지 않습니다.</p>
+</section>
+
+<section class="panel" id="p10">
+  <div class="phead"><div class="num">10</div><div><h2>정할 질문</h2><p>각 질문 아래가 추천입니다. 만들기는 승인 뒤에 시작합니다.</p></div></div>
+  <div class="card qa"><b>1. A, B, C 가운데 어느 것입니까?</b><small>추천: B. PR 1이 A이고 혼자서도 나갑니다. C는 창 설계가 자리 잡은 뒤에 정합니다.</small></div>
+  <div class="card qa"><b>2. 플러그인이 동작을 막거나 바꿀 수 있게 합니까(gate)?</b><small>추천: 예, 다만 새 세션 시작과 자동으로 보내는 메시지 두 곳만. 사용자가 직접 쓴 글은 건드리지 못하고, 사용자의 시작은 <code>Start anyway</code>로 넘깁니다. 다른 답: 막기 없이 패널·명령·설정만(그러면 XO1은 "반"으로 남을 수 있음).</small></div>
+  <div class="card qa"><b>3. 목록 저장소를 공개로 하나 만들어도 됩니까(develku/nunchiro-plugins)?</b><small>추천: 예. 처음에는 Nunchiro가 만든 예제 서너 개만 넣습니다. 남의 플러그인을 받을지는 그 뒤에 정합니다(본 저장소는 지금 바깥 PR을 받지 않습니다). 새 공개 저장소를 만드는 일이라 사용자의 승인이 필요합니다.</small></div>
+  <div class="card qa"><b>4. 웹훅 주소를 엽니까?</b><small>추천: 예, 127.0.0.1에만, 웹훅 트리거가 있을 때만. 인터넷에서 닿게 하는 터널은 사용자의 것이고 Nunchiro가 만들지 않습니다. 다른 답: GitHub 읽기와 명령만 내고 웹훅은 미룸(XO4는 그래도 참일 가능성이 큼).</small></div>
+  <div class="card qa"><b>5. 트리거의 기본은 Ask me first입니까?</b><small>추천: 예. 스스로 시작은 트리거마다 사용자가 켭니다. 한 시간 4번 한도는 그대로 둡니다.</small></div>
+  <div class="card qa"><b>6. p22의 넓이를 세는 줄을 늘립니까?</b><small>추천: 지금은 아니오. 줄을 늘리면 점수표가 엄격해지고(Orca의 모양 가운데 없는 것이 "아니오"로 잡힘) 먼저 내려갑니다. M6를 다 만든 뒤 주간 검토에서 정합니다. 점수를 올리려고 기준을 느슨하게 하는 안은 없습니다.</small></div>
+</section>
+</div>
+</body>
+</html>

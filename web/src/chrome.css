@@ -1,0 +1,953 @@
+/* The window chrome: tab strip, status bar, composer, target sizes, the large modal, the usage and account menus (split from styles.css, loaded after keys.css). */
+
+/* chrome: frame-ko-e tab strip and status bar (ko/frame-ko-e.html .zh .tab .tadd, footer.stb) */
+.tabw {
+  padding: 0 6px 0 10px; /* design book (tabs): padding 0 6 0 10, gap 8, dot 8 then the name */
+  gap: 8px;
+  font-weight: 400;
+  /* Ticket 996 (owner 11-19, draft A, VS Code's tabSizing "shrink"): tabs share the strip in equal parts, each at most as wide
+     as its name (and 180 px, the cap on .tab below), down to 68 px, where the icon, the dot and a few letters still show (look
+     1117 v4f: never an icon and a dot only). Only then does the strip scroll, with its "+N" counts (CentreView markCut). */
+  flex: 1 1 0;
+  min-width: 68px;
+  max-width: fit-content;
+}
+/* The shown tab keeps its whole name (its own 220 px cap); Room and Schedules keep their icon and word. */
+.tabw:has(> [aria-selected='true']),
+.tabw:has(> :is(.rtab, .stab)) {
+  flex: none;
+  max-width: 260px;
+}
+/* Ticket 996: another tab's Close lies over the end of its name on hover (Chrome), so a 68 px tab keeps letters, not blank
+   room; it still never changes width. The ⌘ chip (.tkey) sits over the same place. */
+.tabw:has(> .tab[aria-selected='false']) {
+  padding-right: 6px;
+}
+.tabw > .tab[aria-selected='false'] {
+  max-width: 163px; /* with the box's padding and border: a tab of at most 180 px */
+}
+.tabw:has(> .tab[aria-selected='false']) > .x {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: linear-gradient(var(--tint-1), var(--tint-1)), var(--page); /* the hovered tab's own fill */
+}
+/* Owner 11-17: a tab has no Stop (it is in the tab's menu, the tree and the palette), so the only room kept after the
+   name is Close's own: it shows on hover or focus in that room, and a tab never changes width or cuts its name on hover
+   (needs 26). */
+.tabw > .tab {
+  overflow: hidden;
+}
+.tabw:hover {
+  color: var(--text);
+}
+.tabw:has(> .tab[aria-selected='false']):hover {
+  background: var(--tint-1);
+}
+.tab .ticon {
+  display: inline-flex;
+  flex: none;
+}
+.tab .tname {
+  min-width: 0;
+}
+/* v25-tab-menu-close (C2): a drag or double-click on a tab never selects its label (the rename field stays editable). */
+.tab :is(.tname, .tacct) {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.tabw > .x {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 5px; /* design book (tabs): close 18 square, radius 5, x 12 */
+  color: var(--muted);
+  visibility: hidden; /* room kept: a hovered or focused tab never changes width */
+}
+.tabw:is(:hover, :focus-within) > .x {
+  visibility: visible;
+}
+/* The open tab always shows its close mark (design book). The button itself joins the tablist only on hover or focus, as
+   on the other tabs (a tablist owns only tabs); a click on the mark reaches the button. */
+.tabw:has(> .tab[aria-selected='true']) > .x > * {
+  visibility: visible;
+}
+.tabw > .x:hover {
+  background: linear-gradient(var(--tint-2), var(--tint-2)), var(--panel);
+  color: var(--text);
+}
+/* Ticket 377 (F4): while ⌘ is held for 200 ms (useHeldKeys sets data-held-tab) the first nine tabs show the key that opens them.
+   Design book (tabs): the chip takes the close button's place, so no tab changes width and the strip does not move. */
+.tabw > .tkey {
+  display: none;
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0 2px;
+  font-size: var(--fs-10);
+  line-height: 14px;
+  pointer-events: none;
+}
+:root[data-held-tab] .tabw > .tkey {
+  display: inline;
+}
+:root[data-held-tab] .tabw:has(> .tkey) > .x,
+:root[data-held-tab] .tabw:has(> .tkey) > .x > * {
+  visibility: hidden;
+}
+.tadd {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-8);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.tadd:hover {
+  color: var(--text);
+  background: var(--tint-1);
+}
+.status .it {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.status .stalebtn:hover,
+.status .rcupdate:hover,
+.status .rclater:hover,
+.status .acsw-chip:hover,
+.status .acsw-chip[aria-expanded='true'] {
+  background: var(--tint-1);
+  border-radius: var(--r-6);
+}
+/* Ticket 1041: an update is news, not your turn: ink text, no orange. Design book, status-bar note: a 24 pill, radius 7,
+   --tint-1, a 6 dot, the note in 11.5 --text; Install is its secondary small button, Later a quiet one. */
+.status .snote {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: var(--sp-8);
+  height: var(--btn-h-sm);
+  padding: 0 2px 0 var(--sp-8);
+  border-radius: var(--btn-r);
+  background: var(--tint-1);
+  color: var(--text);
+  font-size: var(--fs-meta);
+}
+.status .snote-dot {
+  flex: none;
+  width: var(--pip);
+  height: var(--pip);
+  border-radius: 50%;
+  background: var(--light-run);
+}
+.status .snote :is(.rcupdate, .rclater) {
+  height: calc(var(--btn-h-sm) - 4px);
+  padding: 0 var(--btn-pad-sm);
+  border-radius: var(--r-6);
+  color: var(--text);
+  font-weight: 500;
+}
+.status .snote .rcupdate {
+  background: var(--tint-2);
+}
+.status .snote .rcupdate:hover:not(:disabled) {
+  background: var(--tint-3);
+}
+.status .snote .rclater:hover {
+  background: var(--tint-2);
+}
+/* Ticket 1031: shown only while the core connection is lost; ticket 1041 N083: in the broken red. */
+.status .fcore {
+  color: var(--error);
+  font-weight: 600;
+}
+/* Ticket 1031: the PR chip sits in the session header, beside +N −M. */
+.shead .prchip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  font-size: var(--fs-11);
+  /* The chip keeps its state button; its one-time "Show live PR status?" offer gives way before the header overflows. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.shead .prchip > :first-child {
+  flex: none;
+}
+.shead .prchip .offer {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shead .prchip .btn {
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  font-size: var(--fs-sm);
+}
+.chat .prchip {
+  display: none; /* CHROME: the PR chip lives in the session header (NODUP); ChatView still mounts it */
+}
+/* the strip row: tablist plus the one + (not a tab, so outside the tablist) */
+.zh {
+  flex: none;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 var(--sp-8);
+  background: var(--page);
+}
+.zh .tabs {
+  flex: 0 1 auto;
+  min-width: 0;
+  border-bottom: 0;
+}
+/* /chrome */
+
+/* chrome: composer (claude-feel-2 .cmp: grows, focus ring, + menu, hint line) */
+.composer {
+  background: var(--page);
+  border-top: 0;
+  padding: 8px 20px 4px;
+}
+/* needs 130 (focus_ring_rounded): the mockup's `.cmp`, a rounded box (design book: radius 14). Ticket 1041 (polish-1121
+   .comp): no border, one tint step; focus draws the neutral ring (1 px, 3:1) round the box, as the input itself draws none. */
+.cbox {
+  max-width: var(--chat-w, 700px); /* v25-chat-calm: the chat width setting; round 3: the mockup's own .cmp max-width, so the two sides shoot at one width */
+  margin: 0 auto;
+  border-radius: var(--composer-r);
+  background: var(--tint-1);
+}
+.cbox:focus-within {
+  outline: 1px solid var(--focus-ring);
+}
+.cbox textarea {
+  height: auto;
+  min-height: 38px;
+  max-height: 220px;
+  font-size: var(--fs-145); /* round 3: the mockup's .cmp textarea */
+}
+.cbox .chips {
+  gap: 4px;
+  flex-wrap: wrap; /* ticket 192: at 320 px the left cluster wraps; the ring and Send (flex: none, perm-chip.css) stay in the box */
+}
+/* Ticket 1041: the composer's chips have no outline: the place chip is plain muted text (mockup .where), an image chip a
+   tint step on the box's tint. */
+.cbox .chip {
+  border-color: transparent;
+}
+.cbox .chips > .chip:not(.pk-chip, .ichip) {
+  color: var(--muted);
+}
+.cbox .chip.ichip {
+  background: var(--tint-1);
+}
+.cbox .chips > .chip:not(.pk-chip) {
+  flex: 1000 1 calc(8ch + 30px); /* wave 8: its floor is about eight characters; it shortens before the row wraps (picker.css) */
+  min-width: 0;
+  max-width: max-content;
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* The project chip truncates instead of pushing the row wider than the box. The ellipsis is its text's own (look 1117 v6r,
+   C S3-2: a flex chip draws none, "demo-shop / mair"). */
+.cbox .chips > .chip > .chip-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Wave 8: a really narrow composer wraps whole chips to a second line instead of shortening them past their floors. */
+.cbox {
+  container: cbox / inline-size;
+}
+@container cbox (max-width: 440px) {
+  .cbox .chips > .chip:not(.pk-chip),
+  .composer .pk {
+    flex-basis: auto;
+  }
+  /* Two chip floors (about 81 px each, picker.css) are wider than a 320 px window's line: the effort chip goes below the
+     model chip whole instead of leaving the box. */
+  .composer .pk {
+    flex-wrap: wrap;
+    row-gap: 4px;
+    min-width: 0;
+  }
+}
+.plus {
+  position: relative;
+  display: inline-flex;
+}
+.cib {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-6);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.cib:hover:not(:disabled) {
+  background: var(--tint-1);
+  color: var(--text);
+}
+.plusmenu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  min-width: 220px;
+  padding: 4px;
+  border-radius: var(--r-12);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+}
+.plusmenu button {
+  display: flex;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--r-6);
+  text-align: left;
+  font-size: var(--fs-13);
+}
+.plusmenu button:hover,
+.plusmenu button:focus-visible {
+  background: var(--select-bg);
+}
+/* Ticket 1041 (owner 11-22): Send is the ink control, not the working blue; with nothing to send, the mockup's tint. */
+/* Design book: Send is the composer's one primary, 28 round; with nothing to send it is the --tint-2 chip. */
+.send {
+  width: var(--btn-h);
+  height: var(--btn-h);
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--on-primary);
+}
+.send:disabled {
+  background: var(--tint-2);
+  color: var(--muted);
+  opacity: 1;
+}
+.send.stop {
+  background: var(--text);
+  color: var(--page);
+}
+/* needs 130 (queued_label_row): the mockup's `.cmp .queued`, the box's own first line, above the input.
+   The 12px under it is the mockup's `.cmp textarea` top padding; the app's textarea has none of its own. */
+.cbox .queued {
+  padding: 8px 14px var(--sp-12);
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+/* w25-l: a held message as long as a lead's brief grew the composer row to the window's height, and the side pane's terminal
+   beside it fell to 4 rows: Claude cut its start question off there and refused Yes, so the lead never started. */
+.cbox .queued.held {
+  max-height: 8.5em;
+  overflow-y: auto;
+}
+.composer .queued b {
+  color: var(--text);
+  font-weight: 500;
+}
+.cbox .queued .steer {
+  margin-left: 8px;
+  font: inherit;
+  color: var(--muted);
+  background: var(--control-quiet-bg);
+  border: 0;
+  border-radius: var(--r-4);
+  padding: 1px 6px;
+  cursor: pointer;
+}
+.cbox .queued .steer:hover {
+  color: var(--text);
+  background: var(--control-quiet-hover);
+}
+/* N132: one width, the box's (it was 760 against the box's 700) */
+.composer .chint {
+  max-width: var(--chat-w, 700px);
+  margin: 0 auto;
+  padding: 2px 4px 0;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+/* /chrome composer */
+
+/* CHAT-USAGE: claude-feel-2 .ring geometry, with the app's theme tokens. */
+.context-ring {
+  width: calc(var(--sp-12) + var(--sp-6));
+  height: calc(var(--sp-12) + var(--sp-6));
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: conic-gradient(var(--muted) 0 var(--context-fill), var(--tint-2) 0); /* ticket 1041: neutral, blue is working only */
+  mask: radial-gradient(circle var(--sp-6), transparent 98%, var(--text));
+  margin: 0 var(--sp-4);
+}
+
+/* Target size (WCAG 2.5.8, designer panel 2026-10-31): every control is at least 24px. Controls with a box grow to it;
+   text-only controls in bars keep their look and get the room from an invisible hit box, so no bar grows. The tree,
+   search dock and Tidy panel keep their approved mockups (pixel tests); their small controls are a follow-up there. */
+:is(
+    .btn,
+    .chip,
+    select,
+    summary,
+    .addproj,
+    input:not([type='checkbox'], [type='radio'], [type='hidden']),
+    label:has(> input[type='checkbox'], > input[type='radio'])
+  ):not(.tree *, .sdock *, .spanel *, .tidy *) {
+  min-height: 24px;
+}
+:is(.tmore, button:has(> .oi:only-child):not(.ai, .numf .steps button, .shead .qlevel-btn)):not(.tree *, .sdock *, .spanel *, .tidy *) {
+  min-width: 24px;
+  min-height: 24px;
+}
+.cmd,
+.tlink,
+.ph .xall,
+.shead .qlevel-btn,
+.shead .hbtn {
+  position: relative;
+}
+.cmd::after,
+.tlink::after,
+.ph .xall::after,
+.shead .qlevel-btn::after,
+.shead .hbtn::after {
+  content: '';
+  position: absolute;
+  inset: -5px 0;
+}
+/* The 20px header chips: a 24px box would not fit the 24px header (its 1px rule leaves 23), so they take 24px from this hit box. */
+/* Doubled class: the min-height rule above carries a higher specificity than one class pair. */
+.shead .qlevel-btn.qlevel-btn,
+.shead .hbtn.hbtn {
+  min-height: 0;
+}
+.shead .qlevel-btn::after,
+.shead .hbtn::after {
+  inset: -2px 0;
+}
+/* A bare label is inline, where min-height does nothing; zero specificity so any rule that sets its display wins. */
+:where(label:has(> input[type='checkbox'], > input[type='radio']):not(.tree *, .sdock *, .spanel *, .tidy *)) {
+  display: inline-block;
+}
+
+/* v25f (D-20261108-10): Settings and the Board in one large modal over the workspace (chrome/Overlay.tsx). Under the
+   palette (20), so ⌘K still opens over it. The status bar (24 px) stays uncovered: its Undo line answers the Board's deletes. */
+.ovl {
+  position: fixed;
+  inset: 0 0 24px;
+  z-index: 19;
+  background: var(--scrim);
+  display: flex;
+  /* a panel the user made smaller sits in the middle */
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.ovl-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, var(--faint) 50%, var(--faint) 60%, transparent 60%, transparent 70%, var(--faint) 70%, var(--faint) 80%, transparent 80%);
+}
+.ovl-panel {
+  position: relative;
+  align-self: stretch;
+  max-width: 100%;
+  max-height: 100%;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  color: var(--text);
+  border-radius: var(--r-12);
+  /* ticket 1041: solid, no border (owner 15.1 item 6) */
+  box-shadow: var(--shadow-float);
+  overflow: hidden;
+  outline: none;
+}
+.ovl-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 8px 0 14px;
+  flex: none;
+}
+.ovl-head b {
+  flex: 1;
+  font-size: var(--fs-13);
+}
+.ovl-x {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.ovl-x:hover {
+  background: var(--faint);
+}
+.ovl-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+}
+
+/* Ticket 1130 C6: the offer row for a pasted `claude mcp add` line, and its added line (mockup first-use-b-1130 .offer). */
+.mcp-offer {
+  max-width: var(--chat-w, 700px);
+  margin: 0 auto var(--sp-6);
+  border: 1px solid var(--line);
+  border-radius: var(--r-10);
+  background: var(--tint-1);
+  padding: var(--sp-8) 10px;
+  display: grid;
+  gap: 5px;
+  font-size: var(--fs-13);
+  color: var(--text);
+}
+.mcp-offer .mo-t {
+  display: flex;
+  gap: var(--sp-8);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.mcp-offer .mo-t b {
+  margin-right: auto;
+  font-weight: 600;
+}
+.mcp-offer .mo-t b.ok-line {
+  color: var(--ok-text);
+}
+.mcp-offer .btn {
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  font-size: var(--fs-sm);
+}
+.mcp-offer .mo-x {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  padding: 0 var(--sp-4);
+  font-size: var(--fs-14);
+  line-height: 1;
+  cursor: pointer;
+}
+.mcp-offer .mono {
+  font-family: var(--font-code);
+  font-size: var(--fs-code);
+  white-space: pre-wrap; /* ticket 1130 round 2: the command shows its argv's spaces exactly */
+  overflow-wrap: anywhere;
+}
+.mcp-offer small {
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.mcp-offer .mo-seal {
+  font-size: var(--fs-10);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 0 7px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* Ticket 371 item 15: the queued rows, a tray tucked on top of the box, 14px in from each side (mock 371 .qlist). */
+.qlist {
+  width: calc(100% - 28px);
+  max-width: calc(var(--chat-w, 700px) - 28px);
+  margin: 0 auto;
+  background: var(--tint-1); /* ticket 1041: the tray is the box's tint step, no outline */
+  border-radius: var(--r-12) var(--r-12) 0 0;
+  padding: 6px 0 4px;
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.qlist .qhead {
+  padding: 2px 12px 4px;
+}
+.qlist .qhead b {
+  color: var(--text);
+  font-weight: 500;
+  margin-right: 4px;
+}
+.qlist .qrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px 2px 12px;
+  min-height: 30px;
+}
+.qlist .qn {
+  flex: none;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.qlist .qt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.qlist .qa {
+  flex: none;
+  min-height: 24px;
+  padding: 1px 6px;
+  font: inherit;
+  white-space: nowrap;
+  color: var(--muted);
+  background: var(--control-quiet-bg);
+  border: 0;
+  border-radius: var(--r-4);
+  cursor: pointer;
+}
+.qlist .qa:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--control-quiet-hover);
+}
+.qlist .qa:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Ticket 371 item 17: the composer's reason line and its one restart button. */
+.composer .whyline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+/* Ticket 371 item 20: Rewind while the agent is not idle: focusable, reads as unavailable. */
+/* N065: muted words and the tooltip, not a dashed border */
+.message-actions .btn[aria-disabled='true'] {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* Ticket 372: limited (a usage limit until its reset) is the yellow of the tree's clock, on the tab, header and status bar. */
+.st:not(.sdot)[data-s='limited'] {
+  background: var(--warn);
+  border-color: var(--warn);
+}
+
+/* Ticket 451: the status bar's account switch (chrome/AccountSwitch.tsx); its menu opens upward, like the icon bar's ⋯ menu. */
+.acsw,
+.acsw-one {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+.acsw-chip {
+  gap: 4px;
+  max-width: 240px;
+}
+.acsw-agent {
+  color: var(--muted);
+}
+.acsw-label {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Ticket 1041 B: a glass floating layer (.glass, light-glass.css), the usage popover's sibling (N156): no border. */
+.acsw-pop {
+  position: fixed;
+  z-index: 60;
+  min-width: 300px;
+  width: 400px; /* ticket 1126: two-line rows wrap inside it (mockup .pop) */
+  max-width: min(460px, 90vw);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  border-radius: var(--r-12);}
+.acsw-pop .hd,
+.acsw-foot {
+  padding: 4px 8px;
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.acsw-pop .hd {
+  font-weight: 700;
+}
+.acsw-foot {
+  margin-top: 4px;
+  padding-top: 8px;
+}
+.acsw-pop button {
+  display: grid;
+  grid-template-columns: 14px minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: var(--r-6);
+  text-align: left;
+  font-size: var(--fs-2);
+}
+.acsw-pop button:hover:not(:disabled),
+.acsw-pop button:focus-visible {
+  background: var(--tint-1);
+}
+.acsw-pop button:disabled {
+  opacity: 0.55;
+}
+.acsw-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.acsw-facts {
+  color: var(--muted);
+  font-size: var(--fs-11);
+  text-align: right;
+}
+.acsw-pop .acsw-manage {
+  display: block;
+  color: var(--muted);
+}
+.acsw-carry {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+.acsw-foot.plain {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 3px;
+}
+/* Ticket 1126: two-line rows (the automatic switch, continue on a running session), the menu's groups, and the card at 98%
+   of the week (mockup docs/design/default-account-1126). */
+/* The status bar sets nowrap; these rows and the foot are sentences. */
+.acsw-pop button.acsw-two,
+.acsw-foot {
+  white-space: normal;
+}
+.acsw-pop button.acsw-two {
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: start;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.acsw-name.plain {
+  font-weight: 500;
+}
+.acsw-sub {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 400;
+  line-height: 1.35;
+}
+.acsw-box {
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  margin-top: 2px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--muted);
+  border-radius: var(--r-2);
+}
+.acsw-box.on {
+  border: 0;
+  background: var(--run);
+  color: var(--on-status);
+}
+/* Round 4: the card's level (owner 2026-11-25), a sentence and its select on one row. */
+.acsw-level {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: var(--fs-2);
+  white-space: normal;
+}
+.acsw-grp,
+.acsw-carry + .acsw-grp {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+.acsw-card {
+  position: fixed;
+  z-index: 59;
+  width: 420px;
+  max-width: 90vw;
+  box-sizing: border-box;
+  padding: 12px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text);
+  border-radius: var(--r-12);
+  font-size: var(--fs-2);
+  white-space: normal;
+}
+.acsw-card .top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.acsw-card .top > svg {
+  color: var(--warn);
+  flex: none;
+}
+.acsw-card.bad .top > svg {
+  color: var(--bad);
+}
+.acsw-card .x {
+  margin-left: auto;
+  display: flex;
+  color: var(--muted);
+  border-radius: var(--r-4);
+  padding: 2px;
+}
+.acsw-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-12);
+  line-height: 1.45;
+}
+.acsw-card .acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Ticket 476: the raw error text, closed under its error's plain line (src/errors.tsx). */
+.err-details {
+  margin-top: var(--sp-4);
+  font-size: var(--fs-11);
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.err-details > summary {
+  cursor: pointer;
+}
+/* Ticket 476: a failure's note in the status bar: click copies its details, × closes it. */
+.pane-note,
+.pane-note-x {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.pane-note-x {
+  margin-left: var(--sp-4);
+  color: var(--muted);
+}
+/* A held start's Start anyway: the Undo line's quiet tint button, no orange or red (mockup memory-hold-m8). */
+.pane-note-act,
+.held-act .btn {
+  border-color: transparent;
+  background: var(--control-quiet-bg);
+  color: var(--text);
+  font-weight: 500;
+}
+.pane-note-act {
+  margin-left: var(--sp-8);
+  padding: 1px 7px;
+  font-size: var(--fs-1);
+}
+.pane-note-act:hover,
+.held-act .btn:hover {
+  background: var(--control-quiet-hover);
+}
+.held-act {
+  display: flex;
+  margin-top: var(--sp-6);
+}
+/* On the dark toast the muted grey is too faint (476 review). */
+.wtoast .err-details {
+  color: inherit;
+  opacity: 0.8;
+}
+/* Ticket 571: the Room tab at the strip's end (src/room/room.css has the panel). */
+/* Ticket 993: .stab is the Schedules tab, drawn as the Room tab but not pinned at the strip's end. */
+.rtab, .stab { display: flex; align-items: center; align-self: stretch; gap: 6px; min-width: 0; cursor: pointer; }
+.rtab .room-badge { font-size: var(--fs-11); padding: 0 6px; border-radius: var(--r-pill); background: var(--you); color: var(--on-status); }
+/* Ticket 991 C19: a prefix chord (Prefix › key) stays on one line. */
+.kchord {
+  white-space: nowrap;
+}
+
+/* Look 1117 v3: dragging a splitter or a bar's edge selects no text across the window. */
+html[data-resizing] * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Type in terminal (mockup docs/design/draft-hold/index.html panel 4): the switch over the terminal's top right, the
+   2 px focus ring while it is on, and its one line along the bottom. */
+.tdir-btn {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  z-index: 4;
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-6);
+  background: var(--tint-2);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-12);
+  cursor: pointer;
+}
+.tdir-btn[aria-pressed='true'] {
+  background: var(--text);
+  color: var(--panel);
+}
+.term:has(> .offline, > .tfind, > .osc52) > .tdir-btn {
+  display: none;
+}
+.term[data-direct] {
+  outline: 2px solid var(--focus-ring); /* an outline paints over the xterm canvas; an inset shadow went under it */
+  outline-offset: -2px;
+}
+.tdir-line {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 6px;
+  z-index: 4;
+  margin: 0;
+  padding: 5px 12px;
+  border-radius: var(--r-6);
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--tint-2);
+  color: var(--muted);
+  font-size: var(--fs-12);
+  pointer-events: none;
+}

@@ -4,8 +4,8 @@ import { CoreClient } from '../api';
 import { sideChatShown } from '../chat/SideChat';
 import { hasTranscript } from '../chat/ChatView';
 import { threadText } from '../chat/thread';
-import { startShell } from '../pane/SidePane';
-import { isOpen as paneOpen, maximise as paneMax, shellsOf, show as paneShow, tabOf as paneTab, toggle as paneToggle, usePane } from '../pane/store';
+import { showShell } from '../pane/SidePane';
+import { isOpen as paneOpen, maximise as paneMax, show as paneShow, tabOf as paneTab, toggle as paneToggle, usePane } from '../pane/store';
 import { add as addSplit, splitsOf } from '../split/store';
 import { CARD_OPS, cardCan, runCard } from '../board/cardMenu';
 import { editScrollback } from '../terminal/editor';
@@ -399,11 +399,7 @@ export function buildCommands({ resume, ordered, board, ownerList, current, t, o
     }),
     Object.defineProperty({ id: 'split.close', title: 'Close the focused split', why: t('look8.noSplit'), run: () => splitRef.current.close() }, 'enabled', { get: () => !!current && splitsOf(current.id).length > 0, enumerable: true }),
     { id: 'pane.shell.new', title: 'New shell in the side pane (this session’s folder)', enabled: !!paneSession, run: () => {
-      if (!paneSession) return;
-      // Ticket 1130 C4: a running shell of this pane is shown and focused; only with none is a new one started.
-      const have = shellsOf(paneSession.id).filter((id) => sessions.some((s) => s.id === id && s.kind === 'shell' && s.state === 'running')).at(-1);
-      if (have) return paneShow(paneSession.id, { shell: have }, true);
-      void startShell(core, paneSession, (shell) => paneShow(paneSession.id, { shell }, true)).then((e) => e && setPaneNote(e));
+      if (paneSession) showShell(core, paneSession, sessions, setPaneNote); // ticket 1130 C4
     } },
     { id: 'about.copy', title: t('about.copyBuild'), run: () => void copyBuildInfo() }, // ticket 262: the About page's support line
     // G2: only in a build that updates itself. A newer build shows in the status bar; nothing newer or a failure (ticket 377) is a short note.

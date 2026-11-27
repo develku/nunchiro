@@ -360,6 +360,7 @@ fn task_ask(operation: &str, text: &str, project: Option<&Path>) -> Request {
         package: None,
         why: None,
         account: None,
+        after: vec![],
     }
 }
 /// The account a plan of `staff_plan` starts its seat on.
@@ -1192,5 +1193,70 @@ fn leads_may_use_any_account_only_when_the_owner_turned_it_on() {
         .filter(|b| b.contains("on account official"))
         .collect();
     assert_eq!(lines.len(), 1, "{lines:?}");
+    end_handoff(registry, home);
+}
+
+// Task dependencies: the core starts no Reviewer for a task that waits for another (checked under the lock, at the
+// start), and a landing is told to the running lead once, however often the release runs.
+#[test]
+fn a_waiting_task_gets_no_reviewer_and_its_lead_hears_its_release_once() {
+    let (registry, home, lead, task) = lead_core("advance-after", None);
+    let ledger = Ledger::open(&home);
+    let (first, _) = ledger
+        .make(&home, Some("lead"), "first", &[], false, 1)
+        .unwrap();
+    ledger
+        .set_after(&task.id, std::slice::from_ref(&first.id), "the user", 2)
+        .unwrap();
+    let before = registry.lock().unwrap().entries.len();
+    let refused = start(&registry, &task, &lead).unwrap_err();
+    assert_eq!(refused, "skipped: the task waits for another task");
+    assert_eq!(registry.lock().unwrap().entries.len(), before);
+    ledger.close(&first.id, "done", 3).unwrap();
+    for _ in 0..3 {
+        crate::advance::release(&registry, &home);
+    }
+    let core = registry.lock().unwrap();
+    let meta = &core.entries[&lead].meta;
+    let lines: std::collections::BTreeSet<&str> = meta
+        .send_log
+        .iter()
+        .chain(&meta.send_queue)
+        .filter(|s| s.content.contains("landed"))
+        .map(|s| s.id.as_str())
+        .collect();
+    assert_eq!(lines.len(), 1, "{:?}", meta.send_queue);
+    drop(core);
+    end_handoff(registry, home);
+}
+
+// Task dependencies: with auto-advance off the lead still hears a landing, in the room (the core types nothing into its
+// box then), once.
+#[test]
+fn with_auto_advance_off_the_lead_hears_a_landing_in_the_room() {
+    let (registry, home, _lead, task) = lead_core("advance-after-off", None);
+    let ledger = Ledger::open(&home);
+    ledger.set_place(&home, None, None, Some(false)).unwrap();
+    let (first, _) = ledger
+        .make(&home, Some("lead"), "first", &[], false, 1)
+        .unwrap();
+    ledger
+        .set_after(&task.id, std::slice::from_ref(&first.id), "the user", 2)
+        .unwrap();
+    ledger.close(&first.id, "done", 3).unwrap();
+    for _ in 0..2 {
+        crate::advance::release(&registry, &home);
+    }
+    let said: Vec<String> = crate::room::Log::open(&home, &home)
+        .find(|m| m.body.contains("landed"))
+        .unwrap()
+        .into_iter()
+        .map(|m| m.body)
+        .collect();
+    assert_eq!(
+        said,
+        ["\"first\" landed. \"tax\" no longer waits: start it when you are ready."]
+    );
+    drop(said);
     end_handoff(registry, home);
 }

@@ -27,8 +27,9 @@ async function browserPane(app: Page, core: Core, language: string, a: { id: str
     [language, seed] as const,
   );
   await openAgent(app, core, language, a);
-  await app.locator('#icon-terminal').click();
+  // The Browser icon opens the pane on its own; ⌘J opens it on the agent's PTY (the Terminal icon shows a shell).
   if (tab === 'browser') await app.locator('#icon-browser').click();
+  else await app.keyboard.press('Meta+KeyJ');
   return app.locator('[data-side-pane]:not([hidden])');
 }
 async function openAgent(app: Page, core: Core, language: string, a: { id: string }) {
@@ -105,7 +106,7 @@ test('sidepane_extra_strings_translated: a shell tab closes with a translated na
   const tab = pane.getByRole('tab').filter({ hasText: 'shell' });
   await expect(tab).toBeVisible();
   const name = await tab.innerText();
-  await expect(pane.getByRole('button', { name: t('ko', 'sidePane.closeShell', { name }) })).toBeVisible();
+  await expect(pane.locator('.px')).toHaveAttribute('title', t('ko', 'sidePane.closeShell', { name }));
 });
 
 test('sidepane_extra_strings_translated: the selection button reads Korean', async ({ app, core }) => {

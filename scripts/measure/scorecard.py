@@ -13,6 +13,7 @@ Usage:
   scorecard.py tests [--target DIR] [--out FILE]
       Runs every command a check in parts.json names under "tests" (detached, as `dev` runs the gate's test stage) and
       writes docs/measure/tests-<date>.json: the commit, and per command whether it ended 0 with at least one test run.
+      A command that names a spec file missing from web/tests is not run and not green.
   scorecard.py weigh [--secs 60] [--out FILE]
       Read only, the owner-run step for idle memory and CPU with real agent sessions: the owner's running Nunchiro
       (core, window, WebKit helpers, holders) by ps and footprint, with the number of Claude and Codex sessions it
@@ -38,11 +39,18 @@ Usage:
       minute: a hidden window draws no frames. --repeats times: another session selected, then the chat's tree row,
       from the press to the page's nunchiro:chat-drawn mark. Writes chat_open_5000_ms (the median; p95, n and misses
       in its evidence) into the manual file only when every open has its mark; exit 1 otherwise.
+  scorecard.py stream8 [--no-build] [--out FILE]
+      The owner-run step for p33's streaming figure. Builds (or reuses) the RC core with debug assertions on (a release
+      core gives its window token to the app only, peer.rs is_app; MEASURE_TARGET + "-assert") and
+      runs paint.py's stream phase as the anchor table names it: 8 fake agents stream 20 MiB each into visible
+      terminals of the shipped web bundle in headless WebKit, 3 repeats. Writes stream8_worst_frame_ms (the median of
+      the repeats' worst frames) into the manual file only when every repeat painted all 8 end markers with
+      unthrottled frames; exit 1 otherwise.
   scorecard.py dev [--target DIR] [--out FILE]
       Maintainability figures (part p26): a cold and a warm debug build of the Rust workspace in DIR (a fresh cargo
       target, removed first), the web build, the pull-request gate's Rust test stage (TEST_STAGE) on that target,
-      the largest source files, and the files that two or more open lanes (local branches with a commit today that
-      origin/main does not have) both change. Writes docs/measure/dev-<date>.json; `page` reads the newest one.
+      the largest source files, and the files that two or more open lanes (local branches with a commit today or an
+      open pull request, less the ones whose pull request is merged or closed; pull requests read with gh) both change. Writes docs/measure/dev-<date>.json; `page` reads the newest one.
   scorecard.py ops [--clones DIR] [--out FILE]
       Parts p27 and p29. Deploy stability from the main CI log (read only): each red episode on main (first RED to
       the next GREEN), the change failure rate over tested main tips and the minutes red; reverts landed (git log).
@@ -166,12 +174,14 @@ def log_start(text):
 
 
 def parse_main_log(text, runs=30, installs=20):
-    """Gate runs ("testing <sha>" then "GREEN|RED <sha>") with their minutes, and owner install outcomes.
+    """Gate runs ("testing <sha>" then "GREEN|RED <sha>") with their minutes, and what became of each of the last
+    `installs` green runs on the owner's app: installed when an owner install of its commit is recorded, failed when
+    only a failed one is, skipped otherwise (a wait, or nobody tried). landed_pct needs all `installs` green runs.
     A run that crosses midnight adds 24 h. Lines of other kinds are ignored."""
     def secs(hms):
         h, m, s = map(int, hms.split(":"))
         return h * 3600 + m * 60 + s
-    gates, pending, inst = [], {}, []
+    gates, pending, inst = [], {}, {}
     for line in text.splitlines():
         m = re.match(r"^(\d\d:\d\d:\d\d) testing ([0-9a-f]{40})$", line)
         if m:
@@ -180,19 +190,20 @@ def parse_main_log(text, runs=30, installs=20):
         m = re.match(r"^(\d\d:\d\d:\d\d) (GREEN|RED) ([0-9a-f]{40})\b", line)
         if m and m[3] in pending:
             d = secs(m[1]) - pending.pop(m[3])
-            gates.append(dict(sha=m[3][:9], verdict=m[2], minutes=round((d + 86400 if d < 0 else d) / 60, 1)))
+            gates.append(dict(sha=m[3][:9], commit=m[3], verdict=m[2], minutes=round((d + 86400 if d < 0 else d) / 60, 1)))
             continue
         m = re.match(r"^\d\d:\d\d:\d\d owner (?:install|build of) ([0-9a-f]{40})[: ](.*)$", line)
         if m:
-            rest = m[2]
-            inst.append("installed" if "installed" in rest else "failed" if "FAILED" in rest else "skipped")
-    last, li = gates[-runs:], inst[-installs:]
+            if "installed" in m[2] or "FAILED" in m[2] and inst.get(m[1]) != "installed":
+                inst[m[1]] = "installed" if "installed" in m[2] else "failed"
+    last = gates[-runs:]
+    li = [inst.get(g["commit"], "skipped") for g in gates if g["verdict"] == "GREEN"][-installs:]
     green = sum(g["verdict"] == "GREEN" for g in last)
     return dict(runs=len(last), green=green, green_pct=round(100 * green / len(last), 1) if last else None,
                 median_min=statistics.median([g["minutes"] for g in last]) if last else None,
                 min_min=min((g["minutes"] for g in last), default=None), max_min=max((g["minutes"] for g in last), default=None),
                 installs=dict(n=len(li), installed=li.count("installed"), skipped=li.count("skipped"), failed=li.count("failed"),
-                              landed_pct=round(100 * li.count("installed") / len(li), 1) if li else None))
+                              landed_pct=round(100 * li.count("installed") / len(li), 1) if len(li) == installs else None))
 
 
 def within(first, second):
@@ -314,17 +325,41 @@ def git(*args):
     return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True).stdout
 
 
+def live_lanes(branches, prs, today, contains):
+    """The names of the open lanes among local branches [(name, tip, day and time of the tip's commit)]. Open: a commit
+    today, or an open pull request. Not open: its pull request is merged or closed (the tip is that pull request's
+    head, or a pull request of that name was merged after the tip's commit; a squash merge leaves the branch's own
+    commits outside main), or another open branch carries it (`contains(a, b)`: commit a is b or an ancestor of b):
+    a lane built on another, or a reviewer's copy, is the same line of work, and its files are not changed twice."""
+    import datetime
+    when = lambda x: datetime.datetime.fromisoformat(x.replace("Z", "+00:00"))  # noqa: E731
+    has_pr = {p["headRefName"] for p in prs if p["state"] == "OPEN"}
+    landed = {p["headRefOid"] for p in prs if p["state"] != "OPEN"}
+    merged = {}
+    for p in prs:
+        if p["state"] == "MERGED":
+            merged[p["headRefName"]] = max(when(p["mergedAt"]), merged.get(p["headRefName"], when(p["mergedAt"])))
+    live = sorted(((n not in has_pr, n, tip) for n, tip, day, at in branches if n in has_pr or day == today
+                   and tip not in landed and not (n in merged and when(at) <= merged[n])))
+    return sorted(n for i, (_, n, tip) in enumerate(live)
+                  if not any(j != i and contains(tip, other) and (tip != other or j < i) for j, (_, _, other) in enumerate(live)))
+
+
 def open_lanes():
-    """{branch: changed files} for local branches with a commit today that origin/main does not contain."""
-    today = time.strftime("%Y-%m-%d")
-    out = {}
-    for line in git("for-each-ref", "refs/heads", "--format=%(refname:short) %(committerdate:short)").splitlines():
-        name, day = line.rsplit(" ", 1)
-        if day != today or not git("rev-list", "-1", f"origin/main..{name}").strip():
-            continue
-        base = git("merge-base", "origin/main", name).strip()
-        out[name] = [f for f in git("diff", "--name-only", base, name).splitlines() if f]
-    return out
+    """{branch: changed files} of the open lanes (live_lanes) among the local branches that origin/main does not
+    contain. The pull requests are read with gh (read only); when gh cannot say, no branch counts as landed.
+    shortcut: the newest 300 pull requests, so an older landed branch with a commit today reads open; raise the limit
+    when that is seen.
+    shortcut: two branches that both carry a third lane's commits (a reviewer's merge of it beside a lane built on it)
+    still show that lane's files as shared: worse, never better; compare their own commits pair by pair if it hides
+    the real figure."""
+    refs = [line.split(" ") for line in git("for-each-ref", "refs/heads", "--format=%(refname:short) %(objectname) %(committerdate:short) %(committerdate:iso-strict)").splitlines()]
+    r = subprocess.run(["gh", "pr", "list", "--repo", os.environ.get("MEASURE_REPO") or "develku/nunchiro", "--state", "all", "--limit", "300",
+                        "--json", "state,headRefName,headRefOid,mergedAt"], capture_output=True, text=True)
+    contains = lambda a, b: a == b or subprocess.run(["git", "-C", str(ROOT), "merge-base", "--is-ancestor", a, b]).returncode == 0  # noqa: E731
+    names = live_lanes([x for x in refs if git("rev-list", "-1", f"origin/main..{x[0]}").strip()], json.loads(r.stdout) if r.returncode == 0 else [],
+                       time.strftime("%Y-%m-%d"), contains)
+    return {n: [f for f in git("diff", "--name-only", git("merge-base", "origin/main", n).strip(), n).splitlines() if f] for n in names}
 
 
 MARK = ".scorecard-owned"
@@ -601,6 +636,22 @@ def ran_green(rc, output):
     n = n or sum(int(x) for x in re.findall(r"^Ran (\d+) tests? in", output, re.M))
     flaky = re.search(r"^\s*\d+ flaky\b", output, re.M)  # Playwright: passed only on a retry
     return rc == 0 and n > 0 and not flaky, n
+
+
+def missing_specs(cmd):
+    """The spec files a command names that are not in web/tests. Playwright runs the ones it finds and still ends 0,
+    so such a command is never green, whatever the rest of it does."""
+    return [x for x in cmd if x.endswith(".spec.ts") and not (ROOT / "web/tests" / x).is_file()]
+
+
+def run_test(cmd, env):
+    """One row of tests-<date>.json. A command that names a missing spec is not run and not green."""
+    gone = missing_specs(cmd)
+    if gone:
+        return dict(cmd=cmd, green=False, tests=0, exit=None, seconds=0, tail="names a spec that is not in web/tests: " + ", ".join(gone))
+    secs, rc, out = outside_holder(cmd, env)
+    ok, n = ran_green(rc, out)
+    return dict(cmd=cmd, green=ok, tests=n, exit=rc, seconds=secs, tail="" if ok else out[-400:])
 
 
 def green_commands(doc, commit):
@@ -1156,14 +1207,28 @@ def tests_cmd(a):
         env["CARGO_TARGET_DIR"] = str(Path(a.target).resolve())
     results = []
     for cmd in cmds:
-        secs, rc, out = outside_holder(cmd, env)
-        ok, n = ran_green(rc, out)
-        results.append(dict(cmd=cmd, green=ok, tests=n, exit=rc, seconds=secs, tail="" if ok else out[-400:]))
-        print(f"{'green' if ok else 'NOT GREEN'} ({n} tests, exit {rc}, {secs} s): {' '.join(cmd)}", flush=True)
+        r = run_test(cmd, env)
+        results.append(r)
+        print(f"{'green' if r['green'] else 'NOT GREEN'} ({r['tests']} tests, exit {r['exit']}, {r['seconds']} s): {' '.join(cmd)}"
+              + ("" if r["exit"] is not None else f" ({r['tail']})"), flush=True)
     doc = dict(date=time.strftime("%Y-%m-%d %H:%M"), commit=git("rev-parse", "--short", "HEAD").strip(), results=results)
     path = Path(a.out) if a.out else OUT_DIR / f"tests-{time.strftime('%Y-%m-%d')}.json"
     path.write_text(json.dumps(doc, indent=1) + "\n")
     print(f"wrote {path}: {sum(r['green'] for r in results)} of {len(results)} green")
+
+
+WEIGHED = ("core", "window", "helpers", "holders")  # the groups idle_cpu_pct sums; "agents" is reported beside it
+
+
+def weigh_cpu(groups, secs, cputime, sleep=time.sleep, clock=time.monotonic):
+    """(idle_cpu_pct, CPU % per group) over `secs`: idle_cpu_pct is the WEIGHED groups' summed CPU time, rounded once."""
+    def used(pids):
+        return cputime(pids) if pids else 0.0
+    before, t0 = {g: used(p) for g, p in groups.items()}, clock()
+    sleep(secs)
+    dt = clock() - t0
+    delta = {g: used(p) - before[g] for g, p in groups.items()}
+    return round(sum(delta[g] for g in WEIGHED) / dt * 100, 2), {g: round(d / dt * 100, 2) for g, d in delta.items()}
 
 
 def weigh_cmd(a):
@@ -1186,15 +1251,16 @@ def weigh_cmd(a):
     helpers = ml.attribute(procs, {p: ml.responsible_pid(p) for p in procs}, window[0], set(holders) | {core})[0]
     pids, kids = [core, window[0], *helpers, *holders], [p for ks in under.values() for p in ks]
     mib = rel.mib(sum(rel.footprint(pids).values()))
-    c0, k0, t0 = bl.cputime(pids), bl.cputime(kids) if kids else 0.0, time.monotonic()
-    time.sleep(a.secs)
-    dt = time.monotonic() - t0
-    cpu, agent_cpu = round((bl.cputime(pids) - c0) / dt * 100, 2), round(((bl.cputime(kids) if kids else 0.0) - k0) / dt * 100, 2)
+    groups = dict(core=[core], window=[window[0]], helpers=helpers, holders=holders, agents=kids)
+    cpu, by_group = weigh_cpu(groups, a.secs, bl.cputime)
+    agent_cpu = by_group["agents"]
     now = time.strftime("%Y-%m-%d %H:%M")
+    split = ", ".join(f"{g} {v} %" for g, v in by_group.items())
     evidence = (f"scorecard.py weigh {now}: the owner's running app ({exe}), window open, {len(holders)} sessions held, {len(agents)} with a "
                 f"Claude or Codex process; {len(pids)} processes (core, window, {len(helpers)} helpers, holders); the agents' own CPU in the "
-                f"same {a.secs} s was {agent_cpu} % (idle means near 0); 1-min load {rel.load()}")
-    print(json.dumps(dict(idle_mib=mib, idle_cpu_pct=cpu, sessions=len(holders), agent_sessions=len(agents), agents_cpu_pct=agent_cpu), indent=1))
+                f"same {a.secs} s was {agent_cpu} % (idle means near 0); by group: {split}; 1-min load {rel.load()}")
+    print(json.dumps(dict(idle_mib=mib, idle_cpu_pct=cpu, sessions=len(holders), agent_sessions=len(agents), agents_cpu_pct=agent_cpu,
+                          cpu_pct_by_group=by_group), indent=1))
     if len(agents) < 5:
         print(f"not written: the rubric's figure needs at least 5 Claude or Codex sessions, this app holds {len(agents)}")
         return
@@ -1279,6 +1345,57 @@ def chatopen_cmd(a):
                  f"{r['n']} opens (another session selected, then the chat's tree row, its tab closed), press to the page's "
                  f"nunchiro:chat-drawn mark: median {r['median_ms']} ms, p95 {r['p95_ms']} ms, max {r['max_ms']} ms, "
                  f"misses {r['misses']}; 1-min load {res['load_start']} to {res['load_end']}; raw {out.name}/result.json")
+
+
+def stream8_verdict(row):
+    """(stream8_worst_frame_ms, why it is not written or None) from paint.py's stream-8-webkit row: the median of the
+    repeats' worst frames, written only when every repeat ran, painted all 8 end markers and drew unthrottled frames."""
+    if row.get("not_run"):
+        return None, row["not_run"]
+    why = ([f"{row['skipped_repeats']} repeats not run"] if row.get("skipped_repeats") else []) + \
+          ([f"end markers painted {row['painted']} of 8"] if any(p != 8 for p in row["painted"]) else []) + \
+          (["frames throttled (idle rAF under the floor), frame figures invalid"] if not row["frames_valid"] else [])
+    return (None, "; ".join(why)) if why else (statistics.median(row["worst_frame_ms"]), None)
+
+
+def stream8_cmd(a):
+    """p33's streaming figure: paint.py's stream phase as the anchor table names it (`--only stream --sizes 8
+    --engines webkit --no-record`, fake agents on an RC core, headless WebKit), its row read back into the manual file."""
+    import interact_window as iw
+    os.environ.setdefault("CARGO_BUILD_JOBS", "2")
+    # The page takes its window token straight from the core, which a release core gives only to the app (peer.rs
+    # is_app); its test seam is debug assertions on a throwaway home. So: release optimisation with debug assertions,
+    # in a target of its own.
+    target = iw.TARGET.with_name(iw.TARGET.name + "-assert")
+    core = target / "release/nunchiro"
+    if not a.no_build:
+        subprocess.run(["cargo", "build", "--release", "--locked", "-p", "nunchiro"], cwd=ROOT, check=True,
+                       env=dict(os.environ, CARGO_TARGET_DIR=str(target), NUNCHIRO_BUILD="1",
+                                CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS="true"))
+    if not core.is_file():
+        raise SystemExit(f"no build at {core}; run without --no-build")
+    runs = ROOT / ".scratch/measure"
+    before = set(runs.glob("*-paint")) if runs.is_dir() else set()
+    env = {k: v for k, v in os.environ.items() if not k.startswith("NUNCHIRO_")}
+    # Detached, as `tests` runs: no Nunchiro holder above the run.
+    secs, rc, log = outside_holder([sys.executable, "-B", str(HERE / "paint.py"), "--only", "stream", "--sizes", "8",
+                                    "--engines", "webkit", "--no-record"], dict(env, NUNCHIRO_MEASURE_CORE=str(core)))
+    print(log[-3000:])
+    if rc:
+        raise SystemExit(f"paint.py ended {rc} after {secs} s; nothing written")
+    out = max(set(runs.glob("*-paint")) - before)
+    res = json.loads((out / "result.json").read_text())
+    row = res["rows"]["stream-8-webkit"]
+    value, why = stream8_verdict(row)
+    if why:
+        print(f"not written: {why}; see {out / 'result.json'}")
+        sys.exit(1)
+    write_manual(a.out, dict(stream8_worst_frame_ms=value),
+                 f"scorecard.py stream8 {time.strftime('%Y-%m-%d %H:%M')}: paint.py --only stream --sizes 8 --engines webkit "
+                 f"on the RC core built with release optimisation and debug assertions (the page's window token; fake agents, 8 terminals x {res['stream_size'] // 2**20} MiB, headless WebKit "
+                 f"{row.get('browser')}); worst frame per repeat {row['worst_frame_ms']} ms, the median written; stalls "
+                 f"{row['stalls']}, probe max {row['probe_max_ms']} ms, wall {row['wall_s']} s; 1-min load "
+                 f"{res['load_start']} to {res['load_end']}; raw {out.relative_to(ROOT)}/result.json")
 
 
 def write_manual(out, values, evidence):
@@ -1368,6 +1485,9 @@ def main():
     co.add_argument("--max-load", type=float, default=6.0, help="refuse to start above this 1-min load")
     co.add_argument("--no-build", action="store_true")
     co.add_argument("--out")
+    st = sub.add_parser("stream8", help="p33 streaming: 8 fake agents stream 20 MiB each into headless WebKit")
+    st.add_argument("--no-build", action="store_true")
+    st.add_argument("--out")
     a, rest = ap.parse_known_args()
     if a.cmd in ("accuracy", "waits", "record"):
         # accuracy.py's own options, --help too, in the order given: parse_known_args splits "--days 7" into
@@ -1377,7 +1497,7 @@ def main():
         ap.error("unrecognized arguments: " + " ".join(rest))
     {"run": run_cmd, "ops": ops_cmd, "dev": dev_cmd, "merge": merge_cmd, "check": check_cmd, "page": page_cmd,
      "tests": tests_cmd, "weigh": weigh_cmd, "accuracy": accuracy_cmd, "waits": waits_cmd,
-     "record": record_cmd, "chatopen": chatopen_cmd}[a.cmd](a)
+     "record": record_cmd, "chatopen": chatopen_cmd, "stream8": stream8_cmd}[a.cmd](a)
 
 
 if __name__ == "__main__":

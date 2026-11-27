@@ -32,3 +32,7 @@ ignore = "0.4"
 # v1b-21 r3: Unicode 16 General Category and Default_Ignorable tables for the act text allowlist; already in the
 # lock through ignore -> globset (no new crate).
 regex-syntax = "0.8.11"
+
+[dev-dependencies]
+# The published wire schema (docs/api/nunchiro-api.schema.json) is written by a test, so the release links no schema crate.
+schemars = "1.2"

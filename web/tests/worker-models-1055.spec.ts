@@ -6,14 +6,11 @@ import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { type Core, expect, openWindow, test } from './fixtures';
 import { setLevels } from './levels-seed';
-import { openSettings } from './settings-modal';
+import { openLevels } from './settings-modal';
 
 const features = (core: Core) => (JSON.parse(fs.readFileSync(path.join(core.home, 'settings.json'), 'utf8')).features ?? {}) as Record<string, unknown>;
-async function teamPage(app: Page) {
-  await openSettings(app);
-  await app.locator('.settings > nav button[data-page="team"]').click();
-  return app.locator('.sbody');
-}
+// Since the move to the Bots view: Settings > Team's Levels line opens Models and limits, which holds Worker models.
+const teamPage = (app: Page) => openLevels(app);
 
 test('workers1055_rows: the two rows show the slots with their real models, default to Lead picks and None, and keep a choice after a reload', async ({ app, core }) => {
   // The user's own slot: Standard runs Opus here, so the option says Opus, not a level word.

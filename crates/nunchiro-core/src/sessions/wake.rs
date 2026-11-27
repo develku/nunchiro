@@ -32,9 +32,6 @@ const REPORT_READ: u64 = 4096;
 /// The state a snapshot shows, as `agent wait` derives it; working, idle and closed wake nobody.
 pub(crate) fn reached(session: &Session) -> Option<Reached> {
     Some(match session.state {
-        SessionState::Failed => Reached::Failed,
-        SessionState::Closed => return None, // the owner or the parent closed it: nothing to tell
-        SessionState::Exited | SessionState::Resumable => Reached::Exited,
         SessionState::Running if crate::delivery::blocked(&session.pending) => {
             if session
                 .pending
@@ -50,7 +47,17 @@ pub(crate) fn reached(session: &Session) -> Option<Reached> {
             return None;
         }
         SessionState::Running => Reached::Done,
+        ended => return reached_ended(ended),
     })
+}
+/// What an ended row reached, from its state alone.
+fn reached_ended(state: SessionState) -> Option<Reached> {
+    match state {
+        SessionState::Failed => Some(Reached::Failed),
+        SessionState::Exited | SessionState::Resumable => Some(Reached::Exited),
+        // Closed: the owner or the parent closed it, nothing to tell. Running is never ended.
+        SessionState::Closed | SessionState::Running => None,
+    }
 }
 
 /// Worker-written text made safe to type: its first line, control and escape bytes dropped, at most 200 chars.
@@ -142,11 +149,21 @@ impl Sessions {
             let Some(entry) = self.entries.get(child) else {
                 continue;
             };
-            let snapshot = self.snapshot_session(&entry.meta);
-            let Some(mut reached) = reached(&snapshot) else {
-                continue;
+            // Idle CPU: an ended row's state alone says what it reached (`reached`), so only a running one is built
+            // into a snapshot; this tick runs four times a second over every worker ever started.
+            let (mut reached, seq, working_since) = if entry.meta.state == SessionState::Running {
+                let snapshot = self.snapshot_session(&entry.meta);
+                let Some(reached) = reached(&snapshot) else {
+                    continue;
+                };
+                let since = snapshot.attention.working_since;
+                (reached, snapshot.completion_seq, since)
+            } else {
+                let Some(reached) = reached_ended(entry.meta.state) else {
+                    continue;
+                };
+                (reached, self.queue.attention(child).completion_seq, 0)
             };
-            let seq = snapshot.completion_seq;
             let told = |r: Reached| self.wakes.get(child).is_some_and(|s| s.contains(&(r, seq)));
             if reached == Reached::Done {
                 // A turn told as waiting for the lead is not told "done" once the answer comes: the seat starts a turn.
@@ -172,16 +189,12 @@ impl Sessions {
                 .iter()
                 .chain(&entry.meta.send_queue)
                 .any(|s| s.content.contains("## Scheduled task"));
-            if reached == Reached::Done
-                && snapshot.completion_seq == 1
-                && entry.meta.teammate.is_some()
-                && !job
-            {
+            if reached == Reached::Done && seq == 1 && entry.meta.teammate.is_some() && !job {
                 sent.insert(key);
                 continue;
             }
             let since = match reached {
-                Reached::Done => snapshot.attention.working_since,
+                Reached::Done => working_since,
                 _ => 0,
             };
             let status = report_status(&entry.meta.cwd, since);
@@ -1315,6 +1328,21 @@ mod tests {
                 "two MUSTs. See sessions.rs",
                 1,
             ),
+        );
+        // Task dependencies: what a landing freed, and a dropped task's waiters.
+        add("release", crate::advance::landed_line("a", &["b"], &[]));
+        add(
+            "release",
+            crate::advance::landed_line("a", &["b", "c"], &[("d", 1)]),
+        );
+        add(
+            "release",
+            crate::advance::landed_line("a", &[], &[("d", 2)]),
+        );
+        add("release", crate::advance::dropped_line("a", &[("b", "t2")]));
+        add(
+            "release",
+            crate::advance::dropped_line("a", &[("b", "t2"), ("c", "t3")]),
         );
         let fixture: serde_json::Value =
             serde_json::from_str(include_str!("../../tests/fixtures/automatic-lines.json"))

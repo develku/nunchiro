@@ -202,3 +202,20 @@ test('item3_composer_send_answers_type_something_and_says_so', async ({ app, cor
   await app.waitForTimeout(300);
   expect(st.answers).toHaveLength(1);
 });
+
+// The composer's hint names the digit keys while a question waits (it named only Shift+Tab, so a new user took two keys).
+test('digit_hint_in_empty_composer: a waiting question\'s hint says its option numbers answer it', async ({ app, core }) => {
+  const { a, st } = await setup(app, core);
+  st.items[a.id] = [question(a.id, 'q1')];
+  st.push();
+  await expect(docked(app).locator('.dc-item')).toHaveCount(1);
+  await expect(box(app)).toHaveAttribute('placeholder', /Or press an option's number\. Shift\+Tab: to the card\.$/);
+  await box(app).focus();
+  await app.keyboard.press('3');
+  await expect.poll(() => st.answers).toEqual([{ item: 'q1', answer: { type: 'choose', index: 2 } }]);
+  // A permission keeps its own hint (1 allows only a safe one): no option numbers named.
+  st.items[a.id] = [permission(a.id, 'p1', false)];
+  st.push();
+  await expect(docked(app).locator('.dc-item[data-item="p1"]')).toHaveCount(1);
+  await expect(box(app)).not.toHaveAttribute('placeholder', /option's number/);
+});

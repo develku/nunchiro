@@ -109,6 +109,8 @@ pub mod rights;
 pub mod nudge;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "BoardSource"))]
 #[serde(rename_all = "snake_case")]
 pub enum Source {
     Session,
@@ -116,6 +118,8 @@ pub enum Source {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "BoardState"))]
 #[serde(rename_all = "snake_case")]
 pub enum State {
     // A seat that has not had a turn: claimed by no column, so it sits in the first column that claims no state (To do).
@@ -127,6 +131,7 @@ pub enum State {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Column {
     pub id: String,
     pub title: String,
@@ -141,12 +146,14 @@ pub struct Column {
 
 // V2.5-36 (ticket 184): task card fields.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Receipt {
     pub sha: String,
     pub command: String,
     pub result: String,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Attachment {
     pub session_id: String,
     #[serde(default)]
@@ -184,6 +191,7 @@ where
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Snapshot {
     pub columns: Vec<Column>,
     pub cards: Vec<serde_json::Value>,

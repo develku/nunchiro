@@ -34,7 +34,7 @@ import { ChromeIcon } from '../chrome/icons';
 import { handOff, rewind, userView } from './conversation';
 import { useSteered } from './queued'; // Q7 point 16
 import { useAppControl } from './commandRecord'; // ticket 1019
-import { SenderFace, useSentBy } from '../queue/Knock';
+import { SenderFace, useChangedBy, useSentBy } from '../queue/Knock';
 import { useTeamNow } from '../lead/lead';
 import { agentState, status } from '../types';
 import { TurnFiles } from './TurnFiles'; // ticket 222
@@ -756,6 +756,8 @@ function RowBody({ row, session, control = false }: { row: Row; session: string;
   const t = useContext(Tr);
   // The knock: a message another sender's row put in (the send log names it) shows who it is from.
   const from = useSentBy(useContext(Pending).session, row.kind === 'user' ? row.text : '', useTeamNow());
+  const changed = useChangedBy(useContext(Pending).session, row.kind === 'user' ? row.text : '');
+  const tag = changed && <small className="changed-tag" data-changed-by={changed}>{t('plugins.changedBy', { name: changed })}</small>;
   switch (row.kind) {
     case 'user': {
       const v = userView(row.text); // B11: what the user typed, a handoff folded
@@ -767,6 +769,7 @@ function RowBody({ row, session, control = false }: { row: Row; session: string;
           <div>
             <small>{t('knock.from', { name: from.name })}</small>
             <div className="ut">{plain(v.text)}</div>
+            {tag}
           </div>
         </div>
       );
@@ -785,6 +788,7 @@ function RowBody({ row, session, control = false }: { row: Row; session: string;
             </Disclose>
           )}
           {v.text && <div className="ut">{plain(v.text)}</div>}
+          {tag}
         </div>
       );
     }

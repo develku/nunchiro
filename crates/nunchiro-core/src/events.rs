@@ -19,6 +19,7 @@ use std::{
 pub const CAPACITY: usize = 4096;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Event {
     /// Increasing within a core; a later core starts above the earlier one (`Log::new`).
     pub id: u64,
@@ -92,7 +93,8 @@ pub fn push(mut event: Event) {
 /// Ticket 1130 C-C3: the durable journal. Every event the ring takes is also appended, one line, to
 /// `$NUNCHIRO_HOME/logs/events/events-<UTC date>.ndjson` (dir 0700, files 0600, opened with O_APPEND and never
 /// rewritten), so a core restart loses none and `nunchiro events --history` reads past days. A room event's `data` (a
-/// message body, a pin list) is left out, and each line goes through the log redactor. A day file stops taking lines
+/// message body, a pin list) is left out, except the act, seat and quiet minutes of the core's own advance lines
+/// (`advance_line`), and each line goes through the log redactor. A day file stops taking lines
 /// at `JOURNAL_DAY_BYTES` (one `journal_full` line says so) and files older than `JOURNAL_DAYS` are removed when a day
 /// file opens: the whole journal stays under 14 x 4 MiB.
 pub const JOURNAL_DAYS: i64 = 14;
@@ -174,7 +176,10 @@ fn journal_append(event: &Event) {
     if event.kind.starts_with("room_")
         && let Some(object) = value.as_object_mut()
     {
-        object.remove("data");
+        match event.data.as_ref().and_then(advance_line) {
+            Some(kept) => object.insert("data".into(), kept),
+            None => object.remove("data"),
+        };
     }
     let mut line = crate::logs::redact(value.to_string().as_bytes());
     line.push(b'\n');
@@ -187,6 +192,39 @@ fn journal_append(event: &Event) {
         }
         Err(_) => {}
     }
+}
+
+/// The core's own auto-advance line (advance.rs `note`, `created_by` core) as the journal keeps it: what the core did,
+/// to which seat, and a nudge's quiet minutes, so unattended runs can be read back. Never the body: it names seats and
+/// gives reasons in words. Any other room data (agent or person text, pins) stays out.
+fn advance_line(data: &serde_json::Value) -> Option<serde_json::Value> {
+    if data["kind"] != "team" || data["created_by"] != "core" || data["team"]["what"] != "advance" {
+        return None;
+    }
+    // The words of advance.rs room_line.
+    let body = data["body"].as_str().unwrap_or_default();
+    let quiet = body
+        .strip_prefix("core nudged ")
+        .and_then(|b| b.strip_suffix(" min)"))
+        .and_then(|b| b.rsplit_once("(quiet "))
+        .and_then(|(_, n)| n.parse::<u64>().ok());
+    let act = if body.starts_with("core could not act (") {
+        "failed"
+    } else if quiet.is_some() {
+        "nudge"
+    } else if body.starts_with("core asked the user") {
+        "card"
+    } else if body.starts_with("core sent the waiting message") {
+        "resend"
+    } else if body.ends_with(" moves again") {
+        "moved"
+    } else {
+        "other"
+    };
+    Some(
+        serde_json::json!({"kind": "team", "team": {"what": "advance", "seat": data["team"]["seat"]},
+        "act": act, "quiet_min": quiet.unwrap_or(0)}),
+    )
 }
 
 fn write_line(j: &mut Journal, at: u64, line: &[u8]) -> Result<(), String> {
@@ -520,6 +558,69 @@ mod tests {
         ));
         std::fs::create_dir_all(&home).unwrap();
         home
+    }
+
+    #[test]
+    fn journal_keeps_the_core_s_advance_lines_without_their_body() {
+        let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        let home = temp_home("advance");
+        let project = "/events-unit-advance";
+        let journaling = journal(&home).unwrap();
+        let line = |body: &str, by: &str, what: &str| {
+            push(Event {
+                kind: "room_message".into(),
+                project: project.into(),
+                data: Some(
+                    serde_json::json!({"kind": "team", "body": body, "created_by": by, "from": "person zq7",
+                    "team": {"what": what, "seat": "s1", "name": body}}),
+                ),
+                ..Event::default()
+            })
+        };
+        line("core nudged Builder zq7 (quiet 21 min)", "core", "advance");
+        line(
+            "core sent the waiting message to Builder zq7 again (zq7 why)",
+            "core",
+            "advance",
+        );
+        line(
+            "core could not act (core nudged Builder zq7 (quiet 5 min)): zq7",
+            "core",
+            "advance",
+        );
+        line("core nudged Builder zq7 (quiet 9 min)", "agent", "advance"); // not the core's: no data
+        line("zq7 made a worktree", "core", "created"); // another team line: no data
+        drop(journaling);
+        let data: Vec<_> = history(&home, 1)
+            .into_iter()
+            .filter(|e| e["project"] == project)
+            .map(|e| e.get("data").cloned())
+            .collect();
+        let advance = |act: &str, quiet: u64| {
+            Some(
+                serde_json::json!({"kind": "team", "team": {"what": "advance", "seat": "s1"}, "act": act,
+                "quiet_min": quiet}),
+            )
+        };
+        assert_eq!(
+            data,
+            [
+                advance("nudge", 21),
+                advance("resend", 0),
+                advance("failed", 0),
+                None,
+                None
+            ]
+        );
+        let dir = home.join("logs/events");
+        for f in std::fs::read_dir(&dir).unwrap() {
+            assert!(
+                !std::fs::read_to_string(f.unwrap().path())
+                    .unwrap()
+                    .contains("zq7")
+            );
+        }
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
