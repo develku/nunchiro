@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
+use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -26,6 +27,7 @@ const TOTAL: Duration = Duration::from_secs(12);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
 pub struct File {
     /// Relative to `dir`.
     pub path: String,
@@ -34,6 +36,7 @@ pub struct File {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[cfg_attr(test, schemars(rename = "CatalogEntry"))]
+#[serde(deny_unknown_fields)]
 pub struct Entry {
     pub id: String,
     pub name: String,
@@ -54,7 +57,10 @@ pub struct Entry {
     pub files: Vec<File>,
 }
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Index {
+    /// The catalogue's format; only 1 is read.
+    version: u32,
     plugins: Vec<Entry>,
 }
 
@@ -82,8 +88,9 @@ fn hex(s: &str, n: usize) -> bool {
         && s.bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
+/// Short text with no control, bidirectional or hidden characters (what a window row may show).
 fn plain(s: &str, max: usize) -> bool {
-    s.chars().count() <= max && !s.chars().any(char::is_control)
+    s.chars().count() <= max && s.chars().all(crate::delivery::shown)
 }
 impl Entry {
     fn check(&self) -> Result<(), String> {
@@ -116,6 +123,12 @@ impl Entry {
 pub fn parse(bytes: &[u8]) -> Result<Vec<Entry>, String> {
     let index: Index =
         serde_json::from_slice(bytes).map_err(|e| format!("the catalogue is not valid: {e}"))?;
+    if index.version != 1 {
+        return Err(format!(
+            "the catalogue's version {} is newer than this Nunchiro reads",
+            index.version
+        ));
+    }
     Ok(index
         .plugins
         .into_iter()
@@ -144,7 +157,7 @@ impl Catalog {
         })
     }
     pub fn entries(&self) -> Result<Vec<Entry>, String> {
-        parse(&Client::new(&self.origin, TOTAL)?.get(CATALOG, CATALOG_CAP)?)
+        parse(&get(&self.origin, TOTAL, CATALOG, CATALOG_CAP)?)
     }
     /// Downloads `id`'s files at its commit, checks each hash, and only then puts the folder in `plugins/<id>`
     /// (an older one goes to `plugins/.removed/`, as Remove does). One mismatch installs nothing.
@@ -162,7 +175,7 @@ impl Catalog {
                 return Err(crate::themes_online::TIMED_OUT.into());
             }
             let path = format!("{}/{}/{}", entry.commit, entry.dir, f.path);
-            let bytes = Client::new(&self.origin, left)?.get(&path, FILE_CAP)?;
+            let bytes = get(&self.origin, left, &path, FILE_CAP)?;
             if sha256(&bytes) != f.sha256 {
                 return Err(format!(
                     "{} of {id} does not match the catalogue (it changed after the catalogue was made); nothing was installed",
@@ -171,33 +184,67 @@ impl Catalog {
             }
             got.push((f.path.clone(), bytes));
         }
+        // One install at a time: two of one id would share the folder they write and the one they set aside.
+        let _one = INSTALL.lock().map_err(|_| "plugin installs unavailable")?;
         let plugins = self.home.join(crate::plugins::FOLDER);
+        if plugins
+            .symlink_metadata()
+            .is_ok_and(|m| m.file_type().is_symlink())
+        {
+            return Err("plugins folder must not be a symlink".into());
+        }
+        fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&plugins)
+            .map_err(|e| e.to_string())?;
+        let to = plugins.join(id);
+        if to.symlink_metadata().is_ok_and(|m| !m.is_dir()) {
+            return Err(format!(
+                "a link or a file is in the way at plugins/{id}: move it away first"
+            ));
+        }
         let fresh = plugins.join(format!(".install-{id}"));
         let _ = fs::remove_dir_all(&fresh);
+        // shortcut: files are written 0644, so an executable bit in the repository is lost (parts run `/bin/sh x.sh`);
+        // keep the mode in the catalogue when a plugin needs one.
         let written = (|| {
+            fs::DirBuilder::new()
+                .mode(0o700)
+                .create(&fresh)
+                .map_err(|e| e.to_string())?;
             for (path, bytes) in &got {
                 let to = fresh.join(path);
-                fs::create_dir_all(to.parent().unwrap_or(&fresh)).map_err(|e| e.to_string())?;
+                fs::DirBuilder::new()
+                    .recursive(true)
+                    .mode(0o700)
+                    .create(to.parent().unwrap_or(&fresh))
+                    .map_err(|e| e.to_string())?;
                 fs::write(&to, bytes).map_err(|e| e.to_string())?;
             }
             let manifest = fs::read_to_string(fresh.join(crate::plugins::MANIFEST))
                 .map_err(|e| e.to_string())?;
-            crate::plugins::parse(&manifest, id).map(|_| ())
+            crate::plugins::parse(&manifest, id)?;
+            if to.symlink_metadata().is_ok() {
+                crate::plugins::set_aside(&self.home, id)?;
+            }
+            fs::rename(&fresh, &to).map_err(|e| e.to_string())
         })();
-        if let Err(e) = written {
+        if written.is_err() {
             let _ = fs::remove_dir_all(&fresh);
-            return Err(e);
         }
-        let to = plugins.join(id);
-        if to.symlink_metadata().is_ok() {
-            crate::plugins::set_aside(&self.home, id)?;
-        }
-        fs::rename(&fresh, &to).map_err(|e| {
-            let _ = fs::remove_dir_all(&fresh);
-            e.to_string()
-        })
+        written?;
+        // Installed is off: an update (or the same files approved before) never runs before the owner says so.
+        crate::plugins::turn_off(&self.home, id)
     }
 }
+/// A catalogue fetch; its errors name the catalogue, not the themes the client was first written for.
+fn get(origin: &str, total: Duration, path: &str, cap: usize) -> Result<Vec<u8>, String> {
+    Client::new(origin, total)?
+        .get(path, cap)
+        .map_err(|e| e.replace("theme server", "the plugin catalogue"))
+}
+static INSTALL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[cfg(test)]
 mod tests {

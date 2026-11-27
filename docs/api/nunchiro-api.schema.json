@@ -1556,6 +1556,7 @@
       "type": "string"
     },
     "CatalogEntry": {
+      "additionalProperties": false,
       "properties": {
         "about": {
           "type": "string"
@@ -2966,6 +2967,7 @@
       "type": "object"
     },
     "File2": {
+      "additionalProperties": false,
       "properties": {
         "path": {
           "description": "Relative to `dir`.",

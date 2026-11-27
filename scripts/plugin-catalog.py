@@ -28,7 +28,11 @@ def entry(folder: str) -> dict:
     ).stdout.strip()
     if len(commit) != 40:
         sys.exit(f"{folder}: no commit has it yet; commit the plugin first")
-    files = sorted(p for p in path.rglob("*") if p.is_file())
+    # The files git tracks, so a stray local file (.DS_Store) is never catalogued and then missing at install.
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z", "--", folder], cwd=ROOT, capture_output=True, text=True, check=True
+    ).stdout
+    files = sorted(ROOT / f for f in tracked.split("\0") if f)
     parts = [p for kind in KINDS for p in manifest.get(kind, [])]
     out = {
         "id": manifest["id"],

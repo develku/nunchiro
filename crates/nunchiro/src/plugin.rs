@@ -99,7 +99,7 @@ pub fn run(
         }
         Reply::Plugins { .. } if words[0] == "install" => {
             println!(
-                "installed plugin {0}: off and not approved; it runs nothing until `nunchiro plugin allow {0}` and `nunchiro plugin on {0}`",
+                "installed plugin {0}: off; it runs nothing until you review it with `nunchiro plugin allow {0}` and turn it on with `nunchiro plugin on {0}`",
                 words[1]
             );
             Ok(())

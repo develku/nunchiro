@@ -474,6 +474,14 @@ fn save(home: &Path, store: &Store) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(store).map_err(|e| e.to_string())?;
     crate::store::atomic_write(&home.join(STORE), &bytes)
 }
+/// Switches a plugin off (an install from the catalogue).
+pub(crate) fn turn_off(home: &Path, id: &str) -> Result<(), String> {
+    let mut store = load(home);
+    if store.on.remove(id) {
+        save(home, &store)?;
+    }
+    Ok(())
+}
 /// A part's plugin is on (the switch on the Plugins page); its approval is checked separately.
 pub(crate) fn on(home: &Path, name: &str) -> Result<(), String> {
     match split(name) {
@@ -919,11 +927,16 @@ pub(crate) fn set_aside(home: &Path, id: &str) -> Result<(), String> {
         .mode(0o700)
         .create(&removed)
         .map_err(|e| e.to_string())?;
-    fs::rename(
-        &from,
-        removed.join(format!("{id}-{}", crate::queue::now_ms())),
-    )
-    .map_err(|e| e.to_string())?;
+    // Two set aside in one millisecond (an update right after another) get their own names.
+    let at = crate::queue::now_ms();
+    let to = (0..)
+        .map(|n| match n {
+            0 => removed.join(format!("{id}-{at}")),
+            n => removed.join(format!("{id}-{at}-{n}")),
+        })
+        .find(|p| p.symlink_metadata().is_err())
+        .unwrap_or_default();
+    fs::rename(&from, to).map_err(|e| e.to_string())?;
     crate::sandbox::stop_subjects(home, &part_name(id, ""));
     Ok(())
 }
