@@ -2981,26 +2981,46 @@ fn a_core_restart_drops_the_waiting_starts() {
 
 /// A core at `level` with the due daily run "nightly" (and "late") held when it starts; its home and project.
 fn waiting_runs(tag: &str, labels: &[&str]) -> (PathBuf, PathBuf, PathBuf, home::ServeGuard) {
+    waiting_runs_as(tag, labels, true, 600_000)
+}
+/// `waiting_runs`, daily or once, dropped after `max` ms. A once entry's time is the last whole minute, so it is due
+/// and not late.
+fn waiting_runs_as(
+    tag: &str,
+    labels: &[&str],
+    daily: bool,
+    max: u64,
+) -> (PathBuf, PathBuf, PathBuf, home::ServeGuard) {
     let (home, proj, path) = setup(tag);
     let mut core = serve(&home, &path);
     shell(&home, &proj, "exec cat");
     core.stop();
+    let minute = (now_ms() - 60_000) / 60_000 * 60_000;
+    let (at, made) = match daily {
+        true => ("21:00".to_string(), 0),
+        false => {
+            let of_day = minute % (24 * HOUR) / 60_000;
+            (format!("{:02}:{:02}", of_day / 60, of_day % 60), minute - 1)
+        }
+    };
     let mut s = Schedules::load(&home);
     for label in labels {
-        s.add(
-            run(&proj, label),
-            "21:00".into(),
-            true,
-            None,
-            &known(&proj),
-            0,
-            UTC,
-        )
-        .unwrap();
+        let e = s
+            .add(
+                run(&proj, label),
+                at.clone(),
+                daily,
+                None,
+                &known(&proj),
+                made,
+                UTC,
+            )
+            .unwrap();
+        assert!(daily || e.next_ms == minute, "{e:?}");
     }
     drop(s);
     let file = level_file(&format!("lvl-{tag}"), "2");
-    let env = waiting(&file, 600_000);
+    let env = waiting(&file, max);
     let claude_home = home.join("claude-home").to_string_lossy().into_owned();
     let mut envs = vec![
         ("PATH", path.as_str()),
@@ -3107,4 +3127,91 @@ fn a_waiting_start_of_an_ended_asker_starts_nothing() {
         .map(|r| r.label)
         .collect();
     assert!(started.is_empty(), "{started:?}");
+}
+
+/// How many seats `label` has.
+fn seats(home: &Path, label: &str) -> usize {
+    rows(home).iter().filter(|r| r.label == label).count()
+}
+
+/// A held one-time schedule (switched off as it fired) waits like a daily one and runs exactly once when memory frees.
+#[test]
+fn a_held_once_schedule_runs_once_when_memory_frees() {
+    let (home, _proj, file, _core) = waiting_runs_as("sch-once-go", &["once"], false, 600_000);
+    let id = schedules(&home)[0].id.clone();
+    let last = serde_json::to_value(entry(&home, &id).last.unwrap()).unwrap();
+    assert_eq!(last["reason"], "waiting for memory", "{last}");
+    fs::write(&file, "1").unwrap();
+    wait_long("the waiting once run never ran", || {
+        seats(&home, "once") > 0
+    });
+    thread::sleep(Duration::from_millis(2500));
+    assert_eq!(seats(&home, "once"), 1);
+    assert!(waiting_list(&home).is_empty());
+    let after = entry(&home, &id);
+    assert!(after.paused, "a once schedule stays switched off");
+    assert!(
+        after.last.unwrap().session.is_some(),
+        "its last run names the seat"
+    );
+}
+
+/// A held one-time schedule the owner removes while it waits starts nothing.
+#[test]
+fn a_removed_once_schedule_does_not_start_after_waiting() {
+    let (home, _proj, file, _core) = waiting_runs_as("sch-once-gone", &["once"], false, 600_000);
+    let id = schedules(&home)[0].id.clone();
+    call(&home, Request::ScheduleRemove { id }).unwrap();
+    assert!(waiting_list(&home).is_empty());
+    fs::write(&file, "1").unwrap();
+    thread::sleep(Duration::from_millis(2500));
+    assert_eq!(seats(&home, "once"), 0, "a removed once schedule started");
+}
+
+/// A held one-time schedule whose longest wait (1.5 s here) passes is recorded as skipped, once, and never runs.
+#[test]
+fn a_once_schedule_that_waits_too_long_is_skipped_once() {
+    let (home, _proj, file, _core) = waiting_runs_as("sch-once-drop", &["once"], false, 1500);
+    let id = schedules(&home)[0].id.clone();
+    wait("the once run was not dropped", || {
+        waiting_list(&home).is_empty()
+    });
+    let e = entry(&home, &id);
+    let last = serde_json::to_value(e.last.as_ref().unwrap()).unwrap();
+    assert_eq!(
+        (&last["result"], &last["reason"]),
+        (&json!("skipped"), &json!("low memory")),
+        "{last}"
+    );
+    let skips = e
+        .earlier
+        .iter()
+        .chain(&e.last)
+        .filter(|l| serde_json::to_value(l).unwrap()["result"] == "skipped")
+        .count();
+    assert_eq!(skips, 1, "{e:?}");
+    fs::write(&file, "1").unwrap();
+    thread::sleep(Duration::from_millis(2500));
+    assert_eq!(seats(&home, "once"), 0, "a dropped once run started");
+}
+
+/// Run now on a held one-time schedule, refused at critical, keeps it waiting; it runs once when memory frees.
+#[test]
+fn run_now_held_keeps_a_waiting_once_run() {
+    let (home, _proj, file, _core) = waiting_runs_as("sch-once-runnow", &["once"], false, 600_000);
+    let id = schedules(&home)[0].id.clone();
+    fs::write(&file, "4").unwrap();
+    let refused = call(&home, Request::ScheduleRunNow { id: id.clone() }).unwrap_err();
+    assert!(refused.contains("memory"), "{refused}");
+    assert_eq!(
+        waiting_list(&home).len(),
+        1,
+        "Run now refused lost the waiting run"
+    );
+    fs::write(&file, "1").unwrap();
+    wait_long("the waiting once run never ran", || {
+        seats(&home, "once") > 0
+    });
+    thread::sleep(Duration::from_millis(2500));
+    assert_eq!(seats(&home, "once"), 1);
 }
