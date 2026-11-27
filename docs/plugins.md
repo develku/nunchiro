@@ -130,13 +130,25 @@ schedule's changed task leaves a line in the core's log. With `on_error = "allow
 busy action is skipped: the core's log says so, and the Plugins page counts the skipped checks. A check cannot answer a permission, skip an outward card or widen
 anything: allow, refuse and replacement text are its only outputs. With no plugin on, nothing is run.
 
+## Browse and install
+
+Plugins, Browse plugins (or `nunchiro plugin catalog`) lists the catalogue: `plugins/catalog.json` of the Nunchiro
+repository on GitHub. Each entry pins a plugin to one commit and lists every file with its SHA-256. Install (or
+`nunchiro plugin install <id>`) downloads exactly those files at that commit and writes `plugins/<id>` only when every
+hash matches; one file changed after the catalogue was made installs nothing. An installed plugin is off and not
+approved, so it runs nothing until you review it. When the catalogue has a newer version, the button says Update;
+the old folder moves to `plugins/.removed/` and the new one asks for approval again.
+
+The catalogue holds Nunchiro's own examples for now. It is a folder of the main repository, read from GitHub the
+way a separate catalogue repository would be; `scripts/plugin-catalog.py` writes it.
+
 ## Through the API
 
 The window and scripts use the same request, `{"op": "plugin", "action": {"do": "list"}}` (also `set`, `setting`,
-`run`, `remove`), owner and window only; see [api.md](api.md). A panel is the widget `plugin__<id>__<panel>` in
+`run`, `remove`, `catalog`, `install`), owner and window only; see [api.md](api.md). A panel is the widget `plugin__<id>__<panel>` in
 `widget_list` and `widget_run`.
 
 ## Not yet
 
 - Skills, hooks and MCP servers in a plugin (today they are extension folders, `nunchiro extensions`).
-- A catalogue to install from.
+- Plugins from outside the catalogue by a git URL and commit; submissions to the catalogue.

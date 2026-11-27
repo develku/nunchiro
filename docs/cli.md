@@ -1191,6 +1191,15 @@ Runs one of the plugin's commands now, with no project, and prints its output.
 Moves the folder to `$NUNCHIRO_HOME/plugins/.removed/<id>-<time>` and forgets its switch and settings; move it back
 to undo.
 
+### `nunchiro plugin catalog [--json]`
+Lists the plugin catalogue (`plugins/catalog.json` of the Nunchiro repository, read from GitHub): id, version, name
+and what it does.
+
+### `nunchiro plugin install <id>`
+Downloads the catalogue's plugin at its pinned commit, checks every file's SHA-256 and writes the folder only when
+all match (an older version moves to `plugins/.removed/`). It is off and not approved: run `plugin allow` and
+`plugin on` after reading what it asks for.
+
 ## Other machines
 
 Each Mac runs its own core; see [remote.md](remote.md) for install, SSH settings and project mappings.

@@ -430,6 +430,10 @@ pub enum Reply {
     Plugins {
         plugins: Vec<crate::plugins::Listed>,
     },
+    /// The plugin catalogue's entries (Browse plugins).
+    PluginCatalog {
+        catalog: Vec<crate::plugins_online::Entry>,
+    },
     /// A plugin command's run and where the window shows its output.
     PluginRun {
         run: crate::widgets::Run,

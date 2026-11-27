@@ -451,6 +451,36 @@
             "id"
           ],
           "type": "object"
+        },
+        {
+          "description": "The catalogue's plugins (`plugins_online.rs`); the network, so off every lock.",
+          "properties": {
+            "do": {
+              "const": "catalog",
+              "type": "string"
+            }
+          },
+          "required": [
+            "do"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Installs or updates a plugin from the catalogue: off and not approved until the owner reviews it.",
+          "properties": {
+            "do": {
+              "const": "install",
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "do",
+            "id"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -1524,6 +1554,70 @@
         "agent_changed"
       ],
       "type": "string"
+    },
+    "CatalogEntry": {
+      "properties": {
+        "about": {
+          "type": "string"
+        },
+        "adds": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "default": {},
+          "description": "How many of each kind it adds (`panel`, `command`, `setting`, `check`).",
+          "type": "object"
+        },
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commit": {
+          "description": "The commit its files are read at (40 hex).",
+          "type": "string"
+        },
+        "dir": {
+          "description": "Its folder in the repository at that commit.",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/File2"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network": {
+          "default": [],
+          "description": "The hosts its parts may reach.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "about",
+        "version",
+        "commit",
+        "dir",
+        "files"
+      ],
+      "type": "object"
     },
     "Change": {
       "properties": {
@@ -2868,6 +2962,22 @@
         "path",
         "additions",
         "deletions"
+      ],
+      "type": "object"
+    },
+    "File2": {
+      "properties": {
+        "path": {
+          "description": "Relative to `dir`.",
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
       ],
       "type": "object"
     },
@@ -8134,6 +8244,13 @@
               },
               "type": "array"
             },
+            "turns": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Turn"
+              },
+              "description": "The last test message per ACP agent name.",
+              "type": "object"
+            },
             "type": {
               "const": "acp_agents",
               "type": "string"
@@ -8143,7 +8260,8 @@
             "type",
             "terminal",
             "acp",
-            "file"
+            "file",
+            "turns"
           ],
           "type": "object"
         },
@@ -8157,6 +8275,22 @@
           },
           "required": [
             "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "turn": {
+              "$ref": "#/$defs/Turn"
+            },
+            "type": {
+              "const": "acp_turn",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "turn"
           ],
           "type": "object"
         },
@@ -8345,6 +8479,26 @@
           "required": [
             "type",
             "plugins"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The plugin catalogue's entries (Browse plugins).",
+          "properties": {
+            "catalog": {
+              "items": {
+                "$ref": "#/$defs/CatalogEntry"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "plugin_catalog",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "catalog"
           ],
           "type": "object"
         },
@@ -12104,6 +12258,28 @@
             },
             "op": {
               "const": "acp_agent_sign_out",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "name"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "description": "The test message of an approved agent (one fixed sentence, confined as the check, 60 s); `cancel` ends a running one.",
+          "properties": {
+            "cancel": {
+              "default": false,
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "op": {
+              "const": "acp_agent_try",
               "type": "string"
             }
           },
@@ -16153,6 +16329,66 @@
       "required": [
         "name",
         "projects"
+      ],
+      "type": "object"
+    },
+    "Turn": {
+      "description": "The three flags are the scorecard's words: a prompt sent, an answer read, the turn's end seen.",
+      "properties": {
+        "answer_read": {
+          "type": "boolean"
+        },
+        "at": {
+          "description": "Unix seconds of the try.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "error": {
+          "description": "The failure's detail, one line.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "failure": {
+          "description": "Why the try failed: `no_answer`, `not_signed_in`, `error` (the agent's own words in `error`), `empty`, `no_end`\n(it stopped before the turn ended) or `other`; none when it answered.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ms": {
+          "description": "From the start of the run to the turn's end (or to the failure).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sent": {
+          "type": "boolean"
+        },
+        "text": {
+          "description": "The answer's first `TEXT_MAX` characters, control characters removed.",
+          "type": "string"
+        },
+        "turn_end": {
+          "type": "boolean"
+        },
+        "version": {
+          "description": "The agent's `--version`, as the check reads it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "sent",
+        "answer_read",
+        "turn_end",
+        "ms",
+        "text",
+        "at"
       ],
       "type": "object"
     },

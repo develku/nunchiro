@@ -1,4 +1,4 @@
-//! `nunchiro plugin new|check|list|on|off|allow|run|remove` (docs/plugins.md). `new` and `check` touch only the
+//! `nunchiro plugin new|check|list|on|off|allow|run|remove|catalog|install` (docs/plugins.md). `new` and `check` touch only the
 //! plugin's folder, so they work inside a session; the rest go to the core as the owner's, so the core refuses them
 //! to an agent (an `allow` from a session becomes one waiting item for the owner, as `widget allow` does).
 use nunchiro_core::{
@@ -8,7 +8,7 @@ use nunchiro_core::{
 };
 use std::path::Path;
 
-const USAGE: &str = "usage: nunchiro plugin new <id> [--with panel,command,setting,gate] | check <id> | list [--json] | on <id> | off <id> | allow <id> | run <id> <command> | remove <id>";
+const USAGE: &str = "usage: nunchiro plugin new <id> [--with panel,command,setting,gate] | check <id> | list [--json] | on <id> | off <id> | allow <id> | run <id> <command> | remove <id> | catalog [--json] | install <id>";
 
 pub fn run(
     home: &Path,
@@ -28,7 +28,10 @@ pub fn run(
         | ["off", _]
         | ["allow", _]
         | ["run", _, _]
-        | ["remove", _] => {}
+        | ["remove", _]
+        | ["catalog"]
+        | ["catalog", "--json"]
+        | ["install", _] => {}
         _ => return Err(USAGE.into()),
     }
     ensure_core(home)?;
@@ -42,6 +45,8 @@ pub fn run(
             on: false,
         },
         ["remove", id] => Action::Remove { id: id.to_string() },
+        ["catalog", ..] => Action::Catalog,
+        ["install", id] => Action::Install { id: id.to_string() },
         ["run", id, command] => Action::Run {
             id: id.to_string(),
             command: command.to_string(),
@@ -79,6 +84,26 @@ pub fn run(
             }
             (None, None) => Ok(()),
         },
+        Reply::PluginCatalog { catalog } if words.last() == Some(&"--json") => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&catalog).map_err(|e| e.to_string())?
+            );
+            Ok(())
+        }
+        Reply::PluginCatalog { catalog } => {
+            for e in catalog {
+                println!("{}\t{}\t{}: {}", e.id, e.version, e.name, e.about);
+            }
+            Ok(())
+        }
+        Reply::Plugins { .. } if words[0] == "install" => {
+            println!(
+                "installed plugin {0}: off and not approved; it runs nothing until `nunchiro plugin allow {0}` and `nunchiro plugin on {0}`",
+                words[1]
+            );
+            Ok(())
+        }
         Reply::Plugins { plugins } if words.last() == Some(&"--json") => {
             println!(
                 "{}",

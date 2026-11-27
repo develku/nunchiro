@@ -44,7 +44,11 @@ fn answer(mut stream: TcpStream, files: &Files) {
             break;
         }
     }
-    let path = first.split(' ').nth(1).unwrap_or("").trim_start_matches('/');
+    let path = first
+        .split(' ')
+        .nth(1)
+        .unwrap_or("")
+        .trim_start_matches('/');
     let out = match files.lock().unwrap().get(path) {
         Some(body) => {
             let mut out = format!(
@@ -60,7 +64,10 @@ fn answer(mut stream: TcpStream, files: &Files) {
     let _ = stream.write_all(&out);
 }
 fn sha(b: &[u8]) -> String {
-    Sha256::digest(b).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(b)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 /// The origin's files for `hello` at `version`, and a catalogue that names them (plus one entry that is not valid).
 fn publish(files: &Files, version: &str) {
@@ -103,7 +110,11 @@ fn an_install_writes_the_files_and_runs_nothing_before_approval() {
     catalog.install("hello").unwrap();
     let dir = home.join("plugins/hello");
     assert_eq!(fs::read_to_string(dir.join("hi.sh")).unwrap(), SCRIPT);
-    assert!(fs::read_to_string(dir.join("plugin.toml")).unwrap().contains("1.0.0"));
+    assert!(
+        fs::read_to_string(dir.join("plugin.toml"))
+            .unwrap()
+            .contains("1.0.0")
+    );
     let listed = plugins::list(&home, true, false);
     let hello = listed.iter().find(|p| p.id == "hello").unwrap();
     assert!(!hello.on, "an installed plugin is off");
@@ -121,7 +132,8 @@ fn a_file_changed_after_the_catalogue_installs_nothing() {
     );
     let e = catalog.install("hello").unwrap_err();
     assert!(
-        e.contains("hi.sh of hello does not match the catalogue") && e.contains("nothing was installed"),
+        e.contains("hi.sh of hello does not match the catalogue")
+            && e.contains("nothing was installed"),
         "{e}"
     );
     let left: Vec<_> = fs::read_dir(home.join("plugins"))
