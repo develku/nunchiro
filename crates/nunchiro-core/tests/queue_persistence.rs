@@ -411,9 +411,31 @@ fn streaming_activity_and_unchanged_ticks_do_not_rewrite_the_store() {
         "activity fsync on every chunk"
     );
     assert_eq!(q.attention("s").last_activity, 99);
-    q.activity("s", 1000).unwrap();
+    q.activity("s", 10_000).unwrap();
     assert_ne!(fs::metadata(home.join("queue.json")).unwrap().ino(), inode);
-    assert!(q.activity("missing", 1001).is_err());
+    assert!(q.activity("missing", 10_001).is_err());
+    fs::remove_dir_all(home).unwrap();
+}
+
+/// The saved activity time moves at most every 10 s while output streams; a clean exit or restart (`Sessions::leave`)
+/// flushes the exact in-memory time, so the next core reads where each session really was.
+#[test]
+fn a_clean_exit_saves_the_exact_activity_time() {
+    let home = home("activity-flush");
+    let mut q = Queue::open(&home).unwrap();
+    q.register("s", AgentKind::Claude, 0).unwrap();
+    q.activity("s", 10_000).unwrap();
+    q.activity("s", 15_000).unwrap();
+    assert_eq!(
+        Queue::open(&home).unwrap().attention("s").last_activity,
+        10_000,
+        "checkpoint only"
+    );
+    q.flush_activity().unwrap();
+    assert_eq!(
+        Queue::open(&home).unwrap().attention("s").last_activity,
+        15_000
+    );
     fs::remove_dir_all(home).unwrap();
 }
 
