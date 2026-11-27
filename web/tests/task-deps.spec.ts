@@ -61,29 +61,37 @@ async function scene(app: Page, core: Core, plain = false) {
   return { view, sent, card: (id: string) => view.locator(`.tcard[data-task="${id}"]`) };
 }
 
-/** The contrast of a pill's words with what is behind them, through the card's dimming (WCAG ratio). */
-async function contrast(pill: import('@playwright/test').Locator) {
-  return pill.evaluate((el) => {
+/** WCAG contrast through the card's dimming: a pill's words against what is behind them, or (`dot`) a dot's fill
+ *  against the chip it sits on. */
+async function contrast(node: import('@playwright/test').Locator, dot = false) {
+  return node.evaluate((el, dot) => {
     const rgba = (c: string) => (c.match(/[\d.]+/g) ?? []).map(Number);
     const over = (top: number[], under: number[]) => { const a = top[3] ?? 1; return [0, 1, 2].map((i) => top[i] * a + under[i] * (1 - a)); };
     const card = el.closest('.tcard')!;
-    const chain: Element[] = [];
-    for (let e: Element | null = el; e; e = e.parentElement) chain.unshift(e);
-    let page = rgba(getComputedStyle(document.body).backgroundColor);
-    let behind = page;
-    for (const e of chain) {
-      const c = rgba(getComputedStyle(e).backgroundColor);
-      if (!c.length || (c[3] ?? 1) === 0) continue;
-      if (e === card || card.contains(e)) behind = over(c, behind);
-      else page = behind = over(c, behind);
-    }
+    // The solid colour behind `to` (its own fill included): the page's, then the card's layers down to it.
+    const fill = (to: Element, inCard: boolean) => {
+      const chain: Element[] = [];
+      for (let e: Element | null = to; e; e = e.parentElement) chain.unshift(e);
+      let c = rgba(getComputedStyle(document.body).backgroundColor);
+      for (const e of chain) {
+        if ((e === card || card.contains(e)) !== inCard && inCard) continue;
+        if (!inCard && (e === card || card.contains(e))) break;
+        const b = rgba(getComputedStyle(e).backgroundColor);
+        if (b.length && (b[3] ?? 1) > 0) c = over(b, c);
+      }
+      return c;
+    };
+    const page = fill(card, false);
+    const ground = (to: Element) => { let c = page; for (let e: Element | null = card; e; e = e === to ? null : [...e.children].find((k) => k.contains(to)) ?? null) { const b = rgba(getComputedStyle(e).backgroundColor); if (b.length && (b[3] ?? 1) > 0) c = over(b, c); } return c; };
+    const under = dot ? ground(el.parentElement!) : ground(el);
+    const mark = over(rgba(dot ? getComputedStyle(el).backgroundColor : getComputedStyle(el).color), under);
     const op = Number(getComputedStyle(card).opacity);
-    const text = over([...over(rgba(getComputedStyle(el).color), behind), op], page);
-    const bg = over([...behind, op], page);
+    const fg = over([...mark, op], page);
+    const bg = over([...under, op], page);
     const L = (c: number[]) => { const f = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]; };
-    const [a, b] = [L(text), L(bg)].sort((x, y) => y - x);
+    const [a, b] = [L(fg), L(bg)].sort((x, y) => y - x);
     return (a + 0.05) / (b + 0.05);
-  });
+  }, dot);
 }
 
 test('task_deps_board: waiting, blocking, freed, stuck and early cards, as the mockup', async ({ app, core }) => {
@@ -208,7 +216,12 @@ for (const scheme of ['light', 'dark'] as const)
   test(`task_deps_pill_contrast_${scheme}: the waiting pills read 4.5:1 through the card's dimming`, async ({ app, core }) => {
     await app.emulateMedia({ colorScheme: scheme });
     const { card } = await scene(app, core);
-    for (const id of ['t2', 't4']) expect(await contrast(card(id).locator('.tcard-stages > span')), id).toBeGreaterThanOrEqual(4.5);
+    for (const id of ['t2', 't4', 't5']) expect(await contrast(card(id).locator('.tcard-stages > span')), id).toBeGreaterThanOrEqual(4.5);
+    // The stuck card's chip is quiet: the --light-you dot beside the word reads 3:1 on it, and the card's one warm fill
+    // is Stop waiting.
+    const chip = card('t5').locator('.tcard-stages > span');
+    expect(await contrast(chip.locator('.tcard-dot'), true), 'dot').toBeGreaterThanOrEqual(3);
+    expect(await chip.evaluate((e) => getComputedStyle(e).backgroundColor)).toBe(await card('t1').locator('.tcard-stages > [data-at="next"]').first().evaluate((e) => getComputedStyle(e).backgroundColor));
     // A card whose Reviewer waits for a seat keeps its full stage row, each chip in its own colours as on any card.
     const colours = (id: string) => card(id).locator('.tcard-stages > [data-at]').evaluateAll((els) => els.map((e) => `${(e as HTMLElement).dataset.at} ${getComputedStyle(e).color}`));
     await expect(card('t8')).toHaveAttribute('data-waits-seat', 'true');
