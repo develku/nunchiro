@@ -78,3 +78,5 @@ shell-beside-agent.spec.ts
 
 # a registered Settings page keeps the focus on its title after a nav click
 settings-registered-title-focus.spec.ts
+# a turn's changed-files card shows once the turn ends and stays where it is; the tab strip's "+" stays at the end
+chat-turn-files.spec.ts | chat_turn_card_does_not_move_while_the_turn_ends
