@@ -21,7 +21,7 @@ const KEPT = new Map<string, Text>();
 
 /** `onOpen`: open a PR in the PR view (after a create, or the one that already exists). `writer`: the session's agent
  *  that Write with AI runs (Claude or Codex); none for an ACP agent or a terminal, which get no button. */
-export function PrForm({ core, session, writer, onCreated, onCancel, onOpen, t }: { core: CoreClient; session: string; writer?: string; onCreated: (c: Created) => void; onCancel: () => void; onOpen: (url: string) => void; t: T }) {
+export function PrForm({ core, session, writer, writerOff, onCreated, onCancel, onOpen, t }: { core: CoreClient; session: string; writer?: string; writerOff?: boolean; onCreated: (c: Created) => void; onCancel: () => void; onOpen: (url: string) => void; t: T }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [text, setText] = useState<Text | null>(KEPT.get(session) ?? null);
   const [busy, setBusy] = useState(false);
@@ -38,7 +38,11 @@ export function PrForm({ core, session, writer, onCreated, onCancel, onOpen, t }
         if (!live) return;
         const d = (r as { draft: Draft }).draft;
         setDraft(d);
-        setText((kept) => kept ?? { title: d.title, body: d.body, base: d.bases[0] ?? 'main', draft: false });
+        // A kept base the list no longer has falls back to the first shown one; with none shown, Create stays off.
+        setText((kept) => {
+          const base = kept && d.bases.includes(kept.base) ? kept.base : (d.bases[0] ?? '');
+          return { ...(kept ?? { title: d.title, body: d.body, draft: false }), base };
+        });
       },
       (e: unknown) => live && setError(e),
     );
@@ -51,7 +55,7 @@ export function PrForm({ core, session, writer, onCreated, onCancel, onOpen, t }
   }, [draft]);
   const edit = (patch: Partial<Text>) =>
     setText((x) => {
-      const next = { ...(x ?? { title: '', body: '', base: 'main', draft: false }), ...patch };
+      const next = { ...(x ?? { title: '', body: '', base: '', draft: false }), ...patch };
       KEPT.set(session, next);
       return next;
     });
@@ -71,12 +75,12 @@ export function PrForm({ core, session, writer, onCreated, onCancel, onOpen, t }
   };
   const stop = () => void core.request({ op: 'pr_write_cancel', session }).catch(() => {});
   const n = draft?.push.ahead ?? 0;
-  const off = !draft || !text || busy || writing || !!draft.gh_why || !text.title.trim();
+  const off = !draft || !text || busy || writing || !!draft.gh_why || !text.title.trim() || !draft.bases.includes(text.base);
   const go = () => {
     if (off || !draft || !text) return;
     setBusy(true);
     setError(null);
-    core.request({ op: 'pr_create', session, head: draft.head, title: text.title, body: text.body, base: text.base, draft: text.draft }).then(
+    core.request({ op: 'pr_create', session, head: draft.head, remote: draft.push.remote, branch: draft.push.branch, ahead: draft.push.ahead, key: draft.push.key, title: text.title, body: text.body, base: text.base, draft: text.draft }).then(
       (r) => {
         KEPT.delete(session);
         setBusy(false);
@@ -135,6 +139,7 @@ export function PrForm({ core, session, writer, onCreated, onCancel, onOpen, t }
               {written && !writing && <span className="dfact">{t('gitActions.ai.written', { agent: writer })}</span>}
             </div>
           )}
+          {writerOff && <p className="dfact">{t('gitActions.ai.claudeOnly')}</p>}
           <ErrorLine t={t} error={aiError} className="dpush-err" />
           <p className="dfact">
             {t(draft.template ? 'gitActions.pr.fromTemplate' : 'gitActions.pr.filled', { n: draft.commits })}
@@ -142,11 +147,11 @@ export function PrForm({ core, session, writer, onCreated, onCancel, onOpen, t }
           </p>
         </>
       )}
-      <div className="drow">
-        <button type="button" className="btn p" aria-disabled={off || undefined} data-tip={draft?.gh_why ? t('gitActions.pr.needsGh') : undefined} onClick={go}>
+      <div className="drow dbtns">
+        <button type="button" className="btn p sm" aria-disabled={off || undefined} data-tip={draft?.gh_why ? t('gitActions.pr.needsGh') : undefined} onClick={go}>
           {busy ? t('gitActions.pr.creating') : t(n > 0 ? 'gitActions.label.pushCreatePr' : 'gitActions.label.createPr')}
         </button>
-        <button type="button" className="btn" disabled={busy} onClick={onCancel}>
+        <button type="button" className="btn sm" disabled={busy} onClick={onCancel}>
           {t('gitActions.push.cancel')}
         </button>
       </div>

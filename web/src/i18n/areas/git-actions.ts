@@ -30,6 +30,7 @@ declare module '../index' {
     'gitActions.prompt.pushPr': true;
     'gitActions.prompt.createPr': true;
     'gitActions.prompt.pull': true;
+    'gitActions.ai.claudeOnly': true;
     'gitActions.ai.write': true;
     'gitActions.ai.again': true;
     'gitActions.ai.writing': true;
@@ -60,6 +61,9 @@ declare module '../index' {
     'gitActions.err.notGithub': true;
     'gitActions.err.noPr': true;
     'gitActions.err.noLink': true;
+    'gitActions.err.url': true;
+    'gitActions.err.target': true;
+    'gitActions.push.noUpstream': true;
     'gitActions.why.noPushRemote': true;
     'gitActions.label.askPush': true;
     'gitActions.choices': true;
@@ -168,6 +172,10 @@ export const en = {
   'gitActions.ai.stop': "Stop",
   'gitActions.ai.written': "Written by {agent} from the diff. Read it before you send it.",
   'gitActions.ai.failed': "{agent} could not write it: {reason}. Your text is unchanged.",
+  'gitActions.err.target': "Nothing was sent: where this pushes changed after it was shown (now {remote}/{branch}). Look again.",
+  'gitActions.push.noUpstream': "The branch's upstream was not set; git push -u in a terminal sets it.",
+  'gitActions.ai.claudeOnly': "Write with AI runs in Claude sessions only for now.",
+  'gitActions.err.url': "Nothing was sent: the push URL of {remote} changed after this was shown. Look again.",
 };
 export const ko = {
   'gitActions.label.commit': '커밋',

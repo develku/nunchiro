@@ -791,6 +791,8 @@ impl Core {
             .arg("serve")
             .env("NUNCHIRO_HOME", &home)
             .env("CLAUDE_CONFIG_DIR", home.join("agent"))
+            // Write with AI's limit, shortened so a hanging agent is seen ending.
+            .env("NUNCHIRO_WRITE_AI_MS", "4000")
             .env(
                 "PATH",
                 format!("{}:/usr/bin:/bin", home.join("bin").display()),
@@ -1187,6 +1189,12 @@ fn git_push_from_the_window_moves_the_remote() {
     let r = core.window(json!({"op":"git_push","session":s.id}));
     assert_eq!(r["Err"], "push needs the confirmed head commit", "{r}");
     let r = core.window(json!({"op":"git_push","session":s.id,"head":head}));
+    assert_eq!(r["Err"], "push needs what the strip showed", "{r}");
+    // What the strip shows: the Diff list's git facts.
+    let list = core.window(json!({"op":"diff_list","session":s.id,"git":true,"fresh":true}));
+    let to = &list["Ok"]["git"]["push_to"];
+    assert_eq!(list["Ok"]["git"]["head"], head.as_str(), "{list}");
+    let r = core.window(json!({"op":"git_push","session":s.id,"head":head,"remote":to["remote"],"branch":to["branch"],"ahead":to["ahead"],"key":to["key"]}));
     assert_eq!(
         r["Ok"],
         json!({"type":"git_pushed","pushed":2,"remote":"origin","branch":"parser-fix"}),
@@ -1287,7 +1295,8 @@ fn pr_create_pushes_then_hands_gh_the_text_unchanged() {
     let head = d["head"].as_str().unwrap().to_string();
     let title = "-x Fix $(rm -rf ~) `id` \"quoted\"";
     let body = "$(touch /tmp/pwned)\n`id`\n--admin\n- item\r\n\ttab ünïcode";
-    let r = core.window(json!({"op":"pr_create","session":s.id,"head":head,"title":title,"body":body,"base":"main","draft":false}));
+    let p = &d["push"];
+    let r = core.window(json!({"op":"pr_create","session":s.id,"head":head,"remote":p["remote"],"branch":p["branch"],"ahead":p["ahead"],"key":p["key"],"title":title,"body":body,"base":"main","draft":false}));
     assert_eq!(
         r["Ok"],
         json!({"type":"pr_created","url":"https://github.com/develku/nunchiro/pull/58","number":58,"pushed":2}),
@@ -1312,12 +1321,59 @@ fn pr_create_pushes_then_hands_gh_the_text_unchanged() {
     assert_eq!(chip["Ok"]["chip"]["state"], "open", "{chip}");
     // Pushed already: Create as draft runs gh alone, with --draft.
     fs::remove_file(core.home.join("gh-runs")).unwrap();
-    let r = core.window(json!({"op":"pr_create","session":s.id,"head":head,"title":"T","body":"","base":"main","draft":true}));
+    let d = core.window(json!({"op":"pr_draft","session":s.id}))["Ok"]["draft"].clone();
+    let p = &d["push"];
+    let r = core.window(json!({"op":"pr_create","session":s.id,"head":head,"remote":p["remote"],"branch":p["branch"],"ahead":p["ahead"],"key":p["key"],"title":"T","body":"","base":"main","draft":true}));
     assert_eq!(r["Ok"]["pushed"], 0, "{r}");
     assert!(
         fs::read_to_string(core.home.join("gh-runs"))
             .unwrap()
             .ends_with("|--body-file=-|--draft|\n")
+    );
+}
+
+/// Repository text in the draft is plain: hidden characters (bidi overrides, zero-width marks) leave the subjects and
+/// the template, and a template reached through a linked folder is not read. The owner's own words reach gh unchanged
+/// (an emoji joined with ZWJ included).
+#[test]
+fn pr_text_has_no_hidden_characters_and_no_linked_template() {
+    let core = Core::new();
+    let dir = pr_repo(&core, 0);
+    pr_git(
+        &dir,
+        &[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "Fix\u{202E}txt.exe lexer\u{200B}",
+        ],
+    );
+    let outside = core.home.join("outside");
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(
+        outside.join("pull_request_template.md"),
+        "## From outside the repository\n",
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(&outside, dir.join(".github")).unwrap();
+    gh_create_shim(&core);
+    let s = core.start();
+    let d = core.window(json!({"op":"pr_draft","session":s.id}))["Ok"]["draft"].clone();
+    assert_eq!(d["title"], "Fixtxt.exe lexer", "{d}");
+    assert_eq!(d["template"], false, "{d}");
+    assert!(!d["body"].as_str().unwrap().contains("outside"), "{d}");
+    let p = &d["push"];
+    let r = core.window(json!({"op":"pr_create","session":s.id,"head":d["head"],"remote":p["remote"],"branch":p["branch"],"ahead":p["ahead"],"key":p["key"],"title":"Fix\u{202E} it","body":"a\u{2066}b 👩\u{200D}💻 🏳\u{FE0F}\u{200D}🌈","base":"main"}));
+    assert!(r["Ok"].is_object(), "{r}");
+    assert!(
+        fs::read_to_string(core.home.join("gh-runs"))
+            .unwrap()
+            .contains("|--title=Fix\u{202E} it|")
+    );
+    assert_eq!(
+        fs::read_to_string(core.home.join("gh-stdin")).unwrap(),
+        "a\u{2066}b 👩\u{200D}💻 🏳\u{FE0F}\u{200D}🌈"
     );
 }
 
@@ -1328,8 +1384,11 @@ fn pr_create_refusals_say_what_happened() {
     gh_create_shim(&core);
     let s = core.start();
     let head = pr_git(&dir, &["rev-parse", "HEAD"]);
+    // Each create sends what the form shows now (its draft): the head, the remote, the branch, the count, the URL key.
     let create = |title: &str| {
-        core.window(json!({"op":"pr_create","session":s.id,"head":head,"title":title,"body":"b","base":"main"}))
+        let d = core.window(json!({"op":"pr_draft","session":s.id}))["Ok"]["draft"].clone();
+        let p = &d["push"];
+        core.window(json!({"op":"pr_create","session":s.id,"head":d["head"],"remote":p["remote"],"branch":p["branch"],"ahead":p["ahead"],"key":p["key"],"title":title,"body":"b","base":"main"}))
     };
     // A title over two lines, or empty: nothing runs, nothing is pushed.
     for bad in ["two\nlines", "", "   "] {
@@ -1388,7 +1447,7 @@ fn claude_writer(core: &Core) {
     )
     .unwrap();
     let script = format!(
-        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo \"2.1.310 (Claude Code)\"; exit; fi\nif [ \"$1\" != -p ]; then exec /bin/cat; fi\nprintf '%s|' \"$@\" > '{h}/claude-argv'\nprintf '%s' \"$CLAUDE_CONFIG_DIR\" > '{h}/claude-config'\necho $$ > '{h}/claude-pid'\n/bin/cat > '{h}/claude-stdin'\nif [ -e '{h}/claude-hang' ]; then /bin/sleep 120; fi\n/bin/cat '{h}/claude-out'\n"
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo \"2.1.310 (Claude Code)\"; exit; fi\nif [ \"$1\" != -p ]; then exec /bin/cat; fi\nprintf '%s|' \"$@\" > '{h}/claude-argv'\nprintf '%s' \"$CLAUDE_CONFIG_DIR\" > '{h}/claude-config'\nprintf '%s' \"$PWD\" > '{h}/claude-pwd'\n/bin/ls -A > '{h}/claude-ls'\necho $$ > '{h}/claude-pid'\n/bin/cat > '{h}/claude-stdin'\nif [ -e '{h}/claude-hang' ]; then /bin/sleep 120; fi\n/bin/cat '{h}/claude-out'\n"
     );
     let path = core.home.join("bin/claude");
     fs::write(&path, script).unwrap();
@@ -1408,8 +1467,28 @@ fn pr_write_runs_the_agent_once_without_tools() {
     .unwrap();
     pr_git(&dir, &["add", "lex.rs"]);
     pr_git(&dir, &["commit", "-q", "-m", "Stop the lexer at the end"]);
+    // diff.external names a program; Write with AI's diff never runs it.
+    let marker = core.home.join("external-ran");
+    let external = core.home.join("external.sh");
+    fs::write(
+        &external,
+        format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+    )
+    .unwrap();
+    fs::set_permissions(&external, fs::Permissions::from_mode(0o755)).unwrap();
+    pr_git(
+        &dir,
+        &["config", "diff.external", external.to_str().unwrap()],
+    );
     let s = core.start();
+    let transcript = "{\"type\":\"user\",\"message\":{\"content\":\"hi\"}}\n";
+    core.transcript(&s, transcript);
     claude_writer(&core);
+    fs::write(
+        core.home.join("claude-out"),
+        json!({"type":"result","is_error":false,"result":"{\"title\":\"Fix the\\u202e lexer\",\"body\":\"## Summary\\nIt stops\\u200b at the end.\"}"}).to_string(),
+    )
+    .unwrap();
     let sent_before = core.window(json!({"op":"agent_get","id":s.id}));
     assert!(sent_before["Ok"].is_object(), "{sent_before}");
     let r = core.window(json!({"op":"pr_write","session":s.id}));
@@ -1446,6 +1525,48 @@ fn pr_write_runs_the_agent_once_without_tools() {
         sent_before,
         "the session changed"
     );
+    assert!(!marker.exists(), "diff.external ran");
+    // An empty folder of the app's own, never the shared temp folder.
+    let pwd = fs::read_to_string(core.home.join("claude-pwd")).unwrap();
+    assert!(
+        pwd.starts_with(&core.home.canonicalize().unwrap().display().to_string()),
+        "{pwd}"
+    );
+    assert_eq!(fs::read_to_string(core.home.join("claude-ls")).unwrap(), "");
+    // The session's transcript is byte-equal.
+    let encoded: String = s
+        .cwd
+        .to_string_lossy()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    let file = core
+        .home
+        .join("agent/projects")
+        .join(encoded)
+        .join(format!("{}.jsonl", s.agent_session_id.as_ref().unwrap()));
+    assert_eq!(fs::read_to_string(file).unwrap(), transcript);
+}
+
+/// A Write with AI that never answers ends at its limit: the sentence, and the agent's process is gone.
+#[test]
+fn pr_write_ends_a_run_at_its_limit() {
+    let core = Core::new();
+    pr_repo(&core, 1);
+    let s = core.start();
+    claude_writer(&core);
+    fs::write(core.home.join("claude-hang"), "").unwrap();
+    let r = core.window(json!({"op":"pr_write","session":s.id}));
+    assert_eq!(
+        r["Err"], "Claude could not write it: it did not answer in 4 seconds",
+        "{r}"
+    );
+    let pid = fs::read_to_string(core.home.join("claude-pid")).unwrap();
+    let alive = std::process::Command::new("/bin/kill")
+        .args(["-0", pid.trim()])
+        .status()
+        .unwrap();
+    assert!(!alive.success(), "the agent's process is still running");
 }
 
 /// Cancel stops that run alone: the reply says so and the agent's process is gone.

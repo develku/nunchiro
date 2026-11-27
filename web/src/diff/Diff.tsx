@@ -17,6 +17,7 @@ import { useFeatureSetting } from '../settings/useFeatureSetting';
 import type { Session } from '../types';
 import { agentLive, appAction, ASK_AGENT, gitAction, keepWay, ladder, promptKey, storedWay, type GitFacts, type Way } from './gitAction';
 import { createdText, PrForm } from './PrForm';
+import { prChipChanged } from '../chat/PrChip';
 import { PrView } from '../pr/PrView';
 import { PushStrip, pushedText, WayMenu } from './GitPush';
 import { agentName } from '../chat/conversation';
@@ -165,7 +166,8 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
   const [sent, setSent] = useState<string | null>(null);
   // The app's Push: the strip is open for this session; `pushed` is the foot line after one.
   const [way, setWay] = useState<Way>(storedWay);
-  const [strip, setStrip] = useState<string | null>(null);
+  // The strip keeps the git facts of the press: a list re-read (scope, refresh, an error) never re-arms it.
+  const [strip, setStrip] = useState<{ session: string; git: GitFacts } | null>(null);
   const [pushed, setPushed] = useState<{ session: string; text: string; url?: string } | null>(null);
   const [form, setForm] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null); // the PR view opened from the form or its foot line
@@ -268,7 +270,7 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
   // sends nothing and shows its own label and reason.
   const press = async () => {
     if (!gitAsk || !session || !owner) return;
-    if (byApp) return gitAsk === 'push' ? setStrip(session) : setForm(session);
+    if (byApp) return gitAsk === 'push' ? (list?.git ? setStrip({ session, git: list.git }) : undefined) : setForm(session);
     setSent('');
     wait.current = { at: Date.now(), seen: false };
     try {
@@ -367,11 +369,11 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
           </button>
         )}
       </div>
-      {session && strip === session && byApp && appAct?.ask && list?.git && (
+      {session && strip?.session === session && (
         <PushStrip
           core={core}
           session={session}
-          git={list.git}
+          git={strip.git}
           pr={prNumber}
           onCancel={() => setStrip(null)}
           onPushed={(r) => {
@@ -387,12 +389,14 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
         <PrForm
           core={core}
           session={session}
-          writer={owner?.kind === 'claude' || owner?.kind === 'codex' ? agent : undefined}
+          writer={owner?.kind === 'claude' ? agent : undefined}
+          writerOff={owner?.kind === 'codex'}
           onCancel={() => setForm(null)}
           onOpen={setViewing}
           onCreated={(c) => {
             setForm(null);
             setPushed({ session, text: createdText(t, c), url: c.url });
+            prChipChanged(session);
             fresh.current = true;
             setTick((n) => n + 1);
           }}
@@ -465,7 +469,7 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
       {stacked && <Stack key={`${session}\u0000${shown === 'branch'}`} core={core} session={session!} machine={machine} branch={shown === 'branch'} force={force} files={files} at={current} jump={jump} t={t} quote={quote} />}
       {pushed?.session === session && (
         <div className="dpushed" role="status">
-          {pushed.text}
+          <span className="dpushed-t">{pushed.text}</span>
           {pushed.url && (
             <button type="button" className="btn q sm" onClick={() => setViewing(pushed.url!)}>
               {t('gitActions.pr.open')}

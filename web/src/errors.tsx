@@ -23,6 +23,8 @@ export const startOp = (start: { op: 'start'; [k: string]: unknown }, anyway = f
 export const KNOWN: [RegExp, Key, Key?][] = [
   // git_write.rs: the Diff panel's Push. First, as git's own lines under the sentence may hold "fatal: " (the git row).
   [/^nothing was sent: the branch changed after this was shown \(new head (?<head>\S+)\)/, 'gitActions.err.changed'],
+  [/^nothing was sent: the push URL of (?<remote>\S+) changed after this was shown/, 'gitActions.err.url'],
+  [/^nothing was sent: where this pushes changed after this was shown \(now (?<remote>[^/\s]+)\/(?<branch>\S+)\)/, 'gitActions.err.target'],
   [/^not pushed: (?<remote>\S+) has newer commits on (?<branch>\S+)/, 'gitActions.err.newer'],
   [/^not pushed: git needs you to sign in/, 'gitActions.err.signin'],
   [/^not pushed: the pre-push hook failed/, 'gitActions.err.hook'],
@@ -39,6 +41,7 @@ export const KNOWN: [RegExp, Key, Key?][] = [
   [/^no pull request: (?<remote>\S+) is not a GitHub repository/, 'gitActions.err.notGithub'],
   [/^no pull request: /, 'gitActions.err.noPr', 'gitActions.err.failed.todo'],
   [/^the pull request was created, but gh printed no link/, 'gitActions.err.noLink'],
+  [/^Write with AI runs in Claude sessions only$/, 'gitActions.ai.claudeOnly'],
   [/^(?<agent>\S+) could not write it: (?<reason>[\s\S]+?)\.?$/, 'gitActions.ai.failed'],
   [/core disconnected|core is stopping/i, 'settings.err.core'],
   // The core's own wording only: SSH and agent output also says "timed out" or "Permission denied (publickey)".

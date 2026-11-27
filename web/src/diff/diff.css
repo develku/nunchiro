@@ -393,7 +393,7 @@
   align-items: center;
   gap: var(--sp-8);
   min-height: 24px;
-  padding: 0 var(--sp-8) 0 var(--sp-12);
+  padding: var(--sp-4) var(--sp-8) var(--sp-4) var(--sp-12);
   font-size: var(--fs-meta);
   font-weight: 600;
   background: var(--tint-1);
@@ -452,4 +452,20 @@
 .diff .dprform .btn.p[aria-disabled='true'] {
   opacity: 0.5;
   cursor: default;
+}
+/* Buttons keep one line and sit side by side; the foot line wraps its words instead of clipping them. */
+.diff .dprform .drow .btn {
+  flex: none;
+  white-space: nowrap;
+}
+.diff .dpushed {
+  flex-wrap: wrap;
+  line-height: 1.4;
+}
+.diff .dpushed .dpushed-t {
+  flex: 1 1 8em;
+  min-width: 0;
+}
+.diff .dprform .dbtns {
+  flex-wrap: nowrap;
 }

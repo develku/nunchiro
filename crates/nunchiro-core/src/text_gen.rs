@@ -1,6 +1,6 @@
-//! The Create PR form's Write with AI: one separate run of the session's agent CLI (Claude or Codex; never ACP or a
-//! terminal) in print mode, on a press only. The run gets no tools that write (Claude: no tools at all; Codex: its
-//! read-only sandbox), keeps no conversation on disk, starts in an empty temp folder (so no project instructions load),
+//! The Create PR form's Write with AI: one separate run of the session's agent CLI (Claude only for now; never Codex,
+//! ACP or a terminal) in print mode, on a press only. The run gets no tools and no MCP servers, keeps no
+//! conversation on disk, starts in an empty folder of the app's own (so no project instructions load),
 //! and uses the session's account folder. Its input is the commit subjects, `git diff --stat`, the diff cut at 60,000
 //! characters and the PR template, each fenced with a marker the data cannot guess and called data, not instructions.
 //! The answer only fills the form's two fields: nothing reaches the session's conversation, no session row, no tab.
@@ -20,8 +20,10 @@ const DIFF_MAX: usize = 60_000;
 const SUBJECTS_MAX: usize = 100;
 const READ: Duration = Duration::from_secs(10);
 
-/// The running Write with AI per session: its process group, so Cancel stops that run alone.
-static RUNNING: LazyLock<Mutex<HashMap<String, u32>>> = LazyLock::new(Default::default);
+/// The running Write with AI per session: the run's own number and its process group, so Cancel stops that run alone
+/// and a later run is never stopped by an earlier one's bookkeeping.
+static RUNNING: LazyLock<Mutex<HashMap<String, (u64, u32)>>> = LazyLock::new(Default::default);
+static RUNS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 /// The fixed arguments per agent: print mode, the smallest model (Claude), no tools or a read-only sandbox, nothing
 /// saved. The prompt goes on stdin.
@@ -43,22 +45,9 @@ pub fn argv(kind: AgentKind) -> Option<(&'static str, Vec<&'static str>)> {
                 "json",
             ],
         )),
-        // shortcut: Codex runs its configured model at low effort; name a small model here once one is stable.
-        AgentKind::Codex => Some((
-            "codex",
-            vec![
-                "exec",
-                "--ephemeral",
-                "--sandbox",
-                "read-only",
-                "--skip-git-repo-check",
-                "-c",
-                "approval_policy=\"never\"",
-                "-c",
-                "model_reasoning_effort=\"low\"",
-                "-",
-            ],
-        )),
+        // Codex is not offered: its exec mode keeps its shell tool and the account's MCP servers, which a planted line in
+        // the diff could drive. shortcut: Claude only; offer Codex once it can run with no tools and no MCP servers.
+        AgentKind::Codex => None,
         AgentKind::Shell | AgentKind::Acp => None,
     }
 }
@@ -138,14 +127,11 @@ pub fn parse(kind: AgentKind, stdout: &[u8]) -> Result<(String, String), String>
         .as_str()
         .ok_or("the answer held no title")?
         .chars()
-        .filter(|c| !c.is_control())
+        .filter(|c| !c.is_control() && !crate::board::rights::hidden(*c))
         .take(git_write::TITLE_MAX)
         .collect();
-    let body: String = v["body"]
-        .as_str()
-        .unwrap_or_default()
+    let body: String = git_write::plain(v["body"].as_str().unwrap_or_default())
         .chars()
-        .filter(|c| !c.is_control() || matches!(c, '\n' | '\t'))
         .take(git_write::BODY_MAX)
         .collect();
     if title.trim().is_empty() {
@@ -175,11 +161,25 @@ fn data(dir: &Path) -> Result<(String, String, String, Option<String>), String> 
         "--end-of-options",
         &range,
     ])?;
-    let stat = read(&["diff", "--stat", "--end-of-options", &range])?;
-    let diff: String = read(&["diff", "--end-of-options", &range])?
-        .chars()
-        .take(DIFF_MAX)
-        .collect();
+    // No external diff program and no textconv filter: the folder's config never picks a program here.
+    let stat = read(&[
+        "diff",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--stat",
+        "--end-of-options",
+        &range,
+    ])?;
+    let diff: String = read(&[
+        "diff",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--end-of-options",
+        &range,
+    ])?
+    .chars()
+    .take(DIFF_MAX)
+    .collect();
     Ok((subjects, stat, diff, git_write::template(dir)))
 }
 
@@ -189,15 +189,39 @@ pub fn write(
     kind: AgentKind,
     dir: &Path,
     config: Option<&Path>,
+    home: &Path,
 ) -> Result<(String, String), String> {
     let (program, args) = argv(kind).ok_or("this session has no agent that can write it")?;
     let (subjects, stat, diff, template) = data(dir)?;
     let input = prompt(&subjects, &stat, &diff, template.as_deref(), &nonce());
     let bin = crate::firstrun::on_path(program)
         .ok_or_else(|| format!("{program} was not found on PATH"))?;
+    // An empty folder of the app's own per run, so no project settings or instructions load (never the shared temp
+    // folder, where anyone may put a .claude folder or a CLAUDE.md); removed after.
+    let run = RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let empty = home.join("write-ai").join(run.to_string());
+    let _ = std::fs::remove_dir_all(&empty);
+    std::fs::create_dir_all(&empty).map_err(|e| e.to_string())?;
+    let result = run_in(session, run, kind, &bin, &args, &empty, config, input);
+    let _ = std::fs::remove_dir_all(&empty);
+    result
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_in(
+    session: &str,
+    run: u64,
+    kind: AgentKind,
+    bin: &Path,
+    args: &[&str],
+    empty: &Path,
+    config: Option<&Path>,
+    input: String,
+) -> Result<(String, String), String> {
+    let limit = crate::account_signin::wait("NUNCHIRO_WRITE_AI_MS", WRITE_TIMEOUT);
     let mut c = crate::process::command(bin);
-    c.args(&args)
-        .current_dir(std::env::temp_dir())
+    c.args(args)
+        .current_dir(empty)
         .env_remove("NUNCHIRO_TOKEN")
         .env_remove("NUNCHIRO_SESSION");
     if let (Some(agent), Some(folder)) = (
@@ -206,20 +230,21 @@ pub fn write(
     ) {
         c.env(crate::accounts::variable(agent), folder);
     }
-    let out = crate::process::output_watched(c, WRITE_TIMEOUT, input.into_bytes(), &|pid| {
+    let out = crate::process::output_watched(c, limit, input.into_bytes(), &|pid| {
         if let Ok(mut r) = RUNNING.lock() {
-            r.insert(session.to_string(), pid);
+            r.insert(session.to_string(), (run, pid));
         }
     });
-    let mine = RUNNING.lock().ok().and_then(|mut r| r.remove(session));
+    // This run's entry only: still there means not cancelled.
+    let mine = RUNNING.lock().ok().and_then(|mut r| match r.get(session) {
+        Some((id, _)) if *id == run => r.remove(session),
+        _ => None,
+    });
     let out = match out {
         Ok(o) => o,
         Err(_) if mine.is_none() => return Err("cancelled".into()),
         Err(e) if e.contains("timed out") => {
-            return Err(format!(
-                "it did not answer in {} seconds",
-                WRITE_TIMEOUT.as_secs()
-            ));
+            return Err(format!("it did not answer in {} seconds", limit.as_secs()));
         }
         Err(e) => return Err(e),
     };
@@ -234,7 +259,7 @@ pub fn write(
 
 /// Stops `session`'s running Write with AI (its own process group only).
 pub fn cancel(session: &str) -> bool {
-    let Some(pid) = RUNNING.lock().ok().and_then(|mut r| r.remove(session)) else {
+    let Some((_, pid)) = RUNNING.lock().ok().and_then(|mut r| r.remove(session)) else {
         return false;
     };
     unsafe {
@@ -247,17 +272,27 @@ pub fn cancel(session: &str) -> bool {
 pub(crate) fn answer(registry: &Mutex<Sessions>, request: Request) -> Response {
     match request {
         Request::PrWrite { session } => {
-            let meta = registry
-                .lock()
-                .map_err(|_| "session registry unavailable")?
-                .session_meta(&session)?;
+            let (meta, home) = {
+                let sessions = registry
+                    .lock()
+                    .map_err(|_| "session registry unavailable")?;
+                (
+                    sessions.session_meta(&session)?,
+                    sessions.home().to_path_buf(),
+                )
+            };
             let agent = match meta.kind {
                 AgentKind::Claude => "Claude",
-                AgentKind::Codex => "Codex",
-                _ => return Err("this session has no agent that can write it".into()),
+                _ => return Err("Write with AI runs in Claude sessions only".into()),
             };
-            let (title, body) = write(&session, meta.kind, &meta.cwd, meta.config_dir.as_deref())
-                .map_err(|e| format!("{agent} could not write it: {e}"))?;
+            let (title, body) = write(
+                &session,
+                meta.kind,
+                &meta.cwd,
+                meta.config_dir.as_deref(),
+                &home,
+            )
+            .map_err(|e| format!("{agent} could not write it: {e}"))?;
             Ok(Reply::PrWritten {
                 title,
                 body,
@@ -313,12 +348,9 @@ mod tests {
         let at = claude.iter().position(|a| *a == "--tools").unwrap();
         assert_eq!(claude[at + 1], "");
         assert!(claude.contains(&"--no-session-persistence"));
-        let (_, codex) = argv(AgentKind::Codex).unwrap();
-        assert!(
-            codex.windows(2).any(|w| w == ["--sandbox", "read-only"])
-                && codex.contains(&"--ephemeral")
-        );
-        for a in claude.iter().chain(&codex) {
+        // Codex cannot run without its shell tool and its configured MCP servers here: Claude only for now.
+        assert!(argv(AgentKind::Codex).is_none());
+        for a in &claude {
             assert!(
                 !a.contains("dangerously") && !a.contains("bypass") && !a.contains("write"),
                 "{a}"
