@@ -286,8 +286,9 @@ def folder_key(name):
     return re.sub(r"[^A-Za-z0-9]", "-", name)
 
 
-WORKTREE_ADD = re.compile(r"worktree add (?:-[bB]) ['\"]?([^\s'\";&|]+)['\"]? ['\"]?([^\s'\";&|]+)")
-PUSH = re.compile(r"push (?:-u )?origin ['\"]?([^\s'\";&|]+)")
+# other flags may come first ("worktree add -q -b", "push -q -u", "push --force-with-lease")
+WORKTREE_ADD = re.compile(r"worktree add (?:-\S+ )*?-[bB] ['\"]?([^\s'\";&|]+)['\"]? ['\"]?([^\s'\";&|]+)")
+PUSH = re.compile(r"push (?:-\S+ )*origin ['\"]?([^\s'\";&|]+)")
 PR_NUMBER = re.compile(r"PR #(\d+)|/pull/(\d+)")
 
 
@@ -309,9 +310,12 @@ def sessions(claude_dirs, codex_dir, since, seen):
     request number its first message names, and for a top-level Claude session the owner's typed messages per day.
     'usage' is the whole session (a lane's cost includes its days before the window), 'in_window' its messages since.
     No text leaves this function."""
-    out = []
+    out, read = [], set()
     for root in claude_dirs:
-        proj = Path(root) / "projects"
+        proj = (Path(root) / "projects").resolve()
+        if proj in read:  # a second account whose projects folder links to the first one's
+            continue
+        read.add(proj)
         for d in sorted(proj.iterdir() if proj.is_dir() else []):
             if not d.is_dir():
                 continue
@@ -423,22 +427,34 @@ def join(ss, landed):
     return out
 
 
+def nunchiro_cli():
+    """MEASURE_NUNCHIRO, else the owner's app's own CLI, else nunchiro on PATH (an older install may lack `events`)."""
+    app = Path.home() / "Applications/Nunchiro.app/Contents/MacOS/nunchiro"
+    return os.environ.get("MEASURE_NUNCHIRO") or (str(app) if app.is_file() else "nunchiro")
+
+
 def core_events(project, days):
     """The core's event journal for a project ("nunchiro events --history": read from the day files, no running core
-    needed, the owner's shell only). A room event's data is not in the journal."""
+    needed, the owner's shell only), with the core's own lines that name no project (core_started, journal_full);
+    None when it cannot be read. A room event's data is not in the journal."""
     try:
-        r = subprocess.run(["nunchiro", "events", "--history", str(max(1, min(days + 1, 14))), "--project", str(project)],
+        r = subprocess.run([nunchiro_cli(), "events", "--history", str(max(1, min(days + 1, 14)))],
                            capture_output=True, text=True, timeout=120)
-    except (OSError, subprocess.TimeoutExpired):
-        return []
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"core events not read: {e}", file=sys.stderr)
+        return None
     if r.returncode:
         print(f"core events not read: {r.stderr.strip()}", file=sys.stderr)
+        return None
     out = []
     for line in r.stdout.splitlines():
         try:
-            out.append(json.loads(line))
+            e = json.loads(line)
         except ValueError:
-            pass
+            continue
+        # "--project" would drop the project-less lines, which end the states a stopped core left open
+        if not e.get("project") or e["project"] == str(project):
+            out.append(e)
     return out
 
 
@@ -449,7 +465,13 @@ def seat_time(events, now):
     cur = {}
     for e in sorted((e for e in events if e.get("at") is not None), key=lambda e: e["at"]):
         t, s = e["at"] / 1000, e.get("session")
-        if e["type"] in ("session_started", "state") and s and e.get("state"):
+        if e["type"] in ("core_started", "journal_full"):
+            # a new core lists its live sessions again; a full day file shows nothing more: what was open ends here
+            for s, (st, since) in cur.items():
+                states.setdefault(s, {}).setdefault(st, 0)
+                states[s][st] += t - since
+            cur = {}
+        elif e["type"] in ("session_started", "state") and s and e.get("state"):
             if s in cur:
                 st, since = cur[s]
                 states.setdefault(s, {}).setdefault(st, 0)
@@ -632,7 +654,9 @@ def measure(days, record_path=None, log_path=scorecard.CI_LOG, now=None, project
 
     # 6. Owner touches: the record's asks per pull request and their waits; the core's event journal for Nunchiro seats
     # (permission waits; asks to the person only when the events carry room data, which the journal does not keep).
-    core = core if core is not None else (core_events(project, days) if project else [])
+    core = core if core is not None else (core_events(project, days) if project else None)
+    journal = "read" if core is not None else "not read: no project, or `nunchiro events --history` failed"
+    core = core or []
     if core and not any(e.get("type") == "room_message" and e.get("data") for e in core):
         coverage["room_messages"] = "not in the journal: asks to the owner, core cards and stall nudges read 0"
     states, stalls = seat_time(core, now)
@@ -645,7 +669,9 @@ def measure(days, record_path=None, log_path=scorecard.CI_LOG, now=None, project
                  lanes=len(touches), touches=sum(touches), median_per_lane=pct(touches, 50), max_per_lane=max(touches, default=None),
                  lanes_with_a_touch=sum(1 for x in touches if x), max_wait_min=None if max_wait is None else round(max_wait / 60),
                  asks_to_owner=len(asks),
-                 core_cards=sum(1 for x in stalls if x["kind"] == "card"), permission_waits=len(perm), permission_wait_min=round(sum(perm.values()) / 60),
+                 core_cards=sum(1 for x in stalls if x["kind"] == "card"),
+                 permission_waits=len(perm) if journal == "read" else None,
+                 permission_wait_min=round(sum(perm.values()) / 60) if journal == "read" else None,
                  core_events_from=stamp(min((e["at"] / 1000 for e in core if e.get("at")), default=None)),
                  chat_messages_by_day=dict(sorted(chat.items())))
 
@@ -671,8 +697,9 @@ def measure(days, record_path=None, log_path=scorecard.CI_LOG, now=None, project
             if st not in ("exited", "lost"):
                 live[st] = live.get(st, 0) + secs
     total = sum(live.values())
-    seats = dict(seats=len(states), seat_hours=round(total / 3600, 1),
-                 share_pct={k: round(100 * v / total, 1) for k, v in sorted(live.items())} if total else {},
+    seats = dict(journal=journal, seats=len(states), seat_hours=round(total / 3600, 1) if journal == "read" else None,
+                 share_pct=({k: round(100 * v / total, 1) for k, v in sorted(live.items())} if total else {}) if journal == "read" else None,
+                 state_changes=sum(1 for e in core if e.get("type") == "state"),  # the rest are snapshots at a start
                  stall_nudges=sum(1 for x in stalls if x["kind"] == "nudge"),
                  stalled_min=sum(x["quiet_min"] for x in stalls),  # quiet minutes before each nudge: a lower bound
                  resends=sum(1 for x in stalls if x["kind"] == "resend"), moved_again=sum(1 for x in stalls if x["kind"] == "moved"),

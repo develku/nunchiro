@@ -518,6 +518,8 @@ class DevSpeed(UtcClock):
         keep = speed.subprocess.run
         self.addCleanup(lambda: setattr(speed.subprocess, "run", keep))
         speed.subprocess.run = fake
+        os.environ["MEASURE_NUNCHIRO"] = "nunchiro"  # never the owner's app on this machine
+        self.addCleanup(lambda: os.environ.pop("MEASURE_NUNCHIRO"))
         self.assertEqual([e["type"] for e in speed.core_events("/p", 7)], ["core_started", "state"])
         self.assertEqual(seen, [["nunchiro", "events", "--history", "8"]])
 
