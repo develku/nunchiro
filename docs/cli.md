@@ -555,7 +555,7 @@ Without `--path` the folder is `<worktrees folder>/<project folder>/<random id>`
 as Orca's `--name` does: it must be one new plain name (not starting with `.`) right under
 `<worktrees folder>/<project folder>/`, where the worktrees folder is the `worktrees_dir` setting, a folder this
 project's worktrees already use (`$NUNCHIRO_HOME/worktrees` only while a record of this project lies there), or the
-unset default. Unset, the worktrees folder is `~/nunchiro/worktrees` (in the user's home; made on first use, and refused when `~/nunchiro` is a link or not a folder). Set a folder to use another disk. A record made under `../.worktrees` (ticket 1061) keeps working. A path
+unset default. Unset, the worktrees folder is `~/nunchiro/worktrees` (in the user's home; made on first use, and refused when `~/nunchiro` is a link or not a folder). A core on any other data folder (`NUNCHIRO_HOME` other than `~/.nunchiro`) uses `<its home>-worktrees/nunchiro/worktrees` beside it instead (leading dots dropped), never the shared one. Set a folder to use another disk. A record made under `../.worktrees` (ticket 1061) keeps working. A path
 anywhere else, one that already exists, or one a worktree record already names is refused and nothing is created. When
 the user's home is not known or cannot be written, the command fails and names the `worktrees_dir`
 setting to change.

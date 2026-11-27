@@ -92,7 +92,8 @@ fn hand_edits(kind: AgentKind) -> bool {
 #[derive(Clone, Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
-    /// Ticket 1083: the user's home (`$HOME`), read once when the core opens; the unset worktrees folder lies in it.
+    /// Ticket 1083: the folder the unset worktrees folder lies in (`<it>/nunchiro/worktrees`), set once when the core
+    /// opens: the user's home (`$HOME`) for the default data folder, else the core's own home (`worktree_user_home`).
     #[serde(skip)]
     user_home: PathBuf,
     // v1a-06

@@ -167,9 +167,7 @@ impl Sessions {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Settings::default(),
             Err(e) => return Err(e.to_string()),
         };
-        settings.user_home = std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_default();
+        settings.user_home = worktree_user_home(home, std::env::var_os("HOME").map(PathBuf::from));
         // v1a-74: with history off no scrollback file stays, a set-aside sessions.json's included.
         if settings.history().is_none() {
             crate::scrollback::sweep(home, |_| false);
