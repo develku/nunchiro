@@ -9,6 +9,8 @@
 # docs/measure/ (measure tests). Two scenario tests read the safe files too, and both still hold on a skip:
 # test_export_links.py (every exported *.md) also runs in ci.yml's lint job, and test_export_public.py needs README.md
 # to exist, which a delete (exit 1 below) would break. check-reuse-ledger.sh scans root *.md but has no CI caller.
+# docs/design/design-book/ is safe as a folder: checked 2026-11-27 (git grep, include_str!, test_outbound_hosts walks only
+# crates, app, web/src, plugin; public-exclude drops docs/design/ from the export).
 # Add a file only after the same check.
 set -u
 ref=${1:?usage: docs-only.sh <ref>}
@@ -20,6 +22,7 @@ other=$(git diff --no-renames --name-only --diff-filter=am "$base" HEAD) || exit
 printf '%s\n' "$all" | while IFS= read -r f; do
   case $f in
     README.md | CHANGELOG.md | GLOSSARY.md | SECURITY.md | docs/product.md | docs/brand/trademark-search-2026-11.md) ;;
+    docs/design/design-book/*) ;; # the design book: no build, test or tree walker reads it (only test_export_links.py, in lint)
     *) exit 1 ;;
   esac
 done
