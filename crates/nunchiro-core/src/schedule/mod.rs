@@ -973,10 +973,16 @@ fn run_entry(
         start(registry, stopping, entry, who)
     };
     let held = result.as_ref().is_err_and(|e| crate::pressure::is_held(e));
+    // A due run that was held waits for memory and runs by itself (`pressure::wait`); its Last run says so.
+    let waits = held && who == crate::pressure::Who::Session;
+    if waits {
+        hold_run(entry, now_ms);
+    }
     // A schedule's own words: the start's sentence names `agent start --anyway`, which runs no schedule.
-    let result = match held {
-        true => Err(crate::pressure::HELD_SCHEDULE.to_string()),
-        false => result,
+    let result = match (held, waits) {
+        (true, true) => Err(crate::pressure::WAITING_SCHEDULE.to_string()),
+        (true, false) => Err(crate::pressure::HELD_SCHEDULE.to_string()),
+        (false, _) => result,
     };
     if let Err(e) = &result {
         eprintln!("schedule {}: {e}", entry.id);
@@ -1011,6 +1017,45 @@ fn run_entry(
     result
 }
 
+/// A due run held for low memory, kept to run by itself; dropped after the longest wait (or cancelled) it is a
+/// skipped slot. The same schedule waits once.
+fn hold_run(entry: &Entry, now_ms: u64) {
+    let key = format!("schedule:{}", entry.id);
+    let agent = entry.run.label.clone();
+    let project = crate::pressure::place_name(&entry.run.project);
+    let entry = entry.clone();
+    let go: crate::pressure::Go = Box::new(move |registry, stopping, done| {
+        use crate::pressure::Done;
+        match done {
+            Done::Released | Done::Anyway => run_entry(
+                registry,
+                stopping,
+                &entry,
+                crate::queue::now_ms(),
+                crate::pressure::Who::Session,
+            ),
+            Done::Cancelled | Done::Dropped => {
+                let reason = match done {
+                    Done::Dropped => crate::pressure::DROPPED_SCHEDULE,
+                    _ => "cancelled while it waited for memory",
+                };
+                if let Ok(mut sessions) = lock(registry) {
+                    let last = Last {
+                        session: None,
+                        at: now_ms,
+                        result: Some(Outcome::Skipped),
+                        reason: Some(reason.into()),
+                    };
+                    sessions.schedules.record(&entry, last);
+                    sessions.schedules_changed();
+                }
+                Err(String::new())
+            }
+        }
+    });
+    crate::pressure::hold(key, agent, project, crate::pressure::Asker::Schedule, 2, go);
+}
+
 /// Ticket 993: the owner's Run now. The entry runs once, at once, also when it is switched off; its next time stays.
 pub(crate) fn run_now(registry: &Mutex<Sessions>, id: &str) -> crate::api::Response {
     let entry = lock(registry)?
@@ -1019,6 +1064,8 @@ pub(crate) fn run_now(registry: &Mutex<Sessions>, id: &str) -> crate::api::Respo
         .into_iter()
         .find(|e| e.id == id)
         .ok_or("no such schedule")?;
+    // The owner's run takes the place of a due run still waiting for memory.
+    crate::pressure::forget(&format!("schedule:{id}"));
     // `start` and `open_seat` refuse a core the owner stopped (`Sessions::stopped`).
     run_entry(
         registry,

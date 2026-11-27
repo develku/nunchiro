@@ -539,6 +539,19 @@ pub enum Reply {
         counts: crate::loops::Counts,
         today: String,
     },
+    /// The window's start waits for memory (`StartOrWait`): the status bar lists it.
+    MemoryWaiting {
+        text: String,
+    },
+    /// The starts waiting for memory (`pressure::wait::Shown`).
+    MemoryWait {
+        entries: Vec<serde_json::Value>,
+    },
+    /// A waiting start the owner started anyway; `mine`: the owner had asked for it.
+    MemoryWaitStarted {
+        session: String,
+        mine: bool,
+    },
     /// Ticket 990: the seat's session after `team_open` (found or started).
     TeamOpened {
         session: Session,

@@ -314,6 +314,9 @@ pub struct Sessions {
     /// `wake_rows`, so the user's rows go first). Only the core adds to it: a sender named "core" from anywhere else
     /// is no seat and no token, and `send_refused` cancels its rows.
     core_rows: std::collections::BTreeSet<String>,
+    /// The lines a start that waited for memory sends its asker as the core (`memory_line`), by send id (in memory;
+    /// also in `wake_rows`). Kept until written, as a wake line whose worker still runs.
+    memory_rows: std::collections::BTreeSet<String>,
     /// Ticket 1056: the wake lines joined into a written wake row, by that row's send id (in memory). They stay
     /// `attempting` until that row ends, and then end as it does (`mark_send`).
     joined_rows: BTreeMap<String, Vec<String>>,
@@ -757,8 +760,11 @@ impl Sessions {
                 self.tree = Ok(next.clone());
                 Ok(Reply::Tree { tree: next })
             }
-            Request::Start { .. } | Request::StartAnyway { .. } => {
+            Request::Start { .. } | Request::StartAnyway { .. } | Request::StartOrWait { .. } => {
                 Err("start requires launch preparation".into())
+            }
+            Request::MemoryWaitList | Request::MemoryWaitGo { .. } | Request::MemoryWaitCancel { .. } => {
+                Err("the starts waiting for memory are the owner's".into())
             }
             Request::List | Request::Snapshot => self.snapshot(),
             // V2.5-30: the owner outside every session has no children of its own.

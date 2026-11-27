@@ -259,13 +259,8 @@ fn a_schedule_run_is_held_under_memory_pressure() {
     wait("the due run left no record", || last().is_some());
     let held = serde_json::to_value(last().unwrap()).unwrap();
     assert_eq!(held["result"], "held", "{held}");
-    // A schedule's own words: it names memory and the run, never `agent start --anyway`, which runs no schedule.
-    let reason = held["reason"].as_str().unwrap();
-    assert!(
-        reason.contains("memory") && reason.contains("scheduled run"),
-        "{held}"
-    );
-    assert!(!reason.contains("anyway"), "{held}");
+    // A due run waits for memory (and runs by itself once it is free); its record says so, never `--anyway`.
+    assert_eq!(held["reason"], "waiting for memory", "{held}");
     assert!(
         rows(&home).iter().all(|r| r.label != "nightly"),
         "a held run started a seat"
@@ -278,6 +273,10 @@ fn a_schedule_run_is_held_under_memory_pressure() {
     wait("Run now did not start at warning", || {
         rows(&home).iter().any(|r| r.label == "nightly")
     });
+    assert!(
+        waiting_list(&home).is_empty(),
+        "Run now took the waiting run's place"
+    );
     core.stop();
     let _core = pressured("4");
     let refused = call(&home, now).unwrap_err();
