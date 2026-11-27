@@ -16,6 +16,8 @@ pub const TEXT_MAX: usize = 300;
 const QUOTE_MAX: usize = 6 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "NotesScope"))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Scope {
     /// About the user: every seat everywhere reads it.
@@ -31,6 +33,7 @@ pub enum Scope {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Note {
     pub id: String,
     pub text: String,
@@ -47,6 +50,8 @@ pub struct Note {
 
 /// A note as the list shows it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "NotesListed"))]
 pub struct Listed {
     #[serde(flatten)]
     pub note: Note,

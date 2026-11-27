@@ -11,6 +11,7 @@ fn is_false(v: &bool) -> bool {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Reply {
     SessionContext {

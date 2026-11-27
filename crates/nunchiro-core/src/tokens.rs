@@ -16,6 +16,8 @@ pub const SECRET_PREFIX: &str = "nunchiro_";
 const FILE: &str = "tokens.json";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "TokensScope"))]
 #[serde(rename_all = "snake_case")]
 pub enum Scope {
     /// List, get, read, wait, room check and thread read.
@@ -38,6 +40,7 @@ impl std::str::FromStr for Scope {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Token {
     pub id: String,
     pub scope: Scope,

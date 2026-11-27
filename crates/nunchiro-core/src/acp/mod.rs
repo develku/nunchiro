@@ -80,6 +80,7 @@ fn display_names(entries: &[config::Entry]) -> BTreeMap<String, String> {
 
 /// Ticket 358: one model an agent reported in its Session Config Options; `value` goes back to it exactly as it came.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct AcpModel {
     pub value: String,
     pub label: String,
@@ -127,6 +128,7 @@ fn remember(home: &Path, file: &str, agent: &str, models: &[AcpModel]) {
 
 /// One row of Settings > Agents' ACP table.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct AcpRow {
     pub name: String,
     pub label: String,

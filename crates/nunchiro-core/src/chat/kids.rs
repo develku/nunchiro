@@ -17,6 +17,7 @@ pub struct Kids {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Kid {
     /// The launch call's id: one launch, one child, however many records replay it.
     pub id: String,
@@ -30,6 +31,7 @@ pub struct Kid {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum KidState {
     /// The agent said it is working: an ACP `subagent_update` running or requires_action.
@@ -290,6 +292,8 @@ pub fn of(meta: &Session, path: Option<&Path>) -> Result<Kids, String> {
 
 /// Where an opened sub-agent's rows come from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "KidsSource"))]
 #[serde(rename_all = "snake_case")]
 pub enum Source {
     /// The child's own transcript file.
@@ -299,6 +303,7 @@ pub enum Source {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Opened {
     pub source: Source,
     /// The child's newest events (at most `EVENTS_MAX`); empty for `Parent`. Each event's `cursor` is its 0-based index

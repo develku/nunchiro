@@ -11,8 +11,14 @@ use std::{
     time::Duration,
 };
 
-const SCHEMA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/api/nunchiro-api.schema.json");
-const EXAMPLE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/api/examples/agents.py");
+const SCHEMA: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../docs/api/nunchiro-api.schema.json"
+);
+const EXAMPLE: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../docs/api/examples/agents.py"
+);
 
 fn nunchiro(home: &Path) -> Command {
     let mut c = home::git_env::scrubbed(env!("CARGO_BIN_EXE_nunchiro"));
@@ -41,11 +47,18 @@ fn core(tag: &str) -> home::ServeGuard {
 
 fn token(home: &Path, scope: &str) -> String {
     let out = nunchiro(home)
-        .env("NUNCHIRO_TOKEN", std::fs::read_to_string(home.join("core.token")).unwrap())
+        .env(
+            "NUNCHIRO_TOKEN",
+            std::fs::read_to_string(home.join("core.token")).unwrap(),
+        )
         .args(["token", "create", "--scope", scope])
         .output()
         .unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     String::from_utf8(out.stdout).unwrap().trim().to_string()
 }
 
@@ -81,7 +94,11 @@ fn sample(schema: &Value, defs: &Value) -> Value {
         }
     }
     let kind = match &schema["type"] {
-        Value::Array(kinds) => kinds.iter().find(|k| *k != "null").cloned().unwrap_or_default(),
+        Value::Array(kinds) => kinds
+            .iter()
+            .find(|k| *k != "null")
+            .cloned()
+            .unwrap_or_default(),
         kind => kind.clone(),
     };
     match kind.as_str().unwrap_or("object") {
@@ -102,16 +119,29 @@ fn sample(schema: &Value, defs: &Value) -> Value {
 }
 
 fn schema() -> Value {
-    serde_json::from_str(&std::fs::read_to_string(SCHEMA).expect("docs/api/nunchiro-api.schema.json")).unwrap()
+    serde_json::from_str(
+        &std::fs::read_to_string(SCHEMA).expect("docs/api/nunchiro-api.schema.json"),
+    )
+    .unwrap()
 }
 
 #[test]
 fn api_schema_prints_the_published_file() {
     let home = home::short("aps");
     let out = nunchiro(&home).args(["api", "schema"]).output().unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    assert_eq!(String::from_utf8(out.stdout).unwrap(), std::fs::read_to_string(SCHEMA).unwrap());
-    assert_eq!(schema()["$schema"], "https://json-schema.org/draft/2020-12/schema");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        std::fs::read_to_string(SCHEMA).unwrap()
+    );
+    assert_eq!(
+        schema()["$schema"],
+        "https://json-schema.org/draft/2020-12/schema"
+    );
 }
 
 #[test]
@@ -138,14 +168,30 @@ fn stable_operations_are_the_ones_a_token_may_call() {
         match variant["x-stability"].as_str().unwrap() {
             "stable" => {
                 stable += 1;
-                assert!(!refused(&reply), "{op} is stable but a supervised token is refused: {reply:?}");
+                assert!(
+                    !refused(&reply),
+                    "{op} is stable but a supervised token is refused: {reply:?}"
+                );
             }
             "window" => {
-                let err = reply.as_ref().and_then(|r| r["Err"].as_str());
-                assert!(err.is_some(), "{op} is window-only but a supervised token got {reply:?}");
+                // Refused for who is asking, not for a malformed sample.
+                let err = reply
+                    .as_ref()
+                    .and_then(|r| r["Err"].as_str())
+                    .unwrap_or_default()
+                    .to_lowercase();
+                assert!(
+                    err.contains("not granted") || err.contains("only you"),
+                    "{op} is window-only but a supervised token got {reply:?}"
+                );
                 // As today: a read token calling a window operation is refused.
                 let reply = call(home, &read, &request);
-                assert!(reply.and_then(|r| r["Err"].as_str().map(String::from)).is_some(), "{op}");
+                assert!(
+                    reply
+                        .and_then(|r| r["Err"].as_str().map(String::from))
+                        .is_some(),
+                    "{op}"
+                );
             }
             other => panic!("{op}: x-stability {other}"),
         }
@@ -162,12 +208,23 @@ fn the_example_client_lists_agents() {
     std::fs::create_dir_all(&project).unwrap();
     let started = nunchiro(home)
         .env("NUNCHIRO_TOKEN", &owner)
-        .args(["agent", "start", "example-seat", "--kind", "shell", "--project"])
+        .args([
+            "agent",
+            "start",
+            "example-seat",
+            "--kind",
+            "shell",
+            "--project",
+        ])
         .arg(&project)
         .args(["--", "/bin/sh", "-c", "exec cat"])
         .output()
         .unwrap();
-    assert!(started.status.success(), "{}", String::from_utf8_lossy(&started.stderr));
+    assert!(
+        started.status.success(),
+        "{}",
+        String::from_utf8_lossy(&started.stderr)
+    );
     let read = token(home, "read");
     let out = Command::new("python3")
         .arg("-I")
@@ -176,7 +233,11 @@ fn the_example_client_lists_agents() {
         .env("NUNCHIRO_TOKEN", &read)
         .output()
         .unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let text = String::from_utf8(out.stdout).unwrap();
     assert!(text.contains("example-seat"), "{text}");
 }

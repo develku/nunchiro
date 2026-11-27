@@ -23,6 +23,7 @@ const JOB_MAX: usize = 2000;
 const MEMORY_QUOTE_MAX: usize = 6 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Teammate {
     pub id: String,
@@ -65,6 +66,8 @@ impl Teammate {
 
 /// Ticket 992: how much a task needs. Ordered, so Auto's upper limit is a `min`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "TeamLevel"))]
 #[serde(rename_all = "snake_case")]
 pub enum Level {
     Light,

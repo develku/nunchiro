@@ -18,6 +18,8 @@ const NAME_MAX: usize = 100;
 const QUOTE_MAX: usize = 4 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "LoopsKind"))]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
     /// The user owes it to `who`.
@@ -27,6 +29,8 @@ pub enum Kind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "LoopsRow"))]
 pub struct Row {
     /// "L3"; empty until the row is stored.
     #[serde(default)]
@@ -50,6 +54,7 @@ pub struct Row {
 
 /// The counts a brief and the digest give; no agent writes one.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Counts {
     pub promises: usize,
     pub waiting: usize,

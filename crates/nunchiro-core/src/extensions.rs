@@ -42,6 +42,8 @@ const SHIPPED: &str = "the Nunchiro skill is shipped with the app and is not cha
 const NOT_OWN: &str = "the extensions folder is a link or not this user's own folder";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ExtensionsItem"))]
 pub struct Item {
     pub id: String,
     pub name: String,
@@ -64,6 +66,7 @@ pub struct Item {
 
 /// One hook command: on `event`, for tools matching `matcher` (empty: every one), runs `command`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct HookLine {
     pub event: String,
     #[serde(default)]
@@ -76,6 +79,8 @@ fn is_zero(n: &u32) -> bool {
 
 /// One file of an item, `path` relative to the item and `/` separated.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ExtensionsFileEntry"))]
 pub struct FileEntry {
     pub path: String,
     pub bytes: u64,
@@ -83,6 +88,7 @@ pub struct FileEntry {
 
 /// One MCP server as shown: `env` holds variable names only, never values.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct McpServer {
     pub agent: String,
     pub name: String,
@@ -257,6 +263,7 @@ fn read_capped(path: &Path, cap: u64, follow: bool) -> Text {
 
 /// An agent config past `MAX_AGENT_FILE`: its servers are not shown, and the page says why.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct TooLarge {
     /// `~/`-relative, as the page shows it.
     pub file: String,

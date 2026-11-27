@@ -37,6 +37,7 @@ pub const LEARNED_KEPT: usize = 2;
 const TOLD_TWICE_MS: u64 = 5_000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Task {
     pub id: String,
     /// The project root, or the Home folder.
@@ -82,6 +83,7 @@ pub struct Task {
 /// Progress is what the core records itself: the task's record (`updated`: a seat, a review, a worktree, the user's
 /// words) and its worktrees' files (`revision`). Never what an agent wrote.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct Stall {
     /// `updated` and the revision at the last check-in; empty when the task has no worktree that could be read.
@@ -96,6 +98,7 @@ pub struct Stall {
 }
 /// Ticket 1081: the core's auto-advance record of a task. Kept so a restart repeats no nudge and no card.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct Advance {
     /// What was done once, as `nudge:<session>:<n>` and `card:<session>:<n>` (`n`: the stall's start), newest last.
@@ -121,6 +124,7 @@ impl Advance {
 }
 /// One stalled seat: `why` is a plain line ("quiet for 20 min"), `at` the nudge's time, `n` the stall's start.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Stalled {
     pub session: String,
     pub name: String,
@@ -136,6 +140,7 @@ pub const STALL_QUIET: u32 = 2;
 pub const STALL_SAME: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Lesson {
     pub text: String,
     /// Who proposed it, as the card shows it ("Reviewer · review-tax").
@@ -148,6 +153,7 @@ pub struct Lesson {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct MergeOk {
     pub revision: String,
     pub at: u64,
@@ -155,6 +161,8 @@ pub struct MergeOk {
 
 /// One session of a role on this task. Never reused: a second builder after the first ended is a second seat.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "LedgerSeat"))]
 pub struct Seat {
     pub session: String,
     pub name: String,
@@ -171,6 +179,7 @@ pub struct Seat {
 
 /// What the user said to a seat directly, in the user's words (masked and cut by the caller).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Told {
     pub at: u64,
     pub session: String,
@@ -179,6 +188,7 @@ pub struct Told {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Review {
     /// What was reviewed: `revision` of every worktree of the task at that moment, in the task's order.
     pub revision: String,
@@ -192,6 +202,7 @@ pub struct Review {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Closed {
     pub at: u64,
     /// `done` (the lead or the user said so), `merged` (its last worktree went with nothing left outside the project),
@@ -202,6 +213,7 @@ pub struct Closed {
 /// Slice i: what a place (a project, or Home) decided for the work done in it. A role carries neither: the same
 /// Builder asks before each edit in one project and edits freely in another.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Place {
     /// The way of working: `solo` (build only), `team` (build, then a fresh review), `strict` (team plus a security
     /// review). The guide's `levels.md`.
@@ -261,6 +273,8 @@ struct Stored {
 
 /// A task as a reader gets it: the record, and what the core worked out now.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "LedgerView"))]
 pub struct View {
     #[serde(flatten)]
     pub task: Task,
@@ -1282,6 +1296,7 @@ pub fn view(
 /// Home view change 1 (11-17): one registered project as the Home view's Projects part shows it. Every number is the
 /// core's, from the ledger, the decision queue and the sessions; no agent writes one.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct DigestRow {
     pub project: PathBuf,
     /// The project's lead (a teammate id); none: the row is never counted for that.
@@ -1309,6 +1324,7 @@ pub struct DigestRow {
 /// Ticket 993 rule 6: a schedule whose last run failed, for the digest: which schedule (its id, and `line`, the
 /// sentence its card would say) and why. It stays until the schedule runs again, is edited or is removed.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct FailedRun {
     pub schedule: String,
     pub line: String,

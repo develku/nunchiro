@@ -60,6 +60,7 @@ static CACHE: std::sync::Mutex<BTreeMap<PathBuf, Cached>> = std::sync::Mutex::ne
 static PINS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum By {
     Agent,
@@ -69,6 +70,8 @@ pub enum By {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "RoomKind"))]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
     Message,
@@ -91,6 +94,7 @@ pub enum Kind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Message {
     pub id: String,
     pub kind: Kind,
@@ -111,6 +115,7 @@ pub struct Message {
 }
 /// What happened to a lead's team. `worktree` is the worktree's folder; `seat` the sub-bot's session.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct TeamNote {
     /// `created`, `removed`, `handed`, `taken` or `told`.
     pub what: String,

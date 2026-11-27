@@ -29,6 +29,7 @@ pub(crate) fn source_metadata(home: &Path, name: &str) -> Result<Vec<FileStamp>,
 #[cfg(test)]
 pub(crate) use hash::read_count;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SubjectKind {
     #[default]
@@ -67,6 +68,8 @@ use std::path::Path;
 /// What a user may grant. Never (answer decisions, change settings, touch agent config) has no API,
 /// so it is not a level; `Act` implies `Read`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ApprovalLevel"))]
 #[serde(rename_all = "snake_case")]
 pub enum Level {
     Read,
@@ -74,6 +77,8 @@ pub enum Level {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ApprovalState"))]
 #[serde(rename_all = "snake_case")]
 pub enum State {
     Unapproved,
@@ -84,6 +89,8 @@ pub enum State {
 
 /// Everything the permission sheet shows.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ApprovalView"))]
 pub struct View {
     pub name: String,
     pub state: State,
@@ -352,6 +359,7 @@ fn check_kind(home: &Path, name: &str, kind: SubjectKind) -> Result<Proof, Strin
 
 /// What the agent approval sheet shows: the exact command it would run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct AgentView {
     pub name: String,
     pub state: State,
@@ -437,6 +445,7 @@ pub fn check_agent(home: &Path, name: &str) -> Result<AgentProof, String> {
 
 /// What the setup approval sheet shows: the exact text that would run, and where.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct SetupView {
     pub project: std::path::PathBuf,
     /// The worktree the script was read from and would run in.

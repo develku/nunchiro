@@ -70,6 +70,7 @@ impl Config {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct List {
     pub enabled: bool,
     /// "script widgets unavailable: <reason>" when the sandbox is missing or failed its self-check.
@@ -80,6 +81,8 @@ pub struct List {
     pub web_enabled: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "WidgetsListed"))]
 pub struct Listed {
     pub name: String,
     /// Absent when the folder cannot be read or its manifest does not parse (`error` says why).
@@ -96,12 +99,15 @@ pub struct Listed {
 /// What a widget printed, never truncated: `json` when the whole output parses as JSON (sent as printed, so
 /// the window keeps key order for table columns), else `text`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "format", rename_all = "snake_case")]
 pub enum Output {
     Text { text: String },
     Json { text: String },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "WidgetsRun"))]
 pub struct Run {
     pub name: String,
     /// Display name of the project the run saw; absent = no project.
@@ -116,17 +122,20 @@ pub struct Run {
 
 /// `context.json`: project display names and the session list with states; no paths, ids, transcripts or tokens.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Context {
     pub projects: Vec<ContextProject>,
     pub sessions: Vec<ContextSession>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ContextProject {
     pub name: String,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ContextSession {
     pub label: String,

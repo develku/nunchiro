@@ -80,6 +80,7 @@ const HELLO_WAIT: Duration = Duration::from_secs(10);
 const BACKOFF_SECS: [u64; 6] = [1, 2, 4, 8, 16, 30];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ChannelState {
     Connecting,
@@ -90,6 +91,7 @@ pub enum ChannelState {
 }
 /// What V2-12m-b's Machines page reads: the connection state and since when, and the remote's protocol.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Channel {
     pub state: ChannelState,
     pub since_ms: u64,

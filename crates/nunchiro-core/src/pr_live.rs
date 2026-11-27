@@ -45,6 +45,7 @@ const KEPT: [&str; 3] = ["PATH", "HOME", "GH_CONFIG_DIR"];
 
 /// What the window gets for one PR.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Live {
     pub state: PrState,
     /// `https://github.com/<owner>/<repo>/pull/<n>`, rebuilt from validated pieces.

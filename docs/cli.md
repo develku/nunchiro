@@ -1125,7 +1125,14 @@ active = 1                                 # the tab shown first (0-based)
 ## Window-only APIs
 
 The window's local API has operations with no CLI command: files (list, read, search), chat history,
-approvals status, the board, and the quit settings. The core README lists each request.
+approvals status, the board, and the quit settings. Every request, answer and event is in the published schema
+([api.md](api.md)); the window's own operations are marked `x-stability: window` there and may change.
+
+### `nunchiro api schema`
+Prints the local API as one JSON Schema (draft 2020-12), the file `docs/api/nunchiro-api.schema.json`: the envelope
+a caller writes to `core.sock`, the response it reads back, and the lines of `nunchiro events`. Each request
+variant carries `x-stability`: `stable` for what an outside token may call, `window` for the rest. Needs no core.
+See [api.md](api.md) for the socket, the callers and an example client.
 
 ## Other machines
 

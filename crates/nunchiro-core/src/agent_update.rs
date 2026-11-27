@@ -28,6 +28,7 @@ use std::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Tool {
     Claude,
@@ -146,6 +147,8 @@ const TABLE: &[Entry] = &[
 
 /// What the window shows for one tool found on the PATH.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "AgentUpdateRow"))]
 pub struct Row {
     pub tool: Tool,
     pub path: String,
@@ -162,6 +165,8 @@ pub struct Row {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "AgentUpdateView"))]
 pub struct View {
     pub phase: Phase,
     /// The last line the updater printed, sampled; installers report no percent.
@@ -172,6 +177,8 @@ pub struct View {
 
 /// A finished update that worked or was cancelled has no run: the row is back on its version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "AgentUpdatePhase"))]
 #[serde(rename_all = "snake_case")]
 pub enum Phase {
     Running,
@@ -181,6 +188,8 @@ pub enum Phase {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "AgentUpdateReason"))]
 #[serde(rename_all = "snake_case")]
 pub enum Reason {
     Exited,

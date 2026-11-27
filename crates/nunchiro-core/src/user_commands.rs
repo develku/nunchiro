@@ -17,6 +17,8 @@ use std::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "UserCommandsRow"))]
 pub struct Row {
     pub name: String,
     pub description: String,

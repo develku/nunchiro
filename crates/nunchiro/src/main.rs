@@ -142,7 +142,7 @@ fn run() -> Result<(), String> {
         ); // v1a-06, v2-1a
         println!("nunchiro skill get orchestration [--file NAME] [--full]"); // V2.5-31
         println!(
-            "nunchiro mcp -- a stdio MCP server: the agent, worktree and room verbs as tools\nnunchiro token create --scope read|supervised|full [--project DIR] [--expires 30m|12h|7d]\nnunchiro token list|revoke [--json] [ID]"
+            "nunchiro mcp -- a stdio MCP server: the agent, worktree and room verbs as tools\nnunchiro token create --scope read|supervised|full [--project DIR] [--expires 30m|12h|7d]\nnunchiro token list|revoke [--json] [ID]\nnunchiro api schema -- the local API as JSON Schema (docs/api.md)"
         ); // ticket 573
         println!(
             "nunchiro extensions list|show|new|on|off|mcp [<args>] (nunchiro extensions --help)"
@@ -191,6 +191,19 @@ fn run() -> Result<(), String> {
     if args.first().map(String::as_str) == Some("hook") {
         let hold = args.get(2).map(String::as_str) == Some("--hold");
         return hook::run(&home, args.get(1).map(String::as_str).unwrap_or(""), hold);
+    }
+    // The local API's JSON Schema, generated from the core's types by its tests (docs/api.md); no core needed.
+    if args.first().map(String::as_str) == Some("api") {
+        return match args.as_slice() {
+            [_, verb] if verb == "schema" => {
+                print!(
+                    "{}",
+                    include_str!("../../../docs/api/nunchiro-api.schema.json")
+                );
+                Ok(())
+            }
+            _ => Err("usage: nunchiro api schema".into()),
+        };
     }
     // v1b-14
     if args.first().map(String::as_str) == Some("widget") {

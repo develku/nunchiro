@@ -27,6 +27,7 @@ const GIT_TIMEOUT: Duration = Duration::from_secs(10);
 /// What the session's folder was when it started. A session record without one (started before
 /// v1b-11) has no base: Diff says "start commit unknown" and never falls back to today's HEAD.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Base {
     Commit {
@@ -40,6 +41,8 @@ pub enum Base {
 /// Ticket 374: what a diff request compares with. `Branch` is where HEAD left origin's default branch, from the
 /// last fetched origin (no network); behaviour from t3code apps/web/src/components/DiffPanel.tsx:678-700 (MIT).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "DiffScope"))]
 #[serde(rename_all = "snake_case")]
 pub enum Scope {
     #[default]
@@ -49,6 +52,7 @@ pub enum Scope {
 
 /// Whether the Branch scope can compare in this folder.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Branch {
     /// `default` is origin's default branch as a remote branch name, such as `origin/main`.
@@ -61,6 +65,7 @@ pub enum Branch {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Change {
     /// Relative to the session folder.
     pub path: String,
@@ -79,6 +84,7 @@ pub struct Change {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Patch {
     pub path: String,
     pub status: String,
@@ -92,6 +98,7 @@ pub struct Patch {
 /// Ticket 373: what the Diff header's one git button reads (web/src/diff/gitAction.ts, after T3 Code's
 /// `resolveQuickAction`). Read only, like the rest of this module: the button only asks the session's agent.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct GitFacts {
     /// The checked-out branch; null when HEAD is detached.
     pub branch: Option<String>,
