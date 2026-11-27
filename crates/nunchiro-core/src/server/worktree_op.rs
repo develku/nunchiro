@@ -84,6 +84,14 @@ pub(crate) fn worktree(
     // Ticket 991 A2: a remove that went ahead (no loss to confirm) takes the folder's ended sessions with it.
     if let (Some(path), Ok((_, _, None))) = (reservation.as_deref(), &result) {
         sessions.close_ended_in(path, caller.as_ref());
+        // A setup ask of a removed worktree could never be approved (its script is gone with the folder).
+        if ["remove", "forget"].contains(&operation.as_str())
+            && let Err(e) = sessions.queue.answer_owner(|i| {
+                matches!(&i.owner, Some(crate::queue::OwnerAsk::Setup { path: p, .. }) if p == path)
+            })
+        {
+            eprintln!("queue: setup ask of {} not dropped: {e}", path.display());
+        }
     }
     sessions.release_worktree(reservation);
     drop(sessions);

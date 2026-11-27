@@ -20,6 +20,7 @@ import { GoalCard } from '../lead/GoalCard';
 import { OutboxCard } from '../lead/OutboxCard';
 import { ScheduleCard } from '../schedule/ScheduleCard';
 import { CapCard } from '../lead/CapCard';
+import { PermissionSheet } from '../approval/PermissionSheet';
 
 /** A jump from a decision row: the session to show first, and a number that changes with each jump. */
 export interface Ask {
@@ -220,6 +221,35 @@ function TidyCard({ d, onAnswer, t }: { d: Decision; onAnswer: OnAnswer; t: T })
   );
 }
 
+/** A repo setup script that waits for approval: a quiet card (no dot, not counted), whose Review opens the setup sheet.
+ *  The sheet reads the script from the worktree and approves exactly what it shows. */
+function SetupCard({ d, core, t }: { d: Decision; core: CoreClient; t: T }) {
+  const [open, setOpen] = useState(false);
+  if (d.owner?.type !== 'setup') return null;
+  const { path } = d.owner;
+  const title = t('setupSheet.title', { name: plain(basename(path)) });
+  return (
+    <div className="deccard hosted" role="group" aria-label={title} data-item={d.id} data-setup={path}>
+      <div className="dwh">
+        <b>{t('field.setupScript')}</b>
+        <span className="tm">{age(t, Date.now() - d.observed_at)}</span>
+      </div>
+      <div className="dc-item">
+        <p className="dc-what" title={path}>
+          {title}
+        </p>
+        <p className="dc-why">{t('setupSheet.kind')}</p>
+        <div className="dc-btns">
+          <button type="button" className="b" data-act="review" onClick={() => setOpen(true)}>
+            {t('rest.shell.strip.review')}
+          </button>
+        </div>
+      </div>
+      {open && <PermissionSheet core={core} t={t} name={path} subject="setup" onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
 export function DecisionsWidget({ sessions, onAnswer, ask, onBack, onFocused, onAnswered, t = tEn, owner = [], core, home, front }: Props) {
   const root = useRef<HTMLDivElement>(null);
   // A jump is used up whatever happens: the card of its session (if one is on screen) moves focus in its own timer,
@@ -244,14 +274,15 @@ export function DecisionsWidget({ sessions, onAnswer, ask, onBack, onFocused, on
   const outbox = owner.filter((d) => d.owner?.type === 'outward'); // ticket 1002 lane 2
   const loops = owner.filter((d) => d.owner?.type === 'loop'); // ticket 1003
   const caps = owner.filter((d) => d.owner?.type === 'cap' || d.owner?.type === 'session_close'); // ticket 1099 panel 4
+  const setups = owner.filter((d) => d.owner?.type === 'setup');
   const count = waitingCount(sessions, owner);
   return (
     <div ref={root} className="dw" data-widget-body="decisions">
-      {count === 0 ? (
+      {count === 0 && !setups.length ? (
         <p className="dw-empty">{t('decisions.none')}</p>
       ) : (
         <>
-          <p className="dw-count">{t('decisions.waiting', { count })}</p>
+          {count > 0 && <p className="dw-count">{t('decisions.waiting', { count })}</p>}
           {merges.map((d) => (
             <MergeCard key={d.id} d={d} core={core} onAnswer={onAnswer} t={t} who={((s) => s && whoOf(s))(byId.get(d.session_id))} />
           ))}
@@ -284,6 +315,9 @@ export function DecisionsWidget({ sessions, onAnswer, ask, onBack, onFocused, on
           ))}
           {tidies.map((d) => (
             <TidyCard key={d.id} d={d} onAnswer={onAnswer} t={t} />
+          ))}
+          {setups.map((d) => (
+            <SetupCard key={d.id} d={d} core={core} t={t} />
           ))}
           {waiting.map((s) => (
             <DecisionCard key={s.id} session={s} onAnswer={onAnswer} onBack={onBack} hosted={{ age: age(t, Date.now() - oldest(s)), place: s.teammate && s.project !== home ? basename(s.project) : undefined }} focusAsk={ask?.to === s.id ? ask.n : undefined} onFocused={onFocused} onAnswered={onAnswered} t={t} note={s.id === front ? t('decisions.alsoInChat') : undefined} />
