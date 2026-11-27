@@ -61,5 +61,9 @@ for (const scheme of ['light', 'dark'] as const) {
     await section.getByRole('group', { name: 'Remove this trigger?' }).getByRole('button', { name: 'Remove' }).click();
     await expect(section.locator('[data-trigger="ci"]')).toHaveCount(0);
     expect(triggers(core).map((x) => x.name)).toEqual(['fix-checks']);
+    // The narrow widget in the right sidebar: the run's line goes under the name.
+    await view.locator('[data-move="side"]').click();
+    await expect(app.locator('.sbar .schedv [data-trigger="fix-checks"]')).toBeVisible();
+    await app.screenshot({ path: `../.scratch/shots/triggers-window-side-${scheme}.png` });
   });
 }

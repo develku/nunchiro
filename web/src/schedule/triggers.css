@@ -1,0 +1,99 @@
+/* Triggers under the Schedules list (TriggersSection.tsx): the schedule form's fields, rows as the plugin rows. */
+.trig {
+  container-type: inline-size;
+  display: grid;
+  gap: var(--sp-6);
+  margin: var(--sp-8) var(--sp-6);
+}
+.trig-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  font-size: var(--fs-12);
+}
+.trig-form h4 {
+  margin: 0;
+  font-size: var(--fs-12);
+}
+.trig-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto auto auto;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.trig-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid; /* one column line for every row */
+  align-items: center;
+  gap: var(--sp-8);
+  padding: var(--sp-6) var(--sp-8);
+  border-radius: var(--r-8);
+  background: var(--tint-1);
+}
+.trig-row[data-paused] {
+  opacity: 0.6;
+}
+.trig-name {
+  display: grid;
+  min-width: 0;
+}
+.trig-meta,
+.trig-note {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+.trig-note {
+  margin: 0;
+}
+.trig-acts {
+  display: flex;
+  gap: var(--sp-6);
+}
+.trig-code {
+  overflow-wrap: anywhere;
+  font-family: var(--font-code);
+  font-size: var(--fs-11);
+}
+.trig-secret {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-6);
+  padding: var(--sp-8);
+  border-radius: var(--r-8);
+  background: var(--tint-1);
+}
+.trig-once {
+  flex-basis: 100%;
+  margin: 0;
+}
+@container (max-width: 520px) {
+  /* Narrow (the right sidebar): the name with its switch and Remove, then the run, then Ask me first. */
+  .trig-list,
+  .trig-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .trig-row > .trig-meta {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .trig-row > .chip {
+    grid-column: 1;
+    grid-row: 3;
+    justify-self: start;
+  }
+  .trig-row > .stog {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .trig-row > .btn,
+  .trig-row > .trig-acts {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}

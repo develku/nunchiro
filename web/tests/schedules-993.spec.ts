@@ -501,7 +501,7 @@ test('schedule_remove_empty: Remove asks first; with none left the widget says w
   // Rule 8: besides those two lines the widget's fixed text is its title and its two button names.
   const buttons = await widget.locator('.schedv-head button').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''));
   expect(buttons).toEqual(['Add schedule', 'Open as a tab']);
-  expect(await widget.locator('.schedv-body').evaluate((e) => (e as HTMLElement).innerText.split(/\s+/).filter(Boolean).join(' '))).toBe('No schedules yet. Add one, or ask your lead to set one up. New schedule'); // ticket 1099: the empty state's Add is a button
+  expect(await widget.locator('.schedv-body').evaluate((e) => (e as HTMLElement).innerText.split(/\s+/).filter(Boolean).join(' '))).toBe('No schedules yet. Add one, or ask your lead to set one up. New schedule Triggers Add trigger No triggers yet.'); // ticket 1099: the empty state's Add is a button; the triggers under the list (docs/triggers.md)
   await widget.getByRole('button', { name: 'Add schedule', exact: true }).click();
   await expect(empty).toHaveCount(0);
   await expect(widget.getByRole('form', { name: 'Add schedule' })).toBeVisible();

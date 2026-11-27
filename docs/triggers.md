@@ -6,6 +6,8 @@ what it runs.
 
 ## Add one
 
+In the window: Schedules, then Add trigger under the list. Or from the command line:
+
 ```sh
 nunchiro trigger add fixer --on cli --kind claude --project ~/code/app \
   --task "Find why the checks failed and fix it."
@@ -82,5 +84,5 @@ or a field: it is only text after your task.
 
 - A GitHub mention event.
 - Slack and Linear signatures (use `X-Nunchiro-Secret` from a relay).
-- Adding triggers in the window; agents proposing a trigger.
+- Agents proposing a trigger.
 - The address reads at most 8 requests at once, each within 10 seconds; a connection past 8 is closed unanswered.
