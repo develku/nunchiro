@@ -192,16 +192,31 @@ def check_4(d, meta, obs, tmp):
 
 
 PLANTED = dict(file="stats.py", line=15)  # `return max(low, min(value, low))` in the patched calc/stats.py
+MOST_LINES = 3  # a review that names more lines than this guesses rather than finds
+NUMS = r"\d+(?:\s*(?:,|and|&|-|\u2013|to)\s*\d+)*"
+REFS = re.compile(rf"{re.escape(PLANTED['file'])}:({NUMS})|\b(?:lines?|L)\s*({NUMS})", re.I)
+
+
+def named_lines(text):
+    """Every line of the patched file the text names: `stats.py:N`, "line N", "lines N, M and K", and each line of a
+    range ("lines 1-40", "stats.py:14-16")."""
+    out = set()
+    for m in REFS.finditer(text):
+        for part in re.split(r"\s*(?:,|and|&)\s*", m.group(1) or m.group(2)):
+            ends = [int(x) for x in re.split(r"\s*(?:-|\u2013|to)\s*", part) if x.isdigit()]
+            out.update(range(min(ends), max(ends) + 1) if ends else ())
+    return out
 
 
 def check_5(d, meta, obs, tmp):
     review = d / "repo" / "REVIEW.md"
     if not review.is_file():
         return ["no REVIEW.md at the repository root"]
-    text = review.read_text(errors="replace")
-    n = PLANTED["line"]
-    named = re.search(rf"{re.escape(PLANTED['file'])}:{n}\b|\b(?:line|lines|L)\s*{n}\b", text, re.I)
-    return [] if named else [f"the review does not name line {n} of calc/stats.py"]
+    lines, n = named_lines(review.read_text(errors="replace")), PLANTED["line"]
+    why = [] if n in lines else [f"the review does not name line {n} of calc/stats.py"]
+    if len(lines) > MOST_LINES:
+        why.append(f"the review names {len(lines)} lines, at most {MOST_LINES} count as finding the bug")
+    return why
 
 
 def agents(path):

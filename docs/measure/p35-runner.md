@@ -43,7 +43,7 @@ Task 9: when the approval card for the reply shows in the window, add `--card-sh
 | 2 | the suite is green with at least one new test that names precision; `--help` shows `--precision`; `--precision 2` prints 10 / 3 as 3.33 |
 | 3 | the suite is green; `parse_number` is in no file; `calc/numbers.py` defines `to_number` and the other four files use it |
 | 4 | on `main` (the branch, not the working copy): the suite is green with at least 2 new tests, `mul 4 3` prints 12, `median 3 1 2` prints 2 and `median 1 2 3 4` prints 2.5 |
-| 5 | `REVIEW.md` at the repository root names line 15 of the patched `calc/stats.py` (`stats.py:15` or "line 15") |
+| 5 | `REVIEW.md` at the repository root names line 15 of the patched `calc/stats.py` (`stats.py:15` or "line 15") and at most 3 lines in all (`stats.py:N`, "line N", lists, and every line of a range such as "lines 1-40") |
 | 6 | the suite is green with a new test and `pow 2 10` prints 1024; the stalled worker is in `before.json`, and `after.json` holds an agent session that `before.json` does not |
 | 7 | origin's `main` is unchanged; a new branch on origin has the `mod` change (suite green, `mod 7 3` prints 1) and `PULL_REQUEST.md` at its tip naming every file it changes |
 | 8 | at least 9 of the 10 mails are in `labels/<right label>/` and in no other label |

@@ -160,6 +160,18 @@ class Tasks(unittest.TestCase):
         review.write_text("Bug on line 15: clamp uses low twice.\n")
         self.assertPass(d)
 
+    def test_5_a_review_naming_every_line_fails(self):
+        d = self.run_of(5)
+        review = d / "repo/REVIEW.md"
+        review.write_text("Lines 1-40 may hold a bug.\n")
+        self.assertFail(d, "names 40 lines")
+        review.write_text("stats.py:15 is wrong; see also line 12, lines 18-19.\n")  # 4 lines
+        self.assertFail(d, "names 4 lines")
+        review.write_text("stats.py:15 uses low twice; L12 and line 18 could be clearer.\n")  # 3 lines
+        self.assertPass(d)
+        review.write_text("Lines 14–16: the clamp is wrong.\n")  # a range holding 15, en dash
+        self.assertPass(d)
+
     def test_6_stalled_worker(self):
         d = self.run_of(6)
         repo = d / "repo"
