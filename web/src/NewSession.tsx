@@ -30,7 +30,7 @@ import { AgentLogo } from './tree/AgentLogo';
 import { Icon as WidgetIcon } from './layout/icons';
 import { queueBrowserGo } from './tree/browserGo';
 import { useClosed } from './chrome/closedTabs';
-import { currentFeature, useFeatureSetting } from './settings/useFeatureSetting';
+import { currentFeature, defineSetting, useFeatureSetting } from './settings/useFeatureSetting';
 import { DEFAULT_AGENT } from './settings/onboarding/state';
 import { AGENTS_OFF, agentOff, isOff, leadAgent, MODELS_OFF, newDefaults } from './settings/agents/newDefaults';
 import { efforts } from './picker/catalog';
@@ -151,6 +151,9 @@ function where(a: HTMLElement | null) {
   return { top: r.bottom + 4, left: Math.max(8, Math.min(r.left, window.innerWidth - WIDTH - 8)) };
 }
 
+/** The projects whose last new session started in a new worktree: the popover opens there on New worktree. */
+const IN_WORKTREE = defineSetting<string[]>('newtab.in_worktree', [], (v) => (Array.isArray(v) && v.every((x) => typeof x === 'string') ? v.slice(-200) : undefined));
+
 export function NewSession({ core, ordered, current, project, machine, prefer, go, worktree, soleProject, home, bindings, onStarted, onNote, onClose, onReopen, onWorktree }: { worktree?: { path: string; name: string }; home?: string; onWorktree?: (path: string) => void; core: CoreClient; ordered: Session[]; current: Session | null; project?: string; machine?: string; prefer?: AgentKind; go?: boolean; soleProject?: string; bindings?: Bindings; onStarted: (s: Session, background?: boolean) => void; onNote?: (note: Note) => void; onClose: () => void; onReopen?: () => void }) {
   const t = useHtmlLangT();
   const keymap = useMemo(() => merge(bindings ?? {}), [bindings]);
@@ -174,11 +177,13 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
   const [files, setFiles] = useState<string[]>([]);
   // Q7 point 1: start in the project's checkout, or in a new worktree of it (the core's worktree create, as the tree's card).
   // Look 1117 v7 (S2-2): or in the worktree the popover was asked for (`given`), while the folder is still its project.
-  const [picked, setPlace] = useState<'given' | 'here' | 'worktree'>(worktree ? 'given' : 'here');
+  // The choice made in this opening; none yet follows the folder's last start (IN_WORKTREE).
+  const [picked, setPlace] = useState<'given' | 'here' | 'worktree' | null>(worktree ? 'given' : null);
+  const [inWorktree, setInWorktree] = useFeatureSetting(IN_WORKTREE);
   const made = useRef<{ project: string; path: string } | null>(null); // a worktree made for a start that then failed: a retry reuses it
   const path = folder.trim();
   const given = worktree && path === project ? worktree : undefined;
-  const place = picked === 'given' && !given ? 'here' : picked;
+  const place = picked === 'given' && !given ? 'here' : (picked ?? (inWorktree.includes(path) ? 'worktree' : 'here'));
   const places = [...(given ? (['given'] as const) : []), 'here', 'worktree'] as const;
   const root = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -285,6 +290,7 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
       const like = !machine && (kind === 'claude' || kind === 'codex') ? likeNew(current, ordered, kind, path) : { model: null, effort: null };
       const account = machine ? null : opts.account !== undefined ? opts.account : kind === 'claude' || kind === 'codex' ? lastAccount(ordered, kind, path, accounts) : null;
       const session = { kind, project: kind === 'shell' && place === 'here' ? shellFolder(current, path) : path, ...like, resume: null, ...(account ? { account } : {}), ...(opts.acp ? { args: [opts.acp] } : {}) };
+      if (canWorktree && kind !== 'shell' && place !== 'given' && inWorktree.includes(path) !== (place === 'worktree')) setInWorktree(place === 'worktree' ? [...inWorktree, path] : inWorktree.filter((p) => p !== path));
       const wt = place === 'worktree' && canWorktree ? await newWorktree(path) : place === 'given' && given && !machine ? given.path : null;
       if (place === 'worktree' && canWorktree && !wt) return setBusy(false);
       // A start held for low memory waits and starts by itself (this Mac's hold), unless the card's words wait for it here.
