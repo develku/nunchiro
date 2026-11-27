@@ -155,7 +155,8 @@ function ChatList({ boot, feed, session, shown, readOnly, head, main, t }: { t: 
   useEffect(() => claimControls(session.id, built), [session.id, built]); // ticket 1019: the picker's own commands
   const view = useView(); // CHROME: Verbose shows `built` as is; Normal and Thinking fold each turn
   const asking = session.pending.filter((d) => d.kind === 'permission').length; // sixth look: a command whose request waits has not run
-  const shownRows = useMemo(() => viewRows(built, view, asking), [built, view, asking]);
+  const turnOn = session.attention.working;
+  const shownRows = useMemo(() => viewRows(built, view, asking, turnOn), [built, view, asking, turnOn]);
   useEffect(() => void (state.events.length && seenCursor(session.id, state.events[state.events.length - 1].cursor)), [session.id, state.events]);
   // N27: the user's own Stop before any output: Claude writes no record, so the message it stopped reads as interrupted.
   const stop = stoppedAt(session.id);
