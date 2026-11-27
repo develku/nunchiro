@@ -22,7 +22,7 @@ use std::{
 mod start_record;
 mod worktree_op;
 use start_record::record_start;
-pub(crate) use worktree_op::{record_started_worktree, worktree};
+pub(crate) use worktree_op::{record_started_worktree, started_reply, worktree};
 const FRAME_BYTES: u64 = 512 * 1024;
 /// A stopping core's reply to a request it never ran, while it winds down for an `exit` (`serve restart`) or a signal:
 /// the agents stay for a next core, so the CLI sends such a request once more, to that core (ticket 305).
@@ -64,8 +64,7 @@ const REPLY_WAIT: Duration = Duration::from_secs(15);
 /// a start the core then makes (a retry would make a second seat). A `--worktree` Codex start's own bounds add up to
 /// about 75 s: the base-branch reads (`start_worktree::READ`, 10 s each), `git worktree add` (`GIT_WORKTREE`, 10 s),
 /// `--version` (`VERSION_WAIT`, 3 s), the Codex start check (`outward::CODEX_ASK_DEADLINE`, 10 s) and the holder's
-/// hello (10 s), and the record of its folder (`record_started_worktree`: one `git worktree list`, 10 s, and no facts
-/// of the project's other worktrees). The window's requests go over its WebSocket, which waits for every reply.
+/// hello (10 s), its folder's record (one `git worktree list`, 10 s). The window's requests go over its WebSocket.
 const START_REPLY_WAIT: Duration = Duration::from_secs(120);
 fn reply_wait(request: &Request) -> Duration {
     match request {
@@ -792,10 +791,7 @@ fn start_seat(
             .map_err(|_| "session registry unavailable")?
             .start_failed_at(session, folder.as_deref(), e.clone());
     }
-    if let Ok(started) = &result {
-        record_started_worktree(registry, session.worktree, started);
-    }
-    result.map(|session| Reply::Started { session })
+    started_reply(registry, session.worktree, result)
 }
 
 /// A session's held start, kept to go by itself (`pressure::wait`); the sentence it answers. The session hears how it

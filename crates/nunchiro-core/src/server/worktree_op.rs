@@ -293,3 +293,15 @@ pub(crate) fn record_started_worktree(
         eprintln!("session {}: its worktree was not recorded: {e}", started.id);
     }
 }
+
+/// A start's reply, its `--worktree` folder recorded first (`record_started_worktree`), with no registry guard held.
+pub(crate) fn started_reply(
+    registry: &Mutex<Sessions>,
+    worktree: bool,
+    result: Result<crate::api::Session, String>,
+) -> Response {
+    if let Ok(started) = &result {
+        record_started_worktree(registry, worktree, started);
+    }
+    result.map(|session| Reply::Started { session })
+}
