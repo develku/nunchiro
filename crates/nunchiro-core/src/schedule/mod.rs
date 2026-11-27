@@ -32,9 +32,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 mod github;
 pub mod triggers; // a schedule whose time is an event // GitHub triggers, read with the user's `gh`
-pub(crate) use github::spawn as spawn_github;
 mod webhook; // the loopback address webhook triggers are fired at
-pub(crate) use webhook::spawn as spawn_webhook;
+/// The triggers' two threads: the webhook's loopback port (`webhook.rs`) and the GitHub reads (`github.rs`).
+pub(crate) fn spawn_triggers(
+    registry: std::sync::Arc<Mutex<Sessions>>,
+    stopping: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    home: PathBuf,
+) -> std::io::Result<[std::thread::JoinHandle<()>; 2]> {
+    let hooks = webhook::spawn(registry.clone(), stopping.clone(), home.clone())?;
+    Ok([hooks, github::spawn(registry, stopping, home)?])
+}
 const FILE: &str = "schedules.json";
 const KEY: &str = "schedule.key";
 const LABEL_MAX: usize = 80;
