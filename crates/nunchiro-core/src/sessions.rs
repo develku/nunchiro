@@ -123,6 +123,8 @@ struct Settings {
     orchestration: OrchestrationSettings,
     // Ticket 211: canonical folders the owner allowed Usage to read through a link; `usage.rs` reads the file itself.
     usage_link_roots: Vec<PathBuf>,
+    // The triggers' webhook port (`schedule/webhook.rs` reads the file itself); absent is 47800.
+    triggers_port: Option<u16>,
     // Ticket 250: absorb features' own values by dotted key (`quit_settings` checks key and size); read with `feature`.
     features: BTreeMap<String, serde_json::Value>,
 }
@@ -451,6 +453,9 @@ pub struct Sessions {
     /// Look 11-17 v8 (Home S2-B): the entries the owner asked to run again on a failed run's card; the schedule timer
     /// runs them off this lock (`schedule::fire`), as Run now.
     pub(crate) schedule_reruns: Vec<String>,
+    /// The owner's Start on a trigger's card: its id, the trigger, the run and the subject; the schedule timer starts
+    /// them off this lock (`schedule::fire`). The card stays until the start ran.
+    pub(crate) trigger_starts: Vec<(String, String, crate::schedule::Run, Option<String>)>,
     /// Ticket 1004: the check-ins that wait for the judge, at most one per task (`check_in_due`); the server's loop
     /// has them judged off this lock (`start_judge`: git is read there).
     pub(crate) check_ins: Vec<crate::ledger::CheckIn>,
@@ -588,8 +593,7 @@ impl Sessions {
             Request::Browser { .. } | Request::BrowserNext | Request::BrowserDone { .. } => {
                 Err("browser verbs run only on the owner socket".into())
             }
-            // v1b-02
-            Request::ChatPage { .. } => Err("chat requires unlocked transport dispatch".into()),
+            Request::ChatPage { .. } => Err("chat requires unlocked transport dispatch".into()), // v1b-02
             Request::HandoffPreview { .. } | Request::HandoffSend { .. } => {
                 Err("handoff requires unlocked transport dispatch".into())
             }
@@ -603,13 +607,14 @@ impl Sessions {
                 Err("the PR view requires the window".into())
             }
             Request::PrBranch { .. } => Err("the PR view requires the window".into()), // ticket 373
-            Request::GitPush { .. } => Err("push requires the window".into()),
+            Request::GitPush { .. } | Request::PrDraft { .. } | Request::PrCreate { .. } => {
+                Err("push requires the window".into())
+            }
             Request::LibsResolve { .. } | Request::LibsEntry { .. } => {
                 Err("libraries require owner dispatch".into()) // the socket server answers after its owner check
             }
-            // Ticket 573: answered by the socket server after its owner check.
             Request::TokenCreate { .. } | Request::TokenList | Request::TokenRevoke { .. } => {
-                Err("tokens require owner dispatch".into())
+                Err("tokens require owner dispatch".into()) // ticket 573: the socket server answers after its owner check
             }
             Request::AccountList
             | Request::AccountCheck { .. }
@@ -1397,6 +1402,9 @@ impl Sessions {
             | Request::Plugin { .. } => {
                 Err("widget requests run outside the registry lock".into())
             }
+            Request::Trigger { .. } => {
+                Err("trigger requests are the owner's socket's (`nunchiro trigger`)".into())
+            }
             // v1b-05
             Request::ImagePut { .. } => Err("image uploads run outside the registry lock".into()),
             // CHAT-MODELIST: the window's mode list; the owner path only (see `check_agent`).
@@ -1785,18 +1793,6 @@ fn retire_send(
 mod tests; // 2026-11-20: moved out for the 1 MiB publish scan
 
 #[cfg(test)]
-type BeforeDecide = Box<dyn FnOnce(&std::sync::Mutex<Sessions>)>;
-/// Ticket 32: the fake `claude` and `codex` unit tests run, set once (`agent_program`).
+mod test_hooks;
 #[cfg(test)]
-static FAKE_AGENTS: std::sync::OnceLock<(String, String)> = std::sync::OnceLock::new();
-#[cfg(test)]
-thread_local! {
-    // Ticket 32: runs at the start of `Launch::prepare` on the thread that prepares.
-    static IN_PREPARE: std::cell::Cell<Option<Box<dyn FnOnce()>>> = const { std::cell::Cell::new(None) };
-    static IN_HOOKS_CHECK: std::cell::Cell<Option<Box<dyn FnOnce() -> bool>>> = const { std::cell::Cell::new(None) };
-}
-#[cfg(test)]
-thread_local! {
-    // Ticket 39: runs in `handoff_send` between the first decision (and prepare) and the lock that decides again.
-    static BEFORE_DECIDE: std::cell::Cell<Option<BeforeDecide>> = const { std::cell::Cell::new(None) };
-}
+use test_hooks::*;

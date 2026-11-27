@@ -1057,7 +1057,16 @@ fn serve(
                         jobs.spawn(frame.id, move || crate::pr::answer(&registry, request))
                     }
                     // The Diff panel's Push runs git for up to 120 s: off this loop.
-                    Ok(frame) if matches!(frame.request, Some(Request::GitPush { .. })) => {
+                    Ok(frame)
+                        if matches!(
+                            frame.request,
+                            Some(
+                                Request::GitPush { .. }
+                                    | Request::PrDraft { .. }
+                                    | Request::PrCreate { .. }
+                            )
+                        ) =>
+                    {
                         let registry = registry.clone();
                         let request = frame.request.unwrap();
                         jobs.spawn(frame.id, move || {
@@ -1837,8 +1846,13 @@ fn read_pr_chip(registry: &Mutex<Sessions>, id: &str) -> Response {
     let (mut before, mut generation, mut events, mut chip, mut past) =
         (None, None, vec![], None, 0);
     for _ in 0..PAGES {
-        let Reply::ChatPage { page, .. } = read_chat(registry, id, before, None, generation)?
-        else {
+        let read = read_chat(registry, id, before, None, generation);
+        // A session with no conversation to read (a terminal) still shows the PR the app made for it.
+        let Ok(Reply::ChatPage { page, .. }) = read else {
+            if let Some(chip) = crate::pr_live::made_chip(id) {
+                return Ok(Reply::PrChip { chip: Some(chip) });
+            }
+            read?;
             return Err("chat unavailable".into());
         };
         // Every later page must match the first page's generation: after a reset, start over from the newest page.
@@ -1866,6 +1880,8 @@ fn read_pr_chip(registry: &Mutex<Sessions>, id: &str) -> Response {
     if chip.is_some() {
         crate::pr_live::note_created(&events); // v2-8c
     }
+    // A PR the app created from the Diff panel, until the transcript names one.
+    let chip = chip.or_else(|| crate::pr_live::made_chip(id));
     Ok(Reply::PrChip { chip })
 }
 

@@ -22,7 +22,7 @@ import { matches, Pending } from './pending'; // v1b-12; ticket 212
 import { publishPrompts, recallable } from './promptHistory'; // ticket 371
 import { baseName } from '../files/open';
 import { elapsed, Open, RowView } from './Rows';
-import { PrChip, type PrChipData } from './PrChip'; // v2-8b
+import { PR_CHIP_EVENT, PrChip, type PrChipData } from './PrChip'; // v2-8b
 import { useWarm } from '../warm';
 import { blocked, show as paneShow } from '../pane/store';
 import { doneJump, useJump } from '../search/jump'; // v2-7
@@ -155,7 +155,8 @@ function ChatList({ boot, feed, session, shown, readOnly, head, main, t }: { t: 
   useEffect(() => claimControls(session.id, built), [session.id, built]); // ticket 1019: the picker's own commands
   const view = useView(); // CHROME: Verbose shows `built` as is; Normal and Thinking fold each turn
   const asking = session.pending.filter((d) => d.kind === 'permission').length; // sixth look: a command whose request waits has not run
-  const shownRows = useMemo(() => viewRows(built, view, asking), [built, view, asking]);
+  const turnOn = session.attention.working;
+  const shownRows = useMemo(() => viewRows(built, view, asking, turnOn), [built, view, asking, turnOn]);
   useEffect(() => void (state.events.length && seenCursor(session.id, state.events[state.events.length - 1].cursor)), [session.id, state.events]);
   // N27: the user's own Stop before any output: Claude writes no record, so the message it stopped reads as interrupted.
   const stop = stoppedAt(session.id);
@@ -178,9 +179,13 @@ function ChatList({ boot, feed, session, shown, readOnly, head, main, t }: { t: 
     seen.current = { session: session.id, results };
     const timer = first ? undefined : setTimeout(fetch, PR_CHIP_DELAY);
     if (first) fetch();
+    // A PR the Diff panel created for this session: read the chip now.
+    const changed = (e: Event) => (e as CustomEvent<{ session: string }>).detail?.session === session.id && fetch();
+    window.addEventListener(PR_CHIP_EVENT, changed);
     return () => {
       live = false;
       clearTimeout(timer);
+      window.removeEventListener(PR_CHIP_EVENT, changed);
     };
   }, [feed, session.id, results]);
   // Ticket 212 (A9): the queue keeps `working` set while a PermissionRequest or question waits, so a pending decision

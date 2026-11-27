@@ -710,6 +710,21 @@ pub enum Request {
         #[serde(flatten)]
         shown: crate::git_write::Shown,
     },
+    // The Diff panel's Create PR form: what it starts with (commit subjects, the PR template, the bases). Window only.
+    PrDraft {
+        session: String,
+    },
+    // The form's Create PR: checked and pushed as `GitPush`, then `gh pr create` with the body on stdin. Window only.
+    PrCreate {
+        session: String,
+        #[serde(flatten)]
+        shown: crate::git_write::Shown,
+        title: String,
+        body: String,
+        base: String,
+        #[serde(default)]
+        draft: bool,
+    },
     // v2-10c: owner only and local (the app's `serve`), answered by the socket server before any session check.
     // Reads the library cache; Allow, auto-allow and Remove are window-only `libs::Op`, never a `Request`.
     LibsResolve {
@@ -1342,6 +1357,11 @@ pub enum Request {
     /// Plugins (`plugins.rs`): list, on and off, settings, a command run, remove. Owner and window only.
     Plugin {
         action: crate::plugins::Action,
+    },
+    /// Triggers (`schedule/triggers.rs`): the owner lists, adds, removes and pauses them; the owner or a token of the
+    /// `trigger` scope fires one.
+    Trigger {
+        action: crate::schedule::triggers::Action,
     },
     /// v1a-10: owner only. Claude replies `delivery` (the switch runs as one send row); Codex restarts into
     /// the same conversation and replies `started` with the replacing session.
