@@ -679,7 +679,8 @@ pub fn create(
     base: &str,
     draft: bool,
 ) -> Result<Created, String> {
-    let (title, body) = (&plain(title), &plain(body));
+    // The owner's own words go as typed (an emoji joined with ZWJ, Persian or Indic text); only control characters are
+    // refused, with a sentence. Repository text is filtered where the draft reads it (`plain`).
     check_text(title, body)?;
     if !crate::pr_live::piece(base) {
         return Err("no pull request: not a branch name".into());
