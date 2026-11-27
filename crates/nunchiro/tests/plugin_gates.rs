@@ -659,3 +659,66 @@ fn a_check_skipped_for_no_time_is_counted_on_the_plugin() {
     let listed: Value = serde_json::from_str(&ok(&c.home, &["plugin", "list", "--json"])).unwrap();
     assert!(listed[0]["skipped"].as_u64().unwrap_or(0) >= 1, "{listed}");
 }
+
+#[test]
+fn the_room_copy_of_a_changed_agent_send_names_the_plugin() {
+    let c = core("pgy");
+    plugin(
+        &c.home,
+        "prompt.send.before",
+        r#"printf '{"allow": true, "text": "seen-agent-words"}\n'"#,
+        "refuse",
+        true,
+    );
+    let project = user(&c.home).join("proj");
+    std::fs::create_dir_all(&project).unwrap();
+    let project = project.canonicalize().unwrap();
+    let start = |name: &str, run: &str| {
+        let out = ok(
+            &c.home,
+            &[
+                "agent",
+                "start",
+                name,
+                "--kind",
+                "shell",
+                "--project",
+                project.to_str().unwrap(),
+                "--",
+                "/bin/sh",
+                "-c",
+                run,
+            ],
+        );
+        let v: Value = serde_json::from_str(&out).unwrap();
+        v["session"]["id"].as_str().unwrap().to_string()
+    };
+    let to = start("to", "exec cat");
+    start(
+        "from",
+        &format!(
+            "'{}' agent send {to} 'raw words'; exec cat",
+            env!("CARGO_BIN_EXE_nunchiro")
+        ),
+    );
+    let end = Instant::now() + Duration::from_secs(15);
+    let line = loop {
+        let read = call(
+            &c.home,
+            &c.owner,
+            json!({"op": "room_read", "project": project}),
+        );
+        if let Some(m) = read["Ok"]["messages"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|m| m["body"] == "seen-agent-words")
+        {
+            break m.clone();
+        }
+        assert!(Instant::now() < end, "{read}");
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    assert_eq!(line["kind"], "typed", "{line}");
+    assert_eq!(line["changed_by"], "Guard", "{line}");
+}
