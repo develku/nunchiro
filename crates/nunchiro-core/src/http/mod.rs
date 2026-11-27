@@ -1575,10 +1575,15 @@ fn serve(
                 let registry = registry
                     .lock()
                     .map_err(|_| "session registry unavailable")?;
-                let key = (registry.revision(), crate::pty::output_seq());
-                let fresh = built != Some(key) || built_at.elapsed() >= SNAPSHOT_FORCE;
+                let key = (
+                    registry.revision(),
+                    crate::pty::output_seq(),
+                    crate::board::sources::revision(), // board.json holds the board's decisions
+                );
+                // Measured from this pass's start, so the force lands on the pass a second later, not the one after.
+                let fresh = built != Some(key) || snapshot_at - built_at >= SNAPSHOT_FORCE;
                 if fresh {
-                    (built, built_at) = (Some(key), Instant::now());
+                    (built, built_at) = (Some(key), snapshot_at);
                 }
                 fresh
             };

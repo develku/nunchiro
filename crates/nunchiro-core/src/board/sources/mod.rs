@@ -124,6 +124,10 @@ struct Home {
 static HOMES: OnceLock<Mutex<BTreeMap<PathBuf, Home>>> = OnceLock::new();
 /// S9 r3: moves whenever a merge finds a home's sources changed (new cards, an error, a finished command run).
 static REVISION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// Moves when a board or source file changed (the background check), for a window's snapshot key.
+pub(crate) fn revision() -> u64 {
+    REVISION.load(std::sync::atomic::Ordering::SeqCst)
+}
 /// S9 r3: what the board's cards read of each source and the board files' stamps, cheaply: a file's stamp, a command's last run, errors, the card
 /// count and local moves (new cards come with a new stamp or a new run).
 fn fingerprint(home: &Path, state: &Home) -> u64 {

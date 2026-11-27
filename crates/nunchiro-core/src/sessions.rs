@@ -521,8 +521,8 @@ struct Writes {
 /// after its own, and the Stop reply's drain returns only once an earlier tick's drain is done.
 static DRAINING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 impl Sessions {
-    /// What the snapshot reads moved (a save, a transcript read, a machine's push); `revision` adds the queue's saves.
-    /// A request that changes the store saves it; a read-only one (a window's once-a-second heartbeat) counts nothing.
+    /// What the snapshot reads moved (a save, a request, a transcript read, a machine's push); `revision` adds the
+    /// queue's saves.
     pub(crate) fn changed(&self) {
         self.revision
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -533,6 +533,25 @@ impl Sessions {
         self.revision.load(std::sync::atomic::Ordering::SeqCst) + self.queue.revision()
     }
     pub fn handle(&mut self, request: Request) -> Response {
+        // Any request may change what the snapshot reads without a save (an Outbox yes, a draft brought home, a
+        // setting); only the reads a window repeats while idle are left out.
+        if !matches!(
+            request,
+            Request::Snapshot
+                | Request::List
+                | Request::AgentList { .. }
+                | Request::QueueConnect
+                | Request::BoardSnapshot
+                | Request::TreeGet
+                | Request::DiffList { .. }
+                | Request::PrBranch { .. }
+                | Request::WidgetList
+                | Request::ScheduleList
+                | Request::RoomRead { .. }
+                | Request::ChatPage { .. }
+        ) {
+            self.changed();
+        }
         if self.left {
             return Err("core is stopping".into());
         }
