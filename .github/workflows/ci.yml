@@ -9,7 +9,12 @@
 name: CI
 
 on:
+  # Only pull requests into main: a stacked PR (base = another PR's branch) ran the whole gate twice, once on its stack
+  # and again after its base moved to main, on the 5 shared macOS runners. It runs once its base is main: `edited` is the
+  # event GitHub sends when it moves a PR's base (a title or body edit also sends it; the newer run cancels the older).
   pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
   merge_group:
     types: [checks_requested]
   push:
