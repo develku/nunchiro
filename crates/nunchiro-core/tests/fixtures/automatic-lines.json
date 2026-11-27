@@ -98,7 +98,7 @@
     },
     {
       "kind": "stall",
-      "text": "Stalled: Builder · Add a pow (x) (0a1b2c3d): quiet for 25 min, still after one nudge. Replace it now without asking the user: nunchiro session close 0a1b2c3d, then nunchiro task staff t2 builder with its brief. Ask the user instead only if your brief or the user says so, or it is a teammate you did not open."
+      "text": "Stalled: Builder · Add a pow (x) (0a1b2c3d): quiet for 25 min, still after one nudge. If `nunchiro task show t2` still lists it as stalled, replace it now without asking the user: nunchiro session close 0a1b2c3d, then nunchiro task staff t2 builder with its brief. Ask the user instead only if your brief or the user says so, or it is a teammate you did not open."
     },
     {
       "kind": "forward",

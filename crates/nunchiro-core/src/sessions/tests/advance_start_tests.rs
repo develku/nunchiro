@@ -1302,3 +1302,30 @@ fn a_stall_card_also_tells_the_lead_what_to_do() {
     drop(core);
     end_handoff(registry, home);
 }
+
+// Acceptance review: while the lead works, its queued stall line is not replaced by a later heartbeat.
+#[test]
+fn a_queued_stall_line_outlives_a_later_heartbeat() {
+    let (registry, home, lead, task, builder, _) = two_seats("advance-card-queued");
+    let mut core = registry.lock().unwrap();
+    core.delivery_inflight.insert(lead.clone(), u64::MAX); // the lead is busy: core lines queue
+    let act = crate::advance::Act::Card {
+        seat: builder.clone(),
+        name: "Builder · tax".into(),
+        why: "quiet for 25 min".into(),
+    };
+    let was = core.seat_facts(&builder);
+    crate::advance::act(&mut core, &task, &lead, &act, &was, None, &mut vec![]).unwrap();
+    core.core_line(&lead, crate::advance::beat_line(0, 0, 1).unwrap())
+        .unwrap();
+    let meta = &core.entries[&lead].meta;
+    let stall = meta
+        .send_queue
+        .iter()
+        .chain(&meta.send_log)
+        .find(|s| s.content.starts_with("Stalled: "))
+        .unwrap();
+    assert_eq!(stall.status, "queued", "{stall:?}");
+    drop(core);
+    end_handoff(registry, home);
+}

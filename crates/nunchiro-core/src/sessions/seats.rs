@@ -270,7 +270,9 @@ impl Sessions {
                 e.meta
                     .send_queue
                     .iter()
+                    // A stall line names one seat and its step: a newer core line does not replace it.
                     .filter(|s| s.status == "queued" && self.core_rows.contains(&s.id))
+                    .filter(|s| !s.content.starts_with("Stalled: "))
                     .map(|s| s.id.clone())
                     .collect()
             })
