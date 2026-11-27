@@ -441,7 +441,13 @@ impl Launch {
                 true => crate::home_lock::Mode::Ask, // its plan mode stays
                 false => crate::home_lock::effective(crate::home_lock::mode(stored), self.owner),
             };
-            let args = crate::home_lock::args(mode, &servers);
+            let off = self
+                .settings
+                .features
+                .get(crate::home_lock::CONNECTORS_OFF_KEY)
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
+            let args = crate::home_lock::args(mode, &servers, off);
             self.permission = if side { args[2..].to_vec() } else { args };
             self.home_mode = Some(mode);
             self.ran_mode = (!side)

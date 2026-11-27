@@ -7,9 +7,22 @@ makes a fresh copy per run and checks each task's acceptance.
 ## Before the first run
 
 - Use an isolated RC: its own `HOME` and `NUNCHIRO_HOME`, never the owner's app or home.
-- No mail or calendar account or connector is signed in on that RC. The mail tasks work on files only. On an Outbox
+- Tasks 8-10 run with the account connectors off (below). The mail tasks work on files only. On an Outbox
   card, press Discard, never Send.
 - `python3` and `git` on the PATH.
+
+### Tasks 8-10: the Assistant sees no account connector
+
+The RC's Claude may be signed in to an account whose claude.ai connectors (Gmail, Calendar) are real. Before the first
+of tasks 8-10, cut them off for the Assistant's seat; the fixtures are files, so the seat needs no tool server at all.
+
+1. With the RC's `NUNCHIRO_HOME` set, turn **Settings > Assistants > Connectors > Account connectors** off. Without the
+   window: stop the RC's core, add `"home.connectors_off": true` under `"features"` in `$NUNCHIRO_HOME/settings.json`,
+   start it again. The seat then starts with `--strict-mcp-config` and an empty `--mcp-config`, so no MCP server loads.
+2. Close any Assistant seat that was open before the change (the setting applies at the next start), then open it.
+3. Check before sending the task: `nunchiro agent list --json` gives the seat's id, `nunchiro agent get <id> --json`
+   its `pid`, and `ps -o command= -p <pid>` must show `--strict-mcp-config`. If it does not, stop: do not send the task.
+4. Do not ask the seat to list or call mail or calendar tools; the check above is the proof.
 
 ## One run
 

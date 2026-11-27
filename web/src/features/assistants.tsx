@@ -10,7 +10,7 @@ import { leadOf, setTeam as shareTeam, type Team, type Teammate } from '../lead/
 import { PLAIN } from '../plainText';
 import { openSchedules } from '../schedule/schedules';
 import { nameAssistant } from '../settings/agents/open';
-import { Reset, Row, Sec, Seg } from '../settings/shell/Row';
+import { Reset, Row, Sec, Seg, Switch } from '../settings/shell/Row';
 import { PageSummary } from '../settings/shell/PageActions';
 import { useCoreFeature } from '../settings/useFeatureSetting';
 import { registerSettingsPage, type PageContext } from './registry';
@@ -52,6 +52,8 @@ function NameRow({ core, t, lead, onSaved }: { core: CoreClient; t: PageContext[
 
 function AssistantsPage({ core, t, reveal, closeSettings }: Pick<PageContext, 'core' | 't' | 'reveal' | 'closeSettings'>) {
   const [mode, setMode, error, , modeRead] = useCoreFeature<string>('home.chief_mode', 'ask');
+  // Off (`home.connectors_off`): the seat starts with no MCP server, so the claude.ai connectors never load.
+  const [off, setOff, offError] = useCoreFeature<boolean>('home.connectors_off', false);
   const [team, setTeam] = useState<Team | null>(null);
   useEffect(() => void core.request({ op: 'team_list' }).then((r) => setTeam(r as Team), () => setTeam({ teammates: [], home: '' })), [core]);
   const lead = team && leadOf(team, '');
@@ -131,6 +133,16 @@ function AssistantsPage({ core, t, reveal, closeSettings }: Pick<PageContext, 'c
       <Sec id="assistants-connectors" title={t('assistants.connectors')}>
         <Row label={t('assistants.mail')} chip={claude ? <span className="chip tag">{t('assistants.readDrafts')}</span> : undefined} desc={t('assistants.mailDesc')} />
         <Row label={t('assistants.calendar')} chip={<span className="chip tag">{t('assistants.calendarOff')}</span>} desc={t('assistants.calendarDesc')} />
+        <Row
+          label={t('assistants.accountConnectors')}
+          desc={
+            <>
+              {t('assistants.accountConnectorsDesc')} {t('assistants.applies')}
+              {offError && <span role="alert"> {offError}</span>}
+            </>
+          }
+          control={claude && <Switch setting="homeConnectors" label={t('assistants.accountConnectors')} checked={!off} onChange={(v) => void setOff(v ? null : true)} />}
+        />
         <Row label={t('assistants.allowed')} chip={<span className="chip tag">{t('assistants.fixed')}</span>} desc={t('assistants.allowedDesc')} />
       </Sec>
     </div>
@@ -151,6 +163,9 @@ registerSettingsPage({
   },
   group: 'agents',
   order: 5.5, // between Team (5) and Notes (6)
-  fields: [{ key: 'homeChief', at: '[data-setting="homeChief"]' }],
+  fields: [
+    { key: 'homeChief', at: '[data-setting="homeChief"]' },
+    { key: 'homeConnectors', at: '[data-setting="homeConnectors"]' },
+  ],
   render: (ctx) => <AssistantsPage core={ctx.core} t={ctx.t} reveal={ctx.reveal} closeSettings={ctx.closeSettings} />,
 });

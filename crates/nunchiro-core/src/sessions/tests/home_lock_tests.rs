@@ -90,6 +90,30 @@ fn home_seat_starts_locked_in_the_chosen_mode() {
     };
     let refused = core.handle(Request::QuitSettings { patch }).unwrap_err();
     assert!(refused.contains(MODE_KEY), "{refused}");
+    // Connectors off: the Home seat starts with the strict empty MCP config (no account connector loads); a project
+    // seat never gets it.
+    let strict = |a: &[String]| a.iter().any(|w| w == "--strict-mcp-config");
+    assert!(!strict(&prepared(&core, true, None).0));
+    let off = crate::home_lock::CONNECTORS_OFF_KEY;
+    core.settings.features.insert(off.into(), true.into());
+    let (cut, _) = prepared(&core, true, None);
+    assert!(strict(&cut) && locked(&cut), "{cut:?}");
+    let project_off = core
+        .launch(claude_start(&home, &[]))
+        .owner_start()
+        .prepare()
+        .unwrap();
+    assert!(!strict(&project_off.permission));
+    core.settings.features.remove(off);
+    let patch = LifetimePatch {
+        features: Some([(off.to_string(), serde_json::json!("yes"))].into()),
+        ..Default::default()
+    };
+    assert!(
+        core.handle(Request::QuitSettings { patch })
+            .unwrap_err()
+            .contains(off)
+    );
     drop((bare, project, sub));
     fs::remove_dir_all(home).unwrap();
 }
