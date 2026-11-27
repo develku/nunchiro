@@ -525,7 +525,7 @@ body.still *, body.still *::before, body.still *::after { animation-play-state: 
 
 <main>
 <header class="top" id="start">
-  <span class="eyebrow">Nunchiro · design book · v0.2 draft</span>
+  <span class="eyebrow">Nunchiro · design book · v0.3 draft</span>
   <h1>The quiet room, built to measure</h1>
   <p class="lede">Every part a builder needs, drawn in four themes with its exact values. Shape, type, spacing, motion and state signals are fixed rules; colour comes from the theme. Concept 4, the recommended blend: 눈치 is the idea, the precision instrument decides how numbers are shown, Liquid Glass stays on the outer chrome.</p>
   <p class="small">Each part is drawn four times: Nunchiro light and dark (the default theme, hand-set) and Catppuccin Latte and Mocha (the two catalog themes in the bundle, coloured by the derive rule). Builders: read <a href="README.md">README.md</a> first, copy values from here, import <a href="tokens.css">tokens.css</a>; the move order is in <a href="migration.md">migration.md</a>. The hover, pressed and focus states are drawn still so you can read them.</p>
@@ -723,7 +723,7 @@ body.still *, body.still *::before, body.still *::after { animation-play-state: 
     <tr><td>Docs site header</td><td class="v">logo-mark.svg</td><td class="v">20</td><td class="v">--text</td></tr>
     <tr><td>Download page</td><td class="v">app-icon.svg</td><td class="v">44 to 64, centred above the headline</td><td class="v">its own tile</td></tr>
     <tr><td>Release notes</td><td class="v">app-icon.svg</td><td class="v">32, first line of the notes</td><td class="v">its own tile</td></tr>
-    <tr><td>Window chrome (title bar, sidebar header)</td><td class="v">not decided</td><td class="v">—</td><td class="v">see the proposal and the open question below</td></tr>
+    <tr><td>Window chrome (title bar, sidebar header)</td><td class="v">none</td><td class="v">—</td><td class="v">the mark stays out of the window chrome (decision below)</td></tr>
     </tbody></table></div>
   <div class="spec one" data-tpl="t-mark-win" data-only="nl nd"></div>
   <div class="dd">
@@ -737,12 +737,12 @@ body.still *, body.still *::before, body.still *::after { animation-play-state: 
     </div><span class="why">Each of these makes the mark look like a state, a button or a sticker.</span></div>
   </div>
   <div class="col">
-  <div class="n-card ask stack" role="group" aria-label="Open question">
-    <div class="hd"><svg class="mk" width="16" height="16" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg><span class="who">Open question</span><span class="m">not decided</span></div>
+  <div class="n-card ask stack" role="group" aria-label="Decision">
+    <div class="hd"><svg class="mk" width="16" height="16" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg><span class="who">Decision</span><span class="m">decided</span></div>
     <div class="q">Should the mark sit in the window chrome?</div>
-    <div><div class="opt"><i class="n-radio on"></i>C · Not in the window chrome: only About, onboarding and the empty window<span class="n-badge" style="margin-left:auto">Recommended</span><span class="n-kbd" style="margin-left:0">1</span></div><div class="opt"><i class="n-radio"></i>A · Sidebar header, 16, --muted<span class="n-kbd">2</span></div><div class="opt"><i class="n-radio"></i>B · Title bar, centred<span class="n-kbd">3</span></div></div>
+    <div><div class="opt"><i class="n-radio on"></i>C · Not in the window chrome: only About, onboarding and the empty window<span class="n-badge" style="margin-left:auto">Chosen</span></div><div class="opt"><i class="n-radio"></i>A · Sidebar header, 16, --muted</div><div class="opt"><i class="n-radio"></i>B · Title bar, centred</div></div>
     <span class="fine">The Dock and the menu bar already say which app this is, and Linear, Arc and Zed keep their logo out of the window chrome and show it on welcome and empty screens; the sidebar header belongs to the project.</span>
-    <span class="n-field" style="width:100%"><span class="ph">Something else…</span></span>
+    
   </div>
   </div>
 </section>
@@ -1109,22 +1109,6 @@ pnpm test -- login</div><div class="n-menu glass" style="width:200px;margin-left
         <div style="width:300px;background:var(--raised);border-radius:14px;box-shadow:var(--shadow-card);padding:20px;display:flex;flex-direction:column;gap:8px"><svg class="mk" width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg><b style="font:600 15px/1.3 var(--font-display);margin-top:4px">Quick setup</b><span style="font-size:13px;color:var(--muted)">Pick a folder and tell the agent what to do.</span></div>
       </div>
       <span class="lbl">mark 24, --text, above the title</span>
-    </div>
-    <div class="mk-cell">
-      <span class="lbl"><span class="n-badge">Proposal, not decided</span> option A · top-left of the window, 320 × 200</span>
-      <div class="crop" style="width:320px;height:200px;background:var(--page)">
-        <div class="side" style="position:absolute;left:8px;top:8px;width:280px;height:230px;padding:0;border-radius:12px">
-          <span class="lights"><i></i><i></i><i></i></span>
-          <span class="pmk"><svg class="mk mu" width="16" height="16" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg></span>
-          <div style="position:absolute;left:8px;right:8px;top:76px">
-            <div class="n-proj" style="margin-top:0"><b>nunchiro</b><span class="br">main</span></div>
-            <div class="n-row run"><i class="st"></i><span class="n">Fix login test</span><span class="m">working 4:12</span></div>
-            <div class="n-row idle"><i class="st"></i><span class="n">Docs pass</span><span class="m">idle · 2h</span></div>
-          </div>
-        </div>
-        <div style="position:absolute;left:296px;top:46px;right:0;bottom:0;background:var(--panel);border-radius:10px 0 0 0"></div>
-      </div>
-      <span class="lbl">mark 16, --muted, in the sidebar header under the window controls (traffic lights at 20, 20)</span>
     </div>
   </div>
 </template>
