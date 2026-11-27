@@ -26,6 +26,7 @@ export const GROUPS: Record<string, string[]> = {
     'Codex did not stop ({}); nothing changed', '{} has not reported its conversation id yet',
     '{}; current line not cleared: a dialog is focused or the screen is not current', '{}; current line cleared', 'not imported',
     "fast mode is available after Claude's first reply", // sessions/claude_modes.rs (fast mode, ultracode, restart); nightly 11-21
+    "a test message is running", // acp/turn.rs: Send test message while one runs
   ],
   'err.g.extGone': [
     "no task {}", "no note {}", "no open loop {}", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
@@ -37,6 +38,7 @@ export const GROUPS: Record<string, string[]> = {
     'not a changed file', 'unknown service', 'no such device', 'browser connection revoked or not tracked', 'conversation {} is not in the agents\' folders', 'not a transcript under the agent\'s folder',
     'that library is not pinned', 'remote decision not found', 'retry needs a listed machine alias', 'unknown clone', 'no such schedule', 'session has no log', 'unknown group {}', 'token not found', 'decision not found',
     'message not found in this room', 'ask not found in this room', 'send not found', 'send is not queued', 'worktree not managed or outside grants', 'worktree not managed',
+    "plugin {} has no panel, command or check {}", "plugin {} has no setting {}", "plugin {} has no command {}", "no run of {} to read", "no plugin {}", // plugins.rs: a plugin or part that left since the window read the list
   ],
   'err.h.fileBad': [
     '{}: not a regular file', 'the outward hook could not be written', // events.rs: a journal day file; sessions/spawn.rs: Codex's hooks file has no hook list
@@ -66,6 +68,7 @@ export const GROUPS: Record<string, string[]> = {
     'tree.toml: {}', 'tree.toml is not a regular file or is too large', 'tree.toml: unsupported version', 'tree.toml is not a regular file', 'tree.toml would exceed its size limit', 'widget cache must not be a symlink', 'widgets folder must not be a symlink',
     'invalid {} name', '{} folder must not be a symlink',
     'sessions.json: {}', 'invalid outbox domains', 'queue store is not an object', 'the Home seat lock hook could not be written', // ticket 1002 (Home chief of staff, Outbox), worktree sharing; nightly 11-21
+    "plugin {}: {}", "missing plugin.toml", "plugin.toml is not UTF-8", "plugin.toml is too large", "plugin.toml id \"{}\" is not its folder's name \"{}\"", "plugin.toml needs a {}", "plugin.toml text has a hidden, control or bidi character", "a plugin has at most {} panels and commands", "two panels or commands are named \"{}\"", "setting key \"{}\" is invalid or repeated", "choice setting {} needs choices", "setting {} default: {}", // plugins.rs, approval/mod.rs: a plugin folder Settings > Plugins lists with its fault
   ],
   'err.h.limit': [
     'this command is too large to ask the user about', // acp/client.rs: an ACP agent's terminal command too large for the ask card
@@ -79,6 +82,7 @@ export const GROUPS: Record<string, string[]> = {
     'body over 8 KB: write it to a file and send the path', 'cache over {} MiB', 'at most {} schedules', '{} would be too large: remove a schedule or shorten a task', 'too many watched pull requests', 'composed input exceeds 64 KiB', '{} secret variable(s) too long for one keychain item', 'too many {}', 'too many project names', 'too many waiting items', 'too many waiting owner items',
     '{} already has {} running sessions in this project; stop one first', 'too many terminals', 'too many requests wait for this machine', 'pin_full: this room has {} pins; unpin one first',
     '{}: at most {} files and {} folders per project', // ticket 1002 (Home chief of staff, Outbox), worktree sharing; nightly 11-21
+    "output over {} characters; nothing put in the message box", // plugins.rs: a plugin command's output for the composer
   ],
   'err.h.value': [
     "Codex arguments cannot set hooks; Nunchiro's outward-action check runs as a Codex hook. Keep your own hooks in Codex's config", // sessions/spawn.rs
@@ -100,6 +104,7 @@ export const GROUPS: Record<string, string[]> = {
     '{}: a Home seat runs with the mode in Settings > Assistants and its lock; this argument is not taken', 'shared path "{}" {}', // ticket 1002 (Home chief of staff, Outbox), worktree sharing; nightly 11-21
     "fast mode runs on Opus 5.5 or Fable 5.2; pick one of them first", // sessions/claude_modes.rs (fast mode, ultracode, restart); nightly 11-21
     'project: a full folder path', 'a server named {} is already added for {}; remove it first or pick another name', // extensions.rs: an MCP server added for one project
+    "not a \"{}\" value", // plugins.rs: a plugin setting's value
   ],
   'err.h.notFor': [
     'not a repository of a PR an agent created or you watch', "no config folder for the agent's own account", 'only Claude and Codex have a command to approve', 'this service has no sign-in command', 'this service has no sign-out command', 'merge is only for a PR an agent made or you pinned', 'a shell session has no model picker', "an ACP agent has no model picker here", "an ACP agent's effort is set in the agent",
@@ -110,6 +115,7 @@ export const GROUPS: Record<string, string[]> = {
     "the chief of staff's seat is not handed off in v1", "Home seats are Claude in v1 (the chief of staff's lock is for Claude seats)", // ticket 1002 (Home chief of staff, Outbox), worktree sharing; nightly 11-21
     "ultracode is Claude's only", "fast mode is Claude's only", "only Claude and Codex restart", "this session keeps the settings it started with", // sessions/claude_modes.rs (fast mode, ultracode, restart); nightly 11-21
     'your own prompt does not wait for you', 'only a message with words can be attached', 'only one line of words goes back into the box', // sessions/deliver.rs knock, sessions/home.rs ⌘Z put back
+    "only a plugin part has a trial run", // approval/mod.rs: Trial run
   ],
   'err.h.nothingUndo': ['nothing to undo on this card', 'nothing to undo (up to {} steps)', "no message of another sender is waiting in the agent's box"], // sessions/home.rs: ⌘Z take back
   'err.h.noLimit': ["no usage limit with a reset time ahead is on this session's screen"],
@@ -123,6 +129,7 @@ export const GROUPS: Record<string, string[]> = {
     '{} was ended by signal {}{}', 'acp agent {}: {}', 'no agent stdin', 'no agent stdout', 'initialize: {}', 'the agent speaks ACP version {}; Nunchiro speaks version {}', 'the agent cannot load a session', 'session start: {}', 'session/new answered no session id', 'the agent closed its output before answering ACP',
     'check folder: {}', 'the agent is not reading its input: {}', 'the agent did not answer {} within {} s', 'the agent closed its output before answering {}', 'a check failed', '--version did not finish: {}', '--version failed ({})', '--version printed nothing',
     '{} --version: probe ended without an answer', '{} --version: {}', 'version probe ended without an answer',
+    "the agent's input could not be set up", "session/new answered no session id.", // acp/probe.rs, acp/turn.rs: an ACP agent's check and its test message
   ],
   'err.h.inside': [
     "ledger unavailable", "notes unavailable", "roles unavailable", "open loops unavailable", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
@@ -131,6 +138,7 @@ export const GROUPS: Record<string, string[]> = {
    
     'handoff not sent', 'sha256 does not match the bytes received', 'theme fetcher unavailable', 'update list unavailable', 'sign-in list unavailable', 'account registry unavailable', 'session registry unavailable', 'the entry did not round-trip through agents.toml', 'Stop store unavailable', 'session list unavailable', 'chat store unavailable', 'chat source unavailable', 'transcript source unavailable', 'chat unavailable',
     'sessions unavailable', 'cache unavailable', 'browser broker unavailable', 'integration source state unavailable', 'clone list unavailable', 'room cache unavailable', 'room pins unavailable', 'token store unavailable', 'widget state unavailable', 'widget act state unavailable', 'version probe thread: {}',
+    "test results unavailable", "plugin runs unavailable", // acp/turn.rs, plugins.rs
   ],
   'err.h.io': [
     'room: {}', // sessions/locate.rs: Locate could not move the project's room folder (ticket 1040)
@@ -150,6 +158,7 @@ export const GROUPS: Record<string, string[]> = {
     'it is already sending: only Undo answers it now', // ticket 1002 (Home chief of staff, Outbox), worktree sharing; nightly 11-21
     'the schedule was removed while it waited for memory', // schedule/mod.rs: a held scheduled run whose schedule left meanwhile
     'the message is not attached', "the agent's box is not empty: nothing was written", // sessions/deliver.rs knock, sessions/home.rs ⌘Z put back
+    "plugin {} is off", // plugins.rs: a plugin turned off since the palette listed its command
   ],
   // Ticket 259: the owner's cleanup script refused a remove; the worktree stays.
   // sessions.rs teammate_removed: the window's Remove teammate; the core's sentence under Details names what is left.
@@ -163,6 +172,7 @@ export const GROUPS: Record<string, string[]> = {
     '[act] needs exactly one of session = "<label>" or start = "claude"|"codex"', 'read is only for script widgets', 'read lists at most {} paths', 'invalid read path "{}": use ~, ~/<path> or an absolute path, without . or .. parts', 'program name "{}" must be ASCII (after case folding) so the sheet shows which program runs', 'inline script ({}) for {} is refused; put the script in a file in the widget folder',
     'invalid integration source name', 'missing widget.toml', 'widget.toml is not UTF-8', '{} does not declare "{}" permission', 'integration source manifest kind must be integration', 'entry {} is missing', 'entry over {} MiB', 'entry is not UTF-8',
     'cache is a symlink', 'non-UTF-8 sandbox path', 'invalid sandbox path', 'sandbox could not count processes', 'sandbox spawn: {}', 'missing stdout', 'missing stderr', 'sandbox could not stop the run', 'stdout reader failed', 'stderr reader failed', 'sandbox output cap exceeded', 'sandbox command failed: {}', 'cache parent missing', 'sandbox self-check: nc missing', 'sandbox self-check allowed a denied write', 'sandbox self-check failed: {}', 'sandbox environment key {} not allowed', 'runner unavailable',
+    "answered \"{}\", not {{}}", // plugins.rs: a plugin check's trial answer in a shape the core does not read
   ],
   'err.h.machineFail': ['remote reply exceeds 8 MiB limit', 'machine {}: SSH {}', '{} sent no ed25519 host key', 'machine {}: SSH {}: {}', 'ssh failed: {}', 'the relay did not start with a valid hello', '{} discovery failed: {}', 'command timed out after {} ms'],
   'err.h.actRefused': [
@@ -185,7 +195,7 @@ export const GROUPS: Record<string, string[]> = {
   'err.g.answerTerminal': ['no verified allow-once screen option', 'confirmation_required: option changes user settings'],
   'err.c.notReady': ['the terminal output is behind: the footer cannot be trusted; mode not confirmed', 'the footer did not change; mode not changed', 'did not reach {} in a full cycle'],
   // The same wording is an agent's program (acp/add.rs, acp/probe.rs, approval/command.rs) and an extension file (extensions.rs): the file line fits both.
-  'err.missing': ['{} was not found', "{}'s folder is gone; resume it from the session"],
+  'err.missing': ["{} was not found.", '{} was not found', "{}'s folder is gone; resume it from the session"],
   'err.session': ['Side chat parent is not running', 'session has no live replay after restart'],
   'err.git': ['git: the read timed out', 'git {}: the listing is too long to read safely', 'git: submodules nested too deep to read safely', 'git: too many filters configured to switch off safely', 'git {}: {}', 'origin/HEAD is not on origin'],
   'err.g.notGit': ['not a git top level'],
