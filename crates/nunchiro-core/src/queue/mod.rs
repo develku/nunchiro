@@ -526,6 +526,8 @@ pub struct Queue {
     outbox_approved: Vec<Approved>,
     /// Round 2: owner items of a kind this core does not know (a newer core's), shown nowhere and written back as read.
     foreign_owner: Vec<Value>,
+    /// Counts saves: a window loop builds no snapshot while this and the registry's own count stand still.
+    revision: std::sync::atomic::AtomicU64,
 }
 /// v1b-40 r2: the integer `version` of an over-cap queue file, streamed without keeping the rest; `None` unless the
 /// file is one JSON object (as the in-cap path requires).
@@ -762,6 +764,7 @@ impl Queue {
             outbox_yes: BTreeMap::new(),
             outbox_approved: vec![],
             foreign_owner,
+            revision: Default::default(),
         };
         // Old evidence remains visible but cannot authorize input to a new process.
         for state in queue.disk.sessions.values_mut() {
@@ -835,7 +838,12 @@ impl Queue {
         }
         Ok(())
     }
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision.load(std::sync::atomic::Ordering::SeqCst)
+    }
     pub fn save(&self) -> Result<(), String> {
+        self.revision
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Self::validate(&self.disk)?;
         let bytes = if self.foreign_owner.is_empty() {
             serde_json::to_vec(&self.disk)

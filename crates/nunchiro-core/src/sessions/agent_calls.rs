@@ -715,6 +715,7 @@ impl Sessions {
         caller: &crate::grants::Caller,
         request: Request,
     ) -> Response {
+        self.changed(); // as `handle`: an agent's request may change what a window's snapshot reads
         self.refresh()?;
         self.observe()?;
         self.check_agent(caller, &request)?;
