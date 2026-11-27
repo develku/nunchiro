@@ -1,0 +1,433 @@
+/* Nunchiro design book tokens, v0.1 draft (design-book/index.html is the picture of every value here).
+   Concept 4, the recommended blend: 눈치 (quiet surfaces, one warm signal), precision-instrument figures and gauges,
+   Liquid Glass on the outer chrome only.
+
+   Three layers:
+     1. Primitives   the Nunchiro palette and the fixed scales. Parts never read a primitive colour directly.
+     2. Semantic     roles (surfaces, text, tints, glass, accent, state lights and words, primary). These are what a
+                     theme changes: the bundled Nunchiro pair paints the values below; any other theme gets them from
+                     themes/derive.ts by the derive rule (index.html, "Theme derive rule").
+     3. Component    sizes and radii of the parts.
+   Load it after web/src/tokens.css (main.tsx imports both, this one second). It overrides the colour roles with the
+   blend palette and adds the new roles; block 4 re-points the old names whose meaning changed. Tokens the book does
+   not cover stay in web/src/tokens.css as they are. README.md has the old -> new table; delete an old name once
+   nothing reads it, and delete web/src/tokens.css when it is empty.
+
+   Marks vs words: a state has a mark colour (--light-*, 3:1, dots, rings, gauges) and a words colour (--*-text, 4.5:1).
+   --faint is never text. Colours that carry state are never used for decoration. */
+
+/* ---------------------------------------------------------------- 1. Primitives */
+:root {
+  /* Nunchiro light neutrals (stone) */
+  --stone-0: #ffffff;
+  --stone-25: #fafaf9;
+  --stone-50: #f1f2f0;
+  --stone-150: #e2e4e1;
+  --stone-500: #868c92;
+  --stone-600: #5d646a;
+  --stone-900: #23272b;
+  /* Nunchiro dark neutrals (graphite) */
+  --graphite-950: #15171a;
+  --graphite-900: #1b1e21;
+  --graphite-850: #22262a;
+  --graphite-800: #2b2f33;
+  --graphite-500: #6e757b;
+  --graphite-400: #9aa1a7;
+  --graphite-100: #e5e7e8;
+  --graphite-50: #e9ebec;
+  /* Hues: 300 = dark-scheme value, 500 = light-scheme mark, 600/700 = light-scheme words */
+  --tide-300: #7fb0d6; /* working, focus (dark) */
+  --tide-500: #5583a8; /* working dot (light) */
+  --tide-550: #4f7fa8; /* focus ring (light) */
+  --tide-650: #355f86; /* legacy --run as words (light) */
+  --ember-300: #f2a35a; /* needs you, every role (dark) */
+  --ember-400: #e08a3c; /* needs-you glow (light) */
+  --ember-500: #b87131; /* needs-you dot (light) */
+  --ember-700: #9f500f; /* needs-you words, primary fill (light) */
+  --rose-300: #ee8076;
+  --rose-500: #b3443b;
+  --rose-600: #aa4138;
+  --moss-300: #86b293;
+  --moss-500: #4f7d5d;
+  --moss-650: #446c50;
+  --amber-300: #d9a441;
+  --amber-500: #b07a1a;
+  --amber-700: #8a5e0e;
+  --plum-300: #b9a0c4;
+  --plum-500: #6b4e78;
+  --berry-300: #d49bc4;
+  --berry-500: #8a3b6f;
+  --sea-300: #8fb8dc;
+  --sea-500: #2f5e8a;
+  --moss-50: #edf5ef;
+  --moss-950: #1e2b23;
+  --rose-50: #f8ecea;
+  --rose-950: #2e1f1e;
+
+  /* Type */
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif;
+  --font-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, 'D2Coding', monospace;
+  --fs-cap: 10px; /* caps captions, status bar and gauges only: 600, uppercase, +0.06em */
+  --fs-kbd: 11px; /* key chips, counts, badges */
+  --fs-meta: 11.5px; /* row meta, captions, status bar, tooltips */
+  --fs-sm: 12px; /* 24 px buttons, segmented, model chip, error lines */
+  --fs-ui: 13px; /* the UI size */
+  --fs-title: 14.5px; /* session title, SF Pro Display 600 */
+  --fs-chat: 15px; /* chat and composer */
+  --fs-h2: 17px; /* section title in a wide tab */
+  --fs-h1: 22px; /* Settings page title */
+  --fs-code: 12px;
+  --lh-ui: 1.4;
+  --lh-chat: 1.65;
+  --lh-code: 20px;
+  --tracking-cap: 0.06em;
+
+  /* Space: five steps */
+  --sp-4: 4px;
+  --sp-8: 8px;
+  --sp-12: 12px;
+  --sp-20: 20px;
+  --sp-32: 32px;
+
+  /* Radius */
+  --r-4: 4px; /* key chip, checkbox, skeleton bar */
+  --r-6: 6px; /* menu row, chip, tooltip, inline code */
+  --r-7: 7px; /* button, field, select, icon button */
+  --r-8: 8px; /* tree row, tab top, option row, well */
+  --r-10: 10px; /* diff, code block, terminal well, toast, menu */
+  --r-12: 12px; /* floating panels (sidebar, popovers), cards */
+  --r-14: 14px; /* composer, own message, dialog, sheet */
+  --r-round: 999px;
+
+  /* Motion */
+  --dur-fade: 200ms;
+  --dur-gauge: 300ms;
+  --dur-breathe: 3.6s;
+  --dur-swell: 4.8s;
+  --dur-spin: 1s;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in-out: ease-in-out;
+  --delay-tooltip: 500ms;
+  --delay-spinner: 400ms;
+  --delay-skeleton: 300ms;
+  --lift: 4px; /* an appearing layer rises this far while it fades in */
+}
+
+/* ---------------------------------------------------------------- 2. Semantic: Nunchiro light */
+:root,
+:root[data-theme='light'] {
+  --page: var(--stone-50); /* chrome ground: tab strip, title bar, rails */
+  --panel: var(--stone-25); /* reading surface: chat, terminal, the open tab */
+  --raised: var(--stone-0); /* cards, dialogs, composer */
+  --text: var(--stone-900);
+  --muted: var(--stone-600); /* 4.5:1 on page, panel, raised, the selected row and both diff tints */
+  --faint: var(--stone-500); /* 3:1, marks and control edges only, never text */
+  --line: var(--stone-150); /* the few hairlines: diff, composer, fields */
+  --tint-1: rgb(35 45 40 / 0.05); /* hover, field fill, wells */
+  --tint-2: rgb(35 45 40 / 0.085); /* selected row, secondary button, key chip */
+  --tint-3: rgb(35 45 40 / 0.13); /* secondary hover, gauge track, switch off */
+  --glass-chrome: rgb(241 242 240 / 0.62); /* sidebar, status bar */
+  --glass-float: rgb(255 255 255 / 0.82); /* menus, tooltips, popovers */
+  --glass-hi: rgb(255 255 255 / 0.7); /* the glass rim */
+  --accent: var(--tide-550); /* focus ring, 3:1 */
+  --light-run: var(--tide-500); /* working dot, 3:1 */
+  --light-you: var(--ember-500); /* needs-you dot and ring, 3:1 */
+  --you-glow: var(--ember-400); /* needs-you glow and wash: decoration only */
+  --you-text: var(--ember-700); /* needs-you words, 4.5:1 incl. the wash */
+  --primary: var(--ember-700); /* the one warm button */
+  --on-primary: var(--stone-0);
+  --light-bad: var(--rose-500); /* failed dot, 3:1 */
+  --bad-text: var(--rose-600); /* failed words, destructive labels, 4.5:1 */
+  --light-done: var(--moss-500); /* done ring, 3:1 */
+  --ok-text: var(--moss-650); /* done and added words, 4.5:1 */
+  --light-warn: var(--amber-500); /* near a limit: arc, ring, redline, 3:1 */
+  --warn-text: var(--amber-700); /* near-limit figure, 4.5:1 */
+  --chat-code: var(--plum-500);
+  --syn-keyword: var(--berry-500);
+  --syn-string: var(--sea-500);
+  --diff-add: var(--moss-50);
+  --diff-del: var(--rose-50);
+  --knob: var(--stone-0);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.08), 0 0 0 0.5px rgb(0 0 0 / 0.06);
+  --shadow-float: 0 12px 32px rgb(0 0 0 / 0.14), 0 1px 3px rgb(0 0 0 / 0.08);
+  --scrim: rgb(0 0 0 / 0.3);
+  --face-filter: none;
+  color-scheme: light;
+}
+
+/* ---------------------------------------------------------------- 2. Semantic: Nunchiro dark */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --page: var(--graphite-950);
+    --panel: var(--graphite-900);
+    --raised: var(--graphite-850);
+    --text: var(--graphite-100);
+    --muted: var(--graphite-400);
+    --faint: var(--graphite-500);
+    --line: var(--graphite-800);
+    --tint-1: rgb(255 255 255 / 0.05);
+    --tint-2: rgb(255 255 255 / 0.09);
+    --tint-3: rgb(255 255 255 / 0.13);
+    --glass-chrome: rgb(24 26 29 / 0.6);
+    --glass-float: rgb(34 38 42 / 0.8);
+    --glass-hi: rgb(255 255 255 / 0.07);
+    --accent: var(--tide-300);
+    --light-run: var(--tide-300);
+    --light-you: var(--ember-300);
+    --you-glow: var(--ember-300);
+    --you-text: var(--ember-300);
+    --primary: var(--ember-300);
+    --on-primary: var(--graphite-900);
+    --light-bad: var(--rose-300);
+    --bad-text: var(--rose-300);
+    --light-done: var(--moss-300);
+    --ok-text: var(--moss-300);
+    --light-warn: var(--amber-300);
+    --warn-text: var(--amber-300);
+    --chat-code: var(--plum-300);
+    --syn-keyword: var(--berry-300);
+    --syn-string: var(--sea-300);
+    --diff-add: var(--moss-950);
+    --diff-del: var(--rose-950);
+    --knob: var(--graphite-50);
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 0 0 0.5px rgb(255 255 255 / 0.06);
+    --shadow-float: 0 12px 32px rgb(0 0 0 / 0.45), 0 1px 3px rgb(0 0 0 / 0.3);
+    --scrim: rgb(0 0 0 / 0.45);
+    --face-filter: saturate(0.92) brightness(0.9);
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --page: var(--graphite-950);
+  --panel: var(--graphite-900);
+  --raised: var(--graphite-850);
+  --text: var(--graphite-100);
+  --muted: var(--graphite-400);
+  --faint: var(--graphite-500);
+  --line: var(--graphite-800);
+  --tint-1: rgb(255 255 255 / 0.05);
+  --tint-2: rgb(255 255 255 / 0.09);
+  --tint-3: rgb(255 255 255 / 0.13);
+  --glass-chrome: rgb(24 26 29 / 0.6);
+  --glass-float: rgb(34 38 42 / 0.8);
+  --glass-hi: rgb(255 255 255 / 0.07);
+  --accent: var(--tide-300);
+  --light-run: var(--tide-300);
+  --light-you: var(--ember-300);
+  --you-glow: var(--ember-300);
+  --you-text: var(--ember-300);
+  --primary: var(--ember-300);
+  --on-primary: var(--graphite-900);
+  --light-bad: var(--rose-300);
+  --bad-text: var(--rose-300);
+  --light-done: var(--moss-300);
+  --ok-text: var(--moss-300);
+  --light-warn: var(--amber-300);
+  --warn-text: var(--amber-300);
+  --chat-code: var(--plum-300);
+  --syn-keyword: var(--berry-300);
+  --syn-string: var(--sea-300);
+  --diff-add: var(--moss-950);
+  --diff-del: var(--rose-950);
+  --knob: var(--graphite-50);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 0 0 0.5px rgb(255 255 255 / 0.06);
+  --shadow-float: 0 12px 32px rgb(0 0 0 / 0.45), 0 1px 3px rgb(0 0 0 / 0.3);
+  --scrim: rgb(0 0 0 / 0.45);
+  --face-filter: saturate(0.92) brightness(0.9);
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------- 2b. Roles made from roles (every theme) */
+:root {
+  --focus-ring: var(--accent);
+  --focus-width: 2px;
+  --primary-hover: color-mix(in srgb, var(--primary) 90%, var(--text));
+  --primary-press: color-mix(in srgb, var(--primary) 82%, var(--text));
+  --you-wash: linear-gradient(90deg, color-mix(in srgb, var(--you-glow) 14%, transparent), color-mix(in srgb, var(--you-glow) 4%, transparent) 75%);
+  --you-ring: 0 0 0 3px color-mix(in srgb, var(--you-glow) 22%, transparent), 0 0 10px 2px color-mix(in srgb, var(--you-glow) 55%, transparent);
+  --card-you: 0 0 0 1px color-mix(in srgb, var(--you-glow) 50%, transparent), 0 8px 26px -6px color-mix(in srgb, var(--you-glow) 38%, transparent);
+  --card-you-peak: 0 0 0 1px color-mix(in srgb, var(--you-glow) 70%, transparent), 0 10px 34px -4px color-mix(in srgb, var(--you-glow) 55%, transparent);
+  --redline: color-mix(in srgb, var(--light-warn) 45%, transparent);
+  --glass-blur: blur(24px) saturate(160%);
+  --glass-edge: inset 0 1px 0 var(--glass-hi), inset 0 0 0 0.5px var(--glass-hi), 0 0 0 0.5px color-mix(in srgb, var(--text) 12%, transparent);
+  --glass-shadow: var(--glass-edge), var(--shadow-float);
+  --scrollbar-thumb: color-mix(in srgb, var(--text) 24%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--text) 40%, transparent);
+  /* what parts read for glass; reduced transparency swaps them below */
+  --glass-chrome-fill: var(--glass-chrome);
+  --glass-float-fill: var(--glass-float);
+  --glass-filter: var(--glass-blur);
+}
+
+/* ---------------------------------------------------------------- 3. Component */
+:root {
+  /* window */
+  --window-inset: 8px; /* glass panels float this far from the window edge */
+  --titlebar-h: 38px;
+  --sidebar-w: 280px; /* 220 to 420 by drag */
+  --sidebar-min: 220px;
+  --sidebar-max: 420px;
+  --rail-w: 44px;
+  --tabs-h: 36px;
+  --header-h: 56px;
+  --statusbar-h: 28px;
+  --chat-col: 680px;
+  --chat-gutter: 32px;
+  --side-panel-w: 360px;
+  --traffic-light-x: 20px;
+  --traffic-light-y: 20px;
+  /* controls */
+  --btn-h: 28px;
+  --btn-h-sm: 24px;
+  --btn-pad: 12px;
+  --btn-pad-sm: 8px;
+  --btn-r: var(--r-7);
+  --field-h: 28px;
+  --field-pad: 10px;
+  --field-r: var(--r-7);
+  --ib: 28px; /* icon button */
+  --ib-sm: 24px;
+  --icon: 16px;
+  --icon-inline: 12px; /* inside a text line, fold carets */
+  --icon-stroke: 1.5px; /* drawn icons the Octicons set lacks */
+  --kbd-h: 16px;
+  --kbd-r: var(--r-4);
+  --check: 16px;
+  --switch-w: 30px;
+  --switch-h: 18px;
+  --knob-d: 14px;
+  --seg-h: 28px;
+  --seg-r: 9px;
+  --hit: 24px; /* the smallest pointer target (WCAG 2.5.8) */
+  /* rows */
+  --row-h: 34px;
+  --row-h-compact: 24px;
+  --row-r: var(--r-8);
+  --row-pad-l: 24px;
+  --proj-h: 28px;
+  --dot: 8px;
+  --pip: 6px;
+  --opt-h: 32px;
+  /* tabs (share the strip 180 to 68, open tab whole) */
+  --tab-h: 30px;
+  --tab-max: 180px;
+  --tab-min: 68px;
+  --tab-r: var(--r-8) var(--r-8) 0 0;
+  /* menus and floating layers */
+  --menu-row: 26px;
+  --menu-row-r: var(--r-6);
+  --menu-pad: 4px;
+  --menu-r: var(--r-10);
+  --menu-w-min: 200px;
+  --menu-w-max: 320px;
+  --popover-r: var(--r-12);
+  --popover-w: 300px;
+  --tooltip-r: var(--r-6);
+  --tooltip-w-max: 260px;
+  --float-offset: 6px;
+  /* cards and surfaces */
+  --card-r: var(--r-12);
+  --card-pad: 12px 12px 12px 16px;
+  --diff-r: var(--r-10);
+  --composer-r: var(--r-14);
+  --dialog-r: var(--r-14);
+  --dialog-w: 400px;
+  --sheet-w: 480px;
+  --toast-h: 36px;
+  --toast-r: var(--r-10);
+  --chip-h: 22px;
+  --badge-h: 18px;
+  --count-h: 16px;
+  /* gauges */
+  --arc-w: 24px;
+  --arc-h: 14px;
+  --arc-stroke: 2.2px;
+  --ring-d: 20px;
+  --ring-stroke: 2.5px;
+  --limit-at: 80; /* percent where a gauge turns --light-warn */
+  /* faces: tile radius is 28% of the size */
+  --face-16: 16px;
+  --face-24: 24px;
+  --face-32: 32px;
+  --face-48: 48px;
+  --face-64: 64px;
+}
+
+/* ---------------------------------------------------------------- Preferences */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fade: 0s;
+    --dur-gauge: 0s;
+    --lift: 0px;
+    /* parts also set animation: none on the breathing dot, the swell and spinners (dots still, glow at its peak) */
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-chrome-fill: var(--page);
+    --glass-float-fill: var(--raised);
+    --glass-filter: none;
+  }
+}
+@media (prefers-contrast: more) {
+  :root {
+    --line: var(--faint);
+    --glass-edge: inset 0 0 0 1px var(--faint);
+  }
+}
+
+/* ---------------------------------------------------------------- 4. Old names whose meaning changed */
+/* Listed with every selector the old file uses, so these win over its light and dark blocks. Each is in README.md
+   with its replacement; delete a line once nothing reads it. A catalog theme's inline values (themes/apply.ts) still
+   win over this block until themes/derive.ts writes the new roles (migration.md, slice 1). */
+:root,
+:root[data-theme='light'],
+:root[data-theme='dark'],
+:root:not([data-theme='light']) {
+  --you: var(--you-text); /* was the your-turn hue for words and fills; words now --you-text, marks --light-you */
+  --you-bg: color-mix(in srgb, var(--you-glow) 12%, var(--panel));
+  --bad: var(--light-bad);
+  --ok: var(--light-done);
+  --done: var(--light-done); /* was purple; "done" is now the moss ring */
+  --idle: var(--faint);
+  --warn: var(--light-warn);
+  --light-limited: var(--light-warn);
+  --hover: var(--tint-1);
+  --on-status: var(--panel);
+  --ring-focus: var(--accent); /* the neutral grey ring is replaced by the accent ring */
+  --control-bg: var(--primary); /* the ink primary is replaced by the warm primary */
+  --control-text: var(--on-primary);
+  --control-quiet-bg: var(--tint-2);
+  --control-quiet-hover: var(--tint-3);
+  --select-bg: var(--tint-2);
+  --select-text: var(--text);
+  --link-text: var(--text);
+  --error: var(--bad-text);
+  --glass-bg: var(--glass-float);
+  --glass-fill: var(--glass-float-fill);
+  --glow-you: 0 0 10px 1px color-mix(in srgb, var(--you-glow) 75%, transparent);
+  --glow-bad: none; /* failed does not glow */
+  --glow-limited: none; /* near a limit does not glow; the arc turns --light-warn */
+  --motion-breathe: var(--dur-breathe);
+  --motion-base: var(--dur-fade);
+  --tree-you: var(--light-you);
+  --tree-bad: var(--light-bad);
+  --tree-run: var(--light-run);
+  --tree-idle: var(--faint);
+  --tree-mut: var(--muted);
+  --row-radius: var(--r-8); /* rows were 6 */
+  --font-code: var(--font-mono);
+}
+:root,
+:root[data-theme='light'] {
+  --run: var(--tide-650); /* legacy: --run is still read as words (tool names, links); 4.5:1. The working dot is --light-run */
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --run: var(--tide-300);
+  }
+}
+:root[data-theme='dark'] {
+  --run: var(--tide-300);
+}
