@@ -1,0 +1,36 @@
+# ci-guard: a pull request that changes the gate itself (.github/ or the ratchet scripts) is held until the owner's
+# coordinator has reviewed it and set the `ci-reviewed` label. On `pull_request` GitHub runs the PR's own ci.yml, so a PR
+# could drop a gate step and still pass; `pull_request_target` runs THIS file from main, which a PR cannot edit for its
+# own run. Safe with forks: it checks out no PR code and only reads the file list
+# with a read-only token.
+name: ci-guard
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  ci-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Changes to the gate need the ci-reviewed label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -euo pipefail
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
+          gate=$(printf '%s\n' "$files" | grep -E '^(\.github/|scripts/(raw-literal-ratchet|file-size-ratchet|raw-literals)\.sh$)' || true)
+          if [ -z "$gate" ]; then echo "no gate files changed"; exit 0; fi
+          echo "gate files changed:"; printf '  %s\n' $gate
+          if printf '%s' "$LABELS" | grep -q '"ci-reviewed"'; then echo "ci-reviewed label set"; exit 0; fi
+          echo "::error::this pull request changes the gate; it merges only after review sets the ci-reviewed label"
+          exit 1

@@ -43,6 +43,7 @@ pr-create.spec.ts
 board.spec.ts
 settings.spec.ts
 settings-search.spec.ts
+settings-one-head.spec.ts
 
 # the existing gate's pixel and dead-click checks and the browser-access pair
 visual-conformance.spec.ts
@@ -69,3 +70,18 @@ i18n-translations.spec.ts | cjk_punctuation
 i18n-remaining-catalogue.spec.ts
 i18n-chat-catalogue.spec.ts
 i18n-key-sets.spec.ts
+
+# onboarding adds the picked folder without starting; Skills & hooks opens at its top
+onboarding-folder-skills-top.spec.ts
+# a waiting question: its option numbers answer it from an empty composer, and the hint says so
+sidechat-card-1097.spec.ts | item2_empty_composer_digit|digit_hint_in_empty_composer
+# remembered choices: New worktree per project in the new-session popover, Search's scope
+remember-choices.spec.ts
+# a shell beside the agent: the Terminal icon opens one in the agent's folder, New terminal too
+shell-beside-agent.spec.ts
+
+# a registered Settings page keeps the focus on its title after a nav click
+settings-registered-title-focus.spec.ts
+
+# task dependencies on the Team board: waiting, blocking, freed, stuck and early cards; the drawer and the Wait for menu
+task-deps.spec.ts

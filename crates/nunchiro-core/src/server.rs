@@ -289,9 +289,10 @@ fn serve_locked(home: &Path) -> Result<(), String> {
     let observer_registry = sessions.clone();
     let observer_stopping = stopping.clone();
     let observer = thread::spawn(move || {
-        // S9 r3: as the tick: every TICK while output or a transcript line came in the last ACTIVE, else every IDLE_TICK.
+        // S9 r3: as the tick: every TICK while output or a transcript line came in the last ACTIVE, else every OBSERVER_IDLE.
         let wake = crate::pty::Wake::subscribe().ok();
         let mut active_until = std::time::Instant::now() + ACTIVE;
+        let mut output_seen = crate::pty::output_seq();
         while !observer_stopping.load(Ordering::SeqCst) {
             let jobs = {
                 let Ok(mut registry) = observer_registry.lock() else {
@@ -322,14 +323,18 @@ fn serve_locked(home: &Path) -> Result<(), String> {
             let period = if std::time::Instant::now() < active_until {
                 TICK
             } else {
-                IDLE_TICK
+                OBSERVER_IDLE
             };
             // Only an idle wait ends on output: while active, output keeps it at TICK, never faster.
             match &wake {
-                Some(wake) if period == IDLE_TICK => wait_readable(&[wake.fd()], period),
+                Some(wake) if period == OBSERVER_IDLE => wait_readable(&[wake.fd()], period),
                 _ => thread::sleep(period),
             }
-            if wake.as_ref().is_some_and(crate::pty::Wake::drain) {
+            // A window's job reply or layout command rings too: only agent output makes the observer active.
+            if wake.as_ref().is_some_and(crate::pty::Wake::drain)
+                && output_seen != crate::pty::output_seq()
+            {
+                output_seen = crate::pty::output_seq();
                 active_until = std::time::Instant::now() + ACTIVE;
             }
         }
@@ -361,6 +366,7 @@ fn serve_locked(home: &Path) -> Result<(), String> {
     // end or a holder's), else every IDLE_TICK. Output and holder ends ring `wake`, which this loop waits on.
     let wake = crate::pty::Wake::subscribe().ok();
     let mut active_until = std::time::Instant::now() + ACTIVE;
+    let mut output_seen = crate::pty::output_seq();
     while !stopping.load(Ordering::SeqCst) {
         // V2.5-34i: SIGTERM, SIGINT or SIGHUP takes the `exit` path (agents keep running for the next core, no
         // sign-in login outlives this one), then the core winds down as after an `exit` request.
@@ -369,8 +375,14 @@ fn serve_locked(home: &Path) -> Result<(), String> {
             stopping.store(true, Ordering::SeqCst);
             continue;
         }
-        if wake.as_ref().is_some_and(crate::pty::Wake::drain) {
+        // Agent output makes the tick active for ACTIVE; any other ring (a changed board file, a memory wait, a
+        // window's job reply) asks for one prompt tick only, so a window's polls never hold the tick at TICK.
+        let rung = wake.as_ref().is_some_and(crate::pty::Wake::drain);
+        if rung && output_seen != crate::pty::output_seq() {
+            output_seen = crate::pty::output_seq();
             active_until = std::time::Instant::now() + ACTIVE;
+        } else if rung {
+            active_until = active_until.max(std::time::Instant::now() + TICK);
         }
         let period = if std::time::Instant::now() < active_until {
             TICK
@@ -576,9 +588,8 @@ fn refuse_stopping(stream: &mut UnixStream, quit: bool) {
     }
 }
 
-/// The owner's request for another machine: the CLI's `--machine`, and the window's New session on a machine (ticket
-/// 980; real SSH look 11-17: the window's own loop had no arm for it, so every start there was refused with "transport
-/// requires owner dispatch"). A local owner-only operation is never forwarded.
+/// The owner's request for another machine (the CLI's `--machine`, the window's New session on one; ticket 980).
+/// A local owner-only operation is never forwarded; the window/owner APIs below stay local (v1a-06 merge).
 pub(crate) fn remote_from_owner(
     sessions: &Mutex<Sessions>,
     home: &Path,
@@ -587,7 +598,6 @@ pub(crate) fn remote_from_owner(
     request: Request,
     stopping: &AtomicBool,
 ) -> Response {
-    // v1a-06 merge: these new window/owner APIs stay local, never SSH-forwarded.
     if matches!(
         request,
         Request::ChatPage { .. }
@@ -633,6 +643,7 @@ pub(crate) fn remote_from_owner(
             | Request::AcpAgentSignInState { .. }
             | Request::AcpAgentSignInCancel { .. }
             | Request::AcpAgentSignOut { .. }
+            | Request::AcpAgentTry { .. }
             | Request::AgentUpdateStart { .. } // ticket 358: an installer runs here
             | Request::AgentUpdateCancel { .. }
             | Request::AgentUpdateState
@@ -649,6 +660,7 @@ pub(crate) fn remote_from_owner(
             | Request::WidgetRun { .. } // v1b-19
             | Request::WidgetAct { .. } // v1b-20
             | Request::WidgetPage { .. } // v1b-22
+            | Request::Plugin { .. } // this Mac's plugins, the owner's alone
             | Request::ImagePut { .. } // v1b-05
             | Request::AccountList // v2-2a
             | Request::AccountCheck { .. }
@@ -975,6 +987,15 @@ fn connection(
                 return crate::machines::status(sessions, home, label, retry);
             }
             Request::Forwarded { caller, request } if owner => {
+                // Another machine's agent: this Mac's plugin checks hold for what it sends and starts here.
+                let mut request = request;
+                crate::plugins::check_request(
+                    home,
+                    crate::plugins::Asker::Agent,
+                    "",
+                    &mut request,
+                    true,
+                )?;
                 return crate::machines::forwarded(sessions, caller, *request, stopping);
             }
             _ => {}
@@ -1111,7 +1132,17 @@ fn connection(
                 {
                     return Err("operation not granted to a token on another machine".into());
                 }
+                // A plugin's checks (messages, new sessions) before the request leaves this Mac, off the lock.
+                let caller = sessions.agent_caller(&env.token)?;
                 drop(sessions);
+                let mut request = request;
+                crate::plugins::check_request(
+                    home,
+                    crate::plugins::Asker::Agent,
+                    &caller.id,
+                    &mut request,
+                    true,
+                )?;
                 return crate::grants::dispatch_remote(
                     registry, &env.token, machine, *request, stopping,
                 );
@@ -1121,6 +1152,32 @@ fn connection(
                 return reply;
             }
             sessions.check_agent(&caller, &env.request)?;
+            // A plugin's check before a message an agent or a token sends, once the caller may send it, off the lock
+            // (a sandbox run of up to 5 s per check). The owner's socket and the window are no session caller.
+            if crate::plugins::sends_text(&env.request) {
+                // Only a message that would be taken reaches a check: its seat or room first.
+                match &env.request {
+                    Request::RoomSend { .. } | Request::RoomReply { .. } => {
+                        sessions.room_may(&caller, &env.request)?;
+                    }
+                    Request::AgentPrompt { id, .. }
+                    | Request::AgentSend { id, .. }
+                    | Request::SendText { id, .. }
+                    | Request::SteerNow { id, .. } => {
+                        sessions.session_of(id)?;
+                    }
+                    _ => {}
+                }
+                let asker = match caller.id.starts_with(crate::tokens::CALLER) {
+                    true => crate::plugins::Asker::Token,
+                    false => crate::plugins::Asker::Agent,
+                };
+                drop(sessions);
+                crate::plugins::check_request(home, asker, &caller.id, &mut env.request, false)?;
+                sessions = registry
+                    .lock()
+                    .map_err(|_| "session registry unavailable")?;
+            }
             Some(caller)
         };
         // Ticket 305: a request that waited on the registry lock while a Stop or Exit ran has not run, so it gets the
@@ -1144,9 +1201,8 @@ fn connection(
                 .map_err(|_| "session registry unavailable")?
                 .handle(Request::TreeEdit { edit });
         }
-        // Ticket 1040: as the added folder above (owner only).
         if caller.is_none() && matches!(env.request, Request::ProjectFolders) {
-            drop(sessions);
+            drop(sessions); // ticket 1040: owner only, as above
             return crate::sessions::locate::folders(registry);
         }
         if caller.is_none()
@@ -1191,6 +1247,10 @@ fn connection(
         ) {
             return crate::widgets::handle(home, sessions, env.request);
         }
+        // Owner only, like the widget requests (`check_agent` refuses session callers and tokens).
+        if matches!(env.request, Request::Plugin { .. }) {
+            return crate::plugins::handle(home, sessions, env.request);
+        }
         // v1b-20: owner only, like the two above; the act locks the registry itself.
         if matches!(env.request, Request::WidgetAct { .. }) {
             drop(sessions);
@@ -1234,9 +1294,8 @@ fn connection(
             drop(sessions);
             return crate::git_providers::handle(registry, Some(stopping), login, logout);
         }
-        // v2-2c: reads transcripts, so off the registry lock.
         if let Request::AccountUsage { limits } = env.request {
-            drop(sessions);
+            drop(sessions); // v2-2c: reads transcripts, so off the registry lock
             let reply = crate::usage::reply(home, limits);
             crate::account_near::after_usage(
                 registry,
@@ -1314,6 +1373,7 @@ fn connection(
                 | Request::AcpAgentSignInState { .. }
                 | Request::AcpAgentSignInCancel { .. }
                 | Request::AcpAgentSignOut { .. }
+                | Request::AcpAgentTry { .. }
         ) {
             drop(sessions);
             return crate::acp::setup(home, registry, Some(stopping), env.request);
@@ -1420,6 +1480,22 @@ fn connection(
             receipt,
         } = env.request
         {
+            // A plugin's check before a new session, off the lock (a sandbox run of up to 5 s); the owner's
+            // `--anyway` passes it, as it passes a memory hold.
+            if !anyway {
+                let asker = match &caller {
+                    None => crate::plugins::Asker::Owner,
+                    Some(c) if c.id.starts_with(crate::tokens::CALLER) => {
+                        crate::plugins::Asker::Token
+                    }
+                    Some(_) => crate::plugins::Asker::Agent,
+                };
+                drop(sessions);
+                crate::plugins::check_start(home, asker, &session)?;
+                sessions = registry
+                    .lock()
+                    .map_err(|_| "session registry unavailable")?;
+            }
             // Ticket 573 slice 2 (Orca): a receipt is the caller's own; a retry waits out a start still running with it.
             let mut claim = Receipt(None);
             if let Some(receipt) = receipt {
@@ -1887,6 +1963,9 @@ const TICK: Duration = Duration::from_millis(50);
 /// S9 r3: the tick once nothing moved for ACTIVE: what it still finds then is an agent that ended without a last output
 /// (seen in the process table) or a clock (a stale mark, a limit resume), which this bounds.
 const IDLE_TICK: Duration = Duration::from_millis(250);
+/// Idle CPU: the transcript observer's idle wait. Agents write their transcripts while they draw output, which
+/// ends the wait at once; a line written with no output (rare) is read within this.
+const OBSERVER_IDLE: Duration = Duration::from_secs(1);
 /// S9 r3: how long the tick stays at TICK after a request, output or an agent's end.
 const ACTIVE: Duration = Duration::from_secs(2);
 /// S9: blocks until one of `fds` is readable (an accept is waiting) or `timeout` passes; an accept loop's idle wait.

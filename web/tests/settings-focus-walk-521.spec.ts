@@ -1,5 +1,7 @@
-// Ticket 521 item 1: Tab and Shift+Tab never leave the Settings window, on any page of its nav. Focus is sampled on every
-// animation frame and after every key, so a leak that a timer repairs a moment later still fails.
+// Ticket 521 item 1: Tab and Shift+Tab never leave the Settings window, on any page of its nav. Every focus move is
+// recorded as it happens (focusin) and focus is also sampled on every animation frame, so a leak that a timer repairs a
+// moment later still fails. The page is asked once per lap, not after every key: a hosted WebKit runner took longer than
+// the test's 4 minutes for the round trips alone.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
@@ -44,6 +46,11 @@ test('settings_focus_walk_521: Tab and Shift+Tab stay in the Settings window on 
       requestAnimationFrame(sample);
     };
     requestAnimationFrame(sample);
+    document.addEventListener('focusin', (e) => {
+      const panel = document.querySelector('.ovl-panel');
+      const at = e.target as Element | null;
+      if (panel && !(at instanceof Node && panel.contains(at))) w.__leaks.push(at ? `${at.tagName.toLowerCase()}${at.className ? '.' + String(at.className).split(' ')[0] : ''}` : 'none');
+    }, true);
   });
   await openWindow(app);
   await openSettings(app);
@@ -64,14 +71,9 @@ test('settings_focus_walk_521: Tab and Shift+Tab stay in the Settings window on 
         for (const dir of [key, `Shift+${key}`]) {
           await start.focus();
           await leaks(app);
-          for (let i = 0; i < n; i++) {
-            await app.keyboard.press(dir);
-            const out = await leaks(app);
-            if (out.length) {
-              found.push(`${id} from ${from} ${dir} press ${i + 1}: ${[...new Set(out)].join(', ')}`);
-              break;
-            }
-          }
+          for (let i = 0; i < n; i++) await app.keyboard.press(dir);
+          const out = await leaks(app);
+          if (out.length) found.push(`${id} from ${from} ${dir} within ${n} presses: ${[...new Set(out)].join(', ')}`);
         }
       }
     }

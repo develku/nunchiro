@@ -11,6 +11,7 @@ import { basename, type ListedWorktree } from '../tree';
 import type { Session } from '../types';
 import { askNewBot, eyesOf, onHand, type Bot } from './bots';
 import { Face } from './Face';
+import { PLAIN } from '../plainText';
 import './bots.css';
 
 type Props = { core: CoreClient; t: T; list: ListedWorktree[]; sessions: Session[]; team: (path: string, lead: string) => Promise<unknown>; open: (id: string) => void };
@@ -83,7 +84,7 @@ function Dialog({ core, t, sessions, team: join, open, worktree, onClose }: Prop
                 </label>
               ))}
             </div>
-            <textarea className="nb-job" aria-label={t('bots.hand.goal')} placeholder={`${t('bots.hand.goal')} ${t('bots.hand.goalPh')}`} value={goal} maxLength={2000} rows={2} disabled={busy} onChange={(e) => setGoal(e.target.value)} />
+            <textarea {...PLAIN} className="nb-job" aria-label={t('bots.hand.goal')} placeholder={`${t('bots.hand.goal')} ${t('bots.hand.goalPh')}`} value={goal} maxLength={2000} rows={2} disabled={busy} onChange={(e) => setGoal(e.target.value)} />
           </>
         )}
         <ErrorLine t={t} error={error ? rawError(error) : ''} />

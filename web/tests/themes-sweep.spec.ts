@@ -5,6 +5,7 @@
 // keeps a second set (before/after).
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { REPO, expect, openWindow, test } from './fixtures';
@@ -20,6 +21,11 @@ import { artifactServer } from './sandbox-server';
 import { openQuiet, seed as treeSeed } from './tree-seed';
 import { patchSnapshots } from './visual/compare';
 import { lowContrast } from './contrast-scan';
+import { agentsToml, ownerOk, tomlEntry } from './acp-fakes';
+import { openAdd, openRow } from './accounts-rows';
+import { leaderScene, mates, openSeat, openTeam, repo as leadRepo, tokenClaude } from './leader-990';
+import { shim as ghShim, URL as PR_URL } from './pr-shim';
+import { openSettings } from './settings-modal';
 
 const outDir = (browser: string) => path.join(REPO, '.scratch', `${process.env.SWEEP_OUT ?? 'sweep'}${browser === 'webkit' ? '-webkit' : ''}`);
 const SCHEMES = ['dark', 'light'] as const;
@@ -33,6 +39,13 @@ async function shoot(app: Page, scheme: string, name: string, target?: Locator) 
   const out = outDir(test.info().project.name);
   const file = path.join(out, scheme, `${name}.png`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
+  // The kept sweep is public (docs/design/sweep): the machine's own paths (the test homes live under the checkout) read "~".
+  await app.evaluate((roots) => {
+    const mask = (s: string) => roots.reduce((t, r) => t.split(r).join('~'), s);
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) if (roots.some((r) => n!.nodeValue?.includes(r))) n.nodeValue = mask(n.nodeValue!);
+    for (const i of document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea')) if (roots.some((r) => i.value.includes(r))) i.value = mask(i.value);
+  }, [fs.realpathSync(path.join(REPO, '.scratch')), fs.realpathSync(REPO), REPO, fs.realpathSync(os.homedir()), os.homedir()].sort((a, b) => b.length - a.length));
   if (target) await target.first().screenshot({ path: file, animations: 'disabled' });
   else await app.screenshot({ path: file, animations: 'disabled' });
   const low = await app.evaluate(lowContrast);
@@ -618,4 +631,132 @@ test('552 crash screen', { tag: '@shots' }, async ({ app }) => {
   await app.goto('/');
   await expect(app.getByRole('alert').filter({ hasText: 'This window hit a problem' })).toBeVisible();
   await both(app, 'crash-screen', undefined, undefined, false);
+});
+
+// Pages and views added after 11-15 (scorecard DE2): the Bots view, the Team view, the PR view, git actions in the Diff
+// dock, an ACP agent's card and the Accounts steps, and an ACP agent kind in New tab. The scenes are the specs' own
+// (bots-1168, leader-tasks-990, pr-view, git-actions, accounts-acp-signin).
+async function openBots(app: Page) {
+  await openSettings(app);
+  await app.locator('.settings > nav button[data-page="team"]').click();
+  await app.locator('.sbody [data-open-bots]').click();
+  const view = app.getByRole('dialog', { name: 'Bots' }).locator('[data-bots]');
+  await expect(view).toBeVisible();
+  return view;
+}
+
+test('bots: the lead header, the roster, a bot page and its Models fold, New bot', { tag: '@shots' }, async ({ app, core }) => {
+  tokenClaude(core);
+  const project = leadRepo(core, 'nunchiro');
+  mates(core, [
+    { id: 'bot-mina', name: 'Mina', job: 'Runs your office: brief, reply drafts, follow-ups.', lead: true },
+    { id: 'bot-dalsu', name: 'Dalsu', job: 'Splits goals into tasks, staffs and reviews them.', project, lead: true },
+    { id: 'bot-ori', name: 'Ori', job: "Reviews every lead's work before it lands.", project },
+    { id: 'bot-bom', name: 'Bom', job: 'Writes release notes from what landed.' },
+  ]);
+  await openWindow(app, {}, core);
+  await openSeat(app, core, 'Dalsu');
+  await both(app, 'bots-lead-header');
+  const view = await openBots(app);
+  await both(app, 'bots-roster');
+  await view.locator('[data-bot="bot-mina"]').click();
+  await expect(app.locator('[data-bot-page="bot-mina"] .bot-soul')).not.toBeEmpty();
+  await both(app, 'bots-page');
+  await app.locator('[data-bot-page="bot-mina"] details[data-bot-models] summary').click();
+  await both(app, 'bots-page-models');
+  await app.getByRole('button', { name: 'Close Bots' }).click();
+  await (await openBots(app)).locator('[data-bots-new]').click();
+  await expect(app.getByRole('dialog', { name: 'New bot' })).toBeVisible();
+  await both(app, 'bots-new');
+});
+
+test('team view: the side widget and the wide tab', { tag: '@shots' }, async ({ app, core }) => {
+  test.setTimeout(120_000);
+  await leaderScene(app, core);
+  const side = await openTeam(app);
+  await expect(side.getByRole('button', { name: 'Actions for palette' })).toBeVisible({ timeout: 15_000 });
+  await both(app, 'team-side');
+  await side.getByRole('button', { name: 'Open as a tab' }).click();
+  await expect(app.locator('.pane > .teamv')).toHaveAttribute('data-wide');
+  await both(app, 'team-wide');
+});
+
+chatTest('pr view: off, on, and the PRs tab', { tag: '@shots' }, async ({ page: app, chatCore }) => {
+  await app.addInitScript(() => localStorage.setItem('nunchiro.chatView.v2', 'verbose'));
+  ghShim(chatCore.home);
+  const s = chatCore.chat('alpha');
+  append(s.file, rec.user('open a pr'), rec.use('t1', 'Bash', { command: 'gh pr create' }), rec.result('t1', PR_URL));
+  await openChat(app, s.id);
+  const chip = app.locator('.shead .prchip button').first();
+  await expect(chip).toBeVisible({ timeout: 20_000 });
+  await both(app, 'pr-chip', app.locator('.shead'));
+  await chip.click();
+  const dlg = app.getByRole('dialog', { name: 'Pull request' });
+  await expect(dlg.getByText('Turn on live PR status')).toBeVisible();
+  await both(app, 'pr-view-off');
+  await dlg.getByRole('button', { name: 'Turn on' }).click();
+  await expect(dlg.locator('.pr-diff [data-line="add"]')).toBeVisible();
+  await both(app, 'pr-view');
+  await dlg.getByRole('tab', { name: 'PRs' }).click();
+  await expect(dlg.locator('.pr-row')).toHaveCount(6);
+  await both(app, 'pr-list');
+});
+
+test('git actions: the Diff dock button on a worktree branch and its tip', { tag: '@shots' }, async ({ app, core }) => {
+  const origin = core.project('origin.git');
+  git(origin, 'init', '-q', '--bare', '-b', 'main');
+  const project = core.project('demo');
+  git(project, 'init', '-q', '-b', 'main');
+  fs.writeFileSync(path.join(project, 'login.ts'), 'export const a = 1;\n');
+  git(project, 'add', '-A');
+  git(project, 'commit', '-q', '-m', 'init');
+  git(project, 'remote', 'add', 'origin', origin);
+  git(project, 'push', '-q', '-u', 'origin', 'main');
+  git(project, 'remote', 'set-head', 'origin', 'main');
+  fs.copyFileSync(path.join(REPO, 'crates/nunchiro/tests/fixtures/claude-picker'), path.join(core.home, 'bin/claude'));
+  fs.writeFileSync(path.join(core.home, 'bin/gh'), '#!/bin/sh\nexit 1\n', { mode: 0o700 });
+  const w = (core.cli('worktree', 'create', '--project', project, '--branch', 'fix-login', '--no-focus').worktrees as { path: string; branch: string }[]).find((x) => x.branch === 'fix-login')!;
+  const s = core.cli('session', 'start', '--kind', 'claude', '--project', w.path, '--label', 'calm').session as { cwd: string };
+  fs.writeFileSync(path.join(s.cwd, 'login.ts'), 'export const a = 2;\n');
+  await openWindow(app);
+  await app.getByRole('navigation', { name: 'Right bar' }).getByRole('button', { name: 'Diff', exact: true }).click();
+  const button = app.getByRole('complementary', { name: 'Diff' }).getByRole('button', { name: 'Commit, push & PR', exact: true });
+  await expect(button).toBeVisible();
+  await both(app, 'git-actions');
+  await both(app, 'state-git-actions-hover', undefined, button);
+});
+
+test('agent kinds and Accounts steps: an ACP card signing in, a Claude account, Add account, New tab', { tag: '@shots' }, async ({ app, core }) => {
+  test.setTimeout(120_000);
+  const cmd = path.join(core.home, 'bin/acme');
+  const py = path.join(REPO, 'crates/nunchiro-core/tests/fixtures/acp/signin_agent.py');
+  fs.writeFileSync(cmd, `#!/bin/sh\n[ "$1" = --version ] && { echo 'acme 0.9.1'; exit 0; }\nexec /usr/bin/python3 ${py} ${path.join(core.home, 'acme.state')} methods:agent,terminal link:https://acme.example/login hold "$@"\n`, { mode: 0o700 });
+  fs.writeFileSync(agentsToml(core), tomlEntry('acme', cmd));
+  ownerOk(core, { op: 'acp_agent_grant', name: 'acme', hash: ownerOk(core, { op: 'acp_agent_status', name: 'acme' }).view.hash });
+  core.shell(core.project('demo'), 'alpha');
+  await openWindow(app);
+  await openSettings(app);
+  await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name: 'Providers' }).click();
+  await openRow(app, 'acme');
+  const acme = app.locator('#s-accounts .acct-agent[data-agent="acme"]');
+  await expect(acme.getByRole('radiogroup', { name: 'Sign-in method' })).toBeVisible();
+  await acme.scrollIntoViewIfNeeded();
+  await both(app, 'accounts-acp-signin');
+  await acme.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(acme.locator('.prv-row')).toContainText('Signing in');
+  await both(app, 'accounts-acp-signing-in');
+  await acme.getByRole('button', { name: 'Cancel' }).click();
+  await openRow(app, 'claude');
+  const claude = app.locator('#s-accounts .acct-agent[data-agent="claude"]');
+  await claude.scrollIntoViewIfNeeded();
+  await both(app, 'accounts-claude');
+  await openAdd(app, 'claude');
+  await both(app, 'accounts-add');
+  await app.keyboard.press('Escape');
+  await app.keyboard.press('Escape');
+  await app.keyboard.press('Meta+KeyK');
+  await app.getByRole('dialog', { name: 'Command palette' }).locator('[data-command="session.new"]').click();
+  const tab = app.getByRole('dialog', { name: 'New tab' });
+  await expect(tab).toContainText('acme');
+  await both(app, 'dialog-new-tab-agent-kinds');
 });

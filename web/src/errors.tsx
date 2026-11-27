@@ -13,6 +13,10 @@ type T = (key: Key, args?: Record<string, string | number>) => string;
 const LOW_MEMORY = /^(Your|This) Mac is low on memory, so the new session was not started/;
 /** Whether a start was refused by the low-memory hold, which the owner's "Start anyway" passes. */
 export const isLowMemory = (e: unknown) => LOW_MEMORY.test(rawError(e));
+/** plugins.rs STOPPED_START: the owner's start a plugin's check refused ("Quiet hours stopped this start: ..."). */
+const STOPPED = / stopped this start: /;
+/** A start the owner's Start anyway passes: a low-memory hold or a plugin's check. */
+export const isHeld = (e: unknown) => isLowMemory(e) || STOPPED.test(rawError(e));
 /** A window start as sent: `anyway` wraps it as the owner's Start anyway, past a low-memory hold; `wait` as a start that,
  *  when held, waits for memory and starts by itself (its reply is `memory_waiting`, the status bar lists it). */
 export const startOp = (start: { op: 'start'; [k: string]: unknown }, anyway = false, wait = false) =>
@@ -240,7 +244,7 @@ export const errorNote = (text: string, e: unknown, session?: string): Note => (
 /** A window start's low-memory hold as a note naming the agent, with Start anyway (`again`: the same start, past the hold);
  *  null for any other refusal. */
 export const heldNote = (t: T, e: unknown, agent: string, again: () => void): Note | null =>
-  isLowMemory(e) ? { text: t('err.lowMemory.agent', { agent }), details: rawError(e), action: { label: t('err.startAnyway'), tip: t('err.startAnyway.tip'), run: again } } : null;
+  isHeld(e) ? { text: isLowMemory(e) ? t('err.lowMemory.agent', { agent }) : rawError(e), details: rawError(e), action: { label: t('err.startAnyway'), tip: t(isLowMemory(e) ? 'err.startAnyway.tip' : 'plugins.startAnyway.tip'), run: again } } : null;
 
 /** What happened, what to do, and the raw text for Details. `foreign`: the text comes from another program (SSH), so it is
  *  never matched to a sentence about Nunchiro. Anything not listed gets the generic line and keeps its words in Details. */
@@ -304,9 +308,9 @@ export function ErrorLine({ t, error, retry, anyway, className = 'conflict', for
           {t('settings.kit.retry')}
         </button>
       )}
-      {anyway && isLowMemory(error) && (
+      {anyway && isHeld(error) && (
         <span className="held-act">
-          <button type="button" className="btn" data-tip={t('err.startAnyway.tip')} onClick={anyway}>
+          <button type="button" className="btn" data-tip={t(isLowMemory(error) ? 'err.startAnyway.tip' : 'plugins.startAnyway.tip')} onClick={anyway}>
             {t('err.startAnyway')}
           </button>
         </span>

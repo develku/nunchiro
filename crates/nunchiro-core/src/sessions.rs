@@ -95,14 +95,12 @@ struct Settings {
     /// Ticket 1083: the user's home (`$HOME`), read once when the core opens; the unset worktrees folder lies in it.
     #[serde(skip)]
     user_home: PathBuf,
-    // v1a-06
-    machines: BTreeMap<String, crate::machines::Config>,
+    machines: BTreeMap<String, crate::machines::Config>, // v1a-06
     disable_hook_injection: bool,
     worktrees_dir: Option<PathBuf>,
     stale_after_ms: Option<u64>,
     permission_answers: BTreeMap<PathBuf, bool>,
-    // v1a-09
-    session_lifetime: Lifetime,
+    session_lifetime: Lifetime, // v1a-09
     start_at_login: bool,
     // v1b-19: off until the security review (ticket 21) turns it on.
     script_widgets: bool,
@@ -381,8 +379,7 @@ pub struct Sessions {
     window_size: Option<(u16, u16)>,
     // Ticket 32: account folder -> its logout tab (in memory). While that row is listed, no agent starts on the folder.
     pub(crate) logouts: BTreeMap<PathBuf, String>,
-    // v1b-15
-    board_error: Option<String>,
+    board_error: Option<String>, // v1b-15
     // S9: the rows the board last observed, with the `board_key` they were built at.
     board_rows: Option<(u64, Vec<Session>)>,
     // S9: the `board_key` and time of the last board observation.
@@ -435,6 +432,8 @@ pub struct Sessions {
     #[cfg(test)]
     saves: std::sync::atomic::AtomicUsize,
     // Ticket 300 step 2: rows an ended session's cancel walked, and session snapshots taken (tests count lock work).
+    /// Counts saves, requests and transcript reads (`revision`), so a window skips a snapshot nothing changed.
+    revision: std::sync::atomic::AtomicU64,
     #[cfg(test)]
     exit_walked: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
@@ -519,7 +518,37 @@ struct Writes {
 /// after its own, and the Stop reply's drain returns only once an earlier tick's drain is done.
 static DRAINING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 impl Sessions {
+    /// What the snapshot reads moved (a save, a request, a transcript read, a machine's push); `revision` adds the
+    /// queue's saves.
+    pub(crate) fn changed(&self) {
+        self.revision
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+    /// Idle CPU: a window loop builds no snapshot while this and the output count stand still (http/mod.rs). What it
+    /// does not count (the clock, a file) a window still sees within its `SNAPSHOT_FORCE`.
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision.load(std::sync::atomic::Ordering::SeqCst) + self.queue.revision()
+    }
     pub fn handle(&mut self, request: Request) -> Response {
+        // Any request may change what the snapshot reads without a save (an Outbox yes, a draft brought home, a
+        // setting); only the reads a window repeats while idle are left out.
+        if !matches!(
+            request,
+            Request::Snapshot
+                | Request::List
+                | Request::AgentList { .. }
+                | Request::QueueConnect
+                | Request::BoardSnapshot
+                | Request::TreeGet
+                | Request::DiffList { .. }
+                | Request::PrBranch { .. }
+                | Request::WidgetList
+                | Request::ScheduleList
+                | Request::RoomRead { .. }
+                | Request::ChatPage { .. }
+        ) {
+            self.changed();
+        }
         if self.left {
             return Err("core is stopping".into());
         }
@@ -545,8 +574,7 @@ impl Sessions {
             | Request::MachineTrust { .. } => {
                 Err("machine discovery requires unlocked owner dispatch".into())
             }
-            // v1a-06: transport requests are handled outside the registry lock.
-            Request::RemoteService { .. }
+            Request::RemoteService { .. } // v1a-06: transport requests are handled outside the registry lock
             | Request::Remote { .. }
             | Request::Forwarded { .. }
             | Request::MachineStatus { .. } => Err("transport requires owner dispatch".into()),
@@ -556,8 +584,7 @@ impl Sessions {
             Request::Browser { .. } | Request::BrowserNext | Request::BrowserDone { .. } => {
                 Err("browser verbs run only on the owner socket".into())
             }
-            // v1b-02
-            Request::ChatPage { .. } => Err("chat requires unlocked transport dispatch".into()),
+            Request::ChatPage { .. } => Err("chat requires unlocked transport dispatch".into()), // v1b-02
             Request::HandoffPreview { .. } | Request::HandoffSend { .. } => {
                 Err("handoff requires unlocked transport dispatch".into())
             }
@@ -578,13 +605,11 @@ impl Sessions {
             | Request::PrWriteCancel { .. } => {
                 Err("push requires the window".into())
             }
-            // v2-10c: answered by the socket server after its owner check.
             Request::LibsResolve { .. } | Request::LibsEntry { .. } => {
-                Err("libraries require owner dispatch".into())
+                Err("libraries require owner dispatch".into()) // the socket server answers after its owner check
             }
-            // Ticket 573: answered by the socket server after its owner check.
             Request::TokenCreate { .. } | Request::TokenList | Request::TokenRevoke { .. } => {
-                Err("tokens require owner dispatch".into())
+                Err("tokens require owner dispatch".into()) // ticket 573: the socket server answers after its owner check
             }
             Request::AccountList
             | Request::AccountCheck { .. }
@@ -635,14 +660,13 @@ impl Sessions {
             Request::AcpAgents
             | Request::AcpAgentCheck { .. }
             | Request::AcpAgentAdd { .. }
-            | Request::AcpAgentLogin { .. } => {
-                Err("agent setup requires unlocked transport dispatch".into()) // V2-4b
-            }
-            Request::AcpAgentSignIn { .. }
+            | Request::AcpAgentLogin { .. }
+            | Request::AcpAgentSignIn { .. }
             | Request::AcpAgentSignInState { .. }
             | Request::AcpAgentSignInCancel { .. }
-            | Request::AcpAgentSignOut { .. } => {
-                Err("agent setup requires unlocked transport dispatch".into()) // ticket 358
+            | Request::AcpAgentSignOut { .. }
+            | Request::AcpAgentTry { .. } => {
+                Err("agent setup requires unlocked transport dispatch".into()) // V2-4b, ticket 358
             }
             Request::ExtensionsList
             | Request::ExtensionsMcpAdd { .. }
@@ -1369,7 +1393,8 @@ impl Sessions {
             Request::WidgetList
             | Request::WidgetRun { .. }
             | Request::WidgetAct { .. } /* v1b-20 */
-            | Request::WidgetPage { .. } /* v1b-22 */ => {
+            | Request::WidgetPage { .. } /* v1b-22 */
+            | Request::Plugin { .. } => {
                 Err("widget requests run outside the registry lock".into())
             }
             // v1b-05

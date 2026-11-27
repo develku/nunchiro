@@ -22,7 +22,9 @@ if [ "${1:-}" = --affected ] || [ "${1:-}" = --needed ]; then
   fi
   [ "$1" = --needed ] && exit 0
 fi
-unset CARGO_TARGET_DIR
+# The app is its own Cargo workspace: sharing the core's target folder would rebuild both on every switch. A set
+# CARGO_TARGET_DIR (lanes keep builds off the internal disk) gets an "-app" sibling; unset, cargo uses app/src-tauri/target.
+[ -n "${CARGO_TARGET_DIR:-}" ] && export CARGO_TARGET_DIR="${CARGO_TARGET_DIR%/}-app"
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
 [ -f web/dist/index.html ] || (cd web && pnpm exec vite build --logLevel error)
 cd app/src-tauri

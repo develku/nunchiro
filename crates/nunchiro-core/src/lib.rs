@@ -69,6 +69,7 @@ mod scrollback;
 // v1a-38b
 pub mod scrollback_edit;
 // v1b-19
+pub mod plugins; // panels, commands and settings from one approved folder
 pub mod widgets;
 // v1a-47
 pub mod themes_online;

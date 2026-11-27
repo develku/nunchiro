@@ -69,6 +69,9 @@ test('libs_requester_chat_card_and_preview_name_the_session: never the page titl
   await expect.poll(() => allowed).toEqual([[URL1, 'sales-bot']]);
   // The Preview it opens follows the same session and names it the same way.
   await c.getByRole('button', { name: 'Open' }).click();
+  // The side pane opens where the pointer rests: while the pointer is on a frame its library cards stay folded behind
+  // the bar's chip (ArtifactFrame `frozen`, by design), and open once it leaves. The pointer leaves, as a user's would.
+  await page.mouse.move(1, 1);
   const pv = page.locator('.preview .pv-frame');
   await expect(asked(pv)).toHaveText('Asked by sales-bot');
   await expect(pv.locator('.af-libs')).not.toContainText(HOSTILE);

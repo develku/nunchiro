@@ -34,6 +34,7 @@ pub(crate) struct Config {
     pub port: Option<u32>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Caller {
     pub id: String,
@@ -42,6 +43,8 @@ pub struct Caller {
     pub permission_answers: bool,
 }
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "MachinesStatus"))]
 pub struct Status {
     pub machine: String,
     pub status: String,
@@ -351,6 +354,9 @@ pub(crate) fn dispatch(
         .lock()
         .map_err(|_| "session registry unavailable")?;
     label(&mut reply, &alias);
+    if matches!(reply, Reply::Started { .. }) || matches!(request, Request::Close { .. }) {
+        sessions.changed(); // the window's machine rows, before the machine's next push
+    }
     if let Reply::Started { session } = &reply {
         let Some(row) = channel::clean(&alias, vec![session.clone()]).pop() else {
             return Err("invalid remote session id".into());

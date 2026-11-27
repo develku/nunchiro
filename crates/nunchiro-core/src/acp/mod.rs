@@ -6,6 +6,7 @@ pub(crate) mod add;
 mod client;
 pub mod config;
 pub mod probe;
+pub(crate) mod turn;
 
 use crate::{
     api::{Reply, Response, Session},
@@ -80,6 +81,7 @@ fn display_names(entries: &[config::Entry]) -> BTreeMap<String, String> {
 
 /// Ticket 358: one model an agent reported in its Session Config Options; `value` goes back to it exactly as it came.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct AcpModel {
     pub value: String,
     pub label: String,
@@ -127,6 +129,7 @@ fn remember(home: &Path, file: &str, agent: &str, models: &[AcpModel]) {
 
 /// One row of Settings > Agents' ACP table.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct AcpRow {
     pub name: String,
     pub label: String,
@@ -332,6 +335,7 @@ pub(crate) fn setup(
             terminal: crate::firstrun::detect_all(),
             acp: rows(home)?,
             file: home.join("agents.toml"),
+            turns: turn::turns(home),
         })
     };
     match request {
@@ -374,6 +378,7 @@ pub(crate) fn setup(
         Request::AcpAgentSignInState { attempt } => add::state(&attempt),
         Request::AcpAgentSignInCancel { attempt } => add::cancel(&attempt),
         Request::AcpAgentSignOut { name } => add::sign_out(home, &name),
+        Request::AcpAgentTry { name, cancel } => turn::try_turn(home, &name, cancel, stopping),
         _ => Err("not an agent setup request".into()),
     }
 }
@@ -428,6 +433,8 @@ impl Feed {
             self.bytes -= size;
             self.dropped += 1;
         }
+        // An ACP agent's chat is its output: windows keep their fast cadence and send it now.
+        crate::pty::notify_output();
     }
     fn page_of(&self, from: u64, to: u64, older: bool) -> crate::chat::Page {
         crate::chat::Page {

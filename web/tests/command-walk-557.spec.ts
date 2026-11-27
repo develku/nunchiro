@@ -127,39 +127,58 @@ const confirm = async (app: Page) => {
   await app.waitForTimeout(300);
 };
 
-test('command_walk_557 run: every command runs without a page error', async ({ app, core }) => {
+// One window walked every command in turn, a reload before each; with every new command it ran longer, and on a hosted
+// WebKit runner it passed its 8 minutes. The same walk now runs in PARTS windows of its own (every PARTS-th command each),
+// which the runner can run side by side, and the Settings commands in one more.
+const PARTS = 6;
+for (let part = 0; part < PARTS; part++) {
+  test(`command_walk_557 run (${part + 1} of ${PARTS}): every command runs without a page error`, async ({ app, core }) => {
+    test.setTimeout(480_000);
+    const agent = seed(core);
+    const seen = errors(app);
+    await openWindow(app, {}, core);
+    await focusAgent(app, agent);
+    await openPalette(app);
+    const all = await rows(app);
+    const greyed: string[] = [];
+    const walk = all.filter((r) => !SPENDS.includes(r.id) && !r.id.startsWith('settings.'));
+    expect(walk.length, 'the palette lists the commands').toBeGreaterThan(PARTS);
+    for (const r of walk.filter((_, i) => i % PARTS === part)) {
+      // A reload keeps an open modal (chrome/Overlay.tsx). An Escape that came before a command's Board finished opening left it
+      // over every later tab click (ticket 730: 2 of 5 runs), so each step starts with none.
+      await app.evaluate(() => sessionStorage.removeItem('nunchiro.overlay'));
+      await app.reload();
+      await expect(app.locator(`.tab[data-tab="${agent}"]`)).toBeVisible();
+      await focusAgent(app, agent);
+      if (r.id === 'layout.done' || r.id === 'layout.cancel') await run(app, 'Edit layout', 'layout.edit');
+      if (r.id === 'pane.maximize') await run(app, 'Show or hide the side pane', 'pane.toggle');
+      // Right after a reload a project command is greyed for a moment (no project known yet: group.create was red in 1 run of 2),
+      // so a command not listed as greyed gets the poll `wait` gives before it counts as greyed.
+      if (!(await run(app, r.label, r.id, !(r.id in GREYED) && !NEEDS_MENU_ARG.test(r.id)))) greyed.push(r.id);
+      await app.keyboard.press('Escape');
+    }
+    expect(seen, 'page errors while running the commands').toEqual([]);
+    expect(greyed.filter((id) => !NEEDS_MENU_ARG.test(id) && !(id in GREYED)), 'greyed commands with no reason listed').toEqual([]);
+  });
+}
+
+test('command_walk_557 run (settings): every Settings command opens its page without a page error', async ({ app, core }) => {
   test.setTimeout(480_000);
   const agent = seed(core);
   const seen = errors(app);
   await openWindow(app, {}, core);
   await focusAgent(app, agent);
   await openPalette(app);
-  const all = await rows(app);
-  const greyed: string[] = [];
-  const walk = all.filter((r) => !SPENDS.includes(r.id));
-  for (const r of walk.filter((r) => !r.id.startsWith('settings.'))) {
-    // A reload keeps an open modal (chrome/Overlay.tsx). An Escape that came before a command's Board finished opening left it
-    // over every later tab click (ticket 730: 2 of 5 runs), so each step starts with none.
-    await app.evaluate(() => sessionStorage.removeItem('nunchiro.overlay'));
-    await app.reload();
-    await expect(app.locator(`.tab[data-tab="${agent}"]`)).toBeVisible();
-    await focusAgent(app, agent);
-    if (r.id === 'layout.done' || r.id === 'layout.cancel') await run(app, 'Edit layout', 'layout.edit');
-    if (r.id === 'pane.maximize') await run(app, 'Show or hide the side pane', 'pane.toggle');
-    // Right after a reload a project command is greyed for a moment (no project known yet: group.create was red in 1 run of 2),
-    // so a command not listed as greyed gets the poll `wait` gives before it counts as greyed.
-    if (!(await run(app, r.label, r.id, !(r.id in GREYED) && !NEEDS_MENU_ARG.test(r.id)))) greyed.push(r.id);
-    await app.keyboard.press('Escape');
-  }
+  const walk = (await rows(app)).filter((r) => !SPENDS.includes(r.id) && r.id.startsWith('settings.'));
+  expect(walk.length, 'the palette lists the Settings commands').toBeGreaterThan(0);
   // The settings commands open a page of Settings, focused on one field.
   await app.reload();
   await focusAgent(app, agent);
-  for (const r of walk.filter((r) => r.id.startsWith('settings.'))) {
+  for (const r of walk) {
     expect(await run(app, r.label, r.id), r.id).toBe(true);
     await app.keyboard.press('Escape');
   }
   expect(seen, 'page errors while running the commands').toEqual([]);
-  expect(greyed.filter((id) => !NEEDS_MENU_ARG.test(id) && !(id in GREYED)), 'greyed commands with no reason listed').toEqual([]);
 });
 
 for (const id of SPENDS) {
@@ -171,6 +190,9 @@ for (const id of SPENDS) {
     await openPalette(app);
     const row = (await rows(app)).find((r) => r.id === id)!;
     expect(row, `${id} is in the palette`).toBeTruthy();
+    // The listing's palette is closed before the walk clicks a tab: it is drawn over the tab strip and takes that click.
+    await app.keyboard.press('Escape');
+    await expect(app.locator('#palette-list')).toHaveCount(0);
     if (id === 'tab.reopen') (await run(app, 'Close tab', 'tab.close'), await confirm(app)); // the command is greyed until a tab was closed
     if (id === 'session.restart' || id === 'session.close') {
       // Both act on an ended session: a shell that quits on its own is `exited` (a stopped agent is `closed`, which neither takes).

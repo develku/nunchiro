@@ -573,6 +573,9 @@ fn a_task_with_no_package_prints_as_before() {
         closed: None,
         stall: None,
         advance: Advance::default(),
+        after: vec![],
+        ordered: None,
+        released: vec![],
         created: 1,
         updated: 2,
     };
@@ -689,5 +692,111 @@ fn a_dropped_auto_task_with_a_package_keeps_its_row() {
     l.close(&b.id, "dropped", 2).unwrap();
     let ids: Vec<String> = l.list().unwrap().into_iter().map(|t| t.id).collect();
     assert_eq!(ids, [b.id]);
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// Task dependencies: a ledger in which a task waits for another opens in a build that does not know the field (this
+/// test was first run on the build before it), and a ledger with no dependency is written byte for byte as before.
+#[test]
+fn a_ledger_with_after_opens_and_one_without_is_written_as_before() {
+    let home = home("after-compat");
+    let newer = r#"{
+  "version": 1,
+  "next": 3,
+  "tasks": [
+    {"id": "t1", "place": "/p", "title": "a", "created": 1, "updated": 1},
+    {"id": "t2", "place": "/p", "title": "b", "after": ["t1"], "created": 2, "updated": 2}
+  ]
+}"#;
+    std::fs::write(home.join("ledger.json"), newer).unwrap();
+    let l = Ledger::open(&home);
+    assert_eq!(l.list().unwrap().len(), 2, "it opens with no error");
+    let _ = std::fs::remove_dir_all(&home);
+
+    let home = self::home("after-bytes");
+    let l = Ledger::open(&home);
+    let place = Path::new("/p");
+    l.make(place, Some("lead"), "a", &["works".into()], false, 1)
+        .unwrap();
+    l.make(place, None, "b", &[], false, 2).unwrap();
+    l.seat_on("t1", "s1", "Builder · a", None, 3, &|_| true)
+        .unwrap();
+    l.close("t2", "done", 4).unwrap();
+    let file = std::fs::read_to_string(home.join("ledger.json")).unwrap();
+    assert_eq!(
+        file,
+        include_str!("../../tests/fixtures/ledger/no-after.json")
+    );
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// A blocker that closes as merged or done holds its waiter no more; one dropped still shows, with its word.
+#[test]
+fn a_task_waits_until_its_blocker_lands() {
+    let home = home("after-lands");
+    let l = Ledger::open(&home);
+    let p = Path::new("/p");
+    for title in ["a", "b", "c"] {
+        l.make(p, None, title, &[], false, 1).unwrap();
+    }
+    l.set_after(
+        "t3",
+        &["t1".into(), "t2".into(), "t1".into()],
+        "Lead · x",
+        2,
+    )
+    .unwrap();
+    let waits = |l: &Ledger| {
+        let all = l.list().unwrap();
+        let c = all.iter().find(|t| t.id == "t3").unwrap();
+        let b = blockers(c, &all);
+        (
+            b.into_iter().map(|b| (b.id, b.stage)).collect::<Vec<_>>(),
+            waiters(&all[0], &all),
+        )
+    };
+    assert_eq!(
+        waits(&l),
+        (
+            vec![("t1".into(), "plan".into()), ("t2".into(), "plan".into())],
+            1
+        )
+    );
+    l.close("t1", "merged", 3).unwrap();
+    l.close("t2", "dropped", 3).unwrap();
+    assert_eq!(waits(&l), (vec![("t2".into(), "dropped".into())], 0));
+    assert_eq!(
+        l.list().unwrap()[2].ordered.as_ref().unwrap().by,
+        "Lead · x"
+    );
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// Task dependencies: an automatic task others wait for is never deleted unseen (its worktree taken back, or dropped
+/// empty): it closes as dropped, so its waiters ask instead of starting as if it had landed.
+#[test]
+fn an_automatic_blocker_that_goes_leaves_its_waiter_asking() {
+    let home = home("after-auto");
+    let l = Ledger::open(&home);
+    let p = Path::new("/p");
+    let wt = home.join("wt");
+    std::fs::create_dir_all(&wt).unwrap();
+    let a = l.worktree_made(p, "lead", &wt, "wt-a", 1).unwrap();
+    let (b, _) = l.make(p, Some("lead"), "b", &[], false, 1).unwrap();
+    l.set_after(&b.id, std::slice::from_ref(&a.id), "x", 2)
+        .unwrap();
+    l.worktree_taken(&wt, 3).unwrap();
+    let all = l.list().unwrap();
+    let got = blockers(all.iter().find(|t| t.id == b.id).unwrap(), &all);
+    assert_eq!(got.len(), 1, "{all:?}");
+    assert!(got[0].dropped);
+    // Dropped by hand while empty: the same.
+    let (c, _) = l.make(p, None, "wt-c", &[], true, 4).unwrap();
+    let (d, _) = l.make(p, Some("lead"), "d", &[], false, 4).unwrap();
+    l.set_after(&d.id, std::slice::from_ref(&c.id), "x", 5)
+        .unwrap();
+    l.close(&c.id, "dropped", 6).unwrap();
+    let all = l.list().unwrap();
+    assert!(blockers(all.iter().find(|t| t.id == d.id).unwrap(), &all)[0].dropped);
     let _ = std::fs::remove_dir_all(home);
 }
