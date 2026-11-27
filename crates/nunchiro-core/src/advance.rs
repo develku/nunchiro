@@ -1138,6 +1138,7 @@ pub(crate) fn release(registry: &Mutex<crate::sessions::Sessions>, home: &Path) 
                     seat: None,
                 };
                 sessions.team_note(&r.place, &r.lead, None, line, note);
+                crate::events::tasks(&r.place);
                 return Ok(None);
             }
             sessions.core_line(&seat, line.clone())?;
