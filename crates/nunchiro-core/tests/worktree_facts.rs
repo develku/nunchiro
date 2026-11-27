@@ -324,6 +324,45 @@ fn a_worktree_start_is_listed_when_it_answers() {
     );
 }
 
+/// The start's record reads no facts of the project's other worktrees (review of the first round: with 30 worktrees a
+/// start answered after about 3 s, each a 10 s-bounded git read): the git it runs is the same with 1 worktree or 7.
+#[test]
+fn a_worktree_start_runs_no_git_per_worktree() {
+    let core = Core::new();
+    let log = core.home.join("git.log");
+    let git_bin = core.home.join("bin/git");
+    fs::write(
+        &git_bin,
+        format!(
+            "#!/bin/sh\necho \"$*\" >> \"{}\"\nexec /usr/bin/git \"$@\"\n",
+            log.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(
+        &git_bin,
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .unwrap();
+    let start = |label: &str| {
+        let _ = fs::remove_file(&log);
+        core.op(json!({"op":"start","session":{"kind":"shell","project":core.repo,"worktree":true,"label":label,"args":["/bin/cat"],"model":null,"effort":null,"resume":null}}))
+            .unwrap();
+        fs::read_to_string(&log).unwrap_or_default().lines().count()
+    };
+    core.create("one");
+    let few = start("a");
+    for i in 0..6 {
+        core.create(&format!("more{i}"));
+    }
+    let many = start("b");
+    assert!(few > 0, "the wrapper sees the core's git");
+    assert_eq!(
+        many, few,
+        "git calls of a start with 7 worktrees, against 2"
+    );
+}
+
 #[test]
 fn removed_outside_nunchiro_shows_gone() {
     let core = Core::new();

@@ -22,7 +22,7 @@ use std::{
 mod start_record;
 mod worktree_op;
 use start_record::record_start;
-pub(crate) use worktree_op::worktree;
+pub(crate) use worktree_op::{record_started_worktree, worktree};
 const FRAME_BYTES: u64 = 512 * 1024;
 /// A stopping core's reply to a request it never ran, while it winds down for an `exit` (`serve restart`) or a signal:
 /// the agents stay for a next core, so the CLI sends such a request once more, to that core (ticket 305).
@@ -64,7 +64,8 @@ const REPLY_WAIT: Duration = Duration::from_secs(15);
 /// a start the core then makes (a retry would make a second seat). A `--worktree` Codex start's own bounds add up to
 /// about 75 s: the base-branch reads (`start_worktree::READ`, 10 s each), `git worktree add` (`GIT_WORKTREE`, 10 s),
 /// `--version` (`VERSION_WAIT`, 3 s), the Codex start check (`outward::CODEX_ASK_DEADLINE`, 10 s) and the holder's
-/// hello (10 s). The window's requests go over its WebSocket, which waits for every reply.
+/// hello (10 s), and the record of its folder (`record_started_worktree`: one `git worktree list`, 10 s, and no facts
+/// of the project's other worktrees). The window's requests go over its WebSocket, which waits for every reply.
 const START_REPLY_WAIT: Duration = Duration::from_secs(120);
 fn reply_wait(request: &Request) -> Duration {
     match request {
@@ -790,26 +791,8 @@ fn start_seat(
             .map_err(|_| "session registry unavailable")?
             .start_failed_at(session, folder.as_deref(), e.clone());
     }
-    // A `--worktree` start's folder is recorded before the start answers, as a create's is: only an open window adopted
-    // it before, later, and a project Remove read in between took its agent for a plain session (stopped, its history
-    // deleted). The record only (git is read, never written); a refusal leaves the window's adopt to try again.
-    if let Ok(started) = &result
-        && session.worktree
-        && started.cwd != started.project
-    {
-        let adopt = Request::Worktree {
-            operation: "adopt".into(),
-            project: Some(started.project.clone()),
-            path: Some(started.cwd.clone()),
-            branch: None,
-            base: String::new(),
-            label: String::new(),
-            from: None,
-            confirm: None,
-        };
-        if let Err(e) = worktree(registry, None, adopt, Some(stopping)) {
-            eprintln!("session {}: its worktree was not recorded: {e}", started.id);
-        }
+    if let Ok(started) = &result {
+        record_started_worktree(registry, session.worktree, started);
     }
     result.map(|session| Reply::Started { session })
 }

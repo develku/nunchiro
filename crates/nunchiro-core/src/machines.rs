@@ -448,6 +448,7 @@ pub(crate) fn forwarded(
         // A session's start from another Mac is held as one from this Mac.
         let who = crate::pressure::Who::Session;
         crate::pressure::check_start(&session, who, false, "forwarded start")?;
+        let worktree = session.worktree;
         let launch = sessions
             .launch_as(Some(&caller), session, true)?
             .with_folder(folder)
@@ -461,6 +462,7 @@ pub(crate) fn forwarded(
             sessions.start_granted(&caller, &launch, true)
         })?; // v1a-22
         launch.committed = true;
+        crate::server::record_started_worktree(registry, worktree, &session);
         return Ok(Reply::Started { session });
     }
     sessions.handle_remote_agent(&caller, request)
