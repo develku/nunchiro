@@ -588,8 +588,7 @@ impl Sessions {
             Request::Browser { .. } | Request::BrowserNext | Request::BrowserDone { .. } => {
                 Err("browser verbs run only on the owner socket".into())
             }
-            // v1b-02
-            Request::ChatPage { .. } => Err("chat requires unlocked transport dispatch".into()),
+            Request::ChatPage { .. } => Err("chat requires unlocked transport dispatch".into()), // v1b-02
             Request::HandoffPreview { .. } | Request::HandoffSend { .. } => {
                 Err("handoff requires unlocked transport dispatch".into())
             }
@@ -603,13 +602,14 @@ impl Sessions {
                 Err("the PR view requires the window".into())
             }
             Request::PrBranch { .. } => Err("the PR view requires the window".into()), // ticket 373
-            Request::GitPush { .. } => Err("push requires the window".into()),
+            Request::GitPush { .. } | Request::PrDraft { .. } | Request::PrCreate { .. } => {
+                Err("push requires the window".into())
+            }
             Request::LibsResolve { .. } | Request::LibsEntry { .. } => {
                 Err("libraries require owner dispatch".into()) // the socket server answers after its owner check
             }
-            // Ticket 573: answered by the socket server after its owner check.
             Request::TokenCreate { .. } | Request::TokenList | Request::TokenRevoke { .. } => {
-                Err("tokens require owner dispatch".into())
+                Err("tokens require owner dispatch".into()) // ticket 573: the socket server answers after its owner check
             }
             Request::AccountList
             | Request::AccountCheck { .. }

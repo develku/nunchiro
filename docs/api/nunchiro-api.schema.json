@@ -2569,6 +2569,58 @@
       ],
       "type": "object"
     },
+    "Draft": {
+      "description": "What the Create PR form starts with (`pr_draft`). All text is git's or the repository's: the window draws it as text.",
+      "properties": {
+        "bases": {
+          "description": "The default branch first, then the remote's other branches.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "body": {
+          "type": "string"
+        },
+        "commits": {
+          "description": "Commits the PR holds (against the default branch).",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gh_why": {
+          "description": "Why gh cannot create it now (not installed, not signed in); the form still opens.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head": {
+          "type": "string"
+        },
+        "push": {
+          "$ref": "#/$defs/PushTo",
+          "description": "Where the push goes first; `ahead` 0 when nothing needs pushing."
+        },
+        "template": {
+          "description": "The body is the repository's PR template.",
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "body",
+        "template",
+        "commits",
+        "bases",
+        "head",
+        "push"
+      ],
+      "type": "object"
+    },
     "Envelope": {
       "properties": {
         "request": {
@@ -7305,6 +7357,50 @@
         },
         {
           "properties": {
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "type": {
+              "const": "pr_draft",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "draft"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "number": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pushed": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": {
+              "const": "pr_created",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url",
+            "number",
+            "pushed"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "pr": {
               "anyOf": [
                 {
@@ -9907,6 +10003,79 @@
           "required": [
             "op",
             "session"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "properties": {
+            "op": {
+              "const": "pr_draft",
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "session"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "description": "What the strip showed and the window sends back: the push is refused unless all of it still holds.",
+          "properties": {
+            "ahead": {
+              "default": 0,
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "base": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "branch": {
+              "default": "",
+              "type": "string"
+            },
+            "draft": {
+              "default": false,
+              "type": "boolean"
+            },
+            "head": {
+              "default": "",
+              "type": "string"
+            },
+            "key": {
+              "default": "",
+              "type": "string"
+            },
+            "op": {
+              "const": "pr_create",
+              "type": "string"
+            },
+            "remote": {
+              "default": "",
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "session",
+            "title",
+            "body",
+            "base"
           ],
           "type": "object",
           "x-stability": "window"

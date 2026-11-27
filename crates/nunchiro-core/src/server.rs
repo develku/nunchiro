@@ -588,9 +588,8 @@ fn refuse_stopping(stream: &mut UnixStream, quit: bool) {
     }
 }
 
-/// The owner's request for another machine: the CLI's `--machine`, and the window's New session on a machine (ticket
-/// 980; real SSH look 11-17: the window's own loop had no arm for it, so every start there was refused with "transport
-/// requires owner dispatch"). A local owner-only operation is never forwarded.
+/// The owner's request for another machine (the CLI's `--machine`, the window's New session on one; ticket 980).
+/// A local owner-only operation is never forwarded; the window/owner APIs below stay local (v1a-06 merge).
 pub(crate) fn remote_from_owner(
     sessions: &Mutex<Sessions>,
     home: &Path,
@@ -599,7 +598,6 @@ pub(crate) fn remote_from_owner(
     request: Request,
     stopping: &AtomicBool,
 ) -> Response {
-    // v1a-06 merge: these new window/owner APIs stay local, never SSH-forwarded.
     if matches!(
         request,
         Request::ChatPage { .. }
@@ -619,6 +617,8 @@ pub(crate) fn remote_from_owner(
             | Request::PrMerge { .. }
             | Request::PrBranch { .. } // ticket 373
             | Request::GitPush { .. } // pushes from this Mac's folder
+            | Request::PrDraft { .. }
+            | Request::PrCreate { .. }
             | Request::FilesList { .. }
             | Request::FileRead { .. }
             | Request::FileWrite { .. } // ticket 820: a write on this Mac only
