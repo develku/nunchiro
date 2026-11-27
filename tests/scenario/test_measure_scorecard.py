@@ -46,9 +46,17 @@ class MainLog(unittest.TestCase):
         self.assertEqual((r["runs"], r["green"], r["green_pct"]), (2, 1, 50.0))
         self.assertEqual((r["min_min"], r["max_min"]), (10.0, 12.5))
 
-    def test_owner_installs(self):
-        i = s.parse_main_log(self.LOG)["installs"]
-        self.assertEqual((i["n"], i["installed"], i["skipped"], i["failed"], i["landed_pct"]), (3, 1, 1, 1, 33.3))
+    def test_owner_installs_are_read_per_green_run(self):
+        # One green run, A, which waited and landed later (B was red): 1 of 1.
+        i = s.parse_main_log(self.LOG, installs=1)["installs"]
+        self.assertEqual((i["n"], i["installed"], i["skipped"], i["failed"], i["landed_pct"]), (1, 1, 0, 0, 100.0))
+        self.assertIsNone(s.parse_main_log(self.LOG)["installs"]["landed_pct"])  # fewer than 20 green runs: not measured
+        # Three green runs, one install made by hand and one wait: 1 of 3 landed, not 1 of the 1 line that says so.
+        c = "c" * 40
+        log = "\n".join(f"0{n}:00:00 testing {x}\n0{n}:10:00 GREEN {x}" for n, x in enumerate((A, B, c))) + \
+            f"\n04:00:00 owner wait {B}: owner-install: waiting\n05:00:00 owner install {c}: owner-install: installed {c}\n"
+        i = s.parse_main_log(log, installs=3)["installs"]
+        self.assertEqual((i["n"], i["installed"], i["skipped"], i["failed"], i["landed_pct"]), (3, 1, 2, 0, 33.3))
 
 
 class Peer(unittest.TestCase):
@@ -330,6 +338,31 @@ class Dev(unittest.TestCase):
 
     def test_shared_files_need_two_lanes(self):
         self.assertEqual(s.shared_files({"a": ["x", "y"], "b": ["y"], "c": ["z"]}), {"y": ["a", "b"]})
+
+    def test_a_landed_or_carried_branch_is_not_an_open_lane(self):
+        today, at = "2026-11-28", "2026-11-28T08:00:00+10:00"
+        branches = [("built-today", "s1", today, at),
+                    ("merged-today", "s2", today, at),  # a squash merge leaves its commits outside main
+                    ("merged-after-github-updated-it", "s3", today, at),
+                    ("used-again-after-its-merge", "s4", today, "2026-11-28T12:00:00+10:00"),
+                    ("closed-today", "s9", today, at),
+                    ("open-pr-from-yesterday", "s5", "2026-11-27", "2026-11-27T20:00:00+10:00"),
+                    ("idle-since-yesterday", "s6", "2026-11-27", "2026-11-27T20:00:00+10:00"),
+                    ("lower", "s7", today, at), ("upper", "s8", today, at),  # upper is built on lower
+                    ("a-reviewers-copy-of-upper", "s8", today, at)]
+        pr = lambda state, name, head, merged=None: dict(state=state, headRefName=name, headRefOid=head, mergedAt=merged)  # noqa: E731
+        prs = [pr("MERGED", "merged-today", "s2", "2026-11-27T23:00:00Z"),
+               pr("MERGED", "merged-after-github-updated-it", "another", "2026-11-27T23:00:00Z"),  # 09:00 local, after the commit
+               pr("MERGED", "used-again-after-its-merge", "older", "2026-11-28T00:00:00Z"),  # 10:00 local, before the commit
+               pr("CLOSED", "closed-today", "s9"),
+               pr("OPEN", "open-pr-from-yesterday", "s5"), pr("OPEN", "upper", "s8")]
+        contains = lambda a, b: a == b or (a, b) == ("s7", "s8")  # noqa: E731
+        self.assertEqual(s.live_lanes(branches, prs, today, contains),
+                         ["built-today", "open-pr-from-yesterday", "upper", "used-again-after-its-merge"])
+        # No pull request list (gh could not say): the old reading, less what another branch carries. Never fewer than with it.
+        self.assertEqual(s.live_lanes(branches, [], today, contains),
+                         ["a-reviewers-copy-of-upper", "built-today", "closed-today", "merged-after-github-updated-it", "merged-today",
+                          "used-again-after-its-merge"])
 
     def test_the_dev_run_times_the_pr_gates_rust_tests(self):
         """The test stage is the PR gate's own nextest run; the retired local gate's scripts are named nowhere."""
