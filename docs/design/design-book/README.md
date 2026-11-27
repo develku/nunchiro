@@ -1,6 +1,6 @@
 # Nunchiro design book: builder rules
 
-v0.2 draft. The picture of every part, in four themes, with its values: [index.html](index.html). Tokens: [tokens.css](tokens.css). Move order: [migration.md](migration.md).
+v0.3 draft. The picture of every part, in four themes, with its values: [index.html](index.html). Tokens: [tokens.css](tokens.css). Move order: [migration.md](migration.md).
 
 Parts in the book: colour roles, type, space and radius, layout grid, motion, icons, mark, buttons, icon buttons and key chips, fields, choices, tabs, tree rows, badges and chips, cards, diff and code, menus and popovers, dialogs, toasts and notes, status bar and gauges, empty and loading states, bot faces, scrollbars and focus.
 
@@ -41,7 +41,7 @@ The mark says who made the window; it never shows a state. Files: `docs/brand/as
 - Sizes: minimum 16. Menu bar 16 (template image), onboarding 24, empty window 48, docs site header 20, About 64 (app icon), release notes 32 (app icon), app icon 16 to 512.
 - Colour: `--text`, or `--muted` where it should stay quiet. The app icon keeps its own tile. In the menu bar macOS draws the template in the bar's colour; the waiting file adds the one warm dot.
 - Clear space: a quarter of the mark's size on every side.
-- Where: menu bar, Dock and Finder, About, the onboarding first screen, the empty window, the docs site, the download page, the release notes. In the window chrome (title bar or sidebar header): not decided; the book draws it only as a proposal next to the open question.
+- Where: menu bar, Dock and Finder, About, the onboarding first screen, the empty window, the docs site, the download page, the release notes. Never in the window chrome (title bar or sidebar header): the Dock and the menu bar already name the app, and the sidebar header belongs to the project.
 - Never: another colour (no accent, warm or state colour), stretched, glow, shadow or outline, warm (warm means something needs you), on glass or images busier than the chrome.
 
 ## Checks before you land
