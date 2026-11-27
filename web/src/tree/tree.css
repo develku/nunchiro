@@ -1304,9 +1304,7 @@
   font-family: var(--font-ui);
   font-size: var(--fs-12);
   line-height: normal;
-  border-radius: var(--r-8);
-  border-color: var(--line);
-  background: var(--panel);
+  border-radius: var(--dialog-r);
 }
 .palette.wtnew {
   top: 50%;
@@ -1378,9 +1376,14 @@
   background: var(--hover);
   color: var(--text);
 }
-/* The dialog's buttons are the book's (styles.css .btn); a removing action is a secondary in --bad-text, never a red fill. */
+/* The dialog's buttons are the book's (styles.css .btn); a removing action is quiet in --bad-text, never a red fill (on the
+   dialog's --raised a --tint-2 fill left --bad-text under 4.5:1 in dark themes). */
 .wtdlg .btn.x {
+  background: none;
   color: var(--bad-text);
+}
+.wtdlg .btn.x:hover:not(:disabled) {
+  background: var(--tint-1);
 }
 /* Look 1117 v11 A S3-2: inside the Remove-project dialog's sheet (remove.css .rmdlg), whose gap spaces it. */
 .wtdirty .wtlist {
@@ -1413,33 +1416,50 @@
   border-radius: 0;
   cursor: default;
 }
-/* The one toast: the dark bar of the mockup (ground = the text colour, ink = the panel), Undo underlined. */
+/* The worktree toast: the design book's toast (styles.css .toast), a solid --raised pill, never glass; Undo a secondary
+   small button, the close a quiet 24 icon button. */
 .wtoast .wtbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--sp-8);
+  gap: var(--sp-12);
+  box-sizing: border-box;
   min-width: 280px;
-  padding: 7px 10px;
-  border-radius: var(--r-12); /* ticket 1041 (B): a glass toast (.glass); was the dark bar */
+  min-height: var(--toast-h);
+  padding: 0 6px 0 14px;
+  border-radius: var(--toast-r);
+  background: var(--raised);
+  box-shadow: var(--shadow-float), 0 0 0 0.5px color-mix(in srgb, var(--text) 12%, transparent);
   color: var(--text);
-  font-size: var(--fs-2);
+  font-size: var(--fs-ui);
   line-height: normal;
 }
 .wtoast .wtundo,
 .wtoast .wtdismiss {
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
   border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
+  border-radius: var(--btn-r);
+  background: var(--tint-2);
+  color: var(--text);
+  font: 500 var(--fs-sm) / 1 var(--font-ui);
 }
-.wtoast .wtundo {
-  font-weight: 600;
-  text-decoration: underline;
+.wtoast .wtundo:hover {
+  background: var(--tint-3);
 }
 .wtoast .wtdismiss {
-  margin-left: var(--sp-4);
+  min-width: var(--hit);
+  padding: 0;
+  background: none;
+  color: var(--muted);
+}
+.wtoast .wtdismiss:hover {
+  background: var(--tint-1);
+  color: var(--text);
 }
 .wtoast .wtundo:focus-visible,
 .wtoast .wtdismiss:focus-visible {

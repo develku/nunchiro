@@ -61,8 +61,11 @@ test('setup_approval_sheet_shows_script_text_and_hash', async ({ app, core }) =>
   await expect(item).toBeVisible({ timeout: 10_000 });
   expect(fs.existsSync(path.join(wt, 'ran.txt'))).toBe(false);
   const hash = (core.cli('snapshot', '--json').owner_decisions[0].owner.hash as string).slice(0, 12);
-  // Real-app look 11-15: the sheet opens by itself for a worktree no session made (the default layout has no strip).
+  // A worktree the window did not make (here the CLI's) opens no sheet by itself: its Review does (setup-ask-quiet.spec.ts).
   const sheet = app.getByRole('dialog', { name: /^Approve the setup script of / });
+  await expect(sheet).toHaveCount(0);
+  await app.getByRole('navigation', { name: 'Right bar' }).getByRole('button', { name: 'Decisions' }).click();
+  await app.locator(`[data-widget-body="decisions"] [data-setup="${wt}"]`).getByRole('button', { name: 'Review' }).click();
   await expect(sheet.locator('[data-field="script"]')).toHaveText('echo from-repo > ran.txt');
   await expect(sheet.locator('[data-field="hash"]')).toHaveText(`hash ${hash}`);
   await expect(sheet.locator('[data-field="path"]')).toHaveText(wt);

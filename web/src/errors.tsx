@@ -278,7 +278,7 @@ export function ErrorLine({ t, error, retry, anyway, className = 'conflict', for
     <div className={className} role="alert" data-error="plain" data-field={field}>
       {plainError(t, error, foreign)}
       {retry && (
-        <button type="button" className="btn sretry" onClick={retry}>
+        <button type="button" className="btn q sm sretry" onClick={retry} /* design book, error line: Retry is quiet small */>
           {t('settings.kit.retry')}
         </button>
       )}

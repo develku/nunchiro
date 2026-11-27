@@ -132,8 +132,8 @@ test('focus_ring_rounded: the composer box is the mockup rounded box, and focusi
     const c = getComputedStyle(el);
     return { box: { radius: c.borderTopLeftRadius, border: c.borderTopWidth, color: c.borderTopColor }, line, run };
   });
-  // The mockup's .cmp: 16px; ticket 1041 (polish-1121 .comp): no border, a tint step.
-  expect(rest.box).toMatchObject({ radius: '16px', border: '0px' });
+  // The mockup's .cmp rounded box, radius 14 in the design book; ticket 1041 (polish-1121 .comp): no border, a tint step.
+  expect(rest.box).toMatchObject({ radius: '14px', border: '0px' });
   await composer(app).locator('textarea').click();
   const focus = await cbox.evaluate((el) => {
     const probe = document.createElement('i');
@@ -145,7 +145,7 @@ test('focus_ring_rounded: the composer box is the mockup rounded box, and focusi
     const c = getComputedStyle(el);
     return { radius: c.borderTopLeftRadius, color: c.borderTopColor, ring: c.outlineWidth, ringStyle: c.outlineStyle, ringColor: c.outlineColor, want: ring, halo };
   });
-  expect(focus.radius).toBe('16px');
+  expect(focus.radius).toBe('14px');
   // Ticket 1041 (owner 11-22: focus is the neutral --ring-focus): no border; a 1px ring of that colour round the box.
   expect(focus).toMatchObject({ ring: '1px', ringStyle: 'solid', ringColor: focus.halo });
 });

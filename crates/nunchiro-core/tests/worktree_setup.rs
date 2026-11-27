@@ -223,6 +223,21 @@ fn setup_script_from_repo_needs_setup_approval() {
     assert!(core.asks().is_empty());
 }
 
+// An ask whose worktree was removed while the core runs can never be approved: it goes with the worktree, at once.
+#[test]
+fn setup_ask_goes_with_its_removed_worktree() {
+    let core = Core::new();
+    commit(&core.repo, "orca.yaml", &orca("touch ran.txt"));
+    let kept = core.create("kept");
+    let gone = core.create("gone");
+    assert_eq!(core.asks().len(), 2);
+    core.remove(&gone).unwrap();
+    assert!(!gone.exists());
+    let asks = core.asks();
+    assert_eq!(asks.len(), 1, "{asks:?}");
+    assert_eq!(asks[0]["owner"]["path"], kept.to_str().unwrap());
+}
+
 #[test]
 fn setup_script_changed_text_asks_again() {
     let core = Core::new();

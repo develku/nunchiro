@@ -877,12 +877,13 @@ button:disabled {
 .term[hidden] {
   display: none;
 }
+/* Design book, empty states: centred in the pane, the line 13 --muted, max 320 wide. */
 .empty {
   display: grid;
   place-items: center;
   height: 100%;
   color: var(--muted);
-  font-size: var(--fs-12);
+  font-size: var(--fs-ui);
   text-align: center;
   padding: 24px;
 }
@@ -1121,16 +1122,18 @@ button:disabled {
 }
 /* The tree's dialogs built on this shell (name, list, create worktree, tidy, remove, add leader) keep their look here: the
    tree lane (1041 lane 4) restyles them with their own sheets and pixel gates. The command palette and Quick open carry
-   `.glass` (light-glass.css): the mockup's `.pal`. */
+   `.glass` (light-glass.css): the mockup's `.pal`. Design book: those dialogs are solid --raised, radius 14, on the float
+   shadow with no border; the palette is a glass popover, radius 12. */
 .palette:not(:where(.glass)) {
+  border: 0;
+  border-radius: var(--dialog-r);
   background: var(--raised);
-  border: 1px solid var(--faint);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-float);
 }
 .palette.glass {
   width: 480px;
   padding: var(--sp-8);
-  border-radius: var(--r-16);
+  border-radius: var(--popover-r);
 }
 .palette input {
   display: block;
@@ -1226,13 +1229,12 @@ button:disabled {
   clip: rect(0 0 0 0);
 }
 /* V2.5-56: group headers (not rows), the session row's state dot (tree tones; the words are its aria-label) and branch. */
+/* Design book, menu caption: 11.5 / 500 --muted, no capitals (caps captions are the status bar's only). */
 .palette li.gh {
   padding: var(--sp-8) var(--sp-8) var(--sp-4);
   color: var(--muted);
-  font-size: var(--fs-11);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: var(--fs-meta);
+  font-weight: 500;
   cursor: default;
 }
 .palette li .pdot {
@@ -1850,9 +1852,9 @@ button:disabled {
   width: calc(100% - 32px);
   padding: 14px 16px;
   color: var(--text);
-  background: var(--panel);
+  background: var(--raised);
   border: 0; /* ticket 1041: a solid dialog over the scrim, floating on its shadow (owner 15.1 item 6) */
-  border-radius: var(--r-12);
+  border-radius: var(--dialog-r); /* design book, dialogs: --raised, radius 14 */
   box-shadow: var(--shadow-float);}
 .modal::backdrop {
   background: var(--scrim);
@@ -2313,27 +2315,47 @@ button:disabled {
   bottom: 24px;
   transform: translateX(-50%);
   z-index: 70;
+  /* Design book, toasts: a solid --raised pill (never glass), radius 10, 36 high, 13 --text, on the float shadow with a
+     0.5 rim. Its action is a secondary small button (Undo) beside its key chip; the close is a quiet 24 icon button. */
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
-  border-radius: var(--r-8);
-  background: var(--text);
-  color: var(--panel);
-  font-size: var(--fs-13);
-  font-weight: 600;
-  /* ticket 1041: toasts float on the one float shadow, solid ink (not glass) */
-  box-shadow: var(--shadow-float);
+  gap: var(--sp-12);
+  box-sizing: border-box;
+  min-height: var(--toast-h);
+  padding: 0 6px 0 14px;
+  border-radius: var(--toast-r);
+  background: var(--raised);
+  color: var(--text);
+  font-size: var(--fs-ui);
+  box-shadow: var(--shadow-float), 0 0 0 0.5px color-mix(in srgb, var(--text) 12%, transparent);
 }
 .toast button {
-  color: var(--panel);
-  text-decoration: underline;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  border: 0;
+  border-radius: var(--btn-r);
+  background: var(--tint-2);
+  color: var(--text);
+  font: 500 var(--fs-sm) / 1 var(--font-ui);
+}
+.toast button:hover {
+  background: var(--tint-3);
+}
+.toast button:last-child {
+  min-width: var(--hit);
+  padding: 0;
+  background: none;
+  color: var(--muted);
+}
+.toast button:last-child:hover {
+  background: var(--tint-1);
+  color: var(--text);
 }
 .toast .kbd {
-  color: var(--panel);
-  border-color: var(--muted);
-  background: transparent;
+  margin-left: calc(var(--sp-8) * -1);
 }
 .pv {
   width: 100%;
@@ -2498,18 +2520,23 @@ button:disabled {
   top: 44px;
   left: 50%;
   transform: translateX(-50%);
-  width: 440px;
+  width: var(--dialog-w);
   max-width: calc(100% - 32px);
-  padding: 12px 14px;
-  background: var(--panel);
-  border-radius: var(--r-12);
-  /* ticket 1041: a solid question card, no border; its orange edge was a "your turn" mark on a notice that is not one (N-row 9.1) */
+  padding: var(--sp-20);
+  background: var(--raised);
+  /* Design book, dialogs: solid --raised, radius 14, padding 20, on the float shadow; the title 15 / 600, the body 13 / 1.5,
+     the buttons at the right, Cancel then the primary. Ticket 1041: no border, no "your turn" edge (N-row 9.1). */
+  border-radius: var(--dialog-r);
   box-shadow: var(--shadow-float);
-  font-size: var(--fs-12);
+  font-size: var(--fs-ui);
   z-index: 50;}
+.wnotice > b {
+  font: 600 var(--fs-15) / 1.3 var(--font-display);
+}
 .wnotice p {
-  margin: 6px 0 10px;
+  margin: var(--sp-12) 0 var(--sp-20);
   color: var(--text);
+  line-height: 1.5;
 }
 .wnotice .row {
   display: flex;
@@ -2774,6 +2801,9 @@ button:disabled {
 }
 .empty p {
   margin: 0 0 10px;
+}
+.empty > p {
+  max-width: 320px;
 }
 .padd {
   flex: none;
@@ -3096,10 +3126,42 @@ button:disabled {
   background: var(--tint-1);
   border-radius: var(--r-6);
 }
-/* Ticket 1041: an update is news, not your turn: ink text, no orange. */
-.status .rcupdate {
+/* Ticket 1041: an update is news, not your turn: ink text, no orange. Design book, status-bar note: a 24 pill, radius 7,
+   --tint-1, a 6 dot, the note in 11.5 --text; Install is its secondary small button, Later a quiet one. */
+.status .snote {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: var(--sp-8);
+  height: var(--btn-h-sm);
+  padding: 0 2px 0 var(--sp-8);
+  border-radius: var(--btn-r);
+  background: var(--tint-1);
+  color: var(--text);
+  font-size: var(--fs-meta);
+}
+.status .snote-dot {
+  flex: none;
+  width: var(--pip);
+  height: var(--pip);
+  border-radius: 50%;
+  background: var(--light-run);
+}
+.status .snote :is(.rcupdate, .rclater) {
+  height: calc(var(--btn-h-sm) - 4px);
+  padding: 0 var(--btn-pad-sm);
+  border-radius: var(--r-6);
   color: var(--text);
   font-weight: 500;
+}
+.status .snote .rcupdate {
+  background: var(--tint-2);
+}
+.status .snote .rcupdate:hover:not(:disabled) {
+  background: var(--tint-3);
+}
+.status .snote .rclater:hover {
+  background: var(--tint-2);
 }
 /* Ticket 1031: shown only while the core connection is lost; ticket 1041 N083: in the broken red. */
 .status .fcore {
@@ -3157,12 +3219,12 @@ button:disabled {
   border-top: 0;
   padding: 8px 20px 4px;
 }
-/* needs 130 (focus_ring_rounded): the mockup's `.cmp`, a 16px box. Ticket 1041 (polish-1121 .comp): no border, one tint
-   step; focus draws the neutral ring (1 px, 3:1) round the box, as the input itself draws none. */
+/* needs 130 (focus_ring_rounded): the mockup's `.cmp`, a rounded box (design book: radius 14). Ticket 1041 (polish-1121
+   .comp): no border, one tint step; focus draws the neutral ring (1 px, 3:1) round the box, as the input itself draws none. */
 .cbox {
   max-width: var(--chat-w, 700px); /* v25-chat-calm: the chat width setting; round 3: the mockup's own .cmp max-width, so the two sides shoot at one width */
   margin: 0 auto;
-  border-radius: var(--r-16);
+  border-radius: var(--composer-r);
   background: var(--tint-1);
 }
 .cbox:focus-within {

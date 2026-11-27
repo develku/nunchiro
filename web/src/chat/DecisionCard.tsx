@@ -107,7 +107,7 @@ export function DecisionCard({ session, from = null, onAnswer, onBack, hosted, f
   return (
     <div
       ref={root}
-      className={`deccard${hosted ? ' hosted' : ''}${docked ? ` docked light-edge ${items.some(isRisky) ? 'light-bad' : 'light-you'}` : ''}`} /* ticket 1041: the docked card's edge light (light-glass.css) */
+      className={`deccard${hosted ? ' hosted' : ''}${docked ? ' docked' : ''}`} /* docked: the warm ring of the design book's card (decision-card.css) */
       data-session={session.id}
       role="region"
       aria-label={items.length === 1 ? t('decisions.cardOne', { name }) : t('decisions.cardMany', { name, count: items.length })}

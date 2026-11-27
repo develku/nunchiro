@@ -148,7 +148,7 @@ function where(a: HTMLElement | null) {
   return { top: r.bottom + 4, left: Math.max(8, Math.min(r.left, window.innerWidth - WIDTH - 8)) };
 }
 
-export function NewSession({ core, ordered, current, project, machine, prefer, go, worktree, soleProject, home, bindings, onStarted, onNote, onClose, onReopen }: { worktree?: { path: string; name: string }; home?: string; core: CoreClient; ordered: Session[]; current: Session | null; project?: string; machine?: string; prefer?: AgentKind; go?: boolean; soleProject?: string; bindings?: Bindings; onStarted: (s: Session, background?: boolean) => void; onNote?: (note: Note) => void; onClose: () => void; onReopen?: () => void }) {
+export function NewSession({ core, ordered, current, project, machine, prefer, go, worktree, soleProject, home, bindings, onStarted, onNote, onClose, onReopen, onWorktree }: { worktree?: { path: string; name: string }; home?: string; onWorktree?: (path: string) => void; core: CoreClient; ordered: Session[]; current: Session | null; project?: string; machine?: string; prefer?: AgentKind; go?: boolean; soleProject?: string; bindings?: Bindings; onStarted: (s: Session, background?: boolean) => void; onNote?: (note: Note) => void; onClose: () => void; onReopen?: () => void }) {
   const t = useHtmlLangT();
   const keymap = useMemo(() => merge(bindings ?? {}), [bindings]);
   const closed = useClosed();
@@ -313,6 +313,7 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
       const at = r.worktrees?.at(-1)?.path;
       if (!at) throw new CoreRefusal('worktree create returned no worktree');
       made.current = { project, path: at };
+      onWorktree?.(at);
     }
     const at = made.current.path;
     for (const until = Date.now() + 30 * 60_000; ; ) {

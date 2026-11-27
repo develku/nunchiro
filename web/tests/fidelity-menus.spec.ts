@@ -96,9 +96,9 @@ for (const scheme of ['light', 'dark'] as const) {
 test.describe('pixels', { tag: '@chromium' }, () => {
   test.use({ deviceScaleFactor: 2, viewport: { width: 1440, height: 900 }, colorScheme: 'light' });
 
-  // Ticket 1041 lane 6: draft 05's look (24 px rows, a 1 px border, rules between groups) is replaced by the approved
-  // polish-1121 A+B+C, which draws no menu: menus are glass (light-glass.css), rows sit on the 32 px grid at 13 px, groups
-  // part by a space. What 05 asked for and stays (the head naming the row, every key, the red removing item) is checked here.
+  // Ticket 1041 lane 6: draft 05's look is replaced: menus are glass (light-glass.css). Design book (menus): radius 10,
+  // rows 26 at 13 px, groups parted by a 1 px --tint-2 line, the head 11.5 px. What 05 asked for and stays (the head
+  // naming the row, every key, the red removing item) is checked here.
   test('menus_match_mockup context menu (05 A, worktree row)', async ({ app, core }) => {
     const row = await worktreeRow(app, core);
     await row.click({ button: 'right' });
@@ -121,11 +121,12 @@ test.describe('pixels', { tag: '@chromium' }, () => {
     });
     expect(got.border).toBe('0px');
     expect(got.blur).toContain('blur');
-    expect(got.radius).toBe('12px');
-    expect(got.row).toBe(32);
+    expect(got.radius).toBe('10px');
+    expect(got.row).toBe(26);
     expect(got.size).toBe('13px');
-    expect(got.sep).toEqual([8, 'rgba(0, 0, 0, 0)']);
-    expect(got.head).toBe('11px');
+    const tint2 = await app.evaluate(() => { const e = document.createElement('i'); e.style.backgroundColor = 'var(--tint-2)'; document.body.append(e); const c = getComputedStyle(e).backgroundColor; e.remove(); return c; });
+    expect(got.sep).toEqual([1, tint2]);
+    expect(got.head).toBe('11.5px');
     expect(got.keys).toBeGreaterThan(0);
     const bad = await app.evaluate(() => { const e = document.createElement('i'); e.style.color = 'var(--bad-text)'; document.body.append(e); const c = getComputedStyle(e).color; e.remove(); return c; });
     expect(got.danger.length).toBeGreaterThan(0);

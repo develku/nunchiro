@@ -80,8 +80,8 @@ ourselves, is 521 MiB.
 | Locale key coverage, 7 other languages (%) | 100 | 80 | v1, unchanged | run |
 | Cold debug build, warm rebuild, web build, Rust test stage, largest file, files over 2,000 lines, files shared by open lanes | | | v1, unchanged (3..20 min, 15..180 s, 15..120 s, 3..20 min, 2,000..15,000, 0..20, 0..10) | dev |
 | Change failure rate (%), time to restore (min) | 5, 60 | 30, 1440 | v1, unchanged (DORA) | ops |
-| Open a 5,000-event conversation: select it to its newest message painted (ms) | 100 | 1000 | Nielsen's limits: 0.1 s feels instant, 1 s keeps the flow (nngroup.com/articles/response-times-3-important-limits). Peer practice: T3 Code bounds a cold open to 75 rows and about 1 MiB (t3code docs/internals/performance-regressions.md:15) | not yet: the page reports this paint (`nunchiro:chat-drawn <session>` mark) and `measurelib.chat_open` reads it, but no runner draws frames: a gate window is hidden (no animation frames), and Playwright gets no window token from a release core |
-| 8 terminals streaming 20 MiB each: worst frame, WebKit (ms) | 200 | 2000 | 100: the stall bar of measurelib.py:397 (a stall a user sees). 0: the 2 s after which the same scripts call a key missed (measurelib.py:405). We read 1,453-1,843 ms on 10-25 (docs/v1/figures.md `stream-8-webkit`) | owner-run: `paint.sh --only stream --sizes 8 --engines webkit --no-record` |
+| Open a 5,000-event conversation: select it to its newest message painted (ms) | 100 | 1000 | Nielsen's limits: 0.1 s feels instant, 1 s keeps the flow (nngroup.com/articles/response-times-3-important-limits). Peer practice: T3 Code bounds a cold open to 75 rows and about 1 MiB (t3code docs/internals/performance-regressions.md:15) | owner-run: `scorecard.py chatopen` (a visible window of the measure app on the RC core, 19 sessions; 10 opens, each with another session selected first, from the press on the chat's tree row to the page's `nunchiro:chat-drawn <session>` mark, both on the page clock and sent out by the measure app's driver; written only with no miss) |
+| 8 terminals streaming 20 MiB each: worst frame, WebKit (ms) | 200 | 2000 | 100: the stall bar of measurelib.py:397 (a stall a user sees). 0: the 2 s after which the same scripts call a key missed (measurelib.py:405). We read 1,453-1,843 ms on 10-25 (docs/v1/figures.md `stream-8-webkit`) | owner-run: `scorecard.py stream8` (runs `paint.sh --only stream --sizes 8 --engines webkit --no-record` and writes the median of the 3 repeats' worst frames into the manual file) |
 | Memory after 24 h over memory at minute 2, 5 real sessions (ratio) | 1.0 | 1.5 | own bar from the soak bar 1.25 (measurelib.py:400), which is 50 points here | owner-run with the 24 h soak |
 | Prompt delivery: `agent prompt` to the text submitted in a real agent's screen, median (ms) | 1000 | 10000 | Nielsen: 1 s keeps the flow, 10 s loses attention. Our path waits by design (crates/nunchiro-core/src/sessions/deliver.rs: the settle before Enter); cmux delivers through hooks with no wait for a screen | owner-run trial, see p34: each delivered send, from the send to its exact text above the input box; median and p95 per side and in total, the total median scored |
 | Delivery trial: prompts not submitted per 1,000 sent (500 sends) | 0 | 5 | as "missed prompts" above | owner-run trial, see p34 |
@@ -135,7 +135,7 @@ is ignored. The figure names are the keys of ANCHORS in scripts/measure/scorecar
 | p30 | Development speed | rubric | DV1-DV9 | script |
 | p31 | Skills and agent guidance quality | rubric | SK1-SK5 | reading |
 | p32 | Unattended operation | rubric | UO1-UO5 | reading |
-| p33 | Real-use speed and weight (new) | number + trial | open a 5,000-event conversation, 8 terminals streaming, memory growth over 24 h, prompt delivery | owner-run (3), not yet (1) |
+| p33 | Real-use speed and weight (new) | number + trial | open a 5,000-event conversation, 8 terminals streaming, memory growth over 24 h, prompt delivery | owner-run |
 | p34 | Multi-agent accuracy (new) | trial | delivery, shown state, cards, outward gate, start dialogs, waits with no card | owner-run, not yet |
 | p35 | Bot quality (new) | trial + field | task set success, owner touches, first-pass review rate | first-pass: script; task set owner-run, not yet |
 | p36 | Extensibility for others (new) | peer rows | rows XO1-XO5 | reading |
@@ -316,7 +316,7 @@ sandboxes. A phone client is row M2 of p01.
 |---|---|---|
 | Tests of this run | `python3 -B scripts/measure/scorecard.py tests --target <cargo target>` (writes tests-<date>.json) | rule 3 |
 | Idle weight with real agents | with at least 5 Claude or Codex sessions waiting at their prompts and the window open: `python3 -B scripts/measure/scorecard.py weigh` (read only; writes the manual file) | idle_mib_5, idle_cpu_pct_5 |
-| Terminal paint and streaming | `sh scripts/measure/build.sh`, then the two `paint.sh` commands of the anchor table; copy p95_ms and the worst frame into the manual file | term_paint_p95_ms, stream8_worst_frame_ms |
+| Terminal paint and streaming | `sh scripts/measure/build.sh`, then the echo `paint.sh` command of the anchor table and copy p95_ms into the manual file; `python3 -B scripts/measure/scorecard.py stream8` runs the stream command and writes the worst frame itself | term_paint_p95_ms, stream8_worst_frame_ms |
 | Real agent turns | `sh scripts/scenario/v1b-full.sh` (Claude and Codex rows), one real ACP agent turn by hand | the count of p06, EX5, A3 |
 | Peer tasks | drive T1-T12 in Nunchiro (an isolated RC), Orca and T3 Code the same way (by hand with a recording, or computer use for all; the owner answers its access dialog); record steps, seconds and the date in tasks.json | p04, p11, p13 |
 | Seats lost per restart | over 7 days, for each restart of the owner's app (update, serve restart, relaunch): seats held before minus seats back after, from `nunchiro agent list` before and after; the mean | seats_lost_per_restart |
@@ -326,7 +326,7 @@ sandboxes. A phone client is row M2 of p01.
 | Bot task set | p35 above | bot_task_success_pct, bot_owner_touches |
 | Reach | p37 above | RE1-RE5 |
 
-Not yet measurable, with what is missing: opening a 5,000-event conversation (the paint mark and its reader exist; no release-core runner draws frames, see p33's row).
+| Long-chat open | p33 above: `python3 -B scripts/measure/scorecard.py chatopen` (builds the RC core and the measure app, or `--no-build`; the window shows and takes the front for about a minute) | chat_open_5000_ms |
 
 ## Rubric checks
 
