@@ -2241,11 +2241,15 @@ impl Queue {
                 name,
                 level,
                 ..
-            } => format!(
-                "approve {} {name} for {}",
-                subject.label(),
-                format!("{level:?}").to_lowercase()
-            ),
+            } => match crate::plugins::split(name) {
+                // "approve plugin quiet-hours", not "approve widget plugin:quiet-hours for read"
+                Some((id, _)) => format!("approve plugin {id}"),
+                None => format!(
+                    "approve {} {name} for {}",
+                    subject.label(),
+                    format!("{level:?}").to_lowercase()
+                ),
+            },
             OwnerAsk::Setup { path, .. } => {
                 format!("approve the setup script of worktree {}", path.display())
             }

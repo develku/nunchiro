@@ -73,7 +73,7 @@ function PluginsPage({ core, t }: Pick<PageContext, 'core' | 't'>) {
     <div className="ssec-group">
       <PageSummary parts={[[t('plugins.summary'), list?.length]]} />
       <ErrorLine t={t} error={error ? rawError(error) : ''} />
-      <Sec id="h-plugins" className="plg-list" title={t('plugins.section')} lede={t('plugins.lede')}>
+      <Sec id="h-plugins" className="plg-list" title={t('plugins.section')}>
         {list && list.length === 0 && (
           <p className="sds" data-setting="plugins">
             {t('plugins.none')} <code>nunchiro plugin new &lt;id&gt;</code>
@@ -151,8 +151,10 @@ function PluginsPage({ core, t }: Pick<PageContext, 'core' | 't'>) {
           onClose={() => setReview(null)}
           onGranted={() => {
             const id = review;
+            const first = list?.find((p) => p.id === id)?.state === 'unapproved';
             setReview(null);
-            void act({ do: 'set', id, on: true }); // the sheet's Approve turns it on, as the mockup's "Approve and turn on"
+            // A first approval turns it on, as the mockup's "Approve and turn on"; a review again leaves the switch as it was.
+            void act(first ? { do: 'set', id, on: true } : { do: 'list' });
           }}
         />
       )}

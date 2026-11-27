@@ -46,11 +46,31 @@ pub fn run(
             id: id.to_string(),
             command: command.to_string(),
             session: None,
+            poll: false,
         },
         ["allow", id] => return allow(home, id),
         _ => Action::List,
     };
-    match super::call(home, Request::Plugin { action })? {
+    let mut reply = super::call(
+        home,
+        Request::Plugin {
+            action: action.clone(),
+        },
+    )?;
+    // A run longer than the core's first answer is read again until it ends (the sandbox stops it at its limit).
+    while let (Reply::PluginRun { run, .. }, Action::Run { id, command, .. }) = (&reply, &action)
+        && run.running
+    {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let poll = Action::Run {
+            id: id.clone(),
+            command: command.clone(),
+            session: None,
+            poll: true,
+        };
+        reply = super::call(home, Request::Plugin { action: poll })?;
+    }
+    match reply {
         Reply::PluginRun { run, .. } => match (run.output, run.error) {
             (_, Some(e)) => Err(e),
             (Some(widgets_output), None) => {
@@ -139,6 +159,34 @@ fn allow(home: &Path, id: &str) -> Result<(), String> {
     else {
         return Err("unexpected reply".into());
     };
+    // What is approved, part by part, exactly as the window's sheet shows it.
+    let list = |v: &[String]| {
+        if v.is_empty() {
+            "none".to_string()
+        } else {
+            v.join(", ")
+        }
+    };
+    for p in &view.parts {
+        let every = p
+            .interval_secs
+            .map(|s| format!(", every {s} s"))
+            .unwrap_or_default();
+        let draft = if p.writes_draft {
+            ", writes into the message box"
+        } else {
+            ""
+        };
+        println!("{} {}: {}{every}{draft}", p.kind, p.name, p.runs.join(" "));
+        println!(
+            "  network: {}; reads beyond its project: {}",
+            list(&p.network),
+            list(&p.read)
+        );
+    }
+    if view.read_home_wide {
+        println!("warning: a read path covers your whole home folder");
+    }
     match super::call(
         home,
         Request::ApprovalGrant {
@@ -148,14 +196,7 @@ fn allow(home: &Path, id: &str) -> Result<(), String> {
         },
     )? {
         Reply::Waiting { .. } => println!("{}", crate::WAITING),
-        Reply::ApprovalStatus { view } => println!(
-            "approved plugin {id} (network: {})",
-            if view.manifest.network.is_empty() {
-                "none".into()
-            } else {
-                view.manifest.network.join(", ")
-            }
-        ),
+        Reply::ApprovalStatus { .. } => println!("approved plugin {id}"),
         _ => return Err("unexpected reply".into()),
     }
     Ok(())

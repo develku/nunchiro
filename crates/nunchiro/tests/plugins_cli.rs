@@ -63,6 +63,8 @@ fn copy(from: &Path, to: &Path) {
 #[test]
 fn a_new_plugin_passes_its_check() {
     let home = home::short("pln");
+    // A check runs script parts only while script widgets are on, as every run does.
+    std::fs::write(home.join("settings.json"), r#"{"script_widgets": true}"#).unwrap();
     ok(
         &home,
         &["plugin", "new", "quiet", "--with", "panel,command,setting"],
@@ -104,12 +106,12 @@ fn the_example_runs_only_when_on_and_approved() {
     assert!(panels(&home).is_empty());
     assert!(refused(&home, &["plugin", "run", "quiet-hours", "status"]).contains("off"));
     ok(&home, &["plugin", "on", "quiet-hours"]);
-    assert_eq!(panels(&home), ["plugin:quiet-hours/now"]);
+    assert_eq!(panels(&home), ["plugin__quiet-hours__now"]);
     assert!(refused(&home, &["plugin", "run", "quiet-hours", "status"]).contains("needs approval"));
     let run = call(
         &home,
         &owner,
-        json!({"op": "widget_run", "name": "plugin:quiet-hours/now"}),
+        json!({"op": "widget_run", "name": "plugin__quiet-hours__now"}),
     );
     assert!(
         run["Err"].as_str().unwrap().contains("needs approval"),
@@ -182,7 +184,7 @@ fn the_example_runs_only_when_on_and_approved() {
     let run = call(
         &home,
         &owner,
-        json!({"op": "widget_run", "name": "plugin:quiet-hours/now"}),
+        json!({"op": "widget_run", "name": "plugin__quiet-hours__now"}),
     );
     assert!(
         run["Ok"]["run"]["output"]["text"]
@@ -220,7 +222,7 @@ fn the_example_runs_only_when_on_and_approved() {
     let run = call(
         &home,
         &owner,
-        json!({"op": "widget_run", "name": "plugin:quiet-hours/now"}),
+        json!({"op": "widget_run", "name": "plugin__quiet-hours__now"}),
     );
     assert!(run["Err"].as_str().unwrap().contains("changed"), "{run}");
 

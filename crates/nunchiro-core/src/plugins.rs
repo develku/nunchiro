@@ -1,7 +1,7 @@
 //! Plugins: one folder `$NUNCHIRO_HOME/plugins/<id>/` with a `plugin.toml` that adds panels, commands and settings
 //! (docs/plugins.md). A plugin is one approval subject, `plugin:<id>`: the whole folder is hashed and approved once
 //! through the widget permission sheet, and any change asks again. Each panel and command is a part,
-//! `plugin:<id>/<part>`, whose proof carries a widget manifest built from that part and checked by the very rules a
+//! `plugin__<id>__<part>`, whose proof carries a widget manifest built from that part and checked by the very rules a
 //! `widget.toml` takes, so a part runs in the same sandbox as a script widget and a web panel is served as a web
 //! widget. A plugin is off after it is made or copied in; on and approved, its parts run. Owner and window only.
 use crate::{
@@ -17,7 +17,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// The approval name prefix of a plugin; `plugin:<id>` is the plugin, `plugin:<id>/<part>` one panel or command.
+/// The approval name prefix of a plugin; `plugin:<id>` is the plugin, `plugin__<id>__<part>` one panel or command.
 pub const PREFIX: &str = "plugin:";
 pub const FOLDER: &str = "plugins";
 pub const MANIFEST: &str = "plugin.toml";
@@ -129,13 +129,20 @@ pub enum SettingKind {
     Choice,
 }
 
-/// `plugin:<id>` or `plugin:<id>/<part>` split into id and part; `None` for every other name.
+/// The widget name of one part, `plugin__<id>__<part>`: plain widget-name characters, so a panel is placed, framed
+/// and stored in a layout like any widget (`widget:<name>`).
+pub const PART_PREFIX: &str = "plugin__";
+pub fn part_name(id: &str, part: &str) -> String {
+    format!("{PART_PREFIX}{id}__{part}")
+}
+/// `plugin:<id>` (the plugin, as it is approved) or `plugin__<id>__<part>` (one part) split into id and part; `None`
+/// for every other name.
 pub(crate) fn split(name: &str) -> Option<(&str, Option<&str>)> {
-    let rest = name.strip_prefix(PREFIX)?;
-    Some(match rest.split_once('/') {
-        Some((id, part)) => (id, Some(part)),
-        None => (rest, None),
-    })
+    if let Some(id) = name.strip_prefix(PREFIX) {
+        return (!id.contains('/')).then_some((id, None));
+    }
+    let (id, part) = name.strip_prefix(PART_PREFIX)?.split_once("__")?;
+    Some((id, Some(part)))
 }
 fn shown(text: &str) -> bool {
     text.chars().all(crate::delivery::shown)
@@ -153,7 +160,8 @@ pub fn parse(text: &str, id: &str) -> Result<Plugin, String> {
             p.id
         ));
     }
-    if !approval::valid_name(&p.id) {
+    // `__` separates the id from a part in a part's widget name.
+    if !approval::valid_name(&p.id) || p.id.contains("__") {
         return Err(
             "invalid plugin id: use a-z, 0-9, - and _ (up to 64, not starting with - or _)".into(),
         );
@@ -185,8 +193,13 @@ pub fn parse(text: &str, id: &str) -> Result<Plugin, String> {
     }
     let mut seen = BTreeSet::new();
     for name in &parts {
-        if !approval::valid_name(name) {
-            return Err(format!("invalid part name {name:?}: use a-z, 0-9, - and _"));
+        if !approval::valid_name(name)
+            || name.contains("__")
+            || !approval::valid_name(&part_name(&p.id, name))
+        {
+            return Err(format!(
+                "invalid part name {name:?}: use a-z, 0-9, - and _ (no __; id and name together up to 54)"
+            ));
         }
         if !seen.insert(*name) {
             return Err(format!("two panels or commands are named {name:?}"));
@@ -280,22 +293,51 @@ pub struct Part {
     pub kind: String,
     /// The argv, or a web panel's entry file as its one word.
     pub runs: Vec<String>,
+    /// The hosts it may reach and the folders it may read beyond its project, as the runner gets them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub network: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub read: Vec<String>,
+    /// A panel's seconds between runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interval_secs: Option<u64>,
+    /// A command whose output goes into the focused agent's message box (`show = "send"`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub writes_draft: bool,
 }
 pub(crate) fn parts(p: &Plugin) -> Vec<Part> {
-    let panels = p.panel.iter().map(|x| Part {
-        name: x.name.clone(),
-        title: x.title.clone().unwrap_or_else(|| x.name.clone()),
-        kind: "panel".into(),
-        runs: x
+    let part = |name: &String,
+                title: &Option<String>,
+                kind: &str,
+                runs: Vec<String>,
+                writes_draft: bool| {
+        let m = part_manifest(p, name).ok();
+        Part {
+            name: name.clone(),
+            title: title.clone().unwrap_or_else(|| name.clone()),
+            kind: kind.into(),
+            runs,
+            network: m.as_ref().map(|m| m.network.clone()).unwrap_or_default(),
+            read: m.as_ref().map(|m| m.read.clone()).unwrap_or_default(),
+            interval_secs: m.and_then(|m| m.interval_secs),
+            writes_draft,
+        }
+    };
+    let panels = p.panel.iter().map(|x| {
+        let runs = x
             .command
             .clone()
-            .unwrap_or_else(|| x.entry.iter().cloned().collect()),
+            .unwrap_or_else(|| x.entry.iter().cloned().collect());
+        part(&x.name, &x.title, "panel", runs, false)
     });
-    let commands = p.command.iter().map(|x| Part {
-        name: x.name.clone(),
-        title: x.title.clone().unwrap_or_else(|| x.name.clone()),
-        kind: "command".into(),
-        runs: x.command.clone(),
+    let commands = p.command.iter().map(|x| {
+        part(
+            &x.name,
+            &x.title,
+            "command",
+            x.command.clone(),
+            x.show == Show::Send,
+        )
     });
     panels.chain(commands).collect()
 }
@@ -379,11 +421,18 @@ fn values(home: &Path, p: &Plugin) -> BTreeMap<String, Value> {
 /// The JSON a part reads from `$NUNCHIRO_CONTEXT`: the widget context plus which part runs and the settings.
 pub(crate) fn input(
     home: &Path,
-    name: &str,
+    proof: &approval::Proof,
     context: &widgets::Context,
 ) -> Result<Vec<u8>, String> {
-    let (id, part) = split(name).ok_or("not a plugin part")?;
-    let p = read(home, id)?;
+    let (id, part) = split(proof.name()).ok_or("not a plugin part")?;
+    // The manifest the approval hashed, never a second read of the folder.
+    let text = proof
+        .files()
+        .iter()
+        .find(|f| f.path() == MANIFEST)
+        .map(|f| String::from_utf8_lossy(f.bytes()).into_owned())
+        .ok_or("missing plugin.toml")?;
+    let p = parse(&text, id)?;
     let mut v = serde_json::to_value(context).map_err(|e| e.to_string())?;
     let event = if p.panel.iter().any(|x| Some(x.name.as_str()) == part) {
         "panel"
@@ -492,7 +541,7 @@ pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
         .collect()
 }
 
-/// The panels of plugins that are on, as Widget library rows (`plugin:<id>/<panel>`).
+/// The panels of plugins that are on, as Widget library rows (`plugin__<id>__<panel>`).
 pub(crate) fn panels(home: &Path) -> Vec<widgets::Listed> {
     let store = load(home);
     let mut rows = vec![];
@@ -506,7 +555,7 @@ pub(crate) fn panels(home: &Path) -> Vec<widgets::Listed> {
         };
         for x in &p.panel {
             rows.push(widgets::Listed {
-                name: format!("{name}/{}", x.name),
+                name: part_name(&id, &x.name),
                 state: Some(view.state),
                 kind: Some(x.kind.clone()),
                 author: Some(view.manifest.author.clone()),
@@ -519,6 +568,47 @@ pub(crate) fn panels(home: &Path) -> Vec<widgets::Listed> {
         }
     }
     rows
+}
+
+/// Command runs by (home, part name): `None` while it runs, then its result until the window reads it.
+type Runs = BTreeMap<(PathBuf, String), Option<widgets::Run>>;
+fn runs() -> &'static std::sync::Mutex<Runs> {
+    static RUNS: std::sync::OnceLock<std::sync::Mutex<Runs>> = std::sync::OnceLock::new();
+    RUNS.get_or_init(Default::default)
+}
+
+/// A draft for the composer is checked as a widget's act text is (no hidden, bidi or control character, no line
+/// that starts a slash or shell command), line by line, and capped; otherwise the run says why and gives no text.
+const MAX_DRAFT: usize = 4000;
+fn drafted(mut run: widgets::Run, show: Show) -> widgets::Run {
+    if show != Show::Send {
+        return run;
+    }
+    let text = match &run.output {
+        Some(widgets::Output::Text { text } | widgets::Output::Json { text }) => {
+            text.trim_end().to_string()
+        }
+        None => return run,
+    };
+    let checked = if text.chars().count() > MAX_DRAFT {
+        Err(format!(
+            "output over {MAX_DRAFT} characters; nothing put in the message box"
+        ))
+    } else {
+        crate::widgets::act::check_visible(&text).and_then(|()| {
+            text.lines()
+                .filter(|l| !l.trim().is_empty())
+                .try_for_each(crate::widgets::web::check_text)
+        })
+    };
+    if let Err(e) = checked {
+        run.output = None;
+        run.error = Some(
+            e.replace("act text", "output")
+                .replace("nothing sent", "nothing put in the message box"),
+        );
+    }
+    run
 }
 
 /// What the window and the CLI ask of plugins (owner and window only).
@@ -544,6 +634,9 @@ pub enum Action {
         command: String,
         #[serde(default)]
         session: Option<String>,
+        /// Asks for the result of the run started before (the answer to the first ask said `running`).
+        #[serde(default)]
+        poll: bool,
     },
     /// Moves the folder to `plugins/.removed/`, so a removal can be undone by moving it back.
     Remove {
@@ -583,6 +676,7 @@ pub(crate) fn handle(
                 store.on.insert(id);
             } else {
                 store.on.remove(&id);
+                crate::sandbox::stop_subjects(home, &part_name(&id, "")); // a part still running stops now
             }
             save(home, &store)?;
             listed(home)
@@ -604,6 +698,7 @@ pub(crate) fn handle(
             id,
             command,
             session,
+            poll,
         } => {
             let p = read(home, &id)?;
             let c = p
@@ -612,11 +707,71 @@ pub(crate) fn handle(
                 .find(|c| c.name == command)
                 .ok_or_else(|| format!("plugin {id} has no command {command}"))?;
             let show = c.show;
+            let name = part_name(&id, &command);
+            let key = (home.to_path_buf(), name.clone());
+            let pending = |name: &str| widgets::Run {
+                name: name.into(),
+                project: None,
+                ran_at_ms: 0,
+                interval_secs: 0,
+                running: true,
+                output: None,
+                error: None,
+            };
+            {
+                let mut runs = runs().lock().map_err(|_| "plugin runs unavailable")?;
+                match (poll, runs.get(&key)) {
+                    (_, Some(None)) => {
+                        return Ok(Reply::PluginRun {
+                            run: pending(&name),
+                            show,
+                        });
+                    }
+                    (true, Some(Some(_))) => {
+                        let run = runs.remove(&key).flatten().expect("a finished run");
+                        return Ok(Reply::PluginRun { run, show });
+                    }
+                    (true, None) => return Err(format!("no run of {command} to read")),
+                    (false, _) => {
+                        runs.insert(key.clone(), None);
+                    }
+                }
+            }
+            // The window serves its frames one at a time: answer within ANSWER, and let a longer run finish in the
+            // background for the window's next ask (`poll`), as `widget_run` does.
             let config = widgets::Config::core(script_on)?;
             let project = widgets::project(&all, session.as_deref())?;
-            let name = format!("{PREFIX}{id}/{command}");
-            let run = widgets::run_now(home, &config, &name, project, &widgets::context(&all))?;
-            Ok(Reply::PluginRun { run, show })
+            let (send, receive) = std::sync::mpsc::channel();
+            let (home_, name_, context) =
+                (home.to_path_buf(), name.clone(), widgets::context(&all));
+            std::thread::spawn(move || {
+                let run = widgets::run_now(&home_, &config, &name_, project, &context)
+                    .map(|run| drafted(run, show))
+                    .unwrap_or_else(|e| widgets::Run {
+                        error: Some(e),
+                        running: false,
+                        ..pending(&name_)
+                    });
+                if let Ok(mut runs) = runs().lock() {
+                    runs.insert((home_, name_), Some(run.clone()));
+                }
+                let _ = send.send(());
+            });
+            match receive.recv_timeout(std::time::Duration::from_millis(250)) {
+                Ok(()) => {
+                    let run = runs()
+                        .lock()
+                        .map_err(|_| "plugin runs unavailable")?
+                        .remove(&key)
+                        .flatten()
+                        .ok_or("the run was read twice")?;
+                    Ok(Reply::PluginRun { run, show })
+                }
+                Err(_) => Ok(Reply::PluginRun {
+                    run: pending(&name),
+                    show,
+                }),
+            }
         }
         Action::Remove { id } => {
             if !approval::valid_name(&id) {
@@ -637,10 +792,13 @@ pub(crate) fn handle(
                 removed.join(format!("{id}-{}", crate::queue::now_ms())),
             )
             .map_err(|e| e.to_string())?;
+            crate::sandbox::stop_subjects(home, &part_name(&id, ""));
             let mut store = load(home);
             store.on.remove(&id);
             store.settings.remove(&id);
             save(home, &store)?;
+            // Its approval goes with it: the same folder moved back asks again.
+            approval::forget_plugin(home, &id)?;
             listed(home)
         }
     }
@@ -654,11 +812,13 @@ pub struct Tried {
     pub result: Result<String, String>,
 }
 /// `nunchiro plugin check <id>`: the manifest by the core's rules, then each script part once in the widget sandbox
-/// on the sample input (no sessions, the current settings), before and without any approval. A web panel is only
+/// on the sample input (no sessions, the current settings), before and without any approval, so with no network and
+/// no declared reads, and only while script widgets are on. A web panel is only
 /// checked (its entry is in the folder). Runs nothing in a session and changes no approval.
 pub fn trial(home: &Path, id: &str) -> Result<(Plugin, Vec<Tried>), String> {
     let p = read(home, id)?;
-    let config = widgets::Config::core(true)?;
+    let enabled = script_widgets(home);
+    let config = widgets::Config::core(enabled)?;
     let mut tried = vec![];
     for (part, script) in p
         .panel
@@ -666,7 +826,7 @@ pub fn trial(home: &Path, id: &str) -> Result<(Plugin, Vec<Tried>), String> {
         .map(|x| (&x.name, x.kind == "script"))
         .chain(p.command.iter().map(|x| (&x.name, true)))
     {
-        let name = format!("{PREFIX}{id}/{part}");
+        let name = part_name(id, part);
         let result = match approval::trial(home, &name) {
             Err(e) => Err(e),
             Ok(proof) if !script => proof
@@ -675,6 +835,9 @@ pub fn trial(home: &Path, id: &str) -> Result<(Plugin, Vec<Tried>), String> {
                 .any(|f| f.path() == proof.manifest().entry)
                 .then(|| format!("web page {}", proof.manifest().entry))
                 .ok_or_else(|| format!("entry {} is missing", proof.manifest().entry)),
+            Ok(_) if !enabled => {
+                Ok("checked, not run: script widgets are off (Settings > Layout)".into())
+            }
             Ok(proof) => {
                 widgets::execute(home, &config, &proof, None, &widgets::Context::default()).map(
                     |o| match o {
@@ -689,6 +852,14 @@ pub fn trial(home: &Path, id: &str) -> Result<(Plugin, Vec<Tried>), String> {
         });
     }
     Ok((p, tried))
+}
+
+/// The `script_widgets` setting (settings.json): script parts run only while it is on, a check's trial too.
+pub(crate) fn script_widgets(home: &Path) -> bool {
+    crate::store::read_settings(&home.join("settings.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+        .is_some_and(|v| v["script_widgets"] == true)
 }
 
 /// The parts `plugin new --with` can add.

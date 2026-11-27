@@ -4,10 +4,15 @@ declare module '../index' {
     'field.plugins': true;
     'searchWords.plugins': true;
     'plugins.title': true;
+    'plugins.sheet.net': true;
+    'plugins.sheet.noNet': true;
+    'plugins.sheet.reads': true;
+    'plugins.sheet.noReads': true;
+    'plugins.sheet.every': true;
+    'plugins.sheet.draft': true;
     'plugins.desc': true;
     'plugins.summary': true;
     'plugins.section': true;
-    'plugins.lede': true;
     'plugins.none': true;
     'plugins.panels.one': true;
     'plugins.panels.other': true;
@@ -48,10 +53,15 @@ export const en = {
   "field.plugins": "Plugins",
   "searchWords.plugins": "plugins, extensions, add-ons, panels, commands",
   "plugins.title": "Plugins",
-  "plugins.desc": "Folders that add panels, commands and settings. Nothing in one runs until you review it.",
+  "plugins.sheet.net": "Network: {hosts}",
+  "plugins.sheet.noNet": "No network",
+  "plugins.sheet.reads": "Reads beyond its project: {paths}",
+  "plugins.sheet.noReads": "Reads only its project",
+  "plugins.sheet.every": "Every {secs} s",
+  "plugins.sheet.draft": "Puts its output in the focused agent's message box as a draft",
+  "plugins.desc": "Folders that add panels, commands and settings. Nothing in one runs for you until you review it and turn it on.",
   "plugins.summary": "Plugins",
   "plugins.section": "Your plugins",
-  "plugins.lede": "A plugin is a folder that adds panels, commands and settings to Nunchiro. Nothing in it runs until you review it and turn it on.",
   "plugins.none": "No plugins yet. Copy a plugin folder into ~/.nunchiro/plugins, or make one with",
   "plugins.panels.one": "{n} panel",
   "plugins.panels.other": "{n} panels",

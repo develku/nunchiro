@@ -415,6 +415,11 @@
             "id": {
               "type": "string"
             },
+            "poll": {
+              "default": false,
+              "description": "Asks for the result of the run started before (the answer to the first ask said `running`).",
+              "type": "boolean"
+            },
             "session": {
               "default": null,
               "type": [
@@ -5463,12 +5468,34 @@
     "Part": {
       "description": "One part as the permission sheet lists it: what it is and exactly what it runs.",
       "properties": {
+        "interval_secs": {
+          "description": "A panel's seconds between runs.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "kind": {
           "description": "`panel` or `command`.",
           "type": "string"
         },
         "name": {
           "type": "string"
+        },
+        "network": {
+          "description": "The hosts it may reach and the folders it may read beyond its project, as the runner gets them.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "read": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "runs": {
           "description": "The argv, or a web panel's entry file as its one word.",
@@ -5479,6 +5506,10 @@
         },
         "title": {
           "type": "string"
+        },
+        "writes_draft": {
+          "description": "A command whose output goes into the focused agent's message box (`show = \"send\"`).",
+          "type": "boolean"
         }
       },
       "required": [
@@ -16086,7 +16117,7 @@
           "description": "Absent when the folder cannot be read or its manifest does not parse (`error` says why)."
         },
         "title": {
-          "description": "A plugin panel's title and its plugin's name (`plugin:<id>/<panel>` rows); absent for a widget folder.",
+          "description": "A plugin panel's title and its plugin's name (`plugin__<id>__<panel>` rows); absent for a widget folder.",
           "type": [
             "string",
             "null"

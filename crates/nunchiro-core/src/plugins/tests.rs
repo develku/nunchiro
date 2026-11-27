@@ -24,9 +24,9 @@ fn a_starter_with_every_part_parses_and_is_one_unapproved_subject() {
     assert_eq!(view.manifest.kind, "plugin");
     assert_eq!(view.cli, "nunchiro plugin allow x");
     // A part carries the plugin's hash and its own argv.
-    let part = approval::status(&h, "plugin:x/main").unwrap();
-    assert_eq!(part.hash, view.hash);
-    assert_eq!(part.manifest.command, ["/bin/sh", "panel.sh"]);
+    let part = approval::trial(&h, "plugin__x__main").unwrap();
+    assert_eq!(part.hash(), view.hash);
+    assert_eq!(part.argv(), ["/bin/sh", "panel.sh"]);
     assert!(
         scaffold(&h, "x", &[])
             .unwrap_err()
@@ -46,13 +46,13 @@ fn approval_covers_every_part_and_a_change_stops_them() {
     let dir = scaffold(&h, "x", &PARTS).unwrap();
     let view = approval::status(&h, "plugin:x").unwrap();
     assert!(
-        approval::check(&h, "plugin:x/hello")
+        approval::check(&h, "plugin__x__hello")
             .unwrap_err()
             .contains("not approved")
     );
     approval::grant(&h, "plugin:x", approval::Level::Read, &view.hash).unwrap();
     assert_eq!(
-        approval::check(&h, "plugin:x/hello").unwrap().argv(),
+        approval::check(&h, "plugin__x__hello").unwrap().argv(),
         ["/bin/sh", "command.sh"]
     );
     assert!(approval::grant(&h, "plugin:x", approval::Level::Act, &view.hash).is_err());
@@ -62,7 +62,7 @@ fn approval_covers_every_part_and_a_change_stops_them() {
         approval::State::Changed
     );
     assert!(
-        approval::check(&h, "plugin:x/main")
+        approval::check(&h, "plugin__x__main")
             .unwrap_err()
             .contains("changed")
     );
@@ -130,16 +130,22 @@ fn settings_are_checked_by_type_and_reach_the_input() {
         .insert("greeting".into(), "Hi".into());
     store.on.insert("x".into());
     save(&h, &store).unwrap();
-    let input: Value =
-        serde_json::from_slice(&input(&h, "plugin:x/hello", &widgets::Context::default()).unwrap())
-            .unwrap();
+    let input: Value = serde_json::from_slice(
+        &input(
+            &h,
+            &approval::trial(&h, "plugin__x__hello").unwrap(),
+            &widgets::Context::default(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
     assert_eq!(input["settings"]["greeting"], "Hi");
     assert_eq!(
         (input["event"].as_str(), input["part"].as_str()),
         (Some("command"), Some("hello"))
     );
-    assert!(on(&h, "plugin:x/hello").is_ok());
-    assert!(on(&h, "plugin:y/hello").unwrap_err().contains("off"));
+    assert!(on(&h, "plugin__x__hello").is_ok());
+    assert!(on(&h, "plugin__y__hello").unwrap_err().contains("off"));
     fs::remove_dir_all(&h).unwrap();
 }
 
@@ -153,7 +159,7 @@ fn only_plugins_that_are_on_show_their_panels() {
     save(&h, &store).unwrap();
     let rows = panels(&h);
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].name, "plugin:x/main");
+    assert_eq!(rows[0].name, "plugin__x__main");
     assert_eq!(rows[0].state, Some(approval::State::Unapproved));
     let listed = list(&h, false, false);
     assert_eq!(listed[0].needs.as_deref(), Some("script_widgets"));
