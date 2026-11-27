@@ -575,3 +575,48 @@ fn not_now_after_start_calls_the_start_off() {
     std::thread::sleep(Duration::from_secs(3));
     assert!(started(&c).is_empty(), "started after Not now");
 }
+
+#[test]
+fn an_asking_trigger_keeps_at_most_three_cards_waiting() {
+    let c = core("tgq");
+    add(&c, "asker", "cli", false, "");
+    let fire = |s: &str| {
+        nunchiro(
+            &c.home,
+            None,
+            &["trigger", "fire", "asker", "--data", "-"],
+            &format!("{{\"subject\": \"{s}\"}}"),
+        )
+    };
+    for s in ["a", "b", "c"] {
+        assert!(fire(s).status.success(), "{s}");
+    }
+    let fourth = fire("d");
+    assert!(
+        String::from_utf8_lossy(&fourth.stderr).contains("cards wait"),
+        "{}",
+        String::from_utf8_lossy(&fourth.stderr)
+    );
+    let snap = call(&c.home, &c.owner, json!({"op": "snapshot"}));
+    let cards = snap["Ok"]["owner_decisions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["owner"]["change"] == "trigger")
+        .count();
+    assert_eq!(cards, 3);
+    // The refused fire gave its hourly place back and is the trigger's last fire.
+    let listed: Value = serde_json::from_str(&ok(&c.home, &["trigger", "list", "--json"])).unwrap();
+    assert_eq!(
+        listed[0]["fired"].as_array().map_or(0, Vec::len),
+        3,
+        "{listed}"
+    );
+    assert!(
+        listed[0]["last"]["reason"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("cards wait"),
+        "{listed}"
+    );
+}
