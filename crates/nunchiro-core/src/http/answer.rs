@@ -234,6 +234,10 @@ pub(super) fn answer(
             Request::MemoryWaitCancel { id } => {
                 crate::pressure::answer(registry, stopping, &id, false)
             }
+            // The window is the owner: a trigger card's "Turn this trigger off", and the list.
+            Request::Trigger { action } => {
+                crate::schedule::triggers::handle(registry, stopping, home, action)
+            }
             Request::MemoryWaitList => Ok(Reply::MemoryWait {
                 entries: crate::pressure::shown()
                     .iter()
