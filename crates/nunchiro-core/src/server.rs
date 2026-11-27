@@ -987,6 +987,38 @@ fn connection(
         {
             sessions.check_locked(&caller, &env.request)?;
         }
+        // A plugin's check before a message an agent or a token sends, off the lock (a sandbox run of up to 5 s). The
+        // owner's own words never reach it: the owner's socket and the window are not a session caller.
+        if !owner
+            && matches!(
+                env.request,
+                Request::AgentPrompt { .. } | Request::AgentSend { .. } | Request::RoomSend { .. }
+            )
+            && let Ok(caller) = sessions.agent_caller(&env.token)
+        {
+            let asker = match caller.id.starts_with(crate::tokens::CALLER) {
+                true => crate::plugins::Asker::Token,
+                false => crate::plugins::Asker::Agent,
+            };
+            drop(sessions);
+            match &mut env.request {
+                Request::AgentPrompt { id, text } | Request::AgentSend { id, text } => {
+                    *text = crate::plugins::check_send(home, asker, id, text)?;
+                }
+                Request::RoomSend { to, body, .. } => {
+                    *body = crate::plugins::check_send(
+                        home,
+                        asker,
+                        to.as_deref().unwrap_or("room"),
+                        body,
+                    )?;
+                }
+                _ => {}
+            }
+            sessions = registry
+                .lock()
+                .map_err(|_| "session registry unavailable")?;
+        }
         if let Request::AgentRead { id, source, lines } = &env.request
             && source == "transcript"
         {
@@ -1420,6 +1452,22 @@ fn connection(
             receipt,
         } = env.request
         {
+            // A plugin's check before a new session, off the lock (a sandbox run of up to 5 s); the owner's
+            // `--anyway` passes it, as it passes a memory hold.
+            if !anyway {
+                let asker = match &caller {
+                    None => crate::plugins::Asker::Owner,
+                    Some(c) if c.id.starts_with(crate::tokens::CALLER) => {
+                        crate::plugins::Asker::Token
+                    }
+                    Some(_) => crate::plugins::Asker::Agent,
+                };
+                drop(sessions);
+                crate::plugins::check_start(home, asker, &session)?;
+                sessions = registry
+                    .lock()
+                    .map_err(|_| "session registry unavailable")?;
+            }
             // Ticket 573 slice 2 (Orca): a receipt is the caller's own; a retry waits out a start still running with it.
             let mut claim = Receipt(None);
             if let Some(receipt) = receipt {

@@ -1199,6 +1199,8 @@ fn start(
     // A model retired since the entry was made is this run's failure, not the whole file's (`check_stored`).
     run.check_model()?;
     let (session, first) = (run.start(), run.task.clone());
+    let home = lock(registry)?.home().to_path_buf();
+    crate::plugins::check_start(&home, crate::plugins::Asker::Schedule, &session)?;
     crate::pressure::check_start(&session, who, false, "schedule")?;
     let launch = {
         let sessions = lock(registry)?;

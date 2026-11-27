@@ -15,8 +15,8 @@ nunchiro plugin run hello hello      # run its command now
 ```
 
 A working example is in [`api/examples/plugins/quiet-hours`](api/examples/plugins/quiet-hours): a panel that shows
-whether it is quiet time and how many agents are working, a palette command that says the same in one line, and two
-time settings. Copy the folder to `$NUNCHIRO_HOME/plugins/quiet-hours/` to try it.
+whether it is quiet time and how many agents are working, a palette command that says the same in one line, two time
+settings, and a check that refuses new agent sessions an agent, a schedule or a token starts in quiet time. Copy the folder to `$NUNCHIRO_HOME/plugins/quiet-hours/` to try it.
 
 ## `plugin.toml`
 
@@ -81,6 +81,39 @@ Approving and turning on are the owner's: an agent can write and check a plugin,
 waiting item in the window. Script parts also need the `script_widgets` setting; a web panel needs `web_widgets`.
 `plugin list` says which one is off.
 
+## Checks (`[[gate]]`)
+
+A check runs before an action and may refuse it, at two places only:
+
+- `on = "session.start.before"`: before every new agent session (the owner's CLI and window, an agent's
+  `agent start`, a teammate's seat, a schedule, a token). A plain terminal and a resumed conversation are not checked.
+- `on = "prompt.send.before"`: before a message an agent or a token sends is delivered (`agent prompt`, `agent send`,
+  room sends). What the owner types in a composer or a terminal never reaches a check.
+
+```toml
+[[gate]]
+name = "starts"
+on = "session.start.before"
+command = ["/bin/sh", "gate.sh"]
+on_error = "allow"            # or "refuse" (the default): what no answer, a crash or bad JSON means
+```
+
+`$NUNCHIRO_CONTEXT` holds `event`, `asker` (`owner`, `agent`, `schedule`, `token`), `settings`, and `start` (`kind`,
+`project`, `worktree`, `label`) or `to` and `text`. The check prints one line:
+
+```json
+{"allow": true}
+{"allow": false, "reason": "Quiet hours until 07:00."}
+{"allow": true, "text": "the message to deliver instead"}
+```
+
+Checks run for plugins that are on and approved as they are now, plugins in id order and checks in manifest order;
+the first refusal ends it. A check has 5 seconds; then it is stopped and `on_error` decides. A refused owner start
+says `<plugin> stopped this start: <reason>` with Start anyway (`agent start --anyway` in a terminal); an agent, a
+schedule or a token gets the sentence and cannot pass it. A replaced message (at most 16 KB) is delivered instead of
+the original, and the core's log names the plugin. A check cannot answer a permission, skip an outward card or widen
+anything: allow, refuse and replacement text are its only outputs. With no plugin on, nothing is run.
+
 ## Through the API
 
 The window and scripts use the same request, `{"op": "plugin", "action": {"do": "list"}}` (also `set`, `setting`,
@@ -90,4 +123,4 @@ The window and scripts use the same request, `{"op": "plugin", "action": {"do": 
 ## Not yet
 
 - Skills, hooks and MCP servers in a plugin (today they are extension folders, `nunchiro extensions`).
-- Checks that can refuse a start or a message (`[[gate]]`) and a catalogue to install from.
+- A catalogue to install from.

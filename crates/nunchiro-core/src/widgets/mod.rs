@@ -395,7 +395,7 @@ pub fn run(
     let _release = Release(key.clone());
     let started = Instant::now();
     let ran_at_ms = crate::queue::now_ms();
-    let result = execute(home, config, &proof, project.as_ref(), context);
+    let result = execute(home, config, &proof, project.as_ref(), context, None);
     if let Err(e) = &result
         && e.starts_with("script widgets unavailable")
     {
@@ -446,7 +446,7 @@ pub(crate) fn run_now(
     crate::plugins::on(home, name)?;
     let proof = approval::check(home, name).map_err(|e| format!("needs approval: {e}"))?;
     let ran_at_ms = crate::queue::now_ms();
-    let (output, error) = match execute(home, config, &proof, project.as_ref(), context) {
+    let (output, error) = match execute(home, config, &proof, project.as_ref(), context, None) {
         Ok(o) => (Some(o), None),
         Err(e) => (None, Some(e)),
     };
@@ -479,6 +479,7 @@ pub(crate) fn execute(
     proof: &approval::Proof,
     project: Option<&Project>,
     context: &Context,
+    extra: Option<&serde_json::Value>,
 ) -> Result<Output, String> {
     let cache = &cache_dir(home, proof.name());
     // The cache sits beside the hashed files (`cache` is skipped by the folder hash) and must stay a real folder.
@@ -501,7 +502,7 @@ pub(crate) fn execute(
     let file = cache.join("context.json");
     // A rename replaces whatever the last run left at this name (even a symlink) without following it.
     let bytes = match crate::plugins::split(proof.name()) {
-        Some(_) => crate::plugins::input(home, proof.name(), context)?,
+        Some(_) => crate::plugins::input(home, proof.name(), context, extra)?,
         None => serde_json::to_vec(context).map_err(|e| e.to_string())?,
     };
     crate::store::atomic_write(&file, &bytes)?;

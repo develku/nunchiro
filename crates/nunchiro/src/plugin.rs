@@ -8,7 +8,7 @@ use nunchiro_core::{
 };
 use std::path::Path;
 
-const USAGE: &str = "usage: nunchiro plugin new <id> [--with panel,command,setting] | check <id> | list [--json] | on <id> | off <id> | allow <id> | run <id> <command> | remove <id>";
+const USAGE: &str = "usage: nunchiro plugin new <id> [--with panel,command,setting,gate] | check <id> | list [--json] | on <id> | off <id> | allow <id> | run <id> <command> | remove <id>";
 
 pub fn run(
     home: &Path,

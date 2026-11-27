@@ -20,6 +20,7 @@ function counts(t: PageContext['t'], p: NonNullable<Listed['plugin']>) {
     ...n(p.panel?.length ?? 0, 'plugins.panels.one', 'plugins.panels.other'),
     ...n(p.command?.length ?? 0, 'plugins.commands.one', 'plugins.commands.other'),
     ...n(p.setting?.length ?? 0, 'plugins.settings.one', 'plugins.settings.other'),
+    ...n(p.gate?.length ?? 0, 'plugins.checks.one', 'plugins.checks.other'),
   ].join(' · ');
 }
 

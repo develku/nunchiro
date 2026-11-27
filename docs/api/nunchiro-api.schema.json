@@ -3040,6 +3040,68 @@
         }
       ]
     },
+    "Gate": {
+      "additionalProperties": false,
+      "description": "A check run before an action: it answers `{\"allow\": true}`, `{\"allow\": false, \"reason\": \"...\"}` or, before a\nmessage, `{\"allow\": true, \"text\": \"...\"}` to replace it. It can do nothing else.",
+      "properties": {
+        "command": {
+          "description": "argv, run from the plugin folder; 5 seconds at most.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "on": {
+          "$ref": "#/$defs/GateOn"
+        },
+        "on_error": {
+          "$ref": "#/$defs/OnError",
+          "default": "refuse",
+          "description": "What no answer, a crash or bad JSON means."
+        },
+        "read": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "on",
+        "command"
+      ],
+      "type": "object"
+    },
+    "GateOn": {
+      "oneOf": [
+        {
+          "const": "session.start.before",
+          "description": "A new agent session is about to start (not a plain terminal, not a resumed conversation).",
+          "type": "string"
+        },
+        {
+          "const": "prompt.send.before",
+          "description": "A message an agent, a schedule or a token sends is about to be delivered; never what the owner types.",
+          "type": "string"
+        }
+      ]
+    },
     "GitFacts": {
       "description": "Ticket 373: what the Diff header's one git button reads (web/src/diff/gitAction.ts, after T3 Code's\n`resolveQuickAction`). Read only, like the rest of this module: the button only asks the session's agent.",
       "properties": {
@@ -4717,6 +4779,13 @@
         }
       ]
     },
+    "OnError": {
+      "enum": [
+        "refuse",
+        "allow"
+      ],
+      "type": "string"
+    },
     "Opened": {
       "properties": {
         "cursor": {
@@ -5464,7 +5533,7 @@
       "description": "One part as the permission sheet lists it: what it is and exactly what it runs.",
       "properties": {
         "kind": {
-          "description": "`panel` or `command`.",
+          "description": "`panel`, `command` or `check`.",
           "type": "string"
         },
         "name": {
@@ -5589,6 +5658,13 @@
           "description": "Rows in the command palette.",
           "items": {
             "$ref": "#/$defs/Command"
+          },
+          "type": "array"
+        },
+        "gate": {
+          "description": "Checks that may refuse a new session or replace a message an agent, a schedule or a token sends.",
+          "items": {
+            "$ref": "#/$defs/Gate"
           },
           "type": "array"
         },

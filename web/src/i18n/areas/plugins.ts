@@ -4,6 +4,10 @@ declare module '../index' {
     'field.plugins': true;
     'searchWords.plugins': true;
     'plugins.title': true;
+    'plugins.checks.one': true;
+    'plugins.checks.other': true;
+    'plugins.startAnyway.tip': true;
+    'plugins.sheet.check': true;
     'plugins.desc': true;
     'plugins.summary': true;
     'plugins.section': true;
@@ -47,6 +51,10 @@ export const en = {
   "field.plugins": "Plugins",
   "searchWords.plugins": "plugins, extensions, add-ons, panels, commands",
   "plugins.title": "Plugins",
+  "plugins.checks.one": "{n} check",
+  "plugins.checks.other": "{n} checks",
+  "plugins.startAnyway.tip": "Start it now, past the plugin's check, this once.",
+  "plugins.sheet.check": "Check",
   "plugins.desc": "Folders that add panels, commands and settings. Nothing in one runs until you review it and turn it on.",
   "plugins.summary": "Plugins",
   "plugins.section": "Your plugins",

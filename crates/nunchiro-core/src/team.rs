@@ -1224,6 +1224,17 @@ pub(crate) fn open_seat(
             why,
         }))
     };
+    // A plugin's check before a new teammate seat, off the lock. shortcut: checked before the lock decides whether an
+    // open seat resumes, so an owner's reopen that resumes is checked too; move it after if that ever refuses one.
+    let asker = match &opener {
+        Opener::Window => Some(crate::plugins::Asker::Owner),
+        Opener::Schedule(..) => Some(crate::plugins::Asker::Schedule),
+        Opener::Lead(_) => Some(crate::plugins::Asker::Agent),
+        Opener::Fresh(_) | Opener::Undo(..) | Opener::WindowAnyway => None,
+    };
+    if let Some(asker) = asker {
+        crate::plugins::check_start(&home, asker, &start)?;
+    }
     let undo = matches!(opener, Opener::Undo(..));
     let mut parent = match &opener {
         Opener::Fresh(parent) => parent.clone(),

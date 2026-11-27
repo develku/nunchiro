@@ -29,3 +29,10 @@ name = "status"
 title = "Quiet hours: am I in quiet time?"
 command = ["/bin/sh", "status.sh"]
 show = "note"
+
+[[gate]]
+name = "starts"
+title = "No new agent sessions in quiet hours, unless you start them"
+on = "session.start.before"
+command = ["/bin/sh", "gate.sh"]
+on_error = "allow"

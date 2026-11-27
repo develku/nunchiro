@@ -216,7 +216,7 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
             <ul className="ps-parts">
               {(view.parts ?? []).map((p) => (
                 <li key={p.name}>
-                  {p.kind === 'panel' ? t('plugins.sheet.panel') : t('plugins.sheet.command')} · {p.title}
+                  {t(p.kind === 'panel' ? 'plugins.sheet.panel' : p.kind === 'check' ? 'plugins.sheet.check' : 'plugins.sheet.command')} · {p.title}
                   <pre>{p.runs.map(word).join(' ')}</pre>
                 </li>
               ))}

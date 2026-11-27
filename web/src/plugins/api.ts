@@ -20,6 +20,7 @@ export interface Plugin {
   panel?: { name: string; title?: string; kind: string }[];
   command?: { name: string; title?: string; show: Show }[];
   setting?: PluginSetting[];
+  gate?: { name: string; title?: string; on: 'session.start.before' | 'prompt.send.before' }[];
 }
 export interface Listed {
   id: string;

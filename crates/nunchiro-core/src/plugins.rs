@@ -53,6 +53,47 @@ pub struct Plugin {
     /// Values the user sets on the Plugins page; every run gets them as `settings`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub setting: Vec<Setting>,
+    /// Checks that may refuse a new session or replace a message an agent, a schedule or a token sends.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gate: Vec<Gate>,
+}
+/// A check run before an action: it answers `{"allow": true}`, `{"allow": false, "reason": "..."}` or, before a
+/// message, `{"allow": true, "text": "..."}` to replace it. It can do nothing else.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Gate {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    pub on: GateOn,
+    /// argv, run from the plugin folder; 5 seconds at most.
+    pub command: Vec<String>,
+    /// What no answer, a crash or bad JSON means.
+    #[serde(default)]
+    pub on_error: OnError,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub network: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub read: Vec<String>,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub enum GateOn {
+    /// A new agent session is about to start (not a plain terminal, not a resumed conversation).
+    #[serde(rename = "session.start.before")]
+    SessionStart,
+    /// A message an agent, a schedule or a token sends is about to be delivered; never what the owner types.
+    #[serde(rename = "prompt.send.before")]
+    PromptSend,
+}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum OnError {
+    #[default]
+    Refuse,
+    Allow,
 }
 /// A widget manifest inside the plugin (the fields of `widget.toml`), named so its plugin can hold several.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -168,6 +209,7 @@ pub fn parse(text: &str, id: &str) -> Result<Plugin, String> {
         .chain(p.author.iter())
         .chain(p.panel.iter().filter_map(|x| x.title.as_ref()))
         .chain(p.command.iter().filter_map(|x| x.title.as_ref()))
+        .chain(p.gate.iter().filter_map(|x| x.title.as_ref()))
         .chain(p.setting.iter().map(|s| &s.label));
     if words.into_iter().any(|t| !shown(t)) {
         return Err("plugin.toml text has a hidden, control or bidi character".into());
@@ -177,6 +219,7 @@ pub fn parse(text: &str, id: &str) -> Result<Plugin, String> {
         .iter()
         .map(|x| x.name.as_str())
         .chain(p.command.iter().map(|x| x.name.as_str()))
+        .chain(p.gate.iter().map(|x| x.name.as_str()))
         .collect();
     if parts.len() > MAX_PARTS {
         return Err(format!(
@@ -255,15 +298,30 @@ pub(crate) fn part_manifest(p: &Plugin, part: &str) -> Result<approval::Manifest
         if !x.read.is_empty() {
             t.insert("read".into(), strings(&x.read));
         }
-    } else if let Some(x) = p.command.iter().find(|x| x.name == part) {
+    } else if let Some((command, network, read)) = p
+        .command
+        .iter()
+        .find(|x| x.name == part)
+        .map(|x| (&x.command, &x.network, &x.read))
+        .or_else(|| {
+            p.gate
+                .iter()
+                .find(|x| x.name == part)
+                .map(|x| (&x.command, &x.network, &x.read))
+        })
+    {
+        // A command and a check are both a script run on request.
         t.insert("kind".into(), "script".into());
-        t.insert("command".into(), strings(&x.command));
-        t.insert("network".into(), strings(&x.network));
-        if !x.read.is_empty() {
-            t.insert("read".into(), strings(&x.read));
+        t.insert("command".into(), strings(command));
+        t.insert("network".into(), strings(network));
+        if !read.is_empty() {
+            t.insert("read".into(), strings(read));
         }
     } else {
-        return Err(format!("plugin {} has no panel or command {part}", p.id));
+        return Err(format!(
+            "plugin {} has no panel, command or check {part}",
+            p.id
+        ));
     }
     let text = toml::to_string(&t).map_err(|e| e.to_string())?;
     approval::parse_manifest(&text)
@@ -276,7 +334,7 @@ pub(crate) fn part_manifest(p: &Plugin, part: &str) -> Result<approval::Manifest
 pub struct Part {
     pub name: String,
     pub title: String,
-    /// `panel` or `command`.
+    /// `panel`, `command` or `check`.
     pub kind: String,
     /// The argv, or a web panel's entry file as its one word.
     pub runs: Vec<String>,
@@ -291,13 +349,19 @@ pub(crate) fn parts(p: &Plugin) -> Vec<Part> {
             .clone()
             .unwrap_or_else(|| x.entry.iter().cloned().collect()),
     });
+    let gates = p.gate.iter().map(|x| Part {
+        name: x.name.clone(),
+        title: x.title.clone().unwrap_or_else(|| x.name.clone()),
+        kind: "check".into(),
+        runs: x.command.clone(),
+    });
     let commands = p.command.iter().map(|x| Part {
         name: x.name.clone(),
         title: x.title.clone().unwrap_or_else(|| x.name.clone()),
         kind: "command".into(),
         runs: x.command.clone(),
     });
-    panels.chain(commands).collect()
+    panels.chain(commands).chain(gates).collect()
 }
 
 /// What the permission sheet shows for the whole plugin: every host and read path any part may use.
@@ -309,6 +373,7 @@ pub(crate) fn summary(p: &Plugin) -> approval::Manifest {
         .iter()
         .map(|x| &x.name)
         .chain(p.command.iter().map(|x| &x.name))
+        .chain(p.gate.iter().map(|x| &x.name))
     {
         if let Ok(m) = part_manifest(p, m) {
             network.extend(m.network);
@@ -381,6 +446,7 @@ pub(crate) fn input(
     home: &Path,
     name: &str,
     context: &widgets::Context,
+    extra: Option<&Value>,
 ) -> Result<Vec<u8>, String> {
     let (id, part) = split(name).ok_or("not a plugin part")?;
     let p = read(home, id)?;
@@ -394,6 +460,10 @@ pub(crate) fn input(
     v["plugin"] = id.into();
     v["part"] = part.unwrap_or_default().into();
     v["settings"] = serde_json::to_value(values(home, &p)).map_err(|e| e.to_string())?;
+    // A check's event (`session.start.before`, `prompt.send.before`) and what it is about.
+    for (k, x) in extra.and_then(Value::as_object).into_iter().flatten() {
+        v[k] = x.clone();
+    }
     serde_json::to_vec(&v).map_err(|e| e.to_string())
 }
 
@@ -665,7 +735,9 @@ pub fn trial(home: &Path, id: &str) -> Result<(Plugin, Vec<Tried>), String> {
         .iter()
         .map(|x| (&x.name, x.kind == "script"))
         .chain(p.command.iter().map(|x| (&x.name, true)))
+        .chain(p.gate.iter().map(|x| (&x.name, true)))
     {
+        let gate = p.gate.iter().find(|g| &g.name == part);
         let name = format!("{PREFIX}{id}/{part}");
         let result = match approval::trial(home, &name) {
             Err(e) => Err(e),
@@ -676,11 +748,33 @@ pub fn trial(home: &Path, id: &str) -> Result<(Plugin, Vec<Tried>), String> {
                 .then(|| format!("web page {}", proof.manifest().entry))
                 .ok_or_else(|| format!("entry {} is missing", proof.manifest().entry)),
             Ok(proof) => {
-                widgets::execute(home, &config, &proof, None, &widgets::Context::default()).map(
-                    |o| match o {
-                        widgets::Output::Text { text } | widgets::Output::Json { text } => text,
-                    },
+                let sample = gate.map(|g| sample_event(g.on));
+                widgets::execute(
+                    home,
+                    &config,
+                    &proof,
+                    None,
+                    &widgets::Context::default(),
+                    sample.as_ref(),
                 )
+                .map(|o| match o {
+                    widgets::Output::Text { text } | widgets::Output::Json { text } => text,
+                })
+                .and_then(|text| match gate {
+                    None => Ok(text),
+                    // A check must answer in the one shape the core reads.
+                    Some(_) => match answer(&text) {
+                        Some(Answer { allow: true, .. }) => Ok("allowed the sample".into()),
+                        Some(Answer { reason, .. }) => Ok(format!(
+                            "refused the sample: {}",
+                            reason.unwrap_or_default()
+                        )),
+                        None => Err(format!(
+                            "answered {:?}, not {{\"allow\": true|false, \"reason\": \"...\"}}",
+                            text.trim()
+                        )),
+                    },
+                })
             }
         };
         tried.push(Tried {
@@ -691,8 +785,186 @@ pub fn trial(home: &Path, id: &str) -> Result<(Plugin, Vec<Tried>), String> {
     Ok((p, tried))
 }
 
+/// The input `plugin check` gives a check: a made-up start or message, so it runs nothing real.
+fn sample_event(on: GateOn) -> Value {
+    match on {
+        GateOn::SessionStart => {
+            serde_json::json!({"event": "session.start.before", "asker": "agent",
+            "start": {"kind": "claude", "project": "/tmp/sample-project", "worktree": false, "label": "sample"}})
+        }
+        GateOn::PromptSend => serde_json::json!({"event": "prompt.send.before", "asker": "agent",
+            "to": "sample", "text": "A sample message."}),
+    }
+}
+
+/// A check's answer, read from what it printed.
+#[derive(Debug, Deserialize)]
+struct Answer {
+    allow: bool,
+    #[serde(default)]
+    reason: Option<String>,
+    #[serde(default)]
+    text: Option<String>,
+}
+fn answer(printed: &str) -> Option<Answer> {
+    serde_json::from_str(printed.trim()).ok()
+}
+
+/// Who asks for a start or a send, as a check reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Asker {
+    Owner,
+    Agent,
+    Schedule,
+    Token,
+}
+/// A replaced message is cut to this many bytes.
+const MAX_TEXT: usize = 16 * 1024;
+
+/// Runs the checks for `on` of every plugin that is on and approved as it is now: plugins in id order, checks in
+/// manifest order; the first refusal ends it. `Ok(Some(text))` replaces a message. No plugin on with such a check
+/// spawns nothing. A check needs the `script_widgets` setting, as every script part does.
+fn gates(
+    home: &Path,
+    on: GateOn,
+    event: Value,
+) -> Result<Option<(String, String)>, (String, String)> {
+    let store = load(home);
+    if store.on.is_empty() {
+        return Ok(None);
+    }
+    let enabled = crate::store::read_settings(&home.join("settings.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+        .is_some_and(|v| v["script_widgets"] == true);
+    // Script parts are off: no check runs, as no panel or command does (the Plugins page says so).
+    let Ok(config) = widgets::Config::core(enabled) else {
+        return Ok(None);
+    };
+    if !enabled {
+        return Ok(None);
+    }
+    let mut event = event;
+    let mut replaced: Option<(String, String)> = None;
+    for id in ids(home).into_iter().filter(|id| store.on.contains(id)) {
+        let Ok(p) = read(home, &id) else { continue };
+        let mine: Vec<&Gate> = p.gate.iter().filter(|g| g.on == on).collect();
+        if mine.is_empty() || approval::check(home, &format!("{PREFIX}{id}")).is_err() {
+            continue; // off, not approved or changed: runs nothing, so it decides nothing
+        }
+        for g in mine {
+            let name = format!("{PREFIX}{id}/{}", g.name);
+            let ran = approval::check(home, &name)
+                .and_then(|proof| {
+                    widgets::execute(
+                        home,
+                        &config,
+                        &proof,
+                        None,
+                        &widgets::Context::default(),
+                        Some(&event),
+                    )
+                })
+                .ok()
+                .and_then(|o| match o {
+                    widgets::Output::Text { text } | widgets::Output::Json { text } => {
+                        answer(&text)
+                    }
+                });
+            match ran {
+                Some(Answer {
+                    allow: false,
+                    reason,
+                    ..
+                }) => {
+                    let reason = reason
+                        .filter(|r| !r.trim().is_empty() && shown(r))
+                        .unwrap_or_else(|| "no reason given".into());
+                    return Err((
+                        p.name,
+                        reason.lines().next().unwrap_or_default().to_string(),
+                    ));
+                }
+                Some(Answer {
+                    text: Some(text), ..
+                }) if on == GateOn::PromptSend => {
+                    let mut text = text;
+                    if text.len() > MAX_TEXT {
+                        let mut end = MAX_TEXT;
+                        while !text.is_char_boundary(end) {
+                            end -= 1;
+                        }
+                        text.truncate(end);
+                    }
+                    event["text"] = text.clone().into();
+                    replaced = Some((p.name.clone(), text));
+                }
+                Some(_) => {}
+                None if g.on_error == OnError::Allow => {}
+                None => return Err((p.name, "its check did not answer".into())),
+            }
+        }
+    }
+    Ok(replaced)
+}
+
+/// Before a new agent session starts: `Err` is the sentence the asker sees. A plain terminal and a resumed
+/// conversation are not checked (as the memory hold).
+pub(crate) fn check_start(
+    home: &Path,
+    asker: Asker,
+    start: &crate::api::StartSession,
+) -> Result<(), String> {
+    if start.kind == crate::api::AgentKind::Shell || start.resume.is_some() {
+        return Ok(());
+    }
+    let event = serde_json::json!({
+        "event": "session.start.before",
+        "asker": asker,
+        "start": {"kind": start.kind, "project": start.project, "worktree": start.worktree, "label": start.label},
+    });
+    gates(home, GateOn::SessionStart, event).map(|_| ()).map_err(|(plugin, reason)| {
+        match asker {
+            Asker::Owner => format!("{plugin}{STOPPED_START}{reason}"),
+            _ => format!(
+                "Not started. The plugin \"{plugin}\" refused it: {}. Only the owner can start it anyway.",
+                reason.trim_end_matches('.')
+            ),
+        }
+    })
+}
+/// The words the window reads to offer Start anyway on the owner's start a check stopped.
+pub const STOPPED_START: &str = " stopped this start: ";
+
+/// Before a message an agent, a schedule or a token sends is delivered: the text to deliver (replaced or not), or the
+/// refusal. Never called for what the owner types.
+pub(crate) fn check_send(
+    home: &Path,
+    asker: Asker,
+    to: &str,
+    text: &str,
+) -> Result<String, String> {
+    let event =
+        serde_json::json!({"event": "prompt.send.before", "asker": asker, "to": to, "text": text});
+    match gates(home, GateOn::PromptSend, event) {
+        Ok(Some((plugin, new))) => {
+            eprintln!(
+                "plugin {plugin} replaced a message to {to} ({} bytes became {})",
+                text.len(),
+                new.len()
+            );
+            Ok(new)
+        }
+        Ok(None) => Ok(text.into()),
+        Err((plugin, reason)) => Err(format!(
+            "Not sent. The plugin \"{plugin}\" refused it: {reason}"
+        )),
+    }
+}
+
 /// The parts `plugin new --with` can add.
-pub const PARTS: [&str; 3] = ["panel", "command", "setting"];
+pub const PARTS: [&str; 4] = ["panel", "command", "setting", "gate"];
 
 /// `nunchiro plugin new <id>`: a starter plugin that passes `plugin check`. Writes files only; never replaces any.
 pub fn scaffold(home: &Path, id: &str, with: &[&str]) -> Result<PathBuf, String> {
@@ -742,6 +1014,10 @@ pub fn scaffold(home: &Path, id: &str, with: &[&str]) -> Result<PathBuf, String>
         toml.push_str("\n[[command]]\nname = \"hello\"\ntitle = \"Say hello\"\ncommand = [\"/bin/sh\", \"command.sh\"]\nshow = \"note\"\n");
         files.push(("command.sh", COMMAND_SH, 0o700));
     }
+    if has("gate") {
+        toml.push_str("\n[[gate]]\nname = \"start\"\ntitle = \"Before a new session starts\"\non = \"session.start.before\"\ncommand = [\"/bin/sh\", \"gate.sh\"]\non_error = \"allow\"\n");
+        files.push(("gate.sh", GATE_SH, 0o700));
+    }
     files.push((MANIFEST, &toml, 0o600));
     for (file, text, mode) in files {
         use std::io::Write;
@@ -756,6 +1032,7 @@ pub fn scaffold(home: &Path, id: &str, with: &[&str]) -> Result<PathBuf, String>
     Ok(folder)
 }
 const PANEL_SH: &str = "#!/bin/sh\n# A panel: runs in a sandbox once the plugin is approved and on. $NUNCHIRO_CONTEXT is a JSON file with\n# projects, sessions and this plugin's settings; $NUNCHIRO_PROJECT_DIR is the project, if any.\n# Print text, or JSON (an array of objects shows as a table).\ncd \"$NUNCHIRO_PROJECT_DIR\" 2>/dev/null || { echo \"no project\"; exit 0; }\n/bin/ls -1 | /usr/bin/head -20\n";
+const GATE_SH: &str = "#!/bin/sh\n# A check: runs before a new session starts. $NUNCHIRO_CONTEXT has event, asker (owner, agent, schedule, token),\n# start (kind, project, worktree, label) and settings. Print {\"allow\": true}, or {\"allow\": false, \"reason\": \"one line\"}.\nprintf '{\"allow\": true}\\n'\n";
 const COMMAND_SH: &str = "#!/bin/sh\n# A command: a row in the command palette; what it prints shows as a note (show = \"note\").\ngreeting=$(/usr/bin/sed -n 's/.*\"greeting\":\"\\([^\"]*\\)\".*/\\1/p' \"$NUNCHIRO_CONTEXT\")\necho \"${greeting:-Hello} from a plugin command.\"\n";
 
 #[cfg(test)]

@@ -23,7 +23,10 @@ fn user(home: &Path) -> PathBuf {
 }
 fn nunchiro(home: &Path, token: Option<&str>, args: &[&str]) -> Output {
     let mut c = home::git_env::scrubbed(env!("CARGO_BIN_EXE_nunchiro"));
-    c.args(args).env("NUNCHIRO_HOME", home).env("HOME", user(home)).env_remove("NUNCHIRO_TOKEN");
+    c.args(args)
+        .env("NUNCHIRO_HOME", home)
+        .env("HOME", user(home))
+        .env_remove("NUNCHIRO_TOKEN");
     if let Some(t) = token {
         c.env("NUNCHIRO_TOKEN", t);
     }
@@ -31,7 +34,11 @@ fn nunchiro(home: &Path, token: Option<&str>, args: &[&str]) -> Output {
 }
 fn ok(home: &Path, args: &[&str]) -> String {
     let out = nunchiro(home, None, args);
-    assert!(out.status.success(), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     String::from_utf8(out.stdout).unwrap()
 }
 fn call(home: &Path, token: &str, request: Value) -> Value {
@@ -70,12 +77,24 @@ fn core(tag: &str) -> Core {
     let u = user(&home);
     let guard = home::spawn_serve(&home, &[("HOME", u.to_str().unwrap())]);
     let owner = std::fs::read_to_string(home.join("core.token")).unwrap();
-    Core { home, _guard: guard, owner }
+    Core {
+        home,
+        _guard: guard,
+        owner,
+    }
 }
 /// A new agent session, as the owner's CLI asks for it (a fake `claude`, never started: the check runs first).
 fn start(home: &Path, token: Option<&str>, anyway: bool) -> Output {
     let project = user(home);
-    let mut args = vec!["agent", "start", "a", "--kind", "claude", "--project", project.to_str().unwrap()];
+    let mut args = vec![
+        "agent",
+        "start",
+        "a",
+        "--kind",
+        "claude",
+        "--project",
+        project.to_str().unwrap(),
+    ];
     if anyway {
         args.push("--anyway");
     }
@@ -92,17 +111,50 @@ fn a_refusing_check_stops_new_sessions_with_its_reason() {
     // The owner: the sentence and a way past (the window shows Start anyway; the CLI's --anyway).
     let owner = start(&c.home, None, false);
     assert!(!owner.status.success());
-    assert!(stderr(&owner).contains("Guard stopped this start: Quiet hours until 07:00."), "{}", stderr(&owner));
+    assert!(
+        stderr(&owner).contains("Guard stopped this start: Quiet hours until 07:00."),
+        "{}",
+        stderr(&owner)
+    );
     let anyway = start(&c.home, None, true);
-    assert!(!stderr(&anyway).contains("stopped this start"), "{}", stderr(&anyway));
+    assert!(
+        !stderr(&anyway).contains("stopped this start"),
+        "{}",
+        stderr(&anyway)
+    );
     // A token: refused with the reason, and it cannot say anyway.
     let token = ok(&c.home, &["token", "create", "--scope", "supervised"]);
     let refused = start(&c.home, Some(token.trim()), false);
-    assert!(stderr(&refused).contains("refused it: Quiet hours until 07:00. Only the owner can start it anyway."), "{}", stderr(&refused));
-    let reply = call(&c.home, token.trim(), json!({"op": "start_anyway", "start": {"op": "start", "session": {"kind": "claude", "project": user(&c.home)}}}));
+    assert!(
+        stderr(&refused)
+            .contains("refused it: Quiet hours until 07:00. Only the owner can start it anyway."),
+        "{}",
+        stderr(&refused)
+    );
+    let reply = call(
+        &c.home,
+        token.trim(),
+        json!({"op": "start_anyway", "start": {"op": "start", "session": {"kind": "claude", "project": user(&c.home)}}}),
+    );
     assert!(reply["Err"].is_string(), "{reply}");
     // A plain terminal is not a new agent seat: not checked.
-    let shell = nunchiro(&c.home, None, &["agent", "start", "t", "--kind", "shell", "--project", user(&c.home).to_str().unwrap(), "--", "/bin/sh", "-c", "exec cat"]);
+    let shell = nunchiro(
+        &c.home,
+        None,
+        &[
+            "agent",
+            "start",
+            "t",
+            "--kind",
+            "shell",
+            "--project",
+            user(&c.home).to_str().unwrap(),
+            "--",
+            "/bin/sh",
+            "-c",
+            "exec cat",
+        ],
+    );
     assert!(shell.status.success(), "{}", stderr(&shell));
 }
 
@@ -113,7 +165,11 @@ fn an_off_unapproved_or_changed_plugin_decides_nothing() {
     assert!(!stderr(&start(&c.home, None, false)).contains("stopped this start"));
     ok(&c.home, &["plugin", "allow", "guard"]);
     assert!(stderr(&start(&c.home, None, false)).contains("stopped this start"));
-    std::fs::write(c.home.join("plugins/guard/gate.sh"), format!("#!/bin/sh\n{REFUSE}\n# changed\n")).unwrap();
+    std::fs::write(
+        c.home.join("plugins/guard/gate.sh"),
+        format!("#!/bin/sh\n{REFUSE}\n# changed\n"),
+    )
+    .unwrap();
     assert!(!stderr(&start(&c.home, None, false)).contains("stopped this start"));
     ok(&c.home, &["plugin", "allow", "guard"]);
     ok(&c.home, &["plugin", "off", "guard"]);
@@ -123,35 +179,81 @@ fn an_off_unapproved_or_changed_plugin_decides_nothing() {
 #[test]
 fn a_hanging_check_is_stopped_and_on_error_decides() {
     let c = core("pgh");
-    plugin(&c.home, "session.start.before", "/bin/sleep 10", "refuse", true);
+    plugin(
+        &c.home,
+        "session.start.before",
+        "/bin/sleep 10",
+        "refuse",
+        true,
+    );
     let t = Instant::now();
     let out = start(&c.home, None, false);
-    assert!(stderr(&out).contains("Guard stopped this start: its check did not answer"), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("Guard stopped this start: its check did not answer"),
+        "{}",
+        stderr(&out)
+    );
     assert!(t.elapsed() < Duration::from_secs(9), "{:?}", t.elapsed());
-    plugin(&c.home, "session.start.before", "/bin/sleep 10", "allow", true);
+    plugin(
+        &c.home,
+        "session.start.before",
+        "/bin/sleep 10",
+        "allow",
+        true,
+    );
     assert!(!stderr(&start(&c.home, None, false)).contains("stopped this start"));
 }
 
 #[test]
 fn a_check_replaces_what_an_agent_sends_but_never_the_owners_words() {
     let c = core("pgs");
-    plugin(&c.home, "prompt.send.before", r#"printf '{"allow": true, "text": "replaced by the plugin"}\n'"#, "refuse", true);
+    plugin(
+        &c.home,
+        "prompt.send.before",
+        r#"printf '{"allow": true, "text": "replaced by the plugin"}\n'"#,
+        "refuse",
+        true,
+    );
     let project = user(&c.home);
     let start = |name: &str| {
-        let out = ok(&c.home, &["agent", "start", name, "--kind", "shell", "--project", project.to_str().unwrap(), "--", "/bin/sh", "-c", "echo READY; exec cat"]);
+        let out = ok(
+            &c.home,
+            &[
+                "agent",
+                "start",
+                name,
+                "--kind",
+                "shell",
+                "--project",
+                project.to_str().unwrap(),
+                "--",
+                "/bin/sh",
+                "-c",
+                "echo READY; exec cat",
+            ],
+        );
         let v: Value = serde_json::from_str(&out).unwrap();
         v["session"]["id"].as_str().unwrap().to_string()
     };
     let to = start("to");
     let read = |id: &str| {
         let r = call(&c.home, &c.owner, json!({"op": "read", "id": id}));
-        let bytes: Vec<u8> = r["Ok"]["data"].as_array().into_iter().flatten().filter_map(|b| b.as_u64().map(|b| b as u8)).collect();
+        let bytes: Vec<u8> = r["Ok"]["data"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|b| b.as_u64().map(|b| b as u8))
+            .collect();
         String::from_utf8_lossy(&bytes).into_owned()
     };
     let wait = |id: &str, what: &str| {
         let until = Instant::now() + Duration::from_secs(10);
         while !read(id).contains(what) {
-            assert!(Instant::now() < until, "{what} never reached {id}: {}", read(id));
+            assert!(
+                Instant::now() < until,
+                "{what} never reached {id}: {}",
+                read(id)
+            );
             std::thread::sleep(Duration::from_millis(50));
         }
     };
@@ -159,10 +261,31 @@ fn a_check_replaces_what_an_agent_sends_but_never_the_owners_words() {
     // The owner's send: unchanged, and no check ran.
     ok(&c.home, &["session", "send-text", &to, "owner words"]);
     wait(&to, "owner words");
-    assert!(!c.home.join("plugins/guard/cache").exists(), "a check ran for the owner's words");
+    assert!(
+        !c.home.join("plugins/guard/cache").exists(),
+        "a check ran for the owner's words"
+    );
     // An agent's send (from inside its session): replaced before it is delivered.
-    let script = format!("'{}' agent send {to} 'agent words'; exec cat", env!("CARGO_BIN_EXE_nunchiro"));
-    ok(&c.home, &["agent", "start", "from", "--kind", "shell", "--project", project.to_str().unwrap(), "--", "/bin/sh", "-c", &script]);
+    let script = format!(
+        "'{}' agent send {to} 'agent words'; exec cat",
+        env!("CARGO_BIN_EXE_nunchiro")
+    );
+    ok(
+        &c.home,
+        &[
+            "agent",
+            "start",
+            "from",
+            "--kind",
+            "shell",
+            "--project",
+            project.to_str().unwrap(),
+            "--",
+            "/bin/sh",
+            "-c",
+            &script,
+        ],
+    );
     wait(&to, "replaced by the plugin");
     assert!(!read(&to).contains("agent words"));
 }

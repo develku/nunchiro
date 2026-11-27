@@ -27,7 +27,7 @@ test('plugins_page_review_approve_and_settings', async ({ app, core }) => {
   await openWindow(app);
   const row = await page(app);
   await expect(row).toContainText('Quiet hours');
-  await expect(row).toContainText('1 panel · 1 command · 2 settings');
+  await expect(row).toContainText('1 panel · 1 command · 2 settings · 1 check');
   await expect(row).toContainText('Not approved');
   await expect(row.getByRole('switch', { name: 'Turn Quiet hours on' })).not.toBeChecked();
 

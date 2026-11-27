@@ -130,9 +130,10 @@ fn settings_are_checked_by_type_and_reach_the_input() {
         .insert("greeting".into(), "Hi".into());
     store.on.insert("x".into());
     save(&h, &store).unwrap();
-    let input: Value =
-        serde_json::from_slice(&input(&h, "plugin:x/hello", &widgets::Context::default()).unwrap())
-            .unwrap();
+    let input: Value = serde_json::from_slice(
+        &input(&h, "plugin:x/hello", &widgets::Context::default(), None).unwrap(),
+    )
+    .unwrap();
     assert_eq!(input["settings"]["greeting"], "Hi");
     assert_eq!(
         (input["event"].as_str(), input["part"].as_str()),

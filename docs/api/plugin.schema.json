@@ -42,6 +42,75 @@
       ],
       "type": "object"
     },
+    "Gate": {
+      "additionalProperties": false,
+      "description": "A check run before an action: it answers `{\"allow\": true}`, `{\"allow\": false, \"reason\": \"...\"}` or, before a\nmessage, `{\"allow\": true, \"text\": \"...\"}` to replace it. It can do nothing else.",
+      "properties": {
+        "command": {
+          "description": "argv, run from the plugin folder; 5 seconds at most.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "on": {
+          "$ref": "#/$defs/GateOn"
+        },
+        "on_error": {
+          "$ref": "#/$defs/OnError",
+          "default": "refuse",
+          "description": "What no answer, a crash or bad JSON means."
+        },
+        "read": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "on",
+        "command"
+      ],
+      "type": "object"
+    },
+    "GateOn": {
+      "oneOf": [
+        {
+          "const": "session.start.before",
+          "description": "A new agent session is about to start (not a plain terminal, not a resumed conversation).",
+          "type": "string"
+        },
+        {
+          "const": "prompt.send.before",
+          "description": "A message an agent, a schedule or a token sends is about to be delivered; never what the owner types.",
+          "type": "string"
+        }
+      ]
+    },
+    "OnError": {
+      "enum": [
+        "refuse",
+        "allow"
+      ],
+      "type": "string"
+    },
     "Panel": {
       "additionalProperties": false,
       "description": "A widget manifest inside the plugin (the fields of `widget.toml`), named so its plugin can hold several.",
@@ -178,6 +247,13 @@
       "description": "Rows in the command palette.",
       "items": {
         "$ref": "#/$defs/Command"
+      },
+      "type": "array"
+    },
+    "gate": {
+      "description": "Checks that may refuse a new session or replace a message an agent, a schedule or a token sends.",
+      "items": {
+        "$ref": "#/$defs/Gate"
       },
       "type": "array"
     },

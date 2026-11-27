@@ -1140,11 +1140,11 @@ A plugin is one folder, `$NUNCHIRO_HOME/plugins/<id>/`, that adds panels, comman
 [plugins.md](plugins.md). It is off and not approved after it is made or copied in, and runs nothing until both
 change. `new` and `check` touch only the folder, so they work inside an agent session; the others are the owner's.
 
-### `nunchiro plugin new <id> [--with panel,command,setting]`
-Writes a starter plugin (all three parts by default) that passes `plugin check`. Never replaces a file.
+### `nunchiro plugin new <id> [--with panel,command,setting,gate]`
+Writes a starter plugin (all four parts by default; `gate` is a check that allows every start) that passes `plugin check`. Never replaces a file.
 
 ### `nunchiro plugin check <id>`
-Checks `plugin.toml` by the core's rules, then runs each script panel and command once in the widget sandbox on a
+Checks `plugin.toml` by the core's rules, then runs each script panel, command and check once in the widget sandbox on a
 sample input, before and without any approval. Prints `ok` or `failed` per part; exit 1 when any part failed.
 
 ### `nunchiro plugin list [--json]`
