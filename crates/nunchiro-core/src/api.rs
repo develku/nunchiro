@@ -6,7 +6,7 @@ mod reply;
 pub use reply::{Reply, Response};
 // The published wire schema, written by a test (docs/api.md).
 #[cfg(test)]
-mod schema;
+mod schema_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]

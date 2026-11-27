@@ -145,6 +145,9 @@ mod tests {
             .expect("docs/api.md lists the stable operations");
         let para = &docs[start..start + docs[start..].find("\n\n").unwrap()];
         let listed: Vec<&str> = para.split('`').skip(1).step_by(2).collect();
-        assert_eq!(listed, STABLE, "docs/api.md and api::schema::STABLE differ");
+        assert_eq!(
+            listed, STABLE,
+            "docs/api.md and api::schema_tests::STABLE differ"
+        );
     }
 }
