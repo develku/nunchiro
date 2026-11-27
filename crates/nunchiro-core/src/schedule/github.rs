@@ -15,6 +15,8 @@ use std::time::{Duration, Instant};
 
 pub const EVERY: Duration = Duration::from_secs(120);
 const GH_TIMEOUT: Duration = Duration::from_secs(30);
+/// Runs `gh` with these arguments and answers its standard output.
+type Gh<'a> = &'a dyn Fn(&[String]) -> Result<Vec<u8>, String>;
 
 fn every(home: &Path) -> Duration {
     crate::store::read_settings(&home.join("settings.json"))
@@ -26,10 +28,7 @@ fn every(home: &Path) -> Duration {
 }
 
 /// The `gh` run for `g`, and the events it reads now: each event's key (what makes it new) and its payload.
-fn events(
-    g: &Github,
-    run: &dyn Fn(&[String]) -> Result<Vec<u8>, String>,
-) -> Result<Vec<(String, Value)>, String> {
+fn events(g: &Github, run: Gh) -> Result<Vec<(String, Value)>, String> {
     let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     let rows = |out: Vec<u8>| -> Result<Vec<Value>, String> {
         serde_json::from_slice::<Value>(&out)
@@ -124,7 +123,7 @@ pub(crate) fn poll(
     stopping: &AtomicBool,
     home: &Path,
     seen: &mut Seen,
-    run: &dyn Fn(&[String]) -> Result<Vec<u8>, String>,
+    run: Gh,
 ) {
     let Ok(all) = super::triggers::load(home) else {
         return;
@@ -142,17 +141,18 @@ pub(crate) fn poll(
         let first = !seen.contains_key(&key);
         let known = seen.entry(key).or_default();
         for (k, payload) in found {
-            if known.insert(k) && !first {
-                if let Err(e) = super::triggers::fire(
+            if known.insert(k)
+                && !first
+                && let Err(e) = super::triggers::fire(
                     registry,
                     stopping,
                     home,
                     &t.name,
                     Source::Github,
                     &payload.to_string(),
-                ) {
-                    eprintln!("trigger {}: {e}", t.name);
-                }
+                )
+            {
+                eprintln!("trigger {}: {e}", t.name);
             }
         }
     }

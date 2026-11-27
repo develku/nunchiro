@@ -184,6 +184,7 @@ pub(crate) fn secret(home: &Path, name: &str) -> Option<String> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "do", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)] // one request at a time; boxing would change nothing that matters
 pub enum Action {
     List,
     /// The owner's alone. A webhook trigger needs a `secret` of at least 16 characters.
