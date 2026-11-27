@@ -1196,6 +1196,16 @@ button.lead-go {
 .tcard:has(> .lead-menu) {
   z-index: 6;
 }
+/* The book's needs-you mark is a light beside the word, not a picture: a dot in the chip's own text colour. */
+.tcard-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: var(--sp-4);
+  border-radius: var(--r-pill);
+  background: currentColor;
+  vertical-align: middle;
+}
 .tcard-do {
   display: flex;
   flex-wrap: wrap;

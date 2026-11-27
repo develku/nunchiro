@@ -135,7 +135,7 @@ function TaskCard({ t, core, x, tasks, list, byId, open, decide, menu, peek, set
         {waits ? (
           <span className="tcard-stages"><span data-at="next">{waitsWord(t, x)}</span></span>
         ) : dropped ? (
-          <span className="tcard-stages"><span data-at="you">{t('tboard.waits')} ✋</span></span>
+          <span className="tcard-stages"><span data-at="you"><i className="tcard-dot" aria-hidden />{t('tboard.waits')}</span></span>
         ) : waitsSeat(x) && !x.seats?.length ? (
           <span className="tcard-stages"><span data-at="next">{t('tboard.waitsSeat')}</span></span>
         ) : (
