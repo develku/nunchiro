@@ -16,7 +16,6 @@
   max-height: calc(100vh - 32px);
   padding: 14px 16px;
   overflow: auto;
-  border-color: var(--faint);
 }
 .palette.wtdlg.rmdlg.rmblocked {
   width: 400px;

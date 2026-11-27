@@ -1,31 +1,32 @@
-/* V2-6a: the one context menu (draft 05 option A: anchored at the pointer or row, items with their keys). */
+/* V2-6a: the one context menu (draft 05 option A: anchored at the pointer or row, items with their keys). Design book,
+   menus: 200 to 320 wide, padding 4, radius 10; rows 26, radius 6, padding 0 8, gap 8; the highlight a --tint-2 step. */
 .cmenu {
   position: fixed;
   z-index: 30;
-  min-width: 236px;
-  max-width: calc(100vw - 12px);
-  padding: var(--sp-4);
-  border-radius: var(--r-12);
+  min-width: var(--menu-w-min);
+  max-width: min(var(--menu-w-max), calc(100vw - 12px));
+  padding: var(--menu-pad);
+  border-radius: var(--menu-r);
   color: var(--text);
-  font-size: var(--fs-13);
+  font-size: var(--fs-ui);
   outline: 0;
 }
 .cmenu [role='menuitem'] {
   display: flex;
   align-items: center;
   gap: var(--sp-8);
-  height: 32px;
+  height: var(--menu-row);
   padding: 0 var(--sp-8);
-  border-radius: var(--r-8);
+  border-radius: var(--menu-row-r);
   white-space: nowrap;
   cursor: default;
 }
 .cmenu [role='menuitem'][data-current] {
-  background: var(--select-bg);
-  color: var(--select-text);
+  background: var(--tint-2);
+  color: var(--text);
 }
 .cmenu [role='menuitem'][aria-disabled='true'] {
-  opacity: 0.5;
+  opacity: 0.4;
 }
 .cmenu .kbd {
   margin-left: auto;
@@ -33,7 +34,9 @@
   border: 0;
   background: none;
   color: var(--muted);
-  font-size: calc(var(--fs-11) - 0.5px);
+  font-size: var(--fs-meta);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
 }
 /* A chat row stands in for the flex child it wraps (.cin), and takes focus by click only. */
 [data-menu='chat'] {
@@ -45,18 +48,22 @@
   outline: 0;
 }
 
-/* Mockup 05: a header naming the row, a gap between groups, the removing item in red; no footer line (466). */
+/* Mockup 05: a header naming the row, groups parted, the removing item in red. Design book: the caption is 22 high,
+   11.5 / 500 --muted (no capitals); the separator a 1 px --tint-2 line, margin 4 8. */
 .cmenu .mhd {
-  padding: var(--sp-3) var(--sp-8) var(--sp-2);
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--sp-8);
   color: var(--muted);
-  font-size: var(--fs-11);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: var(--fs-meta);
+  font-weight: 500;
   white-space: nowrap;
 }
-/* Ticket 1041 A: groups are parted by a space, not a line (the separator role stays). */
 .cmenu .msep {
-  height: var(--sp-8);
+  height: 1px;
+  margin: var(--sp-4) var(--sp-8);
+  background: var(--tint-2);
 }
 .cmenu [role='menuitem'][data-danger]:not([data-current]) {
   color: var(--bad-text);
