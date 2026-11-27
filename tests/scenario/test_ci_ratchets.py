@@ -42,8 +42,9 @@ class Ratchets(unittest.TestCase):
         # main is already over its baselines: a.css has 2 hex (baseline 1), big.rs 2,600 lines (baseline 2,500)
         self.put("web/src/a.css", "a { color: #fff; background: #000; }\n")
         self.put("src/big.rs", "x\n" * 2600)
+        self.put("src/mid.rs", "x\n" * 1700)  # listed under the limit, also over its number
         self.put("scripts/raw-literals.baseline", "hex a.css 1\n")
-        self.put("scripts/file-sizes.baseline", "# header\n2500 src/big.rs\n")
+        self.put("scripts/file-sizes.baseline", "# header\n2500 src/big.rs\n1500 src/mid.rs\n")
         self.put("scripts/dead-click.baseline", "s|div.a|A\n")
         self.commit("base")
         self.git("tag", "base")
