@@ -445,8 +445,7 @@ impl Launch {
                 .settings
                 .features
                 .get(crate::home_lock::CONNECTORS_OFF_KEY)
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false);
+                .is_some_and(|v| !v.is_null() && v != &serde_json::Value::Bool(false)); // fail closed
             let args = crate::home_lock::args(mode, &servers, off);
             self.permission = if side { args[2..].to_vec() } else { args };
             self.home_mode = Some(mode);

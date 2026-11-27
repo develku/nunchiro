@@ -21,8 +21,12 @@ of tasks 8-10, cut them off for the Assistant's seat; the fixtures are files, so
    start it again. The seat then starts with `--strict-mcp-config` and an empty `--mcp-config`, so no MCP server loads.
 2. Close any Assistant seat that was open before the change (the setting applies at the next start), then open it.
 3. Check before sending the task: `nunchiro agent list --json` gives the seat's id, `nunchiro agent get <id> --json`
-   its `pid`, and `ps -o command= -p <pid>` must show `--strict-mcp-config`. If it does not, stop: do not send the task.
-4. Do not ask the seat to list or call mail or calendar tools; the check above is the proof.
+   its `pid`, and `ps -ww -o command= -p <pid> | grep -c -- --strict-mcp-config` must print 1 (without `-ww`, macOS
+   cuts the line at the terminal width). If it does not, stop: do not send the task. This shows the flag was passed; it
+   is not proof that no connector loaded. The seat's lock hook also refuses every `mcp__` tool while the switch is off.
+4. Keep the Assistant's mode below "Full access, shell included" for tasks 8-10: in that mode its shell runs unasked
+   and could start another `claude` that loads the connectors.
+5. Do not ask the seat to list or call mail or calendar tools.
 
 ## One run
 

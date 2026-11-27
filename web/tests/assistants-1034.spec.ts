@@ -177,6 +177,8 @@ test('account_connectors_switch: off saves home.connectors_off true, on clears i
   await sw.click();
   await expect(sw).not.toBeChecked();
   await expect.poll(() => features()['home.connectors_off']).toBe(true);
+  await expect(app.locator('.srow', { hasText: 'Account connectors are off, so the assistant does not reach your mail.' })).toBeVisible();
+  await expect(app.getByText('Allowed: files in its folders')).toBeVisible();
   await sw.click();
   await expect(sw).toBeChecked();
   await expect.poll(() => features()['home.connectors_off']).toBeUndefined();

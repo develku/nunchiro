@@ -340,6 +340,17 @@ pub fn decide(tool: &str, input: &Value, mode: Mode) -> Decision {
     }
 }
 
+/// The hook flag `spawn` adds when the seat started with connectors off (its arguments hold `--strict-mcp-config`).
+pub const NO_MCP_FLAG: &str = "--no-mcp";
+
+/// Layer 2 of connectors off: with `no_mcp`, every MCP tool is refused, whatever server it came from; otherwise `decide`.
+pub fn decide_locked(tool: &str, input: &Value, mode: Mode, no_mcp: bool) -> Decision {
+    if no_mcp && tool.starts_with("mcp__") {
+        return Decision::Deny("Home seat: account connectors are off (Settings > Assistants)");
+    }
+    decide(tool, input, mode)
+}
+
 /// Asks the core over `sock` to spend the owner's yes for this exact call (`Request::OutboxSpend`, lane 2: the card's
 /// id once as `Reply::Text`, else an error), hashed as the card was (`approval::outward_call_hash`). Ok only on that
 /// reply; a core that is down, slow, older or refusing, or any other reply, is an Err (fail closed).
@@ -413,6 +424,28 @@ mod tests {
                 && check_connectors_off(&json!(null)).is_ok()
         );
         assert!(check_connectors_off(&json!("yes")).is_err());
+        // Layer 2: with the flag every MCP tool is refused, a read and a gated send too; built-ins are unchanged.
+        let (read, send) = (
+            format!("mcp__{MAIL}__get_thread"),
+            format!("mcp__{MAIL}__send_message"),
+        );
+        for tool in [read.as_str(), send.as_str(), "mcp__fake__list"] {
+            assert!(
+                matches!(
+                    decide_locked(tool, &json!({}), Mode::Full, true),
+                    Decision::Deny(_)
+                ),
+                "{tool}"
+            );
+        }
+        assert_eq!(
+            decide_locked(&read, &json!({}), Mode::Full, false),
+            decide(&read, &json!({}), Mode::Full)
+        );
+        assert_eq!(
+            decide_locked("Read", &json!({}), Mode::Ask, true),
+            Decision::Mode
+        );
     }
 
     #[test]

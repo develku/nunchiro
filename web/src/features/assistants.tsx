@@ -131,7 +131,7 @@ function AssistantsPage({ core, t, reveal, closeSettings }: Pick<PageContext, 'c
         />
       </Sec>
       <Sec id="assistants-connectors" title={t('assistants.connectors')}>
-        <Row label={t('assistants.mail')} chip={claude ? <span className="chip tag">{t('assistants.readDrafts')}</span> : undefined} desc={t('assistants.mailDesc')} />
+        <Row label={t('assistants.mail')} chip={claude ? <span className="chip tag">{t(off ? 'assistants.connectorsOff' : 'assistants.readDrafts')}</span> : undefined} desc={t(off ? 'assistants.mailOffDesc' : 'assistants.mailDesc')} />
         <Row label={t('assistants.calendar')} chip={<span className="chip tag">{t('assistants.calendarOff')}</span>} desc={t('assistants.calendarDesc')} />
         <Row
           label={t('assistants.accountConnectors')}
@@ -143,7 +143,7 @@ function AssistantsPage({ core, t, reveal, closeSettings }: Pick<PageContext, 'c
           }
           control={claude && <Switch setting="homeConnectors" label={t('assistants.accountConnectors')} checked={!off} onChange={(v) => void setOff(v ? null : true)} />}
         />
-        <Row label={t('assistants.allowed')} chip={<span className="chip tag">{t('assistants.fixed')}</span>} desc={t('assistants.allowedDesc')} />
+        <Row label={t('assistants.allowed')} chip={<span className="chip tag">{t('assistants.fixed')}</span>} desc={t(off ? 'assistants.allowedOffDesc' : 'assistants.allowedDesc')} />
       </Sec>
     </div>
   );
