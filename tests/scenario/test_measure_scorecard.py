@@ -361,5 +361,22 @@ class FreshWorktree(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
 
+class ChatOpenVerdict(unittest.TestCase):
+    """p33's chatopen writes the figure only when every asked open has its chat-drawn mark."""
+
+    def test_all_opens_marked_is_written(self):
+        r, why = s.chat_open_verdict([[0.0, 120.0], [1000.0, 1080.0], [2000.0, 2100.0]], 3)
+        self.assertEqual((r["median_ms"], r["n"], why), (100.0, 3, None))
+
+    def test_a_miss_refuses(self):
+        r, why = s.chat_open_verdict([[0.0, 120.0], [1000.0, None]], 2)
+        self.assertEqual(r["misses"], 1)
+        self.assertIn("1 opens with no chat-drawn mark", why)
+
+    def test_fewer_opens_than_asked_refuses(self):
+        _, why = s.chat_open_verdict([[0.0, 120.0]], 10)
+        self.assertEqual(why, "1 marked opens of the 10 asked")
+
+
 if __name__ == "__main__":
     unittest.main()
