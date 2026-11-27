@@ -315,6 +315,16 @@ class Dev(unittest.TestCase):
     def test_shared_files_need_two_lanes(self):
         self.assertEqual(s.shared_files({"a": ["x", "y"], "b": ["y"], "c": ["z"]}), {"y": ["a", "b"]})
 
+    def test_the_dev_run_times_the_pr_gates_rust_tests(self):
+        """The test stage is the PR gate's own nextest run; the retired local gate's scripts are named nowhere."""
+        self.assertEqual(s.TEST_STAGE, ["cargo", "nextest", "run", "--workspace", "--config-file", "scripts/nextest.toml"])
+        root = s.ROOT
+        files = [p for p in (root / "scripts/measure").rglob("*") if p.is_file()] + [root / x for x in (
+            "scripts/nextest.toml", "scripts/raw-literal-ratchet.sh", ".github/scripts/web-core.sh", ".gitattributes",
+            "crates/nunchiro-core/src/http/browser_tests.rs")]
+        for old in ("cargo-test-gate.sh", "BUILD_LOOP", "web-smoke.sh", "bin/land", "pre_gate"):
+            self.assertEqual([str(p.relative_to(root)) for p in files if p.is_file() and old in p.read_text(errors="replace")], [], old)
+
 
 class Combine(unittest.TestCase):
     def test_each_figure_and_each_check_is_one_item(self):

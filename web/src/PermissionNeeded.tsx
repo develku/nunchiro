@@ -6,7 +6,7 @@ import type { CoreClient } from './api';
 import { useHtmlLangT } from './i18n/lib/useHtmlLangT';
 import { basename } from './tree';
 import type { Session } from './types';
-import { docT, ErrorDetails, ErrorLine } from './errors';
+import { docT, ErrorDetails, ErrorLine, startOp } from './errors';
 
 type Blockable = Session & { blocked?: { reason: 'file_access'; path: string }; model?: string | null; effort?: string | null; completion_seq?: number };
 
@@ -98,13 +98,14 @@ export function PermissionNeeded({ core, session, onReplaced }: { core: CoreClie
       setError(e);
     }
   };
-  const restart = () =>
+  /** `anyway`: a low-memory hold's Start anyway; the old run was closed by the first try. */
+  const restart = (anyway = false) =>
     run(async () => {
       setBusy(true);
       try {
         // Close first: a resumed conversation cannot start while its old run is live.
-        await core.request({ op: 'close', id: session.id });
-        const reply = (await core.request({ op: 'start', session: restartStart(session) })) as { session?: Session };
+        if (!anyway) await core.request({ op: 'close', id: session.id });
+        const reply = (await core.request(startOp({ op: 'start', session: restartStart(session) }, anyway))) as { session?: Session };
         if (reply.session) onReplaced(session.id, reply.session);
       } finally {
         setBusy(false);
@@ -140,7 +141,7 @@ export function PermissionNeeded({ core, session, onReplaced }: { core: CoreClie
           </li>
         )}
       </ol>
-      <ErrorLine t={docT()} error={error} />
+      <ErrorLine t={docT()} error={error} anyway={() => void restart(true)} />
     </section>
   );
 }

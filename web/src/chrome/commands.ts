@@ -35,7 +35,7 @@ import type { useNotifications } from '../queue/notify';
 import { waitingOrder } from '../queue/Strip';
 import { useBoardItems } from '../queue/board';
 import { AGENTS, agentName, handOff } from '../chat/conversation';
-import { askNew, quickStart } from '../NewSession';
+import { askNew, quickStartNoted } from '../NewSession';
 import { isRoomTab, roomOfTab } from '../room/room';
 import { closeTeamTab } from '../lead/team';
 import { closeSchedTab, NEW_SCHEDULE, openSchedules, SCHED_TAB } from '../schedule/schedules';
@@ -214,7 +214,7 @@ export function buildCommands({ resume, ordered, board, ownerList, current, t, o
       title: t(kind === 'shell' ? 'newtab.cmd.terminal' : kind === 'claude' ? 'newtab.cmd.claude' : 'newtab.cmd.codex'),
       // Ticket 610: on the Room tab (no session tab) it starts in the selected project instead of greying out unexplained.
       enabled: !!(current ?? selected),
-      run: () => (current || selected) && void quickStart(core, ordered, current, kind, current?.project ?? selected ?? undefined).then((s) => s && openStarted(s), (e) => setPaneNote(errorNote(t('err.note.notStarted', { error: notePlain(t, e) }), e))),
+      run: () => (current || selected) && quickStartNoted(core, ordered, current, kind, current?.project ?? selected ?? undefined, openStarted, setPaneNote, t),
     })),
     // Ticket 328: My browser's tabs; they act while its strip is on screen (`strip`).
     strip({ id: 'browser.tab.next', title: 'Next browser tab', run: () => hasStrip() && stepTab(1) }),

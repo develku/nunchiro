@@ -33,7 +33,7 @@ Usage:
       days (the seats figure only when a restart fell in them).
   scorecard.py dev [--target DIR] [--out FILE]
       Maintainability figures (part p26): a cold and a warm debug build of the Rust workspace in DIR (a fresh cargo
-      target, removed first), the web build, the gate's Rust test stage (scripts/cargo-test-gate.sh) on that target,
+      target, removed first), the web build, the pull-request gate's Rust test stage (TEST_STAGE) on that target,
       the largest source files, and the files that two or more open lanes (local branches with a commit today that
       origin/main does not have) both change. Writes docs/measure/dev-<date>.json; `page` reads the newest one.
   scorecard.py ops [--clones DIR] [--out FILE]
@@ -240,6 +240,18 @@ REVERT_LANE = re.compile(r"^(?:fable-revert-|revert-\d+-|lead-revert-?)(.+)$")
 REVERT_SUBJECT = re.compile(r'^Revert (?!"Revert )')  # git's default subject; a revert of a revert lands the change again
 
 
+def attempts(runs, fetch):
+    """One row per attempt. "gh run list" gives a run's last attempt only; fetch(run id, n) gives an earlier one (the
+    REST attempts endpoint), so a failed attempt stays a red gate run when its rerun is green."""
+    out = []
+    for r in runs:
+        for n in range(1, r.get("attempt") or 1):
+            a = fetch(r["databaseId"], n)
+            out.append(dict(r, status=a["status"], conclusion=a["conclusion"], startedAt=a["run_started_at"], updatedAt=a["updated_at"]))
+        out.append(r)
+    return out
+
+
 def revert_of(lane, subjects=()):
     """What a landed lane reverts, or None when it is no revert. Its name says so (REVERT_LANE), or every commit of its
     own is a revert (subject 'Revert ...'); git's `Revert "Merge lane <lane> (...)"` names the lane, else "" (unknown)."""
@@ -336,6 +348,10 @@ def own_folder(path):
     return p
 
 
+# The pull-request gate's Rust test stage (.github/workflows/ci.yml runs it from an archive, split over runners).
+TEST_STAGE = ["cargo", "nextest", "run", "--workspace", "--config-file", "scripts/nextest.toml"]
+
+
 def outside_holder(cmd, env, timeout=3600):
     """(seconds, exit code, output) of cmd run with launchd as its parent: a double fork, so no Nunchiro holder is
     above it (crates/nunchiro-core/src/peer.rs under_holder walks the parents; 29 holder tests fail inside a session).
@@ -412,7 +428,7 @@ def dev_cmd(a):
     warm, p = timed(["cargo", "build", "--workspace"], env)
     web, pw = timed(["pnpm", "--filter", "nunchiro-web", "build"], env)
     md2 = fresh_worktree_test(env, target / "md2")
-    tests, test_rc, test_out = outside_holder(["sh", "scripts/cargo-test-gate.sh"], env)
+    tests, test_rc, test_out = outside_holder(TEST_STAGE, env)
     summary = next((l for l in reversed(test_out.splitlines()) if "Summary" in l or "test result" in l), "")
     files = [(p, int(n)) for n, p in (l.split(None, 1) for l in subprocess.run(
         "git ls-files -z | xargs -0 wc -l", shell=True, cwd=ROOT, capture_output=True, text=True).stdout.splitlines()
@@ -863,8 +879,9 @@ def restored_launch(cli, app, sessions, home, check):
     """(seconds, {"sessions", "chat_events"}): the second launch of the window on a home whose core holds `sessions`
     shell sessions and one fixture agent session with the 5,000-event conversation (workload_v1b.py, no model), to
     the first drawn snapshot; the first launch on that home warms WebKit. check(app pid, core pid) is the owner check.
-    shortcut: DRAWN is the first snapshot drawn, not the conversation's own first paint (chat_open_5000_ms, p33);
-    upgrade when the page reports that paint."""
+    shortcut: DRAWN is the first snapshot drawn, not the conversation's own first paint (chat_open_5000_ms, p33). The
+    page reports that paint (chat-drawn mark, read by measurelib.chat_open), but this gate window is hidden and draws
+    no frames; upgrade when a run shows the window."""
     import measurelib as ml
     import release as rel
     import startup as su

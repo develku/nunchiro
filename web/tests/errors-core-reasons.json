@@ -1,7 +1,7 @@
 {
  "--env {}: invalid name or value": "cli: a `nunchiro` command-line flag or command; the window sends these fields itself",
  "--env {}: secrets are not passed this way": "cli: a `nunchiro` command-line flag or command; the window sends these fields itself",
- "start_anyway carries a start only": "cli: `agent start --anyway` wraps its own start; the window never sends start_anyway",
+ "start_anyway carries a start only": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip",
  "--env: an ACP agent does not take --env yet; set its environment in agents.toml": "cli: a `nunchiro` command-line flag or command; the window sends these fields itself",
  "a deny instruction needs a permission request": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip",
  "a question takes one of its choices": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip",

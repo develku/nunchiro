@@ -4,7 +4,7 @@ Run through scripts/scenario/v1b-full.sh. Each chained scenario script runs as i
 kept); the outer guard here decides Acceptance 15: lib.snapshot()/guard_check plus a manifest of config-like files
 under ~/.claude and ~/.codex (an allowlist: both CLIs write transcripts, caches and history on every turn).
 """
-import fcntl, fnmatch, hashlib, json, os, pathlib, re, signal, socket, subprocess, sys, threading, time, uuid
+import fcntl, fnmatch, hashlib, json, os, pathlib, re, shutil, signal, socket, subprocess, sys, threading, time, uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib  # noqa: E402
@@ -239,10 +239,9 @@ def chat_codex(root):
     and the assistant reply. Trust is a -c override for this run only; no dialog is ever answered."""
     binary = str(root / "target/debug/nunchiro")
     tag = uuid.uuid4().hex[:5]
-    home = root / ".scratch" / ("x" + tag)
+    home = lib.scenario_home("x" + tag)
     project = home / "project"
-    project.mkdir(parents=True)
-    os.chmod(home, 0o700)
+    project.mkdir()
     env = lib.clean_env({"NUNCHIRO_HOME": str(home)})
     for key in ("NUNCHIRO_TOKEN", "NUNCHIRO_SESSION"):
         env.pop(key, None)
@@ -324,6 +323,7 @@ def chat_codex(root):
                 if core.poll() is None:
                     core.kill()
                 core.wait()
+        shutil.rmtree(home, ignore_errors=True)
 
 
 def _walk(x):
@@ -401,7 +401,7 @@ def main(root):
             print(json.dumps({k: row.get(k) for k in ("name", "status", "runs", "error", "why")}), flush=True)
     finally:
         after, m_after = lib.snapshot(), manifest()
-        ours = [str(scratch), sc]
+        ours = [str(scratch), sc, lib.SCENARIO_HOMES, lib.TRUSTED_CWD]
         problems, foreign = lib.guard_check(before, after, ours)
         m_problems, m_foreign = manifest_diff(m_before, m_after, ours)
         problems, foreign = problems + m_problems, foreign + m_foreign

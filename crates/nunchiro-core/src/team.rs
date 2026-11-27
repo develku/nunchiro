@@ -247,6 +247,9 @@ pub enum Op {
         /// changes, when the teammate's seat is another session by now (or none).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         seat: Option<String>,
+        /// The window's "Start anyway": the seat opens past a memory hold (the owner's alone; the window is the owner).
+        #[serde(default)]
+        anyway: bool,
     },
     /// Ticket 992 rule 6: the user picked a level on a seat's row. The running seat does not change; the level is
     /// kept for the teammate's next task (`None` takes the pick back). The window then offers the lesson as a note
@@ -943,6 +946,8 @@ fn task_note(task: &str) -> String {
 /// place's lead (the seat starts as its worker, so wake lines and questions reach the lead).
 pub(crate) enum Opener<'a> {
     Window,
+    /// The window's Open past a memory hold ("Start anyway"): otherwise as `Window`.
+    WindowAnyway,
     /// Ticket 1096: the window's "New Lead conversation": a new session, never the old conversation resumed.
     /// Ticket 1130 B-L3 round 2: with the session that started the old seat (a worker's Lead), which the new seat keeps.
     Fresh(Option<String>),
@@ -964,7 +969,7 @@ impl Opener<'_> {
             Opener::Window => Some((Who::Window, "team seat")),
             Opener::Schedule(_, who) => Some((*who, "schedule")),
             Opener::Lead(_) => Some((Who::Session, "team open")),
-            Opener::Fresh(_) | Opener::Undo(..) => None,
+            Opener::Fresh(_) | Opener::Undo(..) | Opener::WindowAnyway => None,
         }
     }
 }
@@ -1108,7 +1113,7 @@ pub(crate) fn open_seat(
     let last = if task.is_none()
         && asked.is_none()
         && mate.next_level.is_none()
-        && matches!(opener, Opener::Window)
+        && matches!(opener, Opener::Window | Opener::WindowAnyway)
     {
         lock()?.last_seat_level(&mate.id)
     } else {
@@ -1182,8 +1187,10 @@ pub(crate) fn open_seat(
         // Ticket 1002 lane 1 (Fable review R5): a seat the owner left open in "Full access, shell included" takes no
         // work it did not open itself: a brief read with nobody present never runs where the shell asks nothing. The
         // schedule's row shows this line.
-        if !matches!(opener, Opener::Window | Opener::Fresh(_) | Opener::Undo(..))
-            && session.home_mode.as_deref() == Some("full-access-shell")
+        if !matches!(
+            opener,
+            Opener::Window | Opener::WindowAnyway | Opener::Fresh(_) | Opener::Undo(..)
+        ) && session.home_mode.as_deref() == Some("full-access-shell")
         {
             return Err(format!(
                 "{} is open in Full access, shell included; the scheduled or lead task did not run (close the seat or pick another mode)",
@@ -1251,7 +1258,7 @@ pub(crate) fn open_seat(
         // Look 11-17 v9 (Home S2-2): but a lead's schedule continues the lead's conversation as its open seat takes
         // the task: a new session lost the chat with the user after a relaunch.
         let resumes = match &opener {
-            Opener::Window => task.is_none(),
+            Opener::Window | Opener::WindowAnyway => task.is_none(),
             Opener::Schedule(..) => mate.lead,
             Opener::Lead(_) | Opener::Fresh(_) | Opener::Undo(..) => false,
         };
@@ -1263,7 +1270,7 @@ pub(crate) fn open_seat(
             crate::pressure::check_start(&start, who, false, path)?;
         }
         match &opener {
-            Opener::Window | Opener::Fresh(_) | Opener::Undo(..) => sessions
+            Opener::Window | Opener::WindowAnyway | Opener::Fresh(_) | Opener::Undo(..) => sessions
                 .launch_as(None, start.clone(), false)?
                 .owner_start(),
             Opener::Schedule(..) => sessions.launch_as(None, start.clone(), false)?,
@@ -1770,8 +1777,18 @@ pub fn window(
             undo_fresh(registry, &id, &old, seat.as_deref().unwrap_or_default()).map(Opened::reply)
         }
         Op::TeamOpen {
-            id, fresh: None, ..
-        } => open_seat(registry, &id, None, None, Opener::Window).map(Opened::reply),
+            id,
+            fresh: None,
+            anyway,
+            ..
+        } => {
+            let opener = if anyway {
+                Opener::WindowAnyway
+            } else {
+                Opener::Window
+            };
+            open_seat(registry, &id, None, None, opener).map(Opened::reply)
+        }
         Op::TeamOpen {
             id,
             fresh: Some(how),

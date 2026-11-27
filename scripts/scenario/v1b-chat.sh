@@ -3,7 +3,8 @@
 # web/tests/chat-live.spec.ts) must show the turn within 1 s of each transcript write, one grouped read row and
 # one diff card with +1 −1. RUNS (default 5) runs, each with its own core, home and scratch project; the
 # ticket-01 guard fails the run on any change to the user's agent settings, hooks or trust.
-# CHAT_PROJECT_ROOT: a folder Claude already trusts (no trust dialog is ever answered); default .scratch.
+# CHAT_PROJECT_ROOT: a folder Claude already trusts (no trust dialog is ever answered); default a fresh folder
+# under lib.TRUSTED_CWD. Each run's NUNCHIRO_HOME is under lib.SCENARIO_HOMES (outside any repo) and removed after it.
 set -eu
 cd "$(dirname "$0")/../.."
 export CARGO_HOME="${CARGO_HOME:-$PWD/.scratch/cargo-home}"
@@ -12,11 +13,11 @@ cargo build -q -p nunchiro
 exec python3 -B - "$@" <<'PY'
 import json, os, pathlib, re, shutil, socket, subprocess, sys, time, uuid
 sys.path.insert(0, 'scripts/scenario')
-from lib import clean_env, snapshot, guard_check, descendants, visible, GUARDED
+from lib import TRUSTED_CWD, clean_env, scenario_home, snapshot, guard_check, descendants, visible, GUARDED
 root = pathlib.Path.cwd()
 binary = str(root / 'target/debug/nunchiro')
 runs = int(os.environ.get('RUNS', '5'))
-project_root = pathlib.Path(os.environ.get('CHAT_PROJECT_ROOT', str(root / '.scratch')))
+project_root = pathlib.Path(os.environ.get('CHAT_PROJECT_ROOT', TRUSTED_CWD))
 out = root / '.scratch' / ('chat-' + time.strftime('%Y%m%d-%H%M%S'))
 out.mkdir(parents=True)
 before = snapshot()
@@ -26,9 +27,8 @@ ours = [str(out), str(root / 'scripts/scenario')]
 
 def one(n):
     tag = uuid.uuid4().hex[:5]
-    home = root / '.scratch' / ('c' + tag)
-    home.mkdir(mode=0o700)
-    assert len(str(home / 'core.sock').encode()) < 104, 'socket path too long'
+    home = scenario_home('c' + tag)
+    ours.append(str(home))
     project = project_root / ('chat-proj-' + tag)
     project.mkdir(parents=True)
     ours.append(str(project))
@@ -61,7 +61,7 @@ def one(n):
         while True:
             text = visible(bytes(cli('session', 'read', s['id'])['data']))
             # Never answer a startup/trust dialog; stop rather than persist a trust grant.
-            if re.search(r'Is this a project you created or one you trust|Do you trust the files|Allow external CLAUDE.md file imports', text):
+            if re.search(r'Is this a (?:project|directory) you created or one you trust|Do you trust the files|Allow external CLAUDE.md file imports', text):
                 raise RuntimeError('trust dialog: set CHAT_PROJECT_ROOT to a folder Claude already trusts')
             if re.search(r'❯\s+Try|(?:manual|auto|accept edits) (?:mode )?on|for shortcuts', text, re.I):
                 break
@@ -104,6 +104,8 @@ def one(n):
             row['surviving_owned_pids'] = survivors
             if survivors: row['pass'] = False
         shutil.rmtree(project, ignore_errors=True)
+        if (home / 'core.log').exists(): shutil.copy(home / 'core.log', out / f'run-{n}.core.log')
+        shutil.rmtree(home, ignore_errors=True)
     return row
 
 try:

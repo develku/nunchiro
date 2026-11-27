@@ -80,7 +80,7 @@ ourselves, is 521 MiB.
 | Locale key coverage, 7 other languages (%) | 100 | 80 | v1, unchanged | run |
 | Cold debug build, warm rebuild, web build, Rust test stage, largest file, files over 2,000 lines, files shared by open lanes | | | v1, unchanged (3..20 min, 15..180 s, 15..120 s, 3..20 min, 2,000..15,000, 0..20, 0..10) | dev |
 | Change failure rate (%), time to restore (min) | 5, 60 | 30, 1440 | v1, unchanged (DORA) | ops |
-| Open a 5,000-event conversation: select it to its newest message painted (ms) | 100 | 1000 | Nielsen's limits: 0.1 s feels instant, 1 s keeps the flow (nngroup.com/articles/response-times-3-important-limits). Peer practice: T3 Code bounds a cold open to 75 rows and about 1 MiB (t3code docs/internals/performance-regressions.md:15) | not yet (the page does not report this paint) |
+| Open a 5,000-event conversation: select it to its newest message painted (ms) | 100 | 1000 | Nielsen's limits: 0.1 s feels instant, 1 s keeps the flow (nngroup.com/articles/response-times-3-important-limits). Peer practice: T3 Code bounds a cold open to 75 rows and about 1 MiB (t3code docs/internals/performance-regressions.md:15) | not yet: the page reports this paint (`nunchiro:chat-drawn <session>` mark) and `measurelib.chat_open` reads it, but no runner draws frames: a gate window is hidden (no animation frames), and Playwright gets no window token from a release core |
 | 8 terminals streaming 20 MiB each: worst frame, WebKit (ms) | 200 | 2000 | 100: the stall bar of measurelib.py:397 (a stall a user sees). 0: the 2 s after which the same scripts call a key missed (measurelib.py:405). We read 1,453-1,843 ms on 10-25 (docs/v1/figures.md `stream-8-webkit`) | owner-run: `paint.sh --only stream --sizes 8 --engines webkit --no-record` |
 | Memory after 24 h over memory at minute 2, 5 real sessions (ratio) | 1.0 | 1.5 | own bar from the soak bar 1.25 (measurelib.py:400), which is 50 points here | owner-run with the 24 h soak |
 | Prompt delivery: `agent prompt` to the text submitted in a real agent's screen, median (ms) | 1000 | 10000 | Nielsen: 1 s keeps the flow, 10 s loses attention. Our path waits by design (crates/nunchiro-core/src/sessions/deliver.rs: the settle before Enter); cmux delivers through hooks with no wait for a screen | owner-run trial, see p34: each delivered send, from the send to its exact text above the input box; median and p95 per side and in total, the total median scored |
@@ -292,7 +292,8 @@ card for it), with `scorecard.py waits`.
    10. Find a free hour in a fixture calendar and propose it (the hour is free in the fixture).
    The fixtures (repository, mails, calendar) do not exist yet; making them is the first step of the first run.
 2. Owner touches per task in that set, median.
-3. First-pass review rate of the real lanes of the last 7 days (`scripts/measure-dev-speed.py`, rework.first_pass_pct).
+3. First-pass review rate of the real lanes of the last 7 days (`scripts/measure-dev-speed.py`, rework.first_pass_pct,
+   from the verdicts in the private review record).
 
 ### p37 Reach (new)
 
@@ -325,7 +326,7 @@ sandboxes. A phone client is row M2 of p01.
 | Bot task set | p35 above | bot_task_success_pct, bot_owner_touches |
 | Reach | p37 above | RE1-RE5 |
 
-Not yet measurable, with what is missing: opening a 5,000-event conversation (the page does not report that paint).
+Not yet measurable, with what is missing: opening a 5,000-event conversation (the paint mark and its reader exist; no release-core runner draws frames, see p33's row).
 
 ## Rubric checks
 
@@ -458,9 +459,10 @@ correctly. MD1-MD5 replaced MX1-MX5 on 2026-11-25; the number figures stay.
 - SC5 Two clean clones of main build the same binary (scripts/update-clone.sh, cargo --release --locked --offline).
 
 ### p30 Development speed (added 2026-11-25 by the owner, ticket 1127)
-Measured by `python3 -B scripts/measure-dev-speed.py [--days 7]` over the last 7 days: git merges on origin/main (the
-ground truth, with the merged pull requests), the main CI log, the task ledger and, for days before the PR flow, the
-local gate's events, all read only; it writes
+Measured by `python3 -B scripts/measure-dev-speed.py [--days 7]` over the last 7 days: the pull requests merged into
+main (the ground truth) with their auto-merge times, the GitHub Actions runs on pull requests (every attempt), the main
+CI log and a private review record (verdicts, review starts and owner asks, one line per fact, outside git), all
+read only; it writes
 docs/measure/devspeed-<date>.json. The bands are the DORA ones (State of DevOps reports: elite, high, medium, low).
 pass = 100 points (20 of the part), partial = 50 (10), fail = 0. The IDs are DV, because DS1-DS5 belong to p19.
 - DV1 Deployment frequency (DORA elite: on demand, several a day). pass: a lane lands on main on at least 5 of the 7
@@ -471,7 +473,8 @@ pass = 100 points (20 of the part), partial = 50 (10), fail = 0. The IDs are DV,
   the merge is shown beside it.
 - DV3 Change failure rate: landed lanes later reverted (a revert lane or pull request) or named culprit in the main CI log,
   over lanes landed (elite to medium: 0-15 %). pass: 15 % or less; partial: 30 % or less; fail: more, or not measured.
-  Gate rejects (eject and kick) and review rounds are shown, not scored: a rejected lane never reached main.
+  Gate rejects (a CI run on a pull request that went red after its auto-merge was turned on) and review rounds are
+  shown, not scored: a rejected lane never reached main.
 - DV4 Time to restore main: red to green in the main CI log, median (elite: under 1 h). pass: under 60 min; partial:
   under 24 h (high); fail: 24 h or more, or not measured.
 - DV5 The flow split is measured and its waits are short: build, review, review to enqueue, gate queue, gate run.
@@ -483,7 +486,8 @@ pass = 100 points (20 of the part), partial = 50 (10), fail = 0. The IDs are DV,
   at least 80 % of landed lanes and the median under 20 USD (a first budget; the owner may change it); partial: known
   for some lanes, median under 60 USD; fail: otherwise or not measured.
 - DV7 Owner touches per lane and owner wait: questions, cards and answers the owner had to give (accept conditions
-  that need the owner, merge-yes waits, asks to the person, permission waits) and the time lanes waited on them. pass:
+  that need the owner, merge-yes waits, asks to the person, permission waits; read from the review record's asks and
+  the core journal's permission waits) and the time lanes waited on them. pass:
   measured over the whole window, median at most 1 touch per lane and no wait over 1 h; partial: measured in part,
   median at most 1; fail: median over 3 or not measured.
 - DV8 First-pass and rework rate (DORA 2024 rework rate). pass: at least 80 % of reviewed lanes pass their first review
@@ -584,6 +588,26 @@ Where v2 differs from the audit's proposal, and why:
   the local main watcher's log; landings are merged pull requests. No anchor, window or method changed. Gate rejects,
   review rounds, first pass and rework need the local gate's events, which the PR flow does not have: they read "not
   measured" for days after 2026-11-26 (rework read 0 rejects before; now it is null, never better).
+- Source names (2026-11-27, PR-flow data): p30 reads pull requests and the Actions runs on them instead of the local
+  gate's events and "Merge lane" merges. A gate reject is a pull request with a red CI attempt that started at or after
+  its first auto-merge enable (reds before it are the builder's own checks, shown apart; a conflict set-aside has no
+  GitHub event and is not counted). The enqueue is the last auto-merge enable before the merge, no longer the opening
+  (the opening put the review wait into the gate queue); without an enable the queue is not known. A pull request
+  titled `Revert "<title>"` reverts the one with that title. No anchor, band or window changed; where the runs cannot
+  be read, rejects and rework read null.
+  Review rounds, first pass, the build and review times and owner touches read a private review record (one JSON line
+  per verdict, review start, ask or answer, written when it happens; GitHub cannot hold them: an author cannot review
+  their own pull request, and pull-request text is public). Rounds are the distinct commits given a verdict; Codex
+  looks are shown, not rounds. First pass now means the first verdict is an accept (before: one round, which counted a
+  rejected-then-fixed single round as a pass; stricter). Lanes that started before the record's first live line have
+  no owner figures (unknown, not 0), so DV7 reads "measured in part" until the record is older than the window. The
+  task ledger is no longer read: it never saw the pull-request lanes.
+  DV6 finds a lane's sessions by what they did, not by their folder (agent subagents run in the main checkout): the
+  branches a session made a worktree for or pushed, else the one pull request its first message names, else, for
+  Codex, its worktree folder; a session joined to several pull requests is split between them, and the session that
+  runs the others is never put on a lane. Sessions joined to none are summed apart as unassigned. 1-hour cache writes
+  are priced at twice the input price (the price page). Lanes built on another machine have no cost here (not
+  measured, not 0); models with no published token price stay unpriced, listed by model.
 - Owner decision 2026-11-26 (stricter): p14 adds memory-pressure kills over 7 days and row ML1. The Mac staying responsive is the owner's second priority, and the idle figures alone scored a frozen Mac the same as a calm one.
 
 Not changed in v2 (the audit's lower-priority list, outside the approval of 2026-11-26): the weight of the default

@@ -58,16 +58,7 @@ def end_of(text, start):
     return datetime.datetime.combine(start, datetime.time()) + datetime.timedelta(days=day, seconds=last), red
 
 
-def attempts(runs, fetch):
-    """One row per attempt. "gh run list" gives a run's last attempt only; fetch(run id, n) gives an earlier one (the
-    REST attempts endpoint), so a failed attempt stays a red gate run when its rerun is green."""
-    out = []
-    for r in runs:
-        for n in range(1, r.get("attempt") or 1):
-            a = fetch(r["databaseId"], n)
-            out.append(dict(r, status=a["status"], conclusion=a["conclusion"], startedAt=a["run_started_at"], updatedAt=a["updated_at"]))
-        out.append(r)
-    return out
+attempts = scorecard.attempts  # shared with scripts/measure-dev-speed.py
 
 
 def build(old, start, runs, installs=(), since="0001-01-01"):

@@ -3818,6 +3818,27 @@ button:disabled {
   margin-left: var(--sp-4);
   color: var(--muted);
 }
+/* A held start's Start anyway: the Undo line's quiet tint button, no orange or red (mockup memory-hold-m8). */
+.pane-note-act,
+.held-act .btn {
+  border-color: transparent;
+  background: var(--control-quiet-bg);
+  color: var(--text);
+  font-weight: 500;
+}
+.pane-note-act {
+  margin-left: var(--sp-8);
+  padding: 1px 7px;
+  font-size: var(--fs-1);
+}
+.pane-note-act:hover,
+.held-act .btn:hover {
+  background: var(--control-quiet-hover);
+}
+.held-act {
+  display: flex;
+  margin-top: var(--sp-6);
+}
 /* On the dark toast the muted grey is too faint (476 review). */
 .wtoast .err-details {
   color: inherit;

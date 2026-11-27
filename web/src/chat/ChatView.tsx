@@ -290,6 +290,26 @@ function ChatList({ boot, feed, session, shown, readOnly, head, main, t }: { t: 
     }
   }, [rows, total, v, catchUp, working]);
 
+  // The frame that first shows the newest row inside the view after this chat opened: the long-chat open figure reads this mark (scripts/measure/measurelib.py chat_open).
+  // Checked once a frame for 5 s at most (a reader scrolled up in a kept chat never shows it).
+  const drawn = useRef(false);
+  const lastIndex = rows.length - 1;
+  useEffect(() => {
+    if (drawn.current || !shown || lastIndex < 0) return;
+    const until = performance.now() + 5000;
+    const look = () => {
+      const el = scroller.current;
+      const a = el?.getBoundingClientRect();
+      const b = el?.querySelector(`.crow[data-index="${lastIndex}"]`)?.getBoundingClientRect();
+      if (a && b && b.bottom > a.top && b.top < a.bottom) {
+        drawn.current = true;
+        performance.mark(`nunchiro:chat-drawn ${session.id}`);
+      } else if (performance.now() < until) frame = requestAnimationFrame(look);
+    };
+    let frame = requestAnimationFrame(look);
+    return () => cancelAnimationFrame(frame);
+  }, [shown, lastIndex, session.id]);
+
   // v2-7
   useEffect(() => {
     if (!jump || state.generation === null || !shown) return;
