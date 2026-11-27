@@ -74,7 +74,7 @@ test('task_deps_board: waiting, blocking, freed, stuck and early cards, as the m
   await expect(card('t4')).toHaveAttribute('data-waits-seat', 'true');
   await expect(card('t4')).not.toHaveAttribute('data-waits-task');
   await expect(card('t4').locator('.tcard-stages')).toHaveText('Waits for a seat');
-  await expect(card('t4').locator('.tcard-facts')).toContainText('ready since 1 min');
+  await expect(card('t4').locator('.tcard-facts')).toContainText('ready since 1m');
   // Stuck: an asking card with its two buttons.
   await expect(card('t5')).toHaveAttribute('data-you', 'true');
   await expect(card('t5').locator('.tcard-now')).toHaveText('"Old parser" was dropped, so this cannot start. Stop waiting for it, or drop this too?');
@@ -105,7 +105,7 @@ test('task_deps_drawer_menu: a waiting card opens what it waits for; the menu se
   await expect.poll(() => sent.at(-1)).toEqual({ operation: 'after', id: 't3', after: [] });
 
   // The menu: the place's open tasks, this one greyed; a tick sends the whole new list.
-  await card('t2').getByRole('button', { name: /actions/ }).click();
+  await card('t2').getByRole('button', { name: /^Actions for / }).click();
   await view.getByRole('menuitem', { name: 'Wait for…' }).click();
   const menu = view.locator('.lead-menu[data-wait-menu="t2"]');
   await expect(menu.getByRole('menuitemcheckbox', { name: 'Fix lexer panic' })).toHaveAttribute('aria-checked', 'true');

@@ -13,7 +13,7 @@ import type { Decision, Session } from '../types';
 import { leadOf, useTeam } from './lead';
 import { AssistantRows, BriefLine, ProjectRows } from './HomeParts';
 import { TaskRows, TeamTasks, type Other } from './LeadHead';
-import { SeatDrawer, waitsSeat, type Peek } from './TaskBoard';
+import { SeatDrawer, waitsSeat, waitsTask, type Peek } from './TaskBoard';
 import { PlaceGear } from './place';
 import { askTitle, asks, hasCard, placeOfCard, teamWaiting, whatWhy, type Item } from '../tree/decisions';
 import { sessionName } from '../sessionNames';
@@ -54,6 +54,7 @@ export function TeamView({ core, t, folder, sessions, open, wt, owner, decide, w
     ((n) => n > 0 && t('tboard.meta.working', { n }))(openTasks.filter((x) => x.state === 'working').length),
     needs > 0 && t(needs === 1 ? 'tboard.meta.asks.one' : 'tboard.meta.asks.other', { n: needs }),
     ((n) => n > 0 && t(n === 1 ? 'tboard.meta.seat.one' : 'tboard.meta.seat.other', { n }))(tasks.filter(waitsSeat).length),
+    ((n) => n > 0 && t(n === 1 ? 'tboard.meta.task.one' : 'tboard.meta.task.other', { n }))(tasks.filter(waitsTask).length),
     ((n) => n > 0 && t('tboard.meta.landed', { n }))(tasks.filter((x) => x.closed && x.closed.how === 'merged' && x.closed.at >= today).length),
   ]
     .filter(Boolean)
@@ -171,7 +172,7 @@ export function TeamView({ core, t, folder, sessions, open, wt, owner, decide, w
           {wide && home && <div className="lead-gh">{title('room')}</div>}
           <RoomView core={core} t={t} project={live} sessions={sessions} byId={byId} messages={room.messages} pins={room.pins} names={room.names} delivery={room.delivery} dropped={room.dropped} toggle={room.toggle} refresh={room.refresh} open={open} wt={wt} />
         </div>
-        {drawer && term && <SeatDrawer t={t} peek={drawer} tasks={tasks} sessions={sessions} term={term} open={open} close={closeDrawer} />}
+        {drawer && term && <SeatDrawer t={t} core={core} peek={drawer} tasks={tasks} sessions={sessions} term={term} open={open} close={closeDrawer} lead={lead.name} />}
       </div>
     </div>
   );

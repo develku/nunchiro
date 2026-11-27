@@ -14,7 +14,7 @@ import { independent, openSeat, type Teammate } from './lead';
 import { useRoles, type Place, type Seat, type TaskView } from './tasks';
 import { homeCount, type Digest } from './HomeParts';
 import { daySentence, openPlace } from './place';
-import { TaskBoard, type Peek } from './TaskBoard';
+import { TaskBoard, WaitFor, type Peek } from './TaskBoard';
 import './lead.css';
 
 type Wt = NonNullable<WindowCtx['wt']>;
@@ -301,22 +301,32 @@ export function TeamTasks({ t, core, project, mate, sessions, tasks, place, wt, 
   }, [menu]);
   const hand = (paths: string[], lead: string) => (setMenu(null), void Promise.all(paths.map((p) => wt.team(p, lead))).catch(() => {}));
   const openWt = (path: string) => void wt.open(path).then((x) => x && open(x.id));
-  // The ⋯ menu acts on the task's worktrees; a task without one has nothing to take back.
+  // The ⋯ menu acts on the task's worktrees; a task without one has nothing to take back. On the board it also sets what
+  // an open task waits for; there a card with nothing else in its menu shows ⋯ only under the pointer or the focus.
   const taskMenu = (task: TaskView) => {
     const paths = (task.worktrees ?? []).filter((p) => wt.list.some((l) => l.path === p && l.team === mate.id));
-    if (!paths.length) return null;
+    const waits = !!board && !task.closed;
+    if (!paths.length && !waits) return null;
     return (
       <>
-        <button className="lead-more" aria-label={t('lead.band.actions', { name: task.title })} aria-haspopup="menu" aria-expanded={menu === task.id} onClick={() => setMenu(menu === task.id ? null : task.id)}>
+        <button className="lead-more" data-quiet={!paths.length || undefined} aria-label={t('lead.band.actions', { name: task.title })} aria-haspopup="menu" aria-expanded={menu === task.id || menu === `wait:${task.id}`} onClick={() => setMenu(menu === task.id || menu === `wait:${task.id}` ? null : task.id)}>
           ⋯
         </button>
         {menu === task.id && (
           <div className="lead-menu" role="menu">
-            <button role="menuitem" onClick={() => hand(paths, '')}>
-              {t('lead.band.takeBack')}
-            </button>
+            {paths.length > 0 && (
+              <button role="menuitem" onClick={() => hand(paths, '')}>
+                {t('lead.band.takeBack')}
+              </button>
+            )}
+            {waits && (
+              <button role="menuitem" onClick={() => setMenu(`wait:${task.id}`)}>
+                {t('tboard.waitFor')}
+              </button>
+            )}
           </div>
         )}
+        {menu === `wait:${task.id}` && <WaitFor t={t} core={core} task={task} tasks={tasks} />}
       </>
     );
   };

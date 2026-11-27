@@ -69,3 +69,6 @@ i18n-key-sets.spec.ts
 
 # a shell beside the agent: the Terminal icon opens one in the agent's folder, New terminal too
 shell-beside-agent.spec.ts
+
+# task dependencies on the Team board: waiting, blocking, freed, stuck and early cards; the drawer and the Wait for menu
+task-deps.spec.ts
