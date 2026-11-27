@@ -979,7 +979,15 @@ pub fn fire(
     let home = lock(registry).map(|s| s.home().to_path_buf());
     for (card, name, run, about) in starts {
         if let Ok(home) = &home {
-            let _ = triggers::start_card(registry, stopping, home, &name, &run, about.as_deref());
+            let _ = triggers::start_card(
+                registry,
+                stopping,
+                home,
+                &name,
+                &run,
+                about.as_deref(),
+                &card,
+            );
             if let Ok(mut sessions) = lock(registry) {
                 let _ = sessions.queue.answer_owner(|i| i.id == card);
             }

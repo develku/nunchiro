@@ -80,6 +80,25 @@ pub(crate) fn spawn(
         })
 }
 
+/// A stream whose every read stops at one deadline.
+struct Deadline<'a> {
+    stream: &'a TcpStream,
+    until: std::time::Instant,
+}
+impl Read for Deadline<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let left = self
+            .until
+            .saturating_duration_since(std::time::Instant::now());
+        if left.is_zero() {
+            return Err(std::io::ErrorKind::TimedOut.into());
+        }
+        self.stream.set_read_timeout(Some(left))?;
+        let mut s = self.stream;
+        s.read(buf)
+    }
+}
+
 fn answer(mut s: &TcpStream, status: &str) {
     let _ = write!(
         s,
@@ -89,19 +108,16 @@ fn answer(mut s: &TcpStream, status: &str) {
 
 fn serve(stream: TcpStream, registry: &Mutex<Sessions>, stopping: &AtomicBool, home: &Path) {
     let _ = stream.set_nonblocking(false);
-    let deadline = std::time::Instant::now() + REQUEST_DEADLINE;
-    // Each read gets only what is left of the request's deadline.
-    let left = || {
-        let left = deadline.saturating_duration_since(std::time::Instant::now());
-        (!left.is_zero()).then_some(left)
-    };
-    let mut reader = BufReader::new(&stream);
+    // One deadline for the whole request: every read, however small, gets only what is left of it, so a sender that
+    // drips a byte at a time is closed when it runs out.
+    let mut reader = BufReader::new(Deadline {
+        stream: &stream,
+        until: std::time::Instant::now() + REQUEST_DEADLINE,
+    });
     let mut head = vec![];
     let mut line = String::new();
     loop {
         line.clear();
-        let Some(left) = left() else { return };
-        let _ = stream.set_read_timeout(Some(left));
         match reader.read_line(&mut line) {
             Ok(0) | Err(_) => return,
             Ok(_) if line == "\r\n" || line == "\n" => break,
@@ -141,8 +157,6 @@ fn serve(stream: TcpStream, registry: &Mutex<Sessions>, stopping: &AtomicBool, h
         return answer(&stream, "413 Payload Too Large");
     }
     let mut body = vec![0; length];
-    let Some(left) = left() else { return };
-    let _ = stream.set_read_timeout(Some(left));
     if reader.read_exact(&mut body).is_err() {
         return answer(&stream, "400 Bad Request");
     }

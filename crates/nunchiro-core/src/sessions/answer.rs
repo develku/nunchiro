@@ -404,6 +404,8 @@ impl Sessions {
                             ));
                         }
                     } else {
+                        // A Start pressed before this Not now and not yet run is called off.
+                        self.trigger_starts.retain(|(card, ..)| *card != *id);
                         self.queue.answer_owner(|i| i.id == id)?;
                         if let Some(s) = reason {
                             crate::schedule::triggers::release(&self.home, &name, s);

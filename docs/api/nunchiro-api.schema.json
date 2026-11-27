@@ -16064,6 +16064,13 @@
             "string",
             "null"
           ]
+        },
+        "started_cards": {
+          "description": "The cards whose Start already ran (newest last, at most 20), so a card a quit left behind starts nothing twice.\nOutside the MAC.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "required": [

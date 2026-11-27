@@ -68,6 +68,10 @@ pub struct Trigger {
     /// The last fire: the session it started, or why not. Outside the MAC.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last: Option<Last>,
+    /// The cards whose Start already ran (newest last, at most 20), so a card a quit left behind starts nothing twice.
+    /// Outside the MAC.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub started_cards: Vec<String>,
 }
 impl Trigger {
     /// What a reply shows: never the secret.
@@ -235,6 +239,7 @@ pub(crate) fn handle(
                 paused: false,
                 fired: vec![],
                 last: None,
+                started_cards: vec![],
             });
             save(home, all)?;
             drop(_w);
@@ -476,7 +481,8 @@ fn give_back(home: &Path, name: &str, at: u64, about: Option<&str>) {
     }
 }
 
-/// The owner's Start on an asking trigger's card: the subject the fire took is the started session's now.
+/// The owner's Start on an asking trigger's card: the subject the fire took is the started session's now. A card whose
+/// Start already ran (a core that quit before the card went) starts nothing again.
 pub(crate) fn start_card(
     registry: &Mutex<Sessions>,
     stopping: &AtomicBool,
@@ -484,7 +490,14 @@ pub(crate) fn start_card(
     name: &str,
     run: &Run,
     about: Option<&str>,
+    card: &str,
 ) -> Result<String, String> {
+    if load(home)?
+        .iter()
+        .any(|t| t.name == name && t.started_cards.iter().any(|c| c == card))
+    {
+        return Err(format!("trigger {name}: this card's run already started"));
+    }
     let started = start(
         registry,
         stopping,
@@ -493,6 +506,16 @@ pub(crate) fn start_card(
         run,
         crate::pressure::Who::Window,
     );
+    if started.is_ok() {
+        let _w = WRITE.lock().map_err(|_| "triggers unavailable")?;
+        let mut all = load(home)?;
+        if let Some(t) = all.iter_mut().find(|t| t.name == name) {
+            t.started_cards.push(card.to_string());
+            let over = t.started_cards.len().saturating_sub(20);
+            t.started_cards.drain(..over);
+        }
+        save(home, all)?;
+    }
     match (&started, about) {
         (Ok(id), Some(s)) => claim(home, name, s, id),
         (Err(_), Some(s)) => release(home, name, s),

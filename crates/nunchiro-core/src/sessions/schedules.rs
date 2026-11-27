@@ -280,6 +280,22 @@ impl Sessions {
             crate::schedule::triggers::Source::Cli => "the command line",
             crate::schedule::triggers::Source::Webhook => "a webhook",
         };
+        // One card per subject: a fire about another subject is another card, never one that replaces it (each card's
+        // subject is released by its own Start or Not now).
+        let card_key = match &subject {
+            Some(s) => {
+                use sha2::Digest;
+                let h = sha2::Sha256::digest(s.as_bytes());
+                format!(
+                    "trigger-{name}-{}",
+                    h[..6]
+                        .iter()
+                        .map(|b| format!("{b:02x}"))
+                        .collect::<String>()
+                )
+            }
+            None => format!("trigger-{name}"),
+        };
         let ask = queue::OwnerAsk::Schedule {
             change: "trigger".into(),
             id: Some(name.into()),
@@ -294,9 +310,7 @@ impl Sessions {
             // The subject the fire took (a pull request, an issue), so a Start or a Not now settles it.
             reason: subject,
         };
-        self.queue
-            .ask_owner(&format!("trigger-{name}"), ask)
-            .map(|_| ())
+        self.queue.ask_owner(&card_key, ask).map(|_| ())
     }
     pub(super) fn drop_failed_card(&mut self, entry: &str) {
         self.drop_failed_cards(|id| id == entry);

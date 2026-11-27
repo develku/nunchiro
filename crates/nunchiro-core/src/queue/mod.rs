@@ -2169,6 +2169,7 @@ impl Queue {
                     run,
                     when,
                     change,
+                    reason,
                     ..
                 }),
                 OwnerAsk::Schedule {
@@ -2176,11 +2177,14 @@ impl Queue {
                     run: r,
                     when: w,
                     change: c,
+                    reason: why,
                     ..
                 },
             ) => {
                 id == i
                     && (change == "failed") == (c == "failed")
+                    // A trigger's cards are one per subject (`reason`), so another subject never replaces one.
+                    && (change != "trigger" || reason == why)
                     && (id.is_some() || (run.teammate == r.teammate && when == w))
             }
             // One card per stalled task.
