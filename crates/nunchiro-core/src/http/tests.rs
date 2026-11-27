@@ -556,12 +556,15 @@ fn an_idle_window_and_browser_supervisor_wake_rarely() {
     let mut rounds = 0;
     let (window_rate, browser_rate, quiet) = loop {
         rounds += 1;
-        let seq = crate::pty::output_seq();
+        let woken = || {
+            crate::pty::output_seq() + crate::pty::RINGS.load(Ordering::SeqCst) // output and other wakes
+        };
+        let seq = woken();
         thread::sleep(Duration::from_millis(2500)); // past the loop's active period after any earlier output
         let (p, b, at) = (passes(), supervised(), Instant::now());
         thread::sleep(Duration::from_secs(4));
         let secs = at.elapsed().as_secs_f64();
-        let quiet = crate::pty::output_seq() == seq;
+        let quiet = woken() == seq;
         if quiet || rounds == 4 {
             break (
                 (passes() - p) as f64 / secs,
