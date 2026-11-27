@@ -518,5 +518,8 @@
  "start_or_wait carries a start only": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip",
  "start_or_wait is the window's": "guard: the window sends start_or_wait over its own socket only; the owner socket never gets it from the window or a browser",
  "the starts waiting for memory are the owner's": "guard: a dispatch guard behind the owner and window paths, which answer these requests before it; no window request reaches it",
- "the core started nothing": "internal: a start that reported success without a session, which the core's own start path never returns"
+ "the core started nothing": "internal: a start that reported success without a session, which the core's own start path never returns",
+ "push requires the window": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip",
+ "push needs the confirmed head commit": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip",
+ "not a git op": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip"
 }

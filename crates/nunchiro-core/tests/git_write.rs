@@ -41,7 +41,10 @@ impl Repo {
         git(&root, &["init", "-q", "-b", "main", "work"]);
         let r = Self { root };
         r.commit("base");
-        git(&r.work(), &["remote", "add", "origin", r.origin().to_str().unwrap()]);
+        git(
+            &r.work(),
+            &["remote", "add", "origin", r.origin().to_str().unwrap()],
+        );
         git(&r.work(), &["push", "-q", "-u", "origin", "main"]);
         git(&r.work(), &["remote", "set-head", "origin", "main"]);
         r
@@ -63,7 +66,12 @@ impl Repo {
         let out = git_env::scrubbed("git")
             .arg("-C")
             .arg(self.origin())
-            .args(["rev-parse", "--verify", "-q", &format!("refs/heads/{branch}")])
+            .args([
+                "rev-parse",
+                "--verify",
+                "-q",
+                &format!("refs/heads/{branch}"),
+            ])
             .output()
             .unwrap();
         String::from_utf8_lossy(&out.stdout).trim().to_string()
@@ -141,7 +149,10 @@ fn push_refuses_default_detached_behind_and_nothing_ahead() {
     assert_eq!(e, "not pushed: there are no new commits to push");
     // Behind 1 (and ahead 1): the remote gained a commit this clone lacks.
     let other = r.root.join("other");
-    git(&r.root, &["clone", "-q", r.origin().to_str().unwrap(), "other"]);
+    git(
+        &r.root,
+        &["clone", "-q", r.origin().to_str().unwrap(), "other"],
+    );
     git(&other, &["checkout", "-q", "same"]);
     git(&other, &["commit", "-q", "--allow-empty", "-m", "theirs"]);
     git(&other, &["push", "-q", "origin", "same"]);
@@ -180,19 +191,30 @@ fn a_rejecting_remote_and_a_failing_pre_push_hook_are_sentences() {
         "#!/bin/sh\necho 'policy: no pushes today' >&2\nexit 1\n",
     );
     let e = git_write::push(&r.work(), &r.head()).unwrap_err();
-    assert!(e.starts_with("not pushed: origin refused the push\n"), "{e}");
+    assert!(
+        e.starts_with("not pushed: origin refused the push\n"),
+        "{e}"
+    );
     assert!(e.contains("policy: no pushes today"), "{e}");
     fs::remove_file(r.origin().join("hooks/pre-receive")).unwrap();
     // The folder's own pre-push hook runs, as it does for a push in a terminal.
-    let lines: String = (1..=30).map(|i| format!("echo 'check {i}' >&2\n")).collect();
+    let lines: String = (1..=30)
+        .map(|i| format!("echo 'check {i}' >&2\n"))
+        .collect();
     hook(
         &r.work().join(".git/hooks"),
         "pre-push",
         &format!("#!/bin/sh\n{lines}exit 1\n"),
     );
     let e = git_write::push(&r.work(), &r.head()).unwrap_err();
-    assert!(e.starts_with("not pushed: the pre-push hook failed\n"), "{e}");
-    assert!(e.contains("check 30") && !e.contains("check 10\n"), "the last 20 lines: {e}");
+    assert!(
+        e.starts_with("not pushed: the pre-push hook failed\n"),
+        "{e}"
+    );
+    assert!(
+        e.contains("check 30") && !e.contains("check 10\n"),
+        "the last 20 lines: {e}"
+    );
     assert_eq!(r.remote("parser-fix"), before, "the remote moved");
 }
 
@@ -200,7 +222,10 @@ fn a_rejecting_remote_and_a_failing_pre_push_hook_are_sentences() {
 fn several_remotes_and_none_chosen_is_refused_with_the_list() {
     let r = Repo::new("remotes");
     git(&r.work(), &["remote", "rename", "origin", "upstream"]);
-    git(&r.work(), &["remote", "add", "fork", r.origin().to_str().unwrap()]);
+    git(
+        &r.work(),
+        &["remote", "add", "fork", r.origin().to_str().unwrap()],
+    );
     git(&r.work(), &["checkout", "-q", "-b", "new-work"]);
     r.commit("one");
     let e = git_write::push(&r.work(), &r.head()).unwrap_err();

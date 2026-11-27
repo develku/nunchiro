@@ -1,0 +1,324 @@
+//! The Diff panel's Push, run by the app after the window's confirm strip (web/src/diff/PushStrip.tsx). The strip shows
+//! the commits, the remote branch and the head commit; the request carries that head, and the core reads the branch
+//! again before anything runs. The push names its remote and destination ref and pushes the confirmed commit itself
+//! (`git push <remote> <head>:refs/heads/<branch>`), so neither the folder's push config nor a commit made meanwhile
+//! changes what goes out. Never `--force`, never a bare `git push`. The folder's own hooks run, as in a terminal.
+//! Window only (sessions.rs, sessions/agent_calls.rs, http/browser.rs); an agent's own `git push` is its normal work
+//! and is not gated here (outward.rs).
+//!
+//! Behaviour after Orca (src/main/git/remotes/remote.ts:44-50, `--set-upstream <remote> HEAD:<branch>`) and T3 Code
+//! (apps/server/src/vcs/GitVcsDriverCore.ts:2604-2611); idea only, no code taken. The head re-check is the Merge
+//! button's rule (pr/mod.rs `PrMerge`).
+use crate::{api::*, diff, sessions::Sessions};
+use serde::{Deserialize, Serialize};
+use std::{path::Path, sync::Mutex, time::Duration};
+
+/// How long a push may take: a slow network and a pre-push hook that runs the tests.
+pub const PUSH_TIMEOUT: Duration = Duration::from_secs(120);
+const READ_TIMEOUT: Duration = Duration::from_secs(10);
+/// Lines of git's own output kept under a refusal's sentence (a pre-push hook's test run is long).
+const TAIL: usize = 20;
+
+/// Where a push of the checked-out branch goes and how many commits it carries; part of `diff::GitFacts`, so the strip
+/// shows what the core will push.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PushTo {
+    pub remote: String,
+    /// The branch name on the remote (`refs/heads/` stripped).
+    pub branch: String,
+    /// Commits on HEAD the remote branch lacks (against the upstream; without one, against every branch of the remote).
+    pub ahead: u64,
+    /// The branch has this upstream already; a first push sets it.
+    pub upstream: bool,
+}
+
+/// What a push did.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Pushed {
+    pub pushed: u64,
+    pub remote: String,
+    pub branch: String,
+}
+
+/// A remote name the core puts on git's command line: no option look, no control characters, no spaces.
+fn remote_name(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 200
+        && !s.starts_with('-')
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || "._-/".contains(c))
+}
+
+/// The value of `key` in a `git config --get-regexp` listing (lowercased section and variable, the subsection as
+/// written); the last one wins, as `git config --get` reads it.
+fn value<'a>(config: &'a str, key: &str) -> Option<&'a str> {
+    config
+        .lines()
+        .rev()
+        .find_map(|l| l.strip_prefix(key)?.strip_prefix(' '))
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+}
+
+/// The remotes a listing names (`remote.<name>.url`), sorted.
+fn remotes(config: &str) -> Vec<&str> {
+    let mut names: Vec<&str> = config
+        .lines()
+        .filter_map(|l| {
+            l.split_once(' ')?
+                .0
+                .strip_prefix("remote.")?
+                .strip_suffix(".url")
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// Where `branch` pushes, from `facts`' config listing (`remote.*.url`, `branch.*.remote`, `branch.*.pushremote`,
+/// `remote.pushdefault`): its upstream's remote and branch when it has one (`merge` is that upstream's exact ref), else
+/// `branch.<b>.pushRemote`, `remote.pushDefault`, `origin`, or the only remote. `Err` says why there is none.
+/// `ahead` counts against the upstream (`facts`' `branch.ab`); without one it is counted here.
+pub(crate) fn target(
+    dir: &Path,
+    config: &str,
+    branch: &str,
+    merge: Option<&str>,
+    ahead: Option<u64>,
+) -> Result<PushTo, String> {
+    let known = remotes(config);
+    let has = |r: &str| known.contains(&r) && remote_name(r);
+    let (remote, to, upstream) = match merge {
+        Some(merge) => {
+            let remote = value(config, &format!("branch.{branch}.remote")).unwrap_or_default();
+            if !has(remote) {
+                return Err(
+                    "not pushed: this branch tracks a branch that is not on a remote".into(),
+                );
+            }
+            let to = merge
+                .strip_prefix("refs/heads/")
+                .filter(|b| !b.is_empty())
+                .ok_or("not pushed: where this branch pushes is unknown")?;
+            (remote.to_string(), to.to_string(), true)
+        }
+        None => {
+            let named = value(config, &format!("branch.{branch}.pushremote"))
+                .or_else(|| value(config, "remote.pushdefault"));
+            let remote = match named {
+                Some(r) if has(r) => r,
+                Some(_) => {
+                    return Err(
+                        "not pushed: the push remote this branch names is not a remote".into(),
+                    );
+                }
+                None if has("origin") => "origin",
+                None if known.len() == 1 && has(known[0]) => known[0],
+                None if known.is_empty() => {
+                    return Err("not pushed: this repository has no remote".into());
+                }
+                None => {
+                    return Err(format!(
+                        "not pushed: this branch has no remote set and there are several ({})",
+                        known.join(", ")
+                    ));
+                }
+            };
+            (remote.to_string(), branch.to_string(), false)
+        }
+    };
+    let ahead = match ahead.filter(|_| upstream) {
+        Some(n) => n,
+        // Commits no branch of that remote has, as far as this clone knows.
+        None => crate::process::git_read(
+            dir,
+            &[
+                "rev-list",
+                "--count",
+                "HEAD",
+                "--not",
+                &format!("--remotes={remote}"),
+            ],
+            READ_TIMEOUT,
+        )
+        .ok()
+        .and_then(|o| String::from_utf8_lossy(&o).trim().parse().ok())
+        .ok_or("not pushed: git could not count the commits to push")?,
+    };
+    Ok(PushTo {
+        remote,
+        branch: to,
+        ahead,
+        upstream,
+    })
+}
+
+/// The last `TAIL` lines of git's error (after `git push: `).
+fn tail(e: &str) -> String {
+    let text = e.strip_prefix("git push:").unwrap_or(e).trim();
+    let lines: Vec<&str> = text.lines().collect();
+    lines[lines.len().saturating_sub(TAIL)..].join("\n")
+}
+
+/// git's refusal as a sentence the window maps to its own line, git's lines under it.
+fn refusal(e: &str, to: &PushTo) -> String {
+    let (remote, branch) = (&to.remote, &to.branch);
+    let said = |s: &str| e.contains(s);
+    let sentence = if said("command timed out") {
+        return format!(
+            "not pushed: git push did not finish in {} seconds",
+            PUSH_TIMEOUT.as_secs()
+        );
+    } else if said("[rejected]") && (said("fetch first") || said("non-fast-forward")) {
+        format!("not pushed: {remote} has newer commits on {branch}")
+    } else if said("[remote rejected]") {
+        format!("not pushed: {remote} refused the push")
+    } else if said("Authentication failed")
+        || said("could not read Username")
+        || said("terminal prompts disabled")
+        || said("Permission denied (publickey")
+    {
+        "not pushed: git needs you to sign in".to_string()
+    } else if said("failed to push some refs") && !said(" -> ") {
+        // A local pre-push hook stops the push before any ref is sent, so git prints no ref line.
+        "not pushed: the pre-push hook failed".to_string()
+    } else {
+        "not pushed: git push failed".to_string()
+    };
+    format!("{sentence}\n{}", tail(e))
+}
+
+/// Pushes the checked-out branch of `dir` when HEAD is still `head`, the commit the window's strip showed.
+pub fn push(dir: &Path, head: &str) -> Result<Pushed, String> {
+    if !diff::valid_sha(head) {
+        return Err("push needs the confirmed head commit".into());
+    }
+    let facts = diff::facts(dir).ok_or("not pushed: git's state could not be read")?;
+    let branch = facts
+        .branch
+        .as_deref()
+        .ok_or("not pushed: HEAD is not on a branch")?;
+    if facts.is_default {
+        return Err("not pushed: this is the default branch".into());
+    }
+    let now = facts.head.as_deref().unwrap_or_default();
+    if now != head {
+        let short = now.get(..7).unwrap_or(now);
+        return Err(format!(
+            "nothing was sent: the branch changed after this was shown (new head {short})"
+        ));
+    }
+    if facts.upstream_unknown {
+        return Err("not pushed: where this branch pushes is unknown".into());
+    }
+    let to = match facts.push_to {
+        Some(to) => to,
+        None => {
+            return Err(facts
+                .push_why
+                .unwrap_or_else(|| "not pushed: where this branch pushes is unknown".into()));
+        }
+    };
+    if facts.behind > 0 {
+        return Err(format!(
+            "not pushed: {} has newer commits on {}",
+            to.remote, to.branch
+        ));
+    }
+    if to.ahead == 0 {
+        return Err("not pushed: there are no new commits to push".into());
+    }
+    let refspec = format!("{head}:refs/heads/{}", to.branch);
+    crate::process::git_write(dir, &["push", "--", &to.remote, &refspec], PUSH_TIMEOUT)
+        .map_err(|e| refusal(&e, &to))?;
+    // A first push sets the upstream as `--set-upstream` would; the source here is a commit, which `-u` skips.
+    if !to.upstream {
+        for (key, value) in [
+            (format!("branch.{branch}.remote"), to.remote.clone()),
+            (
+                format!("branch.{branch}.merge"),
+                format!("refs/heads/{}", to.branch),
+            ),
+        ] {
+            crate::process::git_write(dir, &["config", "--", &key, &value], READ_TIMEOUT)?;
+        }
+    }
+    Ok(Pushed {
+        pushed: to.ahead,
+        remote: to.remote,
+        branch: to.branch,
+    })
+}
+
+/// The window's `git_push` (window only); runs git, so off the frame loop.
+pub(crate) fn answer(registry: &Mutex<Sessions>, request: Request) -> Response {
+    let Request::GitPush { session, head } = request else {
+        return Err("not a git op".into());
+    };
+    if !diff::valid_sha(&head) {
+        return Err("push needs the confirmed head commit".into());
+    }
+    let dir = registry
+        .lock()
+        .map_err(|_| "session registry unavailable")?
+        .session_folder(&session)?;
+    let Pushed {
+        pushed,
+        remote,
+        branch,
+    } = push(&dir, &head)?;
+    Ok(Reply::GitPushed {
+        pushed,
+        remote,
+        branch,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remote_names_never_read_as_options() {
+        assert!(remote_name("origin") && remote_name("my.fork") && remote_name("team/up"));
+        for bad in ["", "-u", "--force", "a b", "a\nb", "a;b"] {
+            assert!(!remote_name(bad), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn git_errors_become_sentences() {
+        let to = PushTo {
+            remote: "origin".into(),
+            branch: "fix".into(),
+            ahead: 1,
+            upstream: true,
+        };
+        let r = |e: &str| refusal(e, &to).lines().next().unwrap().to_string();
+        assert_eq!(
+            r(
+                "git push: ! [rejected] abc -> fix (fetch first)\nerror: failed to push some refs to 'x'"
+            ),
+            "not pushed: origin has newer commits on fix"
+        );
+        assert_eq!(
+            r("git push: ! [remote rejected] abc -> fix (pre-receive hook declined)"),
+            "not pushed: origin refused the push"
+        );
+        assert_eq!(
+            r(
+                "git push: fatal: could not read Username for 'https://github.com': terminal prompts disabled"
+            ),
+            "not pushed: git needs you to sign in"
+        );
+        assert_eq!(
+            r("git push: tests failed\nerror: failed to push some refs to 'x'"),
+            "not pushed: the pre-push hook failed"
+        );
+        assert_eq!(
+            r("git push: fatal: something else"),
+            "not pushed: git push failed"
+        );
+    }
+}

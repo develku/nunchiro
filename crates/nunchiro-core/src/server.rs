@@ -606,6 +606,7 @@ pub(crate) fn remote_from_owner(
             | Request::PrList
             | Request::PrMerge { .. }
             | Request::PrBranch { .. } // ticket 373
+            | Request::GitPush { .. } // pushes from this Mac's folder
             | Request::FilesList { .. }
             | Request::FileRead { .. }
             | Request::FileWrite { .. } // ticket 820: a write on this Mac only

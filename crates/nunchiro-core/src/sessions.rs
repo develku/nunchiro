@@ -571,6 +571,7 @@ impl Sessions {
                 Err("the PR view requires the window".into())
             }
             Request::PrBranch { .. } => Err("the PR view requires the window".into()), // ticket 373
+            Request::GitPush { .. } => Err("push requires the window".into()),
             // v2-10c: answered by the socket server after its owner check.
             Request::LibsResolve { .. } | Request::LibsEntry { .. } => {
                 Err("libraries require owner dispatch".into())

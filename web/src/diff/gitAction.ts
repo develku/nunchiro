@@ -23,7 +23,14 @@ export type GitFacts = {
   /** Ticket 393: an upstream is set but cannot be read as an exact ref: no push or PR, a commit still. */
   upstream_unknown: boolean;
   gh: boolean;
+  /** The commit HEAD names; the Push strip shows it and sends it back (git_write.rs). Absent from an older core. */
+  head?: string | null;
+  /** Where the app's Push sends the branch; null with `push_why` saying why there is none. */
+  push_to?: PushTo | null;
+  push_why?: string | null;
 };
+/** Mirrors crates/nunchiro-core/src/git_write.rs `PushTo`. */
+export type PushTo = { remote: string; branch: string; ahead: number; upstream: boolean };
 
 /** What a press asks for; `null` sends nothing. */
 export type Ask = 'commit' | 'commit_push' | 'commit_push_pr' | 'push' | 'push_pr' | 'create_pr' | 'pull';
@@ -74,6 +81,40 @@ export function ladder(g: GitFacts, openPr: boolean): Action {
   if ((g.ahead_of_default ?? 0) > 0) return g.gh ? { label: 'gitActions.label.createPr', ask: 'create_pr' } : off('gitActions.label.createPr', 'gitActions.why.noGh');
   return off(COMMIT, 'gitActions.why.upToDate');
 }
+
+/** The asks the app runs itself, behind its own confirm (git_write.rs); every other ask goes to the agent. */
+const APP_ASKS: readonly Ask[] = ['push'];
+/** How a press of an ask both can do goes: the app runs it, or the agent is asked. The last pick is kept. */
+export type Way = 'app' | 'agent';
+export const WAY_KEY = 'nunchiro.diffGitWay';
+export function storedWay(): Way {
+  try {
+    return localStorage.getItem(WAY_KEY) === 'agent' ? 'agent' : 'app';
+  } catch {
+    return 'app';
+  }
+}
+export function keepWay(w: Way) {
+  try {
+    localStorage.setItem(WAY_KEY, w);
+  } catch {
+    // Per-window convenience only.
+  }
+}
+
+/** The app's own path: the ladder's rung when the app runs it, else null. The session's state does not matter (no agent
+ *  is asked), so it works while the agent works, waits, or in a terminal session; the default branch stays off. */
+export function appAction(git: GitFacts | null, openPr: boolean): Action | null {
+  if (!git) return null;
+  const next = ladder(git, openPr);
+  if (!next.ask || !APP_ASKS.includes(next.ask)) return null;
+  if (git.is_default) return { label: next.label, ask: null, why: 'gitActions.why.defaultBranch' };
+  if (!git.push_to || !git.head) return { label: next.label, ask: null, why: 'gitActions.why.noPushRemote' };
+  return next;
+}
+
+/** A session with an agent that can be asked now or later (not a terminal, not ended). */
+export const agentLive = (s: Session) => s.kind !== 'shell' && s.state === 'running' && !s.agent_ended;
 
 /** The button for `s`: the session's own state first, then the default-branch guard, then the ladder. `git` null:
  *  the core could not read git's state. Kinds that do not take a pending answer (core delivery.rs `blocked`). */

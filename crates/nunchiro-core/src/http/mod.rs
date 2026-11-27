@@ -975,6 +975,14 @@ fn serve(
                         let request = frame.request.unwrap();
                         jobs.spawn(frame.id, move || crate::pr::answer(&registry, request))
                     }
+                    // The Diff panel's Push runs git for up to 120 s: off this loop.
+                    Ok(frame) if matches!(frame.request, Some(Request::GitPush { .. })) => {
+                        let registry = registry.clone();
+                        let request = frame.request.unwrap();
+                        jobs.spawn(frame.id, move || {
+                            crate::git_write::answer(&registry, request)
+                        })
+                    }
                     // V2.5-8/9: `gh` runs of up to 15 s (a merge up to 60 s): off this loop.
                     Ok(frame)
                         if matches!(

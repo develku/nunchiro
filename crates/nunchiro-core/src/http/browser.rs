@@ -551,6 +551,7 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | PrList
         | PrMerge { .. }
         | PrBranch { .. } // ticket 373: runs the user's gh on the Mac
+        | GitPush { .. } // pushes as the user: the Mac window's confirm alone
         | LibsResolve { .. }
         | LibsEntry { .. }
         | TokenCreate { .. }

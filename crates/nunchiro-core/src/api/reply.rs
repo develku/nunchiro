@@ -189,6 +189,12 @@ pub enum Reply {
     PrMerged {
         url: String,
     },
+    // `git_push`: how many commits went to which remote branch.
+    GitPushed {
+        pushed: u64,
+        remote: String,
+        branch: String,
+    },
     // Ticket 373: `None` when the branch has no PR of its own (or none is looked up: the default branch, no upstream).
     PrBranch {
         pr: Option<crate::pr::BranchPr>,

@@ -1156,11 +1156,22 @@ fn git_push_from_the_window_moves_the_remote() {
             .args(args)
             .output()
             .unwrap();
-        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         String::from_utf8_lossy(&out.stdout).trim().to_string()
     };
     let origin = core.home.join("origin.git");
-    git(&["init", "-q", "--bare", "-b", "main", origin.to_str().unwrap()]);
+    git(&[
+        "init",
+        "-q",
+        "--bare",
+        "-b",
+        "main",
+        origin.to_str().unwrap(),
+    ]);
     git(&["init", "-q", "-b", "main"]);
     git(&["commit", "-q", "--allow-empty", "-m", "base"]);
     git(&["remote", "add", "origin", origin.to_str().unwrap()]);

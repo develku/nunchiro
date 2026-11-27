@@ -68,8 +68,11 @@ test('git push: the strip names the commits, the remote and the head; Push moves
   await expect(strip).toContainText(`Push 3 commits to origin/fix-login? Head commit: ${head.slice(0, 7)}.`);
   await expect(strip.getByRole('button', { name: 'Cancel' })).toBeFocused();
   await shot(app, 'strip');
+  await app.emulateMedia({ colorScheme: 'dark' });
+  await shot(app, 'strip-dark');
+  await app.emulateMedia({ colorScheme: 'light' });
   await strip.getByRole('button', { name: 'Push', exact: true }).click();
-  await expect(dock.getByRole('status')).toContainText('Pushed 3 commits to origin/fix-login.');
+  await expect(dock.getByRole('status').filter({ hasText: 'Pushed' })).toContainText('Pushed 3 commits to origin/fix-login.');
   expect(remoteHead(origin)).toBe(head);
   expect(git(s.cwd, 'rev-parse', '--abbrev-ref', '@{u}')).toBe('origin/fix-login');
   expect(sent.filter((r) => r.op === 'agent_prompt')).toEqual([]);
@@ -108,7 +111,7 @@ test('git push: works while the agent is working; Ask the agent is the other cho
   await expect(button).not.toHaveAttribute('aria-disabled');
   await button.click();
   await dock.getByRole('alertdialog', { name: 'Push' }).getByRole('button', { name: 'Push', exact: true }).click();
-  await expect(dock.getByRole('status')).toContainText('Pushed 2 commits to origin/fix-login.');
+  await expect(dock.getByRole('status').filter({ hasText: 'Pushed' })).toContainText('Pushed 2 commits to origin/fix-login.');
   expect(remoteHead(origin)).toBe(git(s.cwd, 'rev-parse', 'HEAD'));
   // The menu offers the agent path; while the agent works it is off with its reason, so the app path stays.
   git(s.cwd, 'commit', '-q', '--allow-empty', '-m', 'one more');
@@ -120,9 +123,8 @@ test('git push: works while the agent is working; Ask the agent is the other cho
   core.hook(s.id, 'Stop');
   await dock.getByRole('button', { name: 'Push choices' }).click();
   await ask.click();
-  // The choice is remembered: the main button now asks the agent, after a reload too.
-  await app.reload();
-  await diffIcon(app).click();
+  // The choice is remembered: the main button now asks the agent, and the window keeps the pick for the next Diff.
+  expect(await app.evaluate(() => localStorage.getItem('nunchiro.diffGitWay'))).toBe('agent');
   const askButton = dock.getByRole('button', { name: 'Ask Claude to push', exact: true });
   await askButton.click();
   await expect.poll(() => sent.filter((r) => r.op === 'agent_prompt').map((r) => r.text)).toEqual(['Push this branch. Never push to the default branch.']);
