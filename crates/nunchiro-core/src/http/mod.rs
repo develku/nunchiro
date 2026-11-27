@@ -1749,6 +1749,7 @@ fn read_pr_chip(registry: &Mutex<Sessions>, id: &str) -> Response {
             if let Some(chip) = crate::pr_live::made_chip(id) {
                 return Ok(Reply::PrChip { chip: Some(chip) });
             }
+            link_from_output(registry, id);
             read?;
             return Err("chat unavailable".into());
         };
@@ -1777,9 +1778,26 @@ fn read_pr_chip(registry: &Mutex<Sessions>, id: &str) -> Response {
     if chip.is_some() {
         crate::pr_live::note_created(&events); // v2-8c
     }
-    // A PR the app created from the Diff panel, until the transcript names one.
+    // A PR the app created from the Diff panel, or one the agent printed in its terminal, until the transcript names one.
     let chip = chip.or_else(|| crate::pr_live::made_chip(id));
+    if chip.is_none() {
+        link_from_output(registry, id);
+    }
     Ok(Reply::PrChip { chip })
+}
+
+/// The auto-link's input: the session's terminal output, with live PR status on; the gh check runs off this thread.
+fn link_from_output(registry: &Mutex<Sessions>, id: &str) {
+    let Ok(mut sessions) = registry.lock() else {
+        return;
+    };
+    let on = sessions
+        .pr_live(None, None, None)
+        .is_ok_and(|(on, _, _)| on);
+    if let Some((dir, output)) = on.then(|| sessions.output_tail(id)).flatten() {
+        drop(sessions);
+        crate::pr_live::link_later(id, on, dir, &output);
+    }
 }
 
 // V2-CF4: the tree's sub-agent rows. An ACP agent's children are held in memory; the other kinds' are folded off the

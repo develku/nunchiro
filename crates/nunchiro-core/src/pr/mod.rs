@@ -655,7 +655,7 @@ fn pushed_kept(dir: &Path) -> Option<Pushed> {
 
 /// The by-branch lookup: `gh pr view <branch>` in the worktree folder, at most once per `BRANCH_FRESH` per branch. No PR
 /// is an answer, not an error. A found PR joins the known ones, so the PR view and merge accept it (`known`).
-fn branch_pr(dir: &Path) -> Result<Option<BranchPr>, String> {
+pub(crate) fn branch_pr(dir: &Path) -> Result<Option<BranchPr>, String> {
     let Some(at) = pushed_kept(dir) else {
         return Ok(None);
     };
