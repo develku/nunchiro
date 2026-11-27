@@ -123,6 +123,7 @@ impl Sessions {
             | Request::PrList
             | Request::PrMerge { .. }
             | Request::PrBranch { .. } // ticket 373: runs the user's gh in a worktree folder
+            | Request::GitPush { .. } // pushes as the user after the window's confirm
             | Request::AccountList // v2-2a: agent config folders and their login
             | Request::AccountCheck { .. }
             | Request::AccountAdd { .. }

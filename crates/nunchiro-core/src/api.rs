@@ -703,6 +703,13 @@ pub enum Request {
     PrBranch {
         path: String,
     },
+    // The Diff panel's Push after the window's confirm strip, which sends the head commit it showed; the core checks
+    // the branch again and runs `git push <remote> <head>:refs/heads/<branch>` in the session's folder. Window only.
+    GitPush {
+        session: String,
+        #[serde(flatten)]
+        shown: crate::git_write::Shown,
+    },
     // v2-10c: owner only and local (the app's `serve`), answered by the socket server before any session check.
     // Reads the library cache; Allow, auto-allow and Remove are window-only `libs::Op`, never a `Request`.
     LibsResolve {

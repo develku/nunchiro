@@ -30,6 +30,34 @@ declare module '../index' {
     'gitActions.prompt.pushPr': true;
     'gitActions.prompt.createPr': true;
     'gitActions.prompt.pull': true;
+    'gitActions.err.url': true;
+    'gitActions.err.target': true;
+    'gitActions.push.noUpstream': true;
+    'gitActions.why.noPushRemote': true;
+    'gitActions.label.askPush': true;
+    'gitActions.choices': true;
+    'gitActions.choice.app': true;
+    'gitActions.choice.appTip': true;
+    'gitActions.choice.agent': true;
+    'gitActions.push.confirm.one': true;
+    'gitActions.push.confirm.other': true;
+    'gitActions.push.prGets': true;
+    'gitActions.push.go': true;
+    'gitActions.push.going': true;
+    'gitActions.push.cancel': true;
+    'gitActions.push.done.one': true;
+    'gitActions.push.done.other': true;
+    'gitActions.push.dismiss': true;
+    'gitActions.err.changed': true;
+    'gitActions.err.newer': true;
+    'gitActions.err.signin': true;
+    'gitActions.err.hook': true;
+    'gitActions.err.refused': true;
+    'gitActions.err.several': true;
+    'gitActions.err.default': true;
+    'gitActions.err.nothing': true;
+    'gitActions.err.failed': true;
+    'gitActions.err.failed.todo': true;
   }
 }
 
@@ -62,6 +90,34 @@ export const en = {
   'gitActions.prompt.pushPr': 'Push this branch, then open a PR. Never push to the default branch.',
   'gitActions.prompt.createPr': 'Open a PR for this branch. Never push to the default branch.',
   'gitActions.prompt.pull': "Pull the new commits from this branch's remote. If there are conflicts, stop and tell me.",
+  'gitActions.why.noPushRemote': "This branch has no remote to push to that the app can pick. Push it once with git push -u in a terminal.",
+  'gitActions.label.askPush': "Ask {agent} to push",
+  'gitActions.choices': "Push choices",
+  'gitActions.choice.app': "Push from the app",
+  'gitActions.choice.appTip': "The app pushes after you confirm the commits and where they go.",
+  'gitActions.choice.agent': "Ask {agent} to push",
+  'gitActions.push.confirm.one': "Push 1 commit to {remote}/{branch}? Head commit: {head}.",
+  'gitActions.push.confirm.other': "Push {n} commits to {remote}/{branch}? Head commit: {head}.",
+  'gitActions.push.prGets': "PR #{pr} gets them.",
+  'gitActions.push.go': "Push",
+  'gitActions.push.going': "Pushing…",
+  'gitActions.push.cancel': "Cancel",
+  'gitActions.push.done.one': "Pushed 1 commit to {remote}/{branch}.",
+  'gitActions.push.done.other': "Pushed {n} commits to {remote}/{branch}.",
+  'gitActions.push.dismiss': "Dismiss",
+  'gitActions.err.changed': "Nothing was sent: the branch changed after this was shown (new head {head}). Look again.",
+  'gitActions.err.newer': "Not pushed: {remote} has newer commits on {branch}. Pull first, then push again.",
+  'gitActions.err.signin': "Not pushed: git needs you to sign in. Run git push once in a terminal tab, then try again.",
+  'gitActions.err.hook': "Not pushed: the pre-push hook failed.",
+  'gitActions.err.refused': "Not pushed: {remote} refused the push.",
+  'gitActions.err.several': "Not pushed: this branch has no remote set and there are several. Push it once with git push -u in a terminal.",
+  'gitActions.err.default': "Not pushed: this is the default branch. Work in a worktree.",
+  'gitActions.err.nothing': "Not pushed: there are no new commits to push.",
+  'gitActions.err.failed': "Not pushed.",
+  'gitActions.err.failed.todo': "The details below say why.",
+  'gitActions.err.target': "Nothing was sent: where this pushes changed after it was shown (now {remote}/{branch}). Look again.",
+  'gitActions.push.noUpstream': "The branch's upstream was not set; git push -u in a terminal sets it.",
+  'gitActions.err.url': "Nothing was sent: the push URL of {remote} changed after this was shown. Look again.",
 };
 export const ko = {
   'gitActions.label.commit': '커밋',

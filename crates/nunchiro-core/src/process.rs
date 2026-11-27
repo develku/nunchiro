@@ -346,6 +346,17 @@ pub(crate) fn git_update(
     c.args(["-c", "merge.verifySignatures=false"]).args(args);
     git_run(c, args, timeout, false)
 }
+/// The Diff panel's Push and the upstream it sets (git_write.rs): `git_in`'s environment (no `ext::`, no plain
+/// `git://` or `http://`, no prompt), stdin closed; the folder's hooks run, as for a push in a terminal.
+pub(crate) fn git_write(
+    dir: &std::path::Path,
+    args: &[&str],
+    timeout: Duration,
+) -> Result<Vec<u8>, String> {
+    let mut c = git_in(dir);
+    c.args(args).stdin(Stdio::null());
+    git_run(c, args, timeout, false)
+}
 fn git_in(dir: &std::path::Path) -> Command {
     let mut c = command("git");
     c.arg("-C")

@@ -15,7 +15,9 @@ import type { Key, T } from '../i18n';
 import { COLOURS, HIDE_LIST } from '../features/diff-options';
 import { useFeatureSetting } from '../settings/useFeatureSetting';
 import type { Session } from '../types';
-import { gitAction, promptKey, type GitFacts } from './gitAction';
+import { agentLive, appAction, gitAction, keepWay, promptKey, storedWay, type GitFacts, type Way } from './gitAction';
+import { PushStrip, pushedText, WayMenu } from './GitPush';
+import { agentName } from '../chat/conversation';
 import { finishedTurnAt, keepScope, latestTurn, latestTurnPartial, scoped, storedScope, type Scope } from './scope';
 import { listState, truncatedNote } from './state';
 import { ErrorDetails, lineError, rawError } from '../errors';
@@ -98,22 +100,23 @@ function useLatestTurn(session: string | null): { files: string[] | null; at: nu
   return got.session === session ? got : { files: null, at: null, partial: false };
 }
 
-/** Ticket 373: the session has an open PR the app knows of (its agent's own `gh` calls, from the transcript). shortcut:
- *  a PR opened outside the app, or merged since, is not seen; the ladder then offers a PR and the agent finds it. */
+/** Ticket 373: the number of the session's open PR the app knows of (its agent's own `gh` calls, from the transcript),
+ *  else null. shortcut: a PR opened outside the app, or merged since, is not seen; the ladder then offers a PR and the
+ *  agent finds it. */
 const OPEN_PR = new Set(['draft', 'open', 'checks_pass', 'checks_fail', 'approved']);
-function useOpenPr(session: string | null, tick: number): boolean {
-  const [got, setGot] = useState<{ session: string | null; open: boolean }>({ session: null, open: false });
+function useOpenPr(session: string | null, tick: number): number | null {
+  const [got, setGot] = useState<{ session: string | null; open: number | null }>({ session: null, open: null });
   useEffect(() => {
     if (!session) return;
     let live = true;
     void waitForBoot()
       .then((boot) => chatFeed(boot).prChip(session))
-      .then((c) => live && setGot({ session, open: !!c && OPEN_PR.has(c.state) }), () => {});
+      .then((c) => live && setGot({ session, open: c && OPEN_PR.has(c.state) ? Number(/\/pull\/(\d+)$/.exec(c.url)?.[1] ?? 0) : null }), () => {});
     return () => {
       live = false;
     };
   }, [session, tick]);
-  return got.session === session && got.open;
+  return got.session === session ? got.open : null;
 }
 
 /** Beside the right icon bar (±) with `onClose`; inside a layout zone (07b gallery widget) without it. `t` is the
@@ -155,8 +158,15 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
   };
   // Ticket 373: after a press the button waits ('' = sent) until the turn ends, which re-reads the list, or a refresh;
   // a send that failed keeps its reason here. One press can never queue a second request behind the first.
-  const openPr = useOpenPr(session, tick);
+  const prNumber = useOpenPr(session, tick);
+  const openPr = prNumber !== null;
   const [sent, setSent] = useState<string | null>(null);
+  // The app's Push: the strip is open for this session; `pushed` is the foot line after one.
+  const [way, setWay] = useState<Way>(storedWay);
+  // The strip keeps the git facts of the press: a list re-read (scope, refresh, an error) never re-arms it.
+  const [strip, setStrip] = useState<{ session: string; git: GitFacts } | null>(null);
+  const [pushed, setPushed] = useState<{ session: string; text: string } | null>(null);
+  useEffect(() => setStrip(null), [session]);
   const working = !!owner?.attention.working;
   const wasWorking = useRef(working);
   // A refresh tick (focus, 30 s, a finished turn) may come before the agent shows working: it ends the wait only once
@@ -172,8 +182,9 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
     const w = wait.current;
     setSent((s) => (s !== '' || w.seen || Date.now() - w.at > SENT_WAIT_MS ? null : s));
   }, [tick]);
-  // Only a local agent session can be asked: the facts are read for it alone (a few git calls per list).
-  const wantGit = !!owner && owner.kind !== 'shell' && !machine;
+  // Only a local session: the facts are read for it alone (a few git calls per list). A terminal session can push
+  // through the app.
+  const wantGit = !!owner && !machine;
 
   useEffect(() => setPinned(null), [session]);
   useEffect(() => {
@@ -229,13 +240,29 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
   const current = selected && files.some((f) => f.path === selected) ? selected : null;
   const base = list?.base;
   // An SSH session (`machine`) has no button: its prompt would go to this Mac's core, which does not have it.
-  const act = !machine && owner && owner.id === session && list && base?.kind !== 'not_git' ? gitAction(owner, list.git ?? null, openPr) : null;
-  const gitTip = sent ? t('gitActions.sendFailed', { error: lineError(t, sent) }) : sent === '' ? t('gitActions.why.working') : act?.why ? t(act.why, { branch: list?.git?.branch ?? '' }) : undefined;
-  const gitAsk = sent === '' ? null : act?.ask ?? null;
+  const ours = !machine && owner && owner.id === session && list && base?.kind !== 'not_git' ? owner : null;
+  const agentAct = ours ? gitAction(ours, list?.git ?? null, openPr) : null;
+  // An ask the app runs itself (Push): by the app unless the last pick was the agent and there is one to ask.
+  const appAct = ours ? appAction(list?.git ?? null, openPr) : null;
+  const live = !!ours && agentLive(ours);
+  const byApp = !!appAct && (way === 'app' || !live);
+  const agent = ours ? agentName(ours.kind, ours.acp_agent) : '';
+  const act = byApp ? appAct : appAct && agentAct ? { ...agentAct, label: 'gitActions.label.askPush' as const } : agentAct;
+  const gitTip = byApp
+    ? act?.why && t(act.why, { branch: list?.git?.branch ?? '' })
+    : sent
+      ? t('gitActions.sendFailed', { error: lineError(t, sent) })
+      : sent === ''
+        ? t('gitActions.why.working')
+        : act?.why
+          ? t(act.why, { branch: list?.git?.branch ?? '' })
+          : undefined;
+  const gitAsk = byApp ? act?.ask ?? null : sent === '' ? null : act?.ask ?? null;
   // The list may be stale (a branch switched since): the facts are read again at the press, and a changed state
   // sends nothing and shows its own label and reason.
   const press = async () => {
     if (!gitAsk || !session || !owner) return;
+    if (byApp) return list?.git ? setStrip({ session, git: list.git }) : undefined;
     setSent('');
     wait.current = { at: Date.now(), seen: false };
     try {
@@ -300,9 +327,18 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
         <span className="r">{session ? (machine ? `${label} · ${machine}` : label) : ''}</span>
         {/* Ticket 373: aria-disabled keeps the reason reachable by focus (the app tooltip shows for the focused element). */}
         {act && (
-          <button type="button" className="btn dgit" aria-disabled={gitAsk ? undefined : 'true'} data-tip={gitTip ?? t(act.label)} data-tip-clip={gitTip ? undefined : ''} onClick={() => void press()}>
-            {t(act.label)}
+          <button type="button" className="btn dgit" aria-disabled={gitAsk ? undefined : 'true'} data-tip={gitTip || t(act.label, { agent })} data-tip-clip={gitTip ? undefined : ''} onClick={() => void press()}>
+            {t(act.label, { agent })}
           </button>
+        )}
+        {appAct && live && (
+          <WayMenu
+            way={way}
+            agent={agent}
+            agentWhy={agentAct?.ask ? undefined : agentAct?.why ?? 'gitActions.why.notRunning'}
+            onPick={(w) => (setWay(w), keepWay(w), setStrip(null))}
+            t={t}
+          />
         )}
         <button
           className="dbtn"
@@ -324,6 +360,22 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
           </button>
         )}
       </div>
+      {session && strip?.session === session && (
+        <PushStrip
+          core={core}
+          session={session}
+          git={strip.git}
+          pr={prNumber}
+          onCancel={() => setStrip(null)}
+          onPushed={(r) => {
+            setStrip(null);
+            setPushed({ session, text: pushedText(t, r) });
+            fresh.current = true;
+            setTick((n) => n + 1);
+          }}
+          t={t}
+        />
+      )}
       {session && !remoteOff && (
         <div className="dscope" role="radiogroup" aria-label={t('diff.scope.label')} onKeyDown={onScopeKey}>
           {SCOPES.map((s) => {
@@ -387,6 +439,14 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
         </>
       )}
       {stacked && <Stack key={`${session}\u0000${shown === 'branch'}`} core={core} session={session!} machine={machine} branch={shown === 'branch'} force={force} files={files} at={current} jump={jump} t={t} quote={quote} />}
+      {pushed?.session === session && (
+        <div className="dpushed" role="status">
+          {pushed.text}
+          <button type="button" className="dbtn" aria-label={t('gitActions.push.dismiss')} onClick={() => setPushed(null)}>
+            ×
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

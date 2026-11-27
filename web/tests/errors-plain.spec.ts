@@ -391,7 +391,8 @@ test('errors_plain_known_all_languages: each KNOWN line has its own words and it
   const { KNOWN, explainError } = await import('../src/errors');
   const schedule = await import('../src/i18n/areas/schedule');
   const levels = await import('../src/i18n/areas/levels'); // level.customOn: the line of team.rs's custom-model refusal
-  const tables = mergeAreas({ en: {}, ko: {}, ja: {}, 'zh-Hans': {}, 'zh-Hant': {}, es: {}, fr: {}, pt: {} }, { errors, errorsCore, errorsGaps, errorsGroups, kit, dialog, about, exitWidgets, tree, providersManage, agents, schedule, levels, own, koreanA11y, machines, leader }) as unknown as Record<string, Record<string, string>>;
+  const gitActions = await import('../src/i18n/areas/git-actions'); // gitActions.err.*: the Diff panel's Push refusals
+  const tables = mergeAreas({ en: {}, ko: {}, ja: {}, 'zh-Hans': {}, 'zh-Hant': {}, es: {}, fr: {}, pt: {} }, { errors, errorsCore, errorsGaps, errorsGroups, kit, dialog, about, exitWidgets, tree, providersManage, agents, schedule, levels, own, koreanA11y, machines, leader, gitActions }) as unknown as Record<string, Record<string, string>>;
   expect(KNOWN.length).toBeGreaterThan(30);
   const missing: string[] = [];
   for (const lang of ALL_LANGS) {
