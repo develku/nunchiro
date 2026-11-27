@@ -23,6 +23,15 @@ EXCLUDED_PATHS = (
     # claude.ai sync bookkeeping, changed 2 s after a Claude start in receipt r1 (ruling manifest-ruling-2); the rest of synced/* stays hashed.
     ".claude/plugins/synced/*/.marketplaces.json",
 )
+# Claude Code's own run bookkeeping, written within 2 s of each Claude start (seen 2026-11-27 with five real seats):
+# one {"pid","procStart"} file per running Claude process under the synced plugin it loads, named by that pid; the
+# time stamp of the sweep that removes dead processes' markers; the built-in plugins' own state ({"open": false}, a
+# usage queue). Files only: a folder of such a name is still walked, and any other file beside them, like an
+# installed plugin's store, stays hashed.
+EXCLUDED_FILES = (
+    ".claude/plugins/synced/*/*/.in_use/[0-9]*", ".claude/plugins/.last_inuse_sweep",
+    ".claude/plugins/store/*_builtin-*.json",
+)
 # Marketplace auto-update stamps every startup; hashed without `lastUpdated` so an added or removed marketplace still shows.
 MARKETPLACES = os.path.join(".claude", "plugins", "known_marketplaces.json")
 EXCLUDED = ("everything outside settings*.json, hooks*, config.toml, CLAUDE.md, AGENTS.md, rules, skills, plugins, agents, "
@@ -33,13 +42,16 @@ EXCLUDED = ("everything outside settings*.json, hooks*, config.toml, CLAUDE.md, 
             ".claude/plugins/marketplaces/*/.git/**, .codex/plugins/.marketplace-plugin-source-staging/*/.git/** (clone metadata)",
             ".claude/plugins|skills/synced/*/.last-complete-round (Claude Code sync round ids, rewritten at startup)",
             ".claude/plugins/synced/*/.marketplaces.json (Claude Code's claude.ai sync bookkeeping, changed 2 s after a Claude start in receipt r1; other synced/* files and all skill content stay hashed)",
+            ".claude/plugins/synced/*/<plugin>/.in_use/<pid>, .claude/plugins/.last_inuse_sweep (Claude Code's marker per running "
+            "process that loaded the plugin, and its sweep stamp; a file there not named by a pid still counts)",
+            ".claude/plugins/store/*_builtin-*.json (the built-in plugins' own state, rewritten at a Claude start; an installed plugin's store still counts)",
             "lastUpdated fields of .claude/plugins/known_marketplaces.json (auto-update stamps; adds and removes still count)")
 
 
-def excluded(rel):
+def excluded(rel, globs=EXCLUDED_PATHS):
     parts = rel.split(os.sep)
     return any(len(parts) == len(g) and all(fnmatch.fnmatchcase(a, b) for a, b in zip(parts, g))
-               for g in (x.split("/") for x in EXCLUDED_PATHS))
+               for g in (x.split("/") for x in globs))
 
 
 TRUST = ".claude.json:trust:"
@@ -86,7 +98,7 @@ def manifest(home=lib.HOME):
                     for f in sorted(files + dirs_links):
                         p = os.path.join(d, f)
                         rel = os.path.relpath(p, home)
-                        if not excluded(rel):
+                        if not excluded(rel) and not excluded(rel, EXCLUDED_FILES):
                             out[rel] = _hash(p)
                             if rel == MARKETPLACES and not os.path.islink(p):
                                 _, parsed, err = lib._read(p, _marketplaces)

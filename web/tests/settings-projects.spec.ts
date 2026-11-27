@@ -279,7 +279,7 @@ test('projects_page_remove_uses_tree_dialog: the page button opens the tree dial
 });
 
 test('projects_page_new_session_defaults: a model set on the project page is what a new session of that project starts with, and Providers has no scope line', async ({ app, core }) => {
-  const frames: { op: string; session?: unknown }[] = [];
+  const frames: { op: string; session?: unknown; start?: unknown }[] = [];
   app.on('websocket', (ws) =>
     ws.on('framesent', (f) => {
       try {
@@ -290,7 +290,8 @@ test('projects_page_new_session_defaults: a model set on the project page is wha
       }
     }),
   );
-  const lastStart = () => frames.filter((f) => f.op === 'start').at(-1)?.session;
+  // Since #57 the New tab menu sends its start as `start_or_wait` (a held start waits for memory), the start inside it.
+  const lastStart = () => frames.map((f) => (f.op === 'start_or_wait' ? (f.start as typeof f) : f)).filter((f) => f.op === 'start').at(-1)?.session;
   const startClaude = async (project: string) => {
     await app.evaluate((p) => window.dispatchEvent(new CustomEvent('nunchiro:session.new', { detail: { project: p } })), project);
     await app.getByRole('dialog', { name: 'New tab' }).getByRole('option', { name: 'Claude' }).first().click();

@@ -1,7 +1,7 @@
 #!/bin/sh
 # ticket 291 overlap ratchet: prints each offender in FOUND (one `<state>|<width>|<css path A>|<css path B>` per line) that
 # BASELINE does not list, and exits 1 if there is one. web/tests/overlap-check.spec.ts calls it; a baseline line that no
-# longer offends is fine (the lane that fixed it deletes the line, and web-smoke.sh refuses a baseline that gained a line).
+# longer offends is fine (the change that fixed it deletes the line; the CI lint job, .github/scripts/ratchets.py, refuses a baseline that gained a line).
 set -u
 [ $# = 2 ] && [ -f "$1" ] && [ -f "$2" ] || { echo "usage: overlap-check.sh BASELINE FOUND" >&2; exit 2; }
 new=$(grep -vxFf "$1" "$2")

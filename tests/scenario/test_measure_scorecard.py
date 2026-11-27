@@ -134,6 +134,16 @@ class RubricV2(unittest.TestCase):
         self.assertEqual(s.ran_green(0, "Ran 12 tests in 0.2s\n\nOK"), (True, 12))
         self.assertEqual(s.ran_green(1, "Ran 12 tests in 0.2s\n\nFAILED (failures=1)"), (False, 12))
 
+    def test_a_command_that_names_a_missing_spec_is_not_green(self):
+        # Playwright runs the specs it finds and ends 0: without this, half a check passes for the whole.
+        pw = ["pnpm", "-C", "web", "exec", "playwright", "test"]
+        self.assertEqual(s.missing_specs(pw + ["no-such-page.spec.ts", "inputs-one-style.spec.ts"]), ["no-such-page.spec.ts"])
+        self.assertEqual(s.missing_specs(pw + ["inputs-one-style.spec.ts"]), [])
+        self.assertEqual(s.missing_specs(["cargo", "test", "-p", "nunchiro", "x"]), [])
+        row = s.run_test(pw + ["no-such-page.spec.ts", "inputs-one-style.spec.ts"], {})  # refused before anything runs
+        self.assertEqual((row["green"], row["tests"], row["exit"]), (False, 0, None))
+        self.assertIn("no-such-page.spec.ts", row["tail"])
+
     def test_a_test_check_counts_only_when_its_tests_ran_green_at_this_commit(self):
         cmd = ["cargo", "test", "-p", "nunchiro", "x"]
         doc = {"commit": "abc1234", "results": [{"cmd": cmd, "green": True}, {"cmd": ["other"], "green": False}]}
@@ -218,6 +228,12 @@ class Card(unittest.TestCase):
         checks = {c["id"]: c for p in self.parts["parts"] for c in p.get("checks", [])}
         for cid in sorted(s.TEST_CHECKS):
             self.assertTrue(checks[cid].get("tests"), cid)
+
+    def test_every_spec_a_check_names_is_in_this_repository(self):
+        for p in self.parts["parts"]:
+            for c in p.get("checks", []):
+                for cmd in c.get("tests", []):
+                    self.assertEqual(s.missing_specs(cmd), [], c["id"])
 
     def test_the_page_renders_and_unmeasured_parts_are_zero(self):
         res = {"date": "2026-11-27 10:00", "commit": "abc1234", "host": "h", "macos": "m", "load": [1, 2], "repeats": 1,
@@ -376,6 +392,27 @@ class ChatOpenVerdict(unittest.TestCase):
     def test_fewer_opens_than_asked_refuses(self):
         _, why = s.chat_open_verdict([[0.0, 120.0]], 10)
         self.assertEqual(why, "1 marked opens of the 10 asked")
+
+
+class Stream8Verdict(unittest.TestCase):
+    """p33's stream8 writes the median of the repeats' worst frames, only from a whole, judged stream-8 row."""
+
+    ROW = dict(terminals=8, painted=[8, 8, 8], worst_frame_ms=[400.0, 250.0, 1900.0], frames_valid=True,
+               skipped_repeats=0)
+
+    def test_a_whole_row_is_written(self):
+        self.assertEqual(s.stream8_verdict(self.ROW), (400.0, None))
+
+    def test_not_run_refuses(self):
+        self.assertEqual(s.stream8_verdict(dict(not_run="not run: load")), (None, "not run: load"))
+
+    def test_a_terminal_not_painted_refuses(self):
+        _, why = s.stream8_verdict(dict(self.ROW, painted=[8, 7, 8]))
+        self.assertIn("end markers painted [8, 7, 8]", why)
+
+    def test_throttled_frames_or_a_skipped_repeat_refuse(self):
+        self.assertIn("frames throttled", s.stream8_verdict(dict(self.ROW, frames_valid=False))[1])
+        self.assertIn("1 repeats not run", s.stream8_verdict(dict(self.ROW, skipped_repeats=1))[1])
 
 
 if __name__ == "__main__":

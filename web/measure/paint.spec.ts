@@ -135,7 +135,7 @@ const frames = (page: Page, on: boolean) =>
 async function openWindow(page: Page) {
   await page.addInitScript((b) => ((window as unknown as Record<string, unknown>).__NUNCHIRO__ = b), windowAuth(job.home));
   await page.goto('/');
-  await expect(page.getByRole('status').filter({ hasText: 'core connected' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('status').filter({ hasText: /^Connected$/ })).toBeVisible({ timeout: 30_000 });
 }
 
 /** One command, then the zone it added. */
@@ -367,7 +367,7 @@ test('paint', async ({ page, browserName }) => {
       res.t_end = await page.evaluate(() => performance.now());
       res.samples = samples;
       res.hb = await page.evaluate(() => (window as unknown as Record<string, any>).__hb);
-      res.connected = await page.getByRole('status').filter({ hasText: 'core connected' }).isVisible();
+      res.connected = await page.getByRole('status').filter({ hasText: /^Connected$/ }).isVisible();
     }
   } catch (e) {
     res.error = String(e);

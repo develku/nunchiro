@@ -89,6 +89,9 @@ export const shellsOf = (agent: string): string[] => state.shells[agent] ?? [];
 export const isPaneShell = (id: string) => Object.values(state.shells).some((l) => l.includes(id));
 export const isOpen = (s: State, id: string) => !!(s.open[id] || s.auto[id]);
 export const tabOf = (s: State, id: string): PaneTab => s.tab[id] ?? 'pty';
+/** The tab a pane shows now, read outside a render. */
+export const tabNow = (id: string) => tabOf(state, id);
+export const openNow = (id: string) => isOpen(state, id);
 
 export function toggle(id: string) {
   if (isOpen(state, id)) set({ open: without(state.open, id), auto: without(state.auto, id), max: without(state.max, id) });
