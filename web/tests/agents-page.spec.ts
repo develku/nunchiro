@@ -89,7 +89,8 @@ const startClaude = async (app: Page, project: string) => {
   await app.evaluate((p) => window.dispatchEvent(new CustomEvent('nunchiro:session.new', { detail: { project: p } })), project);
   await app.getByRole('dialog', { name: 'New tab' }).getByRole('option', { name: 'Claude' }).first().click();
 };
-const lastStart = (frames: any[]) => frames.filter((f) => f.op === 'start').at(-1)?.session;
+// Since #57 the window's own starts (the New tab menu, the tree's +) go as `start_or_wait`, the start inside it.
+const lastStart = (frames: any[]) => frames.map((f) => (f.op === 'start_or_wait' ? f.start : f)).filter((f) => f?.op === 'start').at(-1)?.session;
 /** The window's stored defaults, as a hand-edited settings file would leave them; read at load. */
 async function seedDefaults(app: Page, stored: unknown, backup?: unknown) {
   await app.evaluate(([v, b]) => {
