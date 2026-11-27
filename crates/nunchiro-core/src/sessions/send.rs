@@ -71,13 +71,14 @@ impl Sessions {
             id: store::new_id()?,
             sender: sender.into(),
             at: queue::now_ms(),
-            content,
+            content: content.clone(),
             keys,
             submit,
             status: status.into(),
             settle: None, // v1a-15
             // Ticket 76: the flush reads this, not the lasting set (a peer may later forward under the same id).
             remote: (sender != "user").then(|| self.grants.remote.contains(sender)),
+            replaced: crate::plugins::take_replaced(sender, id, &content),
         };
         // Ticket 1056: the user's words go ahead of every queued worker wake line, whatever its age.
         let wake_rows = &self.wake_rows;

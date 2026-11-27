@@ -221,6 +221,12 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
                 <li key={p.name}>
                   {t(p.kind === 'panel' ? 'plugins.sheet.panel' : p.kind === 'check' ? 'plugins.sheet.check' : 'plugins.sheet.command')} · {p.title}
                   <pre>{p.runs.map(word).join(' ')}</pre>
+                  {p.check_on && (
+                    <p className="ps-meta" data-field="check-does">
+                      {t(p.check_on === 'session.start.before' ? 'plugins.sheet.checkStart' : 'plugins.sheet.checkSend')}{' '}
+                      {t(p.on_error === 'allow' ? 'plugins.sheet.onErrorAllow' : 'plugins.sheet.onErrorRefuse')}
+                    </p>
+                  )}
                   <p className="ps-meta" data-field="part-rights">
                     {[
                       p.network?.length ? t('plugins.sheet.net', { hosts: p.network.join(' · ') }) : t('plugins.sheet.noNet'),

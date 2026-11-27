@@ -919,6 +919,40 @@ fn serve(
                         let response: Response = Ok(Reply::Ack);
                         Some(serde_json::json!({"id":frame.id,"response":response}))
                     }
+                    // A plugin's checks before a new session run up to 10 s: while one is on, the window's starts run
+                    // off this loop, answered by the same `answer` as here.
+                    Ok(frame)
+                        if matches!(
+                            frame.request,
+                            Some(
+                                Request::Start { .. }
+                                    | Request::StartOrWait { .. }
+                                    | Request::StartAnyway { .. }
+                            )
+                        ) && crate::plugins::start_checks_on(home) =>
+                    {
+                        let (registry, stopping, home) =
+                            (registry.clone(), stopping.clone(), home.to_path_buf());
+                        let (id, request) = (frame.id, frame.request);
+                        jobs.spawn(id, move || {
+                            let frame: Frame = serde_json::from_value(
+                                serde_json::json!({"id": id, "request": request}),
+                            )
+                            .map_err(|e| e.to_string())?;
+                            let mut stamp = (0, None);
+                            let v = answer(
+                                frame,
+                                &registry,
+                                &stopping,
+                                &mut BTreeMap::new(),
+                                &home,
+                                None,
+                                &mut stamp,
+                            );
+                            serde_json::from_value::<Response>(v["response"].clone())
+                                .map_err(|e| e.to_string())?
+                        })
+                    }
                     Ok(frame) if matches!(frame.request, Some(Request::FirstRun)) => {
                         jobs.spawn(frame.id, crate::firstrun::reply)
                     }

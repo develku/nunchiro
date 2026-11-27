@@ -501,11 +501,26 @@ pub(crate) fn execute(
         .mode(0o700)
         .create(cache)
         .map_err(|e| e.to_string())?;
-    let file = cache.join("context.json");
+    // A plugin part's input is its own run's (`context-<id>.json`, removed after): two runs at once never read each
+    // other's message. A widget keeps its one `context.json`.
+    let plugin = crate::plugins::split(proof.name()).is_some();
+    let file = match plugin {
+        true => cache.join(format!("context-{}.json", crate::store::new_id()?)),
+        false => cache.join("context.json"),
+    };
+    struct Gone(Option<PathBuf>);
+    impl Drop for Gone {
+        fn drop(&mut self) {
+            if let Some(f) = &self.0 {
+                let _ = fs::remove_file(f);
+            }
+        }
+    }
+    let _gone = Gone(plugin.then(|| file.clone()));
     // A rename replaces whatever the last run left at this name (even a symlink) without following it.
-    let bytes = match crate::plugins::split(proof.name()) {
-        Some(_) => crate::plugins::input(home, proof, context, extra)?,
-        None => serde_json::to_vec(context).map_err(|e| e.to_string())?,
+    let bytes = match plugin {
+        true => crate::plugins::input(home, proof, context, extra)?,
+        false => serde_json::to_vec(context).map_err(|e| e.to_string())?,
     };
     crate::store::atomic_write(&file, &bytes)?;
     let mut env = vec![(ENV_KEYS[0], file.into_os_string())];

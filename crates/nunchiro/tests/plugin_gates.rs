@@ -429,7 +429,7 @@ fn an_agent_resuming_a_conversation_is_checked() {
         user(&c.home).display(),
         out.display()
     );
-    pair(&c, &script);
+    let _ = pair(&c, &script);
     let read = || std::fs::read_to_string(&out).unwrap_or_default();
     until("refused it", &read);
 }

@@ -971,6 +971,15 @@ fn connection(
                 return crate::machines::status(sessions, home, label, retry);
             }
             Request::Forwarded { caller, request } if owner => {
+                // Another machine's agent: this Mac's plugin checks hold for what it sends and starts here.
+                let mut request = request;
+                crate::plugins::check_request(
+                    home,
+                    crate::plugins::Asker::Agent,
+                    "",
+                    &mut request,
+                    true,
+                )?;
                 return crate::machines::forwarded(sessions, caller, *request, stopping);
             }
             _ => {}
@@ -986,38 +995,6 @@ fn connection(
             && sessions.locked(&caller.id)
         {
             sessions.check_locked(&caller, &env.request)?;
-        }
-        // A plugin's check before a message an agent or a token sends, off the lock (a sandbox run of up to 5 s). The
-        // owner's own words never reach it: the owner's socket and the window are not a session caller.
-        if !owner
-            && matches!(
-                env.request,
-                Request::AgentPrompt { .. } | Request::AgentSend { .. } | Request::RoomSend { .. }
-            )
-            && let Ok(caller) = sessions.agent_caller(&env.token)
-        {
-            let asker = match caller.id.starts_with(crate::tokens::CALLER) {
-                true => crate::plugins::Asker::Token,
-                false => crate::plugins::Asker::Agent,
-            };
-            drop(sessions);
-            match &mut env.request {
-                Request::AgentPrompt { id, text } | Request::AgentSend { id, text } => {
-                    *text = crate::plugins::check_send(home, asker, id, text)?;
-                }
-                Request::RoomSend { to, body, .. } => {
-                    *body = crate::plugins::check_send(
-                        home,
-                        asker,
-                        to.as_deref().unwrap_or("room"),
-                        body,
-                    )?;
-                }
-                _ => {}
-            }
-            sessions = registry
-                .lock()
-                .map_err(|_| "session registry unavailable")?;
         }
         if let Request::AgentRead { id, source, lines } = &env.request
             && source == "transcript"
@@ -1139,7 +1116,17 @@ fn connection(
                 {
                     return Err("operation not granted to a token on another machine".into());
                 }
+                // A plugin's checks (messages, new sessions) before the request leaves this Mac, off the lock.
+                let caller = sessions.agent_caller(&env.token)?;
                 drop(sessions);
+                let mut request = request;
+                crate::plugins::check_request(
+                    home,
+                    crate::plugins::Asker::Agent,
+                    &caller.id,
+                    &mut request,
+                    true,
+                )?;
                 return crate::grants::dispatch_remote(
                     registry, &env.token, machine, *request, stopping,
                 );
@@ -1149,6 +1136,19 @@ fn connection(
                 return reply;
             }
             sessions.check_agent(&caller, &env.request)?;
+            // A plugin's check before a message an agent or a token sends, once the caller may send it, off the lock
+            // (a sandbox run of up to 5 s per check). The owner's socket and the window are no session caller.
+            if crate::plugins::sends_text(&env.request) {
+                let asker = match caller.id.starts_with(crate::tokens::CALLER) {
+                    true => crate::plugins::Asker::Token,
+                    false => crate::plugins::Asker::Agent,
+                };
+                drop(sessions);
+                crate::plugins::check_request(home, asker, &caller.id, &mut env.request, false)?;
+                sessions = registry
+                    .lock()
+                    .map_err(|_| "session registry unavailable")?;
+            }
             Some(caller)
         };
         // Ticket 305: a request that waited on the registry lock while a Stop or Exit ran has not run, so it gets the

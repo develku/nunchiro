@@ -25,6 +25,15 @@ pub struct Send {
     /// reads this, not the lasting `grants.remote` set. Absent for `user`; absent on an agent row fails closed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote: Option<bool>,
+    /// A plugin's check replaced what the sender wrote: the plugin and the original, so the owner sees both.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replaced: Option<Replaced>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub struct Replaced {
+    pub plugin: String,
+    pub original: String,
 }
 
 /// The largest content of one send row; `validate` refuses a saved row above it, so the core would not load.

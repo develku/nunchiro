@@ -5537,6 +5537,17 @@
     "Part": {
       "description": "One part as the permission sheet lists it: what it is and exactly what it runs.",
       "properties": {
+        "check_on": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GateOn"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A check: before what it runs (it can stop a new session, or read and replace every message agents, schedules\nand tokens send) and what no answer within 5 s means."
+        },
         "interval_secs": {
           "description": "A panel's seconds between runs.",
           "format": "uint64",
@@ -5559,6 +5570,16 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "on_error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OnError"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "read": {
           "items": {
@@ -6249,6 +6270,21 @@
         "login"
       ],
       "type": "string"
+    },
+    "Replaced": {
+      "properties": {
+        "original": {
+          "type": "string"
+        },
+        "plugin": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plugin",
+        "original"
+      ],
+      "type": "object"
     },
     "Reply": {
       "oneOf": [
@@ -14209,6 +14245,17 @@
             "boolean",
             "null"
           ]
+        },
+        "replaced": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Replaced"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A plugin's check replaced what the sender wrote: the plugin and the original, so the owner sees both."
         },
         "sender": {
           "type": "string"

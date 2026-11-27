@@ -367,6 +367,12 @@ pub struct Part {
     /// A command whose output goes into the focused agent's message box (`show = "send"`).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub writes_draft: bool,
+    /// A check: before what it runs (it can stop a new session, or read and replace every message agents, schedules
+    /// and tokens send) and what no answer within 5 s means.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub check_on: Option<GateOn>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_error: Option<OnError>,
 }
 pub(crate) fn parts(p: &Plugin) -> Vec<Part> {
     let part = |name: &String,
@@ -384,6 +390,8 @@ pub(crate) fn parts(p: &Plugin) -> Vec<Part> {
             read: m.as_ref().map(|m| m.read.clone()).unwrap_or_default(),
             interval_secs: m.and_then(|m| m.interval_secs),
             writes_draft,
+            check_on: None,
+            on_error: None,
         }
     };
     let panels = p.panel.iter().map(|x| {
@@ -402,10 +410,11 @@ pub(crate) fn parts(p: &Plugin) -> Vec<Part> {
             x.show == Show::Send,
         )
     });
-    let gates = p
-        .gate
-        .iter()
-        .map(|x| part(&x.name, &x.title, "check", x.command.clone(), false));
+    let gates = p.gate.iter().map(|x| Part {
+        check_on: Some(x.on),
+        on_error: Some(x.on_error),
+        ..part(&x.name, &x.title, "check", x.command.clone(), false)
+    });
     panels.chain(commands).chain(gates).collect()
 }
 
@@ -1019,6 +1028,8 @@ fn gates(
     }
     let mut event = event;
     let mut replaced: Option<(String, String)> = None;
+    // All checks of one action together get `BUDGET`; one past it refuses, as a check that does not answer.
+    let deadline = std::time::Instant::now() + BUDGET;
     for id in ids(home).into_iter().filter(|id| store.on.contains(id)) {
         let Ok(p) = read(home, &id) else { continue };
         let mine: Vec<&Gate> = p.gate.iter().filter(|g| g.on == on).collect();
@@ -1026,7 +1037,13 @@ fn gates(
             continue; // off, not approved or changed: runs nothing, so it decides nothing
         }
         for g in mine {
+            if std::time::Instant::now() >= deadline {
+                return Err((p.name, "the plugin checks took too long".into()));
+            }
             let name = part_name(&id, &g.name);
+            // One run of a check at a time: a second action waits for the first, never shares its input.
+            let turn = turn(home, &name);
+            let _turn = turn.lock().unwrap_or_else(|e| e.into_inner());
             let ran = approval::check(home, &name)
                 .and_then(|proof| {
                     widgets::execute(
@@ -1081,14 +1098,40 @@ fn gates(
     Ok(replaced)
 }
 
-/// Before a new agent session starts: `Err` is the sentence the asker sees. A plain terminal and a resumed
-/// conversation are not checked (as the memory hold).
+/// All the checks one action runs, together.
+const BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
+/// One lock per check part, so its runs take turns.
+fn turn(home: &Path, name: &str) -> std::sync::Arc<std::sync::Mutex<()>> {
+    type Turns = BTreeMap<(PathBuf, String), std::sync::Arc<std::sync::Mutex<()>>>;
+    static TURNS: std::sync::OnceLock<std::sync::Mutex<Turns>> = std::sync::OnceLock::new();
+    let mut all = TURNS
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    all.entry((home.to_path_buf(), name.to_string()))
+        .or_default()
+        .clone()
+}
+
+/// Whether a plugin that is on carries a check before new sessions (the window then runs its starts off its loop).
+pub(crate) fn start_checks_on(home: &Path) -> bool {
+    let store = load(home);
+    !store.on.is_empty()
+        && store.on.iter().any(|id| {
+            read(home, id).is_ok_and(|p| p.gate.iter().any(|g| g.on == GateOn::SessionStart))
+        })
+}
+
+/// Before a new agent session starts: `Err` is the sentence the asker sees. A plain terminal is not checked; nor is a
+/// conversation the owner or a schedule resumes (as the memory hold), but an agent's or a token's resume is.
 pub(crate) fn check_start(
     home: &Path,
     asker: Asker,
     start: &crate::api::StartSession,
 ) -> Result<(), String> {
-    if start.kind == crate::api::AgentKind::Shell || start.resume.is_some() {
+    let resumed_by_owner =
+        start.resume.is_some() && matches!(asker, Asker::Owner | Asker::Schedule);
+    if start.kind == crate::api::AgentKind::Shell || resumed_by_owner {
         return Ok(());
     }
     let event = serde_json::json!({
@@ -1117,15 +1160,36 @@ pub(crate) fn check_send(
     to: &str,
     text: &str,
 ) -> Result<String, String> {
+    check_send_from(home, asker, "", to, text)
+}
+/// `check_send` for a caller whose send row will carry the replacement (`sender`): the row keeps the original and the
+/// plugin's name (`take_replaced`).
+fn check_send_from(
+    home: &Path,
+    asker: Asker,
+    sender: &str,
+    to: &str,
+    text: &str,
+) -> Result<String, String> {
     let event =
         serde_json::json!({"event": "prompt.send.before", "asker": asker, "to": to, "text": text});
     match gates(home, GateOn::PromptSend, event) {
         Ok(Some((plugin, new))) => {
-            eprintln!(
-                "plugin {plugin} replaced a message to {to} ({} bytes became {})",
-                text.len(),
-                new.len()
-            );
+            if !sender.is_empty()
+                && let Ok(mut all) = replaced().lock()
+            {
+                all.retain(|r| r.at.elapsed() < std::time::Duration::from_secs(60));
+                all.push(Pending {
+                    sender: sender.into(),
+                    to: to.into(),
+                    text: new.clone(),
+                    replaced: crate::delivery::Replaced {
+                        plugin,
+                        original: text.into(),
+                    },
+                    at: std::time::Instant::now(),
+                });
+            }
             Ok(new)
         }
         Ok(None) => Ok(text.into()),
@@ -1133,6 +1197,80 @@ pub(crate) fn check_send(
             "Not sent. The plugin \"{plugin}\" refused it: {reason}"
         )),
     }
+}
+
+/// A replacement waiting for its send row (`begin_send` takes it), for a minute at most.
+struct Pending {
+    sender: String,
+    to: String,
+    text: String,
+    replaced: crate::delivery::Replaced,
+    at: std::time::Instant,
+}
+fn replaced() -> &'static std::sync::Mutex<Vec<Pending>> {
+    static ALL: std::sync::OnceLock<std::sync::Mutex<Vec<Pending>>> = std::sync::OnceLock::new();
+    ALL.get_or_init(Default::default)
+}
+/// The original of a message a plugin replaced, for the send row being made now; the core's log line names it only
+/// for a send that is delivered.
+pub(crate) fn take_replaced(
+    sender: &str,
+    to: &str,
+    content: &str,
+) -> Option<crate::delivery::Replaced> {
+    let mut all = replaced().lock().ok()?;
+    let at = all
+        .iter()
+        .position(|r| r.sender == sender && r.to == to && r.text == content)?;
+    let r = all.remove(at).replaced;
+    eprintln!(
+        "plugin {} replaced a message from {sender} to {to}",
+        r.plugin
+    );
+    Some(r)
+}
+
+/// Whether a request carries an agent's or a token's text to deliver (`check_request` checks it).
+pub(crate) fn sends_text(request: &Request) -> bool {
+    matches!(
+        request,
+        Request::AgentPrompt { .. }
+            | Request::AgentSend { .. }
+            | Request::SendText { .. }
+            | Request::SteerNow { .. }
+            | Request::RoomSend { .. }
+            | Request::RoomReply { .. }
+    )
+}
+
+/// The checks a request from an agent or a token passes before it runs: the text of each way it sends a message
+/// (replaced in place, or refused), and, inside `Remote` and `Forwarded`, a new session's start (a local start is
+/// checked where it starts). `sender` is the caller's id, for the send row.
+pub(crate) fn check_request(
+    home: &Path,
+    asker: Asker,
+    sender: &str,
+    request: &mut Request,
+    nested: bool,
+) -> Result<(), String> {
+    match request {
+        Request::AgentPrompt { id, text }
+        | Request::AgentSend { id, text }
+        | Request::SendText { id, text, .. }
+        | Request::SteerNow { id, text, .. } => {
+            *text = check_send_from(home, asker, sender, id, text)?
+        }
+        Request::RoomSend { to, body, .. } => {
+            *body = check_send(home, asker, to.as_deref().unwrap_or("room"), body)?;
+        }
+        Request::RoomReply { message, body, .. } => *body = check_send(home, asker, message, body)?,
+        Request::Remote { request, .. } | Request::Forwarded { request, .. } => {
+            check_request(home, asker, sender, request, true)?;
+        }
+        Request::Start { session, .. } if nested => check_start(home, asker, session)?,
+        _ => {}
+    }
+    Ok(())
 }
 
 /// The `script_widgets` setting (settings.json): script parts run only while it is on, a check's trial too.

@@ -89,10 +89,15 @@ drops its approval. Script parts also need the `script_widgets` setting; a web p
 
 A check runs before an action and may refuse it, at two places only:
 
-- `on = "session.start.before"`: before every new agent session (the owner's CLI and window, an agent's
-  `agent start`, a teammate's seat, a schedule, a token). A plain terminal and a resumed conversation are not checked.
-- `on = "prompt.send.before"`: before a message an agent or a token sends is delivered (`agent prompt`, `agent send`,
-  room sends). What the owner types in a composer or a terminal never reaches a check.
+- `on = "session.start.before"`: before every new agent session: the owner's CLI and window, an agent's or a
+  token's start (also a resumed conversation, and a start sent to or from another machine), a teammate's seat that
+  is not open yet, a new conversation, the Reviewer a lead's task starts, a schedule. A plain terminal is not checked,
+  nor a conversation the owner or a schedule resumes.
+- `on = "prompt.send.before"`: before a message an agent, a schedule or a token sends is delivered: `agent prompt`,
+  `agent send`, `session send-text`, Send now, room sends and replies, a schedule's task, and the same sent through
+  another machine. What the owner types in the window or in their own terminal never reaches a check. A `nunchiro`
+  command run inside a Nunchiro terminal tab is that session's request, as every command there is (the core cannot
+  tell a person typing in that tab from a program the session runs), so it is checked like an agent's.
 
 ```toml
 [[gate]]
@@ -112,10 +117,13 @@ on_error = "allow"            # or "refuse" (the default): what no answer, a cra
 ```
 
 Checks run for plugins that are on and approved as they are now, plugins in id order and checks in manifest order;
-the first refusal ends it. A check has 5 seconds; then it is stopped and `on_error` decides. A refused owner start
+the first refusal ends it. A check has 5 seconds; then it is stopped and `on_error` decides. All the checks of one
+action have 10 seconds together; past that the action is refused. Each run gets its own input, and two runs of one
+check take turns. The window's starts run off its frame loop while a start check is on. A refused owner start
 says `<plugin> stopped this start: <reason>` with Start anyway (`agent start --anyway` in a terminal); an agent, a
 schedule or a token gets the sentence and cannot pass it. A replaced message (at most 16 KB) is delivered instead of
-the original, and the core's log names the plugin. A check cannot answer a permission, skip an outward card or widen
+the original; its row in the session's send log (`nunchiro snapshot --json`) keeps the original and the
+plugin's name, and the core's log names the plugin when it is delivered. A room message keeps only the log line. A check cannot answer a permission, skip an outward card or widen
 anything: allow, refuse and replacement text are its only outputs. With no plugin on, nothing is run.
 
 ## Through the API

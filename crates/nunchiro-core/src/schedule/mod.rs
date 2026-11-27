@@ -1182,10 +1182,14 @@ fn start(
     // the brief of a new seat or alone to an open one. A removed teammate starts nothing.
     if let (Some(_), Some(task)) = (&run.teammate, &run.task) {
         let id = teammate_of(registry, entry)?;
+        // The task is a message the schedule sends to the seat: the message checks see it first.
+        let home = lock(registry)?.home().to_path_buf();
+        let task =
+            crate::plugins::check_send(&home, crate::plugins::Asker::Schedule, &run.label, task)?;
         return crate::team::open_seat(
             registry,
             &id,
-            Some(task),
+            Some(&task),
             run.level,
             crate::team::Opener::Schedule(&entry.id, who),
         )
@@ -1201,6 +1205,16 @@ fn start(
     let (session, first) = (run.start(), run.task.clone());
     let home = lock(registry)?.home().to_path_buf();
     crate::plugins::check_start(&home, crate::plugins::Asker::Schedule, &session)?;
+    // The task is a message a schedule sends: it passes the message checks before anything starts.
+    let first = match first {
+        Some(task) => Some(crate::plugins::check_send(
+            &home,
+            crate::plugins::Asker::Schedule,
+            &run.label,
+            &task,
+        )?),
+        None => None,
+    };
     crate::pressure::check_start(&session, who, false, "schedule")?;
     let launch = {
         let sessions = lock(registry)?;
