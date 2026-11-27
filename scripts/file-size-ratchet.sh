@@ -3,10 +3,10 @@
 # scripts/file-sizes.baseline may shrink, never grow, and an unlisted one may not pass 2,000 lines. "Source" and
 # "lines" are the scorecard judge's own (scripts/measure/scorecard.py SOURCE/NOT_SOURCE over `git ls-files`, wc -l),
 # so moving tests to a sibling tests.rs counts the way the judge counts it. Peer: Orca's max-lines baseline.
-# Not wired into the gate yet (flow change, 11-28 review). Exit 0 pass, 1 a file grew or is new, 2 usage.
+# The CI lint job runs it through .github/scripts/ratchets.py. Exit 0 pass, 1 a file grew or is new, 2 usage.
 set -u
 root=$(cd "$(dirname "$0")/.." && pwd)
-base=$root/scripts/file-sizes.baseline
+base=${FILE_SIZES_BASELINE:-$root/scripts/file-sizes.baseline}  # CI: .github/scripts/ratchets.py
 [ -f "$base" ] || { echo "file-size ratchet: $base missing" >&2; exit 2; }
 cd "$root" && exec python3 - "$base" <<'PY'
 import subprocess, sys

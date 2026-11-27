@@ -100,6 +100,12 @@ impl Sessions {
                     entry.observer.screen.reset();
                 }
                 entry.observer.screen.feed(&data);
+                // Idle CPU: the window's snapshot key counted these bytes before this read; what the snapshot reads off
+                // the screen (at_box, the modes, starting) changed only now.
+                if !data.is_empty() {
+                    self.revision
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                }
                 // Ticket 286: a shell left after its agent quit is fed for the screen gates only: no activity, no
                 // decisions read from what the shell prints.
                 if entry.agent_ended {
@@ -379,6 +385,7 @@ impl Sessions {
         path: Option<PathBuf>,
         result: Result<Option<waiting::transcript::Batch>, String>,
     ) -> Result<(), String> {
+        self.changed(); // a transcript read can change a row without a save
         // v1b-15
         self.observe_board();
         let Some(entry) = self.entries.get_mut(&job.session.id) else {

@@ -10,6 +10,7 @@ use std::{
     collections::VecDeque,
     io::{Read, Write},
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream},
+    os::unix::net::UnixStream,
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex, OnceLock,
@@ -28,8 +29,10 @@ pub(crate) const DEFAULT_PORT: u16 = 7788;
 pub(crate) const MAX_BROWSERS: usize = 8;
 const MAX_HANDSHAKES: usize = 16;
 const RESCAN: Duration = Duration::from_secs(30);
-/// S9: the supervisor's idle wait; a settings change is seen within it.
-const IDLE_WAIT: Duration = Duration::from_millis(100);
+/// S9: the supervisor's idle wait. A settings change rings `bell` and is seen at once; without a bell, within
+/// `BELL_LESS_WAIT`. The wait only bounds how late `stopping` is seen.
+const IDLE_WAIT: Duration = Duration::from_secs(1);
+const BELL_LESS_WAIT: Duration = Duration::from_millis(100);
 const MAX_HEAD: usize = 8 << 10;
 const MAX_BODY: usize = 1 << 10;
 const MAX_NOTICES: usize = 20;
@@ -57,6 +60,8 @@ impl Default for Settings {
 
 /// Settings > Browser access: what the window shows and changes (window only, `BrowserFrame`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "BrowserStatus"))]
 pub struct Status {
     pub enabled: bool,
     pub port: u16,
@@ -67,6 +72,7 @@ pub struct Status {
     pub devices: Vec<DeviceRow>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct DeviceRow {
     pub id: String,
     pub name: String,
@@ -105,6 +111,8 @@ pub(crate) struct Browser {
     home: PathBuf,
     settings: Mutex<Settings>,
     changed: AtomicBool,
+    /// Rung beside `changed`, so the supervisor's wait ends at once (send, receive; both non-blocking).
+    bell: Option<(UnixStream, UnixStream)>,
     devices: Mutex<Devices>,
     pairs: Mutex<Pairs>,
     /// Open browser connections: device id, local address, a clone to shut down on revoke or unbind.
@@ -115,6 +123,8 @@ pub(crate) struct Browser {
     handshakes: AtomicUsize,
     running: AtomicBool,
     scan: Mutex<Scan>,
+    #[cfg(test)]
+    pub(crate) wakes: AtomicUsize, // supervisor passes
 }
 
 /// One per core home; the window listener and the browser listener of a core share it.
@@ -135,6 +145,9 @@ pub(crate) fn of(home: &Path) -> Arc<Browser> {
         home: home.to_path_buf(),
         settings: Mutex::new(settings),
         changed: AtomicBool::new(true),
+        bell: UnixStream::pair().ok().filter(|(tx, rx)| {
+            tx.set_nonblocking(true).is_ok() && rx.set_nonblocking(true).is_ok()
+        }),
         devices: Mutex::new(Devices::open(home)),
         pairs: Mutex::default(),
         live: Mutex::default(),
@@ -144,6 +157,8 @@ pub(crate) fn of(home: &Path) -> Arc<Browser> {
         handshakes: AtomicUsize::new(0),
         running: AtomicBool::new(false),
         scan: Mutex::new(interfaces),
+        #[cfg(test)]
+        wakes: AtomicUsize::new(0),
     });
     all.push(b.clone());
     b
@@ -235,6 +250,11 @@ fn supervise(b: &Arc<Browser>, registry: &Arc<Mutex<Sessions>>, stopping: &Arc<A
     let mut listeners: Vec<TcpListener> = vec![];
     let mut scanned = Instant::now();
     while !stopping.load(Ordering::SeqCst) {
+        #[cfg(test)]
+        b.wakes.fetch_add(1, Ordering::SeqCst);
+        if let Some((_, rx)) = &b.bell {
+            while matches!((&*rx).read(&mut [0u8; 64]), Ok(n) if n > 0) {} // before `changed`, so no ring is lost
+        }
         if b.changed.swap(false, Ordering::SeqCst) || scanned.elapsed() >= RESCAN {
             scanned = Instant::now();
             rebind(b, &mut listeners);
@@ -263,13 +283,23 @@ fn supervise(b: &Arc<Browser>, registry: &Arc<Mutex<Sessions>>, stopping: &Arc<A
         if failed {
             thread::sleep(Duration::from_millis(10));
         } else if idle {
-            // S9: wait on the bound listeners (none while browser access is off), not a 10 ms retry. A settings change
-            // waits at most this long for its rebind; RESCAN and expiry run on their own longer clocks.
-            let fds: Vec<_> = listeners
+            // S9: wait on the bound listeners (none while browser access is off) and the bell, not a 10 ms retry.
+            // RESCAN and expiry run on their own longer clocks.
+            let mut fds: Vec<_> = listeners
                 .iter()
                 .map(std::os::fd::AsRawFd::as_raw_fd)
                 .collect();
-            crate::server::wait_readable(&fds, IDLE_WAIT);
+            fds.extend(
+                b.bell
+                    .as_ref()
+                    .map(|(_, rx)| std::os::fd::AsRawFd::as_raw_fd(rx)),
+            );
+            let wait = if b.bell.is_some() {
+                IDLE_WAIT
+            } else {
+                BELL_LESS_WAIT
+            };
+            crate::server::wait_readable(&fds, wait);
         }
     }
     listeners.clear();
@@ -408,7 +438,10 @@ impl Browser {
                 )?;
                 *lock(&self.settings) = settings;
                 self.changed.store(true, Ordering::SeqCst);
-                // The supervisor rebinds within a tick; answer with what it bound.
+                if let Some((tx, _)) = &self.bell {
+                    let _ = (&*tx).write(&[1]); // a full bell is already rung
+                }
+                // The supervisor rebinds at once; answer with what it bound.
                 let until = Instant::now() + Duration::from_secs(2);
                 while self.changed.load(Ordering::SeqCst) && Instant::now() < until {
                     thread::sleep(Duration::from_millis(5));
@@ -551,6 +584,9 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | PrList
         | PrMerge { .. }
         | PrBranch { .. } // ticket 373: runs the user's gh on the Mac
+        | GitPush { .. } // pushes as the user: the Mac window's confirm alone
+        | PrDraft { .. }
+        | PrCreate { .. } // pushes and creates a PR as the user: the Mac window's form alone
         | LibsResolve { .. }
         | LibsEntry { .. }
         | TokenCreate { .. }
@@ -667,6 +703,7 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | AcpAgentSignInState { .. }
         | AcpAgentSignInCancel { .. }
         | AcpAgentSignOut { .. }
+        | AcpAgentTry { .. }
         | AgentUpdateStart { .. } // ticket 358: owner and window only
         | AgentUpdateCancel { .. }
         | AgentUpdateState
@@ -693,6 +730,7 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | WidgetRun { .. }
         | WidgetAct { .. }
         | WidgetPage { .. }
+        | Plugin { .. }
         | SwitchModel { .. }
         | SetMode { .. } // CHAT-MODELIST: owner window only
         | AgentPermissionGet // ticket 362: the owner's setting

@@ -102,6 +102,7 @@ pub enum Op {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Badge {
     /// The sha512 equals the hash cdnjs published for this library, version and file.
@@ -112,6 +113,8 @@ pub enum Badge {
 
 /// One pinned file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "LibsEntry"))]
 #[serde(deny_unknown_fields)]
 pub struct Entry {
     pub host: String,
@@ -143,6 +146,7 @@ impl Entry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct AutoAllow {
     pub host: String,
@@ -180,6 +184,7 @@ fn offer_defaults(file: &mut Lockfile, defaults: &[&str]) {
 
 /// One answer of [`Libs::resolve`], in the order asked.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum Resolved {
     /// Serve `/lib/<sha384>`: the entry exists and its stored file hashes to the pin.

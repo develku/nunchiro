@@ -11,7 +11,7 @@ import { chordOf, label, merge, type Bindings } from './keys';
 import { pickFolder } from './pickFolder';
 import { FILE_ACCESS, FolderAccess } from './PermissionNeeded';
 import { makeT, type Lang, type T } from './i18n';
-import { ErrorDetails, errorNote, heldNote, isLowMemory, notePlain, plainError, startOp, type Note, rawError } from './errors';
+import { ErrorDetails, errorNote, heldNote, isHeld, notePlain, plainError, startOp, type Note, rawError } from './errors';
 import { agentName } from './chat/conversation';
 import { sessionName } from './Sidebar';
 import type { WithLog } from './picker/Picker';
@@ -185,7 +185,11 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
   const made = useRef<{ project: string; path: string } | null>(null); // a worktree made for a start that then failed: a retry reuses it
   const path = folder.trim();
   const given = worktree && path === project ? worktree : undefined;
-  const place = picked === 'given' && !given ? 'here' : (picked ?? (inWorktree.includes(path) ? 'worktree' : 'here'));
+  // A real drive: a fresh conversation beside an agent in the project's checkout opened on the remembered New worktree. In
+  // front of such an agent the popover starts where it works (Orca's "+" opens in the same workspace; T3 Code's "new thread"
+  // from a thread passes that thread's place); the remembered choice is for other starts.
+  const beside = !!current && current.kind !== 'shell' && current.project === path && (!current.cwd || current.cwd === path) && !current.machine;
+  const place = picked === 'given' && !given ? 'here' : (picked ?? (inWorktree.includes(path) && !beside ? 'worktree' : 'here'));
   const places = [...(given ? (['given'] as const) : []), 'here', 'worktree'] as const;
   const root = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -292,7 +296,8 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
       const like = !machine && (kind === 'claude' || kind === 'codex') ? likeNew(current, ordered, kind, path) : { model: null, effort: null };
       const account = machine ? null : opts.account !== undefined ? opts.account : kind === 'claude' || kind === 'codex' ? lastAccount(ordered, kind, path, accounts) : null;
       const session = { kind, project: path, ...like, resume: null, ...(account ? { account } : {}), ...(opts.acp ? { args: [opts.acp] } : {}) };
-      if (canWorktree && kind !== 'shell' && place !== 'given' && inWorktree.includes(path) !== (place === 'worktree')) setInWorktree(place === 'worktree' ? [...inWorktree, path] : inWorktree.filter((p) => p !== path));
+      // Only a place picked in this opening is remembered: a default (above) never changes it.
+      if (canWorktree && kind !== 'shell' && picked && place !== 'given' && inWorktree.includes(path) !== (place === 'worktree')) setInWorktree(place === 'worktree' ? [...inWorktree, path] : inWorktree.filter((p) => p !== path));
       const wt = place === 'worktree' && canWorktree ? await newWorktree(path) : place === 'given' && given && !machine ? given.path : kind === 'shell' && place === 'here' && !machine ? shellIn(current, path) : null;
       if (place === 'worktree' && canWorktree && !wt) return setBusy(false);
       // A start held for low memory waits and starts by itself (this Mac's hold), unless the card's words wait for it here.
@@ -304,7 +309,7 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
       const m = rawError(e);
       if (m.startsWith(FILE_ACCESS)) setError(m); // F15: said with the permission steps below
       // Held for low memory: the plain line and Start anyway (this Mac's hold only; another machine's core says its own).
-      else if (isLowMemory(m) && !machine) {
+      else if (isHeld(m) && !machine) {
         const line = plainError(t, m);
         setError(line);
         setDetails(m);

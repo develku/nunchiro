@@ -43,6 +43,8 @@ const LATE_MS: u64 = 2 * 3_600_000;
 const EARLIER_MAX: usize = 9;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ScheduleEntry"))]
 #[serde(deny_unknown_fields)]
 pub struct Entry {
     pub id: String,
@@ -79,6 +81,7 @@ pub struct Entry {
 
 /// Ticket 993: an entry's last run.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Last {
     /// The session the run started or sent its task to; absent when it could not start.
@@ -94,6 +97,7 @@ pub struct Last {
     pub reason: Option<String>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Outcome {
     Finished,
@@ -114,6 +118,7 @@ impl Outcome {
 
 /// Ticket 993: when an entry runs. `at` and `daily` as on `Entry`; `days` only on a repeating one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct When {
     pub at: String,
@@ -194,6 +199,8 @@ impl When {
 
 /// What a schedule starts: the owner's closed choice, never a raw `StartSession`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ScheduleRun"))]
 #[serde(deny_unknown_fields)]
 pub struct Run {
     pub kind: AgentKind,
@@ -1175,10 +1182,14 @@ fn start(
     // the brief of a new seat or alone to an open one. A removed teammate starts nothing.
     if let (Some(_), Some(task)) = (&run.teammate, &run.task) {
         let id = teammate_of(registry, entry)?;
+        // The task is a message the schedule sends to the seat: the message checks see it first.
+        let home = lock(registry)?.home().to_path_buf();
+        let task =
+            crate::plugins::check_send(&home, crate::plugins::Asker::Schedule, &run.label, task)?;
         return crate::team::open_seat(
             registry,
             &id,
-            Some(task),
+            Some(&task),
             run.level,
             crate::team::Opener::Schedule(&entry.id, who),
         )
@@ -1192,6 +1203,18 @@ fn start(
     // A model retired since the entry was made is this run's failure, not the whole file's (`check_stored`).
     run.check_model()?;
     let (session, first) = (run.start(), run.task.clone());
+    let home = lock(registry)?.home().to_path_buf();
+    crate::plugins::check_start(&home, crate::plugins::Asker::Schedule, &session)?;
+    // The task is a message a schedule sends: it passes the message checks before anything starts.
+    let first = match first {
+        Some(task) => Some(crate::plugins::check_send(
+            &home,
+            crate::plugins::Asker::Schedule,
+            &run.label,
+            &task,
+        )?),
+        None => None,
+    };
     crate::pressure::check_start(&session, who, false, "schedule")?;
     let launch = {
         let sessions = lock(registry)?;

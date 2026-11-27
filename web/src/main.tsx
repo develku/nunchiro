@@ -11,6 +11,9 @@ import './tokens.css';
 import './book-tokens.css'; // the design book's roles over tokens.css (docs/design/design-book)
 import './light-glass.css';
 import './styles.css';
+import './layout.css';
+import './keys.css';
+import './chrome.css';
 import './widget-quiet.css'; // ticket 1041 lane 7b: quiet buttons and fields inside the widgets
 
 syncBreathing();

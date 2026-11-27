@@ -4,8 +4,12 @@ use std::path::PathBuf;
 // Ticket 1162: the answers moved out whole; the child says its own in one `//!` line.
 mod reply;
 pub use reply::{Reply, Response};
+// The published wire schema, written by a test (docs/api.md).
+#[cfg(test)]
+mod schema_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum AgentKind {
     Claude,
@@ -19,6 +23,7 @@ pub enum AgentKind {
 pub const SIDE_CHAT_ARG: &str = "--nunchiro-side-chat";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct StartSession {
     pub kind: AgentKind,
     pub project: PathBuf,
@@ -40,6 +45,7 @@ pub struct StartSession {
 
 // v1a-09: when agents end. `keep_running` is the default: the window and the app may quit, agents stay.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Lifetime {
     #[default]
@@ -65,6 +71,7 @@ pub const KNOWN_FEATURES: &[&str] = &[
 
 // v1a-09: the settings the window edits; absent fields stay as they are.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(default, deny_unknown_fields)]
 pub struct LifetimePatch {
     pub lifetime: Option<Lifetime>,
@@ -97,6 +104,7 @@ pub struct LifetimePatch {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct LifetimeSettings {
     pub lifetime: Lifetime,
     pub start_at_login: bool,
@@ -132,6 +140,7 @@ pub struct LifetimeSettings {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SessionState {
     Running,
@@ -143,6 +152,7 @@ pub enum SessionState {
 
 /// Words that came home from an agent's box (sessions/home.rs) and when they left it (ms).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct DraftHome {
     pub words: String,
@@ -150,6 +160,7 @@ pub struct DraftHome {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Session {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub side_chat: bool,
@@ -411,6 +422,7 @@ mod listed_tests {
 /// W35 picker: `fast` is set at a start that chose it and read from Claude's ↯ per snapshot; `ultracode` is known only
 /// when Nunchiro started or typed it. Absent: not known.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Modes {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fast: Option<bool>,
@@ -433,6 +445,7 @@ pub struct Modes {
 /// Ticket 1010: `text` is Claude's notice before its "· resets in 5m" ("Fast limit reached, fast mode paused"), `until`
 /// the epoch second that "in 5m" pointed at when the notice came. Both absent: the faint ↯ alone was read.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct FastCooldown {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
@@ -442,6 +455,7 @@ pub struct FastCooldown {
 
 /// Ticket 372: `resets` as the agent printed it, `until` its epoch second.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct SessionLimit {
     pub resets: String,
     pub until: i64,
@@ -451,6 +465,7 @@ pub struct SessionLimit {
 
 /// CHAT-MODELIST: the mode list's per-session facts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct ModeState {
     pub skip: SkipPermissions,
     /// A walk to a picked mode: `error` is `None` while it runs and the reason once it stopped short.
@@ -462,6 +477,7 @@ pub struct ModeState {
 /// settings turn it off (`permissions.disableBypassPermissionsMode`); `NeedsSetting`: not in this session's cycle and the
 /// stored choice is Ask, so a new session would not have it either.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SkipPermissions {
     Unavailable,
@@ -472,6 +488,7 @@ pub enum SkipPermissions {
 /// Ticket 362 (owner 11-09): an agent's stored permission for the sessions the owner starts. `Own` adds no flag and leaves
 /// the agent's own setting in charge. Stored by these names: never rename one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum PermissionChoice {
     Own,
@@ -487,6 +504,7 @@ impl PermissionChoice {
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct ModeWalk {
     pub target: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -495,6 +513,7 @@ pub struct ModeWalk {
 
 // V2-1b
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum HolderStatus {
     /// The holder is older than this core: "Needs restart after update" (Restart session).
@@ -505,12 +524,14 @@ pub enum HolderStatus {
 
 // v1a-33
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Blocked {
     pub reason: BlockedReason,
     pub path: PathBuf,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum BlockedReason {
     FileAccess,
@@ -518,6 +539,7 @@ pub enum BlockedReason {
 
 /// V2-2d: the steps of an account remove, in order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum RemoveStep {
     Check,
@@ -554,6 +576,7 @@ pub enum BoardTaskRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Request {
     // v1a-06: RemoteService is interpreted only by the SSH relay.
@@ -679,6 +702,28 @@ pub enum Request {
     // PR status on); window only.
     PrBranch {
         path: String,
+    },
+    // The Diff panel's Push after the window's confirm strip, which sends the head commit it showed; the core checks
+    // the branch again and runs `git push <remote> <head>:refs/heads/<branch>` in the session's folder. Window only.
+    GitPush {
+        session: String,
+        #[serde(flatten)]
+        shown: crate::git_write::Shown,
+    },
+    // The Diff panel's Create PR form: what it starts with (commit subjects, the PR template, the bases). Window only.
+    PrDraft {
+        session: String,
+    },
+    // The form's Create PR: checked and pushed as `GitPush`, then `gh pr create` with the body on stdin. Window only.
+    PrCreate {
+        session: String,
+        #[serde(flatten)]
+        shown: crate::git_write::Shown,
+        title: String,
+        body: String,
+        base: String,
+        #[serde(default)]
+        draft: bool,
     },
     // v2-10c: owner only and local (the app's `serve`), answered by the socket server before any session check.
     // Reads the library cache; Allow, auto-allow and Remove are window-only `libs::Op`, never a `Request`.
@@ -1159,6 +1204,12 @@ pub enum Request {
     AcpAgentSignOut {
         name: String,
     },
+    /// The test message of an approved agent (one fixed sentence, confined as the check, 60 s); `cancel` ends a running one.
+    AcpAgentTry {
+        name: String,
+        #[serde(default)]
+        cancel: bool,
+    },
     // Ticket 276: Agent extensions, the owner window's alone (refused from an agent, a remote machine and a widget).
     /// Skills and hooks, the agents' MCP servers read-only (env names only), and Nunchiro's own servers.
     ExtensionsList,
@@ -1302,6 +1353,10 @@ pub enum Request {
     /// refused while `web_widgets` is off or the folder is not approved as it is now).
     WidgetPage {
         name: String,
+    },
+    /// Plugins (`plugins.rs`): list, on and off, settings, a command run, remove. Owner and window only.
+    Plugin {
+        action: crate::plugins::Action,
     },
     /// v1a-10: owner only. Claude replies `delivery` (the switch runs as one send row); Codex restarts into
     /// the same conversation and replies `started` with the replacing session.
@@ -1693,12 +1748,14 @@ pub enum Request {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Envelope {
     pub token: String,
     pub request: Request,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Worktree {
     pub project: PathBuf,
@@ -1739,6 +1796,7 @@ pub struct Worktree {
 
 /// V2-8a: a snapshot at list time. With no upstream, `unpushed` counts the commits not on the project's HEAD.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct WorktreeFacts {
     pub uncommitted: u32,
     pub unpushed: u32,
@@ -1750,6 +1808,7 @@ pub struct WorktreeFacts {
 /// `ignored`: git-ignored files a remove deletes too (`.env`, local config), less the build output `worktree_clean`
 /// names (`target/`, `node_modules/`, ...), which can be rebuilt.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(default, deny_unknown_fields)]
 pub struct WorktreeLoss {
     pub uncommitted: Vec<String>,
@@ -1771,6 +1830,7 @@ pub struct WorktreeLoss {
 /// `branch` the branch name create takes (a remote ref's name after its remote, `team/up/x` is `x`); `in_worktree`: a
 /// worktree (the main checkout too) has it checked out. No path is ever carried.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct BranchRef {
     pub name: String,
     pub branch: String,
@@ -1780,6 +1840,7 @@ pub struct BranchRef {
 
 /// V2-8a: one auto-clean removal; the branch is kept, so `restore` with these fields is its Undo.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct WorktreeCleaned {
     pub id: u64,
     pub project: PathBuf,
@@ -1793,6 +1854,7 @@ pub struct WorktreeCleaned {
 /// written only through the owner's `QuitSettings`. Owner F5 (2026-11-08): no agent limits; each agent follows its own settings.
 // Unknown keys stay allowed: a settings.json from before F5 still holds level, max_workers, max_depth, merge, auto_close_finished.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct OrchestrationSettings {
     pub enabled: bool,
@@ -1803,6 +1865,7 @@ impl Default for OrchestrationSettings {
     }
 }
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(default, deny_unknown_fields)]
 pub struct OrchestrationPatch {
     pub enabled: Option<bool>,
@@ -1812,6 +1875,7 @@ pub struct OrchestrationPatch {
 
 /// Ticket 1059: Claude's /context "Estimated usage by category" table, as its transcript record wrote it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Breakdown {
     /// When Claude wrote the record, epoch ms.
     pub at: u64,
@@ -1819,6 +1883,7 @@ pub struct Breakdown {
     pub rows: Vec<BreakdownRow>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct BreakdownRow {
     pub label: String,
     pub tokens: u64,

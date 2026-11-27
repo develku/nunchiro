@@ -182,6 +182,9 @@ pub(super) fn answer(
             } => {
                 // Held as the socket's start, at critical only; the window's "Start anyway" passes it.
                 let who = crate::pressure::Who::Window;
+                if !anyway {
+                    crate::plugins::check_start(home, crate::plugins::Asker::Owner, &session)?;
+                }
                 crate::pressure::check_start(&session, who, anyway, "window start")?;
                 window_start(registry, &session, folder, env)
             }
@@ -197,6 +200,7 @@ pub(super) fn answer(
                     return Err("start_or_wait carries a start only".into());
                 };
                 let who = crate::pressure::Who::Window;
+                crate::plugins::check_start(home, crate::plugins::Asker::Owner, &session)?;
                 if let Err(held) =
                     crate::pressure::check_start(&session, who, false, "window start")
                 {
@@ -262,6 +266,9 @@ pub(super) fn answer(
                     Request::WidgetList | Request::WidgetRun { .. } | Request::WidgetPage { .. } // v1b-22
                 ) {
                     return crate::widgets::handle(home, sessions, request);
+                }
+                if matches!(request, Request::Plugin { .. }) {
+                    return crate::plugins::handle(home, sessions, request);
                 }
                 // v1b-08: file and git work runs after the registry lock is released.
                 if let Some(root) = sessions.file_root(&request) {

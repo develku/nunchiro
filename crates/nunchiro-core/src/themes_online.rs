@@ -48,6 +48,8 @@ pub enum Op {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ThemesOnlineEntry"))]
 pub struct Entry {
     pub name: String,
     /// SPDX id as published, `unknown` or `nonfree` included.
@@ -57,6 +59,7 @@ pub struct Entry {
 
 /// web/src/themes/ghostty.ts `ThemeColors`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Colors {
     pub background: String,
@@ -70,6 +73,7 @@ pub struct Colors {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Theme {
     pub name: String,
     pub license: String,

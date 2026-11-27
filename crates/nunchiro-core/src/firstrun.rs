@@ -86,6 +86,8 @@ fn key(binary: &Path) -> Option<Key> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "FirstrunFound"))]
 pub struct Found {
     pub agent: Agent,
     pub found: bool,

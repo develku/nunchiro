@@ -63,13 +63,14 @@ impl Config {
             cache_limit: p.cache_limit, // v1b-21
         }
     }
-    fn core(enabled: bool) -> Result<Self, String> {
+    pub(crate) fn core(enabled: bool) -> Result<Self, String> {
         let home = std::env::var_os("HOME").ok_or("HOME missing; script widgets disabled")?;
         Ok(Self::new(enabled, home.into()))
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct List {
     pub enabled: bool,
     /// "script widgets unavailable: <reason>" when the sandbox is missing or failed its self-check.
@@ -80,6 +81,8 @@ pub struct List {
     pub web_enabled: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "WidgetsListed"))]
 pub struct Listed {
     pub name: String,
     /// Absent when the folder cannot be read or its manifest does not parse (`error` says why).
@@ -91,17 +94,25 @@ pub struct Listed {
     /// v1b-20: the `[act]` table while the widget holds a current act grant; rows are clickable only then.
     #[serde(default)]
     pub act: Option<approval::Act>,
+    /// A plugin panel's title and its plugin's name (`plugin__<id>__<panel>` rows); absent for a widget folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plugin: Option<String>,
 }
 
 /// What a widget printed, never truncated: `json` when the whole output parses as JSON (sent as printed, so
 /// the window keeps key order for table columns), else `text`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "format", rename_all = "snake_case")]
 pub enum Output {
     Text { text: String },
     Json { text: String },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "WidgetsRun"))]
 pub struct Run {
     pub name: String,
     /// Display name of the project the run saw; absent = no project.
@@ -116,17 +127,20 @@ pub struct Run {
 
 /// `context.json`: project display names and the session list with states; no paths, ids, transcripts or tokens.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Context {
     pub projects: Vec<ContextProject>,
     pub sessions: Vec<ContextSession>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ContextProject {
     pub name: String,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ContextSession {
     pub label: String,
@@ -210,6 +224,8 @@ pub fn list(home: &Path, config: &Config) -> List {
             .flatten()
             .filter_map(|e| e.file_name().into_string().ok())
             .filter(|n| !n.starts_with('.'))
+            // A folder named like a plugin part would be read as that part (`plugins::split`).
+            .filter(|n| !n.starts_with(crate::plugins::PART_PREFIX))
             .collect()
     };
     names.sort();
@@ -226,6 +242,8 @@ pub fn list(home: &Path, config: &Config) -> List {
                 act: v.manifest.act.clone().filter(|_| {
                     v.state == approval::State::Approved && v.level == Some(approval::Level::Act)
                 }),
+                title: None,
+                plugin: None,
             },
             Err(e) => Listed {
                 name,
@@ -235,9 +253,12 @@ pub fn list(home: &Path, config: &Config) -> List {
                 interval_secs: None,
                 error: Some(e),
                 act: None, // v1b-20
+                title: None,
+                plugin: None,
             },
         });
     }
+    widgets.extend(crate::plugins::panels(home));
     List {
         enabled: config.enabled,
         unavailable: if linked {
@@ -324,6 +345,7 @@ pub fn run(
     if let Some(reason) = unavailable(config) {
         return Err(reason);
     }
+    crate::plugins::on(home, name)?;
     let proof = approval::check(home, name).map_err(|e| format!("needs approval: {e}"))?;
     if proof.manifest().kind != "script" {
         return Err(format!("{name} is not a script widget"));
@@ -375,8 +397,7 @@ pub fn run(
     let _release = Release(key.clone());
     let started = Instant::now();
     let ran_at_ms = crate::queue::now_ms();
-    let cache = widgets_dir(home).join(name).join("cache");
-    let result = execute(home, config, &proof, &cache, project.as_ref(), context);
+    let result = execute(home, config, &proof, project.as_ref(), context, None);
     if let Err(e) = &result
         && e.starts_with("script widgets unavailable")
     {
@@ -410,18 +431,68 @@ pub fn run(
     Ok(run)
 }
 
-fn execute(
+/// A plugin command's run on the owner's click: no interval and no cache of the result, otherwise a script widget's.
+pub(crate) fn run_now(
+    home: &Path,
+    config: &Config,
+    name: &str,
+    project: Option<Project>,
+    context: &Context,
+) -> Result<Run, String> {
+    if !config.enabled {
+        return Err(OFF.into());
+    }
+    if let Some(reason) = unavailable(config) {
+        return Err(reason);
+    }
+    crate::plugins::on(home, name)?;
+    let proof = approval::check(home, name).map_err(|e| format!("needs approval: {e}"))?;
+    let ran_at_ms = crate::queue::now_ms();
+    let (output, error) = match execute(home, config, &proof, project.as_ref(), context, None) {
+        Ok(o) => (Some(o), None),
+        Err(e) => (None, Some(e)),
+    };
+    Ok(Run {
+        name: name.into(),
+        project: project.map(|p| p.name),
+        ran_at_ms,
+        interval_secs: 0,
+        running: false,
+        output,
+        error,
+    })
+}
+
+/// A widget's cache sits in its folder; a plugin part's in `plugins/<id>/cache/<part>` (outside the folder hash too).
+fn cache_dir(home: &Path, name: &str) -> PathBuf {
+    match crate::plugins::split(name) {
+        Some((id, part)) => home
+            .join(crate::plugins::FOLDER)
+            .join(id)
+            .join("cache")
+            .join(part.unwrap_or("plugin")),
+        None => widgets_dir(home).join(name).join("cache"),
+    }
+}
+
+pub(crate) fn execute(
     home: &Path,
     config: &Config,
     proof: &approval::Proof,
-    cache: &Path,
     project: Option<&Project>,
     context: &Context,
+    extra: Option<&serde_json::Value>,
 ) -> Result<Output, String> {
+    let cache = &cache_dir(home, proof.name());
     // The cache sits beside the hashed files (`cache` is skipped by the folder hash) and must stay a real folder.
-    if cache
-        .symlink_metadata()
-        .is_ok_and(|m| m.file_type().is_symlink())
+    // A plugin's `cache/<part>` is checked at both levels.
+    if [Some(cache.as_path()), cache.parent()]
+        .into_iter()
+        .flatten()
+        .any(|c| {
+            c.symlink_metadata()
+                .is_ok_and(|m| m.file_type().is_symlink())
+        })
     {
         return Err("widget cache must not be a symlink".into());
     }
@@ -430,9 +501,27 @@ fn execute(
         .mode(0o700)
         .create(cache)
         .map_err(|e| e.to_string())?;
-    let file = cache.join("context.json");
+    // A plugin part's input is its own run's (`context-<id>.json`, removed after): two runs at once never read each
+    // other's message. A widget keeps its one `context.json`.
+    let plugin = crate::plugins::split(proof.name()).is_some();
+    let file = match plugin {
+        true => cache.join(format!("context-{}.json", crate::store::new_id()?)),
+        false => cache.join("context.json"),
+    };
+    struct Gone(Option<PathBuf>);
+    impl Drop for Gone {
+        fn drop(&mut self) {
+            if let Some(f) = &self.0 {
+                let _ = fs::remove_file(f);
+            }
+        }
+    }
+    let _gone = Gone(plugin.then(|| file.clone()));
     // A rename replaces whatever the last run left at this name (even a symlink) without following it.
-    let bytes = serde_json::to_vec(context).map_err(|e| e.to_string())?;
+    let bytes = match plugin {
+        true => crate::plugins::input(home, proof, context, extra)?,
+        false => serde_json::to_vec(context).map_err(|e| e.to_string())?,
+    };
     crate::store::atomic_write(&file, &bytes)?;
     let mut env = vec![(ENV_KEYS[0], file.into_os_string())];
     if let Some(p) = project {

@@ -46,9 +46,17 @@ class MainLog(unittest.TestCase):
         self.assertEqual((r["runs"], r["green"], r["green_pct"]), (2, 1, 50.0))
         self.assertEqual((r["min_min"], r["max_min"]), (10.0, 12.5))
 
-    def test_owner_installs(self):
-        i = s.parse_main_log(self.LOG)["installs"]
-        self.assertEqual((i["n"], i["installed"], i["skipped"], i["failed"], i["landed_pct"]), (3, 1, 1, 1, 33.3))
+    def test_owner_installs_are_read_per_green_run(self):
+        # One green run, A, which waited and landed later (B was red): 1 of 1.
+        i = s.parse_main_log(self.LOG, installs=1)["installs"]
+        self.assertEqual((i["n"], i["installed"], i["skipped"], i["failed"], i["landed_pct"]), (1, 1, 0, 0, 100.0))
+        self.assertIsNone(s.parse_main_log(self.LOG)["installs"]["landed_pct"])  # fewer than 20 green runs: not measured
+        # Three green runs, one install made by hand and one wait: 1 of 3 landed, not 1 of the 1 line that says so.
+        c = "c" * 40
+        log = "\n".join(f"0{n}:00:00 testing {x}\n0{n}:10:00 GREEN {x}" for n, x in enumerate((A, B, c))) + \
+            f"\n04:00:00 owner wait {B}: owner-install: waiting\n05:00:00 owner install {c}: owner-install: installed {c}\n"
+        i = s.parse_main_log(log, installs=3)["installs"]
+        self.assertEqual((i["n"], i["installed"], i["skipped"], i["failed"], i["landed_pct"]), (3, 1, 2, 0, 33.3))
 
 
 class Peer(unittest.TestCase):
@@ -134,6 +142,16 @@ class RubricV2(unittest.TestCase):
         self.assertEqual(s.ran_green(0, "Ran 12 tests in 0.2s\n\nOK"), (True, 12))
         self.assertEqual(s.ran_green(1, "Ran 12 tests in 0.2s\n\nFAILED (failures=1)"), (False, 12))
 
+    def test_a_command_that_names_a_missing_spec_is_not_green(self):
+        # Playwright runs the specs it finds and ends 0: without this, half a check passes for the whole.
+        pw = ["pnpm", "-C", "web", "exec", "playwright", "test"]
+        self.assertEqual(s.missing_specs(pw + ["no-such-page.spec.ts", "inputs-one-style.spec.ts"]), ["no-such-page.spec.ts"])
+        self.assertEqual(s.missing_specs(pw + ["inputs-one-style.spec.ts"]), [])
+        self.assertEqual(s.missing_specs(["cargo", "test", "-p", "nunchiro", "x"]), [])
+        row = s.run_test(pw + ["no-such-page.spec.ts", "inputs-one-style.spec.ts"], {})  # refused before anything runs
+        self.assertEqual((row["green"], row["tests"], row["exit"]), (False, 0, None))
+        self.assertIn("no-such-page.spec.ts", row["tail"])
+
     def test_a_test_check_counts_only_when_its_tests_ran_green_at_this_commit(self):
         cmd = ["cargo", "test", "-p", "nunchiro", "x"]
         doc = {"commit": "abc1234", "results": [{"cmd": cmd, "green": True}, {"cmd": ["other"], "green": False}]}
@@ -170,6 +188,24 @@ class RubricV2(unittest.TestCase):
                 3: f"/Users/o/Applications/Nunchiro.app/Contents/MacOS/nunchiro hold {b}", 4: "/bin/cat hold on"}
         self.assertEqual(s.holder_pids(args, ids={a}), [2])
         self.assertEqual(s.holder_pids(args, exe="/Users/o/Applications/Nunchiro.app/Contents/MacOS/nunchiro"), [3])
+
+    def test_weigh_splits_cpu_by_group_and_keeps_the_figure_the_same_sum(self):
+        used = {1: [10.0, 10.5], 2: [3.0, 3.1], 3: [1.0, 1.01], 4: [2.0, 2.0], 5: [7.0, 9.0]}  # pid: CPU s before, after
+        calls = {}
+
+        def cputime(pids):
+            n = calls.setdefault(tuple(pids), 0)
+            calls[tuple(pids)] += 1
+            return sum(used[p][n] for p in pids)
+        clock = iter([0.0, 10.0])
+        groups = dict(core=[1], window=[2], helpers=[3], holders=[4], agents=[5])
+        cpu, by = s.weigh_cpu(groups, 10, cputime, sleep=lambda _: None, clock=lambda: next(clock))
+        self.assertEqual(by, dict(core=5.0, window=1.0, helpers=0.1, holders=0.0, agents=20.0))
+        self.assertEqual(cpu, 6.1)  # core + window + helpers + holders, as before; the agents are not in it
+        calls.clear()
+        _, by = s.weigh_cpu(dict(groups, helpers=[]), 10, cputime, sleep=lambda _: None, clock=iter([0.0, 10.0]).__next__)
+        self.assertEqual(by["helpers"], 0.0)
+        self.assertNotIn((), calls)  # an empty group is 0, never a ps call over no pids
 
     def test_mib_per_session_is_never_negative(self):
         # the 11-26 run: a baseline sampled before the window settled read higher than 20 sessions later
@@ -218,6 +254,12 @@ class Card(unittest.TestCase):
         checks = {c["id"]: c for p in self.parts["parts"] for c in p.get("checks", [])}
         for cid in sorted(s.TEST_CHECKS):
             self.assertTrue(checks[cid].get("tests"), cid)
+
+    def test_every_spec_a_check_names_is_in_this_repository(self):
+        for p in self.parts["parts"]:
+            for c in p.get("checks", []):
+                for cmd in c.get("tests", []):
+                    self.assertEqual(s.missing_specs(cmd), [], c["id"])
 
     def test_the_page_renders_and_unmeasured_parts_are_zero(self):
         res = {"date": "2026-11-27 10:00", "commit": "abc1234", "host": "h", "macos": "m", "load": [1, 2], "repeats": 1,
@@ -314,6 +356,31 @@ class Dev(unittest.TestCase):
 
     def test_shared_files_need_two_lanes(self):
         self.assertEqual(s.shared_files({"a": ["x", "y"], "b": ["y"], "c": ["z"]}), {"y": ["a", "b"]})
+
+    def test_a_landed_or_carried_branch_is_not_an_open_lane(self):
+        today, at = "2026-11-28", "2026-11-28T08:00:00+10:00"
+        branches = [("built-today", "s1", today, at),
+                    ("merged-today", "s2", today, at),  # a squash merge leaves its commits outside main
+                    ("merged-after-github-updated-it", "s3", today, at),
+                    ("used-again-after-its-merge", "s4", today, "2026-11-28T12:00:00+10:00"),
+                    ("closed-today", "s9", today, at),
+                    ("open-pr-from-yesterday", "s5", "2026-11-27", "2026-11-27T20:00:00+10:00"),
+                    ("idle-since-yesterday", "s6", "2026-11-27", "2026-11-27T20:00:00+10:00"),
+                    ("lower", "s7", today, at), ("upper", "s8", today, at),  # upper is built on lower
+                    ("a-reviewers-copy-of-upper", "s8", today, at)]
+        pr = lambda state, name, head, merged=None: dict(state=state, headRefName=name, headRefOid=head, mergedAt=merged)  # noqa: E731
+        prs = [pr("MERGED", "merged-today", "s2", "2026-11-27T23:00:00Z"),
+               pr("MERGED", "merged-after-github-updated-it", "another", "2026-11-27T23:00:00Z"),  # 09:00 local, after the commit
+               pr("MERGED", "used-again-after-its-merge", "older", "2026-11-28T00:00:00Z"),  # 10:00 local, before the commit
+               pr("CLOSED", "closed-today", "s9"),
+               pr("OPEN", "open-pr-from-yesterday", "s5"), pr("OPEN", "upper", "s8")]
+        contains = lambda a, b: a == b or (a, b) == ("s7", "s8")  # noqa: E731
+        self.assertEqual(s.live_lanes(branches, prs, today, contains),
+                         ["built-today", "open-pr-from-yesterday", "upper", "used-again-after-its-merge"])
+        # No pull request list (gh could not say): the old reading, less what another branch carries. Never fewer than with it.
+        self.assertEqual(s.live_lanes(branches, [], today, contains),
+                         ["a-reviewers-copy-of-upper", "built-today", "closed-today", "merged-after-github-updated-it", "merged-today",
+                          "used-again-after-its-merge"])
 
     def test_the_dev_run_times_the_pr_gates_rust_tests(self):
         """The test stage is the PR gate's own nextest run; the retired local gate's scripts are named nowhere."""

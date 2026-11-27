@@ -78,8 +78,11 @@ const LINE_MAX: usize = 8 * 1024 * 1024;
 // ConnectTimeout plus the remote login shell.
 const HELLO_WAIT: Duration = Duration::from_secs(10);
 const BACKOFF_SECS: [u64; 6] = [1, 2, 4, 8, 16, 30];
+/// An idle channel's longest wait between stop, retry and hello checks; relay output ends it at once.
+const IDLE_WAIT: Duration = Duration::from_millis(250);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ChannelState {
     Connecting,
@@ -90,6 +93,7 @@ pub enum ChannelState {
 }
 /// What V2-12m-b's Machines page reads: the connection state and since when, and the remote's protocol.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Channel {
     pub state: ChannelState,
     pub since_ms: u64,
@@ -354,11 +358,12 @@ fn run(registry: &Mutex<Sessions>, home: &Path, alias: &str, slot: usize, stoppi
             if stopping.stopped() {
                 return;
             }
-            thread::sleep(Duration::from_millis(20));
+            thread::sleep(IDLE_WAIT.min(until.saturating_duration_since(Instant::now())));
         }
     }
 }
 fn set(s: &mut Sessions, alias: &str, state: ChannelState, error: Option<String>) {
+    s.changed(); // the window's machine rows
     let Some(channel) = s.remote.channels.get_mut(alias) else {
         return;
     };
@@ -539,14 +544,15 @@ fn stream(
         }
         if !progress {
             // Wait on readiness, not on time: a sleep here capped the stream at one pipe buffer per tick (V2.5-41).
-            // The 20 ms timeout keeps the stop and hello checks above responsive.
+            // The timeout only bounds how late the stop and hello checks above run (it was 20 ms: 50 wakes a second
+            // for an idle machine).
             let err_fd = if err_open { err.as_raw_fd() } else { -1 };
             let mut fds = [out.as_raw_fd(), err_fd].map(|fd| libc::pollfd {
                 fd,
                 events: libc::POLLIN,
                 revents: 0,
             });
-            unsafe { libc::poll(fds.as_mut_ptr(), 2, 20) };
+            unsafe { libc::poll(fds.as_mut_ptr(), 2, IDLE_WAIT.as_millis() as i32) };
         }
     }
 }
@@ -591,6 +597,7 @@ fn accept(registry: &Mutex<Sessions>, alias: &str, stopping: &Stop, line: &[u8])
     if let Ok(mut s) = registry.lock()
         && !stopping.stopped()
     {
+        s.changed(); // the window's machine rows
         // A push read before the remote applied an answer must not offer that item again; once a push no longer
         // holds it, the remote is done with it and the mark goes.
         let pushed: BTreeSet<String> = rows

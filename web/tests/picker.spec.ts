@@ -139,10 +139,15 @@ test('picker: says why it cannot switch; a shell session has no picker', async (
   await expect(app.locator('.pk-chip')).toHaveCount(0);
   await app.locator(`.tab[data-tab="${s.id}"]`).click();
   // Text the user left in Claude's own input box: the core refuses and the chip row says why.
-  await app.getByRole('button', { name: 'Terminal', exact: true }).click(); // the Right bar's Terminal icon: the side pane
-  await app.locator(`.term[data-session="${s.id}"]`).click();
-  // A click before the terminal opens (it opens once its replay is in) still focuses it when it opens; keys wait for that.
-  await expect(app.locator(`.term[data-session="${s.id}"] .xterm-helper-textarea`)).toBeFocused();
+  // Its own terminal in the side pane (⌘J): since #78 the Right bar's Terminal icon opens a new shell beside the agent.
+  await app.keyboard.press('Meta+KeyJ');
+  await expect(app.locator(`.term[data-session="${s.id}"] .xterm-screen`)).toBeVisible();
+  // Since #33 letters typed in an agent's terminal go to the composer; Type in terminal puts them in Claude's own box.
+  const term = app.locator(`.term[data-session="${s.id}"]`);
+  await term.locator('.xterm-screen').hover();
+  await term.getByRole('button', { name: 'Type in terminal' }).click();
+  await expect(term).toHaveAttribute('data-direct', 'true');
+  await expect(term.locator('.xterm-helper-textarea')).toBeFocused();
   await app.keyboard.type('draft');
   await expect.poll(() => app.locator(`.term[data-session="${s.id}"] .xterm-rows`).innerText()).toContain('❯ draft');
   await chip(app, 'model').click();

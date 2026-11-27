@@ -26,6 +26,10 @@ open questions and the review.
 - `nunchiro task new "<outcome>" --accept "<condition>"` makes a task (asking twice gives the same task back).
   `nunchiro task attach <id> --path <worktree>` puts a worktree on it; a task may also use no worktree
   (`nunchiro task assign <id> <session>` seats a session on it).
+- Work that needs another task's result first waits for it: `nunchiro task new "<outcome>" --after <id>`, or
+  `nunchiro task after <id> <id>...` later (`--none` clears it). While it waits, a seat that writes files is refused
+  on it; a seat that only plans may start. When the task it waits for lands (merged or done), the core tells you in
+  one line: start its builder then. When that task is dropped instead, you are told too: clear the wait or drop it.
 - A line `the user told <seat>: "..."` is the user's own correction to that seat. It outranks your brief.
 - A review holds only for the files it saw. After any edit, `nunchiro task show <id>` reads `review` again
   ("changed after the review"): have it reviewed again before a merge.

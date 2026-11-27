@@ -42,6 +42,8 @@ pub enum Op {
 
 /// One conversation as the window shows it. `id` is `<agent>:<file stem>`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ImportItem"))]
 pub struct Item {
     pub id: String,
     pub agent: Agent,
@@ -57,6 +59,7 @@ pub struct Item {
 /// Ticket 1123: one folder an agent worked in, for onboarding's Folder row. No title field: the type cannot carry the
 /// words of a conversation (a first message can hold a secret).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Folder {
     pub project: String,
     /// The agent of the newest conversation there.

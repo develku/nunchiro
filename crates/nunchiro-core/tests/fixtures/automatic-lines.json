@@ -99,6 +99,26 @@
     {
       "kind": "forward",
       "text": "Review round 1 of 3 asked for changes at 012345678 fedcba987: two MUSTs. See sessions.rs. Reviewer · tax sends you the full findings as a room message (agent send): read them with `nunchiro agent check`, fix them, commit, and write REPORT.md again."
+    },
+    {
+      "kind": "release",
+      "text": "\"a\" landed. \"b\" no longer waits: start it when you are ready."
+    },
+    {
+      "kind": "release",
+      "text": "\"a\" landed. \"b\" and \"c\" no longer wait: start them when you are ready. \"d\" still waits for 1 task."
+    },
+    {
+      "kind": "release",
+      "text": "\"a\" landed. \"d\" still waits for 2 tasks."
+    },
+    {
+      "kind": "release",
+      "text": "\"a\" was dropped. \"b\" waited for it: stop waiting (nunchiro task after t2 --none) or drop it."
+    },
+    {
+      "kind": "release",
+      "text": "\"a\" was dropped. \"b\" waited for it: stop waiting (nunchiro task after t2 --none) or drop it. \"c\" waited for it: stop waiting (nunchiro task after t3 --none) or drop it."
     }
   ]
 }

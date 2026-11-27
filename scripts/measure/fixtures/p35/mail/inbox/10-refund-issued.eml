@@ -1,0 +1,9 @@
+From: Store Support <support@shop.example.net>
+To: Sam Owner <sam@example.com>
+Subject: Refund issued for order 5531
+Date: Tue, 01 Dec 2026 11:40:00 +0000
+Message-ID: <refund-5531@example.net>
+Content-Type: text/plain; charset=utf-8
+
+We refunded 32.00 USD for order 5531 to your original payment method. It may take 5 days to show.
+This is a fake fixture mail.
