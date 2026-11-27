@@ -433,3 +433,51 @@ fn an_agent_resuming_a_conversation_is_checked() {
     let read = || std::fs::read_to_string(&out).unwrap_or_default();
     until("refused it", &read);
 }
+
+#[test]
+fn a_schedules_task_is_checked_before_it_is_sent() {
+    let c = core("pgt");
+    plugin(
+        &c.home,
+        "prompt.send.before",
+        r#"printf '{"allow": false, "reason": "No tasks tonight."}\n'"#,
+        "refuse",
+        true,
+    );
+    // A project folder that is not the user's home (a session there does not make the home a project).
+    let project = user(&c.home).join("proj");
+    std::fs::create_dir_all(&project).unwrap();
+    let project = project.canonicalize().unwrap();
+    ok(
+        &c.home,
+        &[
+            "agent",
+            "start",
+            "here",
+            "--kind",
+            "shell",
+            "--project",
+            project.to_str().unwrap(),
+            "--",
+            "/bin/sh",
+            "-c",
+            "exec cat",
+        ],
+    );
+    let add = call(
+        &c.home,
+        &c.owner,
+        json!({"op": "schedule_add", "run": {"kind": "claude", "project": project, "label": "nightly", "task": "Tidy the repo."}, "at": "03:00", "daily": true}),
+    );
+    let id = add["Ok"]["schedules"][0]["id"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    assert!(!id.is_empty(), "{add}");
+    let run = call(
+        &c.home,
+        &c.owner,
+        json!({"op": "schedule_run_now", "id": id}),
+    );
+    assert!(run.to_string().contains("No tasks tonight."), "{run}");
+}
