@@ -39,6 +39,13 @@ fn content_type(path: &str) -> &'static str {
 
 fn main() {
     let dist = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("../../web/dist");
+    // A watched path that does not exist reruns this script (and rebuilds the crate) on every build; an empty bundle
+    // folder is watched like a built one (git ignores it), and the web build filling it still reruns this. Dated in the
+    // past, so the folder made during this run does not count as changed after it.
+    if !dist.exists() && fs::create_dir_all(&dist).is_ok() {
+        let _ =
+            fs::File::open(&dist).and_then(|f| f.set_modified(std::time::SystemTime::UNIX_EPOCH));
+    }
     println!("cargo:rerun-if-changed={}", dist.display());
     let mut files = vec![];
     walk(&dist, &dist, &mut files);
