@@ -27,6 +27,7 @@ fn read_only() -> Vec<Level> {
 
 /// What the sheet shows, from the parsed manifest and never from text the author wrote about it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Manifest {
     /// `script`, `web` or `integration` (a board command approved on the same sheet).
     pub kind: String,
@@ -49,6 +50,7 @@ pub struct Manifest {
 // v1b-20: a script widget's declarative act (`[act]`): a row click renders `template` from that row and sends it
 // to the running session labelled `session` in the placement's project, or starts one `start` agent with it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Act {
     pub template: String,

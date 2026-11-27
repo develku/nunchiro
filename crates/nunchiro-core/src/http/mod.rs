@@ -447,6 +447,8 @@ const MAX_JOBS: usize = 4;
 /// Ticket 459: requests that run an agent's status or `--version` command (up to two 5 s runs, 15 s for a joined
 /// "Your own" check) take places of their own, so a slow probe never refuses a fast read. Measured 11-22: the window's
 /// connect burst holds 4 jobs at once (one an account list of ~2.4 s); Providers opening sends 4 probes at once.
+/// Window starts waiting on plugin checks at once.
+const MAX_START_JOBS: usize = 4;
 const MAX_PROBE_JOBS: usize = 6;
 
 #[derive(Deserialize)]
@@ -699,6 +701,9 @@ fn serve(
     let kid_lease = lease.clone();
     let mut kid_reads: Option<KidReads> = None; // Q9 psn-J12-5
     let mut probes = Jobs::with_cap(lease.clone(), MAX_PROBE_JOBS); // ticket 459
+    // Window starts that wait on a plugin's checks (up to 10 s each) take their own slots, so they never fill the
+    // window's other jobs.
+    let mut start_jobs = Jobs::with_cap(lease.clone(), MAX_START_JOBS);
     let mut jobs = Jobs::new(lease);
     // v2-7: per Search panel (`channel`), a newer page cancels the one still scanning; at most 8 panels kept.
     let mut search_cancel = SearchCancel(vec![]);
@@ -918,6 +923,40 @@ fn serve(
                         feed = true;
                         let response: Response = Ok(Reply::Ack);
                         Some(serde_json::json!({"id":frame.id,"response":response}))
+                    }
+                    // A plugin's checks before a new session run up to 10 s: while one is on, the window's starts run
+                    // off this loop, answered by the same `answer` as here.
+                    Ok(frame)
+                        if matches!(
+                            frame.request,
+                            Some(
+                                Request::Start { .. }
+                                    | Request::StartOrWait { .. }
+                                    | Request::StartAnyway { .. }
+                            )
+                        ) && crate::plugins::start_checks_on(home) =>
+                    {
+                        let (registry, stopping, home) =
+                            (registry.clone(), stopping.clone(), home.to_path_buf());
+                        let (id, request) = (frame.id, frame.request);
+                        start_jobs.spawn(id, move || {
+                            let frame: Frame = serde_json::from_value(
+                                serde_json::json!({"id": id, "request": request}),
+                            )
+                            .map_err(|e| e.to_string())?;
+                            let mut stamp = (0, None);
+                            let v = answer(
+                                frame,
+                                &registry,
+                                &stopping,
+                                &mut BTreeMap::new(),
+                                &home,
+                                None,
+                                &mut stamp,
+                            );
+                            serde_json::from_value::<Response>(v["response"].clone())
+                                .map_err(|e| e.to_string())?
+                        })
                     }
                     Ok(frame) if matches!(frame.request, Some(Request::FirstRun)) => {
                         jobs.spawn(frame.id, crate::firstrun::reply)
@@ -1323,7 +1362,11 @@ fn serve(
             Err(tungstenite::Error::ConnectionClosed) => return Ok(()),
             Err(e) => return Err(e.to_string()),
         }
-        while let Some(reply) = jobs.ready().or_else(|| probes.ready()) {
+        while let Some(reply) = jobs
+            .ready()
+            .or_else(|| probes.ready())
+            .or_else(|| start_jobs.ready())
+        {
             ws.send(Message::Text(reply.to_string().into()))
                 .map_err(|e| e.to_string())?;
         }

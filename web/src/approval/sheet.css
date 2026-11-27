@@ -135,3 +135,16 @@
   color: var(--ps-danger);
   font-weight: 600;
 }
+/* A plugin's parts: one item per panel or command, its argv below it. */
+.ps-parts {
+  margin: var(--sp-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ps-parts li + li {
+  margin-top: var(--sp-8);
+}
+/* A row a plugin sheet leaves out (act: a plugin asks for read only). */
+.ps-row[hidden] {
+  display: none;
+}

@@ -24,6 +24,8 @@ const STROKE: Record<string, string[]> = {
   plug: ['M6 1.5V5M10 1.5V5', 'M4 5h8v2.5a4 4 0 0 1-8 0z', 'M8 11.5v3'],
   // Ticket 990 slice h: Notes (drawn for Nunchiro: a page with lines).
   note: ['M4 1.5h6l2.5 2.5v10.5H4z', 'M6 6.5h4.5M6 9h4.5M6 11.5h3'],
+  // Plugins (drawn for Nunchiro: a puzzle piece, the usual mark for an add-on).
+  puzzle: ['M2.5 4.5h3a1.5 1.5 0 1 1 3 0h3v3a1.5 1.5 0 1 1 0 3v3h-9v-3a1.5 1.5 0 1 0 0-3z'],
   layout: ['M3 2.5h10a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12V4A1.5 1.5 0 0 1 3 2.5z', 'M6 2.5v11M6 8h8.5'],
 };
 
@@ -55,6 +57,7 @@ const PAGE_ICON: Record<string, string> = {
   notes: 'note', // ticket 990 slice h
   assistants: 'person', // ticket 1041 (N164): its own icon, not General's gear (Team keeps people)
   projects: 'file-directory', // ticket 1041: Projects (ticket 1040) drew General's gear
+  plugins: 'puzzle',
 };
 
 /** Ticket 1043 (mockup docs/design/settings-1122, version A): each page's tile colour, from the nav palette in tokens.css
@@ -70,6 +73,7 @@ const PAGE_TONE: Record<string, string> = {
   team: 'purple',
   assistants: 'pink',
   extensions: 'indigo',
+  plugins: 'teal',
   notes: 'green',
   git: 'graphite',
   projects: 'teal',

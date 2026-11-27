@@ -30,6 +30,7 @@ pub const BUSY: &str = "The browser is busy with earlier commands; wait for them
 
 /// The closed verb set (C4). No variant names a space, a session or a grant, and no variant carries script (Q1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "verb", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Verb {
     /// A new tab in the caller's space, which becomes the current tab.
@@ -74,6 +75,7 @@ pub enum Verb {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Job {
     pub id: u64,
     pub space: String,

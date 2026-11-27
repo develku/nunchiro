@@ -37,6 +37,7 @@ pub mod journal;
 pub mod risk; // V2-8e
 mod session_scope; // ticket 1030
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Answer {
     AllowOnce,
@@ -88,6 +89,8 @@ pub fn now_ms() -> u64 {
         .as_millis() as u64
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "QueueKind"))]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
     Permission,
@@ -100,6 +103,7 @@ pub enum Kind {
 }
 /// v1a-23: what an owner item asks the owner to do, with what the core saw when the session asked.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum OwnerAsk {
     /// Approve a widget or integration source folder at the hash shown when it was asked.
@@ -268,6 +272,7 @@ const OWNER_KINDS: &[&str] = &[
     "bot",
 ];
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Choice {
     pub label: String,
     pub keys: Vec<String>,
@@ -306,6 +311,8 @@ impl Choice {
     }
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "QueueDecision"))]
 pub struct Decision {
     pub id: String,
     pub session_id: String,
@@ -357,6 +364,7 @@ fn is_zero(n: &u64) -> bool {
     *n == 0
 }
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Attention {
     #[serde(default)]
     pub observer_error: Option<String>,
@@ -2233,11 +2241,15 @@ impl Queue {
                 name,
                 level,
                 ..
-            } => format!(
-                "approve {} {name} for {}",
-                subject.label(),
-                format!("{level:?}").to_lowercase()
-            ),
+            } => match crate::plugins::split(name) {
+                // "approve plugin quiet-hours", not "approve widget plugin:quiet-hours for read"
+                Some((id, _)) => format!("approve plugin {id}"),
+                None => format!(
+                    "approve {} {name} for {}",
+                    subject.label(),
+                    format!("{level:?}").to_lowercase()
+                ),
+            },
             OwnerAsk::Setup { path, .. } => {
                 format!("approve the setup script of worktree {}", path.display())
             }

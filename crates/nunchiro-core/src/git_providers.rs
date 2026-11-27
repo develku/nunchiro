@@ -25,6 +25,7 @@ const MAX_HOSTS: usize = 16;
 const MAX_NAME: usize = 100;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Id {
     Git,
@@ -36,6 +37,8 @@ pub enum Id {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "GitProvidersState"))]
 #[serde(rename_all = "snake_case")]
 pub enum State {
     SignedIn,
@@ -44,6 +47,7 @@ pub enum State {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Provider {
     pub id: Id,
     pub installed: bool,

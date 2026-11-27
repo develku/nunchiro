@@ -19,6 +19,7 @@ use std::{
 pub const CAPACITY: usize = 4096;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Event {
     /// Increasing within a core; a later core starts above the earlier one (`Log::new`).
     pub id: u64,

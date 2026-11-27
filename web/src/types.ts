@@ -204,7 +204,7 @@ export interface Session {
   take_back?: boolean;
 }
 /** One row of a session's send queue or log (delivery.rs `Send`). `sender` is `user`, a session id, `core` or `widget:<name>`. */
-export type SendRow = { id: string; sender: string; at: number; content: string; status: string; submit?: boolean; settle?: string | null };
+export type SendRow = { id: string; sender: string; at: number; content: string; status: string; submit?: boolean; settle?: string | null; replaced?: { plugin: string; original: string } };
 /** The session's folder was under no git repository when it started (the core's `start_commit`), or is gone from disk
  *  (look 1117 v13 Home S3-5: a removed project folder read "harbor / main"): it has no checkout to name. */
 export const noCheckout = (s: Session) => s.start_commit?.kind === 'not_git' || !!s.folder_gone;

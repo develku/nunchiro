@@ -57,6 +57,8 @@ impl Default for Settings {
 
 /// Settings > Browser access: what the window shows and changes (window only, `BrowserFrame`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "BrowserStatus"))]
 pub struct Status {
     pub enabled: bool,
     pub port: u16,
@@ -67,6 +69,7 @@ pub struct Status {
     pub devices: Vec<DeviceRow>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct DeviceRow {
     pub id: String,
     pub name: String,
@@ -693,6 +696,7 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | WidgetRun { .. }
         | WidgetAct { .. }
         | WidgetPage { .. }
+        | Plugin { .. }
         | SwitchModel { .. }
         | SetMode { .. } // CHAT-MODELIST: owner window only
         | AgentPermissionGet // ticket 362: the owner's setting

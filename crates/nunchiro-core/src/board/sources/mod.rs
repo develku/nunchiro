@@ -80,6 +80,7 @@ impl SourceDocument {
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct SourceState {
     pub name: String,
     pub error: Option<String>,

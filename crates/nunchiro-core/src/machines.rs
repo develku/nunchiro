@@ -34,6 +34,7 @@ pub(crate) struct Config {
     pub port: Option<u32>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Caller {
     pub id: String,
@@ -42,6 +43,8 @@ pub struct Caller {
     pub permission_answers: bool,
 }
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "MachinesStatus"))]
 pub struct Status {
     pub machine: String,
     pub status: String,

@@ -644,6 +644,7 @@ pub(crate) fn remote_from_owner(
             | Request::WidgetRun { .. } // v1b-19
             | Request::WidgetAct { .. } // v1b-20
             | Request::WidgetPage { .. } // v1b-22
+            | Request::Plugin { .. } // this Mac's plugins, the owner's alone
             | Request::ImagePut { .. } // v1b-05
             | Request::AccountList // v2-2a
             | Request::AccountCheck { .. }
@@ -970,6 +971,15 @@ fn connection(
                 return crate::machines::status(sessions, home, label, retry);
             }
             Request::Forwarded { caller, request } if owner => {
+                // Another machine's agent: this Mac's plugin checks hold for what it sends and starts here.
+                let mut request = request;
+                crate::plugins::check_request(
+                    home,
+                    crate::plugins::Asker::Agent,
+                    "",
+                    &mut request,
+                    true,
+                )?;
                 return crate::machines::forwarded(sessions, caller, *request, stopping);
             }
             _ => {}
@@ -1106,7 +1116,17 @@ fn connection(
                 {
                     return Err("operation not granted to a token on another machine".into());
                 }
+                // A plugin's checks (messages, new sessions) before the request leaves this Mac, off the lock.
+                let caller = sessions.agent_caller(&env.token)?;
                 drop(sessions);
+                let mut request = request;
+                crate::plugins::check_request(
+                    home,
+                    crate::plugins::Asker::Agent,
+                    &caller.id,
+                    &mut request,
+                    true,
+                )?;
                 return crate::grants::dispatch_remote(
                     registry, &env.token, machine, *request, stopping,
                 );
@@ -1116,6 +1136,32 @@ fn connection(
                 return reply;
             }
             sessions.check_agent(&caller, &env.request)?;
+            // A plugin's check before a message an agent or a token sends, once the caller may send it, off the lock
+            // (a sandbox run of up to 5 s per check). The owner's socket and the window are no session caller.
+            if crate::plugins::sends_text(&env.request) {
+                // Only a message that would be taken reaches a check: its seat or room first.
+                match &env.request {
+                    Request::RoomSend { .. } | Request::RoomReply { .. } => {
+                        sessions.room_may(&caller, &env.request)?;
+                    }
+                    Request::AgentPrompt { id, .. }
+                    | Request::AgentSend { id, .. }
+                    | Request::SendText { id, .. }
+                    | Request::SteerNow { id, .. } => {
+                        sessions.session_of(id)?;
+                    }
+                    _ => {}
+                }
+                let asker = match caller.id.starts_with(crate::tokens::CALLER) {
+                    true => crate::plugins::Asker::Token,
+                    false => crate::plugins::Asker::Agent,
+                };
+                drop(sessions);
+                crate::plugins::check_request(home, asker, &caller.id, &mut env.request, false)?;
+                sessions = registry
+                    .lock()
+                    .map_err(|_| "session registry unavailable")?;
+            }
             Some(caller)
         };
         // Ticket 305: a request that waited on the registry lock while a Stop or Exit ran has not run, so it gets the
@@ -1185,6 +1231,10 @@ fn connection(
             Request::WidgetList | Request::WidgetRun { .. } | Request::WidgetPage { .. } // v1b-22
         ) {
             return crate::widgets::handle(home, sessions, env.request);
+        }
+        // Owner only, like the widget requests (`check_agent` refuses session callers and tokens).
+        if matches!(env.request, Request::Plugin { .. }) {
+            return crate::plugins::handle(home, sessions, env.request);
         }
         // v1b-20: owner only, like the two above; the act locks the registry itself.
         if matches!(env.request, Request::WidgetAct { .. }) {
@@ -1415,6 +1465,22 @@ fn connection(
             receipt,
         } = env.request
         {
+            // A plugin's check before a new session, off the lock (a sandbox run of up to 5 s); the owner's
+            // `--anyway` passes it, as it passes a memory hold.
+            if !anyway {
+                let asker = match &caller {
+                    None => crate::plugins::Asker::Owner,
+                    Some(c) if c.id.starts_with(crate::tokens::CALLER) => {
+                        crate::plugins::Asker::Token
+                    }
+                    Some(_) => crate::plugins::Asker::Agent,
+                };
+                drop(sessions);
+                crate::plugins::check_start(home, asker, &session)?;
+                sessions = registry
+                    .lock()
+                    .map_err(|_| "session registry unavailable")?;
+            }
             // Ticket 573 slice 2 (Orca): a receipt is the caller's own; a retry waits out a start still running with it.
             let mut claim = Receipt(None);
             if let Some(receipt) = receipt {

@@ -1362,7 +1362,8 @@ impl Sessions {
             Request::WidgetList
             | Request::WidgetRun { .. }
             | Request::WidgetAct { .. } /* v1b-20 */
-            | Request::WidgetPage { .. } /* v1b-22 */ => {
+            | Request::WidgetPage { .. } /* v1b-22 */
+            | Request::Plugin { .. } => {
                 Err("widget requests run outside the registry lock".into())
             }
             // v1b-05

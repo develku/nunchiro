@@ -240,6 +240,7 @@ pub(crate) fn login(
 
 /// What the window polls for one `agent` sign-in; a terminal method is a tab, not an attempt.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct SignIn {
     pub attempt: String,
     pub name: String,

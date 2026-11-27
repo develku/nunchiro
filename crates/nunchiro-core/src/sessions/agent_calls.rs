@@ -183,6 +183,7 @@ impl Sessions {
             | Request::WidgetRun { .. }
             | Request::WidgetAct { .. }
             | Request::WidgetPage { .. }
+            | Request::Plugin { .. } // an agent writes a plugin's files; only the owner turns it on or runs it
             // V2.5-35 (ticket 183): BoardSnapshot, BoardPut, BoardMove, BoardTaskPut, BoardDone, BoardAdd, BoardSelf reach
             // `board::rights::serve` with the caller; the window's own board edits stay the owner's.
             | Request::BoardSeen { .. }

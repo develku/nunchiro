@@ -9,6 +9,7 @@ mod layout;
 mod machine; // v1a-06
 mod mcp; // ticket 573
 mod outbox; // ticket 1002 lane 2
+mod plugin;
 mod skill; // V2.5-31
 mod token; // ticket 573
 // v1b-14
@@ -142,7 +143,7 @@ fn run() -> Result<(), String> {
         ); // v1a-06, v2-1a
         println!("nunchiro skill get orchestration [--file NAME] [--full]"); // V2.5-31
         println!(
-            "nunchiro mcp -- a stdio MCP server: the agent, worktree and room verbs as tools\nnunchiro token create --scope read|supervised|full [--project DIR] [--expires 30m|12h|7d]\nnunchiro token list|revoke [--json] [ID]"
+            "nunchiro mcp -- a stdio MCP server: the agent, worktree and room verbs as tools\nnunchiro token create --scope read|supervised|full [--project DIR] [--expires 30m|12h|7d]\nnunchiro token list|revoke [--json] [ID]\nnunchiro api schema -- the local API as JSON Schema (docs/api.md)\nnunchiro plugin new|check|list|on|off|allow|run|remove ARGS (docs/plugins.md)"
         ); // ticket 573
         println!(
             "nunchiro extensions list|show|new|on|off|mcp [<args>] (nunchiro extensions --help)"
@@ -192,9 +193,25 @@ fn run() -> Result<(), String> {
         let hold = args.get(2).map(String::as_str) == Some("--hold");
         return hook::run(&home, args.get(1).map(String::as_str).unwrap_or(""), hold);
     }
+    // The local API's JSON Schema, generated from the core's types by its tests (docs/api.md); no core needed.
+    if args.first().map(String::as_str) == Some("api") {
+        return match args.as_slice() {
+            [_, verb] if verb == "schema" => {
+                print!(
+                    "{}",
+                    include_str!("../../../docs/api/nunchiro-api.schema.json")
+                );
+                Ok(())
+            }
+            _ => Err("usage: nunchiro api schema".into()),
+        };
+    }
     // v1b-14
     if args.first().map(String::as_str) == Some("widget") {
         return widget::run(&home, &args[1..], ensure_core);
+    }
+    if args.first().map(String::as_str) == Some("plugin") {
+        return plugin::run(&home, &args[1..], ensure_core);
     }
     if args.first().map(String::as_str) == Some("extensions") {
         return extensions::run(&home, &args[1..], ensure_core);

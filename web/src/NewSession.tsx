@@ -11,7 +11,7 @@ import { chordOf, label, merge, type Bindings } from './keys';
 import { pickFolder } from './pickFolder';
 import { FILE_ACCESS, FolderAccess } from './PermissionNeeded';
 import { makeT, type Lang, type T } from './i18n';
-import { ErrorDetails, errorNote, heldNote, isLowMemory, notePlain, plainError, startOp, type Note, rawError } from './errors';
+import { ErrorDetails, errorNote, heldNote, isHeld, notePlain, plainError, startOp, type Note, rawError } from './errors';
 import { agentName } from './chat/conversation';
 import { sessionName } from './Sidebar';
 import type { WithLog } from './picker/Picker';
@@ -309,7 +309,7 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
       const m = rawError(e);
       if (m.startsWith(FILE_ACCESS)) setError(m); // F15: said with the permission steps below
       // Held for low memory: the plain line and Start anyway (this Mac's hold only; another machine's core says its own).
-      else if (isLowMemory(m) && !machine) {
+      else if (isHeld(m) && !machine) {
         const line = plainError(t, m);
         setError(line);
         setDetails(m);

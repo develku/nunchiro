@@ -2070,6 +2070,7 @@ fn exit_if_idle_waits_for_a_queued_send() {
         status: "queued".into(),
         settle: None,
         remote: None,
+        replaced: None,
     };
     core.entry(&session.id).unwrap().meta.send_queue = vec![queued];
     let floor = crate::holder::frame::MIN_COMPATIBLE;
@@ -2127,6 +2128,7 @@ fn stop_cancels_queued_sends_in_its_one_save() {
         status: "queued".into(),
         settle: None,
         remote: None,
+        replaced: None,
     };
     let meta = &mut core.entry(&session.id).unwrap().meta;
     meta.send_log = (0..250).map(row).collect();
