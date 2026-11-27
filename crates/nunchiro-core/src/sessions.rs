@@ -572,9 +572,8 @@ impl Sessions {
             }
             Request::PrBranch { .. } => Err("the PR view requires the window".into()), // ticket 373
             Request::GitPush { .. } => Err("push requires the window".into()),
-            // v2-10c: answered by the socket server after its owner check.
             Request::LibsResolve { .. } | Request::LibsEntry { .. } => {
-                Err("libraries require owner dispatch".into())
+                Err("libraries require owner dispatch".into()) // the socket server answers after its owner check
             }
             // Ticket 573: answered by the socket server after its owner check.
             Request::TokenCreate { .. } | Request::TokenList | Request::TokenRevoke { .. } => {
