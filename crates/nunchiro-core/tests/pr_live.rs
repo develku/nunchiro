@@ -1520,11 +1520,14 @@ fn pr_write_runs_the_agent_once_without_tools() {
         "the injected line sits inside the fence: {stdin}"
     );
     assert!(stdin.contains("Stop the lexer at the end"), "{stdin}");
-    assert_eq!(
-        core.window(json!({"op":"agent_get","id":s.id})),
-        sent_before,
-        "the session changed"
-    );
+    // Nothing was sent to the session (its working flag may move with the transcript hook; that is not this run).
+    let after = core.window(json!({"op":"agent_get","id":s.id}));
+    for field in ["send_log", "send_queue", "pending"] {
+        assert_eq!(
+            after["Ok"]["session"][field], sent_before["Ok"]["session"][field],
+            "{field} changed"
+        );
+    }
     assert!(!marker.exists(), "diff.external ran");
     // An empty folder of the app's own, never the shared temp folder.
     let pwd = fs::read_to_string(core.home.join("claude-pwd")).unwrap();
