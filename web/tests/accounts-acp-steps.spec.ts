@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { AGENT_PY, ownerOk } from './acp-fakes';
-import { expect, openWindow, test, type Core } from './fixtures';
+import { REPO, expect, openWindow, test, type Core } from './fixtures';
 import { openSettings } from './settings-modal';
 
 async function tiles(app: Parameters<typeof openWindow>[0]) {
@@ -57,4 +57,26 @@ test('acp_steps: Open in a terminal tab types the command and runs nothing', asy
   const screen = () => JSON.stringify(ownerOk(core, { op: 'agent_read', id: shell.id, source: 'screen', lines: 20 }));
   await expect.poll(screen).toContain('npm install -g @github/copilot');
   expect(screen()).not.toContain('not found');
+});
+
+// Pictures on request: PW_OPT_IN=shots ... --project shots -g acp_steps_shots (tiles with cost words, the steps before and
+// after install; light and dark).
+test('acp_steps_shots @shots: tiles with cost words and the four steps', async ({ app, core }) => {
+  const shots = path.join(REPO, '.scratch/shots');
+  fs.mkdirSync(shots, { recursive: true });
+  const page = await tiles(app);
+  await page.locator('[data-tile="copilot"]').click();
+  const grid = page.locator('.prv-pick').first();
+  for (const scheme of ['light', 'dark'] as const) {
+    await app.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await grid.screenshot({ path: path.join(shots, `acp-steps-tiles-${scheme}.png`) });
+    await page.locator('[data-field="acp-steps"]').screenshot({ path: path.join(shots, `acp-steps-install-${scheme}.png`) });
+  }
+  fakeCopilot(core);
+  await app.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.locator('[data-field="acp-steps"]')).toContainText('1.0.83');
+  for (const scheme of ['light', 'dark'] as const) {
+    await app.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await page.locator('[data-field="acp-steps"]').screenshot({ path: path.join(shots, `acp-steps-approve-${scheme}.png`) });
+  }
 });
