@@ -680,6 +680,7 @@ button.lead-go {
 .lead-free {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-8);
   padding: var(--sp-6) var(--sp-8);
@@ -691,6 +692,7 @@ button.lead-go {
 .lead-free .lead-hand {
   margin-left: auto;
   color: var(--link-text);
+  white-space: nowrap; /* a narrow side wraps the button under the sentence, not its words onto three lines */
 }
 .lead-menu {
   position: absolute;
