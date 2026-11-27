@@ -65,7 +65,7 @@ struct Core {
     project: PathBuf,
     owner: String,
     port: u16,
-    _guard: home::ServeGuard,
+    _guard: Option<home::ServeGuard>,
 }
 fn core(tag: &str) -> Core {
     let home = home::short(tag);
@@ -113,7 +113,7 @@ fn core(tag: &str) -> Core {
         project,
         owner,
         port,
-        _guard: guard,
+        _guard: Some(guard),
     }
 }
 fn add(c: &Core, name: &str, on: &str, auto: bool, secret: &str) {
@@ -683,4 +683,130 @@ fn trigger_cards_together_keep_half_the_owners_queue_free() {
         assert!(Instant::now() < end, "no approval card was raised");
         std::thread::sleep(Duration::from_millis(100));
     }
+}
+
+/// A fake `gh` in its own folder: it prints the file `answer` beside it, so a test changes what GitHub says.
+fn fake_gh(c: &Core) -> PathBuf {
+    let dir = user(&c.home).join("fake-gh");
+    std::fs::create_dir_all(&dir).unwrap();
+    let gh = dir.join("gh");
+    std::fs::write(
+        &gh,
+        format!(
+            "#!/bin/sh\necho \"$@\" >> '{0}/asked'\ncat '{0}/answer'\n",
+            dir.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&gh, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    std::fs::write(dir.join("answer"), "[]").unwrap();
+    dir
+}
+const PASSING: &str = r#"[{"url": "https://github.com/o/r/pull/7", "headRefOid": "abc", "statusCheckRollup": [{"conclusion": "SUCCESS"}]}]"#;
+const FAILING: &str = r#"[{"url": "https://github.com/o/r/pull/7", "headRefOid": "abc", "statusCheckRollup": [{"conclusion": "FAILURE"}]}]"#;
+
+#[test]
+fn a_github_trigger_starts_once_when_checks_turn_failed() {
+    let home = home::short("tgg");
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    std::fs::write(
+        home.join("settings.json"),
+        json!({"triggers_port": port, "triggers_poll_secs": 1}).to_string(),
+    )
+    .unwrap();
+    let u = user(&home);
+    let project = u.join("proj");
+    std::fs::create_dir_all(&project).unwrap();
+    let project = project.canonicalize().unwrap();
+    let probe = Core {
+        home: home.clone(),
+        project: project.clone(),
+        owner: String::new(),
+        port,
+        _guard: None,
+    };
+    let gh = fake_gh(&probe);
+    let path = format!(
+        "{}:{}/tests/fixtures/agent-cli:/usr/bin:/bin",
+        gh.display(),
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let guard = home::spawn_serve(
+        &home,
+        &[
+            ("HOME", u.to_str().unwrap()),
+            ("PATH", &path),
+            ("NUNCHIRO_LOGIN_PATH", "off"),
+        ],
+    );
+    let c = Core {
+        owner: std::fs::read_to_string(home.join("core.token")).unwrap(),
+        _guard: Some(guard),
+        ..probe
+    };
+    ok(
+        &c.home,
+        &[
+            "agent",
+            "start",
+            "here",
+            "--kind",
+            "shell",
+            "--project",
+            c.project.to_str().unwrap(),
+            "--",
+            "/bin/sh",
+            "-c",
+            "exec cat",
+        ],
+    );
+    std::fs::write(gh.join("answer"), PASSING).unwrap();
+    let out = nunchiro(
+        &c.home,
+        None,
+        &[
+            "trigger",
+            "add",
+            "ci",
+            "--on",
+            "github",
+            "--repo",
+            "o/r",
+            "--event",
+            "checks_failed",
+            "--kind",
+            "claude",
+            "--project",
+            c.project.to_str().unwrap(),
+            "--task",
+            "Fix the failing checks.",
+            "--auto",
+        ],
+        "",
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // Passing, then read again: nothing starts.
+    std::thread::sleep(Duration::from_secs(3));
+    assert!(started(&c).is_empty());
+    let asked = std::fs::read_to_string(gh.join("asked")).unwrap_or_default();
+    assert!(asked.contains("pr list --repo o/r --state open"), "{asked}");
+    // The checks turn failed: one start, with the pull request in the quoted data.
+    std::fs::write(gh.join("answer"), FAILING).unwrap();
+    let first = wait_started(&c, 1).remove(0);
+    assert!(
+        first.starts_with("Fix the failing checks.")
+            && first.contains("https://github.com/o/r/pull/7"),
+        "{first}"
+    );
+    // The same state read again: no second start.
+    std::thread::sleep(Duration::from_secs(3));
+    assert_eq!(started(&c).len(), 1);
 }
