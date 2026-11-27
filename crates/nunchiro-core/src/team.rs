@@ -1224,20 +1224,15 @@ pub(crate) fn open_seat(
             why,
         }))
     };
-    // A plugin's check before a new teammate seat, off the lock, only when a seat would start: an open seat takes
-    // the task or the focus and starts nothing. A new conversation is checked where the owner asks for it (`Op`).
+    // A plugin's check before a new teammate seat runs once the lock has decided a session starts (below), off it.
+    // A new conversation is checked where the owner asks for it (`Op`).
     let asker = match &opener {
         Opener::Window => Some(crate::plugins::Asker::Owner),
         Opener::Schedule(..) => Some(crate::plugins::Asker::Schedule),
         Opener::Lead(_) => Some(crate::plugins::Asker::Agent),
         Opener::Fresh(_) | Opener::Undo(..) | Opener::WindowAnyway => None,
     };
-    let seat_open = lock()?.seat_of(&mate.id).is_some();
-    if let Some(asker) = asker
-        && !seat_open
-    {
-        crate::plugins::check_start(&home, asker, &start)?;
-    }
+
     let undo = matches!(opener, Opener::Undo(..));
     let mut parent = match &opener {
         Opener::Fresh(parent) => parent.clone(),
@@ -1302,6 +1297,11 @@ pub(crate) fn open_seat(
             Opener::Lead(caller) => sessions.launch_as(Some(caller), start.clone(), false)?,
         }
     };
+    // A session starts now (an open seat that took the task returned above): a plugin's check, off the lock, before
+    // anything is prepared.
+    if let Some(asker) = asker {
+        crate::plugins::check_start(&home, asker, &start)?;
+    }
     // As the owner's Start: a missing agent still opens a tab, with its card.
     let mut launch = match launch.prepare() {
         Ok(launch) => launch,

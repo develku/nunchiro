@@ -1037,30 +1037,49 @@ fn gates(
             continue; // off, not approved or changed: runs nothing, so it decides nothing
         }
         for g in mine {
-            if std::time::Instant::now() >= deadline {
-                return Err((p.name, "the plugin checks took too long".into()));
-            }
             let name = part_name(&id, &g.name);
-            // One run of a check at a time: a second action waits for the first, never shares its input.
+            // One run of a check at a time: a second action waits for its turn, never shares its input, and never
+            // past the action's budget. Each run gets at most what is left of it; a check that gets no time counts
+            // as one that did not answer (`on_error`), so nothing is delivered after the caller was answered.
             let turn = turn(home, &name);
-            let _turn = turn.lock().unwrap_or_else(|e| e.into_inner());
-            let ran = approval::check(home, &name)
-                .and_then(|proof| {
-                    widgets::execute(
-                        home,
-                        &config,
-                        &proof,
-                        None,
-                        &widgets::Context::default(),
-                        Some(&event),
-                    )
-                })
-                .ok()
-                .and_then(|o| match o {
-                    widgets::Output::Text { text } | widgets::Output::Json { text } => {
-                        answer(&text)
+            let got = loop {
+                match turn.try_lock() {
+                    Ok(g) => break Some(g),
+                    Err(std::sync::TryLockError::Poisoned(e)) => break Some(e.into_inner()),
+                    Err(std::sync::TryLockError::WouldBlock)
+                        if std::time::Instant::now() >= deadline =>
+                    {
+                        break None;
                     }
-                });
+                    Err(std::sync::TryLockError::WouldBlock) => {
+                        std::thread::sleep(std::time::Duration::from_millis(20));
+                    }
+                }
+            };
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            let ran = got.filter(|_| !left.is_zero()).and_then(|_turn| {
+                let config = widgets::Config {
+                    timeout: config.timeout.min(left),
+                    ..config.clone()
+                };
+                approval::check(home, &name)
+                    .and_then(|proof| {
+                        widgets::execute(
+                            home,
+                            &config,
+                            &proof,
+                            None,
+                            &widgets::Context::default(),
+                            Some(&event),
+                        )
+                    })
+                    .ok()
+                    .and_then(|o| match o {
+                        widgets::Output::Text { text } | widgets::Output::Json { text } => {
+                            answer(&text)
+                        }
+                    })
+            });
             match ran {
                 Some(Answer {
                     allow: false,
@@ -1175,6 +1194,14 @@ fn check_send_from(
         serde_json::json!({"event": "prompt.send.before", "asker": asker, "to": to, "text": text});
     match gates(home, GateOn::PromptSend, event) {
         Ok(Some((plugin, new))) => {
+            // A room message and a schedule's task have no send row to keep the original: the log line is their trace.
+            if sender.is_empty() {
+                eprintln!(
+                    "plugin {plugin} replaced a message to {to} ({} bytes became {})",
+                    text.len(),
+                    new.len()
+                );
+            }
             if !sender.is_empty()
                 && let Ok(mut all) = replaced().lock()
             {

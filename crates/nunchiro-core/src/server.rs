@@ -1139,6 +1139,19 @@ fn connection(
             // A plugin's check before a message an agent or a token sends, once the caller may send it, off the lock
             // (a sandbox run of up to 5 s per check). The owner's socket and the window are no session caller.
             if crate::plugins::sends_text(&env.request) {
+                // Only a message that would be taken reaches a check: its seat or room first.
+                match &env.request {
+                    Request::RoomSend { .. } | Request::RoomReply { .. } => {
+                        sessions.room_may(&caller, &env.request)?;
+                    }
+                    Request::AgentPrompt { id, .. }
+                    | Request::AgentSend { id, .. }
+                    | Request::SendText { id, .. }
+                    | Request::SteerNow { id, .. } => {
+                        sessions.session_of(id)?;
+                    }
+                    _ => {}
+                }
                 let asker = match caller.id.starts_with(crate::tokens::CALLER) {
                     true => crate::plugins::Asker::Token,
                     false => crate::plugins::Asker::Agent,

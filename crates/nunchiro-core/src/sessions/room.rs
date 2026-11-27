@@ -102,6 +102,55 @@ impl Sessions {
             && parent(a).as_deref() != Some(b)
             && parent(b).as_deref() != Some(a)
     }
+    /// Whether an agent's or a token's room send or reply would be taken, without writing it: the same seat, project
+    /// and reach rules as `room`, so a plugin's check never sees the text of a message that is then refused.
+    pub(crate) fn room_may(
+        &self,
+        caller: &crate::grants::Caller,
+        request: &Request,
+    ) -> Result<(), String> {
+        let project = match request {
+            Request::RoomSend { project, .. } | Request::RoomReply { project, .. } => {
+                project.clone()
+            }
+            _ => return Ok(()),
+        };
+        let (seat, project) = if super::tokens::is_token(caller) {
+            let project = project.ok_or("a token names the room with --project")?;
+            (
+                caller.id.clone(),
+                fs::canonicalize(project).map_err(|e| e.to_string())?,
+            )
+        } else {
+            (
+                caller.id.clone(),
+                self.room_project(&caller.id).ok_or("session not found")?,
+            )
+        };
+        match request {
+            Request::RoomSend { to, .. } => {
+                let to = match to {
+                    Some(to) => to.clone(),
+                    None => self.room_lead(&seat, &project),
+                };
+                if to != PERSON && self.room_project(&to).as_deref() != Some(&project) {
+                    return Err("outside this project's room".into());
+                }
+                self.locked_reach(&seat, &to)
+            }
+            Request::RoomReply { message, .. } => {
+                let original = Log::open(&self.home, &project)
+                    .find(|m| m.id == *message)?
+                    .pop()
+                    .ok_or("message not found in this room")?;
+                if original.to != seat {
+                    return Err("only the seat a message went to replies to it".into());
+                }
+                self.locked_reach(&seat, &original.from)
+            }
+            _ => Ok(()),
+        }
+    }
     pub(super) fn room(
         &mut self,
         caller: Option<&crate::grants::Caller>,

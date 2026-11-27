@@ -118,12 +118,13 @@ on_error = "allow"            # or "refuse" (the default): what no answer, a cra
 
 Checks run for plugins that are on and approved as they are now, plugins in id order and checks in manifest order;
 the first refusal ends it. A check has 5 seconds; then it is stopped and `on_error` decides. All the checks of one
-action have 10 seconds together; past that the action is refused. Each run gets its own input, and two runs of one
+action have 10 seconds together, waiting for a check's turn included; a check that gets no time counts as one that
+did not answer, and its `on_error` decides, so the caller always hears back within the budget. Each run gets its own input, and two runs of one
 check take turns. The window's starts run off its frame loop while a start check is on. A refused owner start
 says `<plugin> stopped this start: <reason>` with Start anyway (`agent start --anyway` in a terminal); an agent, a
 schedule or a token gets the sentence and cannot pass it. A replaced message (at most 16 KB) is delivered instead of
 the original; its row in the session's send log (`nunchiro snapshot --json`) keeps the original and the
-plugin's name, and the core's log names the plugin when it is delivered. A room message keeps only the log line. A check cannot answer a permission, skip an outward card or widen
+plugin's name, and the core's log names the plugin when it is delivered. A room message and a schedule's task keep only the core's log line (plugin, recipient, sizes): the room log is what every seat in the room reads, so the original there would deliver the very words the plugin took out, and a schedule's run keeps no message of its own. A check cannot answer a permission, skip an outward card or widen
 anything: allow, refuse and replacement text are its only outputs. With no plugin on, nothing is run.
 
 ## Through the API
