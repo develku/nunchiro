@@ -259,18 +259,23 @@ const UNASKED_VERBS: &[&str] = &[
     "agent", "task", "schedule", "role", "note", "team", "outbox", "events", "skill",
 ];
 
+/// Only ASCII letters, digits, marks and the plain space: the shell splits words on its own whitespace only, so a
+/// no-break space (or any other Unicode or control space) would join what `split(' ')` reads as two words.
+fn plain(command: &str) -> bool {
+    command.bytes().all(|b| b.is_ascii_graphic() || b == b' ')
+}
+
 /// Fable check S3: one `nunchiro` command on the verb list and nothing else: no separator, redirect, substitution,
 /// subshell, line break, leading `VAR=` or `--machine`.
 pub fn nunchiro_line(command: &str) -> bool {
-    let command = command.trim();
-    let mut words = command.split_whitespace();
-    words.next() == Some("nunchiro")
+    let command = command.trim_matches(' ');
+    let mut words = command.split(' ').filter(|w| !w.is_empty());
+    plain(command)
+        && words.next() == Some("nunchiro")
         && words
             .next()
             .is_some_and(|verb| UNASKED_VERBS.contains(&verb))
-        && !command
-            .split_whitespace()
-            .any(|w| w.starts_with("--machine"))
+        && !command.split(' ').any(|w| w.starts_with("--machine"))
         && !command.contains([
             ';', '&', '|', '<', '>', '(', ')', '$', '`', '\\', '\n', '\r',
         ])
@@ -279,33 +284,35 @@ pub fn nunchiro_line(command: &str) -> bool {
 const SETUP: &str = "Home seat: a setup step of its brief";
 
 /// The two setup steps a seat's brief names, unasked in every mode (they asked before the seat was ready):
-/// `nunchiro task list`, and `cat` of a bot's SOUL file in this core's `team/<bot>/` folder (a plain file, no link:
-/// another session could plant one). Exactly that line: anything more asks as before.
+/// `nunchiro task list`, and `cat` of a bot's SOUL file in this core's `team/<bot>/` folder. Exactly that line, plain
+/// ASCII, the path absolute and of `[A-Za-z0-9._/-]` only (no glob, quote or shell mark); the file resolves to
+/// `<team>/<bot>/SOUL.md` (a linked bot folder or file resolves elsewhere: another session could plant one) and has one link (a hard link
+/// shows another file's content). Anything else asks as before.
 pub fn setup_line(home: &Path, command: &str) -> bool {
-    if command.contains(['\n', '\r']) {
-        return false; // one command only: a line break runs each word as its own
+    use std::os::unix::fs::MetadataExt;
+    if !plain(command) {
+        return false;
     }
-    let words: Vec<&str> = command.split_whitespace().collect();
+    let words: Vec<&str> = command.split(' ').filter(|w| !w.is_empty()).collect();
     match words[..] {
         ["nunchiro", "task", "list"] => true,
         ["cat", path]
-            if !path.contains(['\'', '"', '$', '`', '\\', ';', '&', '|', '<', '>', '(', ')']) =>
-        {
-            let path = Path::new(path);
-            let team = std::fs::canonicalize(home.join("team"));
-            path.file_name() == Some("SOUL.md".as_ref())
-                && path.components().all(|c| {
-                    matches!(
-                        c,
-                        std::path::Component::RootDir | std::path::Component::Normal(_)
-                    )
-                })
-                && std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_file())
+            if path.starts_with('/')
+                && path.split('/').all(|c| c != ".." && c != ".")
                 && path
-                    .parent()
-                    .and_then(Path::parent)
-                    .and_then(|t| std::fs::canonicalize(t).ok())
-                    .is_some_and(|t| team.is_ok_and(|team| team == t))
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"._/-".contains(&b)) =>
+        {
+            let (Ok(team), Ok(real)) = (
+                std::fs::canonicalize(home.join("team")),
+                std::fs::canonicalize(path),
+            ) else {
+                return false;
+            };
+            real.file_name() == Some("SOUL.md".as_ref())
+                && real.parent().and_then(Path::parent) == Some(team.as_path())
+                && std::fs::symlink_metadata(&real)
+                    .is_ok_and(|m| m.file_type().is_file() && m.nlink() == 1)
         }
         _ => false,
     }
@@ -543,6 +550,8 @@ mod tests {
             "nunchiro machine add x",
             "nunchiro --machine m task list",
             "nunchiro task list --machine=m",
+            "nunchiro\u{a0}task\u{a0}x/y",
+            "nunchiro task\u{2028}list",
             "nunchiro",
         ] {
             assert!(matches!(b(line, Mode::Full), Decision::Ask(_)), "{line}");
@@ -570,6 +579,12 @@ mod tests {
         let other = home.join("team/other");
         std::fs::create_dir_all(&other).unwrap();
         std::os::unix::fs::symlink("/etc/hosts", other.join("SOUL.md")).unwrap();
+        let away = home.join("away");
+        std::fs::create_dir_all(&away).unwrap();
+        std::fs::write(away.join("SOUL.md"), "not a bot").unwrap();
+        std::os::unix::fs::symlink(&away, home.join("team/linked")).unwrap();
+        std::fs::create_dir_all(home.join("team/hard")).unwrap();
+        std::fs::hard_link(away.join("SOUL.md"), home.join("team/hard/SOUL.md")).unwrap();
         let b = |c: &str, m| decide("Bash", &json!({ "command": c }), m, &home);
         let soul = format!("cat {}", bot.join("SOUL.md").display());
         for m in [Mode::Ask, Mode::AcceptEdits, Mode::Full] {
@@ -593,6 +608,20 @@ mod tests {
             format!("cat {}", bot.join("../593a1861/SOUL.md").display()),
             format!("cat {}", home.join("SOUL.md").display()),
             format!("less {}", bot.join("SOUL.md").display()),
+            // Acceptance review: Unicode and control spaces the shell does not split on, a glob, a relative path, a
+            // linked bot folder, a hard link.
+            soul.replace(' ', "\u{a0}"),
+            soul.replace(' ', "\u{b}"),
+            soul.replace(' ', "\u{c}"),
+            soul.replace(' ', "\u{85}"),
+            soul.replace(' ', "\u{2028}"),
+            soul.replace(' ', "\t"),
+            "nunchiro\u{a0}task\u{a0}list".into(),
+            format!("cat {}", home.join("team/*/SOUL.md").display()),
+            format!("cat {}", home.join("team/59?a1861/SOUL.md").display()),
+            "cat team/593a1861/SOUL.md".into(),
+            format!("cat {}", home.join("team/linked/SOUL.md").display()),
+            format!("cat {}", home.join("team/hard/SOUL.md").display()),
         ] {
             assert!(matches!(b(&line, Mode::Ask), Decision::Ask(_)), "{line}");
         }
