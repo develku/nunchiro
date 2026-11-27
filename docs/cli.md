@@ -1134,6 +1134,40 @@ a caller writes to `core.sock`, the response it reads back, and the lines of `nu
 variant carries `x-stability`: `stable` for what an outside token may call, `window` for the rest. Needs no core.
 See [api.md](api.md) for the socket, the callers and an example client.
 
+## Plugins
+
+A plugin is one folder, `$NUNCHIRO_HOME/plugins/<id>/`, that adds panels, commands and settings; see
+[plugins.md](plugins.md). It is off and not approved after it is made or copied in, and runs nothing until both
+change. `new` and `check` touch only the folder, so they work inside an agent session; the others are the owner's.
+
+### `nunchiro plugin new <id> [--with panel,command,setting]`
+Writes a starter plugin (all three parts by default) that passes `plugin check`. Never replaces a file.
+
+### `nunchiro plugin check <id>`
+Checks `plugin.toml` by the core's rules, then runs each script panel and command once in the widget sandbox on a
+sample input, before and without any approval. Prints `ok` or `failed` per part; exit 1 when any part failed.
+
+### `nunchiro plugin list [--json]`
+One row per plugin: id, on or off, and approved, not approved, changed since approval, or broken (with why); also
+which setting stops it (`script_widgets` or `web_widgets`).
+
+### `nunchiro plugin on <id>`
+Turns the plugin on. Its parts still run only while its approval matches its files.
+
+### `nunchiro plugin off <id>`
+Turns the plugin off; its panels leave the Widget library and its commands stop.
+
+### `nunchiro plugin allow <id>`
+Approves the plugin's files as they are now (the same as Review in the window). From inside an agent session it
+asks the owner instead: one waiting item in the window.
+
+### `nunchiro plugin run <id> <command>`
+Runs one of the plugin's commands now, with no project, and prints its output.
+
+### `nunchiro plugin remove <id>`
+Moves the folder to `$NUNCHIRO_HOME/plugins/.removed/<id>-<time>` and forgets its switch and settings; move it back
+to undo.
+
 ## Other machines
 
 Each Mac runs its own core; see [remote.md](remote.md) for install, SSH settings and project mappings.

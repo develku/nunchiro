@@ -1326,6 +1326,10 @@ pub enum Request {
     WidgetPage {
         name: String,
     },
+    /// Plugins (`plugins.rs`): list, on and off, settings, a command run, remove. Owner and window only.
+    Plugin {
+        action: crate::plugins::Action,
+    },
     /// v1a-10: owner only. Claude replies `delivery` (the switch runs as one send row); Codex restarts into
     /// the same conversation and replies `started` with the replacing session.
     SwitchModel {

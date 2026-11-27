@@ -82,6 +82,7 @@ pub fn page(home: &Path, enabled: bool, name: &str, context: Context) -> Result<
     if !enabled {
         return Err(OFF.into());
     }
+    crate::plugins::on(home, name)?;
     let proof = approval::check(home, name).map_err(|e| format!("needs approval: {e}"))?;
     let manifest = proof.manifest();
     if manifest.kind != "web" {

@@ -696,6 +696,7 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | WidgetRun { .. }
         | WidgetAct { .. }
         | WidgetPage { .. }
+        | Plugin { .. }
         | SwitchModel { .. }
         | SetMode { .. } // CHAT-MODELIST: owner window only
         | AgentPermissionGet // ticket 362: the owner's setting

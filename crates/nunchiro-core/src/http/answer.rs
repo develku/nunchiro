@@ -263,6 +263,9 @@ pub(super) fn answer(
                 ) {
                     return crate::widgets::handle(home, sessions, request);
                 }
+                if matches!(request, Request::Plugin { .. }) {
+                    return crate::plugins::handle(home, sessions, request);
+                }
                 // v1b-08: file and git work runs after the registry lock is released.
                 if let Some(root) = sessions.file_root(&request) {
                     let root = root?;

@@ -343,6 +343,112 @@
       ],
       "type": "object"
     },
+    "Action": {
+      "description": "What the window and the CLI ask of plugins (owner and window only).",
+      "oneOf": [
+        {
+          "properties": {
+            "do": {
+              "const": "list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "do"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Turns a plugin on or off; on runs nothing until it is approved.",
+          "properties": {
+            "do": {
+              "const": "set",
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "on": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "do",
+            "id",
+            "on"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Sets one setting; a value of the wrong type is refused.",
+          "properties": {
+            "do": {
+              "const": "setting",
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            },
+            "value": true
+          },
+          "required": [
+            "do",
+            "id",
+            "key",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Runs one command now for the project of `session` (none = no project).",
+          "properties": {
+            "command": {
+              "type": "string"
+            },
+            "do": {
+              "const": "run",
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "session": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "do",
+            "id",
+            "command"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Moves the folder to `plugins/.removed/`, so a removal can be undone by moving it back.",
+          "properties": {
+            "do": {
+              "const": "remove",
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "do",
+            "id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "Advance": {
       "description": "Ticket 1081: the core's auto-advance record of a task. Kept so a restart repeats no nudge and no card.",
       "properties": {
@@ -1921,6 +2027,48 @@
       "required": [
         "id",
         "title"
+      ],
+      "type": "object"
+    },
+    "Command": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "description": "argv, run from the plugin folder; never a shell string.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "read": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "show": {
+          "$ref": "#/$defs/Show",
+          "default": "note"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "command"
       ],
       "type": "object"
     },
@@ -3916,6 +4064,61 @@
       ],
       "type": "object"
     },
+    "Listed": {
+      "description": "One row of the Plugins page.",
+      "properties": {
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "needs": {
+          "description": "The setting that is off and stops this plugin's parts (`script_widgets` or `web_widgets`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "on": {
+          "type": "boolean"
+        },
+        "plugin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Plugin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApprovalState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Absent when the folder or its manifest cannot be read (`error` says why)."
+        },
+        "values": {
+          "additionalProperties": true,
+          "description": "The current value of each setting (stored, else the default).",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "on"
+      ],
+      "type": "object"
+    },
     "Live": {
       "description": "What the window gets for one PR.",
       "properties": {
@@ -5189,6 +5392,67 @@
       ],
       "type": "object"
     },
+    "Panel": {
+      "additionalProperties": false,
+      "description": "A widget manifest inside the plugin (the fields of `widget.toml`), named so its plugin can hold several.",
+      "properties": {
+        "command": {
+          "description": "A script panel's argv, run from the plugin folder.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "entry": {
+          "description": "A web panel's HTML file in the plugin folder.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "interval_secs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "kind": {
+          "description": "`script` or `web`.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "read": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "kind"
+      ],
+      "type": "object"
+    },
     "Patch": {
       "properties": {
         "binary": {
@@ -5268,6 +5532,66 @@
       "required": [
         "way",
         "seats"
+      ],
+      "type": "object"
+    },
+    "Plugin": {
+      "additionalProperties": false,
+      "description": "`plugin.toml`. Unknown keys refuse the whole file.",
+      "properties": {
+        "about": {
+          "default": "",
+          "type": "string"
+        },
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "command": {
+          "description": "Rows in the command palette.",
+          "items": {
+            "$ref": "#/$defs/Command"
+          },
+          "type": "array"
+        },
+        "id": {
+          "description": "The folder's name: a-z, 0-9, - and _ (up to 64).",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "nunchiro": {
+          "description": "The Nunchiro versions the plugin is made for, as written; shown, not enforced yet.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "description": "Panels in the Widget library: a script that prints text or JSON, or a web page.",
+          "items": {
+            "$ref": "#/$defs/Panel"
+          },
+          "type": "array"
+        },
+        "setting": {
+          "description": "Values the user sets on the Plugins page; every run gets them as `settings`.",
+          "items": {
+            "$ref": "#/$defs/Setting"
+          },
+          "type": "array"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "version"
       ],
       "type": "object"
     },
@@ -7526,6 +7850,46 @@
           "required": [
             "type",
             "page"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "plugins": {
+              "items": {
+                "$ref": "#/$defs/Listed"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "plugins",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "plugins"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A plugin command's run and where the window shows its output.",
+          "properties": {
+            "run": {
+              "$ref": "#/$defs/WidgetsRun"
+            },
+            "show": {
+              "$ref": "#/$defs/Show"
+            },
+            "type": {
+              "const": "plugin_run",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "run",
+            "show"
           ],
           "type": "object"
         },
@@ -11719,6 +12083,24 @@
           "x-stability": "window"
         },
         {
+          "description": "Plugins (`plugins.rs`): list, on and off, settings, a command run, remove. Owner and window only.",
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/Action"
+            },
+            "op": {
+              "const": "plugin",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "action"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
           "description": "v1a-10: owner only. Claude replies `delivery` (the switch runs as one send row); Codex restarts into\nthe same conversation and replies `started` with the replacing session.",
           "properties": {
             "effort": {
@@ -14109,6 +14491,52 @@
       ],
       "type": "string"
     },
+    "Setting": {
+      "additionalProperties": false,
+      "properties": {
+        "choices": {
+          "description": "The values of a `choice` setting.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "default": true,
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/SettingKind"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "type"
+      ],
+      "type": "object"
+    },
+    "SettingKind": {
+      "oneOf": [
+        {
+          "enum": [
+            "text",
+            "number",
+            "bool",
+            "choice"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "time",
+          "description": "`HH:MM`, 24-hour.",
+          "type": "string"
+        }
+      ]
+    },
     "Settings": {
       "additionalProperties": false,
       "description": "`[settings]` in board.toml. `done_days` (1, 7 or 30, default 7, ticket 1066) is how long a finished card stays in\nthe Done column before it moves to the Archive. `stale_minutes` is the stale badge threshold (1 to 1440, default 10);\n`turn_end_nudge` turns ticket 187's turn-end context line on or off (default true). One struct for both keys:\n`deny_unknown_fields` refuses any other key.",
@@ -14175,6 +14603,15 @@
         "link"
       ],
       "type": "object"
+    },
+    "Show": {
+      "description": "Where a command's output goes: a note, a panel, or the focused agent's composer as a draft (never sent by itself).",
+      "enum": [
+        "note",
+        "panel",
+        "send"
+      ],
+      "type": "string"
     },
     "SignIn": {
       "description": "What the window polls for one `agent` sign-in; a terminal method is a tab, not an attempt.",
@@ -14423,14 +14860,23 @@
       "type": "object"
     },
     "SubjectKind": {
-      "enum": [
-        "widget",
-        "source",
-        "agent",
-        "agent_command",
-        "setup"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "widget",
+            "source",
+            "agent",
+            "agent_command",
+            "setup"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "plugin",
+          "description": "A plugin folder, stored by its id; asked for and granted as the widget name `plugin:<id>` (`plugins.rs`).",
+          "type": "string"
+        }
+      ]
     },
     "Sum": {
       "description": "The v4 Usage page (usage.html v4, lane v25c-usage-split): sums over a rolling range for its tiles, token mix, busy\nhours and tabs, and the 42 local days of its intensity grid. Read from the same local records as `rows`, in the\nsame budget; nothing is stored. Lifted from Orca (MIT License, Copyright (c) 2026 Lovecast Inc.; 1.4.214): the\ncache share (cache read / (new input + cache read), `usage-overview-model.ts:72-73`) and the 42-day window\n(`UsageOverviewPane.tsx:13`).",
@@ -15586,6 +16032,12 @@
         "name": {
           "type": "string"
         },
+        "plugin": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "state": {
           "anyOf": [
             {
@@ -15596,6 +16048,13 @@
             }
           ],
           "description": "Absent when the folder cannot be read or its manifest does not parse (`error` says why)."
+        },
+        "title": {
+          "description": "A plugin panel's title and its plugin's name (`plugin:<id>/<panel>` rows); absent for a widget folder.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [

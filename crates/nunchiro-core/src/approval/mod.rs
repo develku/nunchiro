@@ -16,6 +16,8 @@ pub use command::{
     command_reset, command_status,
 };
 pub use manifest::{Act, Manifest, expand, home_wide}; // v1b-20: Act; v1b-33: expand, home_wide
+// A plugin part's manifest is checked by the widget rules (`plugins::part_manifest`).
+pub(crate) use manifest::parse as parse_manifest;
 // v1b-17
 pub(crate) use hash::FileStamp;
 pub use hash::SnapshotFile;
@@ -41,6 +43,8 @@ pub enum SubjectKind {
     AgentCommand,
     // Ticket 259: a worktree setup script read from the repo (`orca.yaml` `scripts.setup`), by the script text's hash.
     Setup,
+    /// A plugin folder, stored by its id; asked for and granted as the widget name `plugin:<id>` (`plugins.rs`).
+    Plugin,
 }
 impl SubjectKind {
     pub(crate) fn label(self) -> &'static str {
@@ -50,6 +54,7 @@ impl SubjectKind {
             Self::Agent => "agent",
             Self::AgentCommand => "agent command",
             Self::Setup => "setup script",
+            Self::Plugin => "plugin",
         }
     }
     fn folder(self) -> &'static str {
@@ -59,6 +64,7 @@ impl SubjectKind {
             Self::Agent => "agents", // never a folder: `subject` refuses this kind
             Self::AgentCommand => "agent-commands", // nor this one
             Self::Setup => "setup",  // nor this one
+            Self::Plugin => "plugins", // read through `plugin_subject`
         }
     }
 }
@@ -174,9 +180,14 @@ pub(crate) fn valid_name(name: &str) -> bool {
 fn subject(home: &Path, name: &str, kind: SubjectKind) -> Result<Subject, String> {
     if matches!(
         kind,
-        SubjectKind::Agent | SubjectKind::AgentCommand | SubjectKind::Setup
+        SubjectKind::Agent | SubjectKind::AgentCommand | SubjectKind::Setup | SubjectKind::Plugin
     ) {
         return Err("an agent is an agents.toml entry, not a folder".into());
+    }
+    if kind == SubjectKind::Widget
+        && let Some((id, part)) = crate::plugins::split(name)
+    {
+        return plugin_subject(home, id, part);
     }
     if !valid_name(name) {
         return Err(format!("invalid {} name", kind.label()));
@@ -215,6 +226,54 @@ fn subject(home: &Path, name: &str, kind: SubjectKind) -> Result<Subject, String
     })
 }
 
+/// A plugin (`plugin:<id>`) is one subject: its whole folder is hashed, and a part (`plugin:<id>/<part>`) carries that
+/// same hash with the part's own manifest, so approving the plugin approves exactly the parts the sheet showed.
+fn plugin_subject(home: &Path, id: &str, part: Option<&str>) -> Result<Subject, String> {
+    if !valid_name(id) || part.is_some_and(|p| !valid_name(p)) {
+        return Err("invalid plugin name".into());
+    }
+    let relative = std::path::Path::new(crate::plugins::FOLDER).join(id);
+    if home
+        .join(&relative)
+        .symlink_metadata()
+        .map_err(|e| format!("plugin {id}: {e}"))?
+        .file_type()
+        .is_symlink()
+    {
+        return Err("plugin folder must not be a symlink".into());
+    }
+    let (hash, files) = hash::folder(home, &relative).map_err(|e| {
+        e.replace("widget folder", "plugin folder")
+            .replace("widgets may not", "plugins may not")
+    })?;
+    let bytes = files
+        .iter()
+        .find(|f| f.path() == crate::plugins::MANIFEST)
+        .ok_or("missing plugin.toml")?
+        .bytes()
+        .to_vec();
+    let text = String::from_utf8(bytes).map_err(|_| "plugin.toml is not UTF-8")?;
+    let plugin = crate::plugins::parse(&text, id)?;
+    let manifest = match part {
+        None => crate::plugins::summary(&plugin),
+        Some(part) => crate::plugins::part_manifest(&plugin, part)?,
+    };
+    Ok(Subject {
+        manifest,
+        text,
+        hash,
+        files,
+    })
+}
+
+/// Where an approval is stored: a plugin and each of its parts under the plugin's id.
+fn stored_as(kind: SubjectKind, name: &str) -> (SubjectKind, String) {
+    match crate::plugins::split(name) {
+        Some((id, _)) if kind == SubjectKind::Widget => (SubjectKind::Plugin, id.into()),
+        _ => (kind, name.into()),
+    }
+}
+
 fn view(name: &str, s: Subject, stored: Option<&store::Approval>) -> View {
     let act_refused = crate::widgets::web::act_refused(&s.manifest);
     let (state, level) = match stored {
@@ -237,7 +296,10 @@ fn view(name: &str, s: Subject, stored: Option<&store::Approval>) -> View {
         hash: s.hash,
         manifest: s.manifest,
         manifest_text: s.text,
-        cli: format!("nunchiro widget allow {name} --read"),
+        cli: match crate::plugins::split(name) {
+            Some((id, _)) => format!("nunchiro plugin allow {id}"),
+            None => format!("nunchiro widget allow {name} --read"),
+        },
     }
 }
 
@@ -258,7 +320,8 @@ fn source_cli(mut view: View) -> View {
 }
 fn status_kind(home: &Path, name: &str, kind: SubjectKind) -> Result<View, String> {
     let stored = store::load(home)?;
-    let view = view(name, subject(home, name, kind)?, stored.find(kind, name));
+    let (at, key) = stored_as(kind, name); // a plugin part is approved as its plugin
+    let view = view(name, subject(home, name, kind)?, stored.find(at, &key));
     Ok(if kind == SubjectKind::Source {
         source_cli(view)
     } else {
@@ -304,15 +367,16 @@ fn grant_kind(
     {
         return Err(reason);
     }
+    let (at, key) = stored_as(kind, name);
     stored.set(store::Approval {
-        kind,
-        name: name.into(),
+        kind: at,
+        name: key.clone(),
         level,
         hash: s.hash.clone(),
         granted_at_ms: crate::queue::now_ms(),
     });
     stored.save(home)?;
-    let stored = stored.find(kind, name).cloned();
+    let stored = stored.find(at, &key).cloned();
     let view = view(name, s, stored.as_ref());
     Ok(if kind == SubjectKind::Source {
         source_cli(view)
@@ -332,7 +396,8 @@ pub fn check_source(home: &Path, name: &str) -> Result<Proof, String> {
 fn check_kind(home: &Path, name: &str, kind: SubjectKind) -> Result<Proof, String> {
     let stored = store::load(home)?;
     let s = subject(home, name, kind)?;
-    match stored.find(kind, name) {
+    let (at, key) = stored_as(kind, name);
+    match stored.find(at, &key) {
         Some(a) if a.hash == s.hash => {
             // v1b-34: an act grant stored before the rule (or by hand) is no proof.
             if let Some(reason) = crate::widgets::web::act_refused(&s.manifest)
@@ -352,6 +417,23 @@ fn check_kind(home: &Path, name: &str, kind: SubjectKind) -> Result<Proof, Strin
         Some(_) => Err(format!("{} changed since it was approved", kind.label())),
         None => Err(format!("{} is not approved", kind.label())),
     }
+}
+
+/// `nunchiro plugin check`: one plugin part as it is now, approved or not, for one confined trial run by its author
+/// (the sandbox still holds; nothing is stored). Only `plugins::trial` asks for this; every other run needs `check`.
+pub(crate) fn trial(home: &Path, name: &str) -> Result<Proof, String> {
+    if !matches!(crate::plugins::split(name), Some((_, Some(_)))) {
+        return Err("only a plugin part has a trial run".into());
+    }
+    let s = subject(home, name, SubjectKind::Widget)?;
+    Ok(Proof {
+        name: name.into(),
+        level: Level::Read,
+        hash: s.hash,
+        manifest: s.manifest,
+        files: s.files,
+        kind: SubjectKind::Widget,
+    })
 }
 
 // V2-4a: an `agents.toml` entry is approved by the hash of its own content (name, command, args, env names), so any

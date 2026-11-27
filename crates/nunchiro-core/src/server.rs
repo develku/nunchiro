@@ -644,6 +644,7 @@ pub(crate) fn remote_from_owner(
             | Request::WidgetRun { .. } // v1b-19
             | Request::WidgetAct { .. } // v1b-20
             | Request::WidgetPage { .. } // v1b-22
+            | Request::Plugin { .. } // this Mac's plugins, the owner's alone
             | Request::ImagePut { .. } // v1b-05
             | Request::AccountList // v2-2a
             | Request::AccountCheck { .. }
@@ -1185,6 +1186,10 @@ fn connection(
             Request::WidgetList | Request::WidgetRun { .. } | Request::WidgetPage { .. } // v1b-22
         ) {
             return crate::widgets::handle(home, sessions, env.request);
+        }
+        // Owner only, like the widget requests (`check_agent` refuses session callers and tokens).
+        if matches!(env.request, Request::Plugin { .. }) {
+            return crate::plugins::handle(home, sessions, env.request);
         }
         // v1b-20: owner only, like the two above; the act locks the registry itself.
         if matches!(env.request, Request::WidgetAct { .. }) {

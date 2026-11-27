@@ -245,6 +245,9 @@ impl Sessions {
             crate::approval::SubjectKind::Setup => {
                 return Err("a setup script is approved on its own sheet".into()); // ticket 259
             }
+            crate::approval::SubjectKind::Plugin => {
+                return Err("a plugin is approved as the widget plugin:<id>".into());
+            }
         };
         self.queue.answer_owner(|i| {
             matches!(&i.owner, Some(queue::OwnerAsk::Approval { subject: s, name: n, .. }) if *s == subject && n == name)

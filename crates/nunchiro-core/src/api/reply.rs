@@ -405,6 +405,14 @@ pub enum Reply {
     WidgetPage {
         page: crate::widgets::web::Page,
     },
+    Plugins {
+        plugins: Vec<crate::plugins::Listed>,
+    },
+    /// A plugin command's run and where the window shows its output.
+    PluginRun {
+        run: crate::widgets::Run,
+        show: crate::plugins::Show,
+    },
     /// v1b-20: the target session (started for a `start` act) and its send row.
     WidgetAct {
         session: String,
