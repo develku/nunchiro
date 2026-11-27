@@ -1192,9 +1192,8 @@ button.lead-go {
 .tcard:not(:hover):not(:focus-within) > .lead-more[data-quiet] {
   opacity: 0;
 }
-/* The words of a waiting card's one pill read 4.5:1 through the card's dimming (--faint would not). */
-.tcard[data-waits-task] .tcard-stages > span,
-.tcard[data-waits-seat] .tcard-stages > span {
+/* The words of a waiting card's one pill (not its stage chips) read 4.5:1 through the card's dimming (--faint would not). */
+.tcard-stages > .tcard-wait {
   color: var(--text);
 }
 /* A dimmed card is its own stacking layer: the card whose menu is open goes over the cards after it. */
@@ -1205,14 +1204,14 @@ button.lead-go {
 .tcard:has(> .lead-menu) {
   z-index: 6;
 }
-/* The book's needs-you mark is a light beside the word, not a picture: a dot in the chip's own text colour. */
+/* The book's needs-you mark is a light beside the word, not a picture: the --light-you dot. */
 .tcard-dot {
   display: inline-block;
   width: 6px;
   height: 6px;
   margin-right: var(--sp-4);
   border-radius: var(--r-pill);
-  background: currentColor;
+  background: var(--light-you);
   vertical-align: middle;
 }
 .tcard-do {

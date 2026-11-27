@@ -143,11 +143,11 @@ function TaskCard({ t, core, x, tasks, list, byId, open, decide, menu, peek, set
       <button className="tcard-go" data-none={(!seat && !waits) || undefined} aria-pressed={peek?.task === x.id} onClick={(e) => (e.currentTarget.focus(), seat ? setPeek(peek?.session === seat.id ? null : { task: x.id, session: seat.id }) : waits && setPeek(peek?.task === x.id ? null : { task: x.id, session: '' }))}>
         <b className="tcard-t">{x.title}</b>
         {waits ? (
-          <span className="tcard-stages"><span data-at="next">{waitsWord(t, x)}</span></span>
+          <span className="tcard-stages"><span className="tcard-wait" data-at="next">{waitsWord(t, x)}</span></span>
         ) : dropped ? (
           <span className="tcard-stages"><span data-at="you"><i className="tcard-dot" aria-hidden />{t('tboard.waits')}</span></span>
         ) : waitsSeat(x) && !x.seats?.length ? (
-          <span className="tcard-stages"><span data-at="next">{t('tboard.waitsSeat')}</span></span>
+          <span className="tcard-stages"><span className="tcard-wait" data-at="next">{t('tboard.waitsSeat')}</span></span>
         ) : (
           <>
             {/* A button's content is flat for assistive tech: the stage is said in words, the pills are hidden. */}

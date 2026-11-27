@@ -116,7 +116,7 @@ export function TeamView({ core, t, folder, sessions, open, wt, owner, decide, w
   const title = (p: Part) => (p === 'tasks' ? t('lead.task.band') : p === 'projects' ? t('home.part.projects') : p === 'assistants' ? t('home.part.assistants') : t('room.tab'));
   const panel = (p: Part) => (wide ? { role: 'region', 'aria-label': title(p) } : { role: 'tabpanel', id: id(p), 'aria-labelledby': `${id(p)}-tab`, hidden: part !== p });
   return (
-    <div className="teamv" ref={root} data-wide={wide || undefined} data-three={three || undefined} data-where={where} data-team-view={live} data-drawer={drawer ? true : undefined} onKeyDownCapture={drawer ? (e) => e.key === 'Escape' && (e.preventDefault(), e.stopPropagation(), closeDrawer()) : undefined}>
+    <div className="teamv" ref={root} data-wide={wide || undefined} data-three={three || undefined} data-where={where} data-team-view={live} data-drawer={drawer ? true : undefined} onKeyDownCapture={drawer ? (e) => e.key === 'Escape' && !(e.target as Element).closest?.('.lead-menu') && (e.preventDefault(), e.stopPropagation(), closeDrawer()) : undefined}>
       <div className="teamv-head">
         {wide ? (
           // The legend is about worktrees, and Home has none (look 1117 v3).
