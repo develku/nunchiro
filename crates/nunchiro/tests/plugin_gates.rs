@@ -481,3 +481,69 @@ fn a_schedules_task_is_checked_before_it_is_sent() {
     );
     assert!(run.to_string().contains("No tasks tonight."), "{run}");
 }
+
+#[test]
+fn a_hung_check_never_holds_a_send_past_the_budget() {
+    let c = core("pgb");
+    plugin(
+        &c.home,
+        "prompt.send.before",
+        "/bin/sleep 30",
+        "allow",
+        true,
+    );
+    // Six agent sends at once through a check that never answers: each is answered within the 10 s budget (the CLI
+    // gives up at 15 s), and each is then delivered, as `on_error = "allow"` says.
+    let out = user(&c.home).join("times");
+    let script = format!(
+        "for i in 1 2 3 4 5 6; do ( s=$(/bin/date +%s); '{{bin}}' agent send {{to}} m$i >/dev/null 2>&1; echo \"$? $(( $(/bin/date +%s) - s ))\" >> '{}' ) & done; wait",
+        out.display()
+    );
+    let (_, read) = pair(&c, &script);
+    let end = Instant::now() + Duration::from_secs(40);
+    while std::fs::read_to_string(&out).map_or(0, |t| t.lines().count()) < 6 {
+        assert!(
+            Instant::now() < end,
+            "not all sends answered: {:?}",
+            std::fs::read_to_string(&out)
+        );
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    for line in std::fs::read_to_string(&out).unwrap().lines() {
+        let (code, secs) = line.split_once(' ').unwrap();
+        assert_eq!(code, "0", "a send failed: {line}");
+        assert!(secs.parse::<u64>().unwrap() <= 12, "a send took {secs} s");
+    }
+    for i in 1..=6 {
+        until(&format!("m{i}"), &read);
+    }
+}
+
+#[test]
+fn a_room_reply_that_would_be_refused_never_reaches_a_check() {
+    let c = core("pgm");
+    plugin(
+        &c.home,
+        "prompt.send.before",
+        r#"printf '{"allow": false, "reason": "checked"}\n'"#,
+        "refuse",
+        true,
+    );
+    let out = user(&c.home).join("reply-out");
+    let script = format!(
+        "'{{bin}}' agent reply no-such-message 'words' > '{}' 2>&1",
+        out.display()
+    );
+    let _ = pair(&c, &script);
+    let read = || std::fs::read_to_string(&out).unwrap_or_default();
+    let end = Instant::now() + Duration::from_secs(15);
+    while read().is_empty() {
+        assert!(Instant::now() < end);
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(
+        read().contains("not found") && !read().contains("checked"),
+        "{}",
+        read()
+    );
+}
