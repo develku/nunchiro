@@ -21,6 +21,14 @@ counts only when the test ran green in the same run, and anchors come from measu
 - evidence/peers-<date>-<app>.json: launch, idle memory and idle CPU of an installed peer (`scripts/measure/peers.py`).
 - shots/: Nunchiro pictures from the run, and peer pictures from the 2026-11-02 timed run.
 
+## Old names in history records
+
+The local gate that ran before pull requests (named build-loop, with `bin/land` and `.agents/build-loop.toml`) is retired.
+Its names stay only in records of runs made while it existed: rubric-v1.md, scorecard.html and parts.json of the card at
+c5cd98879, results and dev files dated up to 2026-11-26, and evidence/prompt-audit-2026-11-25.md. They are kept unchanged
+because a record must show what was measured then; the next run writes new evidence from the pull-request flow. Scripts
+and tests no longer read those names, and tests/scenario/test_measure_scorecard.py fails if a measure script uses them again.
+
 ## Weekly full run (TR2)
 
 .github/workflows/full.yml runs every web spec on Chromium and WebKit and the `measure` Rust set each week. Read the newest
