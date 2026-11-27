@@ -40,6 +40,7 @@ diff.spec.ts | lists exactly the changed and untracked files|two windows viewing
 board.spec.ts
 settings.spec.ts
 settings-search.spec.ts
+settings-one-head.spec.ts
 
 # the existing gate's pixel and dead-click checks and the browser-access pair
 visual-conformance.spec.ts
