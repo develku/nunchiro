@@ -148,6 +148,13 @@ fn nothing_is_pasted_into_a_box_that_holds_text() {
     .enumerate()
     {
         let mut f = seat(&format!("gap-box-{i}"), kind, &screen);
+        // His words stay his: he pressed a key just now, so the homecoming (#36: after SWITCH_SETTLE of a still screen it
+        // clears the box with Ctrl+U) does not start. Under load the flushes below came later than that 100 ms.
+        let id = f.id.clone();
+        f.core.typing_until.insert(
+            id,
+            std::time::Instant::now() + std::time::Duration::from_secs(3600),
+        );
         let mine = owner_prompt(&mut f, "my prompt");
         let line = agent_line(&mut f, "agent line");
         for _ in 0..3 {
