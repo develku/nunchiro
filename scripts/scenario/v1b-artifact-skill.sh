@@ -11,12 +11,12 @@
 #                 ~/.agents/policies/usage.sh shows no headroom.
 #   repo-clean    after both rows the project folder holds exactly the same files with the same bytes (hidden and
 #                 ignored ones included). Claude keys folder trust on the git root, so a fresh scratch repo would always
-#                 show the trust dialog, which is never answered; the project is therefore a plain folder inside a
-#                 trusted checkout, and this tree comparison stands in for (and is stricter than) `git status --porcelain`.
+#                 show the trust dialog, which is never answered; the project is therefore a plain folder outside
+#                 any repo, under a folder Claude already trusts, and this tree comparison stands in for (and is stricter than) `git status --porcelain`.
 #   guard-claude, guard-codex  the ticket-01 guard (settings, hooks, trust) plus the bytes of ~/.claude/skills and
 #                 ~/.codex/skills: unchanged.
-# ROWS picks agent rows (default both). ARTIFACT_PROJECT_ROOT: a folder inside a repo Claude already trusts (no trust
-# dialog is ever answered); default .scratch.
+# ROWS picks agent rows (default both). ARTIFACT_PROJECT_ROOT: a folder Claude already trusts (no trust dialog is ever
+# answered); default lib.TRUSTED_CWD. Each NUNCHIRO_HOME is under lib.SCENARIO_HOMES (outside any repo) and removed after it.
 set -eu
 cd "$(dirname "$0")/../.."
 export CARGO_HOME="${CARGO_HOME:-$PWD/.scratch/cargo-home}"
@@ -25,11 +25,11 @@ cargo build -q -j 2 -p nunchiro
 exec python3 -B - "$@" <<'PY'
 import hashlib, json, os, pathlib, re, shutil, subprocess, sys, threading, time, uuid
 sys.path.insert(0, 'scripts/scenario')
-from lib import CODEX_MODEL, clean_env, snapshot, guard_check, descendants, visible, GUARDED
+from lib import CODEX_MODEL, TRUSTED_CWD, clean_env, scenario_home, snapshot, guard_check, descendants, visible, GUARDED
 root = pathlib.Path.cwd()
 binary = str(root / 'target/debug/nunchiro')
 rows = os.environ.get('ROWS', 'claude-chart codex-chart').split()
-project_root = pathlib.Path(os.environ.get('ARTIFACT_PROJECT_ROOT', str(root / '.scratch')))
+project_root = pathlib.Path(os.environ.get('ARTIFACT_PROJECT_ROOT', TRUSTED_CWD))
 port = os.environ.get('NUNCHIRO_WEB_PORT', '4194')
 out = root / '.scratch' / ('artifact-skill-' + time.strftime('%Y%m%d-%H%M%S'))
 out.mkdir(parents=True)
@@ -40,7 +40,7 @@ READY = {'claude': r'❯\s+Try|(?:manual|auto|accept edits) (?:mode )?on|for sho
 # Claude's and Codex's approval dialogs (Codex: "Would you like to run the following command?", "... make the following
 # edits?"); the screen is the whole replay, so any dialog shown during the turn stays matched.
 PROMPTED = re.compile(r'Do you want to (?:create|make this edit|proceed)|Would you like to (?:run|make|allow)|Esc to cancel · Tab to amend')
-TRUST = re.compile(r'Is this a project you created or one you trust|Do you trust the files|Allow external CLAUDE.md file imports|Trust this folder\?')
+TRUST = re.compile(r'Is this a (?:project|directory) you created or one you trust|Do you trust the files|Allow external CLAUDE.md file imports|Trust this folder\?')
 
 def tree(path):
     """sha256 over every file name and its bytes under `path` (no symlinks followed); None when absent."""
@@ -87,9 +87,8 @@ ours.append(str(project))
 project_before = files(project)
 
 def one(agent):
-    home = root / '.scratch' / ('a' + uuid.uuid4().hex[:5])
-    home.mkdir(mode=0o700)
-    assert len(str(home / 'core.sock').encode()) < 104, 'socket path too long'
+    home = scenario_home('a' + uuid.uuid4().hex[:5])
+    ours.append(str(home))
     env = clean_env({'NUNCHIRO_HOME': str(home), 'NUNCHIRO_WINDOW_ORIGINS': 'http://127.0.0.1:' + port})
     for key in ('NUNCHIRO_TOKEN', 'NUNCHIRO_SESSION'):
         env.pop(key, None)
@@ -203,6 +202,8 @@ def one(agent):
                 except ProcessLookupError: pass
             row['surviving_owned_pids'] = survivors
             if survivors: row['pass'] = False
+        if (home / 'core.log').exists(): shutil.copy(home / 'core.log', out / f'{agent}.core.log')
+        shutil.rmtree(home, ignore_errors=True)
     return row
 
 try:

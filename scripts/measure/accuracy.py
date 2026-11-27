@@ -675,7 +675,7 @@ def guarded(fn):
         res = fn()
     finally:
         after, m_after = lib.snapshot(), v1b_full.manifest()
-    ours = [str(ROOT / ".scratch"), str(ROOT / "scripts")]
+    ours = [str(ROOT / ".scratch"), str(ROOT / "scripts"), lib.SCENARIO_HOMES, lib.TRUSTED_CWD]
     problems = lib.guard_check(before, after, ours)[0] + v1b_full.manifest_diff(m_before, m_after, ours)[0]
     return res, problems
 
@@ -684,7 +684,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="accuracy", description="p34's trial; see docs/measure/rubric.md")
     ap.add_argument("--machine", help="the SSH alias of the second Mac (its core runs this same Nunchiro version)")
     ap.add_argument("--remote-project", help="a folder on the second Mac that Claude already trusts")
-    ap.add_argument("--project-root", default=str(ROOT / ".scratch"), help="a folder here that Claude already trusts")
+    ap.add_argument("--project-root", help="a folder here that Claude already trusts (default: lib.TRUSTED_CWD)")
     ap.add_argument("--nunchiro", default=str(ROOT / "target/debug/nunchiro"))
     ap.add_argument("--self-test", action="store_true", help="the fixture agent on this Mac for both sides; not counted")
     ap.add_argument("--out")
@@ -701,8 +701,10 @@ def main(argv=None):
             path = shutil.which(kind)
             if not path or is_fake(path):
                 raise SystemExit(f"{kind} on PATH is {'missing' if not path else 'the fixture agent'}: p34 needs the real agents")
+        import lib
+        a.project_root = a.project_root or lib.TRUSTED_CWD
         Path(a.project_root).mkdir(parents=True, exist_ok=True)
-        work = tempfile.mkdtemp(prefix="acc-", dir=str(ROOT / ".scratch"))
+        work = str(lib.scenario_home("acc-"))  # outside any repo: Claude asks to trust an --add-dir folder inside one
         res, problems = guarded(lambda: run(a.nunchiro, FULL, work, a.machine, a.remote_project, a.project_root))
         res["guard_problems"] = problems
         shutil.rmtree(work, ignore_errors=True)
