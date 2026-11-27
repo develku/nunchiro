@@ -1,7 +1,7 @@
 """The 24 h soak of docs/measure/rubric.md ("Owner-run steps", 24 h soak; anchors soak_clean_hours of p08 and
 mem_growth_24h_ratio of p33). An RC core on its own NUNCHIRO_HOME (a fresh folder under lib.SCENARIO_HOMES, the core
 binary copied into it so a day-long run reads nothing off an external disk) holds --sessions real Claude seats on the
-owner's sign-ins (haiku, the cheapest model) in a folder Claude already trusts, inside the config guard of
+owner's sign-ins (haiku, the cheapest model, no MCP server) in a folder Claude already trusts, inside the config guard of
 scripts/scenario/v1b-full.sh. Every --every seconds (10 min) each seat gets a heartbeat prompt (`agent prompt`,
 `reply ok #<n>`); then the core is checked alive, every seat still listed and running, and the footprint of the core
 and its holders (the app; the agents' own footprint beside it) is sampled. Minute 2 is the base sample.
@@ -17,7 +17,8 @@ Usage: soak.py --nunchiro BIN [--sessions 5] [--hours 24] [--every 600] [--proje
        soak.py --self-test --nunchiro BIN   (the fixture agent of accuracy.py on a throwaway HOME, 2 seats, 4 min,
                                              a heartbeat every 30 s; never written)
        soak.py --report FILE
-Stops only the PIDs it started (the core, and the holders and agents of its own sessions). Stdlib only."""
+A seat the core holds for memory pressure is never started with --anyway: the start is retried every 10 min for
+--start-within hours, with nothing kept from the held try. Stops only the PIDs it started (the core, and the holders and agents of its own sessions). Stdlib only."""
 import argparse, json, os, re, shutil, signal, subprocess, sys, time
 from pathlib import Path
 
@@ -67,6 +68,10 @@ def figures(lines):
                 app_mib=[(round(l["t"] / 60), round(l["app"] / 2**20, 1)) for l in ticks])
 
 
+class Held(Exception):
+    """The core held a seat for memory pressure (crates/nunchiro-core/src/pressure.rs): nothing measured, try later."""
+
+
 class Soak:
     def __init__(self, nunchiro, sessions, project_root, self_test):
         self.self_test, self.work = self_test, lib.scenario_home("soak-")
@@ -104,7 +109,10 @@ class Soak:
         for i in range(self.sessions):
             label = f"soak-c{i}"
             rc, out, err = self.cli("agent", "start", label, "--kind", "claude", "--project", str(self.project),
-                                    "--model", acc.CLAUDE_MODEL, timeout=90)
+                                    "--model", acc.CLAUDE_MODEL, "--", "--strict-mcp-config", "--mcp-config",
+                                    '{"mcpServers": {}}', timeout=90)  # none of the owner's own MCP servers, x seats
+            if rc and "low on memory" in (err or out):
+                raise Held(f"agent start {label}: {(err or out).strip()}")  # the core's memory hold; never --anyway
             if rc:
                 raise SystemExit(f"agent start {label}: {err or out}")
             self.seats[label] = json.loads(out.splitlines()[-1])["session"]["id"]
@@ -171,13 +179,15 @@ def run(a, raw):
     def write(line):
         with raw.open("a") as f:
             f.write(json.dumps(line) + "\n")
+    began, beats = False, 0
     try:
         s.start()
         version = subprocess.run(["claude", "--version"], env=s.env, capture_output=True, text=True).stdout.strip()
         write(dict(start=time.strftime("%Y-%m-%d %H:%M"), sessions=a.sessions, hours=a.hours, every=a.every,
                    self_test=a.self_test, agent=f"claude {version} --model {acc.CLAUDE_MODEL}", core_pid=s.core.pid,
                    home=str(s.home), project=str(s.project)))
-        t0, k, beats = time.monotonic(), 0, 0
+        began = True
+        t0, k = time.monotonic(), 0
         due = BASE_S
         while True:
             time.sleep(max(0, due - (time.monotonic() - t0)))
@@ -197,7 +207,8 @@ def run(a, raw):
         try:
             s.stop()
         finally:
-            write(dict(end=time.strftime("%Y-%m-%d %H:%M"), heartbeats=locals().get("beats", 0)))
+            if began:
+                write(dict(end=time.strftime("%Y-%m-%d %H:%M"), heartbeats=beats))
             shutil.rmtree(s.work, ignore_errors=True)
 
 
@@ -232,6 +243,8 @@ def main(argv=None):
     ap.add_argument("--hours", type=float, default=DAY_H)
     ap.add_argument("--every", type=int, default=600)
     ap.add_argument("--project-root", help="a folder here that Claude already trusts (default: lib.TRUSTED_CWD)")
+    ap.add_argument("--start-within", type=float, default=8, help="hours to keep retrying a start the core holds "
+                    "for memory pressure, every 10 min (default 8)")
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--report", help="the figures of a raw file")
     ap.add_argument("--raw", help="the raw file (default docs/measure/soak-<date>.jsonl, a self-test's in .scratch)")
@@ -255,10 +268,20 @@ def main(argv=None):
     raw = Path(a.raw) if a.raw else (ROOT / ".scratch" / f"soak-selftest-{time.strftime('%H%M%S')}.jsonl" if a.self_test
                                      else ROOT / "docs/measure" / f"soak-{stamp}.jsonl")
     raw.parent.mkdir(parents=True, exist_ok=True)
+    def attempts():
+        until = time.monotonic() + a.start_within * 3600
+        while True:
+            try:
+                return run(a, raw)
+            except Held as e:
+                if time.monotonic() > until:
+                    raise SystemExit(f"{e}; still held after {a.start_within} h, nothing measured")
+                print(f"{time.strftime('%H:%M')} {e}; retrying in 10 min", flush=True)
+                time.sleep(600)
     if a.self_test:
-        run(a, raw)
+        attempts()
     else:
-        problems = acc.guarded(lambda: run(a, raw))[1]
+        problems = acc.guarded(attempts)[1]
         with raw.open("a") as f:
             f.write(json.dumps(dict(end=time.strftime("%Y-%m-%d %H:%M"), guard_problems=problems)) + "\n")
     print(f"raw samples: {raw}")
