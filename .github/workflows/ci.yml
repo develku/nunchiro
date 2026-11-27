@@ -66,7 +66,7 @@ jobs:
   # clippy, doctests and one build of every test binary; the partitions below run the archive.
   rust-build:
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.web_only != 'true'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -135,6 +135,7 @@ jobs:
     outputs:
       app: ${{ steps.app.outputs.needed }}
       docs_only: ${{ steps.docs.outputs.only }}
+      web_only: ${{ steps.web.outputs.only }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -157,6 +158,16 @@ jobs:
           # Fails open to running everything: only exit 0 skips; 1, a bad ref or a broken script all give false.
           only=false
           if [ "$EVENT" = pull_request ] && scripts/docs-only.sh "origin/$BASE"; then only=true; fi
+          echo "only=$only" >> "$GITHUB_OUTPUT"
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+      - id: web
+        run: |
+          # Window code and tests no Rust file reads (scripts/web-only.sh): the web job still compiles the core and runs
+          # every window and scenario test, so only the Rust build and test jobs are skipped. Fails open like docs above.
+          only=false
+          if [ "$EVENT" = pull_request ] && scripts/web-only.sh "origin/$BASE"; then only=true; fi
           echo "only=$only" >> "$GITHUB_OUTPUT"
         env:
           EVENT: ${{ github.event_name }}
@@ -225,7 +236,8 @@ jobs:
 
   # The one required check of the merge queue. `always()`: a skipped or cancelled job must still fail it (T3 Code
   # ci.yml:660-696; Orca pr.yml:1279). Add every new job to `needs`. The allowed skips: `app` when `changes` said no app
-  # input changed, and `rust-build`, `rust-test` and `web` when `changes` said only safe docs changed.
+  # input changed, `rust-build`, `rust-test` and `web` when `changes` said only safe docs changed, and `rust-build` and
+  # `rust-test` when it said only window code and tests no Rust file reads changed.
   gate:
     if: always()
     needs: [lint, changes, rust-build, rust-test, app, web]
@@ -236,6 +248,8 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          echo "$RESULTS" | jq -e '.changes.outputs.app as $app | .changes.outputs.docs_only as $docs | all(to_entries[];
+          echo "$RESULTS" | jq -e '.changes.outputs.app as $app | .changes.outputs.docs_only as $docs
+            | .changes.outputs.web_only as $webonly | all(to_entries[];
             .value.result == "success" or (.key == "app" and .value.result == "skipped" and $app == "false")
-            or ((.key == "rust-build" or .key == "rust-test" or .key == "web") and .value.result == "skipped" and $docs == "true"))' > /dev/null
+            or ((.key == "rust-build" or .key == "rust-test" or .key == "web") and .value.result == "skipped" and $docs == "true")
+            or ((.key == "rust-build" or .key == "rust-test") and .value.result == "skipped" and $webonly == "true"))' > /dev/null
