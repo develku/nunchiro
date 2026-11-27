@@ -407,6 +407,10 @@ pub struct Place {
     /// Absent: the lead's own account.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account: Option<String>,
+    /// The user's "Ask me before merging task work" (`task merge-ask on|off`). Off (the default): a lead merges reviewed
+    /// task work into its working branch with no merge card (`ops::working_branch`); the default branch always asks.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub ask_merge: bool,
 }
 /// The choices of `Place.cap`, and its default.
 pub const CAPS: [u32; 4] = [2, 4, 6, 8];
@@ -431,6 +435,7 @@ impl Default for Place {
             auto: true,
             cap: CAP,
             account: None,
+            ask_merge: false,
         }
     }
 }
@@ -670,6 +675,15 @@ impl Ledger {
         self.change(|s| {
             let p = s.places.entry(place.to_path_buf()).or_default();
             p.cap = cap;
+            Ok((p.clone(), true))
+        })
+    }
+
+    /// The user's "Ask me before merging task work" for a place.
+    pub fn set_ask_merge(&self, place: &Path, on: bool) -> Result<Place, String> {
+        self.change(|s| {
+            let p = s.places.entry(place.to_path_buf()).or_default();
+            p.ask_merge = on;
             Ok((p.clone(), true))
         })
     }

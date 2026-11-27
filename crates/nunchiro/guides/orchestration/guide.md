@@ -94,9 +94,12 @@ open questions and the review.
    (`--file review.md`). You still read the verdicts, brief a fix round when the Builder needs more than the findings,
    and decide the merge (step 7). Only a reviewer seat may record a verdict; the builder may not, and a reviewer starts
    without the edit tools.
-7. **Merge.** When `nunchiro task show <id>` reads `approved` and the project's gate passes on the merged result, ask
-   the user with `nunchiro task ask-merge <id>` and end your turn, unless the user already told you to merge without
-   asking. Tell the user to answer on the merge card (Decisions); never ask them to reply yes or no in the chat, which
+7. **Merge.** When `nunchiro task show <id>` reads `approved` and the project's gate passes on the merged result, run
+   `nunchiro task ask-merge <id>`. Unless the user turned on "Ask me before merging task work" for this project, and
+   while the project's checkout is on your working branch (not the default branch), it needs no card: it tells you to
+   merge the reviewed commit now, and the user gets your final result as a pull request. Otherwise it asks the user on a
+   card: end your turn, unless the user already told you to merge without asking. Never merge task work into the
+   default branch yourself: it changes only through a pull request. Tell the user to answer on the merge card (Decisions); never ask them to reply yes or no in the chat, which
    does not merge. The work must be committed before the review. When the room says yes, merge exactly the commit it names
    (`nunchiro task show <id>` then reads `merge`). Never force-push or
    rewrite history.
