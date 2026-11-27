@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>M5: 팀 보드의 일에 순서를 답니다</title>
+<style>
+/* Colour and size values copied from web/src/tokens.css (origin/main). Buttons, the confirm strip, task cards and the
+   Diff panel head follow web/src/styles.css, pr/pr.css (.pr-confirm, .pr-row), lead/lead.css (.tboard, .tcard) and
+   the M8 page beside this file. No network, no external files. */
+:root,.lt{--page:#f6f6f4;--panel:#ffffff;--raised:#ffffff;--text:#1f2328;--muted:#59636e;--faint:#818b98;--line:#d1d9e0;--hover:#f0f2f4;
+--you:#bc4c00;--you-bg:#fff1e5;--bad:#cf222e;--warn:#9a6700;--run:#0969da;--ok:#1a7f37;--idle:#8c959f;--on-status:#ffffff;
+--tint-1:rgb(15 20 30/.045);--tint-2:rgb(15 20 30/.085);--glass-bg:rgb(255 255 255/.6);--glass-hi:rgb(255 255 255/.85);
+--shadow-card:0 1px 3px #0000001f;--shadow-float:0 12px 32px rgb(0 0 0/.14),0 1px 3px rgb(0 0 0/.08);
+--font-ui:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Segoe UI',sans-serif;--font-code:'SF Mono',Menlo,'D2Coding',monospace;color-scheme:light}
+[data-theme=dark]{--page:#0d1117;--panel:#151b23;--raised:#151b23;--text:#e6edf3;--muted:#9198a1;--faint:#9198a1;--line:#3d444d;--hover:#262c36;
+--you:#f0883e;--you-bg:#3a2614;--bad:#f85149;--warn:#d29922;--run:#4493f8;--ok:#3fb950;--idle:#7d8c86;--on-status:#151b23;
+--tint-1:rgb(255 255 255/.055);--tint-2:rgb(255 255 255/.1);--glass-bg:rgb(48 52 60/.5);--glass-hi:rgb(255 255 255/.14);
+--shadow-card:0 1px 3px #0000005c;--shadow-float:0 12px 32px rgb(0 0 0/.45),0 1px 3px rgb(0 0 0/.3);color-scheme:dark}
+*{box-sizing:border-box}
+html{word-break:keep-all;overflow-wrap:break-word}
+body{margin:0;font:13px/1.55 var(--font-ui);color:var(--text);background:var(--page)}
+h1,h2,h3,h4,p{margin:0}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+code{font:12px var(--font-code);background:var(--tint-1);padding:1px 5px;border-radius:4px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px 80px}
+.nav{position:sticky;top:0;z-index:9;display:flex;gap:4px;align-items:center;padding:8px 0;background:var(--page);box-shadow:0 1px 0 var(--tint-2);overflow-x:auto}
+.nav a{padding:3px 9px;border-radius:6px;color:var(--muted);white-space:nowrap;text-decoration:none}.nav a:hover{background:var(--tint-1);color:var(--text)}
+.nav button{margin-left:auto;border-radius:6px;padding:4px 12px;background:var(--tint-2);white-space:nowrap}
+.top h1{font-size:26px;line-height:1.25;letter-spacing:-.01em;margin:26px 0 8px}
+.top p{color:var(--muted);max-width:880px;font-size:14px}
+.sum{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:16px;margin-top:18px;align-items:stretch}
+.card{background:var(--panel);border-radius:12px;box-shadow:var(--shadow-card)}
+.sum .card{padding:16px 18px}
+.sum ol{margin:8px 0 0;padding-left:18px}.sum li{margin:0 0 5px}
+.fig b{display:block;font-size:40px;line-height:1;letter-spacing:-.03em;margin:6px 0 6px}
+.fig small{color:var(--muted);display:block}
+.cap{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.panel{margin:46px 0 0;scroll-margin-top:50px}
+.phead{display:flex;gap:14px;align-items:flex-start;margin:0 0 14px}
+.num{font-size:40px;font-weight:700;line-height:1;color:var(--faint);letter-spacing:-.04em;min-width:30px}
+.phead h2{font-size:19px;letter-spacing:-.01em}
+.phead p{color:var(--muted);max-width:860px}
+.rec{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;background:var(--text);color:var(--panel);font-size:11px;font-weight:600;vertical-align:3px}
+.two{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr);gap:18px;align-items:start}
+.half{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+@media(max-width:1000px){.two,.half,.sum{grid-template-columns:1fr}}
+.when{font-size:12px;color:var(--muted);margin:14px 0 6px}.when:first-child{margin-top:0}.when b{color:var(--text)}
+.notes{font-size:13px}.notes ul{margin:6px 0 12px;padding-left:16px}.notes li{margin:0 0 5px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;vertical-align:top;padding:8px 12px}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:700}
+tr+tr td{box-shadow:inset 0 1px 0 var(--tint-1)}
+td small{color:var(--muted);display:block}
+td code{white-space:normal}
+.yes{color:var(--ok);font-weight:600}.no{color:var(--bad);font-weight:600}.mid{color:var(--you);font-weight:600}
+.stack{display:grid;gap:10px}
+.qa{padding:14px 18px;margin:0 0 10px}.qa b{display:block;margin:0 0 4px}.qa small{color:var(--muted)}
+
+/* app pieces */
+.app{background:var(--panel);color:var(--text);border-radius:12px;box-shadow:var(--shadow-float),0 0 0 1px var(--tint-2);overflow:hidden;font:13px/1.45 var(--font-ui)}
+.ph{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;box-shadow:inset 0 -1px 0 var(--tint-2);font-size:12px}
+.ph .pt{font-weight:600}.ph .r{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.ph .sp{flex:1}
+.btn{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:2px 9px;background:var(--tint-1);font-size:12px;font-weight:500;white-space:nowrap;flex:none;color:var(--text)}
+.btn:hover{background:var(--tint-2)}
+.btn.p{background:var(--text);color:var(--panel);font-weight:600}
+.btn.q{background:none;color:var(--muted)}
+.btn.off{color:var(--faint);cursor:default}
+.confirm{margin:8px 10px;padding:8px 12px;border-radius:6px;background:var(--you-bg);font-size:12px}
+.confirm p{margin:0 0 6px}
+.files{padding:4px 10px 10px;font:12px/1.9 var(--font-code);color:var(--muted)}
+.files b{font-weight:400;color:var(--ok)}.files i{font-style:normal;color:var(--bad)}
+.form{margin:8px 10px 10px;padding:10px 12px;border-radius:8px;background:var(--tint-1);font-size:12px;display:grid;gap:8px}
+.form label{display:grid;gap:3px;color:var(--muted);font-size:11px}
+.inp{display:block;padding:4px 8px;border-radius:6px;background:var(--panel);box-shadow:inset 0 0 0 1px var(--line);color:var(--text);font-size:12px;min-height:26px}
+.inp.area{min-height:92px;white-space:pre-line;line-height:1.5}
+.inp.sel::after{content:'▾';float:right;color:var(--muted)}
+.frow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chk{display:inline-flex;align-items:center;gap:6px;color:var(--text)}
+.chk::before{content:'';width:13px;height:13px;border-radius:3px;box-shadow:inset 0 0 0 1px var(--faint);background:var(--panel);flex:none}
+.chk.on::before{background:var(--text);box-shadow:none}
+.fact{color:var(--muted);font-size:11px}
+.err{color:var(--bad)}
+.chat{padding:10px 14px;font-size:12px;color:var(--muted);display:grid;gap:8px}
+.bub{justify-self:end;max-width:86%;padding:6px 10px;border-radius:10px;background:var(--tint-2);color:var(--text)}
+.said{color:var(--text)}
+.sys{padding:8px 10px;border-radius:8px;background:var(--tint-1);color:var(--text);white-space:pre-line}
+.sys small{display:block;color:var(--muted);margin-bottom:3px}
+.chip{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:999px;background:var(--tint-1);font-size:11px;font-weight:500;white-space:nowrap}
+.chip.ok{color:var(--ok)}.chip.bad{color:var(--bad)}.chip.you{background:var(--you-bg);color:var(--you)}.chip.run{color:var(--run)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.note{display:flex;align-items:center;gap:8px;height:24px;padding:0 10px;font-size:11px;font-weight:600;box-shadow:inset 0 1px 0 var(--tint-2)}
+.note .x{color:var(--muted);margin-left:auto;font-weight:400}
+.tip{display:inline-block;margin:6px 0 0 10px;background:#1f2328;color:#f6f8fa;font-size:11px;padding:4px 8px;border-radius:6px;box-shadow:var(--shadow-float)}
+.term{font:12px/1.55 var(--font-code);padding:10px 12px;border-radius:8px;background:var(--panel);box-shadow:var(--shadow-card);white-space:pre-wrap;overflow-wrap:anywhere}
+.term .dim{color:var(--faint)}
+/* owner card (the decision queue's card) */
+.ocard{padding:12px 14px;border-radius:10px;background:var(--raised);border:1px solid var(--you);font-size:12px;display:grid;gap:6px}
+.ocard.calm{border-color:var(--line)}
+.ocard h4{font-size:13px;font-weight:600}
+.ocard p{color:var(--muted)}
+.ocard .frow{margin-top:2px}
+/* list rows (pr.css .pr-row) */
+.tabsrow{display:flex;gap:4px;align-items:center;padding:8px 10px 0;font-size:12px}
+.tb{height:24px;padding:0 10px;border-radius:6px;display:flex;align-items:center;color:var(--muted)}.tb.on{background:var(--tint-1);color:var(--text);font-weight:500}
+.lrow{display:grid;grid-template-columns:54px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:6px 12px;font-size:12px;box-shadow:inset 0 1px 0 var(--tint-1)}
+.lrow .n{color:var(--muted);font-variant-numeric:tabular-nums}
+.lrow .t{min-width:0}.lrow .t b{font-weight:500;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .t small{color:var(--muted);font-size:11px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .u{color:var(--muted);font-size:11px;white-space:nowrap}
+.lab{display:inline-block;padding:0 6px;border-radius:999px;background:var(--tint-2);font-size:10px;color:var(--muted);margin-right:3px}
+.empty{padding:22px 14px;text-align:center;color:var(--muted);font-size:12px}
+/* Team board (lead.css .tboard, .tcard) */
+.tboard{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;padding:10px}
+.tcard{position:relative;display:flex;flex-direction:column;gap:6px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--raised);min-width:0;font-size:12px}
+.tcard.you{border-color:var(--you)}.tcard.waits{opacity:.72}.tcard.sel{outline:2px solid var(--run);outline-offset:-1px}
+.tcard>b{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stg{display:flex;flex-wrap:wrap;gap:4px;font-size:11px}
+.stg span{padding:1px 6px;border-radius:999px;background:var(--tint-1);color:var(--faint)}
+.stg .done{color:var(--ok)}.stg .now{background:var(--run);color:var(--on-status)}.stg .yo{background:var(--you);color:var(--on-status)}
+.now-l{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.now-l.yo{padding:4px 8px;border-radius:6px;background:var(--you-bg);color:var(--you);white-space:normal}
+.facts{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--muted)}
+.menu{width:250px;background:var(--panel);border:1px solid var(--faint);border-radius:8px;box-shadow:0 8px 24px rgb(0 0 0/.25);font-size:12px;overflow:hidden;padding:4px}
+.menu .r{display:flex;align-items:center;gap:8px;min-height:26px;padding:0 8px;border-radius:6px}.menu .r.on{background:var(--hover)}
+.menu .r small{margin-left:auto;color:var(--faint);font-size:11px}
+.menu hr{border:0;height:1px;background:var(--tint-2);margin:4px 0}
+.pop{padding:12px 14px;border-radius:14px;background:var(--glass-bg);box-shadow:inset 0 1px 0 var(--glass-hi),inset 0 0 0 .5px var(--glass-hi),var(--shadow-float);font-size:12px;display:grid;gap:8px;max-width:380px}
+.pop h4{font:500 13px/1.4 var(--font-ui)}
+.pop p{color:var(--muted);font-size:11px}
+.bd{max-width:760px}
+.bh{display:flex;align-items:baseline;gap:8px;padding:10px 12px 0;font-size:12px}.bh b{font-size:13px}.bh span{color:var(--muted)}
+.wpill{padding:1px 6px;border-radius:999px;background:var(--tint-1);color:var(--muted);font-size:11px;align-self:flex-start;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.det{padding:10px 12px;font-size:12px;display:grid;gap:6px;max-width:330px}
+.det .r{display:flex;gap:8px;align-items:center}.det .r span:last-child{margin-left:auto;color:var(--muted);font-size:11px}
+.g{display:block;max-width:560px;width:100%;height:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="nav">
+  <a href="#p1">1 지금</a><a href="#p2">2 A 표시만</a><a href="#p3">3 B 기다리고, 풀리면 리드를 깨움 (추천)</a><a href="#p4">4 C 코어가 시작</a><a href="#p5">5 비교</a><a href="#p6">6 다른 앱</a><a href="#p7">7 문구</a><a href="#p8">8 질문</a>
+  <button onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">밝게 / 어둡게</button>
+</div>
+
+<div class="top">
+  <h1>"이 일은 저 일이 끝난 뒤에"를 코어가 기억합니다. 앞의 일이 들어가면 리드에게 알리고, 그 전에는 만들기를 시작하지 못합니다</h1>
+  <p>지금 일(task)에는 검토와 머지 관문은 있지만 일 사이의 순서가 없습니다. 순서는 리드의 대화 안에만 있어서, 리드가 새 대화로 바뀌면 잊히고 보드에서는 보이지 않습니다. 아래는 일에 "기다리는 일"을 다는 안 세 가지입니다. 기록은 일 장부(ledger)에 있으므로 리드가 바뀌어도, 코어가 다시 켜져도 남습니다.</p>
+  <div class="sum">
+    <div class="card">
+      <div class="cap">추천: B</div>
+      <ol>
+        <li><b>리드가 일을 만들 때 순서를 답니다.</b> <code>nunchiro task new "…" --after t-12</code>. 사용자는 카드 메뉴의 <code>Wait for…</code>로 달고 뗍니다.</li>
+        <li><b>기다리는 일은 카드에 한 줄.</b> <code>Waits for "Fix lexer panic"</code>. 단계 줄 자리에 나오고 카드는 흐립니다. 새 칸, 선, 그림은 없습니다.</li>
+        <li><b>기다리는 동안 계획은 되고 만들기는 안 됩니다.</b> 파일을 쓰는 자리를 열려고 하면 코어가 이유와 함께 거절합니다.</li>
+        <li><b>앞의 일이 들어가면 리드를 깨웁니다.</b> 리드가 자리를 엽니다. 앞의 일이 버려지면 조용히 기다리지 않고 사용자와 리드에게 묻습니다.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<section class="panel" id="p1">
+  <div class="phead"><div class="num">1</div><div>
+    <h2>지금: 카드는 서로를 모릅니다</h2>
+    <p><code>crates/nunchiro-core/src/ledger.rs:40-70</code>의 Task에는 받아들이는 조건, 자리, 검토, 머지 승인이 있고 다른 일을 가리키는 칸은 없습니다. "API가 들어간 뒤에 화면"은 리드가 기억하고 있어야 합니다.</p>
+  </div></div>
+  <div class="app bd">
+    <div class="bh"><b>Tasks</b><span>2 working · 1 waits for a seat</span></div>
+    <div class="tboard">
+      <div class="tcard"><b>Fix lexer panic</b><div class="stg"><span class="done">Plan ✓</span><span class="now">Build</span><span>Review</span><span>Gate</span></div><span class="now-l" style="font-family:var(--font-code)">Normalising CRLF in the test…</span><span class="facts"><span>Claude · Opus</span><span>2 min</span></span></div>
+      <div class="tcard"><b>Error spans in the CLI output</b><div class="stg"><span class="done">Plan ✓</span><span class="now">Build</span><span>Review</span><span>Gate</span></div><span class="now-l" style="font-family:var(--font-code)">error[E0432]: unresolved import `parse::Span`</span><span class="facts"><span>Codex</span><span>just now</span></span></div>
+      <div class="tcard waits"><b>Docs: lexer states</b><div class="stg"><span>Waits for a seat</span></div><span class="facts"><span>12 min</span></span></div>
+    </div>
+  </div>
+  <div class="notes" style="margin-top:12px"><ul>
+    <li>둘째 카드는 첫째가 들어가야 만들 수 있는 일인데 먼저 시작돼서, 아직 없는 <code>Span</code>을 찾다가 막혔습니다.</li>
+    <li>리드를 새 대화로 바꾸면(인수인계) 순서는 인수인계 글에 적혀 있을 때만 남습니다.</li>
+  </ul></div>
+</section>
+
+<section class="panel" id="p2">
+  <div class="phead"><div class="num">2</div><div>
+    <h2>A. 표시만: 카드에 "기다림"이 보이고, 지키는 것은 리드</h2>
+    <p>vibe-kanban과 Claude Code의 일 목록 방식입니다. 관계를 기록하고 보여 주기만 합니다. 리드가 무시하고 시작해도 막지 않고, 앞의 일이 끝나도 알리지 않습니다.</p>
+  </div></div>
+  <div class="two">
+    <div class="app bd"><div class="tboard">
+      <div class="tcard"><b>Fix lexer panic</b><div class="stg"><span class="done">Plan ✓</span><span class="now">Build</span><span>Review</span><span>Gate</span></div><span class="facts"><span>Claude · Opus</span><span>2 min</span></span></div>
+      <div class="tcard"><b>Error spans in the CLI output</b><span class="wpill">Waits for "Fix lexer panic"</span><div class="stg"><span class="done">Plan ✓</span><span class="now">Build</span><span>Review</span><span>Gate</span></div><span class="facts"><span>Codex</span><span>just now</span></span></div>
+    </div></div>
+    <div class="notes">
+      <div class="cap">약점</div>
+      <ul><li>표시와 실제가 어긋납니다. "기다림"이라고 쓰인 카드가 Build 중일 수 있습니다. 보드는 참이어야 한다와 부딪힙니다.</li>
+      <li>"팀이 따라 일하는 그래프"라고 하기 어렵습니다. 표시뿐이라 반쪽으로 볼 수 있습니다.</li></ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p3">
+  <div class="phead"><div class="num">3</div><div>
+    <h2>B. 기다리고, 풀리면 리드를 깨움<span class="rec">추천</span></h2>
+    <p>Orca의 리드 주도 방식(풀리면 "준비됨", 리드가 시작)에 두 가지를 더합니다. 기다리는 일에는 만드는 자리를 못 엽니다. 앞의 일이 버려지면 묻습니다. 다른 앱은 이때 뒤의 일이 조용히 영영 기다립니다.</p>
+  </div></div>
+  <div class="two">
+    <div>
+      <p class="when"><b>보드</b> · 기다리는 카드는 단계 줄 자리에 한 줄, 흐리게. 막고 있는 카드에는 작은 사실 하나</p>
+      <div class="app bd">
+        <div class="bh"><b>Tasks</b><span>1 working · 2 wait for a task</span></div>
+        <div class="tboard">
+          <div class="tcard"><b>Fix lexer panic</b><div class="stg"><span class="done">Plan ✓</span><span class="now">Build</span><span>Review</span><span>Gate</span></div><span class="now-l" style="font-family:var(--font-code)">Normalising CRLF in the test…</span><span class="facts"><span>Claude · Opus</span><span>2 min</span><span>2 tasks wait for this</span></span></div>
+          <div class="tcard waits sel"><b>Error spans in the CLI output</b><div class="stg"><span>Waits for "Fix lexer panic"</span></div><span class="facts"><span>planned</span><span>8 min</span></span></div>
+          <div class="tcard waits"><b>Docs: lexer states</b><div class="stg"><span>Waits for 2 tasks</span></div><span class="facts"><span>12 min</span></span></div>
+        </div>
+      </div>
+      <div class="half" style="margin-top:14px">
+        <div><p class="when"><b>기다리는 카드를 누르면</b> · 자리가 없으니 터미널 대신 이것이 서랍에</p>
+          <div class="app det"><b>Docs: lexer states</b><span class="fact">Waits for</span>
+            <div class="r"><span>Fix lexer panic</span><span>Build</span></div>
+            <div class="r"><span>Error spans in the CLI output</span><span>waits</span></div>
+            <span class="fact">Starts when both have landed. Ada (lead) is told then.</span>
+            <div class="frow"><button class="btn">Wait for…</button><button class="btn q">Start anyway</button></div></div></div>
+        <div><p class="when"><b>카드의 ⋯ 메뉴 → Wait for…</b> · 같은 곳의 열린 일에서 고릅니다</p>
+          <div class="menu"><div class="r" style="color:var(--faint)">Wait for…</div><hr>
+            <div class="r on">✓ Fix lexer panic<small>Build</small></div>
+            <div class="r">✓ Error spans in the CLI output<small>waits</small></div>
+            <div class="r">Tabs shrink to share the strip<small>Review</small></div>
+            <div class="r" style="color:var(--faint)">Docs: lexer states<small>this task</small></div>
+            <hr><div class="r">Wait for nothing</div></div></div>
+      </div>
+      <p class="when"><b>리드가 다는 법과, 일찍 시작하려 할 때 받는 답</b></p>
+      <div class="term"><span class="dim">$</span> nunchiro task new "Error spans in the CLI output" --accept "cli shows line:col" --after t-12
+t-13  Error spans in the CLI output  waits for t-12 "Fix lexer panic" (build)
+<span class="dim">$</span> nunchiro task staff t-13 Builder
+Not started: "Error spans in the CLI output" waits for "Fix lexer panic", which has not landed. You are told when it lands. A seat that does not write files may start now. To stop waiting: nunchiro task after t-13 --none
+<span class="dim">$</span> nunchiro task after t-12 t-13
+Refused: "Fix lexer panic" would wait for "Error spans in the CLI output", which already waits for it.</div>
+      <p class="when"><b>앞의 일이 들어갔을 때</b> · 리드에게 한 줄(지금의 깨우기 길), 카드는 보통 카드가 됩니다</p>
+      <div class="half">
+        <div class="app"><div class="chat"><div class="sys"><small>Nunchiro · to Ada (lead)</small>"Fix lexer panic" landed. "Error spans in the CLI output" no longer waits: start it when you are ready. "Docs: lexer states" still waits for 1 task.</div></div></div>
+        <div class="tcard"><b>Error spans in the CLI output</b><div class="stg"><span>Waits for a seat</span></div><span class="facts"><span>ready since 1 min</span></span></div>
+      </div>
+      <p class="when"><b>앞의 일이 버려졌을 때</b> · 조용히 기다리지 않습니다. 주황 카드, 리드에게도 같은 한 줄</p>
+      <div class="tcard you" style="max-width:330px"><b>Error spans in the CLI output</b><div class="stg"><span class="yo">Waits ✋</span></div>
+        <span class="now-l yo">"Fix lexer panic" was dropped, so this cannot start. Stop waiting for it, or drop this too?</span>
+        <div class="frow"><button class="btn p">Stop waiting</button><button class="btn">Drop this task</button></div></div>
+    </div>
+    <div class="notes">
+      <div class="cap">규칙</div>
+      <ul>
+        <li>기록: 일에 <code>after</code> 칸 하나(기다리는 일의 id, 8개까지). "막힘"은 저장하지 않고 그때그때 계산합니다. 어긋날 것이 없습니다.</li>
+        <li>"들어감" = 앞의 일이 merged 또는 done으로 닫힘. 뒤의 일의 워크트리는 base에서 잘라 내므로, 앞의 일이 base에 들어가 있어야 뜻이 있습니다.</li>
+        <li>같은 곳(프로젝트)의 일끼리만. 자기 자신, 없는 일, 돌고 도는 순서는 달 때 거절합니다.</li>
+        <li>기다리는 동안: 파일을 쓰지 않는 자리(계획)는 열 수 있고, 쓰는 자리(Builder)는 거절됩니다. 코어의 Reviewer 자동 시작도 건너뜁니다.</li>
+        <li>리드는 스스로 단 순서를 뗄 수 있습니다(<code>--none</code>). 뗀 것은 일의 기록에 남고 카드가 바뀝니다. 사용자의 <code>Start anyway</code>도 같은 일을 합니다.</li>
+        <li>순서를 달 때 뒤의 일에 이미 쓰는 자리가 있으면: 자리는 그대로 두고 카드에 <code>started before "…" landed</code>를 적습니다. 보드가 거짓말하지 않게.</li>
+        <li>정렬: 기다리는 카드는 일하는 카드 뒤, 닫힌 카드 앞.</li>
+      </ul>
+      <div class="cap">팀 재설계에 기대는 부분</div>
+      <ul>
+        <li>장부의 칸, CLI, 거절, 깨우는 한 줄은 재설계와 상관없이 지금 만들 수 있습니다.</li>
+        <li>카드 모양(한 줄, 사실, 서랍)은 지금의 보드를 따랐습니다. 팀 재설계에서 보드가 바뀌면 문구는 그대로 두고 자리만 옮깁니다. 그래서 화면은 마지막 PR입니다.</li>
+        <li>"한도는 기본으로 두지 않는다": 순서는 한도가 아니라 리드가 스스로 단 사실이고 스스로 뗄 수 있습니다.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p4">
+  <div class="phead"><div class="num">4</div><div>
+    <h2>C. 코어가 시작: 풀리면 저절로 자리가 열리고, 순서 그림도</h2>
+    <p>monocode와 Orca의 Coordinator 방식입니다. 앞의 일이 들어가면 코어가 뒤의 일의 Builder를 바로 엽니다(한 번에 4개까지). 보드에 순서 그림 보기를 더합니다.</p>
+  </div></div>
+  <div class="two">
+    <div class="app" style="padding:12px">
+      <svg class="g" viewBox="0 0 560 120" role="img" aria-label="Three tasks in order">
+        <g font-family="-apple-system,sans-serif" font-size="11" fill="currentColor">
+          <rect x="4" y="40" width="150" height="40" rx="8" fill="none" stroke="var(--run)"/><text x="14" y="58">Fix lexer panic</text><text x="14" y="72" fill="var(--run)">Build</text>
+          <rect x="204" y="8" width="170" height="40" rx="8" fill="none" stroke="var(--line)"/><text x="214" y="26">Error spans in the CLI…</text><text x="214" y="40" fill="var(--muted)">waits</text>
+          <rect x="404" y="40" width="150" height="40" rx="8" fill="none" stroke="var(--line)"/><text x="414" y="58">Docs: lexer states</text><text x="414" y="72" fill="var(--muted)">waits for 2</text>
+          <path d="M154 54 L204 30 M374 30 L404 54 M154 66 L404 66" stroke="var(--faint)" fill="none"/>
+        </g>
+      </svg>
+    </div>
+    <div class="notes">
+      <div class="cap">얻는 것</div><ul><li>리드가 자고 있어도 일이 이어집니다.</li></ul>
+      <div class="cap">약점</div>
+      <ul><li>코어가 누구를 어떤 모델로 열지 정해야 합니다. "리드가 정한다"와 "고정 한도는 기본으로 두지 않는다"와 부딪힙니다.</li>
+      <li>그림 보기는 읽은 13개 앱 어디에도 없습니다. 일이 대여섯 개일 때는 카드의 한 줄로 충분합니다.</li>
+      <li>토큰: 리드가 판단할 틈 없이 자리가 열립니다.</li></ul>
+      <p>B를 쓰면서 "풀렸는데 리드가 늦게 시작한 시간"을 재 보고 정하면 됩니다. 이미 있는 <code>task auto on</code>(곳마다 사용자가 켜는 자동 진행)에 한 단계로 붙일 수 있습니다.</p>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p5">
+  <div class="phead"><div class="num">5</div><div><h2>비교</h2></div></div>
+  <div class="card"><table>
+    <tr><th></th><th>A 표시만</th><th>B 기다리고, 리드를 깨움 (추천)</th><th>C 코어가 시작</th></tr>
+    <tr><td>순서가 남는 곳</td><td>장부</td><td>장부</td><td>장부</td></tr>
+    <tr><td>일찍 만들기 시작</td><td class="no">막지 않음</td><td class="yes">쓰는 자리 거절, 계획은 됨</td><td class="yes">B와 같음</td></tr>
+    <tr><td>앞의 일이 들어가면</td><td class="no">아무 일 없음</td><td class="yes">리드에게 한 줄, 리드가 시작</td><td class="mid">코어가 자리를 엶</td></tr>
+    <tr><td>앞의 일이 버려지면</td><td class="no">영영 기다림</td><td class="yes">사용자와 리드에게 물음</td><td class="yes">B와 같음</td></tr>
+    <tr><td>보드</td><td>알약 하나</td><td>단계 줄 자리에 한 줄, 서랍에 목록</td><td>B + 그림 보기</td></tr>
+    <tr><td>팀이 따라 일하는 순서</td><td class="mid">반쪽으로 볼 수 있음</td><td class="yes">예</td><td class="yes">예</td></tr>
+    <tr><td>만드는 양</td><td>PR 1개</td><td>PR 3개</td><td>PR 5개</td></tr>
+  </table></div>
+</section>
+
+<section class="panel" id="p6">
+  <div class="phead"><div class="num">6</div><div><h2>다른 앱</h2><p>소스에서 확인했습니다. 앱을 띄워 보지는 않았습니다. 13개를 찾았고 6개에 있습니다.</p></div></div>
+  <div class="card"><table>
+    <tr><th>앱</th><th>칸</th><th>"막힘"은</th><th>누가 다나</th><th>풀리면</th><th>돌고 도는 순서</th><th>화면</th></tr>
+    <tr><td>Orca</td><td><code>deps</code> (SQLite)</td><td>저장 (<code>pending</code> → <code>ready</code>)</td><td>리드만, <code>task-create --deps</code>. 나중에 못 고침</td><td>"ready"로 표시, 리드가 시작. 따로 켜는 Coordinator는 저절로(4개까지)</td><td>검사 없음</td><td>없음 (CLI 출력만)</td></tr>
+    <tr><td>monocode</td><td><code>dependsOn</code>, <code>accepted</code></td><td>계산</td><td>리드와 사용자(계획 카드)</td><td>앞의 일이 검토를 통과하면 저절로 시작 (1~4개)</td><td>계획 때 검사</td><td>"After · …"</td></tr>
+    <tr><td>Synara</td><td><code>dependsOnTaskIds</code></td><td>저장</td><td>RPC만</td><td>증거와 함께 받아들여지면 "ready"</td><td>검사함</td><td>찾지 못함</td></tr>
+    <tr><td>vibe-kanban</td><td>관계 표 (<code>blocking</code>)</td><td>계산</td><td>사용자(메뉴)와 에이전트(MCP)</td><td>아무 일 없음</td><td>자기 자신만</td><td>빨간 "blocked by X" 배지, 숨기기 거름</td></tr>
+    <tr><td>Claude Code의 일 목록</td><td><code>blocks</code>, <code>blockedBy</code></td><td>없음</td><td>에이전트</td><td>아무 일 없음</td><td>없음</td><td>(뷰어) 노란 "#id" 칩</td></tr>
+    <tr><td>T3 Code, emdash, Superset, bb, cmux 등 7개</td><td colspan="6">없음</td></tr>
+  </table></div>
+  <div class="notes" style="margin-top:12px"><ul>
+    <li>표준: 일에 "기다리는 일의 id 목록" 하나. 다는 것은 리드. 그림 보기는 아무 데도 없습니다.</li>
+    <li>Orca의 "gate"는 검토 관문이 아니라 결정 관문(질문을 걸고 일을 세워 둠)입니다. Nunchiro는 검토와 머지 관문이 이미 일에 있고, 질문은 방의 ask와 사용자의 카드가 합니다.</li>
+    <li>다른 앱의 빈틈 셋을 메웁니다: 앞의 일이 실패하거나 취소되면 뒤의 일이 조용히 기다림(전부), <code>task-update --status ready</code>로 순서를 건너뜀(Orca), 100개까지만 풀어 줌(Synara).</li>
+  </ul></div>
+</section>
+
+<section class="panel" id="p7">
+  <div class="phead"><div class="num">7</div><div><h2>문구 (영어만, 출시 전까지)</h2></div></div>
+  <div class="card"><table>
+    <tr><th>자리</th><th>문구</th><th>안</th></tr>
+    <tr><td>카드, 단계 줄 자리</td><td><code>Waits for "{title}"</code> · <code>Waits for {n} tasks</code></td><td>A B C</td></tr>
+    <tr><td>막고 있는 카드의 사실</td><td><code>1 task waits for this</code> · <code>{n} tasks wait for this</code></td><td>B C</td></tr>
+    <tr><td>보드 머리의 수</td><td><code>{n} waits for a task</code> · <code>{n} wait for a task</code></td><td>B C</td></tr>
+    <tr><td>서랍</td><td><code>Waits for</code> · <code>Starts when it has landed. {lead} is told then.</code> · <code>Starts when all {n} have landed. {lead} is told then.</code></td><td>B C</td></tr>
+    <tr><td>메뉴</td><td><code>Wait for…</code> · <code>Wait for nothing</code> · <code>this task</code> · <code>Start anyway</code></td><td>B C</td></tr>
+    <tr><td>풀린 뒤 사실</td><td><code>ready since {when}</code></td><td>B C</td></tr>
+    <tr><td>일찍 시작됨</td><td><code>started before "{title}" landed</code></td><td>B C</td></tr>
+    <tr><td>앞의 일이 버려짐</td><td><code>"{title}" was dropped, so this cannot start. Stop waiting for it, or drop this too?</code> · <code>Stop waiting</code> · <code>Drop this task</code></td><td>B C</td></tr>
+    <tr><td>리드에게 가는 한 줄</td><td><code>"{a}" landed. "{b}" no longer waits: start it when you are ready.</code> · <code>"{b}" still waits for {n} tasks.</code> · <code>"{a}" was dropped. "{b}" waited for it: stop waiting (nunchiro task after {id} --none) or drop it.</code></td><td>B C</td></tr>
+    <tr><td>CLI, 만든 뒤</td><td><code>{id}  {title}  waits for {id} "{title}" ({stage})</code></td><td>A B C</td></tr>
+    <tr><td>CLI, 자리 거절</td><td><code>Not started: "{b}" waits for "{a}", which has not landed. You are told when it lands. A seat that does not write files may start now. To stop waiting: nunchiro task after {id} --none</code></td><td>B C</td></tr>
+    <tr><td>CLI, 달 때 거절</td><td><code>Refused: "{a}" would wait for "{b}", which already waits for it.</code> · <code>Refused: a task cannot wait for itself.</code> · <code>Refused: no open task {id} in this project.</code> · <code>Refused: "{a}" was dropped; a task cannot wait for it.</code> · <code>Refused: a task waits for at most 8 tasks.</code></td><td>A B C</td></tr>
+    <tr><td>사용자가 뗐을 때 리드에게</td><td><code>The owner let "{b}" start without waiting for "{a}".</code></td><td>B C</td></tr>
+  </table></div>
+</section>
+
+<section class="panel" id="p8">
+  <div class="phead"><div class="num">8</div><div><h2>사용자가 답할 질문</h2><p>각 질문 아래가 추천입니다. 답이 없으면 추천대로 명세를 씁니다. 만들기는 승인 뒤에 시작합니다.</p></div></div>
+  <div class="card qa"><b>1. A, B, C 가운데 어느 것입니까?</b><small>추천: B. PR 1(장부와 CLI), PR 2(거절, 깨우기, 버려진 일), PR 3(보드)입니다. C는 B를 써 본 뒤에 <code>task auto</code>의 한 단계로 정합니다.</small></div>
+  <div class="card qa"><b>2. 앞의 일이 "끝났다"는 언제입니까?</b><small>추천: 들어갔을 때(merged 또는 done으로 닫힘). 뒤의 일이 base에서 시작하므로 그래야 앞의 일의 결과를 봅니다. 다른 답: 검토를 통과했을 때(monocode, Synara). 더 빠르지만 뒤의 일이 앞의 브랜치 위에서 시작해야 해서 워크트리 규칙이 바뀝니다.</small></div>
+  <div class="card qa"><b>3. 리드가 스스로 단 순서를 스스로 뗄 수 있습니까?</b><small>추천: 예, 기록을 남기고. 순서는 리드의 판단이고 고정 한도가 아닙니다. 다른 답: 떼는 것은 사용자만(카드로 부탁).</small></div>
+  <div class="card qa"><b>4. 기다리는 동안 계획 자리는 열어도 됩니까?</b><small>추천: 예. 파일을 쓰지 않는 자리는 앞의 일을 기다릴 까닭이 없고, 풀리자마자 만들기를 시작할 수 있습니다. 다른 답: 아무 자리도 열지 않음.</small></div>
+  <div class="card qa"><b>5. 화면(PR 3)은 팀 재설계의 보드가 정해진 뒤에 만듭니까?</b><small>추천: 지금의 보드에 한 줄로 먼저 냅니다(문구 3개, 서랍 하나). 재설계가 보드를 바꾸면 자리만 옮깁니다. 규칙은 화면 없이도 PR 2에서 됩니다.</small></div>
+</section>
+</div>
+</body>
+</html>
