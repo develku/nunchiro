@@ -4170,6 +4170,12 @@
             }
           ]
         },
+        "skipped": {
+          "description": "Its checks that got no time in an action's budget since the core started (the action went by `on_error`).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
         "state": {
           "anyOf": [
             {
@@ -4485,6 +4491,13 @@
       "properties": {
         "body": {
           "type": "string"
+        },
+        "changed_by": {
+          "description": "A plugin's check replaced what the sender wrote (`plugins.rs`): its name, never the original, which every seat\nin the room would read.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "created_by": {
           "$ref": "#/$defs/By"

@@ -95,7 +95,14 @@ function PluginsPage({ core, t }: Pick<PageContext, 'core' | 't'>) {
                     </>
                   )
                 }
-                why={p.needs && <Why id={`plg-needs-${p.id}`} reason={t(p.needs === 'web_widgets' ? 'plugins.needs.web' : 'plugins.needs.script')} />}
+                why={
+                  (p.needs || !!p.skipped) && (
+                    <>
+                      {p.needs && <Why id={`plg-needs-${p.id}`} reason={t(p.needs === 'web_widgets' ? 'plugins.needs.web' : 'plugins.needs.script')} />}
+                      {!!p.skipped && <Why id={`plg-skipped-${p.id}`} reason={t('plugins.skipped', { n: p.skipped })} />}
+                    </>
+                  )
+                }
                 chip={<span className={`chip${p.state === 'approved' && !p.error ? ' ok' : p.error || p.state === 'changed' ? ' warn' : ''}`}>{state(p)}</span>}
                 control={
                   <>

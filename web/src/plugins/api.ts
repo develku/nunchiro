@@ -31,6 +31,8 @@ export interface Listed {
   error?: string;
   /** The setting that is off and stops its parts. */
   needs?: 'script_widgets' | 'web_widgets';
+  /** Its checks that got no time in an action's budget since the core started; the action went by `on_error`. */
+  skipped?: number;
 }
 interface Core {
   request(request: { op: string; [k: string]: unknown }): Promise<unknown>;

@@ -578,6 +578,12 @@ pub struct Listed {
     /// The setting that is off and stops this plugin's parts (`script_widgets` or `web_widgets`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub needs: Option<String>,
+    /// Its checks that got no time in an action's budget since the core started (the action went by `on_error`).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub skipped: u64,
+}
+fn is_zero(n: &u64) -> bool {
+    *n == 0
 }
 pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
     let store = load(home);
@@ -599,6 +605,11 @@ pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
                     } else {
                         None
                     };
+                    let skipped = skipped()
+                        .lock()
+                        .ok()
+                        .and_then(|n| n.get(&(home.to_path_buf(), id.clone())).copied())
+                        .unwrap_or(0);
                     Listed {
                         values: values(home, &p),
                         id,
@@ -607,6 +618,7 @@ pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
                         plugin: Some(p),
                         error: None,
                         needs,
+                        skipped,
                     }
                 }
                 Err(e) => Listed {
@@ -617,6 +629,7 @@ pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
                     values: BTreeMap::new(),
                     error: Some(e),
                     needs: None,
+                    skipped: 0,
                 },
             }
         })
@@ -1057,6 +1070,17 @@ fn gates(
                 }
             };
             let left = deadline.saturating_duration_since(std::time::Instant::now());
+            let no_time = got.is_none() || left.is_zero();
+            if no_time {
+                // The action goes by `on_error` unchecked: said in the log and counted on the Plugins page.
+                eprintln!(
+                    "plugin {}: check {} skipped: no time left in the action's budget",
+                    p.name, g.name
+                );
+                if let Ok(mut n) = skipped().lock() {
+                    *n.entry((home.to_path_buf(), id.clone())).or_default() += 1;
+                }
+            }
             let ran = got.filter(|_| !left.is_zero()).and_then(|_turn| {
                 let config = widgets::Config {
                     timeout: config.timeout.min(left),
@@ -1117,6 +1141,12 @@ fn gates(
     Ok(replaced)
 }
 
+/// Checks skipped for want of time since this core started, by plugin (the Plugins page shows the count).
+fn skipped() -> &'static std::sync::Mutex<BTreeMap<(PathBuf, String), u64>> {
+    static ALL: std::sync::OnceLock<std::sync::Mutex<BTreeMap<(PathBuf, String), u64>>> =
+        std::sync::OnceLock::new();
+    ALL.get_or_init(Default::default)
+}
 /// All the checks one action runs, together.
 const BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
 /// One lock per check part, so its runs take turns.
@@ -1288,9 +1318,11 @@ pub(crate) fn check_request(
             *text = check_send_from(home, asker, sender, id, text)?
         }
         Request::RoomSend { to, body, .. } => {
-            *body = check_send(home, asker, to.as_deref().unwrap_or("room"), body)?;
+            *body = check_send_from(home, asker, sender, to.as_deref().unwrap_or("room"), body)?;
         }
-        Request::RoomReply { message, body, .. } => *body = check_send(home, asker, message, body)?,
+        Request::RoomReply { message, body, .. } => {
+            *body = check_send_from(home, asker, sender, message, body)?;
+        }
         Request::Remote { request, .. } | Request::Forwarded { request, .. } => {
             check_request(home, asker, sender, request, true)?;
         }

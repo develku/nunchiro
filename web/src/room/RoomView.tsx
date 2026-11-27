@@ -249,6 +249,7 @@ export function RoomView({ core, t, project, sessions, byId: rows, messages, pin
                       {t(`room.kind.${m.kind}` as const)}
                     </span>
                     <blockquote>{clean(m.body)}</blockquote>
+                    {m.changed_by && <small className="changed-tag" data-changed-by={m.changed_by}>{t('plugins.changedBy', { name: clean(m.changed_by) })}</small>}
                   </div>
                   {m.kind === 'lost' && lostCard(m, list)}
                 </div>
@@ -290,6 +291,7 @@ export function RoomView({ core, t, project, sessions, byId: rows, messages, pin
                   )}
                   {/* A long line (a lead's prompt with its paths) is cut to six lines here; the wide Room tab has it whole. */}
                   <blockquote title={m.body.length > 300 ? clean(m.body) : undefined}>{clean(m.body)}</blockquote>
+                  {m.changed_by && <small className="changed-tag" data-changed-by={m.changed_by}>{t('plugins.changedBy', { name: clean(m.changed_by) })}</small>}
                 </div>
               </div>
             ),

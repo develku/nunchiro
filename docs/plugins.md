@@ -123,8 +123,11 @@ did not answer, and its `on_error` decides, so the caller always hears back with
 check take turns. The window's starts run off its frame loop while a start check is on. A refused owner start
 says `<plugin> stopped this start: <reason>` with Start anyway (`agent start --anyway` in a terminal); an agent, a
 schedule or a token gets the sentence and cannot pass it. A replaced message (at most 16 KB) is delivered instead of
-the original; its row in the session's send log (`nunchiro snapshot --json`) keeps the original and the
-plugin's name, and the core's log names the plugin when it is delivered. A room message and a schedule's task keep only the core's log line (plugin, recipient, sizes): the room log is what every seat in the room reads, so the original there would deliver the very words the plugin took out, and a schedule's run keeps no message of its own. A check cannot answer a permission, skip an outward card or widen
+the original and says "Changed by <plugin>" where the window shows it: the room message and the agent's chat. A
+session's send row (`nunchiro snapshot --json`) also keeps the original; a room message keeps only the plugin's name,
+since the room is what every seat in it reads and the original there would deliver the words the plugin took out. A
+schedule's changed task leaves a line in the core's log. With `on_error = "allow"`, a check that got no time in a
+busy action is skipped: the core's log says so, and the Plugins page counts the skipped checks. A check cannot answer a permission, skip an outward card or widen
 anything: allow, refuse and replacement text are its only outputs. With no plugin on, nothing is run.
 
 ## Through the API

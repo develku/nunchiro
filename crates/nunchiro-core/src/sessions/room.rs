@@ -188,7 +188,18 @@ impl Sessions {
                 (PERSON.to_string(), By::Person, project)
             }
         };
-        let log = Log::open(&self.home, &project);
+        // A plugin's check changed this send or reply's words (server.rs, `plugins::check_request`): the message
+        // names the plugin.
+        let changed = match &request {
+            Request::RoomSend { to, body, .. } => {
+                crate::plugins::take_replaced(&seat, to.as_deref().unwrap_or("room"), body)
+            }
+            Request::RoomReply { message, body, .. } => {
+                crate::plugins::take_replaced(&seat, message, body)
+            }
+            _ => None,
+        };
+        let log = Log::open(&self.home, &project).changed_by(changed.map(|r| r.plugin));
         if matches!(request, Request::RoomRead { .. } | Request::RoomPin { .. }) && by != By::Person
         {
             return Err("the whole room is the owner's to read".into());
