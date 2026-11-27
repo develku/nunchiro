@@ -12,7 +12,7 @@ import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { expect, test, type Core } from './fixtures';
 import { openQuiet } from './tree-seed';
-import { expectMatchesMockup, outDir, repo, show, type Scheme } from './visual/compare';
+import { bookPalette, expectMatchesMockup, outDir, repo, show, type Scheme } from './visual/compare';
 import { MOCKUPS, mockup } from './visual/mockups';
 
 outDir('fidelity-worktree');
@@ -58,13 +58,14 @@ async function newDialog(app: Page, core: Core, scheme: Scheme) {
   await clean(app);
   return d;
 }
-const newFill = (d: Locator, scheme: Scheme) => async (m: Page) => {
+const newFill = (d: Locator, _scheme: Scheme) => async (m: Page) => {
+  await bookPalette(d, m);
   const hint = await d.locator('.wthint').first().innerHTML();
   const advanced = await d.locator('.wtadvanced').innerText();
   const cancel = await d.locator('.wtcancel').innerText();
   const value = await d.getByRole('textbox').inputValue();
   // Control style (ticket 1041 A, docs/design/polish-1121 .cmd): the polish field is a quiet tint with no outline, so the older WTDIALOGS field's line, fill and radius are replaced; layout, words and order stay the mockup's.
-  await m.addStyleTag({ content: `${NEW} .fld input{border-color:transparent;background:${scheme === 'dark' ? 'rgb(255 255 255/.055)' : 'rgb(15 20 30/.045)'};border-radius:6px}` });
+  await m.addStyleTag({ content: `${NEW} .fld input{border-color:transparent;background:${await d.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--tint-1').trim())};border-radius:6px}` });
   // Copy only: the mockup already holds ticket 468's field and ticket 294's Cancel at the line end (ticket 529).
   await m.locator(NEW).first().evaluate(
     (e, a) => {
@@ -161,6 +162,7 @@ async function tidyPanel(app: Page, core: Core, scheme: Scheme) {
   return d;
 }
 const tidyFill = (d: Locator) => async (m: Page) => {
+  await bookPalette(d, m);
   const a = await d.evaluate((e) => ({
     title: e.querySelector('.wtttl span')!.textContent,
     groups: [...e.querySelectorAll('section')].map((s) => ({

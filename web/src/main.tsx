@@ -7,6 +7,7 @@ import { BrowserApp } from './pairing/BrowserApp';
 import { Pairing } from './pairing/Pairing';
 import { isBrowserRole, storedToken } from './pairing/boot';
 import './tokens.css';
+import './book-tokens.css'; // the design book's roles over tokens.css (docs/design/design-book)
 import './light-glass.css';
 import './styles.css';
 import './widget-quiet.css'; // ticket 1041 lane 7b: quiet buttons and fields inside the widgets

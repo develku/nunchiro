@@ -14,6 +14,8 @@ import { expect, openWindow, test, type Core } from './fixtures';
 import { card, harness, openTheme } from './theme-harness';
 import { openQuiet } from './tree-seed';
 import { mockup } from './visual/mockups';
+import { windowTokens } from './window-tokens';
+import { DARK_PICK, LIGHT_PICK } from '../src/themes/nunchiro';
 
 const SRC = path.resolve(import.meta.dirname, '../src');
 const read = (f: string) => fs.readFileSync(path.join(SRC, f), 'utf8');
@@ -50,29 +52,22 @@ async function tree(app: Page, core: Core, name = 'lumen', main = false) {
   return { p, grp: app.locator(`.grp[data-project="${name}"]`) };
 }
 
-/** The mockup's own :root sets (light, then the prefers-color-scheme dark block), read from the file at run time. */
-function mockupRoot() {
-  const html = fs.readFileSync(mockup('hiderows-r6.html'), 'utf8');
-  const light = html.match(/\n:root\{(--bg:[^;]*;--ink:[^;]*;--pbg:[^}]*)\}/)![1];
-  const dark = html.match(/@media \(prefers-color-scheme:dark\)\{:root\{([^}]*)\}\}/)![1];
-  const parse = (s: string) => Object.fromEntries(s.split(';').map((d) => d.split(':')));
-  return { light: parse(light), dark: parse(dark) };
-}
 /** app role -> mockup variable. */
 const ROLES: Record<string, string> = { '--page': '--bg', '--panel': '--pbg', '--text': '--fg', '--muted': '--mut', '--line': '--line', '--hover': '--hov', '--you': '--you', '--bad': '--bad', '--run': '--run', '--ok': '--ok', '--done': '--done' };
 
-test('tokens_match_mockup: the default theme computes the hiderows-r6 :root values, light and dark', async ({ app, core }) => {
-  const mock = mockupRoot();
+// The design book (book-tokens.css) replaced the hiderows-r6 values; the roles are the stylesheets' own (window-tokens.ts).
+test('tokens_match_mockup: the default theme computes the design book values, light and dark; the R8 names follow', async ({ app, core }) => {
   core.shell(core.project('demo'), 'a');
   await openWindow(app);
-  for (const scheme of ['light', 'dark'] as const) {
+  for (const [scheme, pick] of [['light', LIGHT_PICK], ['dark', DARK_PICK]] as const) {
+    const want = windowTokens(pick.colors);
     await app.emulateMedia({ colorScheme: scheme });
     await expect(app.locator('html')).toHaveAttribute('data-theme', scheme);
-    for (const [role, v] of Object.entries(ROLES)) expect(await probe(app, await tok(app, role)), `${scheme} ${role}`).toBe(await probe(app, mock[scheme][v]));
-    // The R8 names follow the roles, so rules that still read them paint the ko/ values.
-    expect(await probe(app, await tok(app, '--bg'))).toBe(await probe(app, mock[scheme]['--pbg']));
-    expect(await probe(app, await tok(app, '--ink'))).toBe(await probe(app, mock[scheme]['--fg']));
-    expect(await probe(app, await tok(app, '--g3'))).toBe(await probe(app, mock[scheme]['--line']));
+    for (const role of Object.keys(ROLES)) expect(await probe(app, await tok(app, role)), `${scheme} ${role}`).toBe(await probe(app, want[role]));
+    // The R8 names follow the roles, so rules that still read them paint the book's values.
+    expect(await probe(app, await tok(app, '--bg'))).toBe(await probe(app, want['--panel']));
+    expect(await probe(app, await tok(app, '--ink'))).toBe(await probe(app, want['--text']));
+    expect(await probe(app, await tok(app, '--g3'))).toBe(await probe(app, want['--line']));
   }
 });
 
@@ -104,22 +99,22 @@ for (const pick of PICKS)
     for (const role of ['--page', '--panel', '--raised', '--text', '--muted', '--line', '--hover', '--faint', '--you', '--you-bg', '--bad', '--run', '--ok', '--done', '--idle'])
       expect(await probe(app, await tok(app, role)), `${pick.name} ${role}`).toBe(await probe(app, want[role]));
     expect(await probe(app, await tok(app, '--panel'))).toBe(await probe(app, pick.colors.background));
-    expect(await probe(app, await tok(app, '--focus-ring'))).toBe(await probe(app, want['--run']));
+    expect(await probe(app, await tok(app, '--focus-ring'))).toBe(await probe(app, want['--accent']));
     // Ticket 293 (needs 212): no contrast push on the text; D-20261108-11: muted is mixed from the theme's background and foreground.
     expect(await probe(app, await tok(app, '--text'))).toBe(await probe(app, pick.colors.foreground));
   });
 
 const box = (l: Locator) => l.evaluate((e) => ({ h: e.getBoundingClientRect().height, r: getComputedStyle(e).borderTopLeftRadius }));
-test('row_height_32_default: a fresh profile draws 32px session rows (ticket 1041, owner 15.1 item 7; was the ko/ 30) with a 6px radius and 25px project heads (ko/ .proj, kept by ticket 1041); compact gives 22px', async ({ app, core }) => {
+test('row_height_32_default: a fresh profile draws 32px session rows (ticket 1041, owner 15.1 item 7; was the ko/ 30) with an 8px radius (the design book; was 6) and 25px project heads (ko/ .proj, kept by ticket 1041); compact gives 22px', async ({ app, core }) => {
   const { grp } = await tree(app, core);
-  expect(await box(grp.locator('.row.head'))).toEqual({ h: 25, r: '6px' });
-  expect(await box(grp.locator('.row.wt2'))).toEqual({ h: 32, r: '6px' });
+  expect(await box(grp.locator('.row.head'))).toEqual({ h: 25, r: '8px' });
+  expect(await box(grp.locator('.row.wt2'))).toEqual({ h: 32, r: '8px' });
   await app.getByRole('button', { name: 'Settings', exact: true }).click();
   await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name: 'Appearance' }).click(); // v25-fix-settings: Settings opens on General
   await app.getByRole('spinbutton', { name: 'Row height' }).fill('22'); // D-20261108-07: the Density presets are gone; 22 px is compact's height
   await app.keyboard.press('Escape'); // v25f: Settings is a modal over the tabs; Esc closes it first
   await app.locator('.tab:not([data-tab="settings"])').first().click(); // back to a session tab
-  await expect.poll(() => box(grp.locator('.row.head'))).toEqual({ h: 22, r: '6px' });
+  await expect.poll(() => box(grp.locator('.row.head'))).toEqual({ h: 22, r: '8px' });
   expect((await box(grp.locator('.row.wt2'))).h).toBe(22);
 });
 
@@ -153,7 +148,7 @@ plain('density_migration: parse keeps explicit picks and old non-default densiti
   expect(parse('{}').settings).toMatchObject({ density: 'comfortable', densityPicked: false });
 });
 
-test('focus_ring_blue: a tree row and its head button show the neutral --ring-focus (ticket 1041 lane 4, 15.1 item 1), a Settings input the same 2px neutral ring (lane 8), light and dark', async ({ app, core, browserName }) => {
+test('focus_ring_blue: a tree row and its head button show --ring-focus, the design book --accent ring (was neutral, ticket 1041 lane 4), a Settings input the same 2px ring, light and dark', async ({ app, core, browserName }) => {
   const { grp } = await tree(app, core);
   const ring = (l: Locator) =>
     l.evaluate((e) => {
@@ -176,9 +171,9 @@ test('focus_ring_blue: a tree row and its head button show the neutral --ring-fo
     await expect(app.locator('html')).toHaveAttribute('data-theme', scheme);
     const run = await probe(app, await tok(app, '--run'));
     expect(run).not.toBe(await probe(app, await tok(app, '--text')));
-    // Ticket 1041 lane 4: the tree's rings are the neutral ring; blue is the working light there.
+    // The design book: the focus ring is --accent (the neutral ring of ticket 1041 lane 4 is replaced).
     const neutral = await probe(app, await tok(app, '--ring-focus'));
-    expect(neutral).not.toBe(run);
+    expect(neutral).toBe(await probe(app, await tok(app, '--accent')));
     await focused(grp.locator('.row.wt2'), 'shadow').toContain(`${neutral} 0px 0px 0px 2px inset`);
     await focused(grp.locator('.row.head button.n'), 'outline').toBe(`solid 2px ${neutral}`);
     await app.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -347,7 +342,7 @@ test('theme_cards_show_their_own_colours: each gallery card paints its own theme
   const seen = await Promise.all(names.map(look));
   expect(new Set(seen).size, seen.join('\n')).toBe(names.length);
   for (const [i, name] of names.entries()) {
-    const c = name.startsWith('Nunchiro') ? (name.endsWith('Dark') ? '#151b23' : '#ffffff') : parseGhostty(THEMES[name]).background;
+    const c = name.startsWith('Nunchiro') ? (name.endsWith('Dark') ? '#1b1e21' : '#fafaf9') : parseGhostty(THEMES[name]).background;
     expect(seen[i].split(' / ')[0], name).toBe(await probe(app, c));
   }
 });

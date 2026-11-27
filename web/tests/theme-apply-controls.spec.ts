@@ -155,7 +155,11 @@ test('accent_contrast_every_theme: the derived accent (--run) reads at 3:1 on ev
   const low: string[] = [];
   for (const [name, text] of Object.entries(THEMES)) {
     const t = deriveTokens(parseGhostty(text));
-    for (const s of ['--page', '--panel', '--hover']) if (contrast(t['--run'], t[s]) < 3) low.push(`${name} --run on ${s}`);
+    // --hover is a tint (#rrggbbaa) since the design book: it is measured as painted on --page.
+    const a = parseInt(t['--hover'].slice(7, 9) || 'ff', 16) / 255;
+    const hover = `#${[1, 3, 5].map((i) => Math.round(parseInt(t['--page'].slice(i, i + 2), 16) * (1 - a) + parseInt(t['--hover'].slice(i, i + 2), 16) * a).toString(16).padStart(2, '0')).join('')}`;
+    const on: Record<string, string> = { '--page': t['--page'], '--panel': t['--panel'], '--hover': hover };
+    for (const [s, bg] of Object.entries(on)) if (contrast(t['--run'], bg) < 3) low.push(`${name} --run on ${s}`);
   }
   expect(low).toEqual([]);
 });

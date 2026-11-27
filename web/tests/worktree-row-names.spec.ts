@@ -206,7 +206,7 @@ test('menu_matches_mockup_05: header, the drawn items in order, rules between gr
   expect(await texts()).toEqual(['Open worktree (a shell in it)', 'New session…', 'Rename label…', 'Copy path', 'Reveal in Finder', 'Open in editor', 'Move to done', 'Remove worktree…']);
   await expect(menu.getByRole('menuitem', { name: /^Rename label/ }).locator('.kbd')).toHaveText('F2');
   await expect(menu.getByRole('separator')).toHaveCount(1); // no session: no Stop, so no second rule
-  await expect(menu.getByRole('menuitem', { name: /^Remove worktree/ })).toHaveCSS('color', 'rgb(207, 34, 46)');
+  await expect(menu.getByRole('menuitem', { name: /^Remove worktree/ })).toHaveCSS('color', 'rgb(170, 65, 56)'); // --bad-text (the design book)
   for (const gone of [/Rename the session tab/, /Focus the terminal/, /Open Diff/, /Tidy/, /New worktree/]) await expect(menu.getByRole('menuitem', { name: gone })).toHaveCount(0);
   await app.keyboard.press('Escape');
   await expect(app.getByRole('button', { name: 'Actions for live one' })).toHaveCount(1); // adopted

@@ -15,9 +15,12 @@
 // like any theme's). The terminal takes the colours as they are. The R8 names (--bg, --g0..--g7, --ink, ...) are
 // aliases in tokens.css and follow these roles.
 //
-// Role table (theme field -> token): palette 4 -> --run (the accent), 3 -> --you (your turn), 1 -> --bad, 2 -> --ok,
-// 5 -> --done, 11 -> --stale, --stale-line and --warn; foreground -> --text; background -> --panel, --raised and
-// --on-status; selectionBackground -> --selection-bg, selectionForeground (else the foreground) -> --selection-text
+// Role table (theme field -> token), since the design book's derive rule (deriveTokens below): palette 4 -> --accent,
+// --light-run and --run (words); mix(palette 3, palette 1, 35%) -> the warm --you-glow, --light-you, --you-text,
+// --primary; 1 -> --light-bad, --bad-text; 2 -> --light-done, --ok-text; 3 -> --light-warn, --warn-text; 11 -> --stale;
+// foreground -> --text; background -> --panel, with --page one step darker and --raised lifted; the old names (--you,
+// --bad, --ok, --done, --warn, ...) take the book's block-4 values. selectionBackground -> --selection-bg,
+// selectionForeground (else the foreground) -> --selection-text
 // (applied by themes/apply.ts as the window's ::selection). Syntax (--syn-*): 5 magenta -> keyword, 2 green -> string,
 // 4 blue -> function, 6 cyan -> constant, 3 yellow -> type, comment and punctuation from background/foreground mixes;
 // each made readable on the panel and diff tints (deriveTokens below). Chat marks (ticket 1039, owner 2026-11-21, approved
@@ -101,70 +104,99 @@ export function chatAccent(c: ThemeColors, slot: number): Record<string, string>
 export function deriveTokens(c: ThemeColors): Record<string, string> {
   const p = c.palette;
   const dark = isDark(c);
-  const tintShare = dark ? 0.2 : 0.1;
-  const page = mix(c.background, c.foreground, 0.04);
-  const surfaces = [page, c.background];
-  // Minimum contrast for the chrome (ticket 520): each is the theme's own value when it already reads at 4.5:1.
   const ink = dark ? WHITE : BLACK;
-  const text = readable(c.foreground, [ink], 4.5, surfaces);
-  const accent = readable(p[4], [ink], 4.5, [c.background]);
-  // Ticket 559 (F4): the two status colours that the chrome also draws as words (the "In use" badge on its 6% tint, the danger menu
-  // item) get a text twin by the same rule on the same surfaces as --text (ticket 561); --ok and --bad themselves stay as written (dots, fills, lines).
-  const okText = readable(p[2], [ink], 4.5, [...surfaces, mix(c.background, p[2], 0.06)]);
-  const badText = readable(p[1], [ink], 4.5, surfaces);
-  const faint = readable(c.background, [text], 3, surfaces, 0.45);
-  const diffAdd = mix(c.background, p[2], dark ? 0.15 : 0.08);
-  const diffDel = mix(c.background, p[1], dark ? 0.15 : 0.08);
-  // Syntax (ticket 482): each role starts at an ANSI colour, as bat's `ansi` theme and delta do, and steps toward the
-  // foreground (then white or black, when the foreground itself reads under 4.5:1 on a tint) until it reads at 4.5:1 on
-  // the panel and both diff tints, or as near as one colour can (a mid-grey background). Comment and punctuation start as
-  // background/foreground mixes like --muted.
-  const code = [c.background, diffAdd, diffDel];
-  const syntax = (start: string, t = 0) => readable(start, [c.foreground, dark ? WHITE : BLACK], 4.5, code, t, true);
-  // Ticket 1041 lane 1 (A+B+C): the surface steps are the theme's own text at a low alpha, as the mockup's are ink at
-  // 4.5% and 8.5% (light) or white at 5.5% and 10% (dark); glass is the background at 60% (light) or a lifted
-  // background at 50% (dark). Words on the selected step read 4.5:1 (on a mid grey, where no ink can, the best one); the focus ring and the four state lights are marks
-  // and read 3:1 on --page, --panel and the selected step, stepping toward black or white only as far as needed.
+  const B = c.background;
+  // The design book's derive rule (docs/design/design-book/index.html, "Theme derive rule"; derive() there is the
+  // reference): surfaces by fixed mixes, every role that carries meaning stepped toward black or white until it reads.
+  const panel = B;
+  const page = mix(B, BLACK, dark ? 0.22 : 0.035);
+  const raised = dark ? mix(B, c.foreground, 0.04) : mix(B, WHITE, 0.7);
+  const base = [page, panel, raised];
   const alpha = (v: string, a: number) => `${v}${Math.round(a * 255).toString(16).padStart(2, '0')}`;
-  const [t1, t2] = dark ? [0.055, 0.1] : [0.045, 0.085];
+  const [t1, t2, t3] = dark ? [0.05, 0.09, 0.13] : [0.05, 0.085, 0.13];
   const a2 = Math.round(t2 * 255) / 255; // the alpha --tint-2 is written with, so the check sees what the browser paints
-  const selected = [mix(page, text, a2), mix(c.background, text, a2)];
-  const marks = [...surfaces, ...selected];
-  const mark = (start: string) => readable(start, [ink], 3, marks);
+  // The text also reads on the hover and selected tints; the tint of the ink itself is the darkest (lightest) they can be.
+  const text = readable(c.foreground, [ink], 4.5, [...base, mix(page, ink, a2), mix(panel, ink, a2)], 0, true);
+  const selected = [mix(page, text, a2), mix(panel, text, a2)];
+  const marksOn = [...base, ...selected]; // words and marks: the three surfaces and the selected row
+  const warm = mix(p[3], p[1], 0.35);
+  const youWash = mix(page, warm, 0.14); // the needs-you row's wash at its strongest
+  const youOn = [...marksOn, youWash]; // a needs-you row can be the selected one too
+  const diffAdd = mix(B, p[2], dark ? 0.15 : 0.08);
+  const diffDel = mix(B, p[1], dark ? 0.15 : 0.08);
+  const onPrimary = dark ? B : WHITE;
+  const word = (start: string, on = marksOn) => readable(start, [ink], 4.5, on, 0, true);
+  const mark = (start: string, on = marksOn) => readable(start, [ink], 3, on, 0, true);
+  const faint = readable(mix(B, text, 0.42), [text], 3, base, 0, true);
+  const accent = mark(p[4]);
+  const lightYou = mark(warm, youOn);
+  const youText = word(warm, youOn);
+  const lightBad = mark(p[1]);
+  const lightDone = mark(p[2]);
+  const lightWarn = mark(p[3]);
+  const badText = word(p[1]);
+  const okText = word(p[2], [...marksOn, mix(B, p[2], 0.06)]); // also on the "In use" badge's 6% tint (ticket 559)
+  const warnText = word(p[3]);
+  const glassFloat = alpha(raised, dark ? 0.8 : 0.82);
+  // Old names the window still reads, at the values the book's tokens.css block 4 gives them. --run stays the 4.5:1 blue
+  // for words (tool names, links); the working dot is --light-run.
+  const run = word(p[4]);
+  // Syntax (ticket 482): each role starts at an ANSI colour, as bat's `ansi` theme and delta do, and steps toward the
+  // foreground (then white or black) until it reads at 4.5:1 on the reading surfaces and both diff tints, or as near as
+  // one colour can (a mid-grey background). Comment and punctuation start as background/foreground mixes like --muted.
+  const code = [panel, raised, diffAdd, diffDel];
+  const syntax = (start: string, t = 0) => readable(start, [c.foreground, ink], 4.5, code, t, true);
   return {
+    '--page': page,
+    '--panel': panel,
+    '--raised': raised,
+    '--text': text,
+    // also on the darkest stack it meets: a hovered quiet button (tint 3) inside a tinted box (tint 1) on the page
+    '--muted': readable(mix(B, text, 0.6), [text], 4.5, [...marksOn, diffAdd, diffDel, mix(mix(page, text, t1), text, t3)], 0, true),
+    '--faint': faint,
+    '--line': mix(B, c.foreground, dark ? 0.09 : 0.11),
     '--tint-1': alpha(text, t1),
     '--tint-2': alpha(text, t2),
-    '--select-text': readable(text, [ink], 4.5, selected, 0, true),
-    '--glass-bg': dark ? alpha(mix(c.background, c.foreground, 0.12), 0.5) : alpha(c.background, 0.6),
-    '--glass-hi': alpha(WHITE, dark ? 0.14 : 0.85),
-    '--shadow-float': `0 12px 32px ${alpha(BLACK, dark ? 0.45 : 0.14)}, 0 1px 3px ${alpha(BLACK, dark ? 0.3 : 0.08)}`,
-    '--ring-focus': readable(mix(c.background, text, 0.5), [text, ink], 3, marks),
-    '--light-run': mark(accent),
-    '--light-you': mark(p[3]),
-    '--light-bad': mark(p[1]),
-    '--light-limited': mark(p[11]),
-    '--panel': c.background,
-    '--raised': c.background,
-    '--on-status': c.background,
-    '--text': text,
-    '--page': page,
-    '--hover': mix(c.background, c.foreground, 0.07),
-    '--line': mix(c.background, c.foreground, 0.175),
-    '--muted': readable(c.background, [text], 4.5, surfaces, 0.6),
-    '--faint': faint,
-    '--idle': faint,
-    '--run': accent,
-    '--ok': p[2],
-    '--ok-text': okText,
-    '--done': p[5],
-    '--you': p[3],
-    '--you-bg': mix(c.background, p[3], tintShare),
-    '--bad': p[1],
+    '--tint-3': alpha(text, t3),
+    '--glass-chrome': alpha(page, dark ? 0.6 : 0.62),
+    '--glass-float': glassFloat,
+    '--glass-hi': dark ? '#ffffff12' : '#ffffffb3',
+    '--accent': accent,
+    '--light-run': accent,
+    '--light-you': lightYou,
+    '--you-glow': warm,
+    '--you-text': youText,
+    '--primary': readable(warm, [ink], 4.5, [onPrimary], 0, true),
+    '--on-primary': onPrimary,
+    '--light-bad': lightBad,
     '--bad-text': badText,
+    '--light-done': lightDone,
+    '--ok-text': okText,
+    '--light-warn': lightWarn,
+    '--warn-text': warnText,
+    '--knob': dark ? mix(c.foreground, WHITE, 0.3) : WHITE,
+    '--shadow-float': `0 12px 32px ${alpha(BLACK, dark ? 0.45 : 0.14)}, 0 1px 3px ${alpha(BLACK, dark ? 0.3 : 0.08)}`,
+    '--shadow-card': `0 1px 3px ${mix(B, BLACK, 0.7)}${dark ? '5c' : '1f'}`,
+    // Old names (book-tokens.css block 4). Many rules still paint --you, --bad, --ok, --done and --warn as words, so they
+    // take the 4.5:1 words twin (which also reads as a 3:1 mark) until those rules move to the new names.
+    '--you': youText,
+    '--you-bg': mix(panel, warm, 0.12),
+    '--bad': badText,
+    '--ok': okText,
+    '--done': okText,
+    '--idle': faint,
+    '--warn': warnText,
+    '--light-limited': lightWarn,
+    '--hover': alpha(text, t1),
+    '--on-status': panel,
+    '--ring-focus': accent,
+    '--select-text': readable(text, [ink], 4.5, selected, 0, true), // the text, or (a mid grey) the best on the selected step
+    '--glass-bg': glassFloat,
+    '--run': run,
+    // Not in the book yet: the stale marks keep palette 11.
     '--stale': p[11],
-    '--stale-bg': mix(c.background, p[11], tintShare),
+    '--stale-bg': mix(B, p[11], dark ? 0.2 : 0.1),
     '--stale-line': p[11],
-    '--warn': p[11],
     '--diff-add': diffAdd,
     '--diff-del': diffDel,
     '--syn-keyword': syntax(p[5]),
@@ -172,12 +204,11 @@ export function deriveTokens(c: ThemeColors): Record<string, string> {
     '--syn-func': syntax(p[4]),
     '--syn-const': syntax(p[6]),
     '--syn-type': syntax(p[3]),
-    '--syn-comment': syntax(c.background, 0.6),
-    '--syn-punct': syntax(c.background, 0.8),
-    '--chat-code': readable(p[5], [ink], 4.5, [c.background, page]),
-    '--chat-link': readable(p[6], [ink], 4.5, [c.background]),
-    '--chat-mark': readable(mix(p[4], c.background, 0.25), [ink], 4.5, [c.background]),
-    '--shadow-card': `0 1px 3px ${mix(c.background, BLACK, 0.7)}${dark ? '5c' : '1f'}`,
+    '--syn-comment': syntax(B, 0.6),
+    '--syn-punct': syntax(B, 0.8),
+    '--chat-code': readable(p[5], [ink], 4.5, base, 0, true),
+    '--chat-link': readable(p[6], [ink], 4.5, [B]),
+    '--chat-mark': readable(mix(p[4], B, 0.25), [ink], 4.5, [B]),
     '--selection-bg': c.selectionBackground,
     '--selection-text': c.selectionForeground ?? c.foreground,
   };

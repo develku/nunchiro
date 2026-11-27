@@ -1,5 +1,5 @@
 // Syntax colours follow the theme (ticket 482, owner 2026-11-12). Pure functions, no page: every --syn-* token reads at
-// 4.5:1 or more on --panel, --diff-add and --diff-del, for tokens.css's two Nunchiro themes, the bundled catalog, the
+// 4.5:1 or more on --panel, --raised, --diff-add and --diff-del, for tokens.css's two Nunchiro themes, the bundled catalog, the
 // Nunchiro theme files run through deriveTokens, and a few hard themes (a pale light one, a low-contrast dark one).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,7 +11,7 @@ import { parseGhostty } from '../src/themes/ghostty';
 import { NUNCHIRO_DARK, NUNCHIRO_LIGHT } from '../src/themes/nunchiro';
 
 const ROLES = ['keyword', 'string', 'func', 'const', 'type', 'comment', 'punct'];
-const SURFACES = ['--panel', '--diff-add', '--diff-del'];
+const SURFACES = ['--panel', '--raised', '--diff-add', '--diff-del']; // --raised: the design book's code and card surface
 
 // Hard cases: Solarized Light's foreground reads at 4.1:1 on its own background; a dull grey dark theme.
 const PALE_LIGHT = `background = #fdf6e3
@@ -63,12 +63,20 @@ for (const [name, text] of themes)
   });
 
 test('syntax tokens read at 4.5:1 on panel and diff tints: tokens.css light and dark', () => {
-  const css = fs.readFileSync(path.resolve(import.meta.dirname, '../src/tokens.css'), 'utf8');
-  // The light block and the [data-theme='dark'] block; each value as written, var() resolved within the block.
-  const blocks = [css.slice(0, css.indexOf('@media')), css.slice(css.indexOf(":root[data-theme='dark'] {"))];
-  for (const b of blocks) {
+  const read = (f: string) => fs.readFileSync(path.resolve(import.meta.dirname, '../src', f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const css = read('tokens.css');
+  const book = read('book-tokens.css');
+  // The light block and the [data-theme='dark'] block of each file; book-tokens.css (loaded second) wins, var() resolved
+  // within the blocks and the book's primitives.
+  const prims = book.slice(0, book.indexOf(':root,'));
+  const bookDark = book.slice(book.indexOf(":root[data-theme='dark'] {"));
+  const blocks = [
+    [book.slice(book.indexOf(":root,"), book.indexOf('@media')), css.slice(0, css.indexOf('@media'))],
+    [bookDark.slice(0, bookDark.indexOf('}')), css.slice(css.indexOf(":root[data-theme='dark'] {"))],
+  ];
+  for (const order of blocks) {
     const v = (k: string): string => {
-      const raw = new RegExp(`${k}: ([^;]+);`).exec(b)![1];
+      const raw = [...order, prims].map((b) => new RegExp(`${k}: ([^;]+);`).exec(b)?.[1]).find(Boolean)!;
       const ref = /^var\((--[\w-]+)\)$/.exec(raw);
       return ref ? v(ref[1]) : raw;
     };

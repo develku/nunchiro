@@ -13,7 +13,8 @@ import { append, chat, type ChatCore, expect, openChat, rec, test } from './fixt
 import { openTheme, stored, token } from './theme-harness';
 
 const WANT = {
-  'Catppuccin Latte': { chat: '#8f5a4e', chatMark: '#87625b', text: '#4c4f69', accent: '#1d61e9', code: '#984d84', link: '#12757a', mark: '#3e67b8', ok: '#307820', bad: '#d20f39' },
+  // The design book's derive rule steps the words blue, green and red further: they read on the selected row too.
+  'Catppuccin Latte': { chat: '#8f5a4e', chatMark: '#87625b', text: '#4c4f69', accent: '#1a57d0', code: '#984d84', link: '#12757a', mark: '#3e67b8', ok: '#2a681c', bad: '#bd0e33' },
   'Catppuccin Mocha': { chat: '#89b4fa', chatMark: '#6e8fc7', text: '#cdd6f4', accent: '#89b4fa', code: '#f5c2e7', link: '#94e2d5', mark: '#6e8fc7', ok: '#a6e3a1', bad: '#f38ba8' },
 } as const;
 type Name = keyof typeof WANT;

@@ -1144,7 +1144,7 @@ button.lead-go {
 .home-setup > .row.wt2 .tm {
   font-size: var(--fs-11);
   font-weight: 600;
-  color: var(--accent);
+  color: var(--run); /* words: the 4.5:1 blue (--accent is a 3:1 mark) */
 }
 .home-setup > .row.wt2 .ic {
   color: var(--tree-mut);

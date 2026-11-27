@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, REPO } from './fixtures';
-import { repo, show, expectMatchesMockup, outDir } from './visual/compare';
+import { bookPalette, repo, show, expectMatchesMockup, outDir } from './visual/compare';
 import { openQuiet } from './tree-seed';
 import { WTDIALOG as data } from './fixtures/wtdialog';
 
@@ -24,6 +24,7 @@ for (const scheme of ['light', 'dark'] as const) {
       name: 'default',
       prepare: async m => {
         await m.addStyleTag({ content: '.cols{display:block!important}' });
+        await bookPalette(d, m);
         const golden = m.locator('section[aria-labelledby="h-d1"] .dlg[aria-label="new worktree"]').first();
         await golden.locator('input').fill(data.words);
         // The same copy-only translation used by the existing fidelity-wtdialog gate.
