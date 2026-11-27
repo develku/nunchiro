@@ -1,0 +1,14 @@
+side-terminal	2.78	rgb(117, 119, 121) on rgb(50, 51, 54)	span.num	3
+side-browser	2.78	rgb(117, 119, 121) on rgb(50, 51, 54)	span.num	3
+onboarding-keys	3.57	rgb(124, 129, 134) on rgb(41, 44, 47)	li.kbd	s
+onboarding-keys	3.57	rgb(124, 129, 134) on rgb(41, 44, 47)	span.sr	used as kind key
+onboarding-keys	3.57	rgb(124, 129, 134) on rgb(41, 44, 47)	li.kbd	p
+tree-decision-line	3.25	rgb(110, 117, 123) on rgb(34, 38, 42)	span.dot	·
+decision-deny-instruction	3.25	rgb(110, 117, 123) on rgb(34, 38, 42)	span.dot	·
+decision-card	3.25	rgb(110, 117, 123) on rgb(34, 38, 42)	span.dot	·
+dialog-quit	3.25	rgb(110, 117, 123) on rgb(34, 38, 42)	span.dot	·
+dialog-close-notice	3.25	rgb(110, 117, 123) on rgb(34, 38, 42)	span.dot	·
+team-side	2.78	rgb(117, 119, 121) on rgb(50, 51, 54)	span.num	3
+team-wide	3.03	rgb(104, 106, 108) on rgb(29, 31, 34)	span.num	3
+team-wide	4.00	rgb(124, 129, 134) on rgb(32, 36, 39)	span.	just now
+team-wide	4.00	rgb(124, 129, 134) on rgb(32, 36, 39)	button.lead-more	⋯

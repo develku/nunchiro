@@ -7,6 +7,7 @@ import type { Key } from '../i18n';
 import type { Session } from '../types';
 import { getDraft, setDraft } from '../composer-drafts';
 import { pluginOp, runCommand, type Listed } from './api';
+import { lineError } from '../errors';
 
 type T = (key: Key, args?: Record<string, string | number>) => string;
 interface Core {
@@ -54,7 +55,7 @@ export function usePluginCommands({ core, t, open, current, composer, note }: De
               // shortcut: `panel` shows as a note too; open a panel tab with the output when one is asked for.
               note(t('plugins.ran', { name, text: text.length > 400 ? `${text.slice(0, 400)}…` : text }));
             },
-            (e: Error) => note(t('plugins.ran', { name: p.plugin!.name, text: e.message })),
+            (e: unknown) => note(t('plugins.ran', { name: p.plugin!.name, text: lineError(t, e) })), // the plain line, not the core's raw words
           ),
       })),
     );

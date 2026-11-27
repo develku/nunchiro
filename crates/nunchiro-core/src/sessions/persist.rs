@@ -344,6 +344,7 @@ impl Sessions {
             unsaved: Default::default(),      // ticket 999
             #[cfg(test)]
             saves: Default::default(),
+            revision: Default::default(),
             #[cfg(test)]
             exit_walked: Default::default(),
             #[cfg(test)]
@@ -395,6 +396,7 @@ impl Sessions {
         Ok(sessions)
     }
     pub(super) fn save(&self) -> Result<(), String> {
+        self.changed();
         #[cfg(test)]
         self.saves.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         // V2-1b: after `exit` the file keeps what the next core reattaches.

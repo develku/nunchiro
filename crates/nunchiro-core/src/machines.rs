@@ -354,6 +354,9 @@ pub(crate) fn dispatch(
         .lock()
         .map_err(|_| "session registry unavailable")?;
     label(&mut reply, &alias);
+    if matches!(reply, Reply::Started { .. }) || matches!(request, Request::Close { .. }) {
+        sessions.changed(); // the window's machine rows, before the machine's next push
+    }
     if let Reply::Started { session } = &reply {
         let Some(row) = channel::clean(&alias, vec![session.clone()]).pop() else {
             return Err("invalid remote session id".into());

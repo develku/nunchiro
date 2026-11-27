@@ -517,6 +517,9 @@ fn browser_role_allowlist_table() {
         // V2.5-38: board settings stay the Mac window's, like board_columns_put.
         r#"{"id":1,"request":{"op":"board_settings_put","revision":"","stale_minutes":1440,"turn_end_nudge":false}}"#,
         r#"{"id":1,"request":{"op":"pr_merge","url":"https://github.com/o/r/pull/1","method":"squash","head":"0123456789abcdef0123456789abcdef01234567"}}"#,
+        r#"{"id":1,"request":{"op":"git_push","session":"s","head":"0123456789abcdef0123456789abcdef01234567"}}"#,
+        r#"{"id":1,"request":{"op":"pr_draft","session":"s"}}"#,
+        r#"{"id":1,"request":{"op":"pr_create","session":"s","head":"0123456789abcdef0123456789abcdef01234567","title":"t","body":"b","base":"main"}}"#,
         // Ticket 264: the profile ops are the Mac window's alone, and no core request carries them.
         r#"{"id":1,"request":{"op":"browser_profiles"}}"#,
         r#"{"id":1,"request":{"op":"browser_profile_clear","profile":"default"}}"#,
@@ -584,6 +587,7 @@ fn browser_role_allowlist_table() {
         "AcpAgentSignInState",
         "AcpAgentSignInCancel",
         "AcpAgentSignOut",
+        "AcpAgentTry",
         "AgentUpdateStart", // ticket 358
         "AgentUpdateCancel",
         "AgentUpdateState",
@@ -633,6 +637,9 @@ fn browser_role_allowlist_table() {
         "PrList",
         "PrMerge",
         "PrBranch", // ticket 373
+        "GitPush",
+        "PrDraft",
+        "PrCreate",
     ] {
         assert!(
             names(no).iter().any(|n| n == refused),
@@ -719,6 +726,18 @@ fn browser_role_refuses_pr_merge() {
     let mut b = browser_ws(addr, &token).unwrap();
     let merge = r#"{"id":9,"request":{"op":"pr_merge","url":"https://github.com/o/r/pull/1","method":"squash","head":"0123456789abcdef0123456789abcdef01234567"}}"#;
     b.send(tungstenite::Message::Text(merge.into())).unwrap();
+    assert_eq!(reply(&mut b, 9)["Err"], "not allowed from the browser");
+}
+
+/// A paired browser can never push, even with a well-formed request: the confirm strip is the Mac window's.
+#[test]
+fn browser_role_refuses_git_push() {
+    let c = core("gitpush");
+    let addr = c.enable();
+    let token = c.pair(addr, "Phone");
+    let mut b = browser_ws(addr, &token).unwrap();
+    let push = r#"{"id":9,"request":{"op":"git_push","session":"s","head":"0123456789abcdef0123456789abcdef01234567"}}"#;
+    b.send(tungstenite::Message::Text(push.into())).unwrap();
     assert_eq!(reply(&mut b, 9)["Err"], "not allowed from the browser");
 }
 
@@ -1165,6 +1184,7 @@ fn bundle_358_ops_are_in_every_owner_only_list() {
         "AcpAgentSignInState",
         "AcpAgentSignInCancel",
         "AcpAgentSignOut",
+        "AcpAgentTry",
         "AgentCommandStatus",
         "AgentCommandCheck",
         "AgentCommandGrant",

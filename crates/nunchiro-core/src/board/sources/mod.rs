@@ -125,6 +125,10 @@ struct Home {
 static HOMES: OnceLock<Mutex<BTreeMap<PathBuf, Home>>> = OnceLock::new();
 /// S9 r3: moves whenever a merge finds a home's sources changed (new cards, an error, a finished command run).
 static REVISION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// Moves when a board or source file changed (the background check), for a window's snapshot key.
+pub(crate) fn revision() -> u64 {
+    REVISION.load(std::sync::atomic::Ordering::SeqCst)
+}
 /// S9 r3: what the board's cards read of each source and the board files' stamps, cheaply: a file's stamp, a command's last run, errors, the card
 /// count and local moves (new cards come with a new stamp or a new run).
 fn fingerprint(home: &Path, state: &Home) -> u64 {
@@ -513,10 +517,22 @@ pub fn merge(
     static TIMER: std::sync::Once = std::sync::Once::new();
     TIMER.call_once(|| {
         std::thread::spawn(|| {
+            let (mut seen, mut active_until) =
+                (crate::pty::output_seq(), std::time::Instant::now());
             loop {
                 // S9 r3: 100 ms (was 250): this pass is what notices a changed source or board file while the
-                // core's tick idles at 250 ms, and wakes it (`merge_inner`).
-                std::thread::sleep(std::time::Duration::from_millis(100));
+                // core's tick idles at 250 ms, and wakes it (`merge_inner`). Idle: 2 s after the last agent output
+                // (agents write those files), it looks every 500 ms; an outside edit then shows within half a second.
+                let idle = std::time::Instant::now() >= active_until;
+                std::thread::sleep(std::time::Duration::from_millis(if idle {
+                    500
+                } else {
+                    100
+                }));
+                if seen != crate::pty::output_seq() {
+                    seen = crate::pty::output_seq();
+                    active_until = std::time::Instant::now() + std::time::Duration::from_secs(2);
+                }
                 let homes = {
                     let mut homes = HOMES
                         .get_or_init(Default::default)

@@ -2694,6 +2694,58 @@
       ],
       "type": "object"
     },
+    "Draft": {
+      "description": "What the Create PR form starts with (`pr_draft`). All text is git's or the repository's: the window draws it as text.",
+      "properties": {
+        "bases": {
+          "description": "The default branch first, then the remote's other branches.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "body": {
+          "type": "string"
+        },
+        "commits": {
+          "description": "Commits the PR holds (against the default branch).",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gh_why": {
+          "description": "Why gh cannot create it now (not installed, not signed in); the form still opens.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head": {
+          "type": "string"
+        },
+        "push": {
+          "$ref": "#/$defs/PushTo",
+          "description": "Where the push goes first; `ahead` 0 when nothing needs pushing."
+        },
+        "template": {
+          "description": "The body is the repository's PR template.",
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "body",
+        "template",
+        "commits",
+        "bases",
+        "head",
+        "push"
+      ],
+      "type": "object"
+    },
     "Envelope": {
       "properties": {
         "request": {
@@ -3297,9 +3349,36 @@
         "has_remote": {
           "type": "boolean"
         },
+        "head": {
+          "default": null,
+          "description": "The commit HEAD names; null before the first commit. The Push strip shows it and sends it back.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "is_default": {
           "description": "The checked-out branch is the default branch: one press must never push there.",
           "type": "boolean"
+        },
+        "push_to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PushTo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where the app's Push sends the branch (git_write.rs `target`); null with `push_why` saying why there is none."
+        },
+        "push_why": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "upstream": {
           "description": "The branch has an upstream; `ahead` and `behind` count against it (0 without one).",
@@ -6365,6 +6444,40 @@
       ],
       "type": "object"
     },
+    "PushTo": {
+      "description": "Where a push of the checked-out branch goes and how many commits it carries; part of `diff::GitFacts`, so the strip\nshows what the core will push.",
+      "properties": {
+        "ahead": {
+          "description": "Commits on HEAD the remote branch lacks (against the upstream; without one, against every branch of the remote).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "branch": {
+          "description": "The branch name on the remote (`refs/heads/` stripped).",
+          "type": "string"
+        },
+        "key": {
+          "description": "A fingerprint of the remote's push URL (never the URL, which may hold a token): a URL changed after the strip\nshowed is caught.",
+          "type": "string"
+        },
+        "remote": {
+          "type": "string"
+        },
+        "upstream": {
+          "description": "The branch has this upstream already; a first push sets it.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "remote",
+        "branch",
+        "ahead",
+        "upstream",
+        "key"
+      ],
+      "type": "object"
+    },
     "QueueDecision": {
       "properties": {
         "actionable": {
@@ -7400,6 +7513,82 @@
         },
         {
           "properties": {
+            "branch": {
+              "type": "string"
+            },
+            "note": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "pushed": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "remote": {
+              "type": "string"
+            },
+            "type": {
+              "const": "git_pushed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "pushed",
+            "remote",
+            "branch"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "type": {
+              "const": "pr_draft",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "draft"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "number": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pushed": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": {
+              "const": "pr_created",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url",
+            "number",
+            "pushed"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "pr": {
               "anyOf": [
                 {
@@ -8133,6 +8322,13 @@
               },
               "type": "array"
             },
+            "turns": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Turn"
+              },
+              "description": "The last test message per ACP agent name.",
+              "type": "object"
+            },
             "type": {
               "const": "acp_agents",
               "type": "string"
@@ -8142,7 +8338,8 @@
             "type",
             "terminal",
             "acp",
-            "file"
+            "file",
+            "turns"
           ],
           "type": "object"
         },
@@ -8156,6 +8353,22 @@
           },
           "required": [
             "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "turn": {
+              "$ref": "#/$defs/Turn"
+            },
+            "type": {
+              "const": "acp_turn",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "turn"
           ],
           "type": "object"
         },
@@ -9957,6 +10170,119 @@
           "required": [
             "op",
             "path"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "description": "What the strip showed and the window sends back: the push is refused unless all of it still holds.",
+          "properties": {
+            "ahead": {
+              "default": 0,
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "branch": {
+              "default": "",
+              "type": "string"
+            },
+            "head": {
+              "default": "",
+              "type": "string"
+            },
+            "key": {
+              "default": "",
+              "type": "string"
+            },
+            "op": {
+              "const": "git_push",
+              "type": "string"
+            },
+            "remote": {
+              "default": "",
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "session"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "properties": {
+            "op": {
+              "const": "pr_draft",
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "session"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "description": "What the strip showed and the window sends back: the push is refused unless all of it still holds.",
+          "properties": {
+            "ahead": {
+              "default": 0,
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "base": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "branch": {
+              "default": "",
+              "type": "string"
+            },
+            "draft": {
+              "default": false,
+              "type": "boolean"
+            },
+            "head": {
+              "default": "",
+              "type": "string"
+            },
+            "key": {
+              "default": "",
+              "type": "string"
+            },
+            "op": {
+              "const": "pr_create",
+              "type": "string"
+            },
+            "remote": {
+              "default": "",
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "session",
+            "title",
+            "body",
+            "base"
           ],
           "type": "object",
           "x-stability": "window"
@@ -12009,6 +12335,28 @@
             },
             "op": {
               "const": "acp_agent_sign_out",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "name"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "description": "The test message of an approved agent (one fixed sentence, confined as the check, 60 s); `cancel` ends a running one.",
+          "properties": {
+            "cancel": {
+              "default": false,
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "op": {
+              "const": "acp_agent_try",
               "type": "string"
             }
           },
@@ -16178,6 +16526,66 @@
         "name",
         "on",
         "run"
+      ],
+      "type": "object"
+    },
+    "Turn": {
+      "description": "The three flags are the scorecard's words: a prompt sent, an answer read, the turn's end seen.",
+      "properties": {
+        "answer_read": {
+          "type": "boolean"
+        },
+        "at": {
+          "description": "Unix seconds of the try.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "error": {
+          "description": "The failure's detail, one line.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "failure": {
+          "description": "Why the try failed: `no_answer`, `not_signed_in`, `error` (the agent's own words in `error`), `empty`, `no_end`\n(it stopped before the turn ended) or `other`; none when it answered.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ms": {
+          "description": "From the start of the run to the turn's end (or to the failure).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sent": {
+          "type": "boolean"
+        },
+        "text": {
+          "description": "The answer's first `TEXT_MAX` characters, control characters removed.",
+          "type": "string"
+        },
+        "turn_end": {
+          "type": "boolean"
+        },
+        "version": {
+          "description": "The agent's `--version`, as the check reads it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "sent",
+        "answer_read",
+        "turn_end",
+        "ms",
+        "text",
+        "at"
       ],
       "type": "object"
     },

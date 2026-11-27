@@ -77,6 +77,11 @@ pub fn deny_note(text: &str) -> String {
 }
 
 pub const DEFAULT_STALE_MS: u64 = 20 * 60 * 1000;
+/// How old queue.json's activity time of a session with output may get. Within a core run `attention` reads the exact
+/// time from memory; only the next core start reads this checkpoint, so it sits well under the shortest idle rule
+/// that reads it (`IDLE_SETTLE_MS`, 30 s). Each checkpoint rewrites the whole store with two full syncs while the
+/// registry is locked, and at once a second per streaming session the keys typed into a terminal waited behind it.
+const ACTIVITY_CHECKPOINT_MS: u64 = 10_000;
 const MAX_STORE: u64 = 8 * 1024 * 1024;
 pub(crate) const OWNER_ITEMS: usize = 64; // v1a-23
 /// v1a-71: how long after a resize of its session a screen item waits for the agent's redraw (one redraw only).
@@ -526,6 +531,8 @@ pub struct Queue {
     outbox_approved: Vec<Approved>,
     /// Round 2: owner items of a kind this core does not know (a newer core's), shown nowhere and written back as read.
     foreign_owner: Vec<Value>,
+    /// Counts saves: a window loop builds no snapshot while this and the registry's own count stand still.
+    revision: std::sync::atomic::AtomicU64,
 }
 /// v1b-40 r2: the integer `version` of an over-cap queue file, streamed without keeping the rest; `None` unless the
 /// file is one JSON object (as the in-cap path requires).
@@ -762,6 +769,7 @@ impl Queue {
             outbox_yes: BTreeMap::new(),
             outbox_approved: vec![],
             foreign_owner,
+            revision: Default::default(),
         };
         // Old evidence remains visible but cannot authorize input to a new process.
         for state in queue.disk.sessions.values_mut() {
@@ -835,7 +843,12 @@ impl Queue {
         }
         Ok(())
     }
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision.load(std::sync::atomic::Ordering::SeqCst)
+    }
     pub fn save(&self) -> Result<(), String> {
+        self.revision
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Self::validate(&self.disk)?;
         let bytes = if self.foreign_owner.is_empty() {
             serde_json::to_vec(&self.disk)
@@ -1034,8 +1047,10 @@ impl Queue {
             .entry(id.into())
             .and_modify(|at| *at = (*at).max(now))
             .or_insert(now);
-        // Keep exact live activity; checkpoint timestamps at most once per second.
-        if !state.attention.stale && now.saturating_sub(state.attention.last_activity) < 1000 {
+        // Keep exact live activity; checkpoint timestamps at most every ACTIVITY_CHECKPOINT_MS.
+        if !state.attention.stale
+            && now.saturating_sub(state.attention.last_activity) < ACTIVITY_CHECKPOINT_MS
+        {
             return Ok(());
         }
         self.change(|q| {
@@ -1043,6 +1058,32 @@ impl Queue {
             s.attention.last_activity = s.attention.last_activity.max(now);
             s.attention.stale = false;
             s.items.retain(|i| i.kind != Kind::Stale);
+            Ok(())
+        })
+    }
+    /// Saves each session's exact in-memory activity time over its older checkpoint (a clean exit or restart), so
+    /// the next core, which starts with no in-memory times, reads where each session really was.
+    pub fn flush_activity(&mut self) -> Result<(), String> {
+        let behind: Vec<(String, u64)> = self
+            .activity
+            .iter()
+            .filter(|(id, at)| {
+                self.disk
+                    .sessions
+                    .get(*id)
+                    .is_some_and(|s| s.attention.last_activity < **at)
+            })
+            .map(|(id, at)| (id.clone(), *at))
+            .collect();
+        if behind.is_empty() {
+            return Ok(());
+        }
+        self.change(|q| {
+            for (id, at) in &behind {
+                if let Some(s) = q.disk.sessions.get_mut(id) {
+                    s.attention.last_activity = *at;
+                }
+            }
             Ok(())
         })
     }
@@ -4335,3 +4376,6 @@ mod order_tests;
 
 #[cfg(test)]
 mod type_something_tests;
+
+#[cfg(test)]
+mod activity_tests;

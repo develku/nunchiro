@@ -219,6 +219,26 @@ pub enum Action {
     },
 }
 
+/// A trigger request on the socket: the owner's; a token of the `trigger` scope may only fire one. Every other caller
+/// (a session, another token, Remote) is refused before any session check.
+pub(crate) fn asked(
+    registry: &Mutex<Sessions>,
+    stopping: &AtomicBool,
+    home: &Path,
+    owner: bool,
+    token: &str,
+    action: Action,
+) -> Response {
+    let fires = matches!(action, Action::Fire { .. });
+    let trigger_token = || {
+        crate::tokens::verify(home, token).is_some_and(|t| t.scope == crate::tokens::Scope::Trigger)
+    };
+    if !owner && !(fires && trigger_token()) {
+        return Err("operation not granted".into());
+    }
+    handle(registry, stopping, home, action)
+}
+
 /// Owner dispatch (server.rs answers a `trigger` token's `Fire` here too, and refuses every other caller first).
 pub(crate) fn handle(
     registry: &Mutex<Sessions>,

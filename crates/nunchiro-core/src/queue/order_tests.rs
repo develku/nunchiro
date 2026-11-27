@@ -188,7 +188,7 @@ fn w14_a_tool_result_written_before_a_request_leaves_its_card() {
         |t: &str| crate::usage::epoch(t).unwrap() as u64 * 1000 + t[20..23].parse::<u64>().unwrap();
     let result = |at: &str| {
         json!({"type":"user","timestamp":at,"uuid":at,
-                "message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"ok"}]}})
+            "message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"ok"}]}})
     };
     let ask = |q: &mut Queue, file: &str, event: &str, at: &str| {
         hook(
@@ -253,7 +253,7 @@ fn w14_a_tool_result_written_before_a_request_leaves_its_card() {
     assert!(q.items_of("s").is_empty() && !q.attention("s").waiting);
     // A question a transcript record made is as old as its record: its result in the same read ends it.
     let asks = json!({"type":"assistant","timestamp":"2026-11-18T01:58:00.000Z","message":{"role":"assistant",
-            "content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[]}}]}});
+        "content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[]}}]}});
     q.transcript(
         "s",
         "k".into(),
@@ -283,7 +283,7 @@ fn codex_async_question_waits_until_answered() {
     let ask = |call: &str| {
         item(
             json!({"type":"function_call","name":"request_user_input_async","call_id":call,
-            "arguments":"{\"questions\":[{\"title\":\"Which port?\",\"options\":[\"8080\",\"9090\"]}]}"}),
+        "arguments":"{\"questions\":[{\"title\":\"Which port?\",\"options\":[\"8080\",\"9090\"]}]}"}),
         )
     };
     let output = |call: &str, out: &str| {

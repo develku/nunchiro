@@ -123,6 +123,9 @@ impl Sessions {
             | Request::PrList
             | Request::PrMerge { .. }
             | Request::PrBranch { .. } // ticket 373: runs the user's gh in a worktree folder
+            | Request::GitPush { .. } // pushes as the user after the window's confirm
+            | Request::PrDraft { .. }
+            | Request::PrCreate { .. } // pushes and runs the user's gh after the window's form
             | Request::AccountList // v2-2a: agent config folders and their login
             | Request::AccountCheck { .. }
             | Request::AccountAdd { .. }
@@ -248,6 +251,7 @@ impl Sessions {
             | Request::AcpAgentCheck { .. }
             | Request::AcpAgentAdd { .. }
             | Request::AcpAgentLogin { .. }
+            | Request::AcpAgentTry { .. }
             // Ticket 276: an agent may not list, add or remove extensions.
             | Request::ExtensionsList
             | Request::ExtensionsMcpAdd { .. }
@@ -715,6 +719,7 @@ impl Sessions {
         caller: &crate::grants::Caller,
         request: Request,
     ) -> Response {
+        self.changed(); // as `handle`: an agent's request may change what a window's snapshot reads
         self.refresh()?;
         self.observe()?;
         self.check_agent(caller, &request)?;

@@ -346,6 +346,17 @@ pub(crate) fn git_update(
     c.args(["-c", "merge.verifySignatures=false"]).args(args);
     git_run(c, args, timeout, false)
 }
+/// The Diff panel's Push and the upstream it sets (git_write.rs): `git_in`'s environment (no `ext::`, no plain
+/// `git://` or `http://`, no prompt), stdin closed; the folder's hooks run, as for a push in a terminal.
+pub(crate) fn git_write(
+    dir: &std::path::Path,
+    args: &[&str],
+    timeout: Duration,
+) -> Result<Vec<u8>, String> {
+    let mut c = git_in(dir);
+    c.args(args).stdin(Stdio::null());
+    git_run(c, args, timeout, false)
+}
 fn git_in(dir: &std::path::Path) -> Command {
     let mut c = command("git");
     c.arg("-C")
@@ -490,17 +501,26 @@ pub(crate) fn output_detached(
     timeout: Duration,
     cap: usize,
 ) -> Result<Output, String> {
-    run_capped(command, timeout, cap, true)
+    run_capped(command, timeout, cap, true, None)
 }
 /// `output` keeping up to `cap` bytes of stdout and up to `OUTPUT_CAP` of stderr (ticket 403 item 15).
 fn output_capped(command: Command, timeout: Duration, cap: usize) -> Result<Output, String> {
-    run_capped(command, timeout, cap, false)
+    run_capped(command, timeout, cap, false, None)
+}
+/// `output` with `input` written to the child's stdin (a pull request body), then stdin closed.
+pub(crate) fn output_with_input(
+    command: Command,
+    timeout: Duration,
+    input: Vec<u8>,
+) -> Result<Output, String> {
+    run_capped(command, timeout, OUTPUT_CAP, false, Some(input))
 }
 fn run_capped(
     mut command: Command,
     timeout: Duration,
     cap: usize,
     detached: bool,
+    input: Option<Vec<u8>>,
 ) -> Result<Output, String> {
     // Round 2: the file name only, never a full path, arguments or environment (the error can reach a reply).
     let program = std::path::Path::new(command.get_program())
@@ -512,11 +532,20 @@ fn run_capped(
     } else {
         command.process_group(0);
     }
+    if input.is_some() {
+        command.stdin(Stdio::piped());
+    }
     let mut child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| e.to_string())?;
+    // A writer thread, so a child that reads slowly (or not at all) never blocks the output loop; it ends at EOF or EPIPE.
+    if let (Some(bytes), Some(mut stdin)) = (input, child.stdin.take()) {
+        thread::spawn(move || {
+            let _ = std::io::Write::write_all(&mut stdin, &bytes);
+        });
+    }
     let mut stdout = child.stdout.take().unwrap();
     let mut stderr = child.stderr.take().unwrap();
     for fd in [stdout.as_raw_fd(), stderr.as_raw_fd()] {

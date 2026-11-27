@@ -22,7 +22,7 @@ import { matches, Pending } from './pending'; // v1b-12; ticket 212
 import { publishPrompts, recallable } from './promptHistory'; // ticket 371
 import { baseName } from '../files/open';
 import { elapsed, Open, RowView } from './Rows';
-import { PrChip, type PrChipData } from './PrChip'; // v2-8b
+import { PR_CHIP_EVENT, PrChip, type PrChipData } from './PrChip'; // v2-8b
 import { useWarm } from '../warm';
 import { blocked, show as paneShow } from '../pane/store';
 import { doneJump, useJump } from '../search/jump'; // v2-7
@@ -178,9 +178,13 @@ function ChatList({ boot, feed, session, shown, readOnly, head, main, t }: { t: 
     seen.current = { session: session.id, results };
     const timer = first ? undefined : setTimeout(fetch, PR_CHIP_DELAY);
     if (first) fetch();
+    // A PR the Diff panel created for this session: read the chip now.
+    const changed = (e: Event) => (e as CustomEvent<{ session: string }>).detail?.session === session.id && fetch();
+    window.addEventListener(PR_CHIP_EVENT, changed);
     return () => {
       live = false;
       clearTimeout(timer);
+      window.removeEventListener(PR_CHIP_EVENT, changed);
     };
   }, [feed, session.id, results]);
   // Ticket 212 (A9): the queue keeps `working` set while a PermissionRequest or question waits, so a pending decision

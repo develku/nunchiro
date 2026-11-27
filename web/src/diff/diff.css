@@ -319,3 +319,153 @@
   opacity: 0.7;
   cursor: default;
 }
+/* The app's Push (GitPush.tsx): the confirm strip under the header has the Merge strip's look (pr/pr.css .pr-confirm),
+   warm because it asks you; mockup docs/design/git-actions-m2 panel 3. */
+.diff .dpush {
+  margin: var(--sp-8) var(--sp-8) 0;
+  padding: var(--sp-8) var(--sp-12);
+  border-radius: var(--r-6);
+  background: var(--you-bg);
+  font-size: var(--fs-sm);
+}
+.diff .dpush p {
+  margin: 0 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+.diff .dpush .dpush-err {
+  margin-top: 6px;
+  color: var(--bad-text);
+}
+/* The menu beside the button: the app's Push or asking the agent. */
+.diff .ph .dway-box {
+  position: relative;
+  flex: none;
+}
+.diff .ph .dway {
+  height: var(--btn-h-sm);
+  min-width: 24px;
+  padding: 0 var(--sp-4);
+  margin-left: 2px;
+}
+.diff .ph .dway-menu {
+  position: absolute;
+  z-index: 8;
+  right: 0;
+  top: calc(var(--btn-h-sm) + var(--sp-4));
+  min-width: 190px;
+  padding: var(--sp-4);
+  border-radius: var(--r-10);
+  display: flex;
+  flex-direction: column;
+}
+.diff .ph .dway-menu button {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  height: 26px;
+  padding: 0 var(--sp-8);
+  border: 0;
+  border-radius: var(--r-6);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-ui);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.diff .ph .dway-menu button:hover,
+.diff .ph .dway-menu button:focus-visible {
+  background: var(--tint-2);
+}
+.diff .ph .dway-menu button[aria-disabled='true'] {
+  color: var(--muted);
+  cursor: default;
+}
+.diff .ph .dway-menu .ck {
+  width: 12px;
+  display: grid;
+  place-items: center;
+}
+/* The line after a push, at the panel's foot (mockup `.note`). */
+.diff .dpushed {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  min-height: 24px;
+  padding: var(--sp-4) var(--sp-8) var(--sp-4) var(--sp-12);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  background: var(--tint-1);
+}
+.diff .dpushed .dbtn {
+  margin-left: auto;
+}
+/* The app's Create PR form (PrForm.tsx): under the header, solid panel ground, fields as the worktree dialog's. */
+.diff .dprform {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+  margin: var(--sp-8) var(--sp-8) 0;
+  padding: var(--sp-8) var(--sp-12);
+  border-radius: var(--r-6);
+  background: var(--tint-1);
+  font-size: var(--fs-sm);
+}
+.diff .dprform .dfld {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  color: var(--muted);
+}
+.diff .dprform .dfld.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sp-8);
+}
+.diff .dprform .dfld input,
+.diff .dprform .dfld textarea {
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-ui);
+}
+.diff .dprform .dfld textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+.diff .dprform .drow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-8);
+}
+.diff .dprform .dcheck {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+.diff .dprform .dfact {
+  margin: 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.diff .dprform .btn.p[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: default;
+}
+/* Buttons keep one line and sit side by side; the foot line wraps its words instead of clipping them. */
+.diff .dprform .drow .btn {
+  flex: none;
+  white-space: nowrap;
+}
+.diff .dpushed {
+  flex-wrap: wrap;
+  line-height: 1.4;
+}
+.diff .dpushed .dpushed-t {
+  flex: 1 1 8em;
+  min-width: 0;
+}
+.diff .dprform .dbtns {
+  flex-wrap: nowrap;
+}

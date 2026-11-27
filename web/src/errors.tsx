@@ -25,6 +25,26 @@ export const startOp = (start: { op: 'start'; [k: string]: unknown }, anyway = f
 // [pattern, what happened, what to do]. The web gets only the core's message string (no code), so patterns are the
 // core's own wording. Order matters: the first match wins. A named group (`(?<name>...)`) fills that placeholder.
 export const KNOWN: [RegExp, Key, Key?][] = [
+  // git_write.rs: the Diff panel's Push. First, as git's own lines under the sentence may hold "fatal: " (the git row).
+  [/^nothing was sent: the branch changed after this was shown \(new head (?<head>\S+)\)/, 'gitActions.err.changed'],
+  [/^nothing was sent: the push URL of (?<remote>\S+) changed after this was shown/, 'gitActions.err.url'],
+  [/^nothing was sent: where this pushes changed after this was shown \(now (?<remote>[^/\s]+)\/(?<branch>\S+)\)/, 'gitActions.err.target'],
+  [/^not pushed: (?<remote>\S+) has newer commits on (?<branch>\S+)/, 'gitActions.err.newer'],
+  [/^not pushed: git needs you to sign in/, 'gitActions.err.signin'],
+  [/^not pushed: the pre-push hook failed/, 'gitActions.err.hook'],
+  [/^not pushed: (?<remote>\S+) refused the push/, 'gitActions.err.refused'],
+  [/^not pushed: this branch has no remote set and there are several/, 'gitActions.err.several'],
+  [/^not pushed: this is the default branch$/, 'gitActions.err.default'],
+  [/^not pushed: there are no new commits to push$/, 'gitActions.err.nothing'],
+  [/^not pushed: /, 'gitActions.err.failed', 'gitActions.err.failed.todo'],
+  [/^a pull request for this branch already exists: #(?<pr>\d+)/, 'gitActions.err.exists'],
+  [/^pushed, but the pull request was not created: gh (is not logged in|was not found)/, 'gitActions.err.pushedNoGh'],
+  [/^pushed, but the pull request was not created/, 'gitActions.err.pushedNoPr', 'gitActions.err.failed.todo'],
+  [/^no pull request: the title/, 'gitActions.err.title'],
+  [/^no pull request: the description/, 'gitActions.err.body'],
+  [/^no pull request: (?<remote>\S+) is not a GitHub repository/, 'gitActions.err.notGithub'],
+  [/^no pull request: /, 'gitActions.err.noPr', 'gitActions.err.failed.todo'],
+  [/^the pull request was created, but gh printed no link/, 'gitActions.err.noLink'],
   [/core disconnected|core is stopping/i, 'settings.err.core'],
   // The core's own wording only: SSH and agent output also says "timed out" or "Permission denied (publickey)".
   [/too many requests in flight/, 'settings.err.busy'],
@@ -199,7 +219,7 @@ export const KNOWN: [RegExp, Key, Key?][] = [
 ];
 
 /** Known lines that name the whole failure, so no raw text is kept under Details. */
-const SAYS_ALL: Key[] = ['schedule.past', 'schedule.pastOff'];
+const SAYS_ALL: Key[] = ['schedule.past', 'schedule.pastOff', 'gitActions.err.changed'];
 
 /** A refusal in the window's own plain words (the layout editor's): shown as written, never the generic line (ticket 599). */
 export class OwnWords extends Error {}
