@@ -1329,8 +1329,9 @@ fn pr_create_pushes_then_hands_gh_the_text_unchanged() {
     );
 }
 
-/// The form's text is plain: hidden characters (bidi overrides, zero-width marks) leave the draft and what gh gets; a
-/// pull request template reached through a linked folder is not read.
+/// Repository text in the draft is plain: hidden characters (bidi overrides, zero-width marks) leave the subjects and
+/// the template, and a template reached through a linked folder is not read. The owner's own words reach gh unchanged
+/// (an emoji joined with ZWJ included).
 #[test]
 fn pr_text_has_no_hidden_characters_and_no_linked_template() {
     let core = Core::new();
@@ -1360,16 +1361,16 @@ fn pr_text_has_no_hidden_characters_and_no_linked_template() {
     assert_eq!(d["template"], false, "{d}");
     assert!(!d["body"].as_str().unwrap().contains("outside"), "{d}");
     let p = &d["push"];
-    let r = core.window(json!({"op":"pr_create","session":s.id,"head":d["head"],"remote":p["remote"],"branch":p["branch"],"ahead":p["ahead"],"key":p["key"],"title":"Fix\u{202E} it","body":"a\u{2066}b","base":"main"}));
+    let r = core.window(json!({"op":"pr_create","session":s.id,"head":d["head"],"remote":p["remote"],"branch":p["branch"],"ahead":p["ahead"],"key":p["key"],"title":"Fix\u{202E} it","body":"a\u{2066}b 👩\u{200D}💻 🏳\u{FE0F}\u{200D}🌈","base":"main"}));
     assert!(r["Ok"].is_object(), "{r}");
     assert!(
         fs::read_to_string(core.home.join("gh-runs"))
             .unwrap()
-            .contains("|--title=Fix it|")
+            .contains("|--title=Fix\u{202E} it|")
     );
     assert_eq!(
         fs::read_to_string(core.home.join("gh-stdin")).unwrap(),
-        "ab"
+        "a\u{2066}b 👩\u{200D}💻 🏳\u{FE0F}\u{200D}🌈"
     );
 }
 
