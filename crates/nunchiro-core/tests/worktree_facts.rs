@@ -304,6 +304,21 @@ fn list_includes_sessionless_worktrees() {
     );
 }
 
+/// A `session start --worktree` folder is in the list when the start answers, with no window to adopt it: the project's
+/// Remove reads this list, and a worktree missing from it was stopped and its session history deleted as a plain session.
+#[test]
+fn a_worktree_start_is_listed_when_it_answers() {
+    let core = Core::new();
+    let started = core
+        .op(json!({"op":"start","session":{"kind":"shell","project":core.repo,"worktree":true,"label":"wt","args":["/bin/cat"],"model":null,"effort":null,"resume":null}}))
+        .unwrap();
+    let cwd = started["session"]["cwd"].as_str().unwrap().to_string();
+    assert_ne!(PathBuf::from(&cwd), core.repo, "{started}");
+    let row = core.row(&json!(cwd)).expect("the start's worktree is listed at once");
+    assert_eq!(row["missing"], false);
+    assert!(row["branch"].as_str().unwrap().starts_with("nunchiro/"), "{row}");
+}
+
 #[test]
 fn removed_outside_nunchiro_shows_gone() {
     let core = Core::new();
