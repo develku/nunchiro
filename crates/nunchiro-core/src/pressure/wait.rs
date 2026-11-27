@@ -258,8 +258,22 @@ static LIST: Mutex<List> = Mutex::new(List {
 /// Wakes the ticker when the first entry arrives.
 static ADDED: Condvar = Condvar::new();
 
+/// Bumped by every use that may change the list (`list`), so a window sends the event only after one.
+static VERSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The list for a change.
 fn list() -> std::sync::MutexGuard<'static, List> {
+    VERSION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    read()
+}
+/// The list to read only.
+fn read() -> std::sync::MutexGuard<'static, List> {
     LIST.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Changes when the list or its notes may have changed.
+pub(crate) fn version() -> u64 {
+    VERSION.load(std::sync::atomic::Ordering::SeqCst)
 }
 
 thread_local! {
@@ -348,12 +362,12 @@ pub(crate) fn forget(key: &str) {
 
 /// The waiting starts, for the owner's list.
 pub(crate) fn shown() -> Vec<Shown> {
-    list().shown()
+    read().shown()
 }
 
 /// The window's event: the list and the last notes.
 pub(crate) fn event() -> String {
-    let list = list();
+    let list = read();
     serde_json::json!({"event": "memory_wait", "entries": list.shown(), "notes": list.notes})
         .to_string()
 }
@@ -370,7 +384,7 @@ pub(crate) fn spawn(
             let times = Times::now();
             while !stopping.load(Ordering::SeqCst) {
                 {
-                    let list = list();
+                    let list = read();
                     if list.is_empty() {
                         // Woken by `hold`: no wakeup and no reading while nothing waits.
                         drop(ADDED.wait(list));

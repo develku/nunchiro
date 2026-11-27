@@ -676,7 +676,7 @@ fn serve(
     }
     let browsers = browser::of(home);
     let mut last_browser = String::new();
-    let mut last_wait = String::new();
+    let mut last_wait = None;
     // Session id -> (byte cursor, replay frame still owed, v1a-53 pacing).
     let mut watches: BTreeMap<String, (u64, bool, Pace)> = BTreeMap::new();
     // v1a-53: this window acked output, so it is paced (`Pace`); and whether a refused ack was logged yet.
@@ -1514,11 +1514,11 @@ fn serve(
         }
         // The starts waiting for memory: the Mac window's status bar item, sent when the list or its notes change.
         if role.is_none() && !feed && snapshot_at.elapsed() >= SNAPSHOT_EVERY {
-            let event = crate::pressure::event();
-            if event != last_wait {
-                ws.send(Message::Text(event.clone().into()))
+            let version = crate::pressure::version();
+            if Some(version) != last_wait {
+                ws.send(Message::Text(crate::pressure::event().into()))
                     .map_err(|e| e.to_string())?;
-                last_wait = event;
+                last_wait = Some(version);
             }
         }
         if feed && snapshot_at.elapsed() >= SNAPSHOT_EVERY {
