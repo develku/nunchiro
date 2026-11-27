@@ -691,3 +691,35 @@ fn a_dropped_auto_task_with_a_package_keeps_its_row() {
     assert_eq!(ids, [b.id]);
     let _ = std::fs::remove_dir_all(home);
 }
+
+/// Task dependencies: a ledger in which a task waits for another opens in a build that does not know the field (this
+/// test was first run on the build before it), and a ledger with no dependency is written byte for byte as before.
+#[test]
+fn a_ledger_with_after_opens_and_one_without_is_written_as_before() {
+    let home = home("after-compat");
+    let newer = r#"{
+  "version": 1,
+  "next": 3,
+  "tasks": [
+    {"id": "t1", "place": "/p", "title": "a", "created": 1, "updated": 1},
+    {"id": "t2", "place": "/p", "title": "b", "after": ["t1"], "created": 2, "updated": 2}
+  ]
+}"#;
+    std::fs::write(home.join("ledger.json"), newer).unwrap();
+    let l = Ledger::open(&home);
+    assert_eq!(l.list().unwrap().len(), 2, "it opens with no error");
+    let _ = std::fs::remove_dir_all(&home);
+
+    let home = self::home("after-bytes");
+    let l = Ledger::open(&home);
+    let place = Path::new("/p");
+    l.make(place, Some("lead"), "a", &["works".into()], false, 1)
+        .unwrap();
+    l.make(place, None, "b", &[], false, 2).unwrap();
+    l.seat_on("t1", "s1", "Builder · a", None, 3, &|_| true)
+        .unwrap();
+    l.close("t2", "done", 4).unwrap();
+    let file = std::fs::read_to_string(home.join("ledger.json")).unwrap();
+    assert_eq!(file, include_str!("../../tests/fixtures/ledger/no-after.json"));
+    let _ = std::fs::remove_dir_all(home);
+}
