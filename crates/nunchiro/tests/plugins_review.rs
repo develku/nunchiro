@@ -284,3 +284,72 @@ fn off_stops_a_running_part_and_remove_forgets_the_approval() {
     std::fs::rename(moved, &dir).unwrap();
     assert!(ok(&c.home, &["plugin", "list"]).contains("not approved"));
 }
+
+#[test]
+fn tokens_and_agents_get_no_plugin_request_and_a_change_stops_the_runner() {
+    let c = core("prt");
+    let dir = plugin(&c.home, "note", "echo hi", "");
+    ok(&c.home, &["plugin", "allow", "p"]);
+    ok(&c.home, &["plugin", "on", "p"]);
+    let full = ok(&c.home, &["token", "create", "--scope", "full"]);
+    for action in [
+        json!({"do": "run", "id": "p", "command": "c"}),
+        json!({"do": "remove", "id": "p"}),
+        json!({"do": "set", "id": "p", "on": false}),
+    ] {
+        let r = call(
+            &c.home,
+            full.trim(),
+            json!({"op": "plugin", "action": action}),
+        );
+        assert!(r["Err"].is_string(), "{r}");
+    }
+    // An agent's own `plugin run` and `plugin allow`: refused (allow becomes the owner's card, never a grant).
+    let out = user(&c.home).join("agent-run");
+    let script = format!(
+        "'{}' plugin run p c > '{}' 2>&1; exec cat",
+        env!("CARGO_BIN_EXE_nunchiro"),
+        out.display()
+    );
+    ok(
+        &c.home,
+        &[
+            "agent",
+            "start",
+            "s",
+            "--kind",
+            "shell",
+            "--project",
+            user(&c.home).to_str().unwrap(),
+            "--",
+            "/bin/sh",
+            "-c",
+            &script,
+        ],
+    );
+    let until = Instant::now() + Duration::from_secs(20);
+    while std::fs::read_to_string(&out).map_or(true, |t| t.is_empty()) {
+        assert!(Instant::now() < until);
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(
+        std::fs::read_to_string(&out)
+            .unwrap()
+            .contains("not granted")
+    );
+    assert_eq!(finished(&c)["Ok"]["run"]["output"]["text"], "hi\n");
+    // A file added after approval: nothing runs.
+    std::fs::write(dir.join("extra.sh"), "#!/bin/sh\n").unwrap();
+    assert!(
+        finished(&c)["Ok"]["run"]["error"]
+            .as_str()
+            .unwrap()
+            .contains("changed")
+    );
+    ok(&c.home, &["plugin", "allow", "p"]);
+    assert_eq!(finished(&c)["Ok"]["run"]["output"]["text"], "hi\n");
+    // A script swapped for a link after approval: nothing runs.
+    std::fs::remove_file(dir.join("c.sh")).unwrap();
+    std::os::unix::fs::symlink("/bin/echo", dir.join("c.sh")).unwrap();
+    assert!(finished(&c)["Ok"]["run"]["error"].is_string());
+}
