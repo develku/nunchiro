@@ -523,6 +523,47 @@ mod tests {
     }
 
     #[test]
+    fn journal_keeps_the_core_s_advance_lines_without_their_body() {
+        let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        let home = temp_home("advance");
+        let project = "/events-unit-advance";
+        let journaling = journal(&home).unwrap();
+        let line = |body: &str, by: &str, what: &str| {
+            push(Event {
+                kind: "room_message".into(),
+                project: project.into(),
+                data: Some(serde_json::json!({"kind": "team", "body": body, "created_by": by, "from": "person zq7",
+                    "team": {"what": what, "seat": "s1", "name": body}})),
+                ..Event::default()
+            })
+        };
+        line("core nudged Builder zq7 (quiet 21 min)", "core", "advance");
+        line("core sent the waiting message to Builder zq7 again (zq7 why)", "core", "advance");
+        line("core could not act (core nudged Builder zq7 (quiet 5 min)): zq7", "core", "advance");
+        line("core nudged Builder zq7 (quiet 9 min)", "agent", "advance"); // not the core's: no data
+        line("zq7 made a worktree", "core", "created"); // another team line: no data
+        drop(journaling);
+        let data: Vec<_> = history(&home, 1)
+            .into_iter()
+            .filter(|e| e["project"] == project)
+            .map(|e| e.get("data").cloned())
+            .collect();
+        let advance = |act: &str, quiet: u64| {
+            Some(serde_json::json!({"kind": "team", "team": {"what": "advance", "seat": "s1"}, "act": act,
+                "quiet_min": quiet}))
+        };
+        assert_eq!(
+            data,
+            [advance("nudge", 21), advance("resend", 0), advance("failed", 0), None, None]
+        );
+        let dir = home.join("logs/events");
+        for f in std::fs::read_dir(&dir).unwrap() {
+            assert!(!std::fs::read_to_string(f.unwrap().path()).unwrap().contains("zq7"));
+        }
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
     fn journal_keeps_events_on_disk_owner_only_without_room_bodies() {
         use std::os::unix::fs::PermissionsExt;
         let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());

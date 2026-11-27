@@ -497,6 +497,17 @@ class DevSpeed(UtcClock):
             self.assertNotIn(secret, text)
         self.assertEqual(d["cost"]["lanes_with_cost"], 1)
 
+    def test_the_journal_s_advance_lines_count_without_a_body(self):
+        # the journal keeps the core's advance lines as {kind, team: {what, seat}, act, quiet_min}, never the body
+        at = lambda t: speed.iso(t) * 1000  # noqa: E731
+        line = lambda t, act, quiet: dict(type="room_message", at=at(t), data=dict(  # noqa: E731
+            kind="team", team=dict(what="advance", seat="s1"), act=act, quiet_min=quiet))
+        core = [dict(type="session_started", at=at(T + "00:00:00Z"), session="s1", state="waiting"),
+                line(T + "00:30:00Z", "nudge", 21), line(T + "00:40:00Z", "resend", 0), line(T + "00:50:00Z", "moved", 0),
+                dict(type="session_ended", at=at(T + "01:00:00Z"), session="s1")]
+        s = self.measure(core)["seat_use"]
+        self.assertEqual((s["stall_nudges"], s["stalled_min"], s["resends"], s["moved_again"]), (1, 21, 1, 1))
+
     def test_journal_events_feed_seat_time_and_say_what_they_lack(self):
         at = lambda t: speed.iso(t) * 1000  # noqa: E731
         core = [dict(type="session_started", at=at("2026-11-27T00:00:00Z"), session="s1", state="working"),
