@@ -664,10 +664,10 @@ pub fn pr_links(output: &[u8]) -> Vec<String> {
             .chars()
             .take_while(|c| c.is_ascii_alphanumeric() || "/:._-".contains(*c))
             .collect();
-        if let Some(url) = clean_url(link.trim_end_matches(['.', ':'])) {
-            if !found.contains(&url) {
-                found.push(url);
-            }
+        if let Some(url) = clean_url(link.trim_end_matches(['.', ':']))
+            && !found.contains(&url)
+        {
+            found.push(url);
         }
         if found.len() >= LINKS_MAX {
             break;
