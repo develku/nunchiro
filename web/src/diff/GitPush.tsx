@@ -9,7 +9,7 @@ import { Icon } from '../icons/Icon';
 import type { Key, T } from '../i18n';
 import type { GitFacts, Way } from './gitAction';
 
-export type PushReply = { type: 'git_pushed'; pushed: number; remote: string; branch: string };
+export type PushReply = { type: 'git_pushed'; pushed: number; remote: string; branch: string; note?: string };
 
 /** `pr`: the number of the open PR the app knows for this branch, which the pushed commits join. */
 export function PushStrip({ core, session, git, pr, onPushed, onCancel, t }: { core: CoreClient; session: string; git: GitFacts; pr: number | null; onPushed: (r: PushReply) => void; onCancel: () => void; t: T }) {
@@ -17,13 +17,14 @@ export function PushStrip({ core, session, git, pr, onPushed, onCancel, t }: { c
   const [error, setError] = useState<unknown>(null);
   const cancel = useRef<HTMLButtonElement>(null);
   useEffect(() => cancel.current?.focus(), []);
-  const to = git.push_to!;
-  const head = git.head!;
+  // What the strip shows is kept from when it opened: a list refresh never re-arms it, and the core checks the push
+  // against exactly these values.
+  const [{ to, head }] = useState(() => ({ to: git.push_to!, head: git.head! }));
   const go = () => {
     if (busy) return;
     setBusy(true);
     setError(null);
-    core.request({ op: 'git_push', session, head }).then(
+    core.request({ op: 'git_push', session, head, remote: to.remote, branch: to.branch, ahead: to.ahead, key: to.key }).then(
       (r) => (setBusy(false), onPushed(r as PushReply)),
       (e: unknown) => (setBusy(false), setError(e)),
     );
@@ -113,4 +114,5 @@ export function WayMenu({ way, agent, agentWhy, onPick, t }: { way: Way; agent: 
 }
 
 /** The line after a push, at the panel's foot. */
-export const pushedText = (t: T, r: PushReply) => t(r.pushed === 1 ? 'gitActions.push.done.one' : 'gitActions.push.done.other', { n: r.pushed, remote: r.remote, branch: r.branch });
+export const pushedText = (t: T, r: PushReply) =>
+  t(r.pushed === 1 ? 'gitActions.push.done.one' : 'gitActions.push.done.other', { n: r.pushed, remote: r.remote, branch: r.branch }) + (r.note ? ` ${t('gitActions.push.noUpstream')}` : '');

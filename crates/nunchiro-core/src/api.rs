@@ -684,8 +684,8 @@ pub enum Request {
     // the branch again and runs `git push <remote> <head>:refs/heads/<branch>` in the session's folder. Window only.
     GitPush {
         session: String,
-        #[serde(default)]
-        head: String,
+        #[serde(flatten)]
+        shown: crate::git_write::Shown,
     },
     // v2-10c: owner only and local (the app's `serve`), answered by the socket server before any session check.
     // Reads the library cache; Allow, auto-allow and Remove are window-only `libs::Op`, never a `Request`.

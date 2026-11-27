@@ -194,6 +194,8 @@ pub enum Reply {
         pushed: u64,
         remote: String,
         branch: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        note: Option<String>,
     },
     // Ticket 373: `None` when the branch has no PR of its own (or none is looked up: the default branch, no upstream).
     PrBranch {
