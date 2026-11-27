@@ -160,7 +160,10 @@ fn a_task_waits_for_others_and_a_wrong_order_is_refused() {
     refused(&nine, "Refused: a task waits for at most 8 tasks.");
     // Nothing refused was kept: b still waits for a alone.
     let b = ok(&["show", "t2"]);
-    assert!(b.contains("  waits for t1 \"a\" (plan)\n") && !b.contains("waits for t6"), "{b}");
+    assert!(
+        b.contains("  waits for t1 \"a\" (plan)\n") && !b.contains("waits for t6"),
+        "{b}"
+    );
     // A bare `task after <id>` names nothing: refused, so nothing is cleared by a slip.
     let (bare, _, _) = run(&["after", "t2"]);
     assert!(!bare);
@@ -168,7 +171,7 @@ fn a_task_waits_for_others_and_a_wrong_order_is_refused() {
     // a lands (done): b no longer waits; a no longer has a waiting task.
     ok(&["done", "t1"]);
     let b = ok(&["show", "t2"]);
-    assert!(!b.contains("waits for"), "{b}");
+    assert!(!b.contains("  waits for t"), "{b}");
     // A core restart keeps the order.
     core.stop();
     let mut core = serve();
@@ -177,7 +180,7 @@ fn a_task_waits_for_others_and_a_wrong_order_is_refused() {
         "kept over a restart"
     );
     let cleared = ok(&["after", "t4", "--none"]);
-    assert!(!cleared.contains("waits for"), "{cleared}");
+    assert!(!cleared.contains("  waits for t"), "{cleared}");
     assert!(ok(&["show", "t4"]).contains("  order set by the user\n"));
 
     // A session that is no lead of the place is refused, as for `task new`.

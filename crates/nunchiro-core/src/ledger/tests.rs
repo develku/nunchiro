@@ -573,6 +573,8 @@ fn a_task_with_no_package_prints_as_before() {
         closed: None,
         stall: None,
         advance: Advance::default(),
+        after: vec![],
+        ordered: None,
         created: 1,
         updated: 2,
     };
@@ -720,6 +722,51 @@ fn a_ledger_with_after_opens_and_one_without_is_written_as_before() {
         .unwrap();
     l.close("t2", "done", 4).unwrap();
     let file = std::fs::read_to_string(home.join("ledger.json")).unwrap();
-    assert_eq!(file, include_str!("../../tests/fixtures/ledger/no-after.json"));
+    assert_eq!(
+        file,
+        include_str!("../../tests/fixtures/ledger/no-after.json")
+    );
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// A blocker that closes as merged or done holds its waiter no more; one dropped still shows, with its word.
+#[test]
+fn a_task_waits_until_its_blocker_lands() {
+    let home = home("after-lands");
+    let l = Ledger::open(&home);
+    let p = Path::new("/p");
+    for title in ["a", "b", "c"] {
+        l.make(p, None, title, &[], false, 1).unwrap();
+    }
+    l.set_after(
+        "t3",
+        &["t1".into(), "t2".into(), "t1".into()],
+        "Lead · x",
+        2,
+    )
+    .unwrap();
+    let waits = |l: &Ledger| {
+        let all = l.list().unwrap();
+        let c = all.iter().find(|t| t.id == "t3").unwrap();
+        let b = blockers(c, &all);
+        (
+            b.into_iter().map(|b| (b.id, b.stage)).collect::<Vec<_>>(),
+            waiters(&all[0], &all),
+        )
+    };
+    assert_eq!(
+        waits(&l),
+        (
+            vec![("t1".into(), "plan".into()), ("t2".into(), "plan".into())],
+            1
+        )
+    );
+    l.close("t1", "merged", 3).unwrap();
+    l.close("t2", "dropped", 3).unwrap();
+    assert_eq!(waits(&l), (vec![("t2".into(), "dropped".into())], 0));
+    assert_eq!(
+        l.list().unwrap()[2].ordered.as_ref().unwrap().by,
+        "Lead · x"
+    );
     let _ = std::fs::remove_dir_all(home);
 }
