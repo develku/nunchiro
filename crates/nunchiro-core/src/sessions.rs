@@ -451,10 +451,8 @@ pub struct Sessions {
     /// Look 11-17 v8 (Home S2-B): the entries the owner asked to run again on a failed run's card; the schedule timer
     /// runs them off this lock (`schedule::fire`), as Run now.
     pub(crate) schedule_reruns: Vec<String>,
-    /// The owner's Start on a trigger's card (its name and the run with the quoted payload); the schedule timer starts
-    /// them off this lock (`schedule::fire`).
-    /// Each: the card's id, the trigger, the run and the subject the fire took. The card stays until the start ran, so a
-    /// core that quits first keeps it for the owner's next Start.
+    /// The owner's Start on a trigger's card: its id, the trigger, the run and the subject; the schedule timer starts
+    /// them off this lock (`schedule::fire`). The card stays until the start ran.
     pub(crate) trigger_starts: Vec<(String, String, crate::schedule::Run, Option<String>)>,
     /// Ticket 1004: the check-ins that wait for the judge, at most one per task (`check_in_due`); the server's loop
     /// has them judged off this lock (`start_judge`: git is read there).
@@ -1764,18 +1762,6 @@ fn retire_send(
 mod tests; // 2026-11-20: moved out for the 1 MiB publish scan
 
 #[cfg(test)]
-type BeforeDecide = Box<dyn FnOnce(&std::sync::Mutex<Sessions>)>;
-/// Ticket 32: the fake `claude` and `codex` unit tests run, set once (`agent_program`).
+mod test_hooks;
 #[cfg(test)]
-static FAKE_AGENTS: std::sync::OnceLock<(String, String)> = std::sync::OnceLock::new();
-#[cfg(test)]
-thread_local! {
-    // Ticket 32: runs at the start of `Launch::prepare` on the thread that prepares.
-    static IN_PREPARE: std::cell::Cell<Option<Box<dyn FnOnce()>>> = const { std::cell::Cell::new(None) };
-    static IN_HOOKS_CHECK: std::cell::Cell<Option<Box<dyn FnOnce() -> bool>>> = const { std::cell::Cell::new(None) };
-}
-#[cfg(test)]
-thread_local! {
-    // Ticket 39: runs in `handoff_send` between the first decision (and prepare) and the lock that decides again.
-    static BEFORE_DECIDE: std::cell::Cell<Option<BeforeDecide>> = const { std::cell::Cell::new(None) };
-}
+use test_hooks::*;

@@ -1,4 +1,5 @@
 //! Owner-only unix socket: one bounded JSON request and response per connection.
+use crate::plugins::{Asker, check_request};
 use crate::{api::*, sessions::Sessions, store};
 use std::{
     fs::{self, OpenOptions},
@@ -990,13 +991,7 @@ fn connection(
             Request::Forwarded { caller, request } if owner => {
                 // Another machine's agent: this Mac's plugin checks hold for what it sends and starts here.
                 let mut request = request;
-                crate::plugins::check_request(
-                    home,
-                    crate::plugins::Asker::Agent,
-                    "",
-                    &mut request,
-                    true,
-                )?;
+                check_request(home, Asker::Agent, "", &mut request, true)?;
                 return crate::machines::forwarded(sessions, caller, *request, stopping);
             }
             _ => {}
@@ -1137,13 +1132,7 @@ fn connection(
                 let caller = sessions.agent_caller(&env.token)?;
                 drop(sessions);
                 let mut request = request;
-                crate::plugins::check_request(
-                    home,
-                    crate::plugins::Asker::Agent,
-                    &caller.id,
-                    &mut request,
-                    true,
-                )?;
+                check_request(home, Asker::Agent, &caller.id, &mut request, true)?;
                 return crate::grants::dispatch_remote(
                     registry, &env.token, machine, *request, stopping,
                 );
@@ -1170,11 +1159,11 @@ fn connection(
                     _ => {}
                 }
                 let asker = match caller.id.starts_with(crate::tokens::CALLER) {
-                    true => crate::plugins::Asker::Token,
-                    false => crate::plugins::Asker::Agent,
+                    true => Asker::Token,
+                    false => Asker::Agent,
                 };
                 drop(sessions);
-                crate::plugins::check_request(home, asker, &caller.id, &mut env.request, false)?;
+                check_request(home, asker, &caller.id, &mut env.request, false)?;
                 sessions = registry
                     .lock()
                     .map_err(|_| "session registry unavailable")?;
@@ -1486,11 +1475,9 @@ fn connection(
             // `--anyway` passes it, as it passes a memory hold.
             if !anyway {
                 let asker = match &caller {
-                    None => crate::plugins::Asker::Owner,
-                    Some(c) if c.id.starts_with(crate::tokens::CALLER) => {
-                        crate::plugins::Asker::Token
-                    }
-                    Some(_) => crate::plugins::Asker::Agent,
+                    None => Asker::Owner,
+                    Some(c) if c.id.starts_with(crate::tokens::CALLER) => Asker::Token,
+                    Some(_) => Asker::Agent,
                 };
                 drop(sessions);
                 crate::plugins::check_start(home, asker, &session)?;
