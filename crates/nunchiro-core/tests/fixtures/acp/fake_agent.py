@@ -9,7 +9,7 @@ updates on the shared stdout and exits after its first prompt. Ticket 358: `nomo
 `set-fails` answers session/set_config_option with an error; `many:N` adds N long model ids after the two short ones.
 Ticket 1130: while a file LOG.noload exists, `session/load` answers an error (a resume whose load fails).
 The test message ("Reply with the one word: ready.") answers "ready" unless `try-silent`, `try-empty`, `try-error` or
-`try-ask` says otherwise (see on_prompt).
+`try-ask`, `try-flood` (never reads again) or `try-huge-error` says otherwise (see on_prompt).
 A prompt's first text block picks the behaviour:
   later          end the turn, then ask permission with no prompt in flight
   elicit         ask a URL elicitation, end the turn once it is answered
@@ -111,6 +111,17 @@ def on_prompt(message):
         # The test message: `try-silent` never ends the turn, `try-empty` ends it with no text, `try-error` answers an
         # error, `try-ask` asks permission first (and answers once refused); otherwise it says "ready".
         if "try-silent" in MODES:
+            return
+        if "try-flood" in MODES:
+            # Asks far more than a pipe holds and never reads again: the client's refusals fill its input.
+            for n in range(20000):
+                send({"jsonrpc": "2.0", "id": "flood-%d" % n, "method": "fs/read_text_file",
+                      "params": {"sessionId": session, "path": "/x"}})
+            time.sleep(300)
+            return
+        if "try-huge-error" in MODES:
+            send({"jsonrpc": "2.0", "id": prompt["id"], "error": {"code": -32603, "message": "\u001b[31m" + "x" * 900000}})
+            prompt["id"] = None
             return
         if "try-error" in MODES:
             send({"jsonrpc": "2.0", "id": prompt["id"], "error": {"code": -32603, "message": "quota exceeded"}})
