@@ -1672,6 +1672,13 @@ fn pr_link_from_terminal_output_needs_the_branch_check() {
         "Shell",
         "the chip says it was linked from the output"
     );
+    // A link to another PR than the branch's: never linked.
+    let other = printed(A13);
+    assert!(
+        !wait_for(&other.id, A13),
+        "a PR of another branch was linked"
+    );
+    assert!(chip(&other.id).is_null());
     // The agent opens a new PR on another branch: the branch's own PR changes, the chip follows it.
     pr_git(&dir, &["checkout", "-q", "-b", "fix-parser"]);
     pr_git(&dir, &["commit", "-q", "--allow-empty", "-m", "parser"]);
@@ -1689,14 +1696,6 @@ fn pr_link_from_terminal_output_needs_the_branch_check() {
         );
         thread::sleep(Duration::from_millis(500));
     }
-
-    // A link to another PR than the branch's: never linked.
-    let other = printed(A13);
-    assert!(
-        !wait_for(&other.id, A13),
-        "a PR of another branch was linked"
-    );
-    assert!(chip(&other.id).is_null());
 }
 
 /// "Agent made" opens Merge for that PR, so only a real `gh pr create` run that prints one PR link on its own line counts.

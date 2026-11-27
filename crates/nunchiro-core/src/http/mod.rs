@@ -1746,10 +1746,13 @@ fn read_pr_chip(registry: &Mutex<Sessions>, id: &str) -> Response {
         let read = read_chat(registry, id, before, None, generation);
         // A session with no conversation to read (a terminal) still shows the PR the app made for it.
         let Ok(Reply::ChatPage { page, .. }) = read else {
-            if let Some(chip) = crate::pr_live::made_chip(id) {
+            let made = crate::pr_live::made_chip(id);
+            if made.as_ref().is_none_or(|c| c.linked.is_some()) {
+                link_from_output(registry, id);
+            }
+            if let Some(chip) = made {
                 return Ok(Reply::PrChip { chip: Some(chip) });
             }
-            link_from_output(registry, id);
             read?;
             return Err("chat unavailable".into());
         };
@@ -1780,7 +1783,8 @@ fn read_pr_chip(registry: &Mutex<Sessions>, id: &str) -> Response {
     }
     // A PR the app created from the Diff panel, or one the agent printed in its terminal, until the transcript names one.
     let chip = chip.or_else(|| crate::pr_live::made_chip(id));
-    if chip.is_none() {
+    // No PR yet, or one linked from the output: look again (the agent may open a new PR on another branch).
+    if chip.as_ref().is_none_or(|c| c.linked.is_some()) {
         link_from_output(registry, id);
     }
     Ok(Reply::PrChip { chip })
@@ -1794,9 +1798,19 @@ fn link_from_output(registry: &Mutex<Sessions>, id: &str) {
     let on = sessions
         .pr_live(None, None, None)
         .is_ok_and(|(on, _, _)| on);
-    if let Some((dir, output)) = on.then(|| sessions.output_tail(id)).flatten() {
+    // The rate limit before the output is copied under the lock.
+    if !on || !crate::pr_live::link_due(id) {
+        return;
+    }
+    let agent = sessions.session_meta(id).ok().map(|m| match m.kind {
+        crate::api::AgentKind::Claude => "Claude".to_string(),
+        crate::api::AgentKind::Codex => "Codex".to_string(),
+        crate::api::AgentKind::Acp => m.acp_agent.unwrap_or_else(|| "the agent".into()),
+        crate::api::AgentKind::Shell => "Shell".to_string(),
+    });
+    if let (Some(agent), Some((dir, output))) = (agent, sessions.output_tail(id)) {
         drop(sessions);
-        crate::pr_live::link_later(id, on, dir, &output);
+        crate::pr_live::link_later(id, agent, dir, &output);
     }
 }
 

@@ -21,6 +21,9 @@ pub struct PrChip {
     pub url: String,
     /// The `gh` result's record time; absent on events stored before v2-8b.
     pub at: Option<String>,
+    /// The agent whose terminal output the app linked it from (pr_live.rs `link_later`); absent for a chat or app PR.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub linked: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -333,6 +336,7 @@ pub fn scan(events: &[Value]) -> Option<PrChip> {
                     state,
                     url,
                     at: e["at"].as_str().map(Into::into),
+                    linked: None,
                 });
             }
             _ => {}

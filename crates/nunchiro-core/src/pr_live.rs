@@ -634,6 +634,19 @@ pub(crate) fn note_found(url: &str) {
 /// A PR the app created for `session` (the Diff panel's Create PR): it joins the created ones (live status, the PR view,
 /// merge) and is that session's chip until its transcript names one. Kept in memory: a core restart drops it.
 pub(crate) fn note_made(session: &str, url: &str, draft: bool) {
+    note(session, url, draft, None);
+}
+/// `note_made` for a PR found in `agent`'s terminal output (`link_later`): never over a PR the app made itself.
+fn note_linked(session: &str, url: &str, draft: bool, agent: String) {
+    let app_made = MADE.lock().ok().is_some_and(|m| {
+        m.get(session)
+            .is_some_and(|(_, _, linked)| linked.is_none())
+    });
+    if !app_made {
+        note(session, url, draft, Some(agent));
+    }
+}
+fn note(session: &str, url: &str, draft: bool, linked: Option<String>) {
     let Some(pull) = Pull::parse(url) else {
         return;
     };
@@ -643,11 +656,12 @@ pub(crate) fn note_made(session: &str, url: &str, draft: bool) {
         if made.len() >= MAX_PINNED {
             made.clear();
         }
-        made.insert(session.to_string(), (pull.url(), draft));
+        made.insert(session.to_string(), (pull.url(), draft, linked));
     }
 }
-static MADE: std::sync::LazyLock<Mutex<BTreeMap<String, (String, bool)>>> =
-    std::sync::LazyLock::new(Default::default);
+/// Per session: the PR link, whether it is a draft, and the agent whose output it was linked from (`None`: the app made it).
+type Made = BTreeMap<String, (String, bool, Option<String>)>;
+static MADE: std::sync::LazyLock<Mutex<Made>> = std::sync::LazyLock::new(Default::default);
 /// How often one session's terminal output is looked at for a PR link it printed.
 const LINK_EVERY: Duration = Duration::from_secs(30);
 static LINK_TRIED: std::sync::LazyLock<Mutex<BTreeMap<String, Instant>>> =
@@ -679,43 +693,48 @@ pub fn pr_links(output: &[u8]) -> Vec<String> {
 /// Auto-link (no agent command): a PR link a session's agent printed in its terminal becomes that session's PR once the
 /// by-branch lookup (`gh pr view <branch>` in its folder) names that very PR. At most once per `LINK_EVERY` per
 /// session, off the caller's thread, and only with live PR status on (outside traffic only then).
-pub(crate) fn link_later(session: &str, on: bool, dir: std::path::PathBuf, output: &[u8]) {
-    if !on {
-        return;
+/// Whether `session`'s output may be looked at now (at most once per `LINK_EVERY`); a yes counts as the look. The caller
+/// asks before it copies the output.
+pub(crate) fn link_due(session: &str) -> bool {
+    let Ok(mut tried) = LINK_TRIED.lock() else {
+        return false;
+    };
+    if tried.get(session).is_some_and(|t| t.elapsed() < LINK_EVERY) {
+        return false;
     }
+    if tried.len() >= MAX_PINNED {
+        tried.clear();
+    }
+    tried.insert(session.to_string(), Instant::now());
+    true
+}
+
+/// `link_due` said yes: when the branch's own PR (gh, by branch) is one `agent` printed and not the session's PR yet, it
+/// becomes the session's PR, also after an earlier linked one (a new PR on another branch).
+pub(crate) fn link_later(session: &str, agent: String, dir: std::path::PathBuf, output: &[u8]) {
     let links = pr_links(output);
     if links.is_empty() {
         return;
-    }
-    {
-        let Ok(mut tried) = LINK_TRIED.lock() else {
-            return;
-        };
-        if tried.get(session).is_some_and(|t| t.elapsed() < LINK_EVERY) {
-            return;
-        }
-        if tried.len() >= MAX_PINNED {
-            tried.clear();
-        }
-        tried.insert(session.to_string(), Instant::now());
     }
     let session = session.to_string();
     thread::spawn(move || {
         if let Ok(Some(pr)) = crate::pr::branch_pr(&dir)
             && links.contains(&pr.url)
+            && made_chip(&session).is_none_or(|c| c.url != pr.url)
         {
-            note_made(&session, &pr.url, pr.state == PrState::Draft);
+            note_linked(&session, &pr.url, pr.state == PrState::Draft, agent);
         }
     });
 }
 
 /// The chip of the PR the app made for `session`, if any.
 pub(crate) fn made_chip(session: &str) -> Option<crate::chat::pr::PrChip> {
-    let (url, draft) = MADE.lock().ok()?.get(session)?.clone();
+    let (url, draft, linked) = MADE.lock().ok()?.get(session)?.clone();
     Some(crate::chat::pr::PrChip {
         state: if draft { PrState::Draft } else { PrState::Open },
         url,
         at: None,
+        linked,
     })
 }
 

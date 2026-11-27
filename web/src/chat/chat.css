@@ -448,6 +448,10 @@
   background: var(--tint-1);
   font-size: var(--fs-12);
 }
+.prchip .linked {
+  margin-left: var(--sp-8);
+  color: var(--muted); /* where the app found it: quiet, beside the state */
+}
 .prchip[data-state='checks_fail'] b,
 .prchip[data-state='closed'] b {
   color: var(--error);

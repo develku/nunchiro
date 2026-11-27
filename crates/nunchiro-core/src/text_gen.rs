@@ -23,6 +23,9 @@ const READ: Duration = Duration::from_secs(10);
 /// The running Write with AI per session: the run's own number and its process group, so Cancel stops that run alone
 /// and a later run is never stopped by an earlier one's bookkeeping.
 static RUNNING: LazyLock<Mutex<HashMap<String, (u64, u32)>>> = LazyLock::new(Default::default);
+/// The runs Cancel stopped, until their write sees it.
+static CANCELLED: LazyLock<Mutex<std::collections::BTreeSet<u64>>> =
+    LazyLock::new(Default::default);
 static RUNS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 /// The fixed arguments per agent: print mode, the smallest model (Claude), no tools or a read-only sandbox, nothing
@@ -230,25 +233,31 @@ fn run_in(
     ) {
         c.env(crate::accounts::variable(agent), folder);
     }
+    // The entry lives from the spawn until just before the reap, so Cancel never signals a PID the system reused.
     let out = crate::process::output_watched(c, limit, input.into_bytes(), &|pid| {
         if let Ok(mut r) = RUNNING.lock() {
-            r.insert(session.to_string(), (run, pid));
+            match pid {
+                Some(pid) => {
+                    r.insert(session.to_string(), (run, pid));
+                }
+                None => {
+                    if r.get(session).is_some_and(|(id, _)| *id == run) {
+                        r.remove(session);
+                    }
+                }
+            }
         }
     });
-    // This run's entry only: still there means not cancelled.
-    let mine = RUNNING.lock().ok().and_then(|mut r| match r.get(session) {
-        Some((id, _)) if *id == run => r.remove(session),
-        _ => None,
-    });
+    let mine = !CANCELLED.lock().ok().is_some_and(|mut c| c.remove(&run));
     let out = match out {
         Ok(o) => o,
-        Err(_) if mine.is_none() => return Err("cancelled".into()),
+        Err(_) if !mine => return Err("cancelled".into()),
         Err(e) if e.contains("timed out") => {
             return Err(format!("it did not answer in {} seconds", limit.as_secs()));
         }
         Err(e) => return Err(e),
     };
-    if mine.is_none() {
+    if !mine {
         return Err("cancelled".into());
     }
     if !out.status.success() && kind != AgentKind::Claude {
@@ -259,9 +268,12 @@ fn run_in(
 
 /// Stops `session`'s running Write with AI (its own process group only).
 pub fn cancel(session: &str) -> bool {
-    let Some((_, pid)) = RUNNING.lock().ok().and_then(|mut r| r.remove(session)) else {
+    let Some((run, pid)) = RUNNING.lock().ok().and_then(|mut r| r.remove(session)) else {
         return false;
     };
+    if let Ok(mut c) = CANCELLED.lock() {
+        c.insert(run);
+    }
     unsafe {
         libc::killpg(pid as i32, libc::SIGKILL);
     }
