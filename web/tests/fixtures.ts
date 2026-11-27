@@ -4,6 +4,7 @@ import { test as base, expect, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 export const REPO = path.resolve(import.meta.dirname, '../..');
@@ -25,6 +26,9 @@ export function codexFake(script: string) {
 }
 const BIN = path.join(REPO, 'target/debug/nunchiro');
 const SCRATCH = path.join(REPO, '.scratch') + path.sep;
+// Real-agent scenario homes (scripts/scenario/lib.py SCENARIO_HOMES): outside any repo, since Claude asks to trust an
+// --add-dir folder inside one. From the passwd entry, not $HOME, so an env change cannot widen the guard.
+const SCENARIO_HOMES = path.join(os.userInfo().homedir, 'Library/Caches/nunchiro-scenario-homes') + path.sep;
 export const ORIGIN = `http://127.0.0.1:${process.env.NUNCHIRO_WEB_PORT ?? '4173'}`;
 export const HANGUL = '눈치로 한글 입력 확인: 가나다 똠방각하 읽었어요';
 
@@ -76,9 +80,9 @@ export function windowAuth(home: string) {
  *  (a call that loses NUNCHIRO_HOME falls back to $HOME/.nunchiro and auto-starts a core there). */
 export function nunchiro(env: NodeJS.ProcessEnv, args: string[], timeout = 20_000) {
   // Resolved first: `.scratch/../x` starts with the folder's name but is outside it.
-  const inScratch = (p?: string) => !!p && path.resolve(p).startsWith(SCRATCH);
+  const inScratch = (p?: string) => !!p && [SCRATCH, SCENARIO_HOMES].some((r) => path.resolve(p).startsWith(r));
   if (!inScratch(env.NUNCHIRO_HOME) || !inScratch(env.HOME))
-    throw new Error(`nunchiro ${args.join(' ')}: NUNCHIRO_HOME and HOME must be this test's folder under .scratch`);
+    throw new Error(`nunchiro ${args.join(' ')}: NUNCHIRO_HOME and HOME must be this test's folder under .scratch (or a scenario home)`);
   // Ticket 991: a `--worktree` start makes a git worktree of its project. A fixture folder that is no repository made
   // git find the checkout around .scratch: the session ran in a checkout of this repository, and each run left a
   // worktree entry registered in it. The project becomes a repository of its own first.
