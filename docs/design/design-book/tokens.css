@@ -146,6 +146,7 @@
   --chat-code: var(--plum-500);
   --syn-keyword: var(--berry-500);
   --syn-string: var(--sea-500);
+  --chat-link: #2f767c; /* the blend's light palette 6: tokens.css #058183 reads 4.49:1 on this --panel */
   --diff-add: var(--moss-50);
   --diff-del: var(--rose-50);
   --knob: var(--stone-0);
@@ -288,7 +289,7 @@
   --field-r: var(--r-7);
   --ib: 28px; /* icon button */
   --ib-sm: 24px;
-  --icon: 16px;
+  --icon-size: 16px;
   --icon-inline: 12px; /* inside a text line, fold carets */
   --icon-stroke: 1.5px; /* drawn icons the Octicons set lacks */
   --kbd-h: 16px;
@@ -354,6 +355,12 @@
   --face-64: 64px;
 }
 
+/* Glass fills: the glass colour, or a solid surface under reduced transparency (below). */
+:root {
+  --glass-chrome-fill: var(--glass-chrome);
+  --glass-float-fill: var(--glass-float);
+}
+
 /* ---------------------------------------------------------------- Preferences */
 @media (prefers-reduced-motion: reduce) {
   :root {
@@ -387,17 +394,19 @@
 :root:not([data-theme='light']) {
   --you: var(--you-text); /* was the your-turn hue for words and fills; words now --you-text, marks --light-you */
   --you-bg: color-mix(in srgb, var(--you-glow) 12%, var(--panel));
-  --bad: var(--light-bad);
-  --ok: var(--light-done);
-  --done: var(--light-done); /* was purple; "done" is now the moss ring */
+  /* --bad --ok --done --warn: still painted as words by many rules, so the 4.5:1 words twin (it reads as a 3:1 mark too)
+     until those rules move to the new names */
+  --bad: var(--bad-text);
+  --ok: var(--ok-text);
+  --done: var(--ok-text); /* was purple; "done" is now moss */
   --idle: var(--faint);
-  --warn: var(--light-warn);
+  --warn: var(--warn-text);
   --light-limited: var(--light-warn);
   --hover: var(--tint-1);
   --on-status: var(--panel);
   --ring-focus: var(--accent); /* the neutral grey ring is replaced by the accent ring */
-  --control-bg: var(--primary); /* the ink primary is replaced by the warm primary */
-  --control-text: var(--on-primary);
+  /* --control-bg and --control-text stay the ink of tokens.css for now: switches, sliders and checked controls read them
+     too, and those stay ink (checked is ink). The controls slice moves the one primary per view to --primary. */
   --control-quiet-bg: var(--tint-2);
   --control-quiet-hover: var(--tint-3);
   --select-bg: var(--tint-2);

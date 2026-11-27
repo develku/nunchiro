@@ -1,3 +1,5 @@
+/* App copy of docs/design/design-book/tokens.css. It differs from the book only in five commented-out lines (--font-ui,
+   --fs-chat, --fs-code, --ease-out, block 4's --font-code): they keep tokens.css's values until the type and motion slices. */
 /* Nunchiro design book tokens, v0.1 draft (design-book/index.html is the picture of every value here).
    Concept 4, the recommended blend: 눈치 (quiet surfaces, one warm signal), precision-instrument figures and gauges,
    Liquid Glass on the outer chrome only.
@@ -17,9 +19,6 @@
    --faint is never text. Colours that carry state are never used for decoration. */
 
 /* ---------------------------------------------------------------- 1. Primitives */
-/* In the app, five values below stay commented out until the slice that moves them: --font-ui, --fs-chat and --fs-code
-   (type), --ease-out (motion) keep tokens.css's values, and tokens.css --icon is a colour (icon ink), so the book's
-   16px size needs another name there. */
 :root {
   /* Nunchiro light neutrals (stone) */
   --stone-0: #ffffff;
@@ -292,7 +291,7 @@
   --field-r: var(--r-7);
   --ib: 28px; /* icon button */
   --ib-sm: 24px;
-  /* --icon: 16px; */
+  --icon-size: 16px;
   --icon-inline: 12px; /* inside a text line, fold carets */
   --icon-stroke: 1.5px; /* drawn icons the Octicons set lacks */
   --kbd-h: 16px;
