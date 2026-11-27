@@ -1097,6 +1097,10 @@
     "Blocker": {
       "description": "A task this one waits for, as a reader gets it.",
       "properties": {
+        "dropped": {
+          "description": "It closed without landing (dropped, or its worktree removed): the waiting task asks instead of waiting.",
+          "type": "boolean"
+        },
         "id": {
           "type": "string"
         },
@@ -3168,9 +3172,36 @@
         "has_remote": {
           "type": "boolean"
         },
+        "head": {
+          "default": null,
+          "description": "The commit HEAD names; null before the first commit. The Push strip shows it and sends it back.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "is_default": {
           "description": "The checked-out branch is the default branch: one press must never push there.",
           "type": "boolean"
+        },
+        "push_to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PushTo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where the app's Push sends the branch (git_write.rs `target`); null with `push_why` saying why there is none."
+        },
+        "push_why": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "upstream": {
           "description": "The branch has an upstream; `ahead` and `behind` count against it (0 without one).",
@@ -3672,6 +3703,13 @@
           "minimum": 0,
           "type": "integer"
         },
+        "early": {
+          "description": "A seat that writes sat on it before it waited: `started before \"<title>\" landed`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "floor": {
           "description": "Ticket 1055 rule 2: a seat that does not write runs its role's own model, so the floor of its Builder's level\ncould not apply. One plain line.",
           "type": [
@@ -3740,6 +3778,13 @@
           "description": "The project root, or the Home folder.",
           "type": "string"
         },
+        "released": {
+          "description": "The tasks of `after` whose landing or drop its lead was told (advance.rs `release`), so a restart tells it once.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "review": {
           "anyOf": [
             {
@@ -3783,6 +3828,13 @@
         "state": {
           "description": "`needs` (a seat waits for the user), `working`, `review` (a reviewer runs, or the files changed after the\nreview), `changes` (the review asked for changes), `approved` (the review passed and nothing changed since),\n`merge` (approved, and the user said yes to merging these files), `asked` (no seat works and one of its room asks\nis open), `idle`, or how it closed.",
           "type": "string"
+        },
+        "stuck": {
+          "description": "A task it waits for was dropped: what the user is asked (the state is then `needs`).",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "title": {
           "description": "The outcome, one line.",
@@ -6152,6 +6204,40 @@
       ],
       "type": "object"
     },
+    "PushTo": {
+      "description": "Where a push of the checked-out branch goes and how many commits it carries; part of `diff::GitFacts`, so the strip\nshows what the core will push.",
+      "properties": {
+        "ahead": {
+          "description": "Commits on HEAD the remote branch lacks (against the upstream; without one, against every branch of the remote).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "branch": {
+          "description": "The branch name on the remote (`refs/heads/` stripped).",
+          "type": "string"
+        },
+        "key": {
+          "description": "A fingerprint of the remote's push URL (never the URL, which may hold a token): a URL changed after the strip\nshowed is caught.",
+          "type": "string"
+        },
+        "remote": {
+          "type": "string"
+        },
+        "upstream": {
+          "description": "The branch has this upstream already; a first push sets it.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "remote",
+        "branch",
+        "ahead",
+        "upstream",
+        "key"
+      ],
+      "type": "object"
+    },
     "QueueDecision": {
       "properties": {
         "actionable": {
@@ -7182,6 +7268,38 @@
           "required": [
             "type",
             "url"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "branch": {
+              "type": "string"
+            },
+            "note": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "pushed": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "remote": {
+              "type": "string"
+            },
+            "type": {
+              "const": "git_pushed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "pushed",
+            "remote",
+            "branch"
           ],
           "type": "object"
         },
@@ -9725,6 +9843,46 @@
           "required": [
             "op",
             "path"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "description": "What the strip showed and the window sends back: the push is refused unless all of it still holds.",
+          "properties": {
+            "ahead": {
+              "default": 0,
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "branch": {
+              "default": "",
+              "type": "string"
+            },
+            "head": {
+              "default": "",
+              "type": "string"
+            },
+            "key": {
+              "default": "",
+              "type": "string"
+            },
+            "op": {
+              "const": "git_push",
+              "type": "string"
+            },
+            "remote": {
+              "default": "",
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "session"
           ],
           "type": "object",
           "x-stability": "window"
