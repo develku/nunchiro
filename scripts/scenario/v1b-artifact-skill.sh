@@ -72,7 +72,9 @@ def headroom():
         return False, 'usage.sh failed'
     line = next((l for l in text.splitlines() if l.startswith('codex .codex')), '')
     m = re.search(r'5h (\d+)%', line)
-    return (bool(m) and int(m.group(1)) < 95), line.strip() or 'no codex line'
+    # the weekly window empties too: a 7d at 100 % fails every turn even with 5h at 0 %
+    used = [int(p) for p in re.findall(r'(?:5h|7d) (\d+)%', line)]
+    return (bool(m) and all(p < 95 for p in used)), line.strip() or 'no codex line'
 
 def files(project):
     return {str(p.relative_to(project)): (hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else 'dir') for p in project.rglob('*')}
