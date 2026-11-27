@@ -584,6 +584,7 @@ fn browser_role_allowlist_table() {
         "AcpAgentSignInState",
         "AcpAgentSignInCancel",
         "AcpAgentSignOut",
+        "AcpAgentTry",
         "AgentUpdateStart", // ticket 358
         "AgentUpdateCancel",
         "AgentUpdateState",
@@ -1165,6 +1166,7 @@ fn bundle_358_ops_are_in_every_owner_only_list() {
         "AcpAgentSignInState",
         "AcpAgentSignInCancel",
         "AcpAgentSignOut",
+        "AcpAgentTry",
         "AgentCommandStatus",
         "AgentCommandCheck",
         "AgentCommandGrant",

@@ -1159,6 +1159,12 @@ pub enum Request {
     AcpAgentSignOut {
         name: String,
     },
+    /// The test message of an approved agent (one fixed sentence, confined as the check, 60 s); `cancel` ends a running one.
+    AcpAgentTry {
+        name: String,
+        #[serde(default)]
+        cancel: bool,
+    },
     // Ticket 276: Agent extensions, the owner window's alone (refused from an agent, a remote machine and a widget).
     /// Skills and hooks, the agents' MCP servers read-only (env names only), and Nunchiro's own servers.
     ExtensionsList,

@@ -1680,7 +1680,10 @@ fn acp_try_answers_in_the_check_folder_and_is_recorded() {
     let cwd = info(&core)["cwd"].as_str().unwrap().to_string();
     assert!(cwd.contains("/acp-check/"), "{cwd}");
     assert!(!Path::new(&cwd).exists(), "{cwd}");
-    wait_gone(info(&core)["pid"].as_i64().unwrap() as i32, "the agent outlived the try");
+    wait_gone(
+        info(&core)["pid"].as_i64().unwrap() as i32,
+        "the agent outlived the try",
+    );
     // The prompt is the fixed text.
     let log = String::from_utf8(core.file("agent.log").unwrap()).unwrap();
     assert!(log.contains("Reply with the one word: ready."), "{log}");
@@ -1694,7 +1697,10 @@ fn acp_try_answers_in_the_check_folder_and_is_recorded() {
 fn acp_try_needs_approval() {
     let core = Core::new("try-unapproved", "");
     core.ok(json!({"op":"acp_agent_add","entry":core.fake("fake", &[], &[])}));
-    assert!(core.err(json!({"op":"acp_agent_try","name":"fake"})).contains("approve the agent first"));
+    assert!(
+        core.err(json!({"op":"acp_agent_try","name":"fake"}))
+            .contains("approve the agent first")
+    );
     assert!(core.file("agent.log").is_none(), "an unapproved agent ran");
 }
 
@@ -1706,8 +1712,11 @@ fn acp_try_no_answer_fails_at_the_cap_and_ends_the_agent() {
     assert_eq!(turn["sent"], true, "{turn}");
     assert_eq!(turn["answer_read"], false, "{turn}");
     assert_eq!(turn["turn_end"], false, "{turn}");
-    assert!(turn["error"].as_str().unwrap().contains("No answer"), "{turn}");
-    wait_gone(info(&core)["pid"].as_i64().unwrap() as i32, "the agent outlived the cap");
+    assert_eq!(turn["failure"], "no_answer", "{turn}");
+    wait_gone(
+        info(&core)["pid"].as_i64().unwrap() as i32,
+        "the agent outlived the cap",
+    );
     assert_eq!(check_folders(&core), 0);
 }
 
@@ -1718,12 +1727,16 @@ fn acp_try_empty_answer_and_error_result_fail() {
     let turn = try_turn(&core, "empty");
     assert_eq!(turn["turn_end"], true, "{turn}");
     assert_eq!(turn["answer_read"], false, "{turn}");
-    assert!(turn["error"].is_string(), "{turn}");
+    assert_eq!(turn["failure"], "empty", "{turn}");
     approved_fake(&core, "error", &["try-error"]);
     let turn = try_turn(&core, "error");
     assert_eq!(turn["sent"], true, "{turn}");
     assert_eq!(turn["turn_end"], false, "{turn}");
-    assert!(turn["error"].as_str().unwrap().contains("quota exceeded"), "{turn}");
+    assert_eq!(turn["failure"], "error", "{turn}");
+    assert!(
+        turn["error"].as_str().unwrap().contains("quota exceeded"),
+        "{turn}"
+    );
 }
 
 #[test]
@@ -1732,7 +1745,7 @@ fn acp_try_auth_required_is_a_sign_in_failure() {
     approved_fake(&core, "fake", &["auth"]);
     let turn = try_turn(&core, "fake");
     assert_eq!(turn["sent"], false, "{turn}");
-    assert!(turn["error"].as_str().unwrap().contains("sign"), "{turn}");
+    assert_eq!(turn["failure"], "not_signed_in", "{turn}");
 }
 
 #[test]
@@ -1756,7 +1769,13 @@ fn acp_try_refused_for_a_full_token() {
     let core = Core::new("try-full", "");
     approved_fake(&core, "fake", &[]);
     let made = core.ok(json!({"op":"token_create","scope":"full"}));
-    let reply = core.raw_as(made["secret"].as_str().unwrap(), json!({"op":"acp_agent_try","name":"fake"}));
+    let reply = core.raw_as(
+        made["secret"].as_str().unwrap(),
+        json!({"op":"acp_agent_try","name":"fake"}),
+    );
     assert!(reply["Err"].is_string(), "{reply}");
-    assert!(core.file("agent.log").is_none(), "a full token ran the agent");
+    assert!(
+        core.file("agent.log").is_none(),
+        "a full token ran the agent"
+    );
 }

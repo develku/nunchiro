@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { agentsToml, fakeAcp, ownerOk, tomlEntry } from './acp-fakes';
 import { openRow } from './accounts-rows';
-import { expect, openWindow, test, type Core } from './fixtures';
+import { REPO, expect, openWindow, test, type Core } from './fixtures';
 import { openSettings } from './settings-modal';
 
 function approved(core: Core, modes: string[] = []) {
@@ -52,4 +52,36 @@ test('acp_try: nothing is sent without the click', async ({ app, core }) => {
   await expect(r.locator('[data-field="acp-try"]')).toBeVisible();
   await app.waitForTimeout(500);
   expect(fs.existsSync(path.join(core.home, 'acme.log')) && fs.readFileSync(path.join(core.home, 'acme.log'), 'utf8').includes('session/prompt')).toBe(false);
+});
+
+// Pictures on request: PW_OPT_IN=shots ... --project shots -g acp_try_shots (before, during, after; light and dark).
+test('acp_try_shots @shots: the agent row before, during and after a test message', async ({ app, core }) => {
+  const shots = path.join(REPO, '.scratch/shots');
+  fs.mkdirSync(shots, { recursive: true });
+  // Before: a fresh agent that answers nothing, so "during" holds until Cancel.
+  approved(core, ['try-silent']);
+  const r2 = await row(app);
+  await openRow(app, 'acme');
+  for (const scheme of ['light', 'dark'] as const) {
+    await app.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await r2.screenshot({ path: path.join(shots, `acp-try-before-${scheme}.png`) });
+  }
+  await r2.locator('[data-field="acp-try"]').getByRole('button', { name: 'Send a test message' }).click();
+  await expect(r2.locator('[data-field="acp-try"]')).toContainText('Waiting for acme to answer');
+  for (const scheme of ['light', 'dark'] as const) {
+    await app.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await r2.screenshot({ path: path.join(shots, `acp-try-during-${scheme}.png`) });
+  }
+  await r2.locator('[data-field="acp-try"]').getByRole('button', { name: 'Cancel' }).click();
+  await expect(r2.locator('[data-field="acp-try"]').getByRole('button', { name: 'Send a test message' })).toBeVisible();
+  // After: a fresh agent that answers.
+  approved(core);
+  const r3 = await row(app);
+  await openRow(app, 'acme');
+  await r3.locator('[data-field="acp-try"]').getByRole('button', { name: 'Send a test message' }).click();
+  await expect(r3.locator('[data-field="acp-try"]')).toContainText('Answered');
+  for (const scheme of ['light', 'dark'] as const) {
+    await app.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await r3.screenshot({ path: path.join(shots, `acp-try-after-${scheme}.png`) });
+  }
 });

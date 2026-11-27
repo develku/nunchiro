@@ -222,7 +222,7 @@ pub(super) fn folder(home: &Path) -> Result<Folder, String> {
 }
 
 /// `<command> --version` as the first-run checklist runs it (3 s), but with the check's environment, not the core's.
-fn version(path: &Path, entry: &Entry, folder: &Path) -> Option<String> {
+pub(super) fn version(path: &Path, entry: &Entry, folder: &Path) -> Option<String> {
     let mut command = crate::process::command(path);
     command
         .arg("--version")
@@ -385,7 +385,7 @@ fn handshake(entry: &Entry, path: &Path, folder: &Folder, out: &mut Check) -> Re
 }
 
 /// ACP's `auth_required` is error code -32000; agents also say it in words.
-fn auth_required(error: &Value, message: &str) -> bool {
+pub(super) fn auth_required(error: &Value, message: &str) -> bool {
     let lower = message.to_lowercase();
     error["code"] == -32000
         || lower.contains("auth_required")

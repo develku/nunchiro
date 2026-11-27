@@ -634,7 +634,8 @@ impl Sessions {
             Request::AcpAgentSignIn { .. }
             | Request::AcpAgentSignInState { .. }
             | Request::AcpAgentSignInCancel { .. }
-            | Request::AcpAgentSignOut { .. } => {
+            | Request::AcpAgentSignOut { .. }
+            | Request::AcpAgentTry { .. } => {
                 Err("agent setup requires unlocked transport dispatch".into()) // ticket 358
             }
             Request::ExtensionsList
