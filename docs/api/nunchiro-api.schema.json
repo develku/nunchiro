@@ -454,6 +454,119 @@
         }
       ]
     },
+    "Action2": {
+      "description": "What the owner and the CLI ask of triggers.",
+      "oneOf": [
+        {
+          "properties": {
+            "do": {
+              "const": "list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "do"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The owner's alone. A webhook trigger needs a `secret` of at least 16 characters.",
+          "properties": {
+            "do": {
+              "const": "add",
+              "type": "string"
+            },
+            "mode": {
+              "$ref": "#/$defs/Mode",
+              "default": "ask"
+            },
+            "name": {
+              "type": "string"
+            },
+            "on": {
+              "$ref": "#/$defs/Source"
+            },
+            "run": {
+              "$ref": "#/$defs/ScheduleRun"
+            },
+            "secret": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "do",
+            "name",
+            "on",
+            "run"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "do": {
+              "const": "remove",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "do",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "do": {
+              "const": "pause",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "paused": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "do",
+            "name",
+            "paused"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The owner, or a token of the `trigger` scope. `data` is the payload, shown to the session as quoted data.",
+          "properties": {
+            "data": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "do": {
+              "const": "fire",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "do",
+            "name"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "Advance": {
       "description": "Ticket 1081: the core's auto-advance record of a task. Kept so a restart repeats no nudge and no card.",
       "properties": {
@@ -4546,6 +4659,21 @@
       ],
       "type": "object"
     },
+    "Mode": {
+      "oneOf": [
+        {
+          "enum": [
+            "auto"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "ask",
+          "description": "A Decisions card: Start or Not this time.",
+          "type": "string"
+        }
+      ]
+    },
     "ModeState": {
       "description": "CHAT-MODELIST: the mode list's per-session facts.",
       "properties": {
@@ -8029,6 +8157,25 @@
           "required": [
             "type",
             "page"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "triggers": {
+              "items": {
+                "$ref": "#/$defs/Trigger"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "triggers",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "triggers"
           ],
           "type": "object"
         },
@@ -12280,6 +12427,24 @@
           "x-stability": "window"
         },
         {
+          "description": "Triggers (`schedule/triggers.rs`): the owner lists, adds, removes and pauses them; the owner or a token of the\n`trigger` scope fires one.",
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/Action2"
+            },
+            "op": {
+              "const": "trigger",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "action"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
           "description": "v1a-10: owner only. Claude replies `delivery` (the switch runs as one send row); Codex restarts into\nthe same conversation and replies `started` with the replacing session.",
           "properties": {
             "effort": {
@@ -14905,6 +15070,20 @@
       ],
       "type": "object"
     },
+    "Source": {
+      "oneOf": [
+        {
+          "const": "cli",
+          "description": "`nunchiro trigger fire <name>`.",
+          "type": "string"
+        },
+        {
+          "const": "webhook",
+          "description": "`POST http://127.0.0.1:<port>/hooks/<name>`, signed (GitHub `X-Hub-Signature-256`) or with\n`X-Nunchiro-Secret`.",
+          "type": "string"
+        }
+      ]
+    },
     "SourceState": {
       "properties": {
         "error": {
@@ -15398,6 +15577,11 @@
           "const": "full",
           "description": "What a session token may do, except answers, keys and settings (no scope has those); types only into its own.",
           "type": "string"
+        },
+        {
+          "const": "trigger",
+          "description": "Fires triggers (`nunchiro trigger fire`) and nothing else.",
+          "type": "string"
         }
       ]
     },
@@ -15716,6 +15900,66 @@
       "required": [
         "name",
         "projects"
+      ],
+      "type": "object"
+    },
+    "Trigger": {
+      "additionalProperties": false,
+      "properties": {
+        "fired": {
+          "description": "The starts of the last hour (unix ms), for `PER_HOUR`. Outside the MAC.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "last": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Last"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The last fire: the session it started, or why not. Outside the MAC."
+        },
+        "mac": {
+          "default": "",
+          "description": "HMAC of name, on, run, mode and secret under `schedule.key`.",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode",
+          "default": "ask"
+        },
+        "name": {
+          "description": "a-z, 0-9, - and _; the webhook path and the CLI's name.",
+          "type": "string"
+        },
+        "on": {
+          "$ref": "#/$defs/Source"
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "run": {
+          "$ref": "#/$defs/ScheduleRun"
+        },
+        "secret": {
+          "description": "A webhook's shared secret, kept only in this 0600 file the core writes; never in a reply.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "on",
+        "run"
       ],
       "type": "object"
     },

@@ -350,6 +350,10 @@ fn serve_locked(home: &Path) -> Result<(), String> {
     // V2.5-11: scheduled runs; it sees `stopping` before each start.
     let _schedule =
         crate::schedule::spawn(sessions.clone(), stopping.clone()).map_err(|e| e.to_string())?;
+    // The webhook triggers' loopback port, open only while one is on.
+    let _webhook =
+        crate::schedule::spawn_webhook(sessions.clone(), stopping.clone(), home.to_path_buf())
+            .map_err(|e| e.to_string())?;
     // Held new seats that wait for memory; asleep (no reading) while none waits.
     let _memory_wait =
         crate::pressure::spawn(sessions.clone(), stopping.clone()).map_err(|e| e.to_string())?;
@@ -948,6 +952,19 @@ fn connection(
             }
             Request::TokenRevoke { id } => {
                 return crate::tokens::revoke(home, id).map(|()| Reply::Ack);
+            }
+            // Triggers: the owner's, off the registry lock; a token of the `trigger` scope may only fire one. Every
+            // other caller (a session, another token, Remote) is refused here, before any session check.
+            Request::Trigger { action } => {
+                let fires = matches!(action, crate::schedule::triggers::Action::Fire { .. });
+                let trigger_token = || {
+                    crate::tokens::verify(home, &env.token)
+                        .is_some_and(|t| t.scope == crate::tokens::Scope::Trigger)
+                };
+                if !owner && !(fires && trigger_token()) {
+                    return Err("operation not granted".into());
+                }
+                return crate::schedule::triggers::handle(sessions, stopping, home, action.clone());
             }
             Request::LibsResolve { urls, requester } => {
                 return crate::libs::Libs::open(home)

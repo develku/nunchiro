@@ -69,7 +69,9 @@ export function ScheduleCard({ d, sessions, core, onAnswer, t }: { d: Decision; 
   };
   const next = twice && row ? nextExact(t, row) : '';
   const title = twice ? t('look8.card.failedTwice') : ask.change === 'failed' ? t('look8.card.failedTitle') : t(`schedule.card.title.${ask.change}` as Key);
-  const rowId = failed?.schedule || ask.id;
+  // A trigger's card names a trigger, not a row of the Schedules list.
+  const trigger = ask.change === 'trigger';
+  const rowId = trigger ? undefined : failed?.schedule || ask.id;
   const mate = team.teammates.find((m) => m.id === ask.run.teammate);
   const level = failed ? undefined : levelOf(ask.run, mate);
   const asker = failed ? undefined : sessions.find((s) => s.id === d.session_id); // a failed run's `session_id` is its schedule's id
@@ -89,7 +91,7 @@ export function ScheduleCard({ d, sessions, core, onAnswer, t }: { d: Decision; 
         ) : (
           <b>{plain(ask.run.label)}</b>
         )}{' '}
-        · {whenWords(t, ask.when)}
+        · {trigger ? t('schedule.card.fromTrigger', { name: ask.id ?? '' }) : whenWords(t, ask.when)}
         {level && (
           <>
             {' · '}

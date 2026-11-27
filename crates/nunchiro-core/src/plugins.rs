@@ -1002,6 +1002,7 @@ pub(crate) enum Asker {
     Agent,
     Schedule,
     Token,
+    Trigger,
 }
 /// A replaced message is cut to this many bytes.
 const MAX_TEXT: usize = 16 * 1024;

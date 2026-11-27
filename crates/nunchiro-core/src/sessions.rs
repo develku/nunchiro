@@ -123,6 +123,8 @@ struct Settings {
     orchestration: OrchestrationSettings,
     // Ticket 211: canonical folders the owner allowed Usage to read through a link; `usage.rs` reads the file itself.
     usage_link_roots: Vec<PathBuf>,
+    // The triggers' webhook port (`schedule/webhook.rs` reads the file itself); absent is 47800.
+    triggers_port: Option<u16>,
     // Ticket 250: absorb features' own values by dotted key (`quit_settings` checks key and size); read with `feature`.
     features: BTreeMap<String, serde_json::Value>,
 }
@@ -449,6 +451,9 @@ pub struct Sessions {
     /// Look 11-17 v8 (Home S2-B): the entries the owner asked to run again on a failed run's card; the schedule timer
     /// runs them off this lock (`schedule::fire`), as Run now.
     pub(crate) schedule_reruns: Vec<String>,
+    /// The owner's Start on a trigger's card (its name and the run with the quoted payload); the schedule timer starts
+    /// them off this lock (`schedule::fire`).
+    pub(crate) trigger_starts: Vec<(String, crate::schedule::Run)>,
     /// Ticket 1004: the check-ins that wait for the judge, at most one per task (`check_in_due`); the server's loop
     /// has them judged off this lock (`start_judge`: git is read there).
     pub(crate) check_ins: Vec<crate::ledger::CheckIn>,
@@ -1365,6 +1370,9 @@ impl Sessions {
             | Request::WidgetPage { .. } /* v1b-22 */
             | Request::Plugin { .. } => {
                 Err("widget requests run outside the registry lock".into())
+            }
+            Request::Trigger { .. } => {
+                Err("trigger requests are the owner's socket's (`nunchiro trigger`)".into())
             }
             // v1b-05
             Request::ImagePut { .. } => Err("image uploads run outside the registry lock".into()),

@@ -56,7 +56,7 @@ export type OwnerAsk =
   // (schedule/mod.rs `Run`, `When`), `line` the core's one sentence of them. Nothing is stored before the yes.
   // Eighth look (Home S2-B): `failed` is a run of schedule `id` that failed or could not start, with the core's `reason`;
   // allow_once runs it again now, deny dismisses the card.
-  | { type: 'schedule'; change: 'add' | 'pause' | 'resume' | 'remove' | 'failed'; id?: string; reason?: string; run: { kind: string; project: string; label: string; task?: string; teammate?: string; level?: 'light' | 'standard' | 'deep' }; when: { at: string; daily: boolean; days?: number[] }; place: string; line: string }
+  | { type: 'schedule'; change: 'add' | 'pause' | 'resume' | 'remove' | 'failed' | 'trigger'; id?: string; reason?: string; run: { kind: string; project: string; label: string; task?: string; teammate?: string; level?: 'light' | 'standard' | 'deep' }; when: { at: string; daily: boolean; days?: number[] }; place: string; line: string }
   // Ticket 1002 lane 2: the Home lead (`from`) stages one outward tool call (`tool`, every `args` key shown on the card).
   // allow_once starts its 10 s undo (`yes_at`, ms); deny then is Undo, before it Discard; choose 1 opens it by hand.
   | { type: 'outward'; tool: string; args: Record<string, unknown>; source?: string; new_domains?: string[]; from: string; hash: string; yes_at?: number }

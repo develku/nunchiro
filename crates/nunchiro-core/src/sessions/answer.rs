@@ -389,6 +389,15 @@ impl Sessions {
                 // Look 11-17 v8 (Home S2-B): a failed run's card. Yes: it runs again now, off this lock (the schedule
                 // timer takes it within a second; a new failure is a new card). No: only the card goes; the entry
                 // keeps its failed run until its next good run or an edit.
+                // A trigger's card: Start runs the run the card carries, off this lock; Not this time drops it.
+                if change == "trigger" {
+                    self.queue.answer_owner(|i| i.id == id)?;
+                    if yes {
+                        self.trigger_starts
+                            .push((entry.clone().unwrap_or_default(), run.clone()));
+                    }
+                    return Ok(Reply::Ack);
+                }
                 if change == "failed" {
                     self.queue.answer_owner(|i| i.id == id)?;
                     let entry = entry.clone().unwrap_or_default();

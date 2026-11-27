@@ -267,6 +267,35 @@ impl Sessions {
             eprintln!("schedule {id}: no card for its failed run: {e}");
         }
     }
+    /// A trigger that asks first fired: the owner's card, with the run its Start starts (the owner's task and the
+    /// caller's payload as quoted data). No session asked; the item carries the trigger's own id.
+    pub(crate) fn trigger_card(
+        &mut self,
+        name: &str,
+        run: crate::schedule::Run,
+        source: crate::schedule::triggers::Source,
+    ) -> Result<(), String> {
+        let from = match source {
+            crate::schedule::triggers::Source::Cli => "the command line",
+            crate::schedule::triggers::Source::Webhook => "a webhook",
+        };
+        let ask = queue::OwnerAsk::Schedule {
+            change: "trigger".into(),
+            id: Some(name.into()),
+            line: format!("Trigger {name} fired from {from}: start {}?", run.label),
+            place: run.project.clone(),
+            run,
+            when: crate::schedule::When {
+                at: String::new(),
+                daily: false,
+                days: vec![],
+            },
+            reason: None,
+        };
+        self.queue
+            .ask_owner(&format!("trigger-{name}"), ask)
+            .map(|_| ())
+    }
     pub(super) fn drop_failed_card(&mut self, entry: &str) {
         self.drop_failed_cards(|id| id == entry);
     }
