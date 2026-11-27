@@ -79,10 +79,12 @@ jobs:
   rust-build:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.web_only != 'true'
-    runs-on: macos-latest
+    runs-on: ${{ fromJSON(needs.changes.outputs.runner) }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: runner.environment == 'self-hosted'
+        run: .github/scripts/self-hosted-clean.sh
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -109,8 +111,8 @@ jobs:
           compression-level: 0 # already zstd
 
   rust-test:
-    needs: rust-build
-    runs-on: macos-latest
+    needs: [changes, rust-build]
+    runs-on: ${{ fromJSON(needs.changes.outputs.runner) }}
     timeout-minutes: 45
     # Two partitions at 4 test threads each, not three at the runner's 3: most tests wait on a spawned core or a timeout,
     # not on the CPU, and the free plan runs only 5 macOS jobs at once, so one fewer job per run shortens the queue.
@@ -121,6 +123,8 @@ jobs:
         partition: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: runner.environment == 'self-hosted'
+        run: .github/scripts/self-hosted-clean.sh
       - run: rustup toolchain install
       - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
@@ -148,6 +152,14 @@ jobs:
       app: ${{ steps.app.outputs.needed }}
       docs_only: ${{ steps.docs.outputs.only }}
       web_only: ${{ steps.web.outputs.only }}
+      # The macOS jobs' runner: the owner's self-hosted Mac (labels self-hosted, nunchiro-mini) for pushes to main and
+      # pull requests from branches of this repository, only while the repository variable SELF_HOSTED is `on`; every
+      # other run, fork pull requests and merge-queue runs included, stays on the hosted label. Set SELF_HOSTED to
+      # anything else (or delete it) when the Mac is offline, or those jobs wait for it forever.
+      runner: >-
+        ${{ vars.SELF_HOSTED == 'on' && (github.event_name == 'push' || (github.event_name == 'pull_request'
+        && github.event.pull_request.head.repo.full_name == github.repository))
+        && '["self-hosted","nunchiro-mini"]' || '"macos-latest"' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -188,10 +200,12 @@ jobs:
   app:
     needs: changes
     if: needs.changes.outputs.app == 'true'
-    runs-on: macos-latest
+    runs-on: ${{ fromJSON(needs.changes.outputs.runner) }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: runner.environment == 'self-hosted'
+        run: .github/scripts/self-hosted-clean.sh
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -212,10 +226,12 @@ jobs:
   web:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: macos-latest
+    runs-on: ${{ fromJSON(needs.changes.outputs.runner) }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: runner.environment == 'self-hosted'
+        run: .github/scripts/self-hosted-clean.sh
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
