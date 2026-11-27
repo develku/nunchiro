@@ -39,6 +39,7 @@ export const KNOWN: [RegExp, Key, Key?][] = [
   [/^no pull request: (?<remote>\S+) is not a GitHub repository/, 'gitActions.err.notGithub'],
   [/^no pull request: /, 'gitActions.err.noPr', 'gitActions.err.failed.todo'],
   [/^the pull request was created, but gh printed no link/, 'gitActions.err.noLink'],
+  [/^(?<agent>\S+) could not write it: (?<reason>[\s\S]+?)\.?$/, 'gitActions.ai.failed'],
   [/core disconnected|core is stopping/i, 'settings.err.core'],
   // The core's own wording only: SSH and agent output also says "timed out" or "Permission denied (publickey)".
   [/too many requests in flight/, 'settings.err.busy'],

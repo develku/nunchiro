@@ -30,6 +30,12 @@ declare module '../index' {
     'gitActions.prompt.pushPr': true;
     'gitActions.prompt.createPr': true;
     'gitActions.prompt.pull': true;
+    'gitActions.ai.write': true;
+    'gitActions.ai.again': true;
+    'gitActions.ai.writing': true;
+    'gitActions.ai.stop': true;
+    'gitActions.ai.written': true;
+    'gitActions.ai.failed': true;
     'gitActions.label.askPushPr': true;
     'gitActions.label.askCreatePr': true;
     'gitActions.label.pushCreatePr': true;
@@ -156,6 +162,12 @@ export const en = {
   'gitActions.err.notGithub': "No pull request: {remote} is not a GitHub repository.",
   'gitActions.err.noPr': "No pull request was created.",
   'gitActions.err.noLink': "The pull request was created, but gh did not say where. Look in the PRs tab.",
+  'gitActions.ai.write': "Write with AI",
+  'gitActions.ai.again': "Write again",
+  'gitActions.ai.writing': "Writing…",
+  'gitActions.ai.stop': "Stop",
+  'gitActions.ai.written': "Written by {agent} from the diff. Read it before you send it.",
+  'gitActions.ai.failed': "{agent} could not write it: {reason}. Your text is unchanged.",
 };
 export const ko = {
   'gitActions.label.commit': '커밋',

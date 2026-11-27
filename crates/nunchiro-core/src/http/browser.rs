@@ -554,6 +554,8 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | GitPush { .. } // pushes as the user: the Mac window's confirm alone
         | PrDraft { .. }
         | PrCreate { .. } // pushes and creates a PR as the user: the Mac window's form alone
+        | PrWrite { .. } // runs the agent CLI on the session's account
+        | PrWriteCancel { .. }
         | LibsResolve { .. }
         | LibsEntry { .. }
         | TokenCreate { .. }

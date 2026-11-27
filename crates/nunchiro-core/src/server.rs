@@ -609,6 +609,8 @@ pub(crate) fn remote_from_owner(
             | Request::GitPush { .. } // pushes from this Mac's folder
             | Request::PrDraft { .. }
             | Request::PrCreate { .. }
+            | Request::PrWrite { .. }
+            | Request::PrWriteCancel { .. }
             | Request::FilesList { .. }
             | Request::FileRead { .. }
             | Request::FileWrite { .. } // ticket 820: a write on this Mac only

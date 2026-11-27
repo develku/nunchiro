@@ -126,6 +126,8 @@ impl Sessions {
             | Request::GitPush { .. } // pushes as the user after the window's confirm
             | Request::PrDraft { .. }
             | Request::PrCreate { .. } // pushes and runs the user's gh after the window's form
+            | Request::PrWrite { .. } // runs the agent CLI on the session's account
+            | Request::PrWriteCancel { .. }
             | Request::AccountList // v2-2a: agent config folders and their login
             | Request::AccountCheck { .. }
             | Request::AccountAdd { .. }

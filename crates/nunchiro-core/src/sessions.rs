@@ -571,7 +571,11 @@ impl Sessions {
                 Err("the PR view requires the window".into())
             }
             Request::PrBranch { .. } => Err("the PR view requires the window".into()), // ticket 373
-            Request::GitPush { .. } | Request::PrDraft { .. } | Request::PrCreate { .. } => {
+            Request::GitPush { .. }
+            | Request::PrDraft { .. }
+            | Request::PrCreate { .. }
+            | Request::PrWrite { .. }
+            | Request::PrWriteCancel { .. } => {
                 Err("push requires the window".into())
             }
             // v2-10c: answered by the socket server after its owner check.

@@ -692,6 +692,14 @@ pub enum Request {
         session: String,
     },
     // The form's Create PR: checked and pushed as `GitPush`, then `gh pr create` with the body on stdin. Window only.
+    // The form's Write with AI: one separate run of the session's agent CLI that answers a title and a description;
+    // its Cancel stops that run alone. Window only.
+    PrWrite {
+        session: String,
+    },
+    PrWriteCancel {
+        session: String,
+    },
     PrCreate {
         session: String,
         #[serde(default)]

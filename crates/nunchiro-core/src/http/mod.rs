@@ -992,6 +992,19 @@ fn serve(
                             crate::git_write::answer(&registry, request)
                         })
                     }
+                    // The form's Write with AI runs the agent CLI for up to 60 s: off this loop.
+                    Ok(frame)
+                        if matches!(
+                            frame.request,
+                            Some(Request::PrWrite { .. } | Request::PrWriteCancel { .. })
+                        ) =>
+                    {
+                        let registry = registry.clone();
+                        let request = frame.request.unwrap();
+                        jobs.spawn(frame.id, move || {
+                            crate::text_gen::answer(&registry, request)
+                        })
+                    }
                     // V2.5-8/9: `gh` runs of up to 15 s (a merge up to 60 s): off this loop.
                     Ok(frame)
                         if matches!(

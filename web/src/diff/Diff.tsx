@@ -387,6 +387,7 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
         <PrForm
           core={core}
           session={session}
+          writer={owner?.kind === 'claude' || owner?.kind === 'codex' ? agent : undefined}
           onCancel={() => setForm(null)}
           onOpen={setViewing}
           onCreated={(c) => {

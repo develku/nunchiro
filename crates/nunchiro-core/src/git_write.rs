@@ -314,7 +314,7 @@ fn github(dir: &Path, remote: &str) -> Result<(String, String), String> {
 }
 
 /// The remote's default branch: its recorded HEAD, else main or master when it has one.
-fn default_base(dir: &Path, remote: &str) -> Option<String> {
+pub(crate) fn default_base(dir: &Path, remote: &str) -> Option<String> {
     text(
         dir,
         &[
@@ -357,7 +357,7 @@ fn readable(branch: &str) -> String {
 }
 
 /// The repository's PR template, a regular file (no link) under its top folder, cut at `BODY_MAX`.
-fn template(dir: &Path) -> Option<String> {
+pub(crate) fn template(dir: &Path) -> Option<String> {
     let top = std::path::PathBuf::from(text(dir, &["rev-parse", "--show-toplevel"])?);
     TEMPLATES.iter().find_map(|t| {
         let path = top.join(t);
