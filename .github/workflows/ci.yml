@@ -54,9 +54,10 @@ jobs:
       - run: python3 -B -m unittest tests/scenario/test_export_links.py
       # The ratchets of scripts/ (dead clicks, no-op clicks, overlaps, raw literals, file sizes): no baseline grows and no
       # count rises above its baseline or the base commit's own. HEAD^ is the base: a pull request's checkout is its merge
-      # commit (first parent: the base branch), and a main tip is one squash merge on the tip before it.
-      - name: Ratchets (.github/scripts/ratchets.py)
-        run: python3 -B .github/scripts/ratchets.py HEAD^
+      # commit (first parent: the base branch), and a main tip is one squash merge on the tip before it. The base's copy
+      # of the script runs, with the base's counters, so a change cannot loosen its own gate.
+      - name: Ratchets (.github/scripts/ratchets.py of the base commit)
+        run: git show HEAD^:.github/scripts/ratchets.py > "$RUNNER_TEMP/ratchets.py" && python3 -B "$RUNNER_TEMP/ratchets.py" HEAD^
       - run: rustup toolchain install # the version and components in rust-toolchain.toml
       - run: cargo fmt --all --check
       - name: sh -n scripts/scenario/*.sh
