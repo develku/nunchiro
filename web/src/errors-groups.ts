@@ -39,6 +39,7 @@ export const GROUPS: Record<string, string[]> = {
     'that library is not pinned', 'remote decision not found', 'retry needs a listed machine alias', 'unknown clone', 'no such schedule', 'session has no log', 'unknown group {}', 'token not found', 'decision not found',
     'message not found in this room', 'ask not found in this room', 'send not found', 'send is not queued', 'worktree not managed or outside grants', 'worktree not managed',
     "plugin {} has no panel, command or check {}", "plugin {} has no setting {}", "plugin {} has no command {}", "no run of {} to read", "no plugin {}", // plugins.rs: a plugin or part that left since the window read the list
+    "no trigger {}", // schedule/triggers.rs: Pause on a trigger's card after the trigger was removed
   ],
   'err.h.fileBad': [
     '{}: not a regular file', 'the outward hook could not be written', // events.rs: a journal day file; sessions/spawn.rs: Codex's hooks file has no hook list
@@ -139,6 +140,7 @@ export const GROUPS: Record<string, string[]> = {
     'handoff not sent', 'sha256 does not match the bytes received', 'theme fetcher unavailable', 'update list unavailable', 'sign-in list unavailable', 'account registry unavailable', 'session registry unavailable', 'the entry did not round-trip through agents.toml', 'Stop store unavailable', 'session list unavailable', 'chat store unavailable', 'chat source unavailable', 'transcript source unavailable', 'chat unavailable',
     'sessions unavailable', 'cache unavailable', 'browser broker unavailable', 'integration source state unavailable', 'clone list unavailable', 'room cache unavailable', 'room pins unavailable', 'token store unavailable', 'widget state unavailable', 'widget act state unavailable', 'version probe thread: {}',
     "test results unavailable", "plugin runs unavailable", // acp/turn.rs, plugins.rs
+    "triggers unavailable", // schedule/triggers.rs
   ],
   'err.h.io': [
     'room: {}', // sessions/locate.rs: Locate could not move the project's room folder (ticket 1040)
