@@ -1145,7 +1145,7 @@ fn main_decides_which_build_is_newer() {
     let _ = fs::remove_dir_all(&work);
     fs::create_dir_all(&work).unwrap();
     fs::set_permissions(&work, fs::Permissions::from_mode(0o700)).unwrap();
-    let line = main_line(&work, url, None).unwrap();
+    let line = main_line(&work, url, None, &AT_INSTALL).unwrap();
     assert_eq!(
         line,
         [c[0].as_str(), &c[1], &c[3], &c[4]],
@@ -1174,7 +1174,13 @@ fn main_decides_which_build_is_newer() {
     let why = newer_on_main(&line, &c[4], "eeeeeeeee").unwrap_err();
     assert!(why.contains("so no build can be judged newer"), "{why}");
     // offline (or no sign-in): refused, with the reason
-    let why = main_line(&work, "file:///nonexistent/nunchiro-1082b", None).unwrap_err();
+    let why = main_line(
+        &work,
+        "file:///nonexistent/nunchiro-1082b",
+        None,
+        &AT_INSTALL,
+    )
+    .unwrap_err();
     assert!(why.contains("main could not be fetched"), "{why}");
     assert!(!work.join("main-line").exists());
     fs::remove_dir_all(work).unwrap();
@@ -1213,10 +1219,11 @@ fn status_offers_only_a_build_install_would_take() {
     let said_now = offer(&dir, &work, running, Some(url));
     assert_eq!(said_now["state"], "ready", "{said_now}");
     assert_eq!(said_now["commit"], c[4].as_str());
-    // A verdict main gave is remembered for this pair of commits: no second fetch (the next one could not reach main).
+    // The last verdict main gave is remembered for its pair of commits: no second fetch (the next could not reach main).
     let gone = Some("file:///nonexistent/nunchiro-1082b");
     assert_eq!(offer(&dir, &work, running, gone)["state"], "ready");
     stamp_for(&dir, &c[0]);
+    offer(&dir, &work, running, Some(url));
     let said_now = offer(&dir, &work, running, gone);
     let reason = said_now["reason"].as_str().unwrap_or_default();
     assert!(reason.contains("is not newer on main"), "{said_now}");
@@ -1238,7 +1245,7 @@ fn status_offers_only_a_build_install_would_take() {
 }
 
 /// The app runs `update status` under its output cap (`Output::KeepBounded`), so the status check's git runs under
-/// it too: a newer build must still read as ready there, and no truncated cache file may be left behind.
+/// it too: a newer build must still read as ready there.
 #[test]
 fn status_judges_a_build_under_the_apps_output_cap() {
     let (url, c) = main_repo();
@@ -1264,8 +1271,8 @@ fn status_judges_a_build_under_the_apps_output_cap() {
     .unwrap();
     let out = String::from_utf8_lossy(&ran.stdout);
     let said = out
-        .lines()
-        .find_map(|l| l.strip_prefix("offer: "))
+        .split_once("offer: ")
+        .and_then(|(_, rest)| rest.lines().next())
         .unwrap_or_else(|| panic!("{out}"));
     let said: serde_json::Value = serde_json::from_str(said).unwrap();
     assert_eq!(said["state"], "ready", "{said}");
@@ -1594,10 +1601,10 @@ fn a_private_main_is_read_with_the_token_only() {
     let _ = fs::remove_dir_all(&work);
     fs::create_dir_all(&work).unwrap();
     fs::set_permissions(&work, fs::Permissions::from_mode(0o700)).unwrap();
-    let line = main_line(&work, url, Some("tok1112")).unwrap();
+    let line = main_line(&work, url, Some("tok1112"), &AT_INSTALL).unwrap();
     assert_eq!(line, [c[0].as_str(), &c[1], &c[3], &c[4]]);
     for token in [None, Some("wrong1112")] {
-        let why = main_line(&work, url, token).unwrap_err();
+        let why = main_line(&work, url, token, &AT_INSTALL).unwrap_err();
         assert!(
             why.contains("main could not be fetched"),
             "{token:?}: {why}"

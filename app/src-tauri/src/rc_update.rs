@@ -319,7 +319,14 @@ async fn local(updates: &Updates) -> Result<Option<String>, String> {
             .as_str()
             .map(|c| c.chars().take(9).collect())),
         Some("refused") => Err(status["reason"].as_str().unwrap_or("refused").to_string()),
-        _ => Ok(None),
+        _ => {
+            // Why a folder build is not offered (older, off main, main unreachable), one line per reason.
+            static SAID: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+            if let Some(why) = status["reason"].as_str() {
+                once(&SAID, why);
+            }
+            Ok(None)
+        }
     }
 }
 
@@ -397,10 +404,15 @@ fn lock<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 fn note(updates: &Updates, failure: &str) {
-    let mut logged = lock(&updates.logged);
+    once(&updates.logged, failure);
+}
+
+/// Logs `line` unless it is the line last logged from `slot`.
+fn once(slot: &std::sync::Mutex<Option<String>>, line: &str) {
+    let mut logged = lock(slot);
     // Only a line that was written counts: the core may not have made its log yet at the first check.
-    if logged.as_deref() != Some(failure) && log_line(failure) {
-        *logged = Some(failure.to_string());
+    if logged.as_deref() != Some(line) && log_line(line) {
+        *logged = Some(line.to_string());
     }
 }
 

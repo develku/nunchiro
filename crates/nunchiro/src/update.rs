@@ -174,7 +174,8 @@ fn source(home: &Path) -> Option<PathBuf> {
     Some(PathBuf::from(text.trim())).filter(|p| p.is_absolute())
 }
 
-/// `{"state": "off" | "none" | "ready" | "refused", "source", "commit", "built", "reason"}`; reads, never changes anything.
+/// `{"state": "off" | "none" | "ready" | "refused", "source", "commit", "built", "reason"}`. Changes nothing outside
+/// `.nunchiro-update/` beside the installed bundle, where the main-line check fetches main and keeps its last verdict.
 fn status(home: &Path) -> serde_json::Value {
     let Some(source) = source(home) else {
         return serde_json::json!({"state": "off"});
@@ -198,7 +199,7 @@ fn status(home: &Path) -> serde_json::Value {
 /// the window then offers nothing for the folder and still checks the signed feed, as for an empty folder.
 fn offer(source: &Path, work: &Path, running: &str, repo: Option<&str>) -> serde_json::Value {
     match ready(source, running) {
-        Ok(Some(stamp)) => match update_repo(repo).and_then(|r| newer(work, r, &stamp, running)) {
+        Ok(Some(stamp)) => match update_repo(repo).and_then(|r| judged(work, r, &stamp, running)) {
             Ok(()) => {
                 serde_json::json!({"state": "ready", "source": source, "commit": stamp.commit, "built": stamp.built})
             }
@@ -207,6 +208,45 @@ fn offer(source: &Path, work: &Path, running: &str, repo: Option<&str>) -> serde
         Ok(None) => serde_json::json!({"state": "none", "source": source}),
         Err(reason) => serde_json::json!({"state": "refused", "source": source, "reason": reason}),
     }
+}
+
+/// `status`'s last verdict of main, for one pair of commits: `<stamp commit> <running>`, a newline, `ready` or the reason.
+const VERDICT: &str = "status-verdict";
+
+/// `newer` for `status`, remembering a lasting verdict so a build left in the folder is not fetched for every check.
+fn judged(work: &Path, repo: &str, stamp: &Stamp, running: &str) -> Result<(), String> {
+    let key = format!("{} {running}", stamp.commit);
+    let path = work.join(VERDICT);
+    let kept = read_small(&path, 4096).and_then(|b| String::from_utf8(b).ok());
+    if let Some((said, why)) = kept.as_deref().and_then(|t| t.split_once('\n'))
+        && said == key
+    {
+        return if why == "ready" {
+            Ok(())
+        } else {
+            Err(why.to_string())
+        };
+    }
+    let verdict = newer(work, repo, stamp, running, &AT_STATUS);
+    // shortcut: "not newer" is told by its words; off main or unreachable is asked again, as either may change.
+    let lasting = match &verdict {
+        Ok(()) => Some("ready"),
+        Err(e) if e.contains("is not newer on main") => Some(e.as_str()),
+        Err(_) => None,
+    };
+    if let Some(why) = lasting {
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(&path);
+        if let Ok(mut file) = file {
+            let _ = std::io::Write::write_all(&mut file, format!("{key}\n{why}").as_bytes());
+        }
+    }
+    verdict
 }
 
 /// The installed bundle this executable runs from: a `.app` that is not where cargo builds it, with this app's id.
@@ -421,7 +461,7 @@ fn install(
         (Candidate::Archive(_), None) => unreachable!("an archive is unpacked above"),
     };
     let stamp = ready(source, running)?.ok_or("no new build is ready")?;
-    newer(&work, repo, &stamp, running)?;
+    newer(&work, repo, &stamp, running, &AT_INSTALL)?;
     let staged = work.join("new").join(name);
     let _ = fs::remove_dir_all(&staged);
     let from = source.canonicalize().map_err(|e| e.to_string())?.join(APP);
@@ -522,9 +562,9 @@ const TOKEN_HELPER: &str = r#"!f() { test "$1" = get && printf 'username=x-acces
 
 /// Ticket 1112: the owner's GitHub sign-in as `gh auth token` reads it (Orca's updater reads it the same way). git's own
 /// sign-in on the owner's Mac is gh's helper in ~/.gitconfig, which the fetch never reads. Only a fixed gh path runs,
-/// with a cleared environment and the account's home, for at most 10 s; its answer goes through a pipe, never to disk.
-/// None when gh is missing, signed out or slow; the fetch then tries the keychain.
-fn gh_token() -> Option<String> {
+/// with a cleared environment and the account's home, for at most `limit`; its answer goes through a pipe, never to
+/// disk. None when gh is missing, signed out or slow; the fetch then tries the keychain.
+fn gh_token(limit: std::time::Duration) -> Option<String> {
     use std::io::Read;
     use std::os::unix::process::CommandExt;
     use std::process::Stdio;
@@ -543,7 +583,7 @@ fn gh_token() -> Option<String> {
         .process_group(0)
         .spawn()
         .ok()?;
-    let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let until = std::time::Instant::now() + limit;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
@@ -580,14 +620,36 @@ fn gh_token() -> Option<String> {
 /// writable by an agent of the same user) and no hooks; only commits are fetched. The sign-in is `token` (ticket 1112:
 /// gh's, given to the fetch alone through one helper for `repo`), else the fixed osxkeychain helper. Offline, or with no
 /// sign-in for a private repository, the install is refused.
-fn main_line(work: &Path, repo: &str, token: Option<&str>) -> Result<Vec<String>, String> {
-    let dir = work.join("main-line");
+fn main_line(
+    work: &Path,
+    repo: &str,
+    token: Option<&str>,
+    check: &Check,
+) -> Result<Vec<String>, String> {
+    let dir = work.join(check.scratch);
     let _ = fs::remove_dir_all(&dir);
     own_dir(&dir)?;
     let line = (|| {
         own_dir(&dir.join("home"))?;
         let git = |args: &[&str]| {
+            use std::os::unix::process::CommandExt;
             let mut cmd = Command::new("/usr/bin/git");
+            // The app runs `update status` under a soft file-size cap for its one JSON line; git's pack and the
+            // xcrun cache /usr/bin/git writes are larger. Raised to the hard limit for git alone.
+            // Safety: getrlimit and setrlimit are async-signal-safe and touch only this child's limits.
+            unsafe {
+                cmd.pre_exec(|| {
+                    let mut l = libc::rlimit {
+                        rlim_cur: 0,
+                        rlim_max: 0,
+                    };
+                    if libc::getrlimit(libc::RLIMIT_FSIZE, &mut l) == 0 {
+                        l.rlim_cur = l.rlim_max;
+                        libc::setrlimit(libc::RLIMIT_FSIZE, &l);
+                    }
+                    Ok(())
+                })
+            };
             cmd.env_clear()
                 .env("PATH", "/usr/bin:/bin")
                 .env("HOME", dir.join("home"))
@@ -600,7 +662,7 @@ fn main_line(work: &Path, repo: &str, token: Option<&str>) -> Result<Vec<String>
                 .args(args);
             cmd
         };
-        let limit = std::time::Duration::from_secs(120);
+        let limit = check.step;
         tool(
             &mut git(&["init", "-q", "--bare", "repo"]),
             "git init",
@@ -653,9 +715,33 @@ fn main_line(work: &Path, repo: &str, token: Option<&str>) -> Result<Vec<String>
     line
 }
 
+/// How the main-line check runs: its scratch folder in the work folder and its time limits (each git step, gh).
+struct Check {
+    scratch: &'static str,
+    step: std::time::Duration,
+    gh: std::time::Duration,
+}
+const AT_INSTALL: Check = Check {
+    scratch: "main-line",
+    step: std::time::Duration::from_secs(120),
+    gh: std::time::Duration::from_secs(10),
+};
+/// Its own scratch, as status takes no install lock; 5 s + 3 x 6 s stays under the app's 30 s for the whole call.
+const AT_STATUS: Check = Check {
+    scratch: "status-main-line",
+    step: std::time::Duration::from_secs(6),
+    gh: std::time::Duration::from_secs(5),
+};
+
 /// Threat 4: the stamp's commit is later than `running` on `repo`'s main, fetched live, not from anything beside the
 /// build. The one check both `install` and `status` use.
-fn newer(work: &Path, repo: &str, stamp: &Stamp, running: &str) -> Result<(), String> {
+fn newer(
+    work: &Path,
+    repo: &str,
+    stamp: &Stamp,
+    running: &str,
+    check: &Check,
+) -> Result<(), String> {
     if stamp.commit.len() != 40 {
         return Err("refused: the stamp's commit must be a full 40-character sha".into());
     }
@@ -663,10 +749,10 @@ fn newer(work: &Path, repo: &str, stamp: &Stamp, running: &str) -> Result<(), St
     // Ticket 1112: gh's sign-in is for GitHub only, so a test's file:// origin never runs gh.
     let token = repo
         .starts_with("https://github.com/")
-        .then(gh_token)
+        .then(|| gh_token(check.gh))
         .flatten();
     newer_on_main(
-        &main_line(work, repo, token.as_deref())?,
+        &main_line(work, repo, token.as_deref(), check)?,
         &stamp.commit,
         running,
     )
