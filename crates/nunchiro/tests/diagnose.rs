@@ -546,7 +546,7 @@ fn diagnose_settings_keys_match_core() {
     // Every core field, with a valid value, is kept: the binary's own key list and shape check match the core.
     let valid = json!({
         "machines": {"m": {"projects": {"/a": "/b"}}}, "disable_hook_injection": true, "worktrees_dir": "/w",
-        "stale_after_ms": 5, "permission_answers": {"/p": true}, "session_lifetime": "end_with_app",
+        "stale_after_ms": 5, "triggers_port": 47800, "permission_answers": {"/p": true}, "session_lifetime": "end_with_app",
         "start_at_login": true, "script_widgets": true, "web_widgets": true,
         "keep_history": null, "mask_history": false,
         "live_pr_status": true, "live_pr_offered": false, "pr_watch": ["https://github.com/o/r/pull/1"],

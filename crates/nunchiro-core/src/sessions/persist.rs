@@ -279,6 +279,7 @@ impl Sessions {
             grants: crate::grants::Grants::default(),
             schedules: crate::schedule::Schedules::load(home), // V2.5-11
             schedule_reruns: vec![],
+            trigger_starts: vec![],
             check_ins: vec![],
             delivery_inflight: BTreeMap::new(),
             wakes: BTreeMap::new(),
