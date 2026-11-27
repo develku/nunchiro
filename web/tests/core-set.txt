@@ -67,6 +67,8 @@ i18n-remaining-catalogue.spec.ts
 i18n-chat-catalogue.spec.ts
 i18n-key-sets.spec.ts
 
+# a waiting question: its option numbers answer it from an empty composer, and the hint says so
+sidechat-card-1097.spec.ts | item2_empty_composer_digit|digit_hint_in_empty_composer
 # remembered choices: New worktree per project in the new-session popover, Search's scope
 remember-choices.spec.ts
 # a shell beside the agent: the Terminal icon opens one in the agent's folder, New terminal too
