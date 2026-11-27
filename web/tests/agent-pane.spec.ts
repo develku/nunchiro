@@ -9,7 +9,7 @@ import { ENTRIES } from '../src/layout/registry';
 import { DEFAULT_BINDINGS, conflicts } from '../src/keys';
 import { expect, openWindow, REPO, terminalText, test, type Core } from './fixtures';
 import { append, chat, openChat, rec, test as chatTest } from './fixtures/chat/harness';
-import { bview, injectPending, item, maximisePane, newShell, pview, showPreview } from './agent-pane';
+import { bview, injectPending, item, maximisePane, pview, showPreview } from './agent-pane';
 import { icon, lib, names, pageErrors, startEdit, stored } from './d5b';
 
 const SEEN = 'window.__sent';
@@ -234,7 +234,8 @@ test('pane_pty_is_session_terminal', async ({ app, core }) => {
   await record(app);
   await openWindow(app, {}, core);
   await open(app, a.id);
-  await termIcon(app).click();
+  await termIcon(app).click(); // a shell beside the agent; its PTY is the row's first tab
+  await tab(app, /PTY/).click();
   await expect(app.locator(`.term[data-session="${a.id}"] .xterm-screen`)).toBeVisible();
   await expect.poll(() => terminalText(app, a.id)).toContain('fake agent ready');
   await app.locator(`.term[data-session="${a.id}"] .xterm-helper-textarea`).focus();
@@ -278,9 +279,7 @@ test('pane_shell_tabs', async ({ app, core }) => {
   await record(app);
   await openWindow(app, {}, core);
   await open(app, a.id);
-  await termIcon(app).click();
-  await expect(pane(app).getByRole('button', { name: /^Close shell/ })).toHaveCount(0);
-  await newShell(app);
+  await termIcon(app).click(); // the icon starts the pane's shell (shell-beside-agent.spec.ts)
   const start = await expect.poll(async () => (await sent(app, 'start')).length).toBe(1).then(() => sent(app, 'start'));
   expect(start[0].session).toMatchObject({ kind: 'shell', project: a.cwd });
   const shellsNow = () => (core.cli('snapshot', '--json').sessions as { id: string; kind: string; cwd: string }[]).filter((s) => s.kind === 'shell');
@@ -290,7 +289,7 @@ test('pane_shell_tabs', async ({ app, core }) => {
   await expect(tab(app, /shell/i)).toHaveAttribute('aria-selected', 'true');
   await expect(app.locator('.tabs .tab', { hasText: /shell/ })).toHaveCount(0); // not also a window tab
   await expect(app.locator(`.term[data-session="${shells[0].id}"] .xterm-screen`)).toBeVisible();
-  await pane(app).getByRole('button', { name: /^Close shell/ }).click();
+  await pane(app).locator('.px[title^="Close shell"]').click();
   await expect(tab(app, /shell/i)).toHaveCount(0);
   await expect.poll(() => (core.cli('snapshot', '--json').sessions as { id: string; state: string }[]).find((s) => s.id === shells[0].id)?.state).not.toBe('running');
 });
@@ -323,7 +322,7 @@ chatTest('pane_preview_tab', async ({ page, chatCore }) => {
   await termI.click();
   await showPreview(page);
   await expect(pane(page).locator('.preview')).toContainText('Nothing to preview yet');
-  await termI.click(); // the pane is on Preview: the Terminal icon brings the PTY back (the strip's PTY tab is gone)
+  await termI.click(); // the pane is on Preview: the Terminal icon brings its shell back
   await expect(page.locator('[data-side-pane] .term')).toBeVisible();
   await termI.click();
   await expect(pane(page)).toHaveCount(0);
@@ -455,6 +454,7 @@ test('selection_to_composer_no_send', async ({ app, core }) => {
   await openWindow(app, {}, core);
   await open(app, a.id);
   await termIcon(app).click();
+  await tab(app, /PTY/).click();
   await expect.poll(() => terminalText(app, a.id)).toContain('fake agent ready');
   await app.evaluate((id) => {
     const t = (window as unknown as { __terminals?: Map<string, { selectAll(): void }> }).__terminals?.get(id);
@@ -491,12 +491,12 @@ test('reach_two_clicks', async ({ app, core }) => {
   const a = agent(core, 'a');
   await openWindow(app, {}, core);
   await open(app, a.id);
-  await termIcon(app).click(); // click 1: the pane (the PTY)
-  await expect(app.locator(`.term[data-session="${a.id}"]`)).toBeVisible();
+  await termIcon(app).click(); // click 1: the pane (a shell beside the agent)
+  await expect(pane(app).locator('.term:visible')).toHaveCount(1);
   await icon(app, 'right', 'Browser').click(); // the Browser icon: one click
   await expect(bview(app)).toBeVisible();
-  await termIcon(app).click(); // the Terminal icon brings the PTY back from another view
-  await expect(app.locator(`.term[data-session="${a.id}"]`)).toBeVisible();
+  await termIcon(app).click(); // the Terminal icon brings the shell back from another view
+  await expect(pane(app).locator('.term:visible')).toHaveCount(1);
   await app.getByRole('button', { name: 'Open command palette' }).click(); // Preview: the palette button, then its command row
   await app.locator('.palette [data-command="preview.toggle"]').click();
   await expect(pview(app)).toBeVisible();

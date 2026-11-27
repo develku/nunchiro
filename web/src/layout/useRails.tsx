@@ -3,6 +3,7 @@ import { roomOfTab } from '../room/room';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type Dispatch, type SetStateAction } from 'react';
 import { isOpen as paneOpen, show as paneShow, showYou, tabOf as paneTabOf, toggle as paneToggle, usePane } from '../pane/store';
 import { BrowserSpaces } from '../pane/browser/view/BrowserView';
+import { showShell } from '../pane/SidePane';
 import { YOU_SPACE } from '../pane/browser/view/spaces';
 import { add as addSplit } from '../split/store';
 import { forgetView } from '../board/views';
@@ -282,7 +283,16 @@ export function useRails({ store, layout, editing, bars, layoutSeen, setSettings
     // rc2b-fb3 item 5: the side pane lives in the terminal widget; a zone showing another tab (Board) hid it, so the
     // icons first bring the session's terminal to the front (open bumps LayoutView's reveal). A hidden pane counts as closed.
     // v25-shell-chrome (ticket 284 item 4): the pane has no tab strip, so the Terminal icon is also the way back to the PTY from Browser or Preview.
-    if (kindOf(w) === 'terminal') return void (paneSession ? (document.querySelector('.spane')?.checkVisibility() ? (paneTabOf(paneState, paneSession.id) === 'pty' ? paneToggle(paneSession.id) : paneShow(paneSession.id, 'pty')) : (open(paneSession.id), paneShow(paneSession.id, 'pty'))) : current?.state === 'running' ? (open(current.id), arrange.notify(t('shell.terminalIcon.inCentre'))) : startTerminal());
+    // A shell beside the agent in one press (T3 Code's terminal drawer): the pane on a terminal (a shell or the agent's PTY)
+    // hides on a press; otherwise this pane's shell in the agent's folder is shown, started when it has none. The agent's PTY
+    // is a tab of the pane's row.
+    if (kindOf(w) === 'terminal' && paneSession) {
+      const tab = paneTabOf(paneState, paneSession.id);
+      if (document.querySelector('.spane')?.checkVisibility() && (typeof tab !== 'string' || tab === 'pty')) return paneToggle(paneSession.id);
+      open(paneSession.id);
+      return showShell(core, paneSession, sessions, (n) => arrange.notify(typeof n === 'string' ? n : n.text));
+    }
+    if (kindOf(w) === 'terminal') return void ( current?.state === 'running' ? (open(current.id), arrange.notify(t('shell.terminalIcon.inCentre'))) : startTerminal());
     if (w === 'browser') return void (paneSession ? (showYou(false), document.querySelector('.spane')?.checkVisibility() && paneTab === 'browser' ? paneToggle(paneSession.id) : (open(paneSession.id), paneShow(paneSession.id, 'browser'))) : browserTab ? openBrowserTab() : showYou(!paneState.you)); // v25 placement item 4; ticket 997 L1: while My browser is a centre tab the icon brings that tab (one place per space); ticket 288: with no agent session it is the user's own browser; defect 17: a second press closes it, as Terminal's does
     const key = foldOf(w);
     if (key) return fold.unfold(key); // a Board zone the user placed and the fold hid comes back first

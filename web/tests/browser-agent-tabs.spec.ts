@@ -46,7 +46,6 @@ test('browser_agent_tabs_switch_close_and_take_over', async ({ app, core }) => {
   // The agent opened two tabs and works in tab 2.
   await setTabs(app, { tabs: [page(1, 'Inbox'), page(2, 'Docs')], current: 2 });
   await app.locator(`.tab[data-tab="${a.id}"]`).click();
-  await icon(app, 'right', 'Terminal').click();
   await icon(app, 'right', 'Browser').click();
   const side = pane(app);
   const tabs = side.getByRole('tablist', { name: 'Browser tabs' }).getByRole('tab');
