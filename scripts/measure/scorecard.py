@@ -240,6 +240,18 @@ REVERT_LANE = re.compile(r"^(?:fable-revert-|revert-\d+-|lead-revert-?)(.+)$")
 REVERT_SUBJECT = re.compile(r'^Revert (?!"Revert )')  # git's default subject; a revert of a revert lands the change again
 
 
+def attempts(runs, fetch):
+    """One row per attempt. "gh run list" gives a run's last attempt only; fetch(run id, n) gives an earlier one (the
+    REST attempts endpoint), so a failed attempt stays a red gate run when its rerun is green."""
+    out = []
+    for r in runs:
+        for n in range(1, r.get("attempt") or 1):
+            a = fetch(r["databaseId"], n)
+            out.append(dict(r, status=a["status"], conclusion=a["conclusion"], startedAt=a["run_started_at"], updatedAt=a["updated_at"]))
+        out.append(r)
+    return out
+
+
 def revert_of(lane, subjects=()):
     """What a landed lane reverts, or None when it is no revert. Its name says so (REVERT_LANE), or every commit of its
     own is a revert (subject 'Revert ...'); git's `Revert "Merge lane <lane> (...)"` names the lane, else "" (unknown)."""
