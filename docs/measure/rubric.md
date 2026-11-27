@@ -148,8 +148,9 @@ that is owner-run or not yet scores 0 until it is measured (rule 1).
 ## Peer tasks (p04, p11, p13)
 
 The tasks, the path rule and the score are in [tasks.md](tasks.md). In short: every cell is one task driven in the
-running app, the same way in every app, on the default GUI path a new user finds; the steps and the seconds are
-recorded; three drives, the median. The task score is the lower of the step score and the time score. T1 starts at
+running app, the same way in every app and in one session, on the default GUI path a new user finds; the steps and
+the seconds are recorded (by computer use the seconds are a fixed user time per step plus the app's measured waits);
+three drives, the median. The task score is the lower of the step score and the time score. T1 starts at
 the app's public download page. A Nunchiro cell not driven in this run scores 0. A task counts only when at least two
 peers were driven on it.
 
@@ -318,7 +319,7 @@ sandboxes. A phone client is row M2 of p01.
 | Idle weight with real agents | with at least 5 Claude or Codex sessions waiting at their prompts and the window open: `python3 -B scripts/measure/scorecard.py weigh` (read only; writes the manual file) | idle_mib_5, idle_cpu_pct_5 |
 | Terminal paint and streaming | `sh scripts/measure/build.sh`, then the echo `paint.sh` command of the anchor table and copy p95_ms into the manual file; `python3 -B scripts/measure/scorecard.py stream8` runs the stream command and writes the worst frame itself. Both commands need the measure core: built with release optimisation and debug assertions on (`CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true`), on a throwaway home. A plain release core gives the window token to the app only (crates/nunchiro-core/src/peer.rs `is_app`), so the measure page cannot open a terminal on it. `stream8` builds that core; the echo command takes it through `NUNCHIRO_MEASURE_CORE`. A core without release optimisation is not these figures | term_paint_p95_ms, stream8_worst_frame_ms |
 | Real agent turns | `sh scripts/scenario/v1b-full.sh` (Claude and Codex rows), one real ACP agent turn by hand | the count of p06, EX5, A3 |
-| Peer tasks | drive T1-T12 in Nunchiro (an isolated RC), Orca and T3 Code the same way (by hand with a recording, or computer use for all; the owner answers its access dialog); record steps, seconds and the date in tasks.json | p04, p11, p13 |
+| Peer tasks | drive T1-T12 in Nunchiro (an isolated RC), Orca and T3 Code the same way (by hand with a recording, or computer use for all; the owner answers its access dialog), in one session, the apps in turn; a computer-use drive records each step's kind, time stamp and wait, and `scripts/measure/drive.py seconds` gives its seconds; record steps, seconds and the date in tasks.json | p04, p11, p13 |
 | Seats lost per restart | over 7 days, for each restart of the owner's app (update, serve restart, relaunch): seats held before minus seats back after, from `nunchiro agent list` before and after; the mean | seats_lost_per_restart |
 | 24 h soak | 20 real agent sessions on a core with its own NUNCHIRO_HOME for 24 h with a heartbeat prompt every 10 min; clean hours until the first crash, stuck terminal or lost session (`python3 -B scripts/measure/soak.py --nunchiro <RC nunchiro> --sessions 20`; raw samples in soak-<date>.jsonl, `--report FILE` for a stopped run; it writes soak_clean_hours only from a day of exactly 20 sessions) | soak_clean_hours |
 | Accuracy trial | p34 above: `python3 -B scripts/measure/scorecard.py accuracy --machine <alias> --remote-project <dir on the second Mac>` (raw records in accuracy-<date>.json; the figures go into the manual file only when the run is counted; `--self-test` checks the script on a fixture agent and is never counted) | the five p34 trial figures, prompt_delivery_ms |
