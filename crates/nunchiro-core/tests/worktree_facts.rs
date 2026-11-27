@@ -363,6 +363,36 @@ fn a_worktree_start_runs_no_git_per_worktree() {
     );
 }
 
+/// A `--worktree` start forwarded from another Mac is recorded too, and the core still answers (round 2 of the review:
+/// the record took the registry lock the start still held, and the core froze for good).
+#[test]
+fn a_forwarded_worktree_start_is_listed_and_the_core_answers() {
+    let core = Core::new();
+    let parent = core
+        .op(json!({"op":"start","session":{"kind":"shell","project":core.repo,"label":"parent","args":["/bin/cat"],"model":null,"effort":null,"resume":null}}))
+        .unwrap();
+    let request = json!({"op":"forwarded","caller":{"id":parent["session"]["id"],"project":core.repo,"permission_answers":false},
+        "request":{"op":"start","session":{"kind":"shell","project":core.repo,"worktree":true,"label":"fwd","args":["/bin/cat"],"model":null,"effort":null,"resume":null}}});
+    let home = core.home.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(
+            call(&home, serde_json::from_value(request).unwrap())
+                .map(|r| serde_json::to_value(r).unwrap()),
+        );
+    });
+    let started = rx
+        .recv_timeout(Duration::from_secs(30))
+        .expect("the core answers a forwarded worktree start")
+        .unwrap();
+    let cwd = started["session"]["cwd"].as_str().unwrap().to_string();
+    assert_ne!(PathBuf::from(&cwd), core.repo, "{started}");
+    assert!(
+        core.row(&json!(cwd)).is_some(),
+        "the forwarded start's worktree is listed"
+    );
+}
+
 #[test]
 fn removed_outside_nunchiro_shows_gone() {
     let core = Core::new();
