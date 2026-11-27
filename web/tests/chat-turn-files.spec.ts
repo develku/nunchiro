@@ -95,9 +95,10 @@ test('chat_turn_row_hidden_without_file_writes', async ({ page, chatCore }) => {
   c.write(c.at(rec.user('now edit')), ...c.edit('e1', 'a.txt'));
   await openChat(page, c.s.id);
   await expect(chat(page, c.s.id).getByText('read it')).toBeVisible();
-  // The read-only turn has no row; the writing turn has only its changes card (B19), before and after it ends.
+  // The read-only turn has no row; the writing turn shows its changes card (B19) once it ends, not while it runs (the card
+  // would move with each line of the reply: chat_turn_card_does_not_move_while_the_turn_ends).
   await expect(chat(page, c.s.id).locator('.turnfiles')).toHaveCount(0);
-  await expect(row(page, c.s.id)).toHaveCount(1);
+  await expect(row(page, c.s.id)).toHaveCount(0);
   c.write(c.end());
   await expect(row(page, c.s.id)).toHaveCount(1);
   await expect(row(page, c.s.id)).toHaveAttribute('aria-label', /^1 file changed, \d+ added, \d+ removed, this turn$/);
