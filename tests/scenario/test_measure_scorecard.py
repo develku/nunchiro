@@ -181,6 +181,24 @@ class RubricV2(unittest.TestCase):
         self.assertEqual(s.holder_pids(args, ids={a}), [2])
         self.assertEqual(s.holder_pids(args, exe="/Users/o/Applications/Nunchiro.app/Contents/MacOS/nunchiro"), [3])
 
+    def test_weigh_splits_cpu_by_group_and_keeps_the_figure_the_same_sum(self):
+        used = {1: [10.0, 10.5], 2: [3.0, 3.1], 3: [1.0, 1.01], 4: [2.0, 2.0], 5: [7.0, 9.0]}  # pid: CPU s before, after
+        calls = {}
+
+        def cputime(pids):
+            n = calls.setdefault(tuple(pids), 0)
+            calls[tuple(pids)] += 1
+            return sum(used[p][n] for p in pids)
+        clock = iter([0.0, 10.0])
+        groups = dict(core=[1], window=[2], helpers=[3], holders=[4], agents=[5])
+        cpu, by = s.weigh_cpu(groups, 10, cputime, sleep=lambda _: None, clock=lambda: next(clock))
+        self.assertEqual(by, dict(core=5.0, window=1.0, helpers=0.1, holders=0.0, agents=20.0))
+        self.assertEqual(cpu, 6.1)  # core + window + helpers + holders, as before; the agents are not in it
+        calls.clear()
+        _, by = s.weigh_cpu(dict(groups, helpers=[]), 10, cputime, sleep=lambda _: None, clock=iter([0.0, 10.0]).__next__)
+        self.assertEqual(by["helpers"], 0.0)
+        self.assertNotIn((), calls)  # an empty group is 0, never a ps call over no pids
+
     def test_mib_per_session_is_never_negative(self):
         # the 11-26 run: a baseline sampled before the window settled read higher than 20 sessions later
         self.assertEqual(s.mib_per_session(280.0, 340.0, 4.0, 20, 20), 3.2)

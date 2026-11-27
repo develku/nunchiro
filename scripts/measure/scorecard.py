@@ -1190,6 +1190,20 @@ def tests_cmd(a):
     print(f"wrote {path}: {sum(r['green'] for r in results)} of {len(results)} green")
 
 
+WEIGHED = ("core", "window", "helpers", "holders")  # the groups idle_cpu_pct sums; "agents" is reported beside it
+
+
+def weigh_cpu(groups, secs, cputime, sleep=time.sleep, clock=time.monotonic):
+    """(idle_cpu_pct, CPU % per group) over `secs`: idle_cpu_pct is the WEIGHED groups' summed CPU time, rounded once."""
+    def used(pids):
+        return cputime(pids) if pids else 0.0
+    before, t0 = {g: used(p) for g, p in groups.items()}, clock()
+    sleep(secs)
+    dt = clock() - t0
+    delta = {g: used(p) - before[g] for g, p in groups.items()}
+    return round(sum(delta[g] for g in WEIGHED) / dt * 100, 2), {g: round(d / dt * 100, 2) for g, d in delta.items()}
+
+
 def weigh_cmd(a):
     import baseline as bl
     import measurelib as ml
@@ -1210,15 +1224,16 @@ def weigh_cmd(a):
     helpers = ml.attribute(procs, {p: ml.responsible_pid(p) for p in procs}, window[0], set(holders) | {core})[0]
     pids, kids = [core, window[0], *helpers, *holders], [p for ks in under.values() for p in ks]
     mib = rel.mib(sum(rel.footprint(pids).values()))
-    c0, k0, t0 = bl.cputime(pids), bl.cputime(kids) if kids else 0.0, time.monotonic()
-    time.sleep(a.secs)
-    dt = time.monotonic() - t0
-    cpu, agent_cpu = round((bl.cputime(pids) - c0) / dt * 100, 2), round(((bl.cputime(kids) if kids else 0.0) - k0) / dt * 100, 2)
+    groups = dict(core=[core], window=[window[0]], helpers=helpers, holders=holders, agents=kids)
+    cpu, by_group = weigh_cpu(groups, a.secs, bl.cputime)
+    agent_cpu = by_group["agents"]
     now = time.strftime("%Y-%m-%d %H:%M")
+    split = ", ".join(f"{g} {v} %" for g, v in by_group.items())
     evidence = (f"scorecard.py weigh {now}: the owner's running app ({exe}), window open, {len(holders)} sessions held, {len(agents)} with a "
                 f"Claude or Codex process; {len(pids)} processes (core, window, {len(helpers)} helpers, holders); the agents' own CPU in the "
-                f"same {a.secs} s was {agent_cpu} % (idle means near 0); 1-min load {rel.load()}")
-    print(json.dumps(dict(idle_mib=mib, idle_cpu_pct=cpu, sessions=len(holders), agent_sessions=len(agents), agents_cpu_pct=agent_cpu), indent=1))
+                f"same {a.secs} s was {agent_cpu} % (idle means near 0); by group: {split}; 1-min load {rel.load()}")
+    print(json.dumps(dict(idle_mib=mib, idle_cpu_pct=cpu, sessions=len(holders), agent_sessions=len(agents), agents_cpu_pct=agent_cpu,
+                          cpu_pct_by_group=by_group), indent=1))
     if len(agents) < 5:
         print(f"not written: the rubric's figure needs at least 5 Claude or Codex sessions, this app holds {len(agents)}")
         return
