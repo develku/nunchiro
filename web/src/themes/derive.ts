@@ -151,7 +151,8 @@ export function deriveTokens(c: ThemeColors): Record<string, string> {
     '--panel': panel,
     '--raised': raised,
     '--text': text,
-    '--muted': readable(mix(B, text, 0.6), [text], 4.5, [...marksOn, diffAdd, diffDel], 0, true),
+    // also on the darkest stack it meets: a hovered quiet button (tint 3) inside a tinted box (tint 1) on the page
+    '--muted': readable(mix(B, text, 0.6), [text], 4.5, [...marksOn, diffAdd, diffDel, mix(mix(page, text, t1), text, t3)], 0, true),
     '--faint': faint,
     '--line': mix(B, c.foreground, dark ? 0.09 : 0.11),
     '--tint-1': alpha(text, t1),

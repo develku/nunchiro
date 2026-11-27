@@ -6,7 +6,7 @@
    The page's own chrome is the Nunchiro theme itself; every specimen panel carries its theme's tokens from the script. */
 :root {
   /* Nunchiro light (the page's own chrome) */
-  --page: #f1f2f0; --panel: #fafaf9; --raised: #ffffff; --text: #23272b; --muted: #5d646a; --faint: #868c92; --line: #e2e4e1;
+  --page: #f1f2f0; --panel: #fafaf9; --raised: #ffffff; --text: #23272b; --muted: #51585d; --faint: #868c92; --line: #e2e4e1;
   --tint-1: #232d280d; --tint-2: #232d2816; --tint-3: #232d2821;
   --glass-chrome: #f1f2f09e; --glass-float: #ffffffd1; --glass-hi: #ffffffb3;
   --accent: #4f7fa8; --light-run: #5583a8; --light-you: #b87131; --you-glow: #e08a3c; --you-text: #9f500f; --primary: #9f500f; --on-primary: #ffffff;
@@ -32,7 +32,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --page: #15171a; --panel: #1b1e21; --raised: #22262a; --text: #e5e7e8; --muted: #9aa1a7; --faint: #6e757b; --line: #2b2f33;
+    --page: #15171a; --panel: #1b1e21; --raised: #22262a; --text: #e5e7e8; --muted: #a5acb1; --faint: #6e757b; --line: #2b2f33;
     --tint-1: #ffffff0d; --tint-2: #ffffff17; --tint-3: #ffffff21;
     --glass-chrome: #181a1d99; --glass-float: #22262acc; --glass-hi: #ffffff12;
     --accent: #7fb0d6; --light-run: #7fb0d6; --light-you: #f2a35a; --you-glow: #f2a35a; --you-text: #f2a35a; --primary: #f2a35a; --on-primary: #1b1e21;
@@ -46,7 +46,7 @@
   }
 }
 :root[data-theme="dark"] {
-  --page: #15171a; --panel: #1b1e21; --raised: #22262a; --text: #e5e7e8; --muted: #9aa1a7; --faint: #6e757b; --line: #2b2f33;
+  --page: #15171a; --panel: #1b1e21; --raised: #22262a; --text: #e5e7e8; --muted: #a5acb1; --faint: #6e757b; --line: #2b2f33;
   --tint-1: #ffffff0d; --tint-2: #ffffff17; --tint-3: #ffffff21;
   --glass-chrome: #181a1d99; --glass-float: #22262acc; --glass-hi: #ffffff12;
   --accent: #7fb0d6; --light-run: #7fb0d6; --light-you: #f2a35a; --you-glow: #f2a35a; --you-text: #f2a35a; --primary: #f2a35a; --on-primary: #1b1e21;
@@ -1472,7 +1472,7 @@ palette = 15=#f1f2f0`;
 
 const NUNCHIRO = {
   light: {
-    page: '#f1f2f0', panel: '#fafaf9', raised: '#ffffff', text: '#23272b', muted: '#5d646a', faint: '#868c92', line: '#e2e4e1',
+    page: '#f1f2f0', panel: '#fafaf9', raised: '#ffffff', text: '#23272b', muted: '#51585d', faint: '#868c92', line: '#e2e4e1',
     tint1: '#232d280d', tint2: '#232d2816', tint3: '#232d2821',
     glassChrome: '#f1f2f09e', glassFloat: '#ffffffd1', glassHi: '#ffffffb3',
     accent: '#4f7fa8', run: '#5583a8', you: '#b87131', youGlow: '#e08a3c', youText: '#9f500f', primary: '#9f500f', onPrimary: '#ffffff',
@@ -1480,7 +1480,7 @@ const NUNCHIRO = {
     code: '#6b4e78', kw: '#8a3b6f', str: '#2f5e8a', addBg: '#edf5ef', delBg: '#f8ecea', knob: '#ffffff', scheme: 'light',
   },
   dark: {
-    page: '#15171a', panel: '#1b1e21', raised: '#22262a', text: '#e5e7e8', muted: '#9aa1a7', faint: '#6e757b', line: '#2b2f33',
+    page: '#15171a', panel: '#1b1e21', raised: '#22262a', text: '#e5e7e8', muted: '#a5acb1', faint: '#6e757b', line: '#2b2f33',
     tint1: '#ffffff0d', tint2: '#ffffff17', tint3: '#ffffff21',
     glassChrome: '#181a1d99', glassFloat: '#22262acc', glassHi: '#ffffff12',
     accent: '#7fb0d6', run: '#7fb0d6', you: '#f2a35a', youGlow: '#f2a35a', youText: '#f2a35a', primary: '#f2a35a', onPrimary: '#1b1e21',
@@ -1514,7 +1514,8 @@ function pairs(t) {
   const add = (label, fg, bgs, min) => bgs.forEach(([n, bg]) => P.push({ label: `${label} on ${n}`, fg, bg, min, r: cr(fg, bg) }));
   const S = [['page', t.page], ['panel', t.panel], ['raised', t.raised], ['selected row', sel]];
   add('text', t.text, [...S, ['secondary button', sec], ['secondary hover', secH], ['field', field], ['chrome glass', gc], ['float glass', gf], ['float glass on card', gfr]], 4.5);
-  add('muted', t.muted, [...S, ['selected (panel)', selP], ['field (placeholder)', field], ['chrome glass', gc], ['float glass', gf]], 4.5);
+  const stack = on(t.tint3, on(t.tint1, t.page)); /* a hovered quiet button inside a tinted box on the chrome */
+  add('muted', t.muted, [...S, ['selected (panel)', selP], ['field (placeholder)', field], ['chrome glass', gc], ['float glass', gf], ['hovered button in a tinted box', stack]], 4.5);
   const B3 = [['page', t.page], ['panel', t.panel], ['raised', t.raised]];
   add('needs-you words', t.youText, [...B3, ['needs-you wash', wash], ['chrome glass', gc]], 4.5);
   add('failed words', t.badText, [...S, ['chrome glass', gc], ['float glass', gf]], 4.5);

@@ -37,7 +37,8 @@ function pairs(t: Record<string, string>): Pair[] {
   const B3: [string, string][] = [['page', page], ['panel', panel], ['raised', raised]];
   const diff: [string, string][] = [['raised', raised], ['added line', v('--diff-add')], ['removed line', v('--diff-del')]];
   add('text', v('--text'), [...S, ['secondary button', sec], ['secondary hover', secH], ['field', field], ['chrome glass', gc], ['float glass', gf], ['float glass on card', gfr]], 4.5);
-  add('muted', v('--muted'), [...S, ['selected (panel)', selP], ['field (placeholder)', field], ['chrome glass', gc], ['float glass', gf]], 4.5);
+  const stack = on(v('--tint-3'), on(v('--tint-1'), page)); // a hovered quiet button inside a tinted box on the chrome
+  add('muted', v('--muted'), [...S, ['selected (panel)', selP], ['field (placeholder)', field], ['chrome glass', gc], ['float glass', gf], ['hovered button in a tinted box', stack]], 4.5);
   add('needs-you words', v('--you-text'), [...B3, ['needs-you wash', wash], ['chrome glass', gc]], 4.5);
   add('failed words', v('--bad-text'), [...S, ['chrome glass', gc], ['float glass', gf]], 4.5);
   add('near-limit figure', v('--warn-text'), [['page', page], ['raised', raised], ['chrome glass', gc], ['float glass', gf]], 4.5);

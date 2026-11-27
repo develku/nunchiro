@@ -12,7 +12,7 @@ import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { expect, test, type Core } from './fixtures';
 import { openQuiet } from './tree-seed';
-import { expectMatchesMockup, outDir, repo, show, type Scheme } from './visual/compare';
+import { bookPalette, expectMatchesMockup, outDir, repo, show, type Scheme } from './visual/compare';
 import { MOCKUPS, mockup } from './visual/mockups';
 
 outDir('fidelity-worktree');
@@ -58,16 +58,6 @@ async function newDialog(app: Page, core: Core, scheme: Scheme) {
   await clean(app);
   return d;
 }
-/** The design book replaced the mockup's palette: its surface, text and line colours take the app's own, so the frame
- *  still compares layout, words and controls like for like. */
-const bookPalette = async (d: Locator, m: Page) => {
-  const v = await d.evaluate(() => {
-    const r = getComputedStyle(document.documentElement);
-    const t = (k: string) => r.getPropertyValue(k).trim();
-    return { page: t('--page'), bg: t('--panel'), fg: t('--text'), mut: t('--muted'), line: t('--line'), hov: t('--hover'), run: t('--accent') };
-  });
-  await m.addStyleTag({ content: `:root,:root:not([data-theme=light]),:root[data-theme=dark]{--page:${v.page}!important;--bg:${v.bg}!important;--fg:${v.fg}!important;--mut:${v.mut}!important;--line:${v.line}!important;--hov:${v.hov}!important;--run:${v.run}!important}` });
-};
 const newFill = (d: Locator, _scheme: Scheme) => async (m: Page) => {
   await bookPalette(d, m);
   const hint = await d.locator('.wthint').first().innerHTML();

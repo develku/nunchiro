@@ -26,7 +26,7 @@
   --stone-50: #f1f2f0;
   --stone-150: #e2e4e1;
   --stone-500: #868c92;
-  --stone-600: #5d646a;
+  --stone-600: #51585d;
   --stone-900: #23272b;
   /* Nunchiro dark neutrals (graphite) */
   --graphite-950: #15171a;
@@ -34,7 +34,7 @@
   --graphite-850: #22262a;
   --graphite-800: #2b2f33;
   --graphite-500: #6e757b;
-  --graphite-400: #9aa1a7;
+  --graphite-400: #a5acb1;
   --graphite-100: #e5e7e8;
   --graphite-50: #e9ebec;
   /* Hues: 300 = dark-scheme value, 500 = light-scheme mark, 600/700 = light-scheme words */
@@ -123,7 +123,7 @@
   --panel: var(--stone-25); /* reading surface: chat, terminal, the open tab */
   --raised: var(--stone-0); /* cards, dialogs, composer */
   --text: var(--stone-900);
-  --muted: var(--stone-600); /* 4.5:1 on page, panel, raised, the selected row and both diff tints */
+  --muted: var(--stone-600); /* 4.5:1 on page, panel, raised, the selected row, both diff tints and a hovered quiet button in a tinted box */
   --faint: var(--stone-500); /* 3:1, marks and control edges only, never text */
   --line: var(--stone-150); /* the few hairlines: diff, composer, fields */
   --tint-1: rgb(35 45 40 / 0.05); /* hover, field fill, wells */
