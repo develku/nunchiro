@@ -1110,6 +1110,7 @@ fn merge_owner_only() {
         json!({"op":"pr_view","url":A12}),
         json!({"op":"pr_list"}),
         json!({"op":"pr_merge","url":A12,"method":"squash","head":HEAD}),
+        json!({"op":"git_push","session":"s","head":HEAD}),
     ];
     // A session token is refused.
     let token = core.session_token();
@@ -1139,6 +1140,45 @@ fn merge_owner_only() {
         assert!(fwd.unwrap_err().contains("local owner-only"), "{op}");
     }
     assert!(gh_runs(&core).is_empty(), "{:?}", gh_runs(&core));
+}
+
+/// The Diff panel's Push: the window's request, with the head commit its strip showed, pushes the session's branch to
+/// a local bare remote; without that head nothing runs.
+#[test]
+fn git_push_from_the_window_moves_the_remote() {
+    let core = Core::new();
+    let dir = core.home.join("cwd");
+    let git = |args: &[&str]| {
+        let out = home::git_env::scrubbed("git")
+            .arg("-C")
+            .arg(&dir)
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    let origin = core.home.join("origin.git");
+    git(&["init", "-q", "--bare", "-b", "main", origin.to_str().unwrap()]);
+    git(&["init", "-q", "-b", "main"]);
+    git(&["commit", "-q", "--allow-empty", "-m", "base"]);
+    git(&["remote", "add", "origin", origin.to_str().unwrap()]);
+    git(&["push", "-q", "-u", "origin", "main"]);
+    git(&["checkout", "-q", "-b", "parser-fix"]);
+    git(&["commit", "-q", "--allow-empty", "-m", "one"]);
+    git(&["commit", "-q", "--allow-empty", "-m", "two"]);
+    let head = git(&["rev-parse", "HEAD"]);
+    let s = core.start();
+    let r = core.window(json!({"op":"git_push","session":s.id}));
+    assert_eq!(r["Err"], "push needs the confirmed head commit", "{r}");
+    let r = core.window(json!({"op":"git_push","session":s.id,"head":head}));
+    assert_eq!(
+        r["Ok"],
+        json!({"type":"git_pushed","pushed":2,"remote":"origin","branch":"parser-fix"}),
+        "{r}"
+    );
+    assert_eq!(git(&["rev-parse", "origin/parser-fix"]), head);
 }
 
 /// "Agent made" opens Merge for that PR, so only a real `gh pr create` run that prints one PR link on its own line counts.
