@@ -12,7 +12,7 @@
 #   sh scripts/scenario/agent-kinds.sh --self-test     the fake ACP agent only; its record says self_test: true and never counts
 #
 # Prints a table and writes docs/measure/evidence/agent-kinds-<date>.json (per kind: executable path, version, the three
-# flags, ms, the failure sentence; at most 80 characters of answer). The core binary is $NUNCHIRO_BIN, else
+# flags, ms, the failure sentence; at most 80 characters of answer; a rerun the same day merges by kind). The core binary is $NUNCHIRO_BIN, else
 # ${CARGO_TARGET_DIR:-target}/debug/nunchiro. Exit 1 when a kind that ran failed.
 set -eu
 cd "$(dirname "$0")/../.."
@@ -166,6 +166,16 @@ record = {"date": date, "self_test": self_test, "counted": 0 if self_test else l
           "kinds": rows, "skipped": [{"kind": n, "why": w} for n, w in skipped]}
 # A self-test never lands in the evidence folder.
 out = home.parent / f"agent-kinds-selftest-{os.getpid()}.json" if self_test else root / f"docs/measure/evidence/agent-kinds-{date}.json"
+if not self_test and out.exists():
+    # A rerun the same day (say with --only) replaces its own kinds and keeps the rest of the day's record.
+    try:
+        old = json.loads(out.read_text())
+    except ValueError:
+        old = {}
+    ran = {r["kind"] for r in rows} | {n for n, _ in skipped}
+    record["kinds"] = [r for r in old.get("kinds", []) if r["kind"] not in ran] + rows
+    record["skipped"] = [s for s in old.get("skipped", []) if s["kind"] not in ran] + record["skipped"]
+    record["counted"] = sum(1 for r in record["kinds"] if r["sent"] and r["answer_read"] and r["turn_end"])
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text(json.dumps(record, indent=2) + "\n")
 shutil.rmtree(home, ignore_errors=True)

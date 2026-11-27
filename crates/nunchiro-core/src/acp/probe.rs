@@ -272,6 +272,12 @@ pub(super) fn run(entry: &Entry, path: &Path, folder: &Folder) -> Result<Run, St
         .map_err(|e| format!("{}: {e}", path.display()))?;
     let mut agent = Spawned(child);
     let stdin = agent.0.stdin.take().ok_or("no agent stdin")?;
+    // Non-blocking: an agent that stops reading fails the send ("not reading its input") instead of holding this thread.
+    let fd = std::os::fd::AsRawFd::as_raw_fd(&stdin);
+    let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+    if flags == -1 || unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } == -1 {
+        return Err("the agent's input could not be set up".into());
+    }
     let stdout = agent.0.stdout.take().ok_or("no agent stdout")?;
     // Bounded: an agent that floods lines waits on its own stdout instead of growing the core.
     let (tell, messages) = mpsc::sync_channel::<Value>(256);

@@ -688,10 +688,7 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
                 <Chip word={t('providersManage.off')} />
               </span>
             ) : (
-              <>
-                {chip}
-                {turns[agent] && <TryChip t={t} turn={turns[agent]} version={found?.version} />}
-              </>
+              chip
             )
           }
           toggle={<UseSwitch t={t} agent={agent} name={name} onOff={() => open && toggle(agent)} />}

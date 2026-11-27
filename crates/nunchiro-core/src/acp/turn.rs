@@ -104,7 +104,9 @@ pub(crate) fn try_turn(
     match result {
         // A cancelled try keeps the last result.
         Err(Failed("cancelled", e)) => return Err(e),
-        Err(Failed(kind, e)) => (turn.failure, turn.error) = (Some(kind.into()), Some(e)),
+        Err(Failed(kind, e)) => {
+            (turn.failure, turn.error) = (Some(kind.into()), Some(clean(&e, 200)))
+        }
         Ok(()) => {}
     }
     save(home, name, &turn)?;

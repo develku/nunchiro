@@ -1787,8 +1787,17 @@ fn acp_try_agent_that_stops_reading_fails_fast_and_frees_the_slot() {
     let began = Instant::now();
     let turn = try_turn(&core, "fake");
     assert!(began.elapsed() < Duration::from_secs(10), "{turn}");
-    assert!(turn["error"].as_str().unwrap().contains("not reading its input"), "{turn}");
-    wait_gone(info(&core)["pid"].as_i64().unwrap() as i32, "the agent outlived the try");
+    assert!(
+        turn["error"]
+            .as_str()
+            .unwrap()
+            .contains("not reading its input"),
+        "{turn}"
+    );
+    wait_gone(
+        info(&core)["pid"].as_i64().unwrap() as i32,
+        "the agent outlived the try",
+    );
     assert_eq!(check_folders(&core), 0);
     // The slot is free again: a second try runs (and fails the same way) instead of "a test message is running".
     assert_eq!(try_turn(&core, "fake")["sent"], true);
@@ -1811,10 +1820,15 @@ fn acp_try_cancel_ends_a_running_test_and_a_second_waits_its_turn() {
     approved_fake(&core, "fake", &["info", "try-silent"]);
     let began = Instant::now();
     let running = {
-        let (home, token) = (core.home.clone(), fs::read_to_string(core.home.join("core.token")).unwrap());
+        let (home, token) = (
+            core.home.clone(),
+            fs::read_to_string(core.home.join("core.token")).unwrap(),
+        );
         thread::spawn(move || {
             let mut s = UnixStream::connect(home.join("core.sock")).unwrap();
-            let line = json!({"token": token, "request": {"op":"acp_agent_try","name":"fake"}}).to_string() + "\n";
+            let line = json!({"token": token, "request": {"op":"acp_agent_try","name":"fake"}})
+                .to_string()
+                + "\n";
             s.write_all(line.as_bytes()).unwrap();
             let mut reply = String::new();
             let _ = BufReader::new(s).read_line(&mut reply);
@@ -1829,12 +1843,18 @@ fn acp_try_cancel_ends_a_running_test_and_a_second_waits_its_turn() {
         assert!(Instant::now() < until, "the prompt never reached the agent");
         thread::sleep(Duration::from_millis(20));
     }
-    assert!(core.err(json!({"op":"acp_agent_try","name":"fake"})).contains("a test message is running"));
+    assert!(
+        core.err(json!({"op":"acp_agent_try","name":"fake"}))
+            .contains("a test message is running")
+    );
     core.ok(json!({"op":"acp_agent_try","name":"fake","cancel":true}));
     let reply = running.join().unwrap();
     assert_eq!(reply["Err"], "Cancelled.", "{reply}");
     assert!(began.elapsed() < Duration::from_secs(30));
-    wait_gone(info(&core)["pid"].as_i64().unwrap() as i32, "the agent outlived Cancel");
+    wait_gone(
+        info(&core)["pid"].as_i64().unwrap() as i32,
+        "the agent outlived Cancel",
+    );
     // A cancelled test keeps no result.
     assert!(core.ok(json!({"op":"acp_agents"}))["turns"]["fake"].is_null());
 }
