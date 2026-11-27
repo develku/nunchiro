@@ -1316,6 +1316,21 @@ mod tests {
                 1,
             ),
         );
+        // Task dependencies: what a landing freed, and a dropped task's waiters.
+        add("release", crate::advance::landed_line("a", &["b"], &[]));
+        add(
+            "release",
+            crate::advance::landed_line("a", &["b", "c"], &[("d", 1)]),
+        );
+        add(
+            "release",
+            crate::advance::landed_line("a", &[], &[("d", 2)]),
+        );
+        add("release", crate::advance::dropped_line("a", &[("b", "t2")]));
+        add(
+            "release",
+            crate::advance::dropped_line("a", &[("b", "t2"), ("c", "t3")]),
+        );
         let fixture: serde_json::Value =
             serde_json::from_str(include_str!("../../tests/fixtures/automatic-lines.json"))
                 .unwrap();

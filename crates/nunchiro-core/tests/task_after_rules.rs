@@ -162,11 +162,14 @@ fn a_waiting_task_starts_no_writer_and_its_lead_hears_once_when_it_is_free() {
     // Every line the core queued or delivered to the lead's seat.
     let told = || {
         let row = rows(&home).into_iter().find(|r| r.id == seat.id).unwrap();
-        row.send_log
+        // A queued row is in both lists: one line per row id.
+        let rows: std::collections::BTreeMap<String, String> = row
+            .send_log
             .iter()
             .chain(&row.send_queue)
-            .map(|s| s.content.clone())
-            .collect::<Vec<_>>()
+            .map(|s| (s.id.clone(), s.content.clone()))
+            .collect();
+        rows.into_values().collect::<Vec<_>>()
     };
     let room = || {
         nunchiro_core::room::Log::open(&home, &proj)
@@ -236,7 +239,7 @@ fn a_waiting_task_starts_no_writer_and_its_lead_hears_once_when_it_is_free() {
     assert!(dropped.contains("  1 task waits for this\n"), "{dropped}");
     let f = ok(&["show", "t8"]);
     assert!(
-        f.starts_with("t8 [needs] f\n")
+        f.contains("\nt8 [needs] f\n")
             && f.contains(
                 "  asks: \"e\" was dropped, so this cannot start. Stop waiting for it, or drop this too?\n"
             ),
@@ -249,7 +252,7 @@ fn a_waiting_task_starts_no_writer_and_its_lead_hears_once_when_it_is_free() {
     });
     // Drop this task: f goes as dropped, and g, which waited for f, asks in turn.
     ok(&["drop", "t8"]);
-    assert!(ok(&["show", "t9"]).starts_with("t9 [needs] g\n"));
+    assert!(ok(&["show", "t9"]).contains("\nt9 [needs] g\n"));
     // Stop waiting, by the owner: g clears, the lead is told in the room, and g's writer may start.
     ok(&["after", "t9", "--none"]);
     wait("the owner's clear was not told", || {
@@ -258,7 +261,10 @@ fn a_waiting_task_starts_no_writer_and_its_lead_hears_once_when_it_is_free() {
             .any(|b| b == "The owner let \"g\" start without waiting for \"f\".")
     });
     let g = ok(&["show", "t9"]);
-    assert!(g.starts_with("t9 [idle] g\n") && g.contains("  order set by the user\n"), "{g}");
+    assert!(
+        g.contains("\nt9 [idle] g\n") && g.contains("  order set by the user\n"),
+        "{g}"
+    );
 
     // A dependency added while a writer runs: the seat is left alone, the task says it started early.
     as_lead(json!({"operation":"after","id":"t3","after":["t2"]}));

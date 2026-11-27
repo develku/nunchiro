@@ -691,6 +691,13 @@ A task waits while one of them has not landed (closed as merged or done). `task 
 Refused with a sentence: the task itself, an id that is no open task of this place, a dropped task, an order that
 would go round (a task waiting for one that already waits for it, however far), more than 8. An older Nunchiro opens
 a ledger with this order and drops it on its next write.
+While a task waits, `task staff` and every start of a seat that writes in its worktree are refused ("Not started:
+…"); a seat that does not write may start, and the core starts no Reviewer for it. When a task lands, the lead of
+the tasks that waited for it gets one line (through its queue, and in the room) naming those it freed and those that
+still wait; it is sent once, also over a restart, and only while the lead's seat runs (else when it runs again). A
+task whose blocker was dropped reads `needs` with `asks: …` and its lead is told; the user's clear (`task after
+<id> --none` from the owner's shell or the board) is told to the lead too. A wait added to a task whose writer already
+runs leaves the seat alone and reads `started before "<title>" landed`.
 
 ### `nunchiro task list`
 `nunchiro task list [--all] [--project DIR]` and `nunchiro task show <id>`. Each task with its state now (`needs`,

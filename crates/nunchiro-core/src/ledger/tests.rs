@@ -575,6 +575,7 @@ fn a_task_with_no_package_prints_as_before() {
         advance: Advance::default(),
         after: vec![],
         ordered: None,
+        released: vec![],
         created: 1,
         updated: 2,
     };
