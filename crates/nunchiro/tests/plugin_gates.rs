@@ -547,3 +547,115 @@ fn a_room_reply_that_would_be_refused_never_reaches_a_check() {
         read()
     );
 }
+
+#[test]
+fn a_changed_room_message_names_the_plugin() {
+    let c = core("pgn");
+    plugin(
+        &c.home,
+        "prompt.send.before",
+        r#"printf '{"allow": true, "text": "seen-rs-words"}\n'"#,
+        "refuse",
+        true,
+    );
+    let project = user(&c.home).join("proj");
+    std::fs::create_dir_all(&project).unwrap();
+    let project = project.canonicalize().unwrap();
+    let script = format!(
+        "'{}' agent send --to person 'raw room words'; exec cat",
+        env!("CARGO_BIN_EXE_nunchiro")
+    );
+    ok(
+        &c.home,
+        &[
+            "agent",
+            "start",
+            "w",
+            "--kind",
+            "shell",
+            "--project",
+            project.to_str().unwrap(),
+            "--",
+            "/bin/sh",
+            "-c",
+            &script,
+        ],
+    );
+    let end = Instant::now() + Duration::from_secs(15);
+    let message = loop {
+        let read = call(
+            &c.home,
+            &c.owner,
+            json!({"op": "room_read", "project": project}),
+        );
+        if let Some(m) = read["Ok"]["messages"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|m| m["body"] == "seen-rs-words")
+        {
+            break m.clone();
+        }
+        assert!(Instant::now() < end, "{read}");
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    assert_eq!(message["changed_by"], "Guard", "{message}");
+    assert!(
+        !message.to_string().contains("raw room words"),
+        "the original stays out of the room: {message}"
+    );
+}
+
+#[test]
+fn a_refused_send_exits_non_zero() {
+    let c = core("pgx");
+    plugin(
+        &c.home,
+        "prompt.send.before",
+        r#"printf '{"allow": false, "reason": "No."}\n'"#,
+        "refuse",
+        true,
+    );
+    let out = user(&c.home).join("exit");
+    let script = format!(
+        // An agent's three ways to send: to a session, text into a session, to the room.
+        "'{{bin}}' agent send {{to}} words >/dev/null 2>&1; a=$?; '{{bin}}' session send-text {{to}} words >/dev/null 2>&1; b=$?; '{{bin}}' agent send --to person words >/dev/null 2>&1; echo \"$a $b $?\" > '{}'",
+        out.display()
+    );
+    let _ = pair(&c, &script);
+    let end = Instant::now() + Duration::from_secs(15);
+    while std::fs::read_to_string(&out).map_or(true, |t| t.is_empty()) {
+        assert!(Instant::now() < end);
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let codes = std::fs::read_to_string(&out).unwrap();
+    assert!(
+        codes.split_whitespace().all(|c| c != "0"),
+        "a refused send exited 0: {codes}"
+    );
+}
+
+#[test]
+fn a_check_skipped_for_no_time_is_counted_on_the_plugin() {
+    let c = core("pgk");
+    plugin(
+        &c.home,
+        "prompt.send.before",
+        "/bin/sleep 30",
+        "allow",
+        true,
+    );
+    let out = user(&c.home).join("done");
+    let script = format!(
+        "for i in 1 2 3; do '{{bin}}' agent send {{to}} m$i >/dev/null 2>&1 & done; wait; echo done > '{}'",
+        out.display()
+    );
+    let _ = pair(&c, &script);
+    let end = Instant::now() + Duration::from_secs(40);
+    while !out.exists() {
+        assert!(Instant::now() < end);
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    let listed: Value = serde_json::from_str(&ok(&c.home, &["plugin", "list", "--json"])).unwrap();
+    assert!(listed[0]["skipped"].as_u64().unwrap_or(0) >= 1, "{listed}");
+}

@@ -221,6 +221,14 @@ export function useSentBy(session: Session | null, text: string, team: Team | nu
   return row ? whoSent(row.sender, sessions, team) : null;
 }
 
+/** The plugin whose check changed the delivered message `text` (its send row keeps the plugin and the original). */
+export function useChangedBy(session: Session | null, text: string): string | null {
+  if (!session) return null;
+  const log = (session as Session & { send_log?: SendRow[] }).send_log ?? [];
+  const words = text.trim();
+  return (words && log.find((r) => r.replaced && r.content.trim() === words)?.replaced?.plugin) || null;
+}
+
 // The composer's `typing`: at most once every 2 s per session; the core holds other senders' lines 5 s after the last.
 const pinged = new Map<string, number>();
 export function typingPing(core: CoreClient, s: Session | null) {
