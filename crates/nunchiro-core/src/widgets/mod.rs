@@ -94,7 +94,7 @@ pub struct Listed {
     /// v1b-20: the `[act]` table while the widget holds a current act grant; rows are clickable only then.
     #[serde(default)]
     pub act: Option<approval::Act>,
-    /// A plugin panel's title and its plugin's name (`plugin:<id>/<panel>` rows); absent for a widget folder.
+    /// A plugin panel's title and its plugin's name (`plugin__<id>__<panel>` rows); absent for a widget folder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -224,6 +224,8 @@ pub fn list(home: &Path, config: &Config) -> List {
             .flatten()
             .filter_map(|e| e.file_name().into_string().ok())
             .filter(|n| !n.starts_with('.'))
+            // A folder named like a plugin part would be read as that part (`plugins::split`).
+            .filter(|n| !n.starts_with(crate::plugins::PART_PREFIX))
             .collect()
     };
     names.sort();
@@ -502,7 +504,7 @@ pub(crate) fn execute(
     let file = cache.join("context.json");
     // A rename replaces whatever the last run left at this name (even a symlink) without following it.
     let bytes = match crate::plugins::split(proof.name()) {
-        Some(_) => crate::plugins::input(home, proof.name(), context, extra)?,
+        Some(_) => crate::plugins::input(home, proof, context, extra)?,
         None => serde_json::to_vec(context).map_err(|e| e.to_string())?,
     };
     crate::store::atomic_write(&file, &bytes)?;

@@ -38,10 +38,19 @@ interface Core {
 export const pluginOp = async (core: Core, action: Record<string, unknown>) => ((await core.request({ op: 'plugin', action })) as { plugins: Listed[] }).plugins;
 
 export interface Ran {
-  run: { output?: { format: 'text' | 'json'; text: string } | null; error?: string | null };
+  run: { running?: boolean; output?: { format: 'text' | 'json'; text: string } | null; error?: string | null };
   show: Show;
 }
-export const runCommand = (core: Core, id: string, command: string, session?: string) => core.request({ op: 'plugin', action: { do: 'run', id, command, session } }) as Promise<Ran>;
+/** Runs a command; the core answers at once and a longer run is read again (`poll`) until it ends (the sandbox stops
+ *  it at its limit), so the window's other requests never wait behind it. */
+export async function runCommand(core: Core, id: string, command: string, session?: string): Promise<Ran> {
+  let ran = (await core.request({ op: 'plugin', action: { do: 'run', id, command, session } })) as Ran;
+  for (let i = 0; ran.run.running && i < 150; i++) {
+    await new Promise((r) => setTimeout(r, 200));
+    ran = (await core.request({ op: 'plugin', action: { do: 'run', id, command, session, poll: true } })) as Ran;
+  }
+  return ran;
+}
 
 /** The approval name of a plugin, as the permission sheet asks for it. */
 export const approvalName = (id: string) => `plugin:${id}`;

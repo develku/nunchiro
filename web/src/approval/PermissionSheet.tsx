@@ -1,5 +1,6 @@
 // Permission sheet (R8-final frame 5): who made it, the exact command, read / act / never, network hosts,
 // files it reads (v1b-33), the manifest viewer and the equivalent CLI line. Everything shown comes from the core's parsed manifest.
+import { busyRetry } from '../api';
 import { ErrorLine } from '../errors';
 import { useEffect, useRef, useState } from 'react';
 import './sheet.css';
@@ -52,8 +53,8 @@ function SetupSheet({ core, name: path, onClose, t: given }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const back = useRef<Element | null>(document.activeElement);
   useEffect(() => {
-    core
-      .request({ op: 'setup_status', path })
+    // A busy refusal (the window's connect burst) is retried: shown as is, the ask could not be reviewed at all.
+    busyRetry(() => core.request({ op: 'setup_status', path }))
       .then((r) => {
         const v = (r as { status: SetupStatus }).status.view;
         if (v) setView(v);
@@ -132,6 +133,10 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
   const htmlT = useHtmlLangT();
   const t = given ?? htmlT;
   const isSource = subject === 'source'; // v1a-23 r2
+  // A plugin (`plugin:<id>`, or one of its panels `plugin__<id>__<panel>` from the library) is shown and approved whole:
+  // its parts take the command's place; the rest of the sheet reads the same.
+  const plugin = /^plugin:([a-z0-9_-]+)$/.exec(name)?.[1] ?? /^plugin__(.+?)__/.exec(name)?.[1] ?? null;
+  const asked = plugin ? `plugin:${plugin}` : name;
   const [view, setView] = useState<ApprovalView | null>(null);
   const [error, setError] = useState<unknown>('');
   const [act, setAct] = useState(false);
@@ -142,12 +147,12 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
 
   useEffect(() => {
     core
-      .request(isSource ? { op: 'board_source_status', name } : { op: 'approval_status', name })
+      .request(isSource ? { op: 'board_source_status', name } : { op: 'approval_status', name: asked })
       .then((r) => setView((r as { view: ApprovalView }).view))
       .catch((e: Error) => setError(e));
     const prev = back.current;
     return () => (prev as HTMLElement | null)?.focus?.();
-  }, [core, name, isSource]);
+  }, [core, asked, isSource]);
   // Focus lands on Cancel, so a stray Enter never approves.
   useEffect(() => {
     root.current?.querySelector<HTMLElement>('[data-cancel]')?.focus();
@@ -158,15 +163,13 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
     if (!view || busy) return;
     setBusy(true);
     core
-      .request(isSource ? { op: 'board_source_grant', name, level, hash: view.hash } : { op: 'approval_grant', name, level, hash: view.hash })
+      .request(isSource ? { op: 'board_source_grant', name, level, hash: view.hash } : { op: 'approval_grant', name: asked, level, hash: view.hash })
       .then((r) => onGranted?.((r as { view: ApprovalView }).view))
       .catch((e: Error) => (setError(e), setBusy(false)));
   };
   const keys = trap(root, onClose);
 
   const m = view?.manifest;
-  // A plugin (`plugin:<id>`): its parts take the command's place; the rest of the sheet reads the same.
-  const plugin = name.startsWith('plugin:') ? name.slice('plugin:'.length).split('/')[0] : null;
   const canAct = !!m?.permissions.includes('act') && !view?.act_refused;
   // v1b-20: the manifest's `[act]` table, shown verbatim (types.ts predates it).
   const actTable = (m as { act?: Act | null } | undefined)?.act ?? null;
@@ -218,6 +221,14 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
                 <li key={p.name}>
                   {t(p.kind === 'panel' ? 'plugins.sheet.panel' : p.kind === 'check' ? 'plugins.sheet.check' : 'plugins.sheet.command')} · {p.title}
                   <pre>{p.runs.map(word).join(' ')}</pre>
+                  <p className="ps-meta" data-field="part-rights">
+                    {[
+                      p.network?.length ? t('plugins.sheet.net', { hosts: p.network.join(' · ') }) : t('plugins.sheet.noNet'),
+                      p.read?.length ? t('plugins.sheet.reads', { paths: p.read.join(' · ') }) : t('plugins.sheet.noReads'),
+                      ...(p.interval_secs ? [t('plugins.sheet.every', { secs: p.interval_secs })] : []),
+                      ...(p.writes_draft ? [t('plugins.sheet.draft')] : []),
+                    ].join(' · ')}
+                  </p>
                 </li>
               ))}
             </ul>
@@ -304,7 +315,7 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
                 <span className="ps-tag">{m.network.length ? t('approval.tagAllowed') : t('approval.tagNone')}</span>
               </div>
               {/* v1b-33 (needs 45): script widgets read their project, cache and tools, plus what they declare. */}
-              {m.kind === 'script' && (
+              {(m.kind === 'script' || m.kind === 'plugin') && (
                 <div className="ps-row">
                   <span className="ps-pk" id="ps-files">
                     {t('approval.files')}

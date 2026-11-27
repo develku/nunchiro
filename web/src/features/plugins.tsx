@@ -152,8 +152,10 @@ function PluginsPage({ core, t }: Pick<PageContext, 'core' | 't'>) {
           onClose={() => setReview(null)}
           onGranted={() => {
             const id = review;
+            const first = list?.find((p) => p.id === id)?.state === 'unapproved';
             setReview(null);
-            void act({ do: 'set', id, on: true }); // the sheet's Approve turns it on, as the mockup's "Approve and turn on"
+            // A first approval turns it on, as the mockup's "Approve and turn on"; a review again leaves the switch as it was.
+            void act(first ? { do: 'set', id, on: true } : { do: 'list' });
           }}
         />
       )}

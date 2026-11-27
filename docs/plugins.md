@@ -1,14 +1,15 @@
 # Plugins
 
 A plugin adds panels, commands and settings to Nunchiro. It is one folder with a `plugin.toml` and the files it
-names; no build step and no SDK. Every part runs in the same sandbox as a script widget, and nothing runs until
-you have reviewed the plugin's files and turned it on.
+names; no build step and no SDK. Every part runs in the same sandbox as a script widget, and nothing runs for you
+until you have reviewed the plugin's files and turned it on. The one exception is its author's `nunchiro plugin
+check`, which runs each part once with no network and none of the folders the plugin asks to read.
 
 ## Make one
 
 ```sh
 nunchiro plugin new hello            # writes $NUNCHIRO_HOME/plugins/hello/
-nunchiro plugin check hello          # checks plugin.toml and runs each part once, confined
+nunchiro plugin check hello          # checks plugin.toml and runs each part once: no network, no extra reads
 nunchiro plugin allow hello          # approve these exact files (or Review in the window)
 nunchiro plugin on hello
 nunchiro plugin run hello hello      # run its command now
@@ -78,7 +79,10 @@ may write only its cache, reach only the `network` hosts, and read only the proj
 A plugin is one approval: the hash of its whole folder (the `cache` folder aside). It starts off and not approved,
 and any change to any file shows it as "Changed since approval" and stops every part until it is approved again.
 Approving and turning on are the owner's: an agent can write and check a plugin, and its `plugin allow` becomes one
-waiting item in the window. Script parts also need the `script_widgets` setting; a web panel needs `web_widgets`.
+waiting item in the window. A plugin is approved whole (`plugin:<id>`); a part's name is never approved alone. The
+sheet and `plugin allow` list every part with what it runs, its hosts, the folders it reads and whether it writes
+into the message box. Turning a plugin off or removing it stops a part that is still running; removing it also
+drops its approval. Script parts also need the `script_widgets` setting; a web panel needs `web_widgets`.
 `plugin list` says which one is off.
 
 ## Checks (`[[gate]]`)
@@ -117,7 +121,7 @@ anything: allow, refuse and replacement text are its only outputs. With no plugi
 ## Through the API
 
 The window and scripts use the same request, `{"op": "plugin", "action": {"do": "list"}}` (also `set`, `setting`,
-`run`, `remove`), owner and window only; see [api.md](api.md). A panel is the widget `plugin:<id>/<panel>` in
+`run`, `remove`), owner and window only; see [api.md](api.md). A panel is the widget `plugin__<id>__<panel>` in
 `widget_list` and `widget_run`.
 
 ## Not yet

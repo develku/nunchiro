@@ -13,7 +13,7 @@ export interface Listed {
   error: string | null;
   /** v1b-20: the `[act]` table while the widget holds a current act grant; rows are clickable only then. */
   act?: Act | null;
-  /** A plugin panel (`plugin:<id>/<panel>`): its title and its plugin's name. */
+  /** A plugin panel (`plugin__<id>__<panel>`): its title and its plugin's name. */
   title?: string;
   plugin?: string;
 }

@@ -163,6 +163,8 @@ fn an_off_unapproved_or_changed_plugin_decides_nothing() {
     let c = core("pgo");
     plugin(&c.home, "session.start.before", REFUSE, "refuse", false);
     assert!(!stderr(&start(&c.home, None, false)).contains("stopped this start"));
+    // Not approved: no check process ran at all (a run makes its cache folder).
+    assert!(!c.home.join("plugins/guard/cache").exists());
     ok(&c.home, &["plugin", "allow", "guard"]);
     assert!(stderr(&start(&c.home, None, false)).contains("stopped this start"));
     std::fs::write(

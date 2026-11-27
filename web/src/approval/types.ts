@@ -27,7 +27,7 @@ export interface ApprovalView {
   /** v1b-34: why act cannot be granted (a web widget naming a script CDN host); absent when it can. */
   act_refused?: string;
   /** A plugin's panels and commands with exactly what each runs (`plugin:<id>`; its manifest's command is empty). */
-  parts?: { name: string; title: string; kind: 'panel' | 'command' | 'check'; runs: string[] }[];
+  parts?: { name: string; title: string; kind: 'panel' | 'command' | 'check'; runs: string[]; network?: string[]; read?: string[]; interval_secs?: number; writes_draft?: boolean }[];
 }
 
 /** Ticket 259: crates/nunchiro-core/src/approval/mod.rs `SetupView`, a repo's worktree setup script (`orca.yaml`). */

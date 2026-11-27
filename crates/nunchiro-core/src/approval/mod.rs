@@ -229,7 +229,7 @@ fn subject(home: &Path, name: &str, kind: SubjectKind) -> Result<Subject, String
     })
 }
 
-/// A plugin (`plugin:<id>`) is one subject: its whole folder is hashed, and a part (`plugin:<id>/<part>`) carries that
+/// A plugin (`plugin:<id>`) is one subject: its whole folder is hashed, and a part (`plugin__<id>__<part>`) carries that
 /// same hash with the part's own manifest, so approving the plugin approves exactly the parts the sheet showed.
 fn plugin_subject(home: &Path, id: &str, part: Option<&str>) -> Result<Subject, String> {
     if !valid_name(id) || part.is_some_and(|p| !valid_name(p)) {
@@ -326,7 +326,25 @@ fn source_cli(mut view: View) -> View {
     );
     view
 }
+/// What a refusal calls the subject: a plugin part says "plugin", not "widget".
+fn label(kind: SubjectKind, name: &str) -> &'static str {
+    match crate::plugins::split(name) {
+        Some(_) => SubjectKind::Plugin.label(),
+        None => kind.label(),
+    }
+}
+/// A plugin is shown and approved whole: a part's name (`plugin__<id>__<part>`) is never a sheet or a grant, so no
+/// approval can be asked for with one part's narrower view.
+fn whole(name: &str) -> Result<(), String> {
+    match crate::plugins::split(name) {
+        Some((id, Some(_))) => Err(format!(
+            "approve the whole plugin (plugin:{id}), not one of its parts"
+        )),
+        _ => Ok(()),
+    }
+}
 fn status_kind(home: &Path, name: &str, kind: SubjectKind) -> Result<View, String> {
+    whole(name)?;
     let stored = store::load(home)?;
     let (at, key) = stored_as(kind, name); // a plugin part is approved as its plugin
     let view = view(name, subject(home, name, kind)?, stored.find(at, &key));
@@ -357,6 +375,7 @@ fn grant_kind(
     seen_hash: &str,
     kind: SubjectKind,
 ) -> Result<View, String> {
+    whole(name)?;
     let mut stored = store::load(home)?;
     let s = subject(home, name, kind)?;
     if s.hash != seen_hash {
@@ -422,18 +441,31 @@ fn check_kind(home: &Path, name: &str, kind: SubjectKind) -> Result<Proof, Strin
                 kind,
             })
         }
-        Some(_) => Err(format!("{} changed since it was approved", kind.label())),
-        None => Err(format!("{} is not approved", kind.label())),
+        Some(_) => Err(format!(
+            "{} changed since it was approved",
+            label(kind, name)
+        )),
+        None => Err(format!("{} is not approved", label(kind, name))),
     }
 }
 
-/// `nunchiro plugin check`: one plugin part as it is now, approved or not, for one confined trial run by its author
-/// (the sandbox still holds; nothing is stored). Only `plugins::trial` asks for this; every other run needs `check`.
+/// A removed plugin's approval is dropped, so the same folder moved back asks again.
+pub(crate) fn forget_plugin(home: &Path, id: &str) -> Result<(), String> {
+    let mut stored = store::load(home)?;
+    stored.remove(SubjectKind::Plugin, id);
+    stored.save(home)
+}
+
+/// `nunchiro plugin check`: one plugin part as it is now, approved or not, for one confined trial run by its author:
+/// the sandbox holds, with no network and no declared reads; nothing is stored. Only `plugins::trial` asks for this; every other run needs `check`.
 pub(crate) fn trial(home: &Path, name: &str) -> Result<Proof, String> {
     if !matches!(crate::plugins::split(name), Some((_, Some(_)))) {
         return Err("only a plugin part has a trial run".into());
     }
-    let s = subject(home, name, SubjectKind::Widget)?;
+    let mut s = subject(home, name, SubjectKind::Widget)?;
+    // Unapproved code gets none of what it declares: no network and no reads beyond its project and cache.
+    s.manifest.network.clear();
+    s.manifest.read.clear();
     Ok(Proof {
         name: name.into(),
         level: Level::Read,

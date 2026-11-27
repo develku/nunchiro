@@ -8,6 +8,12 @@ declare module '../index' {
     'plugins.checks.other': true;
     'plugins.startAnyway.tip': true;
     'plugins.sheet.check': true;
+    'plugins.sheet.net': true;
+    'plugins.sheet.noNet': true;
+    'plugins.sheet.reads': true;
+    'plugins.sheet.noReads': true;
+    'plugins.sheet.every': true;
+    'plugins.sheet.draft': true;
     'plugins.desc': true;
     'plugins.summary': true;
     'plugins.section': true;
@@ -55,7 +61,13 @@ export const en = {
   "plugins.checks.other": "{n} checks",
   "plugins.startAnyway.tip": "Start it now, past the plugin's check, this once.",
   "plugins.sheet.check": "Check",
-  "plugins.desc": "Folders that add panels, commands and settings. Nothing in one runs until you review it and turn it on.",
+  "plugins.sheet.net": "Network: {hosts}",
+  "plugins.sheet.noNet": "No network",
+  "plugins.sheet.reads": "Reads beyond its project: {paths}",
+  "plugins.sheet.noReads": "Reads only its project",
+  "plugins.sheet.every": "Every {secs} s",
+  "plugins.sheet.draft": "Puts its output in the focused agent's message box as a draft",
+  "plugins.desc": "Folders that add panels, commands and settings. Nothing in one runs for you until you review it and turn it on.",
   "plugins.summary": "Plugins",
   "plugins.section": "Your plugins",
   "plugins.none": "No plugins yet. Copy a plugin folder into ~/.nunchiro/plugins, or make one with",
