@@ -122,9 +122,10 @@ class Manifest(Home):
                     ".claude/plugins/store/cc-plugin-diff_builtin-3903e77c01b1.json"):
             self.put(rel, '{"pid":22555,"procStart":"Fri Nov 27 09:16:10 2026"}')  # a Claude process starts
         self.assertEqual(self.diff(before), ([], []))
-        for rel in (plugin + "/.in_use/hook.sh", plugin + "/.in_use/22555/hook.sh", plugin + "/.mcp.json",
-                    ".claude/skills/s/.in_use/22555", ".claude/plugins/marketplaces/m/p/.in_use/22555",
-                    ".claude/plugins/store/mine_local-1.json", ".claude/plugins/x/.last_inuse_sweep"):
+        for rel in (plugin + "/.in_use/hook.sh", plugin + "/.mcp.json", ".claude/skills/s/.in_use/22555",
+                    ".claude/plugins/marketplaces/m/p/.in_use/22555", ".claude/plugins/store/mine_local-1.json",
+                    ".claude/plugins/x/.last_inuse_sweep",
+                    plugin + "/.in_use/7/hook.sh", ".claude/plugins/store/x_builtin-1.json/hook.sh"):  # a folder is still walked
             with self.subTest(rel):
                 before = v1b_full.manifest(self.home)
                 self.put(rel, "a")
