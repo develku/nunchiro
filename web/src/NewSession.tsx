@@ -82,8 +82,9 @@ export function lastAccount(ordered: Session[], kind: AgentKind, project: string
  * project's last account and the current model and effort, as the popover's rows start it. Returns the session or throws. */
 /** Ticket 610: with no session tab open (the Room tab), `project` is the selected project's and the session starts there. */
 /** `wait`: a start held for low memory waits and starts by itself (the status bar lists it); nothing is returned then. */
-/** A new shell in `project` starts where the current session works there (its worktree when it has one). */
-const shellFolder = (current: Session | null, project: string) => (current?.project === project && current.cwd ? current.cwd : project);
+/** A new shell in `project` starts where the current session works there: its worktree, as the start's `folder` so the shell
+ *  stays in that project. Null in the project's own folder. */
+const shellIn = (current: Session | null, project: string) => (current?.project === project && current.cwd && current.cwd !== project && !current.machine ? current.cwd : null);
 
 export async function quickStart(core: CoreClient, ordered: Session[], current: Session | null, kind: 'shell' | 'claude' | 'codex', project = current?.project, anyway = false, wait = false) {
   if (agentOff(kind) || !project) return; // ticket 358: its key does nothing and says nothing
@@ -91,7 +92,8 @@ export async function quickStart(core: CoreClient, ordered: Session[], current: 
   const accounts = agent ? await core.accounts().then((r) => r.accounts, () => [] as Account[]) : [];
   const account = agent ? lastAccount(ordered, kind, project, accounts) : null;
   const like = agent ? likeNew(current, ordered, kind, project) : { model: null, effort: null };
-  const reply = (await core.request(startOp({ op: 'start', session: { kind, project: agent ? project : shellFolder(current, project), ...like, resume: null, ...(account ? { account } : {}) } }, anyway, wait))) as { session?: Session };
+  const folder = agent ? null : shellIn(current, project);
+  const reply = (await core.request(startOp({ op: 'start', session: { kind, project, ...like, resume: null, ...(account ? { account } : {}) }, ...(folder ? { folder } : {}) }, anyway, wait))) as { session?: Session };
   return reply.session;
 }
 
@@ -289,9 +291,9 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
       // Ticket 980: on a machine the remote core starts it with its own accounts, model and effort (this Mac's do not apply there).
       const like = !machine && (kind === 'claude' || kind === 'codex') ? likeNew(current, ordered, kind, path) : { model: null, effort: null };
       const account = machine ? null : opts.account !== undefined ? opts.account : kind === 'claude' || kind === 'codex' ? lastAccount(ordered, kind, path, accounts) : null;
-      const session = { kind, project: kind === 'shell' && place === 'here' ? shellFolder(current, path) : path, ...like, resume: null, ...(account ? { account } : {}), ...(opts.acp ? { args: [opts.acp] } : {}) };
+      const session = { kind, project: path, ...like, resume: null, ...(account ? { account } : {}), ...(opts.acp ? { args: [opts.acp] } : {}) };
       if (canWorktree && kind !== 'shell' && place !== 'given' && inWorktree.includes(path) !== (place === 'worktree')) setInWorktree(place === 'worktree' ? [...inWorktree, path] : inWorktree.filter((p) => p !== path));
-      const wt = place === 'worktree' && canWorktree ? await newWorktree(path) : place === 'given' && given && !machine ? given.path : null;
+      const wt = place === 'worktree' && canWorktree ? await newWorktree(path) : place === 'given' && given && !machine ? given.path : kind === 'shell' && place === 'here' && !machine ? shellIn(current, path) : null;
       if (place === 'worktree' && canWorktree && !wt) return setBusy(false);
       // A start held for low memory waits and starts by itself (this Mac's hold), unless the card's words wait for it here.
       const request = startOp({ op: 'start', session, ...(wt ? { folder: wt } : {}) }, opts.anyway, !card && !machine);
