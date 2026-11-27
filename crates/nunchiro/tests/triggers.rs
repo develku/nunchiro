@@ -458,3 +458,120 @@ fn idle_connections_are_closed_and_the_address_still_answers() {
     );
     assert!(post(c.port, "ci", &[("X-Nunchiro-Secret", secret)], b"{}").contains("202"));
 }
+
+#[test]
+fn a_sender_that_drips_is_closed_at_the_deadline() {
+    let c = core("tgd");
+    let secret = "a-long-shared-secret-1234";
+    add(&c, "ci", "webhook", true, secret);
+    let until = Instant::now() + Duration::from_secs(5);
+    while TcpStream::connect(("127.0.0.1", c.port)).is_err() {
+        assert!(Instant::now() < until);
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    // Eight senders that write one byte a second fill every slot; each is closed by the 10 s request deadline.
+    let t = Instant::now();
+    let drips: Vec<_> = (0..8)
+        .map(|_| {
+            let port = c.port;
+            std::thread::spawn(move || {
+                let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
+                for b in
+                    b"POST /hooks/ci HTTP/1.1\r\nX-Pad: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".iter()
+                {
+                    if s.write_all(&[*b]).is_err() {
+                        return Instant::now();
+                    }
+                    std::thread::sleep(Duration::from_secs(1));
+                }
+                Instant::now()
+            })
+        })
+        .collect();
+    for d in drips {
+        let closed = d.join().unwrap();
+        assert!(
+            closed.duration_since(t) < Duration::from_secs(16),
+            "a dripping sender stayed {:?}",
+            closed.duration_since(t)
+        );
+    }
+    assert!(post(c.port, "ci", &[("X-Nunchiro-Secret", secret)], b"{}").contains("202"));
+}
+
+#[test]
+fn each_subject_has_its_own_card_and_not_now_frees_it() {
+    let c = core("tgk");
+    add(&c, "asker", "cli", false, "");
+    let fire = |s: &str| {
+        nunchiro(
+            &c.home,
+            None,
+            &["trigger", "fire", "asker", "--data", "-"],
+            &format!("{{\"subject\": \"{s}\"}}"),
+        )
+    };
+    assert!(fire("A").status.success());
+    assert!(fire("B").status.success());
+    let cards = || {
+        let snap = call(&c.home, &c.owner, json!({"op": "snapshot"}));
+        snap["Ok"]["owner_decisions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|d| d["owner"]["change"] == "trigger")
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(cards().len(), 2, "{:?}", cards());
+    // A again while its card waits: refused.
+    assert!(!fire("A").status.success());
+    let a = cards()
+        .into_iter()
+        .find(|d| d["owner"]["reason"] == "A")
+        .unwrap();
+    call(
+        &c.home,
+        &c.owner,
+        json!({"op": "answer", "item": a["id"], "answer": {"type": "deny"}, "confirmed": true}),
+    );
+    // Not now freed A; B still waits.
+    assert!(fire("A").status.success(), "A stayed taken");
+    assert!(!fire("B").status.success());
+}
+
+#[test]
+fn not_now_after_start_calls_the_start_off() {
+    let c = core("tgn");
+    add(&c, "asker", "cli", false, "");
+    assert!(
+        nunchiro(
+            &c.home,
+            None,
+            &["trigger", "fire", "asker", "--data", "-"],
+            "{\"subject\": \"x\"}"
+        )
+        .status
+        .success()
+    );
+    let snap = call(&c.home, &c.owner, json!({"op": "snapshot"}));
+    let card = snap["Ok"]["owner_decisions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|d| d["owner"]["change"] == "trigger")
+        .cloned()
+        .unwrap();
+    call(
+        &c.home,
+        &c.owner,
+        json!({"op": "answer", "item": card["id"], "answer": {"type": "allow_once"}, "confirmed": true}),
+    );
+    call(
+        &c.home,
+        &c.owner,
+        json!({"op": "answer", "item": card["id"], "answer": {"type": "deny"}, "confirmed": true}),
+    );
+    std::thread::sleep(Duration::from_secs(3));
+    assert!(started(&c).is_empty(), "started after Not now");
+}
