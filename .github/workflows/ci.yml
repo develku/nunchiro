@@ -18,11 +18,12 @@ on:
 permissions:
   contents: read
 
-# A new push to a pull request cancels its older run; merge-queue and main runs are never cancelled (T3 Code ci.yml:12-14).
-# The group of a main run is its commit: in one group per branch GitHub keeps one waiting run and cancels the one that
-# waited before it, so two landings during a run would leave a main tip untested.
+# A new push to a pull request cancels its older run. A running main run is never cancelled, but main keeps only its
+# newest waiting run: GitHub drops the older waiting one. A skipped main tip is still covered, because the strict ruleset
+# tested its PR on the main of its day and the next main run contains it. One run per tip let 13 main runs wait for
+# hours on the shared runners and starved the pull requests.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.sha }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
