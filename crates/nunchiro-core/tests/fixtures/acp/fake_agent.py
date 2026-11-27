@@ -8,6 +8,8 @@ appended to LOG as received, so a test reads the answers the core gave. `load` d
 updates on the shared stdout and exits after its first prompt. Ticket 358: `nomodels` reports no model option;
 `set-fails` answers session/set_config_option with an error; `many:N` adds N long model ids after the two short ones.
 Ticket 1130: while a file LOG.noload exists, `session/load` answers an error (a resume whose load fails).
+The test message ("Reply with the one word: ready.") answers "ready" unless `try-silent`, `try-empty`, `try-error` or
+`try-ask` says otherwise (see on_prompt).
 A prompt's first text block picks the behaviour:
   later          end the turn, then ask permission with no prompt in flight
   elicit         ask a URL elicitation, end the turn once it is answered
@@ -55,6 +57,7 @@ ALL_OPTIONS = [
     {"optionId": "no", "name": "Reject", "kind": "reject_once"},
     {"optionId": "never", "name": "Never", "kind": "reject_always"},
 ]
+TRY_PROMPT = "Reply with the one word: ready."
 next_id = [0]
 waiting = {}  # our request id -> callback(message)
 prompt = {"id": None, "session": None}
@@ -104,7 +107,25 @@ def on_prompt(message):
     session = params["sessionId"]
     prompt["id"], prompt["session"] = message["id"], session
     text = params["prompt"][0].get("text", "")
-    if "child-writes" in MODES:
+    if text == TRY_PROMPT:
+        # The test message: `try-silent` never ends the turn, `try-empty` ends it with no text, `try-error` answers an
+        # error, `try-ask` asks permission first (and answers once refused); otherwise it says "ready".
+        if "try-silent" in MODES:
+            return
+        if "try-error" in MODES:
+            send({"jsonrpc": "2.0", "id": prompt["id"], "error": {"code": -32603, "message": "quota exceeded"}})
+            prompt["id"] = None
+            return
+        def say(_=None):
+            if "try-empty" not in MODES:
+                update(session, {"sessionUpdate": "agent_message_chunk",
+                                 "content": {"type": "text", "text": "ready\u0007\n"}})
+            end_turn()
+        if "try-ask" in MODES:
+            permission(session, say)
+        else:
+            say()
+    elif "child-writes" in MODES:
         update_json = json.dumps({"jsonrpc": "2.0", "method": "session/update", "params": {
             "sessionId": session, "update": {"sessionUpdate": "tool_call", "toolCallId": "c", "title": "child"}}})
         # A light forked child (one write per 2 ms) so every registry pass finds something: the drain is never quiet.
