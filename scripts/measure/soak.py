@@ -97,6 +97,8 @@ class Soak:
                                      stdout=open(self.home / "serve.log", "w"), stderr=subprocess.STDOUT)
         acc.until(lambda: (self.home / "core.sock").exists(), 20, "core start")
         self.seats, self.sessions = {}, sessions
+        # None of the owner's own MCP servers, once per seat for a day; the fixture reads no MCP config
+        self.no_mcp = [] if self_test else ["--", "--strict-mcp-config", "--mcp-config", '{"mcpServers": {}}']
 
     def cli(self, *args, timeout=60):
         try:
@@ -109,8 +111,7 @@ class Soak:
         for i in range(self.sessions):
             label = f"soak-c{i}"
             rc, out, err = self.cli("agent", "start", label, "--kind", "claude", "--project", str(self.project),
-                                    "--model", acc.CLAUDE_MODEL, "--", "--strict-mcp-config", "--mcp-config",
-                                    '{"mcpServers": {}}', timeout=90)  # none of the owner's own MCP servers, x seats
+                                    "--model", acc.CLAUDE_MODEL, *self.no_mcp, timeout=90)
             if rc and "low on memory" in (err or out):
                 raise Held(f"agent start {label}: {(err or out).strip()}")  # the core's memory hold; never --anyway
             if rc:
