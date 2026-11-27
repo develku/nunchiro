@@ -1550,6 +1550,15 @@ mod tests {
             "{e}"
         );
         assert_eq!(std::fs::read_dir(&planted).unwrap().count(), 0);
+        // A core on its own home: a `<home>-worktrees` folder that is a link is refused too, nothing lands behind it.
+        std::fs::remove_file(user.join("nunchiro")).unwrap();
+        let holder = home.join("holder");
+        std::fs::create_dir_all(&holder).unwrap();
+        std::fs::remove_dir_all(&user).unwrap();
+        std::os::unix::fs::symlink(&holder, &user).unwrap();
+        let e = create(&core, "three").err().unwrap_or_default();
+        assert!(e.contains("aliased"), "{e}"); // worktree_parent: the parent must be its own real path
+        assert_eq!(std::fs::read_dir(&holder).unwrap().count(), 0);
         std::fs::remove_dir_all(&home).unwrap();
     }
     // SHOULD 4 (r2): a session that started in the worktree after the pass read its running list: the real
