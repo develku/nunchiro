@@ -60,6 +60,31 @@ async function scene(app: Page, core: Core, plain = false) {
   return { view, sent, card: (id: string) => view.locator(`.tcard[data-task="${id}"]`) };
 }
 
+/** The contrast of a pill's words with what is behind them, through the card's dimming (WCAG ratio). */
+async function contrast(pill: import('@playwright/test').Locator) {
+  return pill.evaluate((el) => {
+    const rgba = (c: string) => (c.match(/[\d.]+/g) ?? []).map(Number);
+    const over = (top: number[], under: number[]) => { const a = top[3] ?? 1; return [0, 1, 2].map((i) => top[i] * a + under[i] * (1 - a)); };
+    const card = el.closest('.tcard')!;
+    const chain: Element[] = [];
+    for (let e: Element | null = el; e; e = e.parentElement) chain.unshift(e);
+    let page = rgba(getComputedStyle(document.body).backgroundColor);
+    let behind = page;
+    for (const e of chain) {
+      const c = rgba(getComputedStyle(e).backgroundColor);
+      if (!c.length || (c[3] ?? 1) === 0) continue;
+      if (e === card || card.contains(e)) behind = over(c, behind);
+      else page = behind = over(c, behind);
+    }
+    const op = Number(getComputedStyle(card).opacity);
+    const text = over([...over(rgba(getComputedStyle(el).color), behind), op], page);
+    const bg = over([...behind, op], page);
+    const L = (c: number[]) => { const f = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]; };
+    const [a, b] = [L(text), L(bg)].sort((x, y) => y - x);
+    return (a + 0.05) / (b + 0.05);
+  });
+}
+
 test('task_deps_board: waiting, blocking, freed, stuck and early cards, as the mockup', async ({ app, core }) => {
   const { view, sent, card } = await scene(app, core);
   // A waiting card says what it waits for in its stage row, dimmed, and in words for assistive tech.
@@ -172,3 +197,10 @@ test('task_deps_real_core: Stop waiting and Wait for… work after a blocker lan
   await expect(card('t5').locator('.tcard-stages')).toHaveText('Waits for "z"');
   expect(task('show', 't5')).toContain('  waits for t6 "z" (plan)');
 });
+
+for (const scheme of ['light', 'dark'] as const)
+  test(`task_deps_pill_contrast_${scheme}: the waiting pills read 4.5:1 through the card's dimming`, async ({ app, core }) => {
+    await app.emulateMedia({ colorScheme: scheme });
+    const { card } = await scene(app, core);
+    for (const id of ['t2', 't4']) expect(await contrast(card(id).locator('.tcard-stages > span')), id).toBeGreaterThanOrEqual(4.5);
+  });
