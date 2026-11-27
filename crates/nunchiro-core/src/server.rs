@@ -641,6 +641,7 @@ pub(crate) fn remote_from_owner(
             | Request::AcpAgentSignInState { .. }
             | Request::AcpAgentSignInCancel { .. }
             | Request::AcpAgentSignOut { .. }
+            | Request::AcpAgentTry { .. }
             | Request::AgentUpdateStart { .. } // ticket 358: an installer runs here
             | Request::AgentUpdateCancel { .. }
             | Request::AgentUpdateState
@@ -1372,6 +1373,7 @@ fn connection(
                 | Request::AcpAgentSignInState { .. }
                 | Request::AcpAgentSignInCancel { .. }
                 | Request::AcpAgentSignOut { .. }
+                | Request::AcpAgentTry { .. }
         ) {
             drop(sessions);
             return crate::acp::setup(home, registry, Some(stopping), env.request);

@@ -701,6 +701,7 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | AcpAgentSignInState { .. }
         | AcpAgentSignInCancel { .. }
         | AcpAgentSignOut { .. }
+        | AcpAgentTry { .. }
         | AgentUpdateStart { .. } // ticket 358: owner and window only
         | AgentUpdateCancel { .. }
         | AgentUpdateState

@@ -32,6 +32,10 @@ Usage:
       record holds prompts delivered and those that needed a person, and the sessions before and after each core
       restart. Writes missed_prompts_per_1000 and seats_lost_per_restart into the manual file once the record holds 7
       days (the seats figure only when a restart fell in them).
+  scorecard.py bottasks setup TASK RUN | check DIR --touches N ... | report [FILE...]
+      Part p35's bot task set (bottasks.py; the coordinator's steps in docs/measure/p35-runner.md): a fresh fixture
+      copy per run, each task's acceptance checked into docs/measure/bottasks-<date>.jsonl, and `report` writes
+      bot_task_success_pct and bot_owner_touches into the manual file only when all ten tasks have three runs.
   scorecard.py chatopen [--repeats 10] [--no-build] [--out FILE]
       The owner-run step for p33's long-chat open. Builds (or reuses) the RC core and interact_window.py's measure app
       (MEASURE_TARGET), starts that app as a copy under its own bundle id on a fresh HOME and NUNCHIRO_HOME with 20
@@ -1293,6 +1297,22 @@ def record_cmd(a):
                  f"core, {res['person']} needed a person; {res['restarts']} core restarts, {res['lost']} sessions not back")
 
 
+def bottasks_cmd(a):
+    """p35's task set (bottasks.main, its arguments passed on); only a complete `report` writes the two figures."""
+    import bottasks
+    res = bottasks.main(a.args)
+    if not a.args or a.args[0] != "report":
+        return
+    if not res["complete"]:
+        print(f"not written: {res['runs']} of 30 runs" + (f", missing {' '.join(res['missing'])}" if res["missing"] else "")
+              + ("" if len(res["versions"]) < 2 else f", fixture versions {', '.join(res['versions'])} mixed"))
+        return
+    write_manual(None, res["figures"],
+                 f"scorecard.py bottasks report: the p35 set, 10 tasks x 3 runs on fixture {res['versions'][0]} "
+                 f"(scripts/measure/fixtures/p35), {res['passed']} of 30 runs passed with no owner input; "
+                 f"raw lines {', '.join(res['files'])}")
+
+
 def chat_open_verdict(opens, want):
     """(measurelib.chat_open figures, why it is not written or None): written only when all `want` opens have a mark."""
     import measurelib as ml
@@ -1476,6 +1496,8 @@ def main():
     x.add_argument("args", nargs=argparse.REMAINDER)
     x = sub.add_parser("record", add_help=False)
     x.add_argument("args", nargs=argparse.REMAINDER)
+    x = sub.add_parser("bottasks", add_help=False)
+    x.add_argument("args", nargs=argparse.REMAINDER)
     w = sub.add_parser("weigh")
     w.add_argument("--secs", type=int, default=60)
     w.add_argument("--out")
@@ -1489,7 +1511,7 @@ def main():
     st.add_argument("--no-build", action="store_true")
     st.add_argument("--out")
     a, rest = ap.parse_known_args()
-    if a.cmd in ("accuracy", "waits", "record"):
+    if a.cmd in ("accuracy", "waits", "record", "bottasks"):
         # accuracy.py's own options, --help too, in the order given: parse_known_args splits "--days 7" into
         # rest ["--days"] and args ["7"], so the raw argv after the command is passed on instead
         a.args = sys.argv[sys.argv.index(a.cmd) + 1:]
@@ -1497,7 +1519,7 @@ def main():
         ap.error("unrecognized arguments: " + " ".join(rest))
     {"run": run_cmd, "ops": ops_cmd, "dev": dev_cmd, "merge": merge_cmd, "check": check_cmd, "page": page_cmd,
      "tests": tests_cmd, "weigh": weigh_cmd, "accuracy": accuracy_cmd, "waits": waits_cmd,
-     "record": record_cmd, "chatopen": chatopen_cmd, "stream8": stream8_cmd}[a.cmd](a)
+     "record": record_cmd, "bottasks": bottasks_cmd, "chatopen": chatopen_cmd, "stream8": stream8_cmd}[a.cmd](a)
 
 
 if __name__ == "__main__":

@@ -249,6 +249,7 @@ impl Sessions {
             | Request::AcpAgentCheck { .. }
             | Request::AcpAgentAdd { .. }
             | Request::AcpAgentLogin { .. }
+            | Request::AcpAgentTry { .. }
             // Ticket 276: an agent may not list, add or remove extensions.
             | Request::ExtensionsList
             | Request::ExtensionsMcpAdd { .. }
