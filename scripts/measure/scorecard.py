@@ -39,7 +39,8 @@ Usage:
       from the press to the page's nunchiro:chat-drawn mark. Writes chat_open_5000_ms (the median; p95, n and misses
       in its evidence) into the manual file only when every open has its mark; exit 1 otherwise.
   scorecard.py stream8 [--no-build] [--out FILE]
-      The owner-run step for p33's streaming figure. Builds (or reuses) the RC core (MEASURE_TARGET, as chatopen) and
+      The owner-run step for p33's streaming figure. Builds (or reuses) the RC core with debug assertions on (a release
+      core gives its window token to the app only, peer.rs is_app; MEASURE_TARGET + "-assert") and
       runs paint.py's stream phase as the anchor table names it: 8 fake agents stream 20 MiB each into visible
       terminals of the shipped web bundle in headless WebKit, 3 repeats. Writes stream8_worst_frame_ms (the median of
       the repeats' worst frames) into the manual file only when every repeat painted all 8 end markers with
@@ -1303,17 +1304,26 @@ def stream8_cmd(a):
     --engines webkit --no-record`, fake agents on an RC core, headless WebKit), its row read back into the manual file."""
     import interact_window as iw
     os.environ.setdefault("CARGO_BUILD_JOBS", "2")
-    core = iw.TARGET / "release/nunchiro"
+    # The page takes its window token straight from the core, which a release core gives only to the app (peer.rs
+    # is_app); its test seam is debug assertions on a throwaway home. So: release optimisation with debug assertions,
+    # in a target of its own.
+    target = iw.TARGET.with_name(iw.TARGET.name + "-assert")
+    core = target / "release/nunchiro"
     if not a.no_build:
         subprocess.run(["cargo", "build", "--release", "--locked", "-p", "nunchiro"], cwd=ROOT, check=True,
-                       env=dict(os.environ, CARGO_TARGET_DIR=str(iw.TARGET), NUNCHIRO_BUILD="1"))
+                       env=dict(os.environ, CARGO_TARGET_DIR=str(target), NUNCHIRO_BUILD="1",
+                                CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS="true"))
     if not core.is_file():
         raise SystemExit(f"no build at {core}; run without --no-build")
     runs = ROOT / ".scratch/measure"
     before = set(runs.glob("*-paint")) if runs.is_dir() else set()
     env = {k: v for k, v in os.environ.items() if not k.startswith("NUNCHIRO_")}
-    subprocess.run([sys.executable, "-B", str(HERE / "paint.py"), "--only", "stream", "--sizes", "8", "--engines", "webkit",
-                    "--no-record"], cwd=ROOT, check=True, env=dict(env, NUNCHIRO_MEASURE_CORE=str(core)))
+    # Detached, as `tests` runs: no Nunchiro holder above the run.
+    secs, rc, log = outside_holder([sys.executable, "-B", str(HERE / "paint.py"), "--only", "stream", "--sizes", "8",
+                                    "--engines", "webkit", "--no-record"], dict(env, NUNCHIRO_MEASURE_CORE=str(core)))
+    print(log[-3000:])
+    if rc:
+        raise SystemExit(f"paint.py ended {rc} after {secs} s; nothing written")
     out = max(set(runs.glob("*-paint")) - before)
     res = json.loads((out / "result.json").read_text())
     row = res["rows"]["stream-8-webkit"]
@@ -1323,7 +1333,7 @@ def stream8_cmd(a):
         sys.exit(1)
     write_manual(a.out, dict(stream8_worst_frame_ms=value),
                  f"scorecard.py stream8 {time.strftime('%Y-%m-%d %H:%M')}: paint.py --only stream --sizes 8 --engines webkit "
-                 f"on the RC core (fake agents, 8 terminals x {res['stream_size'] // 2**20} MiB, headless WebKit "
+                 f"on the RC core built with release optimisation and debug assertions (the page's window token; fake agents, 8 terminals x {res['stream_size'] // 2**20} MiB, headless WebKit "
                  f"{row.get('browser')}); worst frame per repeat {row['worst_frame_ms']} ms, the median written; stalls "
                  f"{row['stalls']}, probe max {row['probe_max_ms']} ms, wall {row['wall_s']} s; 1-min load "
                  f"{res['load_start']} to {res['load_end']}; raw {out.relative_to(ROOT)}/result.json")
