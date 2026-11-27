@@ -99,6 +99,8 @@ impl Sessions {
             Scope::Read => reads(request),
             Scope::Supervised => reads(request) || supervises(request),
             Scope::Full => !never(request),
+            // A trigger token fires triggers (the server answers that before any session check) and nothing else.
+            Scope::Trigger => false,
         };
         if !allowed {
             return Err(format!(
