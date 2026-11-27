@@ -65,7 +65,8 @@ or a field: it is only text after your task.
 - At most 4 fires an hour per trigger, taken as each fire arrives (fires at the same moment cannot pass it together);
   a fifth is refused with the reason and logged as the trigger's last fire. A fire whose start fails gives its place back.
 - An asking trigger keeps at most 3 cards waiting in Decisions; a fire past that is held (logged as its last fire
-  with the reason) and gives its hourly place back, so one busy trigger never fills the cards everything else needs.
+  with the reason) and gives its hourly place back, so one busy trigger never fills the cards everything else needs. All triggers'
+  waiting cards together take at most half of the owner's cards (32); a fire past that is held the same way.
 - One run per subject at a time: a payload's pull request or issue URL, or its `subject` or `url` field. A fire for
   a subject whose earlier run is still starting, waiting on its card or working starts nothing.
 - A start a plugin's check stops or the Mac's memory holds is logged as the trigger's last fire with the reason.

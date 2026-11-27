@@ -280,6 +280,19 @@ impl Sessions {
             crate::schedule::triggers::Source::Cli => "the command line",
             crate::schedule::triggers::Source::Webhook => "a webhook",
         };
+        // All trigger cards together take at most half of the owner's queue, so approvals, proposals and setup cards
+        // always fit.
+        let all = self
+            .queue
+            .owner_items()
+            .iter()
+            .filter(|i| matches!(&i.owner, Some(queue::OwnerAsk::Schedule { change, .. }) if change == "trigger"))
+            .count();
+        if all >= crate::schedule::triggers::CARDS_SHARE {
+            return Err(format!(
+                "{all} trigger cards wait for your answer in Decisions; this fire of trigger {name} was not added"
+            ));
+        }
         let waiting = self
             .queue
             .owner_items()

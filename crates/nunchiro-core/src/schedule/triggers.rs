@@ -447,6 +447,8 @@ pub(crate) fn fire(
 /// An asking trigger's cards that may wait at once; a fire past it is held, so one busy trigger never fills the owner's
 /// shared queue of cards.
 pub const CARDS_MAX: usize = 3;
+/// All triggers' waiting cards together: half of the owner's shared queue.
+pub const CARDS_SHARE: usize = crate::queue::OWNER_ITEMS / 2;
 /// A subject taken by a fire that is still starting, or waiting for the owner's card.
 const PENDING: &str = "";
 const ASKED: &str = "ask";
