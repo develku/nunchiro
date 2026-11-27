@@ -82,8 +82,15 @@ pub(crate) fn worktree(
         .lock()
         .map_err(|_| "session registry unavailable")?;
     // Ticket 991 A2: a remove that went ahead (no loss to confirm) takes the folder's ended sessions with it.
+    // Only a remove reserves a folder (`reserve_worktree`), so this is a remove.
     if let (Some(path), Ok((_, _, None))) = (reservation.as_deref(), &result) {
         sessions.close_ended_in(path, caller.as_ref());
+        // A setup ask of a removed worktree could never be approved (its script is gone with the folder).
+        if let Err(e) = sessions.queue.answer_owner(|i| {
+            matches!(&i.owner, Some(crate::queue::OwnerAsk::Setup { path: p, .. }) if p == path)
+        }) {
+            eprintln!("queue: setup ask of {} not dropped: {e}", path.display());
+        }
     }
     sessions.release_worktree(reservation);
     drop(sessions);
