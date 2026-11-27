@@ -178,7 +178,9 @@ fn the_example_runs_only_when_on_and_approved() {
     );
     let status = ok(&home, &["plugin", "run", "quiet-hours", "status"]);
     assert!(
-        status.contains("quiet") && status.contains("22:00"),
+        // Inside the quiet hours it says when they end, outside when they start.
+        status.to_lowercase().contains("quiet")
+            && (status.contains("22:00") || status.contains("07:00")),
         "{status}"
     );
     let run = call(
