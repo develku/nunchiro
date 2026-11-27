@@ -60,7 +60,7 @@ jobs:
       - name: Ratchets (.github/scripts/ratchets.py of the base commit)
         run: |
           f="$RUNNER_TEMP/ratchets.py"
-          { git cat-file -e HEAD^:.github/scripts/ratchets.py && git show HEAD^:.github/scripts/ratchets.py > "$f"; } || cp .github/scripts/ratchets.py "$f"
+          { git cat-file -e HEAD^:.github/scripts/ratchets.py 2>/dev/null && git show HEAD^:.github/scripts/ratchets.py > "$f"; } || cp .github/scripts/ratchets.py "$f"
           python3 -B "$f" HEAD^
       - run: rustup toolchain install # the version and components in rust-toolchain.toml
       - run: cargo fmt --all --check
