@@ -143,6 +143,7 @@ pub(crate) fn poll(
             if known.contains(&k) {
                 continue;
             }
+            let at = crate::queue::now_ms();
             match super::triggers::fire(
                 registry,
                 stopping,
@@ -154,10 +155,36 @@ pub(crate) fn poll(
                 Ok(_) => {
                     known.insert(k);
                 }
+                // A start that failed (not one held) fails again on the next read: seen, and the last fire says so.
+                Err(e) if failed_since(home, &t.name, at) => {
+                    known.insert(k);
+                    let last = super::Last {
+                        session: None,
+                        at,
+                        result: Some(super::Outcome::Failed),
+                        reason: Some(format!(
+                            "{}; not tried again until a new head commit",
+                            e.chars().take(150).collect::<String>()
+                        )),
+                    };
+                    let _ = super::triggers::record(home, &t.name, last);
+                }
                 Err(e) => eprintln!("trigger {}: {e}", t.name),
             }
         }
     }
+}
+
+/// The trigger's last fire is a failed start at or after `at` (`triggers::start` records it).
+fn failed_since(home: &Path, name: &str, at: u64) -> bool {
+    super::triggers::load(home).is_ok_and(|all| {
+        all.iter().any(|t| {
+            t.name == name
+                && t.last
+                    .as_ref()
+                    .is_some_and(|l| l.at >= at && l.result == Some(super::Outcome::Failed))
+        })
+    })
 }
 
 /// The poller's thread: asleep while no GitHub trigger is on.
