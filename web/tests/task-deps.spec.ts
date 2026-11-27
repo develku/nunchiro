@@ -27,6 +27,7 @@ async function scene(app: Page, core: Core, plain = false) {
         { ...base('t4', 'Tabs shrink to share the strip', min(1)), after: ['t0'], state: 'idle' },
         { ...base('t5', 'Highlight the error span', min(4)), after: ['t6'], blockers: [blocker('t6', 'Old parser', 'dropped', true)], stuck: '"Old parser" was dropped, so this cannot start. Stop waiting for it, or drop this too?', state: 'needs' },
         { ...base('t7', 'Token positions', min(3)), after: ['t1'], blockers: [blocker('t1', 'Fix lexer panic', 'build')], early: 'started before "Fix lexer panic" landed', seats: [seat(ids.early, 'Builder · Token positions')], live: [ids.early], state: 'working' },
+        { ...base('t8', 'Review waits', min(6)), seats: [seat(ids.early, 'Builder · Review waits')], advance: { review: 'waits' }, state: 'idle' },
         { ...base('t0', 'Split the token table', min(1)), closed: { at: min(1), how: 'merged' }, state: 'merged' },
         { ...base('t6', 'Old parser', min(5)), closed: { at: min(5), how: 'dropped' }, state: 'dropped' },
       ];
@@ -129,6 +130,11 @@ test('task_deps_drawer_menu: a waiting card opens what it waits for; the menu se
   await expect(drawer.locator('.tdrawer-h > b')).toHaveText('Docs: lexer states');
   await expect(drawer.locator('.twaits li')).toHaveText(['Fix lexer panic Build', 'Error spans in the CLI output waits']);
   await expect(drawer).toContainText('Starts when all 2 have landed. Ada is told then.');
+  await drawer.getByRole('button', { name: 'Wait for…' }).click();
+  await expect(drawer.locator('.lead-menu[data-wait-menu="t3"]')).toBeVisible();
+  await app.keyboard.press('Escape');
+  await expect(drawer.locator('.lead-menu')).toHaveCount(0);
+  await expect(drawer).toBeVisible(); // Esc there closes the checklist only
   await drawer.getByRole('button', { name: 'Start anyway', exact: true }).click();
   await expect.poll(() => sent.at(-1)).toEqual({ operation: 'after', id: 't3', after: [] });
   await expect(drawer).toHaveCount(0); // it no longer waits: the drawer closes
@@ -203,4 +209,8 @@ for (const scheme of ['light', 'dark'] as const)
     await app.emulateMedia({ colorScheme: scheme });
     const { card } = await scene(app, core);
     for (const id of ['t2', 't4']) expect(await contrast(card(id).locator('.tcard-stages > span')), id).toBeGreaterThanOrEqual(4.5);
+    // A card whose Reviewer waits for a seat keeps its full stage row, each chip in its own colours as on any card.
+    const colours = (id: string) => card(id).locator('.tcard-stages > [data-at]').evaluateAll((els) => els.map((e) => `${(e as HTMLElement).dataset.at} ${getComputedStyle(e).color}`));
+    await expect(card('t8')).toHaveAttribute('data-waits-seat', 'true');
+    expect(await colours('t8')).toEqual(await colours('t1'));
   });
