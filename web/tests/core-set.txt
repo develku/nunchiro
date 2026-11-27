@@ -66,3 +66,6 @@ i18n-translations.spec.ts | cjk_punctuation
 i18n-remaining-catalogue.spec.ts
 i18n-chat-catalogue.spec.ts
 i18n-key-sets.spec.ts
+
+# a waiting question: its option numbers answer it from an empty composer, and the hint says so
+sidechat-card-1097.spec.ts | item2_empty_composer_digit|digit_hint_in_empty_composer
