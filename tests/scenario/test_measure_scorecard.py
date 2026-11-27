@@ -378,5 +378,26 @@ class ChatOpenVerdict(unittest.TestCase):
         self.assertEqual(why, "1 marked opens of the 10 asked")
 
 
+class Stream8Verdict(unittest.TestCase):
+    """p33's stream8 writes the median of the repeats' worst frames, only from a whole, judged stream-8 row."""
+
+    ROW = dict(terminals=8, painted=[8, 8, 8], worst_frame_ms=[400.0, 250.0, 1900.0], frames_valid=True,
+               skipped_repeats=0)
+
+    def test_a_whole_row_is_written(self):
+        self.assertEqual(s.stream8_verdict(self.ROW), (400.0, None))
+
+    def test_not_run_refuses(self):
+        self.assertEqual(s.stream8_verdict(dict(not_run="not run: load")), (None, "not run: load"))
+
+    def test_a_terminal_not_painted_refuses(self):
+        _, why = s.stream8_verdict(dict(self.ROW, painted=[8, 7, 8]))
+        self.assertIn("end markers painted [8, 7, 8]", why)
+
+    def test_throttled_frames_or_a_skipped_repeat_refuse(self):
+        self.assertIn("frames throttled", s.stream8_verdict(dict(self.ROW, frames_valid=False))[1])
+        self.assertIn("1 repeats not run", s.stream8_verdict(dict(self.ROW, skipped_repeats=1))[1])
+
+
 if __name__ == "__main__":
     unittest.main()
