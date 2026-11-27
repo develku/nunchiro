@@ -1,0 +1,440 @@
+/* Copy mode, the hints and key drawings, session start and stop, prefix help and the command sheet (split from styles.css, loaded after layout.css). */
+
+/* copy mode (v1a-42) */
+.copy-cursor {
+  position: fixed;
+  z-index: 30;
+  box-sizing: border-box;
+  border: 2px solid var(--hint-bg);
+  background: var(--hint-wash);
+  pointer-events: none;
+}
+.copy-status {
+  position: fixed;
+  z-index: 25;
+  right: 12px;
+  bottom: 54px;
+  color: var(--text); /* --g9 is no token: a hard-coded light fallback was near invisible on light themes (V1A-54) */
+  border-radius: var(--r-6); /* ticket 1041 lane 7b: glass (.glass in the JSX), no outline */
+  padding: 2px 8px;
+  font: 12px/18px 'SF Mono', Menlo, monospace;
+  pointer-events: none;
+}
+/* V1A-48 Settings > Keys > Hints: chips, keyboard drawing and the mock-window preview */
+.hk-row,
+.hk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: var(--fs-12);
+  margin: 6px 0;
+}
+.hk-chip {
+  border-radius: var(--r-4);
+  background: var(--tint-1); /* ticket 1041 A: a tint chip, no outline */
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-11);
+  padding: 1px 6px;
+}
+.hk-chip input {
+  padding: 0 4px; /* the 1-2 letter key field: the 24px target width (the key-cap look had this padding) */
+  text-align: center;
+}
+.hk-note {
+  font-size: var(--fs-11);
+  margin: 4px 0;
+}
+.hk-note.conflict {
+  color: var(--error);
+}
+.hk-board {
+  display: grid;
+  gap: 3px;
+  margin: 8px 0;
+}
+.hk-krow {
+  display: flex;
+  gap: 3px;
+}
+.hk-key {
+  position: relative;
+  min-width: 48px;
+  height: 48px; /* panel 2026-10-31: keys 48px tall so an 11px label fits */
+  border: 1px solid var(--faint);
+  border-bottom-width: 2px;
+  border-radius: var(--r-4);
+  background: var(--panel);
+  color: var(--text);
+  font: 11px/1 'SF Mono', Menlo, monospace;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0;
+  overflow: hidden;
+}
+/* V1A-56: a dot per placed chip, names in the legend. Ticket 1041 (N094): every dot is ink and told apart by shape alone
+   (hints.css: kind round, Shift filter square, label key diamond); orange is the your-turn colour only. */
+.hk-key .dots {
+  display: flex;
+  gap: 2px;
+}
+.hk-board .dot,
+.hk-legend .dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text);
+}
+.hk-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  list-style: none;
+  margin: 4px 0 10px;
+  padding: 0;
+  font-size: var(--fs-12);
+}
+.hk-legend li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.hk-key[data-used] {
+  background: var(--page);
+}
+.hint-preview {
+  display: flex;
+  height: 120px;
+  border: 0; /* ticket 1041 A: the mock window is a panel on the tint, no outline */
+  border-radius: var(--r-6);
+  overflow: hidden;
+  font-size: var(--fs-11);
+  color: var(--muted);
+  background: var(--panel);
+}
+.hp-col {
+  width: 22px;
+  border-right: 1px solid var(--hover);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+}
+.hp-col:last-child {
+  border-right: 0;
+  border-left: 1px solid var(--hover);
+}
+.hp-side {
+  width: 96px;
+  border-right: 1px solid var(--hover);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+}
+.hp-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.hp-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--hover);
+}
+.hp-term {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  background: var(--panel);
+  flex: 1;
+  font-family: 'SF Mono', Menlo, monospace;
+}
+.hp-t {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the same look as a live .hint, but in flow */
+.hk-label {
+  background: var(--hint-bg);
+  color: var(--hint-text);
+  border: 1px solid var(--hint-line);
+  border-radius: var(--r-4);
+  font: 700 11px/14px 'SF Mono', Menlo, monospace;
+  padding: 0 2px;
+}
+
+/* V1A-59: session start and stop */
+.newsess[open] {
+  font-size: var(--fs-12);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.newsess fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 14px;
+}
+.newsess legend {
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.ns-projects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ns-projects [aria-pressed='true'] {
+  border-color: var(--text);
+}
+.ns-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+}
+.ns-path {
+  display: flex;
+  gap: 6px;
+}
+.ns-path input {
+  flex: 1;
+  min-width: 0;
+}
+.ns-folder input {
+  padding: 4px 6px;
+}
+.newsess .row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* v25-sendkeys: the optional first message, and the box's queued line's "send now" control. */
+.ns-task {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+}
+/* These button rows borrow .row (overflow: hidden), which would cut the primary button's outside focus ring. */
+.newsess .row,
+.wnotice .row {
+  overflow: visible;
+}
+.empty p {
+  margin: 0 0 10px;
+}
+.empty > p {
+  max-width: 320px;
+}
+.padd {
+  flex: none;
+  width: 16px;
+  color: var(--faint);
+  /* Shown with its row (hover or focus inside), so it never crowds hint labels; Tab from the row reaches it. */
+  display: none;
+}
+/* Drawn, not text: the row's text keeps no "+" that reads as an overflow count. */
+.padd::before {
+  content: '+';
+}
+.row.head:is(:hover, :focus-within) .padd {
+  display: block;
+}
+/* The counts keep their place when "+" shows (needs 26: nothing moves under the pointer). */
+.tree .row.head .r {
+  margin-right: 22px;
+}
+.tree .row.head:is(:hover, :focus-within) .r {
+  margin-right: 0;
+}
+.padd:hover {
+  color: var(--text);
+}
+/* Read only: the "reconnecting" line of a live terminal does not apply. */
+.roterm .offline {
+  display: none;
+}
+.composer .why {
+  display: block;
+  font-size: var(--fs-11);
+  color: var(--muted);
+  padding: 2px 8px 0;
+}
+/* v1a-68 */
+.composer .keeps {
+  display: block;
+}
+.composer .keep {
+  font-size: var(--fs-11);
+  color: var(--muted);
+  margin: 2px 8px 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* V1A-57: index keys on the drawing carry a square ink dot (told apart by shape; 3:1 like the others) */
+.hk-board .dot[data-type='index'],
+.hk-legend .dot[data-type='index'] {
+  background: var(--text);
+  border-radius: var(--r-2);
+}
+/* V1A-57: prefix help, render-only (aria-hidden, pointer-events none) above the status bar while the prefix is armed */
+.prefix-help {
+  position: fixed;
+  left: 50%;
+  bottom: 56px;
+  transform: translateX(-50%);
+  z-index: 24;
+  width: min(860px, calc(100% - 32px));
+  max-height: 60vh;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px 14px;
+  padding: 10px 14px;
+  background: var(--raised);
+  color: var(--text);
+  border-radius: var(--r-12);
+  /* ticket 1041: solid, no border */
+  box-shadow: var(--shadow-float);
+  font-size: var(--fs-12);
+  pointer-events: none;
+}
+.prefix-help .ph-area b {
+  display: block;
+  margin-bottom: 2px;
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
+.prefix-help .ph-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1.6;
+}
+.prefix-help .ph-row .kbd {
+  min-width: 26px;
+  text-align: center;
+}
+.prefix-help .ph-foot {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+/* Ticket 1099 (mockup cohesion-1099 panel 5): the whole sheet (⌘/) flows its areas through columns, so the long ones
+   (Sessions and tabs, Views and docks) do not stretch a grid row; the foot spans them all. */
+.prefix-help[data-all] {
+  display: block;
+  width: min(1040px, calc(100% - 32px));
+  max-height: 80vh;
+  column-width: 210px;
+  column-gap: 14px;
+}
+.prefix-help[data-all] .ph-area {
+  break-inside: avoid;
+  margin-bottom: var(--sp-8);
+}
+.prefix-help[data-all] .ph-foot {
+  column-span: all;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4) var(--sp-16);
+}
+.prefix-help[data-all] .ph-row .kbd {
+  min-width: 34px;
+}
+/* A command that cannot run now (no closed tab to reopen): listed, quieter. */
+.prefix-help .ph-row[data-off] {
+  color: var(--muted);
+}
+.smatches {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.smatches .btn {
+  text-align: left;
+}
+.sbody > .ssearch {
+  grid-column: 1 / -1;
+}
+.addproj {
+  margin-right: 6px;
+}
+.ov {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: var(--r-4);
+  font-size: var(--fs-11);
+  font-weight: 700;
+  color: var(--on-status);
+  background: var(--done);
+  white-space: nowrap;
+}
+.hk-key small {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  bottom: 2px;
+  font: 500 11px system-ui;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+.hk-key {
+  min-width: 58px;
+  height: 46px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 3px 5px;
+}
+.hk-key:hover,
+.hk-key:focus-visible {
+  background: var(--tint-2); /* ticket 1041: a neutral step under the pointer (it was the working blue / your-turn orange) */
+}
+.git-block {
+  margin-top: 16px;
+}
+
+.lib .lnote {
+  margin: 0 10px 6px;
+  font-size: var(--fs-11);
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.lib .lcard.ask {
+  width: 100%;
+  border-style: dashed;
+  text-align: left;
+  cursor: pointer;
+}
+/* A focused artifact frame rings 4 px outside its box: leave that room inside the sidebar's clip. */
+.sbar[data-widget='preview'] .sbb {
+  padding: 4px;
+}

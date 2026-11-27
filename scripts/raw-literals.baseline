@@ -1,8 +1,14 @@
+# Theme definitions by nature (the values the tokens are made of, not rules that should read a token):
+# book-tokens.css is the app copy of the design book's palette (docs/design/design-book/tokens.css);
+# themes/derive.ts builds a theme's roles from its colours (white, black, the glass highlight);
+# themes/nunchiro.ts writes the two bundled themes' palettes; themes/ghostty.ts, themes/catalog parse and list palettes.
+col book-tokens.css 33
+hex book-tokens.css 44
 hex approval/sheet.css 3
 sh approval/sheet.css 1
 hex sandbox/sandbox.css 1
 hex settings/theme/ImportTheme.tsx 2
 hex themes/catalog/catalog.gen.ts 12
-hex themes/derive.ts 2
+hex themes/derive.ts 4
 hex themes/ghostty.ts 18
-hex themes/nunchiro.ts 10
+hex themes/nunchiro.ts 12

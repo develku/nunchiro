@@ -6,6 +6,9 @@ import { PermissionSheet } from '../src/approval/PermissionSheet';
 import '../src/tokens.css'; // the window's roles (--bad for the home warning), as main.tsx loads them
 import '../src/book-tokens.css';
 import '../src/styles.css';
+import '../src/layout.css';
+import '../src/keys.css';
+import '../src/chrome.css';
 
 function Harness({ core, name }: { core: CoreClient; name: string }) {
   const [done, setDone] = useState('open');

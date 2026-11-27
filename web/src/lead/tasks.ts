@@ -36,6 +36,13 @@ export type TaskView = {
   waits?: 'review' | 'merge';
   /** Part B: `review` is `waits` (its Reviewer waits for a free seat) or `started` (the core started it). */
   advance?: { stalled?: { session: string; name: string; why: string }[]; review?: 'waits' | 'started' };
+  /** Task dependencies (ledger.rs `View`): the ids it waits for; those not landed yet, with their stage; how many open tasks
+   *  wait for it; the core's ask when one it waited for was dropped; set when a writer sat on it before it waited. */
+  after?: string[];
+  blockers?: { id: string; title: string; stage: string; dropped?: boolean }[];
+  waiters?: number;
+  stuck?: string;
+  early?: string;
 };
 
 /** crates/nunchiro-core/src/ledger.rs `Place`: the place's way of working and what its writing seats may do unasked. */
