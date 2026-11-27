@@ -1186,6 +1186,12 @@ fn git_push_from_the_window_moves_the_remote() {
     let r = core.window(json!({"op":"git_push","session":s.id}));
     assert_eq!(r["Err"], "push needs the confirmed head commit", "{r}");
     let r = core.window(json!({"op":"git_push","session":s.id,"head":head}));
+    assert_eq!(r["Err"], "push needs what the strip showed", "{r}");
+    // What the strip shows: the Diff list's git facts.
+    let list = core.window(json!({"op":"diff_list","session":s.id,"git":true,"fresh":true}));
+    let to = &list["Ok"]["git"]["push_to"];
+    assert_eq!(list["Ok"]["git"]["head"], head.as_str(), "{list}");
+    let r = core.window(json!({"op":"git_push","session":s.id,"head":head,"remote":to["remote"],"branch":to["branch"],"ahead":to["ahead"],"key":to["key"]}));
     assert_eq!(
         r["Ok"],
         json!({"type":"git_pushed","pushed":2,"remote":"origin","branch":"parser-fix"}),
@@ -1286,7 +1292,8 @@ fn pr_create_pushes_then_hands_gh_the_text_unchanged() {
     let head = d["head"].as_str().unwrap().to_string();
     let title = "-x Fix $(rm -rf ~) `id` \"quoted\"";
     let body = "$(touch /tmp/pwned)\n`id`\n--admin\n- item\r\n\ttab ünïcode";
-    let r = core.window(json!({"op":"pr_create","session":s.id,"head":head,"title":title,"body":body,"base":"main","draft":false}));
+    let p = &d["push"];
+    let r = core.window(json!({"op":"pr_create","session":s.id,"head":head,"remote":p["remote"],"branch":p["branch"],"ahead":p["ahead"],"key":p["key"],"title":title,"body":body,"base":"main","draft":false}));
     assert_eq!(
         r["Ok"],
         json!({"type":"pr_created","url":"https://github.com/develku/nunchiro/pull/58","number":58,"pushed":2}),
@@ -1311,7 +1318,9 @@ fn pr_create_pushes_then_hands_gh_the_text_unchanged() {
     assert_eq!(chip["Ok"]["chip"]["state"], "open", "{chip}");
     // Pushed already: Create as draft runs gh alone, with --draft.
     fs::remove_file(core.home.join("gh-runs")).unwrap();
-    let r = core.window(json!({"op":"pr_create","session":s.id,"head":head,"title":"T","body":"","base":"main","draft":true}));
+    let d = core.window(json!({"op":"pr_draft","session":s.id}))["Ok"]["draft"].clone();
+    let p = &d["push"];
+    let r = core.window(json!({"op":"pr_create","session":s.id,"head":head,"remote":p["remote"],"branch":p["branch"],"ahead":p["ahead"],"key":p["key"],"title":"T","body":"","base":"main","draft":true}));
     assert_eq!(r["Ok"]["pushed"], 0, "{r}");
     assert!(
         fs::read_to_string(core.home.join("gh-runs"))
@@ -1327,8 +1336,11 @@ fn pr_create_refusals_say_what_happened() {
     gh_create_shim(&core);
     let s = core.start();
     let head = pr_git(&dir, &["rev-parse", "HEAD"]);
+    // Each create sends what the form shows now (its draft): the head, the remote, the branch, the count, the URL key.
     let create = |title: &str| {
-        core.window(json!({"op":"pr_create","session":s.id,"head":head,"title":title,"body":"b","base":"main"}))
+        let d = core.window(json!({"op":"pr_draft","session":s.id}))["Ok"]["draft"].clone();
+        let p = &d["push"];
+        core.window(json!({"op":"pr_create","session":s.id,"head":d["head"],"remote":p["remote"],"branch":p["branch"],"ahead":p["ahead"],"key":p["key"],"title":title,"body":"b","base":"main"}))
     };
     // A title over two lines, or empty: nothing runs, nothing is pushed.
     for bad in ["two\nlines", "", "   "] {

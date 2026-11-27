@@ -56,7 +56,7 @@ export function PrForm({ core, session, onCreated, onCancel, onOpen, t }: { core
     if (off || !draft || !text) return;
     setBusy(true);
     setError(null);
-    core.request({ op: 'pr_create', session, head: draft.head, title: text.title, body: text.body, base: text.base, draft: text.draft }).then(
+    core.request({ op: 'pr_create', session, head: draft.head, remote: draft.push.remote, branch: draft.push.branch, ahead: draft.push.ahead, key: draft.push.key, title: text.title, body: text.body, base: text.base, draft: text.draft }).then(
       (r) => {
         KEPT.delete(session);
         setBusy(false);

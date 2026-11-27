@@ -23,6 +23,7 @@ export const startOp = (start: { op: 'start'; [k: string]: unknown }, anyway = f
 export const KNOWN: [RegExp, Key, Key?][] = [
   // git_write.rs: the Diff panel's Push. First, as git's own lines under the sentence may hold "fatal: " (the git row).
   [/^nothing was sent: the branch changed after this was shown \(new head (?<head>\S+)\)/, 'gitActions.err.changed'],
+  [/^nothing was sent: where this pushes changed after this was shown \(now (?<remote>[^/\s]+)\/(?<branch>\S+)\)/, 'gitActions.err.target'],
   [/^not pushed: (?<remote>\S+) has newer commits on (?<branch>\S+)/, 'gitActions.err.newer'],
   [/^not pushed: git needs you to sign in/, 'gitActions.err.signin'],
   [/^not pushed: the pre-push hook failed/, 'gitActions.err.hook'],

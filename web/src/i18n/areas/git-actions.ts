@@ -54,6 +54,8 @@ declare module '../index' {
     'gitActions.err.notGithub': true;
     'gitActions.err.noPr': true;
     'gitActions.err.noLink': true;
+    'gitActions.err.target': true;
+    'gitActions.push.noUpstream': true;
     'gitActions.why.noPushRemote': true;
     'gitActions.label.askPush': true;
     'gitActions.choices': true;
@@ -156,6 +158,8 @@ export const en = {
   'gitActions.err.notGithub': "No pull request: {remote} is not a GitHub repository.",
   'gitActions.err.noPr': "No pull request was created.",
   'gitActions.err.noLink': "The pull request was created, but gh did not say where. Look in the PRs tab.",
+  'gitActions.err.target': "Nothing was sent: where this pushes changed after it was shown (now {remote}/{branch}). Look again.",
+  'gitActions.push.noUpstream': "The branch's upstream was not set; git push -u in a terminal sets it.",
 };
 export const ko = {
   'gitActions.label.commit': '커밋',

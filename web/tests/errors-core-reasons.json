@@ -521,5 +521,6 @@
  "the core started nothing": "internal: a start that reported success without a session, which the core's own start path never returns",
  "push requires the window": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip",
  "push needs the confirmed head commit": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip",
- "not a git op": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip"
+ "not a git op": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip",
+ "push needs what the strip showed": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip"
 }

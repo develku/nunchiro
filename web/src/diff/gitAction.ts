@@ -30,7 +30,7 @@ export type GitFacts = {
   push_why?: string | null;
 };
 /** Mirrors crates/nunchiro-core/src/git_write.rs `PushTo`. */
-export type PushTo = { remote: string; branch: string; ahead: number; upstream: boolean };
+export type PushTo = { remote: string; branch: string; ahead: number; upstream: boolean; key: string };
 
 /** What a press asks for; `null` sends nothing. */
 export type Ask = 'commit' | 'commit_push' | 'commit_push_pr' | 'push' | 'push_pr' | 'create_pr' | 'pull';

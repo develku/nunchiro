@@ -76,7 +76,7 @@ test('git push: the strip names the commits, the remote and the head; Push moves
   expect(remoteHead(origin)).toBe(head);
   expect(git(s.cwd, 'rev-parse', '--abbrev-ref', '@{u}')).toBe('origin/fix-login');
   expect(sent.filter((r) => r.op === 'agent_prompt')).toEqual([]);
-  expect(sent.filter((r) => r.op === 'git_push')).toEqual([{ op: 'git_push', session: s.id, head }]);
+  expect(sent.filter((r) => r.op === 'git_push')).toMatchObject([{ op: 'git_push', session: s.id, head, remote: 'origin', branch: 'fix-login', ahead: 3 }]);
   await shot(app, 'pushed');
 });
 
@@ -92,8 +92,13 @@ test('git push: a commit made after the strip showed is refused and the remote s
   await app.keyboard.press('Escape');
   await expect(strip).toHaveCount(0);
   await button.click();
+  await expect(strip).toContainText('Push 1 commit to origin/fix-login?');
   git(s.cwd, 'commit', '-q', '--allow-empty', '-m', 'made after the strip showed');
   const now = git(s.cwd, 'rev-parse', 'HEAD');
+  // A list refresh while the strip is open keeps what it showed: the push is still checked against that.
+  await app.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await app.waitForTimeout(800);
+  await expect(strip).toContainText('Push 1 commit to origin/fix-login?');
   await strip.getByRole('button', { name: 'Push', exact: true }).click();
   await expect(strip).toContainText(`Nothing was sent: the branch changed after this was shown (new head ${now.slice(0, 7)}). Look again.`);
   expect(remoteHead(origin)).toBe('');
