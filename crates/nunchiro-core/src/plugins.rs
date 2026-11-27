@@ -1276,9 +1276,12 @@ pub(crate) fn take_replaced(
     content: &str,
 ) -> Option<crate::delivery::Replaced> {
     let mut all = replaced().lock().ok()?;
-    let at = all
-        .iter()
-        .position(|r| r.sender == sender && r.to == to && r.text == content)?;
+    // A task seat's prompt gets its header before the checked words (`with_notes`): the row ends with them.
+    let at = all.iter().position(|r| {
+        r.sender == sender
+            && r.to == to
+            && (r.text == content || content.ends_with(&format!("\n{}", r.text)))
+    })?;
     let r = all.remove(at).replaced;
     eprintln!(
         "plugin {} replaced a message from {sender} to {to}",

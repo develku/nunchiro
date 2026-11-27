@@ -2,7 +2,7 @@
 // every send row with those words is a changed one from another sender, so the owner's own line and an agent's
 // unchanged line with the same words stay untagged.
 import { expect, test } from '@playwright/test';
-import { changedBy } from '../src/queue/Knock';
+import { changedBy } from '../src/plugins/changedBy';
 import type { SendRow } from '../src/types';
 
 const row = (sender: string, content: string, plugin?: string): SendRow => ({

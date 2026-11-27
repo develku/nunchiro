@@ -303,11 +303,14 @@ impl Sessions {
         // check a written send takes; it goes once the box is free.
         let reply = self.send_inner(sender, id, text, keys, submit, false)?;
         if let Some(said) = said {
-            let row = match &reply {
-                Reply::Delivery { send } => Some(send.id.clone()),
-                _ => None,
+            let (row, changed) = match &reply {
+                Reply::Delivery { send } => (
+                    Some(send.id.clone()),
+                    send.replaced.as_ref().map(|r| r.plugin.clone()),
+                ),
+                _ => (None, None),
             };
-            self.typed(sender, id, &said, crate::room::By::Agent, row);
+            self.typed_changed(sender, id, &said, crate::room::By::Agent, row, changed);
         }
         Ok(reply)
     }
@@ -322,6 +325,18 @@ impl Sessions {
         text: &str,
         by: crate::room::By,
         send: Option<String>,
+    ) {
+        self.typed_changed(sender, id, text, by, send, None)
+    }
+    /// `typed` for a line a plugin's check changed: the room's copy names the plugin (`changed_by`).
+    fn typed_changed(
+        &mut self,
+        sender: &str,
+        id: &str,
+        text: &str,
+        by: crate::room::By,
+        send: Option<String>,
+        changed: Option<String>,
     ) {
         if sender == id || !self.entries.contains_key(sender) {
             return;
@@ -339,7 +354,9 @@ impl Sessions {
         } else {
             cut
         };
-        if let Err(e) = crate::room::Log::open(&self.home, &room).typed(sender, id, body, by, send)
+        if let Err(e) = crate::room::Log::open(&self.home, &room)
+            .changed_by(changed)
+            .typed(sender, id, body, by, send)
         {
             eprintln!("typed line not kept in the room: {e}");
         }
