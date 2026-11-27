@@ -1314,6 +1314,14 @@ mod tests {
         }
         for k in known().iter().filter(|k| k.acp && !k.service) {
             let s = &k.setup;
+            // The window types these into a terminal tab and never presses Return: a newline (or any control
+            // character) in the text would run it.
+            let typed = s.install.iter().chain(s.install_script.iter());
+            assert!(
+                !typed.flat_map(|w| w.chars()).any(char::is_control),
+                "{}: a control character in the install text",
+                k.name
+            );
             assert!(
                 [
                     "free_plan",

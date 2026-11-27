@@ -56,6 +56,8 @@ test('acp_steps: Open in a terminal tab types the command and runs nothing', asy
   const shell = ownerOk(core, { op: 'snapshot' }).sessions.find((s: { kind: string }) => s.kind === 'shell');
   const screen = () => JSON.stringify(ownerOk(core, { op: 'agent_read', id: shell.id, source: 'screen', lines: 20 }));
   await expect.poll(screen).toContain('npm install -g @github/copilot');
+  // Typed once, after the prompt: not echoed a second time.
+  expect(screen().split('npm install -g @github/copilot').length - 1).toBe(1);
   expect(screen()).not.toContain('not found');
 });
 

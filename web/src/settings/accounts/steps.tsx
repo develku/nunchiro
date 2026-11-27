@@ -56,6 +56,13 @@ export function AcpSteps({ t, core, row, onApproved, onChange, onRecheck }: { t:
     try {
       // An empty project starts the shell in the home folder; the text goes in with no Return, so nothing runs.
       const { session } = (await core.request({ op: 'start', session: { kind: 'shell', project: '', label: `Install ${row.label}`, resume: null } })) as { session: { id: string } };
+      // Typed once the shell's prompt is on screen (up to 5 s): before it, the text echoes twice and a start-up question
+      // can take its first letter.
+      for (let tries = 0; tries < 25; tries++) {
+        const screen = (await core.request({ op: 'agent_read', id: session.id, source: 'screen', lines: 5 }).catch(() => null)) as { text?: string } | null;
+        if (screen?.text?.trim()) break;
+        await new Promise((done) => setTimeout(done, 200));
+      }
       await core.sendText(session.id, command);
       setOpened(true);
     } catch (e) {
