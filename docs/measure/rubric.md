@@ -82,7 +82,7 @@ ourselves, is 521 MiB.
 | Change failure rate (%), time to restore (min) | 5, 60 | 30, 1440 | v1, unchanged (DORA) | ops |
 | Open a 5,000-event conversation: select it to its newest message painted (ms) | 100 | 1000 | Nielsen's limits: 0.1 s feels instant, 1 s keeps the flow (nngroup.com/articles/response-times-3-important-limits). Peer practice: T3 Code bounds a cold open to 75 rows and about 1 MiB (t3code docs/internals/performance-regressions.md:15) | owner-run: `scorecard.py chatopen` (a visible window of the measure app on the RC core, 19 sessions; 10 opens, each with another session selected first, from the press on the chat's tree row to the page's `nunchiro:chat-drawn <session>` mark, both on the page clock and sent out by the measure app's driver; written only with no miss) |
 | 8 terminals streaming 20 MiB each: worst frame, WebKit (ms) | 200 | 2000 | 100: the stall bar of measurelib.py:397 (a stall a user sees). 0: the 2 s after which the same scripts call a key missed (measurelib.py:405). We read 1,453-1,843 ms on 10-25 (docs/v1/figures.md `stream-8-webkit`) | owner-run: `scorecard.py stream8` (runs `paint.sh --only stream --sizes 8 --engines webkit --no-record` on the measure core of "Owner-run steps" and writes the median of the 3 repeats' worst frames into the manual file) |
-| Memory after 24 h over memory at minute 2, 5 real sessions (ratio) | 1.0 | 1.5 | own bar from the soak bar 1.25 (measurelib.py:400), which is 50 points here | owner-run: a day of its own, run like the 24 h soak (see "Owner-run steps") |
+| Memory after 24 h over memory at minute 2, 5 real sessions (ratio) | 1.0 | 1.5 | own bar from the soak bar 1.25 (measurelib.py:400), which is 50 points here | owner-run: a day of its own with these 5 sessions, run like the 24 h soak (see "Owner-run steps", a day's memory growth) |
 | Prompt delivery: `agent prompt` to the text submitted in a real agent's screen, median (ms) | 1000 | 10000 | Nielsen: 1 s keeps the flow, 10 s loses attention. Our path waits by design (crates/nunchiro-core/src/sessions/deliver.rs: the settle before Enter); cmux delivers through hooks with no wait for a screen | owner-run trial, see p34: each delivered send, from the send to its exact text above the input box; median and p95 per side and in total, the total median scored |
 | Delivery trial: prompts not submitted per 1,000 sent (500 sends) | 0 | 5 | as "missed prompts" above | owner-run trial, see p34 |
 | Shown state matches the true state, 100 readings (%) | 100 | 90 | own bar: with six seats on the board, 90 % is one wrong seat in most looks; no peer publishes a figure | owner-run trial |
@@ -320,14 +320,14 @@ sandboxes. A phone client is row M2 of p01.
 | Real agent turns | `sh scripts/scenario/v1b-full.sh` (Claude and Codex rows), one real ACP agent turn by hand | the count of p06, EX5, A3 |
 | Peer tasks | drive T1-T12 in Nunchiro (an isolated RC), Orca and T3 Code the same way (by hand with a recording, or computer use for all; the owner answers its access dialog); record steps, seconds and the date in tasks.json | p04, p11, p13 |
 | Seats lost per restart | over 7 days, for each restart of the owner's app (update, serve restart, relaunch): seats held before minus seats back after, from `nunchiro agent list` before and after; the mean | seats_lost_per_restart |
-| 24 h soak | 20 real agent sessions on a core with its own NUNCHIRO_HOME for 24 h with a heartbeat prompt every 10 min; clean hours until the first crash, stuck terminal or lost session | soak_clean_hours |
-| A day's memory growth | the 24 h soak's run with 5 real agent sessions, the count its anchor names: footprint at the end over minute 2, written only when the 24 h were clean. A day with another session count is not this figure, and this day is not the soak | mem_growth_24h_ratio |
+| 24 h soak | 20 real agent sessions on a core with its own NUNCHIRO_HOME for 24 h with a heartbeat prompt every 10 min; clean hours until the first crash, stuck terminal or lost session; footprint at the end over minute 2 | soak_clean_hours, mem_growth_24h_ratio |
 | Accuracy trial | p34 above: `python3 -B scripts/measure/scorecard.py accuracy --machine <alias> --remote-project <dir on the second Mac>` (raw records in accuracy-<date>.json; the figures go into the manual file only when the run is counted; `--self-test` checks the script on a fixture agent and is never counted) | the five p34 trial figures, prompt_delivery_ms |
 | Waits with no card | p34 above: `python3 -B scripts/measure/scorecard.py waits` on the owner's Mac for 7 days (read only; samples in waits-<date>.jsonl; `--report <file>` gives the figure of a stopped run) | waited_no_card_min_per_day |
 | Bot task set | p35 above | bot_task_success_pct, bot_owner_touches |
 | Reach | p37 above | RE1-RE5 |
 
 | Long-chat open | p33 above: `python3 -B scripts/measure/scorecard.py chatopen` (builds the RC core and the measure app, or `--no-build`; the window shows and takes the front for about a minute) | chat_open_5000_ms |
+| A day's memory growth | p33 above: the 24 h soak's run (a core with its own NUNCHIRO_HOME, a heartbeat prompt every 10 min) with 5 real agent sessions, the count its anchor names; footprint at the end over minute 2, written only when the 24 h were clean. This row, not the soak row, feeds the figure: a day with another session count, the 20-session soak too, is not it, and this day is not the soak | mem_growth_24h_ratio |
 
 ## Rubric checks
 
@@ -578,11 +578,12 @@ How far a user's agent team runs without the person stepping in.
     (crates/nunchiro-core/src/http/mod.rs `UNACKED_MAX`). Such a core also reads memory pressure as normal
     (crates/nunchiro-core/src/pressure.rs `level`), so it never holds a start; these runs use fake agents. The anchors
     are unchanged.
-12. The soak step named 20 sessions for both of its figures while the memory anchor names 5. Each figure is now read
-    at the count its anchor names: clean hours on a day of 20 real sessions, memory growth on a day of 5. Reason: the
-    anchor is the condition (rule 2), and a ratio does not move one way with the session count (a larger footprint at
-    minute 2 hides growth that does not depend on the sessions), so a 20-session day is not a stricter reading of the
-    same figure. The anchors are unchanged; the growth figure costs a day of its own.
+12. The soak step names 20 sessions and listed both of its figures, while the memory anchor names 5. Each figure is
+    read at the count its anchor names: clean hours on a day of 20 real sessions, memory growth on a day of 5, which
+    has its own step row. Reason: the anchor is the condition (rule 2), and a ratio does not move one way with the
+    session count (a larger footprint at minute 2 hides growth that does not depend on the sessions), so a 20-session
+    day is not a stricter reading of the same figure. The anchors are unchanged; the growth figure costs a day of
+    its own.
 13. The config guard around the real-agent runs (p34, the soak) no longer counts three kinds of files that Claude
     Code writes itself at each start: its marker per running process under a synced plugin (`.in_use/<pid>`), the
     stamp of the sweep that clears those markers, and the built-in plugins' state store. Reason: with them counted,
