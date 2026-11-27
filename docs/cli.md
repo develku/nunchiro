@@ -96,11 +96,15 @@ folder in Settings > About; the app writes it to `$NUNCHIRO_HOME/update-source` 
 The folder holds a built `Nunchiro.app` and `nunchiro-build.json` beside it:
 `{"commit": "<git sha>", "built": "<RFC 3339 time>", "sha256": {"nunchiro": "<hex>", "nunchiro-app": "<hex>"}}`, where
 `sha256` names every file in `Nunchiro.app/Contents/MacOS`. Prints
-`{"state": "off" | "none" | "ready" | "refused", "source", "commit", "built", "reason"}`: `ready` is a stamp of another
-commit than this build whose hashes match the bundle. Refused, with the reason: a folder or bundle that is a symlink, not
-owned by you, or writable by group or others; a bundle id other than `dev.nunchiro.app`; a hash that does not match; a
-build that is not an installed `Nunchiro.app` (the isolated test build keeps its own home and never updates). Changes
-nothing. Like `update install`, it refuses to run with a session token (`NUNCHIRO_TOKEN`): it is for the owner.
+`{"state": "off" | "none" | "ready" | "refused", "source", "commit", "built", "reason"}`: `ready` is a stamp whose hashes
+match the bundle and whose commit is later than this build's on the update repository's main first-parent line, the same
+check `update install` makes. To judge that it fetches main over the network (with gh's GitHub sign-in) into
+`.nunchiro-update/` beside the installed bundle and keeps the last lasting verdict there, so the same pair of commits is
+not fetched again. An older or off-main build, or one that cannot be judged now (offline, no sign-in, a build with no
+update repository), is `none` with the reason. Refused, with the reason: a folder or bundle that is a symlink, not owned
+by you, or writable by group or others; a bundle id other than `dev.nunchiro.app`; a hash that does not match; a build
+that is not an installed `Nunchiro.app` (the isolated test build keeps its own home and never updates). Changes nothing
+else. Like `update install`, it refuses to run with a session token (`NUNCHIRO_TOKEN`): it is for the owner.
 
 ### `nunchiro update install [--archive <file>]`
 Copies the ready bundle beside the installed one (`.nunchiro-update/new`), checks the copy again (hashes, bundle id,

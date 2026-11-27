@@ -9,9 +9,9 @@ and its holders (the app; the agents' own footprint beside it) is sampled. Minut
 The run ends at --hours or at the first failure: the core gone (crash), a heartbeat whose exact text is not above the
 agent's input box within 30 s (stuck terminal), or a seat no longer running (lost session). Each sample is appended to
 the raw file at once, so `--report FILE` gives the figures of a stopped run too. Figures (`figures`, pure, tested by
-tests/scenario/test_measure_soak.py): soak_clean_hours (hours to the first failure, 24 for a clean day; needs 20
-sessions, the step's size) and mem_growth_24h_ratio (the app's footprint at the end over minute 2; needs a clean day of
-at least 5 sessions, the anchor's size). Only those reached are written into docs/measure/manual-<date>.json.
+tests/scenario/test_measure_soak.py): soak_clean_hours (hours to the first failure, 24 for a clean day; only from a
+day of exactly 20 sessions, the step's size) and mem_growth_24h_ratio (the app's footprint at the end over minute 2;
+only from a clean day of exactly 5 sessions, its anchor's size: a day with another count gives neither figure). Only those reached are written into docs/measure/manual-<date>.json.
 
 Usage: soak.py --nunchiro BIN [--sessions 5] [--hours 24] [--every 600] [--project-root DIR] [--out FILE]
        soak.py --self-test --nunchiro BIN   (the fixture agent of accuracy.py on a throwaway HOME, 2 seats, 4 min,
@@ -50,16 +50,16 @@ def figures(lines):
     if head["self_test"]:
         why.append("self-test on the fixture agent")
     else:
-        if head["sessions"] < ANCHOR_SESSIONS:
-            why.append(f"mem_growth_24h_ratio needs {ANCHOR_SESSIONS} sessions, ran {head['sessions']}")
+        if head["sessions"] != ANCHOR_SESSIONS:
+            why.append(f"mem_growth_24h_ratio needs exactly {ANCHOR_SESSIONS} sessions, ran {head['sessions']}")
         elif fail:
             why.append(f"mem_growth_24h_ratio: the run failed at {at(fail)} h")
         elif not day or growth is None:
             why.append(f"mem_growth_24h_ratio: stopped at {at(last) if last else 0} h of {DAY_H}")
         else:
             written["mem_growth_24h_ratio"] = growth
-        if head["sessions"] < STEP_SESSIONS:
-            why.append(f"soak_clean_hours needs {STEP_SESSIONS} sessions, ran {head['sessions']}")
+        if head["sessions"] != STEP_SESSIONS:
+            why.append(f"soak_clean_hours needs exactly {STEP_SESSIONS} sessions, ran {head['sessions']}")
         elif not fail and not day:
             why.append(f"soak_clean_hours: stopped at {at(last) if last else 0} h with no failure")
         else:

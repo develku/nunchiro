@@ -6892,7 +6892,7 @@
           "properties": {
             "rows": {
               "items": {
-                "$ref": "#/$defs/UserCommandsRow"
+                "$ref": "#/$defs/Row"
               },
               "type": "array"
             },
@@ -14242,6 +14242,26 @@
         }
       ]
     },
+    "Row": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "description": "`command`, `skill` or `prompt`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "source"
+      ],
+      "type": "object"
+    },
     "Saved": {
       "description": "What settings.json holds for the alias, without what `ssh -G` adds: the Edit form starts from these.",
       "properties": {
@@ -16167,26 +16187,6 @@
         "today",
         "week",
         "partial"
-      ],
-      "type": "object"
-    },
-    "UserCommandsRow": {
-      "properties": {
-        "description": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "source": {
-          "description": "`command`, `skill` or `prompt`.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "description",
-        "source"
       ],
       "type": "object"
     },
