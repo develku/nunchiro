@@ -532,7 +532,7 @@ button:disabled {
   display: flex;
   align-items: center;
   align-self: stretch;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 .tab .tname {
@@ -2921,7 +2921,8 @@ button:disabled {
 
 /* chrome: frame-ko-e tab strip and status bar (ko/frame-ko-e.html .zh .tab .tadd, footer.stb) */
 .tabw {
-  padding: 0 4px 0 10px;
+  padding: 0 6px 0 10px; /* design book (tabs): padding 0 6 0 10, gap 8, dot 8 then the name */
+  gap: 8px;
   font-weight: 400;
   /* Ticket 996 (owner 11-19, draft A, VS Code's tabSizing "shrink"): tabs share the strip in equal parts, each at most as wide
      as its name (and 180 px, the cap on .tab below), down to 68 px, where the icon, the dot and a few letters still show (look
@@ -2981,11 +2982,16 @@ button:disabled {
   display: grid;
   place-items: center;
   padding: 0;
-  border-radius: var(--r-4);
+  border-radius: 5px; /* design book (tabs): close 18 square, radius 5, x 12 */
   color: var(--muted);
   visibility: hidden; /* room kept: a hovered or focused tab never changes width */
 }
 .tabw:is(:hover, :focus-within) > .x {
+  visibility: visible;
+}
+/* The open tab always shows its close mark (design book). The button itself joins the tablist only on hover or focus, as
+   on the other tabs (a tablist owns only tabs); a click on the mark reaches the button. */
+.tabw:has(> .tab[aria-selected='true']) > .x > * {
   visibility: visible;
 }
 .tabw > .x:hover {
@@ -2993,12 +2999,11 @@ button:disabled {
   color: var(--text);
 }
 /* Ticket 377 (F4): while ⌘ is held for 200 ms (useHeldKeys sets data-held-tab) the first nine tabs show the key that opens them.
-   Ticket 996 (mockup tabs-sizing-1119, owner 11-19): the chip takes the kind icon's place (icon and gap, 20 px), so a 68 px tab
-   keeps its letters, no tab changes width and the strip does not move. */
+   Design book (tabs): the chip takes the close button's place, so no tab changes width and the strip does not move. */
 .tabw > .tkey {
   display: none;
   position: absolute;
-  left: 8px;
+  right: 4px;
   top: 50%;
   transform: translateY(-50%);
   padding: 0 2px;
@@ -3009,7 +3014,8 @@ button:disabled {
 :root[data-held-tab] .tabw > .tkey {
   display: inline;
 }
-:root[data-held-tab] .tabw:has(> .tkey) .ticon {
+:root[data-held-tab] .tabw:has(> .tkey) > .x,
+:root[data-held-tab] .tabw:has(> .tkey) > .x > * {
   visibility: hidden;
 }
 .tadd {

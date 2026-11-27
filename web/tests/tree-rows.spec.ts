@@ -94,7 +94,6 @@ async function five(app: Page, core: Core, project = 'repo') {
 const rowsOf = (app: Page, project = 'repo') => app.locator(`.grp[data-project="${project}"] .row.wt2:not([data-menu="treerow"])`);
 const kinds = (rows: Locator) => rows.evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.kind));
 const css = (l: Locator, prop: string) => l.evaluate((e, p) => getComputedStyle(e).getPropertyValue(p), prop);
-const tok = (app: Page, name: string) => app.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
 
 test('rows_in_urgency_order: your turn (oldest first), broken, then the rest as first seen; a row does not move when its session starts or stops working (991 A12); the order holds while the pointer is over the project', async ({ app, core }) => {
   const { ids, patch } = await five(app, core);
@@ -134,7 +133,6 @@ test('your_turn_orange_tinted_broken_red_untinted: the state lights and icon col
   for (const theme of ['light', 'dark']) {
     await app.emulateMedia({ colorScheme: theme as 'light' | 'dark' }); // the app's theme engine follows the OS scheme
     await expect(app.locator('html')).toHaveAttribute('data-theme', theme);
-    const you = await tok(app, '--tree-you');
     const probe = (c: string) => app.evaluate((v) => { const d = document.createElement('i'); d.style.color = v; document.querySelector('.tree')!.append(d); const r = getComputedStyle(d).color; d.remove(); return r; }, c);
     const row = (k: string) => app.locator(`.grp[data-project="repo"] .row.wt2[data-kind="${k}"]`).first();
     expect(await css(row('fail'), 'background-color')).toBe('rgba(0, 0, 0, 0)');
@@ -148,7 +146,7 @@ test('your_turn_orange_tinted_broken_red_untinted: the state lights and icon col
     expect(await css(own, 'background-image')).toContain('linear-gradient');
     expect(await dot('fail')).toBe(await probe('var(--light-bad)'));
     expect(await dot('work')).toBe(await probe('var(--light-run)'));
-    expect(await css(row('hand').locator('.ic'), 'color')).toBe(await probe(you));
+    expect(await css(row('hand').locator('.sw'), 'color')).toBe(await probe('var(--you-text)')); // its word, no glyph
   }
 });
 

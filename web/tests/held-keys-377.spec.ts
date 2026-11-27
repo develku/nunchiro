@@ -48,7 +48,7 @@ test('hold ⌘ 300 ms: chips on the visible project\'s tabs and on the rows of t
   expect(await rowChips(app, a1)).toEqual([]);
 });
 
-test('the tab chip takes the kind icon\'s place and moves nothing; the name keeps its letters', async ({ app, core }) => {
+test('the tab chip takes the close button\'s place and moves nothing; the name keeps its letters', async ({ app, core }) => {
   const { a1 } = seed(core);
   await openWindow(app, {}, core);
   const tab = app.locator(`.tabw:has(> .tab[data-tab="${a1}"])`);
@@ -57,12 +57,12 @@ test('the tab chip takes the kind icon\'s place and moves nothing; the name keep
   await expect(tab.locator('> .tkey')).toBeVisible();
   const after = await tab.boundingBox();
   expect(after?.width).toBe(before?.width);
-  // Ticket 996 (mockup tabs-sizing-1119): over the icon's room (icon and gap), ending before the status dot and the name.
-  const [chip, icon, dot, name] = await Promise.all(['> .tkey', '.ticon', '.tdot', '.tname'].map((s) => tab.locator(s).boundingBox()));
-  expect(Math.abs(chip!.x + chip!.width / 2 - (icon!.x + icon!.width / 2))).toBeLessThan(6);
-  expect(chip!.x + chip!.width).toBeLessThanOrEqual(dot!.x + 1);
-  expect(chip!.x + chip!.width).toBeLessThanOrEqual(name!.x + 1);
-  await expect(tab.locator('.ticon')).toBeHidden();
+  // Design book (tabs): the chip takes the close button's place, after the dot and the name; the close button hides.
+  const [chip, close, dot, name] = await Promise.all(['> .tkey', '> .x', '.tdot', '.tname'].map((s) => tab.locator(s).boundingBox()));
+  expect(Math.abs(chip!.x + chip!.width / 2 - (close!.x + close!.width / 2))).toBeLessThan(6);
+  expect(chip!.x).toBeGreaterThanOrEqual(dot!.x + dot!.width);
+  expect(chip!.x + 1).toBeGreaterThanOrEqual(name!.x);
+  await expect(tab.locator('> .x svg')).toBeHidden();
   await app.keyboard.up('Meta');
   await app.mouse.move(0, 0);
 });

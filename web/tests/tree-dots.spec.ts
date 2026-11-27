@@ -37,21 +37,28 @@ test('row_size_and_dot_per_state: 34 high, radius 8, padding 0 10 0 24; one dot 
     const r = row(app, name);
     expect(await css(r, 'height', 'border-top-left-radius', 'padding-left', 'padding-right'), name).toEqual({ height: '34px', 'border-top-left-radius': '8px', 'padding-left': '24px', 'padding-right': '10px' });
   }
-  const want: [string, string, string | null][] = [
-    ['asks', 'you', 'needs you'],
-    ['works', 'run', null],
-    ['broke', 'bad', 'failed'],
-    ['limited', 'warn', 'Limit'],
-    ['rests', 'idle', null],
-    ['quick', 'done', null],
+  // Every light has its word on the right (the seed's working turn has no start time, so it says the word alone).
+  const want: [string, string, RegExp][] = [
+    ['asks', 'you', /^needs you$/],
+    ['works', 'run', /^working$/],
+    ['broke', 'bad', /^failed$/],
+    ['limited', 'warn', /^Limit$/],
+    ['rests', 'idle', /^idle · (<1m|\d+[mhd])$/],
+    ['quick', 'done', /^done · (<1m|\d+m)$/],
   ];
   for (const [name, dot, word] of want) {
     const d = row(app, name).locator('.sdot');
     await expect(d, name).toHaveCount(1);
     await expect(d, name).toHaveAttribute('data-dot', dot);
     expect(await d.evaluate((e) => [(e as HTMLElement).offsetWidth, (e as HTMLElement).offsetHeight]), `${name}: an 8 px light`).toEqual([8, 8]);
-    if (word) await expect(row(app, name).locator('.sw'), name).toHaveText(word);
+    const w = row(app, name).locator(':scope > :is(.sw, .tm)');
+    await expect(w, name).toHaveCount(1);
+    await expect(w, name).toHaveText(word);
+    expect((await css(w, 'font-size', 'font-variant-numeric'))).toEqual({ 'font-size': '11.5px', 'font-variant-numeric': 'tabular-nums' });
+    // No state glyph after the word: the dot and the word say it.
+    await expect(row(app, name).locator('.ic'), name).toHaveCount(0);
   }
+  expect((await css(row(app, 'rests').locator('.tm'), 'color')).color).toBe(await token(app, '--muted'));
   // The travelling line and the edge lights are gone: no ::after light on any row, no breathing edge on the your-turn block.
   for (const name of ['asks', 'works', 'broke', 'limited'])
     expect(await row(app, name).evaluate((e) => getComputedStyle(e, '::after').content), `${name}: no row light`).toBe('none');
@@ -114,6 +121,17 @@ test('tabs_join_the_sheet: 30 high, radius 8 8 0 0, the open tab on the reading 
   const shown = app.locator('.tabw:has(> .tab[aria-selected="true"])');
   const other = app.locator('.tabw:has(> .tab[aria-selected="false"])').first();
   for (const t of [shown, other]) expect(await css(t, 'height', 'border-top-left-radius', 'border-bottom-left-radius')).toEqual({ height: '30px', 'border-top-left-radius': '8px', 'border-bottom-left-radius': '0px' });
+  // No kind prefix: a session tab is its dot and its name; the open tab always shows its close button (18, radius 5).
+  await expect(app.locator('.tabw:has(> .tab[data-tab]) .ticon')).toHaveCount(0);
+  await expect(app.locator('.tabw:has(> .rtab) .ticon')).toHaveCount(0);
+  await app.mouse.move(5, 600);
+  const close = shown.locator('> .x');
+  await expect(close.locator('svg')).toBeVisible();
+  await expect(other.locator('> .x svg')).toBeHidden();
+  // The book draws it 18; the window's 24 px hit-target floor (the book's "never under 24") keeps it 24.
+  expect(await css(close, 'width', 'height', 'border-top-left-radius')).toEqual({ width: '24px', height: '24px', 'border-top-left-radius': '5px' });
+  await expect(other.locator('> .x')).toBeHidden();
+  expect(await css(shown, 'padding-left', 'padding-right', 'column-gap')).toEqual({ 'padding-left': '10px', 'padding-right': '6px', 'column-gap': '8px' });
   const bg = (n: string) =>
     app.evaluate((v) => {
       const probe = document.createElement('i');

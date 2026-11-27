@@ -15,7 +15,7 @@ test('tab_is_as_wide_as_its_parts: the only room after the name is the room of t
     });
   const rest = await measure();
   expect(rest.pad).toBe('0px');
-  expect(rest.after).toBeLessThanOrEqual(36); // Close (24 with its press area), one gap and the box's padding
+  expect(rest.after).toBeLessThanOrEqual(38); // Close (24 with its press area), the book's 8 gap and 6 padding
   const nameWidth = () => tab.locator('.tname').evaluate((e) => Math.round(e.getBoundingClientRect().width));
   const name = await nameWidth();
   await tab.hover();

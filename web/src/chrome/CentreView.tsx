@@ -25,7 +25,6 @@ import { ownBranch } from '../tree';
 import { TerminalView } from '../Terminal';
 import { SessionFacts, useDiffStat } from './SessionFacts';
 import { ChromeIcon } from './icons';
-import { AgentLogo } from '../tree/AgentLogo';
 import { dotOfStatus } from '../stateDot';
 import { noCheckout, shownStatus, statusKey, type Session } from '../types';
 import { NotifyLevel, useNotifications } from '../queue/notify';
@@ -492,11 +491,9 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
                   if (e.target === e.currentTarget) walkKey(e, id);
                 }}
               >
-                <span className="ticon" aria-hidden>
-                  {/* Ticket 991 A17: a shell tab is a terminal, not a chat. q67 look Q6-2: an agent's tab shows the agent's own
-                      mark, the one the "+" menu and the split chooser start it with (no recorded reason for the old bubble). */}
-                  {file ? <ChromeIcon name="file" /> : s?.kind === 'shell' ? <Icon name="terminal" size={14} /> : s ? <AgentLogo kind={s.kind} name={s.acp_agent ?? undefined} /> : <ChromeIcon name="comment-discussion" />}
-                </span>
+                {/* Design book (tabs): no kind prefix; a session tab is its state dot and its name. A file or an imported chat,
+                    which has no state, keeps its icon. */}
+                {!s && <span className="ticon" aria-hidden>{file ? <ChromeIcon name="file" /> : <ChromeIcon name="comment-discussion" />}</span>}
                 {s && (
                   <i className="tdot sdot" data-s={st} data-dot={dotOfStatus(st)} aria-label={t(st === 'done' && s?.state === 'resumable' ? 'mw.status.resumable' : `mw.status.${st}`)} role="img" />
                 )}
@@ -580,9 +577,6 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
               tabIndex={roomOpen || !strip.includes(active ?? '') ? 0 : -1}
               onKeyDown={(e) => e.target === e.currentTarget && walkKey(e, roomTabId(project))}
             >
-              <span className="ticon" aria-hidden>
-                {teamTab ? <Icon name="people" size={14} /> : <ChromeIcon name="comment-discussion" />}
-              </span>
               <span className="tname">{teamTab ? t('shell.widget.team') : t('room.tab')}</span>
               {(teamTab ? needsYou : room.unread) > 0 && <span className="room-badge" data-needs={teamTab || undefined}>{teamTab ? needsYou : room.unread}</span>}
             </div>

@@ -9,6 +9,7 @@ import type { CoreClient } from '../api';
 import { age } from '../tree';
 import { openHistory } from '../history/history';
 import { sessionName } from '../sessionNames';
+import { shortAge } from '../stateDot';
 import { status, type Session } from '../types';
 import { RowIcon, type IconKind } from './RowIcon';
 import { byEnd, endedAt, endText, finishedAt, JUST_MS } from './finished';
@@ -46,6 +47,8 @@ export function JustRow({ s, now, t, onOpen }: { s: Session; now: number; t: T; 
       <span className="n">
         <span className="nm wordcut">{name}</span>
       </span>
+      {/* design book: the done ring's word, "done · 2m" */}
+      <span className="tm" data-word="done" aria-hidden>{`${t('mw.status.done')} · ${shortAge(now - (finishedAt(s) ?? now))}`}</span>
     </button>
   );
 }

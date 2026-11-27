@@ -84,7 +84,7 @@ test('strip_failed_uses_mock_red: a theme whose failed colour is tan keeps the m
   // Design book (tabs): the tab carries the tree's dot, so it takes the failed light too, not the theme's --bad.
   await expect(app.locator('.tab .tdot[data-s="failed"]').first()).toHaveCSS('background-color', mock);
   await expect(red).toHaveCSS('background-color', mock);
-  await expect(app.locator(`button.row.wt2[data-menu-session="${ids.x}"] .ic`)).toHaveCSS('color', mock);
+  await expect(app.locator(`button.row.wt2[data-menu-session="${ids.x}"] .sdot`)).toHaveCSS('background-color', mock); // the row's dot
 });
 
 test('strip_finished_only_draws_nothing: a project whose sessions all finished keeps the empty column and draws no bar', async ({ app, core }) => {

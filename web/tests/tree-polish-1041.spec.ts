@@ -28,13 +28,14 @@ async function seed(app: Page, core: Core) {
 
 test('state_light_and_word: each state has its light and word, the glyphs stay but the working arc, no rail', async ({ app, core }) => {
   await seed(app, core);
+  // Design book: the dot and the word say the state; no state glyph (working and idle words: tree-dots.spec.ts).
   const want: [string, string, string | null, string | null][] = [
-    // name, state dot (design book; the light classes retired), word, glyph
-    ['asks', 'you', 'needs you', 'hand'],
-    ['broke', 'bad', 'failed', 'fail'],
-    ['limited', 'warn', 'Limit', 'limit'],
+    // name, state dot (the light classes retired), word, glyph
+    ['asks', 'you', 'needs you', null],
+    ['broke', 'bad', 'failed', null],
+    ['limited', 'warn', 'Limit', null],
     ['works', 'run', null, null],
-    ['rests', 'idle', null, null], // an idle row has no glyph (owner 11-22); "idle" stays in its tip and label
+    ['rests', 'idle', null, null],
   ];
   for (const [name, dot, word, glyph] of want) {
     const r = row(app, name);

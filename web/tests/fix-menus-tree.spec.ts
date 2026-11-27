@@ -20,9 +20,8 @@ test('waiting_row_shows_elapsed_time_from_the_mockup', async ({ app, core }) => 
   await expect(row.locator('.tm')).toHaveCount(0);
   await expect(row.locator('.sw')).toHaveText('needs you');
   await expect(row.locator('.tip')).toContainText('2 min');
-  // and the word comes before the icon, where the time was.
-  const order = await row.evaluate((e) => [...e.children].map((k) => k.className));
-  expect(order.indexOf('sw')).toBeLessThan(order.indexOf('ic'));
+  // Design book: the dot and the word say it; no glyph follows the word.
+  await expect(row.locator('.ic')).toHaveCount(0);
 });
 
 /** How much of the question itself paints inside its own box, chip excluded: 0 means the chip ate the whole line. */

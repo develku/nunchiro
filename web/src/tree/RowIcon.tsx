@@ -1,7 +1,7 @@
 // TREEROWS: the row icons (GitHub-style outline, stroke 2, round caps, currentColor) and the row pieces that render
 // without the sidebar's state, so a spec can render them node side. Paths are the approved mockup's (v2-8a-d).
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
-import { age, type RowState } from '../tree';
+import type { RowState } from '../tree';
 import { enT, type T } from './state';
 import { isLevel, LevelMark, pairShort, seatText, type Pair } from '../lead/level';
 import { useReported } from '../chat/ContextRing';
@@ -11,7 +11,7 @@ import { CacheTimer } from './CacheTimer'; // ticket 257
 import { askTitle, whatWhy, type Waiting } from './decisions';
 import { showTeamTab, type TeamAt } from '../lead/team';
 import { sessionName } from '../sessionNames';
-import { dotOfRow } from '../stateDot';
+import { clock, dotOfRow, shortAge } from '../stateDot';
 
 export const ICONS = ['hand', 'ask', 'fail', 'work', 'pr', 'merge', 'new', 'gone', 'stale', 'idle', 'limit', 'done', 'rest'] as const;
 export type IconKind = (typeof ICONS)[number];
@@ -151,6 +151,16 @@ export function HeadName({ name, path, children, ...rest }: { name: string; path
   );
 }
 
+/** A working row's elapsed time, ticking each second. */
+function Elapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <>{clock(now - since)}</>;
+}
+
 /** One worktree row: its state dot (design book), name, optional `#53`, the 11 px state word (ticket 1041, owner 11-22: "needs you",
  *  "failed", "Limit"; a working row's word is its age), one icon; the tooltip and the label keep the whole words. */
 export function WtRow({ name, pre, state, sessionId, selected, sub, count, onOpen, menu = 'tree', menuTitle, since, jumpKey, tag, note, seat, cacheIds, t = enT }: WtRowProps) {
@@ -223,20 +233,25 @@ export function WtRow({ name, pre, state, sessionId, selected, sub, count, onOpe
           </span>
         )}
       </span>
-      {/* Ticket 1041 (mockup polish-1121): a your-turn row shows its word, not its age ("asked 4 min ago" stays in the tip
-          and the label); a working row's age is its word. */}
-      {since !== undefined && state.tone !== 'you' && <span className="tm">{age(t, Date.now() - since)}</span>}
-      {/* Ticket 1041: one 11 px state word slot; "Limit" was the only one before. The your-turn age stays beside it. */}
+      {/* Design book (tree rows): every light has its word on the right. Needs you, failed and "Limit" in the word slot;
+          working its elapsed time (tabular, ticking); idle, stale and done their word and how long ago. Exit codes do not
+          reach the window, so failed says the word alone. */}
+      {!sub && state.tone === 'run' && <span className="tm" data-word="run">{since !== undefined ? <Elapsed since={since} /> : t('mw.status.working')}</span>}
       {!sub && (state.tone === 'you' || state.tone === 'bad' || state.kind === 'limit') && <span className={`sw${state.kind === 'limit' ? ' tm lim' : ''}`} data-word={state.tone}>{t(state.tone === 'you' ? 'lead.state.needs' : state.tone === 'bad' ? 'tree.status.failed' : 'limit.row')}</span>}
+      {!sub && state.tone === 'idle' && (state.kind === 'idle' || state.kind === 'stale') && (
+        <span className="tm" data-word={state.rest ? 'done' : state.kind}>
+          {[t(state.rest ? 'mw.status.done' : state.kind === 'stale' ? 'mw.status.stale' : 'mw.status.idle'), state.ago !== undefined && shortAge(Date.now() - state.ago)].filter(Boolean).join(' · ')}
+        </span>
+      )}
       {note && <span className="tm">{note}</span>}
       {cacheIds && <CacheTimer ids={cacheIds} t={t} /> /* ticket 257 */}
       {count !== undefined && <span className="two">{count}</span>}
       {level && seat && <LevelMark t={t} level={level} text={runs} short={pairShort(seat.kind, seat as Pair, seat.acp_agent)} />}
-      {/* Ticket 1041 (C): the working arc is the row's travelling light now, and an idle row is bare (owner 11-22: the
-          dashed circle was a picture only; "idle" stays in the tip and the label). Every other state keeps its glyph. */}
-      {state.kind !== 'work' && !(state.kind === 'idle' && !state.rest) && (
+      {/* The dot and the word carry the state; a glyph stays only where it says more than they do (a PR, a merge, a new or
+          gone worktree). */}
+      {['pr', 'merge', 'new', 'gone'].includes(state.kind) && (
         <span className="ic">
-          <RowIcon kind={state.kind === 'idle' && state.rest ? 'done' : state.kind} />
+          <RowIcon kind={state.kind} />
         </span>
       )}
       {jumpKey && (
