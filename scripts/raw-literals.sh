@@ -14,16 +14,16 @@ src=${1:-$(cd "$(dirname "$0")/.." && pwd)/web/src}
 cd "$src" || exit 2
 find . -type f \( -name '*.css' -o -name '*.ts' -o -name '*.tsx' \) ! -path ./tokens.css | sed 's|^\./||' | LC_ALL=C sort | while read -r f; do
   # a hex value follows ':', '(', ',', a space or a quote; a rule line ending in '{' is a selector, not a value
-  hex=$(grep -vE '\{[[:space:]]*$' "$f" | grep -oE "[:(,\` '\"]#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b" | wc -l)
-  col=$(grep -oiE "(^|[^a-zA-Z0-9_-])(rgba?|hsla?)\(" "$f" | wc -l)
+  hex=$(grep -vE '\{[[:space:]]*$' -- "$f" | grep -oE "[:(,\` '\"]#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b" | wc -l)
+  col=$(grep -oiE "(^|[^a-zA-Z0-9_-])(rgba?|hsla?)\(" -- "$f" | wc -l)
   # a zero is no literal worth a token: only a non-zero px value (a bare number in TS) counts
   # the unit of each font-size literal: CSS `font-size: 13px`, TS `fontSize: 12`, `fontSize: '1rem'` or `fontSize = '13px'`; a bare TS number is px
-  units=$(grep -oE "(font-size[[:space:]]*:|fontSize['\"]?[[:space:]]*[:=])[[:space:]]*['\"]?[0-9.]*[1-9][0-9.]*[a-z%]*" "$f" | sed -E 's/.*[0-9.]([a-z%]*)$/\1/; s/^$/px/')
+  units=$(grep -oE "(font-size[[:space:]]*:|fontSize['\"]?[[:space:]]*[:=])[[:space:]]*['\"]?[0-9.]*[1-9][0-9.]*[a-z%]*" -- "$f" | sed -E 's/.*[0-9.]([a-z%]*)$/\1/; s/^$/px/')
   fs=$(printf '%s' "$units" | grep -cx 'px')
   fsem=$(printf '%s' "$units" | grep -cx 'em')
   fsrem=$(printf '%s' "$units" | grep -cx 'rem')
-  rad=$(grep -oE "(border(-[a-z]+)*-radius[[:space:]]*:[^;}]*[1-9][0-9.]*px|borderRadius['\"]?[[:space:]]*[:=][[:space:]]*['\"]?[1-9])" "$f" | wc -l)
-  sh=$(grep -E "(box-shadow|boxShadow)['\"]?[[:space:]]*[:=]" "$f" | grep -vE "(box-shadow|boxShadow)['\"]?[[:space:]]*[:=][[:space:]]*['\"]?(none|var\(--[a-z-]+\))['\"]?[;,]?[[:space:]]*$" | wc -l)
+  rad=$(grep -oE "(border(-[a-z]+)*-radius[[:space:]]*:[^;}]*[1-9][0-9.]*px|borderRadius['\"]?[[:space:]]*[:=][[:space:]]*['\"]?[1-9])" -- "$f" | wc -l)
+  sh=$(grep -E "(box-shadow|boxShadow)['\"]?[[:space:]]*[:=]" -- "$f" | grep -vE "(box-shadow|boxShadow)['\"]?[[:space:]]*[:=][[:space:]]*['\"]?(none|var\(--[a-z-]+\))['\"]?[;,]?[[:space:]]*$" | wc -l)
   for k in hex col fs fsem fsrem rad sh; do eval "n=\$((\$$k + 0))"; [ "$n" -gt 0 ] && echo "$k $f $n"; done
 done
 exit 0
