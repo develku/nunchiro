@@ -353,3 +353,36 @@ fn tokens_and_agents_get_no_plugin_request_and_a_change_stops_the_runner() {
     std::os::unix::fs::symlink("/bin/echo", dir.join("c.sh")).unwrap();
     assert!(finished(&c)["Ok"]["run"]["error"].is_string());
 }
+
+#[test]
+fn a_web_panel_is_served_under_a_plain_widget_name() {
+    let home = home::short("prw");
+    std::fs::write(
+        home.join("settings.json"),
+        r#"{"script_widgets": true, "web_widgets": true}"#,
+    )
+    .unwrap();
+    let dir = home.join("plugins/w");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("plugin.toml"), "id = \"w\"\nname = \"W\"\nversion = \"1.0.0\"\n\n[[panel]]\nname = \"page\"\nkind = \"web\"\nentry = \"page.html\"\n").unwrap();
+    std::fs::write(dir.join("page.html"), "<p>hello from a plugin page</p>").unwrap();
+    let u = user(&home);
+    let _guard = home::spawn_serve(&home, &[("HOME", u.to_str().unwrap())]);
+    let owner = std::fs::read_to_string(home.join("core.token")).unwrap();
+    ok(&home, &["plugin", "allow", "w"]);
+    ok(&home, &["plugin", "on", "w"]);
+    let name = "plugin__w__page";
+    // A frame id and a layout kind take only [a-z0-9_-]: the panel's name is one.
+    assert!(
+        name.bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
+    );
+    let page = call(&home, &owner, json!({"op": "widget_page", "name": name}));
+    assert!(
+        page["Ok"]["page"]["entry"]
+            .as_str()
+            .unwrap()
+            .contains("hello from a plugin page"),
+        "{page}"
+    );
+}
