@@ -145,7 +145,8 @@ function TaskCard({ t, core, x, tasks, list, byId, open, decide, menu, peek, set
             <span className="tcard-stages" aria-hidden>
               {(landed ? STAGES : STAGES.slice(0, 4)).map((s, i) => (
                 <span key={s} data-at={step(i)}>
-                  {t(`tboard.stage.${s}`)}{step(i) === 'done' ? ' ✓' : step(i) === 'you' ? ' ✋' : ''}
+                  {step(i) === 'you' && <i className="tcard-dot" aria-hidden />}
+                  {t(`tboard.stage.${s}`)}{step(i) === 'done' ? ' ✓' : ''}
                 </span>
               ))}
             </span>
