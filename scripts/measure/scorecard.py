@@ -20,8 +20,8 @@ Usage:
       docs/measure/manual-<date>.json. Run it while the agents wait at their prompts.
   scorecard.py accuracy --machine ALIAS --remote-project DIR [--project-root DIR] | --self-test
       The owner-run trial of part p34 (scripts/measure/accuracy.py, real agents on the owner's sign-ins, one Claude seat
-      on a second Mac). Writes the raw records to docs/measure/accuracy-<date>.json, and the four p34 figures into
-      docs/measure/manual-<date>.json only when the run is counted; a self-test never is.
+      on a second Mac). Writes the raw records to docs/measure/accuracy-<date>.json, and the p34 trial figures and
+      p33's prompt delivery time into docs/measure/manual-<date>.json only when the run is counted; a self-test never is.
   scorecard.py waits [--days 7] [--every 30] | --report FILE
       Read only, p34's field figure on the owner's own app: every --every seconds, whether each agent session's screen
       shows a dialog while the core holds no card for it. Appends each sample to docs/measure/waits-<date>.jsonl and,
@@ -1230,7 +1230,8 @@ def write_manual(out, values, evidence):
 
 
 def accuracy_cmd(a):
-    """p34's trial (accuracy.py, its arguments passed on); only a counted run writes the four figures."""
+    """p34's trial (accuracy.py, its arguments passed on); only a counted run writes its figures and p33's prompt
+    delivery time (the total median; each side's median and p95 in its evidence)."""
     import accuracy
     res, raw = accuracy.main(a.args)
     if not res["counted"]:
@@ -1243,6 +1244,11 @@ def accuracy_cmd(a):
                 f"({agents}), one Claude on the second Mac '{res['machine']}' whose own figures were "
                 + ", ".join(f"{k} {r[k]}" for k in names) + f"; counts {t['counts']}; raw records {raw.name}")
     write_manual(None, {k: t[k] for k in names}, evidence)
+    side = lambda f, where: f"{where}median {f['delivery_median_ms']} ms, p95 {f['delivery_p95_ms']} ms"  # noqa: E731
+    write_manual(None, dict(prompt_delivery_ms=t["delivery_median_ms"]),
+                 f"scorecard.py accuracy {res['started']}: the send to its exact text above the input box, "
+                 f"{t['counts']['sends']} sends to 5 real seats ({agents}): {side(t, '')} in total; "
+                 f"{side(res['figures']['local'], 'this Mac ')}; {side(r, 'second Mac ')}; raw records {raw.name}")
 
 
 def merge_cmd(a):
