@@ -115,6 +115,8 @@ pub(crate) struct Browser {
     handshakes: AtomicUsize,
     running: AtomicBool,
     scan: Mutex<Scan>,
+    #[cfg(test)]
+    pub(crate) wakes: AtomicUsize, // supervisor passes
 }
 
 /// One per core home; the window listener and the browser listener of a core share it.
@@ -144,6 +146,8 @@ pub(crate) fn of(home: &Path) -> Arc<Browser> {
         handshakes: AtomicUsize::new(0),
         running: AtomicBool::new(false),
         scan: Mutex::new(interfaces),
+        #[cfg(test)]
+        wakes: AtomicUsize::new(0),
     });
     all.push(b.clone());
     b
@@ -235,6 +239,8 @@ fn supervise(b: &Arc<Browser>, registry: &Arc<Mutex<Sessions>>, stopping: &Arc<A
     let mut listeners: Vec<TcpListener> = vec![];
     let mut scanned = Instant::now();
     while !stopping.load(Ordering::SeqCst) {
+        #[cfg(test)]
+        b.wakes.fetch_add(1, Ordering::SeqCst);
         if b.changed.swap(false, Ordering::SeqCst) || scanned.elapsed() >= RESCAN {
             scanned = Instant::now();
             rebind(b, &mut listeners);

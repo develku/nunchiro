@@ -534,6 +534,46 @@ fn a_window_takes_the_registry_only_for_output_it_watches_and_once_per_batch() {
     );
 }
 
+// An open window on an idle core sleeps until there is work: its loop and the browser supervisor each wake at most a
+// few times a second. (Wakes are process-wide: run it in its own process, as nextest does, not beside output tests.)
+#[test]
+fn an_idle_window_and_browser_supervisor_wake_rarely() {
+    let (mut ws, stopping, home) = window("idle-wakes");
+    // The window's first pushes, then past the loop's active period after connecting.
+    if let tungstenite::stream::MaybeTlsStream::Plain(s) = ws.get_ref() {
+        s.set_read_timeout(Some(Duration::from_millis(100)))
+            .unwrap();
+    }
+    let settle = Instant::now() + Duration::from_secs(3);
+    while Instant::now() < settle {
+        let _ = ws.read();
+    }
+    let counts = super::output_counts(&home);
+    let browser = super::browser::of(&home);
+    let passes = || counts.passes.load(Ordering::SeqCst);
+    let supervised = || browser.wakes.load(Ordering::SeqCst);
+    let (p, b, at) = (passes(), supervised(), Instant::now());
+    thread::sleep(Duration::from_secs(4));
+    let secs = at.elapsed().as_secs_f64();
+    let (window_rate, browser_rate) = (
+        (passes() - p) as f64 / secs,
+        (supervised() - b) as f64 / secs,
+    );
+    stopping.store(true, Ordering::SeqCst);
+    let _ = std::fs::remove_dir_all(&home);
+    eprintln!(
+        "idle wakes per second: window loop {window_rate:.1}, browser supervisor {browser_rate:.1}"
+    );
+    assert!(
+        window_rate <= 3.0,
+        "the idle window loop woke {window_rate:.1} times a second"
+    );
+    assert!(
+        browser_rate <= 3.0,
+        "the idle browser supervisor woke {browser_rate:.1} times a second"
+    );
+}
+
 /// v1a-55: a core with no sessions and one authenticated window on it; the core stops when `stopping` is set.
 fn window(
     name: &str,
