@@ -1,0 +1,11 @@
+From: Billing Team <billing@hosting.example.net>
+To: Sam Owner <sam@example.com>
+Subject: Your invoice for November
+Date: Mon, 30 Nov 2026 08:10:00 +0000
+Message-ID: <inv-1130@example.net>
+Content-Type: text/plain; charset=utf-8
+
+Hello Sam,
+
+Your invoice INV-2211 for November is ready. Amount due: 24.00 USD, due on 14 December.
+This is a fake fixture mail.

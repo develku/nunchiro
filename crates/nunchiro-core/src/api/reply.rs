@@ -373,8 +373,13 @@ pub enum Reply {
         acp: Vec<crate::acp::AcpRow>,
         /// The absolute path of `agents.toml` (the window reveals it, or shows it to copy).
         file: std::path::PathBuf,
+        /// The last test message per ACP agent name.
+        turns: std::collections::BTreeMap<String, crate::acp::turn::Turn>,
     },
     AcpCheck(crate::acp::probe::Check),
+    AcpTurn {
+        turn: crate::acp::turn::Turn,
+    },
     // Ticket 358
     AgentCommand {
         view: crate::approval::CommandView,

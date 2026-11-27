@@ -2,11 +2,12 @@
 # agent is a custom entry and needs an API key (ADR 0001 Q3). `args` are each agent's documented ACP switch; a wrong
 # one only makes the setup sheet's check fail visibly. `acp = false` is a terminal-only CLI. `docs_url` and `source_url`
 # (ticket 358) are each confirmed to answer and https only (the test in mod.rs); a tool with no confirmed page has none.
+# Gemini CLI's docs name `gemini --acp` (the older `--experimental-acp` is gone from them).
 [[known]]
 name = "gemini"
 label = "Gemini CLI"
 command = "gemini"
-args = ["--experimental-acp"]
+args = ["--acp"]
 env = ["GEMINI_API_KEY"]
 install_url = "https://github.com/google-gemini/gemini-cli"
 docs_url = "https://geminicli.com/docs/"

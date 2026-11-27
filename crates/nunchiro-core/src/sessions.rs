@@ -660,14 +660,13 @@ impl Sessions {
             Request::AcpAgents
             | Request::AcpAgentCheck { .. }
             | Request::AcpAgentAdd { .. }
-            | Request::AcpAgentLogin { .. } => {
-                Err("agent setup requires unlocked transport dispatch".into()) // V2-4b
-            }
-            Request::AcpAgentSignIn { .. }
+            | Request::AcpAgentLogin { .. }
+            | Request::AcpAgentSignIn { .. }
             | Request::AcpAgentSignInState { .. }
             | Request::AcpAgentSignInCancel { .. }
-            | Request::AcpAgentSignOut { .. } => {
-                Err("agent setup requires unlocked transport dispatch".into()) // ticket 358
+            | Request::AcpAgentSignOut { .. }
+            | Request::AcpAgentTry { .. } => {
+                Err("agent setup requires unlocked transport dispatch".into()) // V2-4b, ticket 358
             }
             Request::ExtensionsList
             | Request::ExtensionsMcpAdd { .. }

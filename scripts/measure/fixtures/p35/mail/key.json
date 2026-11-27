@@ -1,0 +1,16 @@
+{
+ "labels": ["Billing", "Meetings", "Newsletters"],
+ "mails": {
+  "01-invoice-november.eml": "Billing",
+  "02-weekly-digest.eml": "Newsletters",
+  "03-sync-next-week.eml": "Meetings",
+  "04-receipt-coffee.eml": "Billing",
+  "05-standup-moved.eml": "Meetings",
+  "06-design-monthly.eml": "Newsletters",
+  "07-payment-failed.eml": "Billing",
+  "08-review-invite.eml": "Meetings",
+  "09-product-updates.eml": "Newsletters",
+  "10-refund-issued.eml": "Billing"
+ },
+ "reply_to": {"file": "03-sync-next-week.eml", "to": "jordan@partner.example.com", "subject": "Can we find an hour next week?"}
+}
