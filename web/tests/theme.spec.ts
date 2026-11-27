@@ -35,7 +35,7 @@ test('picking a catalog theme recolours the window and the open terminal with no
   await openWindow(app);
   await expect(app.locator(`.term[data-session="${a.id}"] .xterm-rows`)).toContainText('REDTEXT');
   const before = await termColours(app, a.id);
-  expect(await token(app, '--bg')).toBe('#fff'); // Nunchiro Light paints tokens.css (STYLE 2026-10-28); the build minifies #ffffff
+  expect(await token(app, '--bg')).toBe('#fafaf9'); // Nunchiro Light paints book-tokens.css (--stone-25)
   await app.locator(`.term[data-session="${a.id}"] .xterm`).evaluate((el) => el.setAttribute('data-mark', '1'));
   await app.evaluate(() => ((window as { __same?: number }).__same = 1));
 
@@ -96,9 +96,9 @@ test('system mode follows the OS between the light and dark picks', async ({ app
   core.shell(core.project('demo'), 'alpha');
   await app.emulateMedia({ colorScheme: 'light' });
   await openWindow(app);
-  expect(await token(app, '--bg')).toBe('#fff'); // Nunchiro Light paints tokens.css (STYLE 2026-10-28); the build minifies #ffffff
+  expect(await token(app, '--bg')).toBe('#fafaf9'); // Nunchiro Light paints book-tokens.css (--stone-25)
   await app.emulateMedia({ colorScheme: 'dark' });
-  await expect.poll(() => token(app, '--bg')).toBe('#151b23'); // Nunchiro Dark's ko/ panel (STYLE 2026-10-28)
+  await expect.poll(() => token(app, '--bg')).toBe('#1b1e21'); // Nunchiro Dark's panel (book-tokens.css --graphite-900)
   await expect(app.locator('html')).toHaveAttribute('data-theme', 'dark');
   // Choosing while the dark appearance shows sets the dark pick; the light pick stays.
   await openTheme(app);
@@ -106,7 +106,7 @@ test('system mode follows the OS between the light and dark picks', async ({ app
   await app.getByRole('button', { name: 'Catppuccin Mocha', exact: true }).press('Enter'); // ticket 162: a click previews, Enter keeps
   expect(await token(app, '--bg')).toBe('#1e1e2e');
   await app.emulateMedia({ colorScheme: 'light' });
-  await expect.poll(() => token(app, '--bg')).toBe('#fff'); // Nunchiro Light paints tokens.css (STYLE 2026-10-28); the build minifies #ffffff
+  await expect.poll(() => token(app, '--bg')).toBe('#fafaf9'); // Nunchiro Light paints book-tokens.css (--stone-25)
   await expect(app.locator('html')).toHaveAttribute('data-theme', 'light');
   await app.emulateMedia({ colorScheme: 'dark' });
   await expect.poll(() => token(app, '--bg')).toBe('#1e1e2e');

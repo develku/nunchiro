@@ -41,7 +41,8 @@ async function patchSnapshots(app: Page) {
 }
 
 const bg = (app: Page, sel: string) => app.locator(sel).first().evaluate((e) => getComputedStyle(e).backgroundColor);
-const RGB = { '#f6f6f4': 'rgb(246, 246, 244)', '#ffffff': 'rgb(255, 255, 255)', '#0d1117': 'rgb(13, 17, 23)', '#151b23': 'rgb(21, 27, 35)' };
+// The design book's page and panel (book-tokens.css), replacing #f6f6f4 / #ffffff and #0d1117 / #151b23.
+const RGB = { '#f1f2f0': 'rgb(241, 242, 240)', '#fafaf9': 'rgb(250, 250, 249)', '#15171a': 'rgb(21, 23, 26)', '#1b1e21': 'rgb(27, 30, 33)' };
 const SETTINGS = 'nunchiro.settings.v1';
 
 async function expectPage(app: Page, page: string, panel: string) {
@@ -53,14 +54,14 @@ async function expectPage(app: Page, page: string, panel: string) {
   expect(await bg(app, '.zh'), 'the tab strip is a panel').toBe(panel);
 }
 
-test('page_colour_f6f6f4: light page and rails #f6f6f4 behind white panels, fresh and old store; dark #0d1117 / #151b23', async ({ app, core }) => {
+test('page_colour_f6f6f4: light page and rails #f1f2f0 behind #fafaf9 panels, fresh and old store; dark #15171a / #1b1e21', async ({ app, core }) => {
   core.shell(core.project('demo'), 'a');
   await app.emulateMedia({ colorScheme: 'light' });
   await openWindow(app);
-  await expectPage(app, RGB['#f6f6f4'], RGB['#ffffff']);
+  await expectPage(app, RGB['#f1f2f0'], RGB['#fafaf9']);
   await app.emulateMedia({ colorScheme: 'dark' });
   await expect(app.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expectPage(app, RGB['#0d1117'], RGB['#151b23']);
+  await expectPage(app, RGB['#15171a'], RGB['#1b1e21']);
 });
 
 test('page_colour_f6f6f4 old store: a store from before the version field, with the bundled picks saved, paints the same', async ({ app, core }) => {
@@ -72,7 +73,7 @@ test('page_colour_f6f6f4 old store: a store from before the version field, with 
   );
   await app.emulateMedia({ colorScheme: 'light' });
   await openWindow(app);
-  await expectPage(app, RGB['#f6f6f4'], RGB['#ffffff']);
+  await expectPage(app, RGB['#f1f2f0'], RGB['#fafaf9']);
 });
 
 test('page_colour_f6f6f4 user pick kept: a catalog theme the user picked keeps its own colours', async ({ app, core }) => {
@@ -86,7 +87,7 @@ test('page_colour_f6f6f4 user pick kept: a catalog theme the user picked keeps i
   expect(await bg(app, '.zh')).toBe(await probe(pick.colors.background)); // ticket 1041: the panel is the tab strip; the tree sits on the page
   const page = await app.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--page').trim());
   expect(await bg(app, 'nav.ib.l')).toBe(await probe(page));
-  expect(await probe(page)).not.toBe(RGB['#f6f6f4']);
+  expect(await probe(page)).not.toBe(RGB['#f1f2f0']);
   expect((await app.evaluate((k) => JSON.parse(localStorage.getItem(k)!), SETTINGS)).themeFixed.id).toBe('catalog:Catppuccin Latte');
 });
 

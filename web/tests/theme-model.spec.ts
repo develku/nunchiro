@@ -125,18 +125,14 @@ palette = 14=#a4ffff
 palette = 15=#ffffff
 `;
 type Colors = ReturnType<typeof parseGhostty>;
-// Every role token is its source field, byte for byte (round 3, ticket 293 option A: no AA fit). --text and --run are
-// the exception for the app's chrome (ticket 520): see MIN_CONTRAST below.
+// These role tokens are their source field, byte for byte. Since the design book's derive rule, the status colours
+// (--you, --bad, --ok, --done, --warn and their --light-* and -text roles) step until they read, and --raised lifts off
+// the background; theme-book-contrast.spec.ts checks them. --text is the exception for the app's chrome (ticket 520):
+// see MIN_CONTRAST below.
 const ROLES: [string, (c: Colors) => string][] = [
-  ['--ok', (c) => c.palette[2]],
-  ['--done', (c) => c.palette[5]],
-  ['--you', (c) => c.palette[3]],
-  ['--bad', (c) => c.palette[1]],
   ['--stale', (c) => c.palette[11]],
   ['--stale-line', (c) => c.palette[11]],
-  ['--warn', (c) => c.palette[11]],
   ['--panel', (c) => c.background],
-  ['--raised', (c) => c.background],
   ['--on-status', (c) => c.background],
   ['--selection-bg', (c) => c.selectionBackground],
   ['--selection-text', (c) => c.selectionForeground ?? c.foreground],
@@ -146,15 +142,22 @@ const AA = 4.5;
 // --page and --panel, and --run is palette 4 when the --on-status text (the background) reads at 4.5:1 on it; else each
 // steps toward black (light theme) or white (dark) until it does. Returns why a token breaks the rule, or ''.
 const MIN_CONTRAST: [string, (c: Colors) => string, (t: Record<string, string>) => number][] = [
-  ['--text', (c) => c.foreground, (t) => Math.min(contrast(t['--text'], t['--page']), contrast(t['--text'], t['--panel']))],
-  ['--run', (c) => c.palette[4], (t) => contrast(t['--run'], t['--on-status'])],
+  ['--text', (c) => c.foreground, (t) => Math.min(...textOn(t).map((s) => contrast(t['--text'], s)))],
 ];
+/** Where --text must read: the three surfaces and the selected tint at its darkest (the ink's own tint). */
+function textOn(t: Record<string, string>) {
+  const ink = contrast('#ffffff', t['--panel']) > contrast('#000000', t['--panel']) ? '#ffffff' : '#000000';
+  const a2 = parseInt(t['--tint-2'].slice(7, 9), 16) / 255;
+  return [t['--page'], t['--panel'], t['--raised'], mixHex(t['--page'], ink, a2), mixHex(t['--panel'], ink, a2)];
+}
 function minContrastBreak(c: Colors, t: Record<string, string>) {
   for (const [token, source, ratio] of MIN_CONTRAST) {
     const asWritten = { ...t, [token]: source(c) };
     if (ratio(asWritten) >= AA) {
       if (t[token] !== source(c)) return `${token} moved although ${source(c)} reads ${ratio(asWritten).toFixed(2)}:1`;
-    } else if (ratio(t) < AA) return `${token} ${t[token]} reads ${ratio(t).toFixed(2)}:1`;
+    } else if (ratio(t) < Math.min(AA, Math.max(ratio({ ...t, [token]: '#ffffff' }), ratio({ ...t, [token]: '#000000' }))) - 1e-9)
+      // under 4.5:1 only where no ink reaches it (a mid grey), and then the best one can
+      return `${token} ${t[token]} reads ${ratio(t).toFixed(2)}:1`;
   }
   return '';
 }
@@ -174,27 +177,6 @@ test('theme_roles_taken_as_written: every catalog theme sets each role token to 
     for (const [token, source] of ROLES) expect(t[token], `${name} ${token}`).toBe(source(c));
     expect(minContrastBreak(c, t), name).toBe('');
   }
-});
-
-// Ticket 293 option A: the fit is gone. The theme below writes your turn, broken and muted under 4.5:1 on its own background;
-// each still comes out as written. The worst ratio per role over the whole set is printed and asserts nothing.
-test('theme_roles_used_as_written_even_below_aa: a role colour under 4.5:1 on its surface is not moved', () => {
-  const low = parseGhostty(SET['Light, red under 4.5']);
-  expect(contrast(low.palette[1], low.background)).toBeLessThan(AA);
-  expect(contrast(low.palette[3], low.background)).toBeLessThan(AA);
-  expect(contrast(low.palette[8], low.background)).toBeLessThan(AA);
-  const worst: Record<string, [number, string]> = {};
-  for (const [name, text] of Object.entries(SET)) {
-    const c = parseGhostty(text);
-    const t = deriveTokens(c);
-    for (const [token, source] of ROLES) {
-      expect(t[token], `${name} ${token}`).toBe(source(c));
-      const r = contrast(t[token], c.background);
-      if (!worst[token] || r < worst[token][0]) worst[token] = [r, name];
-    }
-  }
-  expect(Object.values(worst).some(([r]) => r < AA)).toBe(true);
-  console.log(`WORST on background ${Object.entries(worst).map(([k, [r, n]]) => `${k} ${r.toFixed(2)} (${n})`).join(', ')}`);
 });
 
 // D-20261108-11: secondary text is mixed from the theme's background and foreground and reads on the window's surfaces.
@@ -220,10 +202,10 @@ test('muted_readable_every_catalog_theme: --muted reads at 4.5:1 and --faint at 
   console.log(`WORST muted ${worst.muted[0].toFixed(2)} (${worst.muted[1]}), faint ${worst.faint[0].toFixed(2)} (${worst.faint[1]})`);
 });
 
-test('muted_mixed_from_bg_fg: --muted starts 60% toward the foreground, --faint 45%; diff tints and the card shadow come from the theme', () => {
+test('muted_mixed_from_bg_fg: --muted starts 60% toward the foreground, --faint 42%; diff tints and the card shadow come from the theme', () => {
   const t = deriveTokens(parseGhostty('background = #000000\nforeground = #ffffff\npalette = 1=#ff0000\npalette = 2=#00ff00\n'));
   expect(t['--muted']).toBe('#999999'); // 60% of 255, already over 4.5:1
-  expect(t['--faint']).toBe('#737373'); // 45% of 255, already over 3:1
+  expect(t['--faint']).toBe('#6b6b6b'); // 42% of 255, already over 3:1
   expect(t['--diff-add']).toBe(mixHex('#000000', '#00ff00', 0.15));
   expect(t['--diff-del']).toBe(mixHex('#000000', '#ff0000', 0.15));
   expect(t['--shadow-card']).toMatch(/^0 1px 3px #[0-9a-f]{8}$/);
@@ -234,36 +216,16 @@ test('muted_mixed_from_bg_fg: --muted starts 60% toward the foreground, --faint 
   expect(l['--muted']).not.toBe(mixHex('#ffffff', '#555555', 0.6));
 });
 
-test('theme_roles_taken_as_written: lines and hovers are plain mixes of background and foreground', () => {
+test('theme_roles_taken_as_written: lines are plain mixes of background and foreground, hovers the text at 5%', () => {
   const t = deriveTokens(parseGhostty('background = #000000\nforeground = #ffffff\n'));
-  expect(t['--hover']).toBe('#121212'); // 7% of 255
-  expect(t['--line']).toBe('#2d2d2d'); // 17.5% of 255
-  expect(t['--you-bg']).toBe(mixHex('#000000', t['--you'], 0.2));
+  expect(t['--hover']).toBe('#ffffff0d'); // the design book's --tint-1: the text at 5%
+  expect(t['--line']).toBe('#171717'); // 9% of 255 (dark)
+  expect(t['--you-bg']).toBe(mixHex('#000000', t['--you-glow'], 0.12));
 });
 const mixHex = (a: string, b: string, t: number) =>
   `#${[1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) + (parseInt(b.slice(i, i + 2), 16) - parseInt(a.slice(i, i + 2), 16)) * t).toString(16).padStart(2, '0')).join('')}`;
 
-test('no_contrast_push_for_catalog_themes: no status role is changed at all, however low its contrast; only --text, --run, --ok-text and --bad-text meet 4.5:1', () => {
-  // foreground 2.2:1 on the background: --text steps toward white only (ticket 520); palette 2 under 3:1 stays.
-  const c = parseGhostty('background = #0f191c\nforeground = #426644\npalette = 2=#10181b\n');
-  const t = deriveTokens(c);
-  expect(contrast(c.foreground, c.background)).toBeLessThan(3);
-  expect(contrast(t['--text'], t['--page'])).toBeGreaterThanOrEqual(AA);
-  expect(t['--ok']).toBe('#10181b');
-  // The ko/ status hues are not a fallback: a theme that wrote none of them does not get them.
-  const mid = deriveTokens(parseGhostty('background = #777777\nforeground = #8a8a8a\n'));
-  expect(mid['--ok']).toBe(DEFAULT_PALETTE[2]);
-  const KO = ['#bc4c00', '#cf222e', '#0969da', '#1a7f37', '#8250df', '#f0883e', '#f85149', '#4493f8', '#3fb950', '#a371f7'];
-  for (const [name, text] of Object.entries(SET)) {
-    const cc = parseGhostty(text);
-    const tk = deriveTokens(cc);
-    for (const [token, source] of ROLES) expect(tk[token], `${name} ${token} changed`).toBe(source(cc));
-    expect(minContrastBreak(cc, tk), name).toBe('');
-    for (const k of ['--you', '--bad', '--run', '--ok', '--done']) expect(KO, `${name} ${k}`).not.toContain(tk[k]);
-  }
-});
-
-test('selection_and_legend_mapped: selection takes the theme selection fields as written; the stale key and warn take palette 11 as written', () => {
+test('selection_and_legend_mapped: selection takes the theme selection fields as written; the stale key takes palette 11 as written', () => {
   for (const [name, text] of Object.entries(SET)) {
     const c = parseGhostty(text);
     const t = deriveTokens(c);
@@ -271,7 +233,6 @@ test('selection_and_legend_mapped: selection takes the theme selection fields as
     expect(t['--selection-text'], `${name} selection text as written`).toBe(c.selectionForeground ?? c.foreground);
     expect(t['--stale'], name).toBe(c.palette[11]);
     expect(t['--stale-line'], name).toBe(c.palette[11]);
-    expect(t['--warn'], name).toBe(c.palette[11]);
     expect(t['--stale-bg'], name).toBe(mixHex(c.background, c.palette[11], isDark(c) ? 0.2 : 0.1));
   }
 });
@@ -301,10 +262,6 @@ cursor-text = #eee8d5
 selection-background = #eee8d5
 selection-foreground = #586e75
 `;
-const DRACULA_FILE = `${DRACULA}cursor-color = #f8f8f2\ncursor-text = #282a36\nselection-foreground = #ffffff\n`;
-// Dracula's derived tokens on main before ticket 520 (it already passes, so nothing may move). Ticket 561 moved --bad-text only: #ff5555 read 4.05:1 on --page.
-// Ticket 1039 adds the three chat roles (--chat-code, --chat-link as written; --chat-mark stepped from 4.0:1) and moves nothing.
-const DRACULA_ON_MAIN = {"--tint-1":"#f8f8f20e","--tint-2":"#f8f8f21a","--select-text":"#f8f8f2","--glass-bg":"#41434d80","--glass-hi":"#ffffff24","--shadow-float":"0 12px 32px #00000073, 0 1px 3px #0000004d","--ring-focus":"#959699","--light-run":"#bd93f9","--light-you":"#f1fa8c","--light-bad":"#ff5e5e","--light-limited":"#ffffa5","--panel":"#282a36","--raised":"#282a36","--on-status":"#282a36","--text":"#f8f8f2","--page":"#30323e","--hover":"#373843","--line":"#4c4e57","--muted":"#a5a6a7","--faint":"#86878b","--idle":"#86878b","--run":"#bd93f9","--ok":"#50fa7b","--ok-text":"#50fa7b","--done":"#ff79c6","--you":"#f1fa8c","--you-bg":"#505447","--bad":"#ff5555","--bad-text":"#ff6f6f","--stale":"#ffffa5","--stale-bg":"#53554c","--stale-line":"#ffffa5","--warn":"#ffffa5","--diff-add":"#2e4940","--diff-del":"#48303b","--syn-keyword":"#fe8ccd","--syn-string":"#50fa7b","--syn-func":"#c6a2f8","--syn-const":"#8be9fd","--syn-type":"#f1fa8c","--syn-comment":"#afb0b0","--syn-punct":"#cecfcc","--chat-code":"#ff79c6","--chat-link":"#8be9fd","--chat-mark":"#a286ce","--shadow-card":"0 1px 3px #0c0d105c","--selection-bg":"#44475a","--selection-text":"#ffffff"};
 
 // Ticket 561: the status words read on every window surface (--page, --panel, and for --ok-text its 6% tint) in every theme of
 // a sample: the bundled catalogue, Solarized Light, and a grid of backgrounds with a foreground that pulls --page away from the
@@ -337,7 +294,8 @@ test('min_contrast_chrome_520: Solarized Light gets --text and on-accent text at
   // as written it misses: foreground 3.95:1 on --page, background on palette 4 3.41:1
   expect(contrast(c.foreground, t['--page'])).toBeLessThan(AA);
   expect(contrast(c.background, c.palette[4])).toBeLessThan(AA);
-  for (const s of ['--page', '--panel', '--raised', '--hover']) expect(contrast(t['--text'], t[s]), `--text on ${s}`).toBeGreaterThanOrEqual(AA);
+  const hover = mixHex(t['--page'], t['--hover'].slice(0, 7), parseInt(t['--hover'].slice(7, 9), 16) / 255); // the tint painted on --page
+  for (const s of [t['--page'], t['--panel'], t['--raised'], hover]) expect(contrast(t['--text'], s), `--text on ${s}`).toBeGreaterThanOrEqual(AA);
   expect(contrast(t['--on-status'], t['--run']), 'on-status text on the accent fill').toBeGreaterThanOrEqual(AA);
   // the primary button (fill --text, label --panel) and secondary text follow
   expect(contrast(t['--panel'], t['--text'])).toBeGreaterThanOrEqual(AA);
@@ -350,15 +308,12 @@ test('min_contrast_chrome_520: Solarized Light gets --text and on-accent text at
   for (const s of surfaces) expect(contrast(t['--bad-text'], s), `--bad-text on ${s}`).toBeGreaterThanOrEqual(AA);
   // only as far as needed: the first 5% step from the theme's own value toward black that reads (a light theme)
   const first = (from: string, ok: (v: string) => boolean) => Array.from({ length: 21 }, (_, i) => mixHex(from, '#000000', i * 0.05)).find(ok);
-  expect(t['--text']).toBe(first(c.foreground, (v) => Math.min(contrast(v, t['--page']), contrast(v, t['--panel'])) >= AA));
-  expect(t['--run']).toBe(first(c.palette[4], (v) => contrast(v, c.background) >= AA));
-  // the status roles, surfaces and the terminal are untouched
-  expect([t['--panel'], t['--on-status'], t['--ok'], t['--bad'], t['--you'], t['--done']]).toEqual([c.background, c.background, c.palette[2], c.palette[1], c.palette[3], c.palette[5]]);
+  expect(t['--text']).toBe(first(c.foreground, (v) => Math.min(...textOn(t).map((s) => contrast(v, s))) >= AA));
+  // the reading surface and the terminal are untouched
+  expect([t['--panel'], t['--on-status']]).toEqual([c.background, c.background]);
   const x = xtermTheme(c);
   expect([x.background, x.foreground, x.cursor, x.cursorAccent, x.selectionBackground, x.selectionForeground]).toEqual(['#fdf6e3', '#657b83', '#657b83', '#eee8d5', '#eee8d5', '#586e75']);
   expect([x.black, x.red, x.green, x.yellow, x.blue, x.magenta, x.cyan, x.white, x.brightBlack, x.brightRed, x.brightGreen, x.brightYellow, x.brightBlue, x.brightMagenta, x.brightCyan, x.brightWhite]).toEqual(
     SOLARIZED_LIGHT.split('\n').filter((l) => l.startsWith('palette')).map((l) => l.split('=').pop()),
   );
-  // a passing theme is byte-for-byte what main derived (plus the ticket 1041 tokens, first 11 keys)
-  expect(deriveTokens(parseGhostty(DRACULA_FILE))).toEqual(DRACULA_ON_MAIN);
 });

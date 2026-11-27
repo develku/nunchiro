@@ -23,7 +23,8 @@ const measure = (page: Page, tokens: Record<string, string>, sel: string) =>
       // Ticket 1041 lane 6: a translucent fill (a tint step, a glass layer) is laid over the first opaque one behind it, as
       // the window paints it; read alone, rgba(255 255 255 / .1) measured as white.
       const behind = (e: Element | null): string => {
-        const rgba = (c: string) => { const v = c.match(/[\d.]+/g)!.map(Number); return [v[0], v[1], v[2], v[3] ?? 1]; };
+        // A color-mix() fill (book-tokens.css --you-bg) computes as color(srgb r g b / a), channels 0-1.
+        const rgba = (c: string) => { const v = c.match(/[\d.]+/g)!.map(Number); const k = c.startsWith('color(') ? 255 : 1; return [v[0] * k, v[1] * k, v[2] * k, v[3] ?? 1]; };
         const layers: number[][] = [];
         for (; e; e = e.parentElement) {
           const b = getComputedStyle(e).backgroundColor;

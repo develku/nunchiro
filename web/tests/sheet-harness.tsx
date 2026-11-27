@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { CoreClient, waitForBoot } from '../src/api';
 import { PermissionSheet } from '../src/approval/PermissionSheet';
 import '../src/tokens.css'; // the window's roles (--bad for the home warning), as main.tsx loads them
+import '../src/book-tokens.css';
 import '../src/styles.css';
 
 function Harness({ core, name }: { core: CoreClient; name: string }) {

@@ -242,7 +242,8 @@ test.describe('micro headers and tooltip', () => {
     });
     // Ticket 1041 lane 6 (N183, polish-1121 `.tip`): one tooltip look, ink --text with --panel text at 11 px on the float
     // shadow; it replaced the ko/v2-8a-a-folds.html .tip (12 px, --hov text, no shadow).
-    expect(css).toEqual({ bg: 'rgb(31, 35, 40)', color: 'rgb(255, 255, 255)', fs: '11px', lh: '15.4px', pad: '4px 8px', r: '6px', shadow: 'rgba(0, 0, 0, 0.14) 0px 12px 32px 0px, rgba(0, 0, 0, 0.08) 0px 1px 3px 0px' });
+    expect(css).toEqual({ bg: 'rgb(35, 39, 43)', color: 'rgb(250, 250, 249)', // the design book's --text and --panel
+      fs: '11px', lh: '15.4px', pad: '4px 8px', r: '6px', shadow: 'rgba(0, 0, 0, 0.14) 0px 12px 32px 0px, rgba(0, 0, 0, 0.08) 0px 1px 3px 0px' });
     await expect(tip).toHaveText('Allow (1)');
   });
 });

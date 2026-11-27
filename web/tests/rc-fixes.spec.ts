@@ -46,7 +46,7 @@ test('main_waiting_row: a waiting main-folder session has its own orange your-tu
   // Ticket 1041 (C): no rail; the row and its decision line are one block lit by the warm edge in --you.
   await expect(row).toHaveClass(/\blight-you\b/);
   await expect(row.locator('.sw')).toHaveText('needs you');
-  expect(await row.locator('xpath=ancestor::div[contains(concat(" ", @class, " "), " sess ")][1]').evaluate((e) => getComputedStyle(e, '::before').backgroundColor)).toBe(await tokenColour(app, 'var(--you)'));
+  expect(await row.locator('xpath=ancestor::div[contains(concat(" ", @class, " "), " sess ")][1]').evaluate((e) => getComputedStyle(e, '::before').backgroundColor)).toBe(await tokenColour(app, 'var(--light-you)')); // the edge is a mark: --light-you since the design book
   await expect(row).toContainText('main-a');
 });
 

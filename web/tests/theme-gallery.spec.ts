@@ -81,7 +81,7 @@ test('gallery-live-preview: hover and arrow focus recolour the window and an ope
   await expect(app.locator(`.term[data-session="${a.id}"] .xterm-rows`)).toContainText('REDTEXT');
   await openTheme(app);
   const before = await stored(app);
-  expect(await token(app, '--bg')).toBe('#fff'); // Nunchiro Light paints tokens.css (STYLE 2026-10-28); the build minifies #ffffff
+  expect(await token(app, '--bg')).toBe('#fafaf9'); // Nunchiro Light paints book-tokens.css (--stone-25)
 
   await card(app, 'Catppuccin Mocha').locator('.tpick').hover();
   await expect.poll(() => token(app, '--bg')).toBe('#1e1e2e');
@@ -90,14 +90,14 @@ test('gallery-live-preview: hover and arrow focus recolour the window and an ope
   expect(await stored(app)).toBe(before);
   // The pointer leaving the grid without a pick reverts.
   await app.mouse.move(1, 1);
-  await expect.poll(() => token(app, '--bg')).toBe('#fff'); // Nunchiro Light paints tokens.css (STYLE 2026-10-28); the build minifies #ffffff
-  await expect.poll(() => termBg(app, a.id)).toBe(rgb('#ffffff'));
+  await expect.poll(() => token(app, '--bg')).toBe('#fafaf9'); // Nunchiro Light paints book-tokens.css (--stone-25)
+  await expect.poll(() => termBg(app, a.id)).toBe(rgb('#fafaf9')); // Nunchiro Light's terminal background
 
   // An online card previews too, and preview never installs it.
   await card(app, 'Fake Dusk').locator('.tpick').hover();
   await expect.poll(() => token(app, '--bg')).toBe('#2a1b3d');
   await app.keyboard.press('Escape');
-  await expect.poll(() => token(app, '--bg')).toBe('#fff'); // Nunchiro Light paints tokens.css (STYLE 2026-10-28); the build minifies #ffffff
+  await expect.poll(() => token(app, '--bg')).toBe('#fafaf9'); // Nunchiro Light paints book-tokens.css (--stone-25)
   expect(await stored(app)).toBe(before);
   await expect(app.getByRole('dialog', { name: 'Settings' })).toBeVisible(); // v25f: the Esc that ended the preview leaves the Settings modal open
 
@@ -106,12 +106,12 @@ test('gallery-live-preview: hover and arrow focus recolour the window and an ope
   await card(app, 'Nunchiro Light').locator('.tpick').focus();
   await app.keyboard.press('ArrowRight');
   await expect(card(app, 'Nunchiro Dark').locator('.tpick')).toBeFocused();
-  await expect.poll(() => token(app, '--bg')).toBe('#151b23'); // Nunchiro Dark's ko/ panel (STYLE 2026-10-28)
+  await expect.poll(() => token(app, '--bg')).toBe('#1b1e21'); // Nunchiro Dark's panel (book-tokens.css --graphite-900)
   await app.keyboard.press('ArrowRight');
   await expect(card(app, 'Catppuccin Mocha').locator('.tpick')).toBeFocused();
   await expect.poll(() => token(app, '--bg')).toBe('#1e1e2e');
   await app.keyboard.press('Escape');
-  await expect.poll(() => token(app, '--bg')).toBe('#fff'); // Nunchiro Light paints tokens.css (STYLE 2026-10-28); the build minifies #ffffff
+  await expect.poll(() => token(app, '--bg')).toBe('#fafaf9'); // Nunchiro Light paints book-tokens.css (--stone-25)
   expect(await stored(app)).toBe(before);
 
   // Enter applies and saves; leaving no longer reverts.
@@ -172,7 +172,7 @@ test('gallery-remove-imported: Remove drops it; a slot it held falls back to the
   await menu(app, 'Fake Dusk', 'Remove');
   await expect(card(app, 'Fake Dusk')).toHaveCount(0);
   await expect(app.getByRole('status').filter({ hasText: 'Fake Dusk was in use, so dark mode now uses Nunchiro Dark.' })).toBeVisible();
-  await expect.poll(() => token(app, '--bg')).toBe('#151b23'); // Nunchiro Dark's ko/ panel (STYLE 2026-10-28)
+  await expect.poll(() => token(app, '--bg')).toBe('#1b1e21'); // Nunchiro Dark's panel (book-tokens.css --graphite-900)
   const saved = JSON.parse((await stored(app))!);
   expect(saved.themesImported).toEqual([]);
   expect(saved.themeDark.id).toBe('nunchiro:dark');
@@ -301,7 +301,7 @@ test('gallery-slot-target: a card goes to the selected slot row, Undo stays with
   await expect.poll(async () => (await saved()).themeDark?.id).toBe('catalog:Catppuccin Mocha');
   expect((await saved()).themeLight.id).toBe(LIGHT_PICK.id);
   await app.mouse.move(1, 1);
-  expect(await token(app, '--bg')).toBe('#fff');
+  expect(await token(app, '--bg')).toBe('#fafaf9');
 
   // 3. In use follows the selected row.
   await expect(card(app, 'Catppuccin Mocha')).toContainText('In use');

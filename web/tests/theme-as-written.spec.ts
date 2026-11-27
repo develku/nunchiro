@@ -10,7 +10,7 @@ import { THEMES } from '../src/themes/catalog/catalog.gen';
 import { contrast, deriveTokens } from '../src/themes/derive';
 import { parseGhostty } from '../src/themes/ghostty';
 import { DARK_PICK, LIGHT_PICK } from '../src/themes/nunchiro';
-import { cssBlock, DARK_CSS, LIGHT_CSS } from './window-tokens';
+import { windowTokens } from './window-tokens';
 import { expect, openWindow, test, type Core } from './fixtures';
 import { seed } from './fixtures/board/coord';
 import { card, openTheme, rgb, stored, token } from './theme-harness';
@@ -88,14 +88,16 @@ for (const pick of PICKS)
       expect.soft(await style(rowOf(app, 'asks').locator('.nm'), 'color'), 'row name').toBe(rgb(c.foreground));
       // text and panel
       expect.soft(await token(app, '--text')).toBe(c.foreground);
-      // status colours and the accent (buttons, focus ring): every one as written (palette 2, 3, 1, 5, 4), even under 4.5:1
-      expect.soft([await token(app, '--ok'), await token(app, '--you'), await token(app, '--bad'), await token(app, '--done')]).toEqual([c.palette[2], c.palette[3], c.palette[1], c.palette[5]]);
+      // status colours: the theme's own palette 2, 3 (mixed toward 1), 1, stepped by the design book's derive rule until
+      // they read (theme-book-contrast.spec.ts)
+      const d = deriveTokens(c);
+      expect.soft([await token(app, '--ok'), await token(app, '--you'), await token(app, '--bad'), await token(app, '--done')]).toEqual([d['--ok'], d['--you'], d['--bad'], d['--done']]);
       // muted: mixed from the theme's background and foreground (D-20261108-11), readable on the page
       const muted = await token(app, '--muted');
       expect.soft(muted).toBe(deriveTokens(c)['--muted']);
       expect.soft(contrast(muted, await token(app, '--page')), 'muted on --page').toBeGreaterThanOrEqual(4.5);
-      // the accent is palette 4, or (ticket 520) palette 4 stepped until the --on-status text reads 4.5:1 on it (Latte)
-      expect.soft(await token(app, '--accent')).toBe(deriveTokens(c)['--run']);
+      // the accent is palette 4, stepped until it reads 3:1 as a mark
+      expect.soft(await token(app, '--accent')).toBe(deriveTokens(c)['--accent']);
       if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
       if (shotsDir) await shot('tree');
       await app.locator('.ib.r').getByRole('button', { name: /^Board( · |$)/ }).click();
@@ -126,7 +128,8 @@ for (const pick of PICKS)
     expect(await style(board.locator('.bkey'), 'color'), 'legend text is the mixed --muted').toBe(rgb(deriveTokens(c)['--muted']));
     // key swatches follow the roles: your turn, stale, broken
     const swatch = (k: string) => style(board.locator(`.bkey [data-k="${k}"] i`), 'color');
-    expect([await swatch('you'), await swatch('stale'), await swatch('bad')]).toEqual([rgb(c.palette[3]), rgb(c.palette[11]), rgb(c.palette[1])]);
+    const d = deriveTokens(c);
+    expect([await swatch('you'), await swatch('stale'), await swatch('bad')]).toEqual([rgb(d['--you']), rgb(c.palette[11]), rgb(d['--bad'])]);
     // a primary button: fill is the theme text, label the panel
     await board.getByRole('button', { name: '+ Card' }).click();
     const save = app.getByRole('dialog', { name: 'New card' }).getByRole('button', { name: 'Save' });
@@ -142,22 +145,22 @@ test('themes_basic_interactions: Settings, Appearance, hovering a card shows the
   await openTheme(app); // two clicks: Settings, then Appearance (labelled buttons)
   const mocha = card(app, 'Catppuccin Mocha');
   await expect(mocha.locator('.tname')).toHaveText('Catppuccin Mocha'); // the name shows on the card
-  expect(await token(app, '--text')).toBe('#1f2328'); // saved: Nunchiro Light
+  expect(await token(app, '--text')).toBe('#23272b'); // saved: Nunchiro Light (book-tokens.css --stone-900)
   await mocha.locator('.tpick').hover();
   const c = PICKS[1].colors;
   await expect.poll(() => token(app, '--text')).toBe(c.foreground);
-  expect(await token(app, '--accent')).toBe(c.palette[4]);
-  expect(await token(app, '--ok')).toBe(c.palette[2]);
+  expect(await token(app, '--accent')).toBe(deriveTokens(c)['--accent']);
+  expect(await token(app, '--ok')).toBe(deriveTokens(c)['--ok']);
   expect(await token(app, '--muted')).toBe(deriveTokens(c)['--muted']);
   await app.keyboard.press('Escape');
-  await expect.poll(() => token(app, '--text')).toBe('#1f2328');
+  await expect.poll(() => token(app, '--text')).toBe('#23272b');
   expect(await stored(app)).not.toContain('Catppuccin Mocha'); // a preview saves nothing
 });
 
-// The bundled pair keeps tokens.css exactly: the window sets no inline token for it, and every role reads the stylesheet's
-// own value (the file parsed in window-tokens.ts, not a copy of its numbers).
+// The bundled pair keeps tokens.css and book-tokens.css exactly: the window sets no inline token for it, and every role
+// reads the stylesheets' own value (the files parsed in window-tokens.ts, not a copy of their numbers).
 const ROLE_TOKENS = ['--page', '--panel', '--raised', '--text', '--muted', '--faint', '--line', '--hover', '--you', '--you-bg', '--bad', '--run', '--ok', '--done', '--idle', '--on-status'];
-for (const [name, pick, head] of [['Nunchiro Light', LIGHT_PICK, LIGHT_CSS], ['Nunchiro Dark', DARK_PICK, DARK_CSS]] as const)
+for (const [name, pick] of [['Nunchiro Light', LIGHT_PICK], ['Nunchiro Dark', DARK_PICK]] as const)
   test(`bundled_themes_unchanged: ${name} sets no inline token and every role is the tokens.css value`, { tag: '@chromium' }, async ({ app, core }) => {
     fill(core);
     await app.addInitScript((p) => localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ themeMode: 'fixed', themeFixed: p })), pick);
@@ -165,7 +168,7 @@ for (const [name, pick, head] of [['Nunchiro Light', LIGHT_PICK, LIGHT_CSS], ['N
     await expect(app.locator('html')).toHaveAttribute('data-theme', name.endsWith('Dark') ? 'dark' : 'light');
     expect(await app.evaluate((ks) => ks.filter((k) => document.documentElement.style.getPropertyValue(k)), [...ROLE_TOKENS])).toEqual([]);
     expect(await app.evaluate(() => [document.getElementById('theme-selection'), document.documentElement.style.getPropertyValue('--selection-bg')])).toEqual([null, '']);
-    const want = cssBlock(head);
+    const want = windowTokens(pick.colors);
     // Resolve each side to the browser's rgb() so #fff and #ffffff compare equal.
     const resolve = (page: Page, vals: string[]) =>
       page.evaluate((vs) => vs.map((v) => { const e = document.createElement('i'); e.style.color = v; document.body.append(e); const c = getComputedStyle(e).color; e.remove(); return c; }), vals);

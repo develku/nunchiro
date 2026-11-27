@@ -60,7 +60,7 @@ test('done_card_facts_real: Done cards show the PR state, checks, lines, when an
   await expect(merged.locator('.bfact')).toContainText('Merged #12', { timeout: 20_000 });
   await expect(merged.locator('.bfact')).toContainText('+120 −34');
   await expect(merged.locator('.bfact').getByRole('img', { name: 'All checks passing' })).toBeVisible(); // the check icon; the words are its name
-  await expect(merged.locator('.bfact b')).toHaveCSS('color', /rgb\((130, 80, 223|163, 113, 247)\)/); // --done, violet
+  await expect(merged.locator('.bfact b')).toHaveCSS('color', /rgb\((68, 108, 80|134, 178, 147)\)/); // --done, moss since the design book (was violet)
   await expect(merged.locator('.bquiet')).toContainText(/just now|min ago/);
   await expect(merged.locator('.bquiet')).toContainText('0123456');
   await expect(open.locator('.bfact')).toContainText('Open #13');

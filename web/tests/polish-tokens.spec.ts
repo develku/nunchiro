@@ -47,7 +47,11 @@ test('polish_tokens_every_theme_1041: new tokens derived for every gallery theme
     // The primary button: label --control-text (= --panel) on --control-bg (= --text).
     expect(contrast(t['--panel'], t['--text']), `${name} primary button`).toBeGreaterThanOrEqual(4.5);
     // --error is --bad-text.
-    for (const s of base) expect(contrast(t['--bad-text'], s), `${name} --error on ${s}`).toBeGreaterThanOrEqual(4.5);
+    // On the selected step too (the design book); on a mid grey, the best one colour reaches on all of them.
+    const words = [...base, t['--raised'], ...selected];
+    const worstOf = (v: string) => Math.min(...words.map((s) => contrast(v, s)));
+    const reachBase = Math.min(4.5, Math.max(worstOf('#ffffff'), worstOf('#000000')));
+    expect(worstOf(t['--bad-text']), `${name} --error on its surfaces`).toBeGreaterThanOrEqual(reachBase - 1e-9);
     for (const k of ['--ring-focus', '--light-run', '--light-you', '--light-bad', '--light-limited'])
       for (const s of [...base, ...selected]) {
         const r = contrast(t[k], s);

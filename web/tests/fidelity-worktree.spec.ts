@@ -58,13 +58,24 @@ async function newDialog(app: Page, core: Core, scheme: Scheme) {
   await clean(app);
   return d;
 }
-const newFill = (d: Locator, scheme: Scheme) => async (m: Page) => {
+/** The design book replaced the mockup's palette: its surface, text and line colours take the app's own, so the frame
+ *  still compares layout, words and controls like for like. */
+const bookPalette = async (d: Locator, m: Page) => {
+  const v = await d.evaluate(() => {
+    const r = getComputedStyle(document.documentElement);
+    const t = (k: string) => r.getPropertyValue(k).trim();
+    return { page: t('--page'), bg: t('--panel'), fg: t('--text'), mut: t('--muted'), line: t('--line'), hov: t('--hover'), run: t('--accent') };
+  });
+  await m.addStyleTag({ content: `:root,:root:not([data-theme=light]),:root[data-theme=dark]{--page:${v.page}!important;--bg:${v.bg}!important;--fg:${v.fg}!important;--mut:${v.mut}!important;--line:${v.line}!important;--hov:${v.hov}!important;--run:${v.run}!important}` });
+};
+const newFill = (d: Locator, _scheme: Scheme) => async (m: Page) => {
+  await bookPalette(d, m);
   const hint = await d.locator('.wthint').first().innerHTML();
   const advanced = await d.locator('.wtadvanced').innerText();
   const cancel = await d.locator('.wtcancel').innerText();
   const value = await d.getByRole('textbox').inputValue();
   // Control style (ticket 1041 A, docs/design/polish-1121 .cmd): the polish field is a quiet tint with no outline, so the older WTDIALOGS field's line, fill and radius are replaced; layout, words and order stay the mockup's.
-  await m.addStyleTag({ content: `${NEW} .fld input{border-color:transparent;background:${scheme === 'dark' ? 'rgb(255 255 255/.055)' : 'rgb(15 20 30/.045)'};border-radius:6px}` });
+  await m.addStyleTag({ content: `${NEW} .fld input{border-color:transparent;background:${await d.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--tint-1').trim())};border-radius:6px}` });
   // Copy only: the mockup already holds ticket 468's field and ticket 294's Cancel at the line end (ticket 529).
   await m.locator(NEW).first().evaluate(
     (e, a) => {
@@ -161,6 +172,7 @@ async function tidyPanel(app: Page, core: Core, scheme: Scheme) {
   return d;
 }
 const tidyFill = (d: Locator) => async (m: Page) => {
+  await bookPalette(d, m);
   const a = await d.evaluate((e) => ({
     title: e.querySelector('.wtttl span')!.textContent,
     groups: [...e.querySelectorAll('section')].map((s) => ({

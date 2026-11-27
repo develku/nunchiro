@@ -55,6 +55,9 @@ function pairs(t: Record<string, string>): Pair[] {
   add('idle ring, control edge', v('--faint'), B3, 3);
   add('redline, near-limit arc', v('--light-warn'), [['page', page], ['raised', raised], ['chrome glass', gc]], 3);
   add('checked control (ink)', v('--text'), [['panel', panel], ['raised', raised]], 3);
+  // Old names that many rules still paint as words (color: var(--you) ...), and the old focus ring name.
+  for (const k of ['--you', '--bad', '--ok', '--done', '--warn', '--run']) add(`old ${k} as words`, v(k), S, 4.5);
+  add('old --ring-focus', v('--ring-focus'), [...S, ['chrome glass', gc]], 3);
   return P;
 }
 
