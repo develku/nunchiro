@@ -63,3 +63,13 @@ test('only the first press counts; a stamp from another clock falls back to now(
   assert.equal(await done, null);
   assert.equal(p.armed, false);
 });
+
+const markAfter = vm.runInNewContext(`${fs.readFileSync(new URL('./interact_window.js', import.meta.url), 'utf8')}; markAfter`, {});
+
+test('the chat-drawn mark paired with a press is the first one of that chat at or after the press', () => {
+  const name = 'nunchiro:chat-drawn s1';
+  const marks = [{ name, startTime: 100 }, { name: 'nunchiro:chat-drawn s2', startTime: 210 }, { name, startTime: 250 }, { name, startTime: 400 }];
+  assert.equal(markAfter(marks, name, 200), 250); // the earlier open's mark and another chat's are not this press's
+  assert.equal(markAfter(marks, name, 250), 250);
+  assert.equal(markAfter(marks, name, 500), null); // no mark yet: a miss
+});

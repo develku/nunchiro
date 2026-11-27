@@ -16,11 +16,10 @@ test('tab_strip_as_drawn', async ({ app, core }) => {
   fs.writeFileSync(path.join(w.cwd, 'go'), '');
   await openWindow(app);
   const t = tab(app, a);
-  await expect(t.locator('.ticon svg.oi[data-icon="terminal"]')).toHaveCount(1); // ticket 991 A17: a shell tab's icon is a terminal
-  // q67 look Q6-2: an agent's tab shows the agent's own mark, as the "+" menu's row that starts it (it was a chat bubble).
-  await expect(tab(app, w.id).locator('.ticon svg.agent-logo.claude')).toHaveCount(1);
-  await expect(tab(app, w.id).locator('.ticon svg.oi')).toHaveCount(0);
-  await expect(t.locator('.tname')).toHaveText('one'); // ticket 996: the icon names the kind
+  // Design book (tabs): no kind prefix; a session tab is its state dot and its name.
+  await expect(t.locator('.ticon')).toHaveCount(0);
+  await expect(tab(app, w.id).locator('.ticon')).toHaveCount(0);
+  await expect(t.locator('.tname')).toHaveText('one');
   await expect(t).toHaveAccessibleName(/shell · one/); // a screen reader still hears it
   const x = t.locator('..').getByRole('button', { name: /^Close tab/ });
   await expect(x).toBeHidden(); // visibility:hidden until hover or focus

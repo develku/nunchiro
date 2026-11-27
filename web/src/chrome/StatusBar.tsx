@@ -90,7 +90,9 @@ export function StatusBar({ current, t, core, sessions, ordered, open, store, ed
       <span className="sp" />
       <AccountSwitch t={t} core={core} connected={connected} onManage={manageAccounts} current={current} onOpen={open} />
       {update.version && (
-        <>
+        // Design book, status-bar note: one pill that stays until it is handled, a dot, the note and its actions.
+        <span className="snote">
+          <i className="snote-dot" aria-hidden="true" />
           {/* Ticket 377: one button, as T3 Code's update item; a failed install relabels it as the retry. Ticket 1082: with
               sessions working it asks once, in place: they keep running, Install or Later. */}
           {update.ask > 0 && <span className="it" role="status">{t(update.ask === 1 ? 'selfUpdate.workingOne' : 'selfUpdate.working', { n: update.ask })}</span>}
@@ -104,7 +106,7 @@ export function StatusBar({ current, t, core, sessions, ordered, open, store, ed
           <span className="sr" role="status">
             {update.error && t('rc.update.failed')}
           </span>
-        </>
+        </span>
       )}
       {/* Connected is the normal state, so it is words for a screen reader only; a lost connection shows until it is back. */}
       <span role="status" className={connected ? 'sr' : 'it fcore'}>

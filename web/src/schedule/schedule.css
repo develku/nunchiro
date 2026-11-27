@@ -78,27 +78,9 @@
 .sched-list .sched-row:hover {
   background: var(--tint-1);
 }
-/* The kit's switch, smaller: in a list row the name is what the eye lands on first. Its press area stays 24 px high.
-   The selectors name the list, so they outrank the kit's (shell.css `:is(.settings[role='region'], .schedv) input.stog`). */
+/* The kit's switch (the book has one size). */
 .schedv .sched-list .sched-row > input.stog {
   grid-area: 1 / 1;
-  width: 28px;
-  height: 16px;
-  border-radius: var(--r-8);
-}
-.schedv .sched-list .sched-row > input.stog::before {
-  content: '';
-  position: absolute;
-  inset: -4px;
-}
-.schedv .sched-list .sched-row > input.stog::after {
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-}
-.schedv .sched-list .sched-row > input.stog:checked::after {
-  left: 14px;
 }
 /* Narrow: a hairline between rows, and an open row's cut task gives way to the whole task in its detail. */
 .schedv:not([data-wide]) .sched-item + .sched-item {

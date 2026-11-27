@@ -132,8 +132,8 @@ test('focus_ring_rounded: the composer box is the mockup rounded box, and focusi
     const c = getComputedStyle(el);
     return { box: { radius: c.borderTopLeftRadius, border: c.borderTopWidth, color: c.borderTopColor }, line, run };
   });
-  // The mockup's .cmp: 16px; ticket 1041 (polish-1121 .comp): no border, a tint step.
-  expect(rest.box).toMatchObject({ radius: '16px', border: '0px' });
+  // The mockup's .cmp rounded box, radius 14 in the design book; ticket 1041 (polish-1121 .comp): no border, a tint step.
+  expect(rest.box).toMatchObject({ radius: '14px', border: '0px' });
   await composer(app).locator('textarea').click();
   const focus = await cbox.evaluate((el) => {
     const probe = document.createElement('i');
@@ -145,7 +145,7 @@ test('focus_ring_rounded: the composer box is the mockup rounded box, and focusi
     const c = getComputedStyle(el);
     return { radius: c.borderTopLeftRadius, color: c.borderTopColor, ring: c.outlineWidth, ringStyle: c.outlineStyle, ringColor: c.outlineColor, want: ring, halo };
   });
-  expect(focus.radius).toBe('16px');
+  expect(focus.radius).toBe('14px');
   // Ticket 1041 (owner 11-22: focus is the neutral --ring-focus): no border; a 1px ring of that colour round the box.
   expect(focus).toMatchObject({ ring: '1px', ringStyle: 'solid', ringColor: focus.halo });
 });
@@ -400,7 +400,7 @@ test('no_uuid_in_tooltips: the project chip\'s hover text is the name it shows, 
 });
 
 // 8c. Round 3 (strict review): the input's type and the Send/Stop target were both smaller than the mockup's.
-test('composer_type_and_target_size: the input reads at the mockup\'s 14.5px and Send/Stop is its 32px box', async ({ app, core }) => {
+test('composer_type_and_target_size: the input reads at the mockup\'s 14.5px and Send/Stop is the design book\'s 28px round control', async ({ app, core }) => {
   fakeClaude(core);
   const s = core.agent(core.project('p'), 'alpha', 'opus');
   await openWindow(app);
@@ -410,10 +410,10 @@ test('composer_type_and_target_size: the input reads at the mockup\'s 14.5px and
   const send = composer(app).locator('.send');
   await expect(send).toHaveAccessibleName('Send');
   const idle = (await send.boundingBox())!;
-  expect([Math.round(idle.width), Math.round(idle.height)]).toEqual([32, 32]);
+  expect([Math.round(idle.width), Math.round(idle.height)]).toEqual([28, 28]);
   await working(app, core, s.id);
   const stop = (await composer(app).locator('.send.stop').boundingBox())!;
-  expect([Math.round(stop.width), Math.round(stop.height)]).toEqual([32, 32]);
+  expect([Math.round(stop.width), Math.round(stop.height)]).toEqual([28, 28]);
 });
 
 // 9. The mockup's `.ch`: model, effort and mode are flat text with a caret, not pills.

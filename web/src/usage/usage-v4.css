@@ -525,7 +525,7 @@
 }
 /* D2: where Accounts' "View usage" lands. */
 .usage4 .lim:focus {
-  outline: 2px solid var(--ring-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
 /* D2: Usage is a dashboard and uses the mockup's frame, wider than the shared settings column (the hours grid needs it).

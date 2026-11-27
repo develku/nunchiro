@@ -277,6 +277,8 @@ export interface RowState {
   skip?: string;
   /** Ticket 462: an `idle` row whose agent has ended (Finished, the mockup's resting row): the check icon (look 1117 v11 A-S3-6), not the dashed circle. */
   rest?: true;
+  /** Design book (row meta word): since when an idle, stale or finished row has rested (epoch ms): "idle · 2h", "done · 12m". */
+  ago?: number;
 }
 
 const WHO: Record<AgentKind, (t: T) => string> = { claude: () => 'Claude', codex: () => 'Codex', shell: (t) => t('firstrun.shell'), acp: (t) => t('walk8.who.acp') }; // ticket 740: product names stay English
@@ -361,13 +363,14 @@ function baseRowState(w: Worktree, sessions: Session[], fact: WorktreeFact | und
   if (asked) return { kind: 'idle', tone: 'idle', tip: [said('asked', who(asked))] };
   if (fact?.pr?.state === 'checks_fail') return { kind: 'fail', tone: 'bad', tip: [t('walk8.tip.checksFail', { n: fact.pr.number }), fact.pr.failed] };
   const stale = by('stale');
-  if (stale) return { kind: 'stale', tone: 'idle', tip: [said('stale', t('walk8.tip.stale', { age: span(now - stale.attention.last_activity) }))] };
+  if (stale) return { kind: 'stale', tone: 'idle', tip: [said('stale', t('walk8.tip.stale', { age: span(now - stale.attention.last_activity) }))], ago: stale.attention.last_activity };
   if (fact?.pr && fact.pr.state !== 'closed') return { kind: 'pr', tone: 'ok', tip: [t('walk8.tip.prOpen', { n: fact.pr.number })] };
   if (!sessions.length) return { kind: 'new', tone: 'idle', tip: [t('walk8.tip.new')] };
   // A restarted session joins its finished one on the row: the live one names the row (verify look, ticket 991 A7).
   const s = sessions.find((x) => agentState(x) === 'running') ?? sessions[0];
   const running = agentState(s) === 'running';
-  return { kind: 'idle', tone: 'idle', ...(running ? {} : { rest: true as const }), tip: [said(running ? 'idle' : s.state === 'resumable' ? 'resumable' : 'done', who(s))] }; // look 1117 v4: a resumable row says so
+  const ago = running ? s.attention.last_activity : (s.ended_at ?? s.closed_at ?? s.attention.last_activity);
+  return { kind: 'idle', tone: 'idle', ...(running ? {} : { rest: true as const }), tip: [said(running ? 'idle' : s.state === 'resumable' ? 'resumable' : 'done', who(s))], ago }; // look 1117 v4: a resumable row says so
 }
 
 // Ticket 991 A12 (two surveys): a row no longer moves when its session starts or stops working; only what needs the person

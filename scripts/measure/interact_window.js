@@ -38,6 +38,12 @@ function makeProbe({ now, raf, post, after, holds, miss = 5000 }) {
   return p;
 }
 
+/** The page time of the first mark called `name` at or after t0 (performance mark entries), or null. */
+function markAfter(entries, name, t0) {
+  const m = entries.find((e) => e.name === name && e.startTime >= t0);
+  return m ? m.startTime : null;
+}
+
 if (typeof document !== 'undefined' && typeof window !== 'undefined' && window.__Q4W_SINK__) (() => {
   const KEY = 'nunchiro.q4w';
   const state = (() => { try { return JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch { return null; } })() || { done: [], cold: [] };
@@ -204,6 +210,25 @@ if (typeof document !== 'undefined' && typeof window !== 'undefined' && window._
       for (let i = 0; i < job.repeats; i++) {
         await closeFromTree(C.history, chatDrawn(C.history));
         ms.push(await timed(chatDrawn(C.history), () => press(treeRow(C.history))));
+        await settle();
+      }
+    });
+
+    // p33 (scorecard.py chatopen): the page's own chat-drawn mark (web/src/chat/ChatView.tsx), not a DOM condition.
+    await row('chat-open-mark', `another session selected, then a press on the tree row of the ${job.long_events}-event chat whose tab is closed: the press's page time and the page's nunchiro:chat-drawn mark (5 s at most)`, async (ms, r) => {
+      r.opens = [];
+      const name = `nunchiro:chat-drawn ${C.history}`;
+      for (let i = 0; i < job.repeats; i++) {
+        await closeFromTree(C.history, chatDrawn(C.history)); // ends on shop-t0, another session, selected
+        const t0 = performance.now();
+        await press(treeRow(C.history));
+        let m = null;
+        while (m === null && performance.now() < t0 + 5000) {
+          m = markAfter(performance.getEntriesByType('mark'), name, t0);
+          if (m === null) await sleep(20);
+        }
+        r.opens.push([t0, m]);
+        ms.push(m === null ? 5000 : m - t0);
         await settle();
       }
     });

@@ -23,7 +23,52 @@ body {
 }
 input,
 progress {
-  accent-color: var(--accent); /* never the system blue (designer panel 2026-10-31) */
+  accent-color: var(--text); /* design book: checked controls are ink, never blue (blue is the working dot and focus) */
+}
+/* Design book, check and radio: 16, a --raised box with a 1.5 --faint ring; checked is ink. Only plain inputs: a part that
+   draws its own (a class on the input) keeps it. */
+:where(input[type='checkbox']:not([class]), input[type='radio']:not([class])) {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--check);
+  height: var(--check);
+  margin: 0;
+  vertical-align: middle;
+  border-radius: var(--r-4);
+  background: var(--raised);
+  box-shadow: inset 0 0 0 1.5px var(--faint);
+  cursor: pointer;
+}
+:where(input[type='radio']:not([class])) {
+  border-radius: 50%;
+}
+:where(input[type='checkbox']:not([class])):where(:checked, :indeterminate) {
+  background: var(--text);
+  box-shadow: none;
+}
+:where(input[type='checkbox']:not([class])):where(:checked)::after {
+  content: '';
+  width: 8px;
+  height: 4px;
+  border: solid var(--panel);
+  border-width: 0 0 2px 2px;
+  transform: translateY(-1px) rotate(-45deg);
+}
+:where(input[type='checkbox']:not([class])):where(:indeterminate)::after {
+  content: '';
+  width: 8px;
+  height: 2px;
+  background: var(--panel);
+}
+:where(input[type='radio']:not([class])):where(:checked) {
+  background: var(--panel);
+  box-shadow: inset 0 0 0 5px var(--text);
+}
+:where(input[type='checkbox']:not([class]), input[type='radio']:not([class])):where(:disabled) {
+  opacity: 0.4;
+  cursor: default;
 }
 /* Ticket 468 + 542 (scorecard D5): the one text field look, the settings kit's (final.html .inp), for every text-like input,
    textarea and select, so none is left browser-default. Zero specificity: a page sets only size and spacing (and the .mono
@@ -31,11 +76,12 @@ progress {
    gives the wrapper this look. The focus ring is the global :focus-visible one; a filter chip (.bfc, .spill) is a chip. */
 :where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='hidden'], [type='color'], [type='button'], [type='submit'], [type='reset'], [type='image']), textarea, select),
 :where(.field-box) {
-  /* Ticket 1041 (A, owner 11-22): no outlined field; one tint step tells it apart. The 1 px line stays, clear, so no size
-     moves and a refused value can still draw it red. */
+  /* Design book, fields: a --tint-1 box with the --line hairline drawn inside (fields keep their line), radius 7. The
+     1 px border stays clear so a refused value can still draw it red. */
   border: 1px solid transparent;
-  border-radius: var(--r-6);
-  background: var(--control-quiet-bg);
+  box-shadow: inset 0 0 0 1px var(--line);
+  border-radius: var(--field-r);
+  background: var(--tint-1);
   color: var(--text);
   font-family: var(--font-ui); /* not inherit: a page with its own body stack (Machines, Browser access) must not change the field */
   font-size: var(--fs-13);
@@ -45,7 +91,11 @@ progress {
 }
 /* The kit's inner spacing for a field that sets none of its own (a wrapper's bare input sets its own). */
 :where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='hidden'], [type='color'], [type='button'], [type='submit'], [type='reset'], [type='image']), select) {
-  padding: 0 var(--sp-8);
+  height: var(--field-h);
+  padding: 0 var(--field-pad);
+}
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='hidden'], [type='color'], [type='button'], [type='submit'], [type='reset'], [type='image']), textarea, select):where(:focus) {
+  background: var(--raised);
 }
 :where(textarea) {
   padding: var(--sp-6) var(--sp-8);
@@ -79,15 +129,19 @@ button:disabled {
 .dim {
   color: var(--muted);
 }
+/* Design book, key chip: 16 high, radius 4, a --tint-2 chip with the key in --muted. */
 .kbd {
-  font-family: 'SF Mono', Menlo, monospace;
-  font-size: var(--fs-11);
-  border: 1px solid var(--faint);
-  border-bottom-width: 2px;
-  border-radius: var(--r-4);
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: var(--kbd-h);
   padding: 0 4px;
-  background: var(--panel);
-  color: var(--text);
+  border-radius: var(--kbd-r);
+  background: var(--tint-2);
+  color: var(--muted);
+  font: 500 var(--fs-kbd) / 1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
   white-space: nowrap;
 }
 /* icons/Icon.tsx: an Octicon sits on the text's baseline like the glyph it replaced. */
@@ -129,12 +183,6 @@ button:disabled {
   gap: 8px;
   padding: 0 12px 0 84px;
   background: var(--panel);
-}
-/* Ticket 1041 lane 2: the shell (title bar, edit bar, tab strip, session header, splits) rings focus in the ring's own
-   neutral colour (owner 2026-11-22, inventory 15.1 item 1); the icon bars set it in rails.css. */
-:is(.title, .estrip, .lib, .zh, .shead, .shost) {
-  --focus-ring: var(--ring-focus);
-  --split-ring: inset 0 0 0 var(--focus-width) var(--ring-focus);
 }
 /* The mockup's `.cmd`: a field told apart by one tint step, no border; the key hint stays. */
 .cmd {
@@ -468,7 +516,7 @@ button:disabled {
 }
 
 /* state dots: shape and word carry the state, colour only adds */
-.st {
+.st:not(.sdot) {
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -476,19 +524,19 @@ button:disabled {
   display: inline-block;
   border: 1.5px solid var(--muted);
 }
-.st[data-s='waiting'] {
+.st:not(.sdot)[data-s='waiting'] {
   background: var(--you);
   border-color: var(--you);
 }
-.st[data-s='stale'] {
+.st:not(.sdot)[data-s='stale'] {
   border-style: dashed;
 }
 /* Look 1117 v6r (A S3-3): done is the tab's and the palette's filled done dot here too; the bare ring is idle's. */
-.st[data-s='done'] {
+.st:not(.sdot)[data-s='done'] {
   background: var(--done);
   border-color: var(--done);
 }
-.st[data-s='failed'] {
+.st:not(.sdot)[data-s='failed'] {
   border-color: var(--text);
   background: linear-gradient(45deg, transparent 40%, var(--text) 40% 60%, transparent 60%);
 }
@@ -501,27 +549,29 @@ button:disabled {
   flex-direction: column;
   min-width: 0;
 }
+/* Design book (tabs): the strip is 36 on the chrome ground, tabs sit on its bottom edge 2 apart; the open tab is the
+   reading surface and joins the sheet under it. */
 .tabs {
-  height: var(--tabh);
+  height: var(--tabs-h);
   flex: none;
   display: flex;
-  align-items: center;
-  gap: var(--sp-4);
+  align-items: flex-end;
+  gap: 2px;
   padding: 0; /* the strip scrolls by whole tabs from its edge (CentreView showActive); the row (.zh) holds the inset */
-  background: var(--panel);
+  background: var(--page);
   overflow-x: auto;
   scrollbar-width: none;
 }
 /* .tabw is a tab's drawn box; the role="tab" .tab inside it and its Stop and Close buttons are siblings (real-app 11-10 defect 6). */
-/* Ticket 1041 lane 2 (the mockup's `.tab`): a 28 px box with no border, told apart by tint and a 4 px gap. */
+/* Design book (tabs): a 30 px box, radius 8 8 0 0, no border, told apart by surface. */
 .tabw {
   position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
+  height: var(--tab-h);
   padding: 0 10px;
-  border-radius: var(--r-8);
+  border-radius: var(--tab-r);
   font-size: var(--tabf);
   color: var(--muted);
   white-space: nowrap;
@@ -530,7 +580,7 @@ button:disabled {
   display: flex;
   align-items: center;
   align-self: stretch;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 .tab .tname {
@@ -563,13 +613,12 @@ button:disabled {
   position: sticky;
   right: 0;
   z-index: 1;
-  background: var(--panel);
+  background: var(--page);
   /* Ticket 1041: the pinned tab covers the strip's whole height (a tab scrolled under it showed a 1 px sliver above its
-     28 px box); the drawn box stays 28 px, the 4 px above and below are transparent border. */
+     box); the drawn box stays the tab's 30 px, the 6 px above is transparent border. */
   align-self: stretch;
   height: auto;
-  border-block: 4px solid transparent;
-  border-radius: var(--r-12);
+  border-top: 6px solid transparent;
   background-clip: padding-box;
 }
 /* Look 1117 v11 B N11-S3-3: the strip scrolls by whole tabs (CentreView `showActive`), so the start's fade stays within the
@@ -595,7 +644,7 @@ button:disabled {
   font-size: var(--fs-11);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  background: linear-gradient(to right, transparent, var(--panel) 18px);
+  background: linear-gradient(to right, transparent, var(--page) 18px);
   pointer-events: none;
 }
 .tabs[data-cut-end]:not(:has(.rtab)) {
@@ -627,22 +676,16 @@ button:disabled {
 .tabs[data-cut-start][data-cut-end]:not(:has(.rtab)) {
   mask-image: linear-gradient(to right, transparent, black 10px, black calc(100% - 24px), transparent);
 }
-/* The shown tab: one tint step (owner 2026-11-22), not the blue bar on top, which is the working colour. */
+/* The shown tab is the reading surface (design book), joined to the sheet under it; the state is the tab's dot. */
 .tabw:has(> .tab[aria-selected='true']),
 .tabw:has(> .stab[aria-selected='true']),
 .tabw:has(> .rtab[aria-selected='true']) {
-  background: var(--select-bg);
-  color: var(--select-text);
-  font-weight: 500;
+  background: var(--panel);
+  color: var(--text);
 }
 .tabs > .tabw:has(> .rtab[aria-selected='true']) {
-  background: linear-gradient(var(--select-bg), var(--select-bg)), var(--panel);
+  background: var(--panel);
   background-clip: padding-box;
-}
-/* C, agent state as light (light-glass.css): a working tab carries the travelling blue line along its bottom edge, a
-   your-turn tab a warm glow under it. The glyph and the name stay; reduced motion holds both still. */
-.tabs > .tabw.light-you {
-  background-image: radial-gradient(90% 120% at 50% 118%, color-mix(in srgb, var(--light-you) 26%, transparent), transparent 70%);
 }
 .tabw > .x {
   color: var(--faint);
@@ -671,46 +714,9 @@ button:disabled {
 .tabw[draggable='true'] {
   cursor: grab;
 }
-/* Ticket 1041 (inventory N048): the tab and the session header draw one state mark (the header's `.st` takes the tab's). */
-:is(.tdot, .shead > .st) {
-  width: 7px;
-  height: 7px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--faint);
-  flex: none;
-}
-:is(.tdot, .shead > .st)[data-s='waiting'] {
-  background: var(--you);
-}
-:is(.tdot, .shead > .st)[data-s='idle'] {
-  background: var(--tint-2);
-}
-/* Ticket 1041 lane 2: asked (a seat waits for its lead's answer) and stale had no mark of their own; asked is idle's dot
-   in the muted ink, stale in the stale yellow-brown. The words are in the name. */
-:is(.tdot, .shead > .st)[data-s='asked'] {
-  background: var(--muted);
-}
-:is(.tdot, .shead > .st)[data-s='stale'] {
-  background: var(--stale-line);
-}
-/* Ticket 1025 (look v26 a), ticket 1041 (owner 2026-11-22, 15.1 item 9): a finished or ended session's tab and header
-   mark is the tree's done bar, one quiet look: a faint filled bar (one tint step), no outline. 2px each side keeps the
-   7px dot's room. */
-:is(.tdot, .shead > .st)[data-s='done'] {
-  box-sizing: border-box;
-  width: 3px;
-  height: 10px;
-  margin: 0 2px;
-  border: 0;
-  border-radius: var(--r-2);
-  background: var(--mark-done); /* one look with the tree's done bars (tokens.css) */
-}
-/* Motion language (needs 140): working is the turning arc of the tree (TREEROWS), on the tab, the session header and the
-   board card, so on the tab strip (as in the tree) the number of turning arcs is the number of
-   sessions at work. Reduced motion keeps the arc, still. Ticket 1041: the tab adds C's travelling line (below). */
-:is(.tdot, .shead > .st)[data-s='working'],
-.st[data-s='working'] {
+/* Design book (tree rows, tabs): the tab and the session header draw the tree's state dot (.sdot, light-glass.css). The
+   arc stays for the other .st marks (board card, room, dialogs). */
+.st:not(.sdot)[data-s='working'] {
   width: 10px;
   height: 10px;
   background: none;
@@ -719,37 +725,12 @@ button:disabled {
   border-right-color: var(--run);
   animation: arcspin var(--motion-spin) linear infinite;
 }
-:is(.tdot, .shead > .st)[data-s='failed'] {
-  background: var(--bad);
-}
-/* A glyph, not a disc, for the two states a colour alone would not separate (hand = your turn, x-circle = broken). */
-:is(.tdot, .shead > .st)[data-s]:has(> svg) {
-  /* The glyph is drawn over the dot's own 7px footprint, so a state change moves no tab. */
-  position: relative;
-  background: none;
-  border-radius: 0;
-}
-:is(.tdot, .shead > .st)[data-s]:has(> svg) svg {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 12px;
-  height: 12px;
-  transform: translate(-50%, -50%);
-}
-:is(.tdot, .shead > .st)[data-s='waiting']:has(> svg) {
-  color: var(--you);
-}
-:is(.tdot, .shead > .st)[data-s='failed']:has(> svg) {
-  color: var(--bad);
-}
 @keyframes arcspin {
   to {
     transform: rotate(360deg);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  :is(.tdot, .shead > .st)[data-s='working'],
   .st[data-s='working'] {
     animation: none;
   }
@@ -896,12 +877,13 @@ button:disabled {
 .term[hidden] {
   display: none;
 }
+/* Design book, empty states: centred in the pane, the line 13 --muted, max 320 wide. */
 .empty {
   display: grid;
   place-items: center;
   height: 100%;
   color: var(--muted);
-  font-size: var(--fs-12);
+  font-size: var(--fs-ui);
   text-align: center;
   padding: 24px;
 }
@@ -982,9 +964,7 @@ button:disabled {
   color: var(--muted);
   /* --panel, not --hover (ticket 481, owner 11-12): red and yellow numbers keep 4.5:1 here */
   background: var(--panel);
-  /* 15.1 item 1: the bar and its floating layers take the neutral ring */
-  --focus-ring: var(--ring-focus);
-  white-space: nowrap;
+  /* 15.1 item 1: the bar and its floating layers take the neutral ring */  white-space: nowrap;
   overflow: hidden;
 }
 .cdot {
@@ -1059,31 +1039,73 @@ button:disabled {
   background: var(--you-bg);
   font-size: var(--fs-12);
 }
-/* Ticket 1041: the band's choices are told apart by tint, not outlines (the band asks you, so it keeps its warm tint). */
-.banner .btn {
-  border-color: transparent;
-  background: var(--control-quiet-bg);
-}
-.banner .btn.p {
-  background: var(--control-bg);
-  color: var(--control-text);
-}
+/* Design book, buttons: three kinds. .btn is the secondary (soft --tint-2 fill), .btn.p the one warm primary of a view,
+   .btn.q the quiet one (text, a tint on hover). 28 high (.sm 24), radius 7; .danger words in --bad-text, never a red fill. */
 .btn {
-  border: 1px solid var(--faint);
-  border-radius: var(--r-6);
-  padding: 1px 8px;
-  background: var(--panel);
-  font-size: var(--fs-12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--btn-h);
+  padding: 0 var(--btn-pad);
+  border: 0;
+  border-radius: var(--btn-r);
+  background: var(--tint-2);
+  color: var(--text);
+  font: 500 var(--fs-ui) / 1 var(--font-ui);
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--tint-3);
+}
+.btn:active:not(:disabled, [aria-disabled='true']) {
+  background: var(--tint-3);
+  box-shadow: inset 0 0 0 40px var(--tint-1);
 }
 .btn.p {
-  background: var(--text);
-  color: var(--panel);
-  border-color: var(--text);
+  background: var(--primary);
+  color: var(--on-primary);
 }
-/* The global ring sits inside the button, which here is --ink on --ink: draw it outside, on the surface around it. */
-.btn.p:focus-visible {
+.btn.p:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--primary-hover);
+}
+.btn.p:active:not(:disabled, [aria-disabled='true']) {
+  background: var(--primary-press);
+  box-shadow: none;
+}
+.btn.q {
+  background: none;
+}
+.btn.q:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--tint-1);
+}
+.btn.q:active:not(:disabled, [aria-disabled='true']) {
+  background: var(--tint-2);
+  box-shadow: none;
+}
+.btn.sm {
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  gap: 4px;
+  font-size: var(--fs-sm);
+}
+.btn.danger {
+  color: var(--bad-text);
+}
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.4;
+}
+.btn:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+/* Key chip inside a button: the button's own colour, a thin ring of it. */
+.btn .kbd {
+  border: 0;
+  background: none;
+  color: inherit;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 40%, transparent);
 }
 /* fid-66 */
 .palette {
@@ -1100,16 +1122,18 @@ button:disabled {
 }
 /* The tree's dialogs built on this shell (name, list, create worktree, tidy, remove, add leader) keep their look here: the
    tree lane (1041 lane 4) restyles them with their own sheets and pixel gates. The command palette and Quick open carry
-   `.glass` (light-glass.css): the mockup's `.pal`. */
+   `.glass` (light-glass.css): the mockup's `.pal`. Design book: those dialogs are solid --raised, radius 14, on the float
+   shadow with no border; the palette is a glass popover, radius 12. */
 .palette:not(:where(.glass)) {
+  border: 0;
+  border-radius: var(--dialog-r);
   background: var(--raised);
-  border: 1px solid var(--faint);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-float);
 }
 .palette.glass {
   width: 480px;
   padding: var(--sp-8);
-  border-radius: var(--r-16);
+  border-radius: var(--popover-r);
 }
 .palette input {
   display: block;
@@ -1205,13 +1229,12 @@ button:disabled {
   clip: rect(0 0 0 0);
 }
 /* V2.5-56: group headers (not rows), the session row's state dot (tree tones; the words are its aria-label) and branch. */
+/* Design book, menu caption: 11.5 / 500 --muted, no capitals (caps captions are the status bar's only). */
 .palette li.gh {
   padding: var(--sp-8) var(--sp-8) var(--sp-4);
   color: var(--muted);
-  font-size: var(--fs-11);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: var(--fs-meta);
+  font-weight: 500;
   cursor: default;
 }
 .palette li .pdot {
@@ -1805,9 +1828,7 @@ button:disabled {
   color: var(--text);
   border: 0;
   border-radius: var(--r-8);
-  font-size: var(--fs-12);
-  --focus-ring: var(--ring-focus);
-}
+  font-size: var(--fs-12);}
 .tfind .search {
   width: 200px;
   height: 24px;
@@ -1831,12 +1852,10 @@ button:disabled {
   width: calc(100% - 32px);
   padding: 14px 16px;
   color: var(--text);
-  background: var(--panel);
+  background: var(--raised);
   border: 0; /* ticket 1041: a solid dialog over the scrim, floating on its shadow (owner 15.1 item 6) */
-  border-radius: var(--r-12);
-  box-shadow: var(--shadow-float);
-  --focus-ring: var(--ring-focus);
-}
+  border-radius: var(--dialog-r); /* design book, dialogs: --raised, radius 14 */
+  box-shadow: var(--shadow-float);}
 .modal::backdrop {
   background: var(--scrim);
 }
@@ -1876,9 +1895,7 @@ button:disabled {
   max-width: 560px;
   padding: 10px 14px;
   border-radius: var(--r-8);
-  font-size: var(--fs-12);
-  --focus-ring: var(--ring-focus);
-}
+  font-size: var(--fs-12);}
 /* Ticket 1041 lane 7b (N078): the card over the terminal floats, so it is glass with the warm edge light (.glass .light-you
    .light-edge in PermissionNeeded.tsx); the folder alert and the holder lines stay flat warm-tint rows, no outline. */
 .perm-needed:not(.glass) {
@@ -2066,25 +2083,12 @@ button:disabled {
 .estrip .etitle {
   color: var(--text);
 }
+/* The strip's buttons are the book's small ones. */
 .estrip .btn {
   flex: none;
-  white-space: nowrap;
-  height: 24px;
-  border-color: transparent;
-  border-radius: var(--r-8);
-  background: var(--control-quiet-bg);
-  color: var(--text);
-}
-.estrip .btn:hover:not(:disabled) {
-  background: var(--control-quiet-hover);
-}
-.estrip .btn.p {
-  background: var(--control-bg);
-  color: var(--control-text);
-  border-color: transparent;
-}
-.estrip .btn:disabled {
-  opacity: 0.5;
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  font-size: var(--fs-sm);
 }
 .estrip .emsg {
   color: var(--muted);
@@ -2311,27 +2315,47 @@ button:disabled {
   bottom: 24px;
   transform: translateX(-50%);
   z-index: 70;
+  /* Design book, toasts: a solid --raised pill (never glass), radius 10, 36 high, 13 --text, on the float shadow with a
+     0.5 rim. Its action is a secondary small button (Undo) beside its key chip; the close is a quiet 24 icon button. */
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
-  border-radius: var(--r-8);
-  background: var(--text);
-  color: var(--panel);
-  font-size: var(--fs-13);
-  font-weight: 600;
-  /* ticket 1041: toasts float on the one float shadow, solid ink (not glass) */
-  box-shadow: var(--shadow-float);
+  gap: var(--sp-12);
+  box-sizing: border-box;
+  min-height: var(--toast-h);
+  padding: 0 6px 0 14px;
+  border-radius: var(--toast-r);
+  background: var(--raised);
+  color: var(--text);
+  font-size: var(--fs-ui);
+  box-shadow: var(--shadow-float), 0 0 0 0.5px color-mix(in srgb, var(--text) 12%, transparent);
 }
 .toast button {
-  color: var(--panel);
-  text-decoration: underline;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  border: 0;
+  border-radius: var(--btn-r);
+  background: var(--tint-2);
+  color: var(--text);
+  font: 500 var(--fs-sm) / 1 var(--font-ui);
+}
+.toast button:hover {
+  background: var(--tint-3);
+}
+.toast button:last-child {
+  min-width: var(--hit);
+  padding: 0;
+  background: none;
+  color: var(--muted);
+}
+.toast button:last-child:hover {
+  background: var(--tint-1);
+  color: var(--text);
 }
 .toast .kbd {
-  color: var(--panel);
-  border-color: var(--muted);
-  background: transparent;
+  margin-left: calc(var(--sp-8) * -1);
 }
 .pv {
   width: 100%;
@@ -2496,38 +2520,28 @@ button:disabled {
   top: 44px;
   left: 50%;
   transform: translateX(-50%);
-  width: 440px;
+  width: var(--dialog-w);
   max-width: calc(100% - 32px);
-  padding: 12px 14px;
-  background: var(--panel);
-  border-radius: var(--r-12);
-  /* ticket 1041: a solid question card, no border; its orange edge was a "your turn" mark on a notice that is not one (N-row 9.1) */
+  padding: var(--sp-20);
+  background: var(--raised);
+  /* Design book, dialogs: solid --raised, radius 14, padding 20, on the float shadow; the title 15 / 600, the body 13 / 1.5,
+     the buttons at the right, Cancel then the primary. Ticket 1041: no border, no "your turn" edge (N-row 9.1). */
+  border-radius: var(--dialog-r);
   box-shadow: var(--shadow-float);
-  font-size: var(--fs-12);
-  z-index: 50;
-  --focus-ring: var(--ring-focus);
+  font-size: var(--fs-ui);
+  z-index: 50;}
+.wnotice > b {
+  font: 600 var(--fs-15) / 1.3 var(--font-display);
 }
 .wnotice p {
-  margin: 6px 0 10px;
+  margin: var(--sp-12) 0 var(--sp-20);
   color: var(--text);
+  line-height: 1.5;
 }
 .wnotice .row {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-}
-/* Look v35 a S3-2 (ticket 1041 A): the Add project wizard's option rows and buttons and the Stop confirm carry no outline,
-   as the other polished dialogs: a quiet tint step, the ink primary. */
-:is(.newsess, .wnotice) .btn {
-  border-color: transparent;
-  background: var(--control-quiet-bg);
-}
-:is(.newsess, .wnotice) .btn:not(.p):hover:not(:disabled) {
-  background: var(--control-quiet-hover);
-}
-:is(.newsess, .wnotice) .btn.p {
-  background: var(--control-bg);
-  color: var(--control-text);
 }
 
 .lnote {
@@ -2788,6 +2802,9 @@ button:disabled {
 .empty p {
   margin: 0 0 10px;
 }
+.empty > p {
+  max-width: 320px;
+}
 .padd {
   flex: none;
   width: 16px;
@@ -2927,8 +2944,6 @@ button:disabled {
   grid-column: 1 / -1;
 }
 .addproj {
-  padding: 1px 8px;
-  font-size: var(--fs-11);
   margin-right: 6px;
 }
 .ov {
@@ -2988,7 +3003,8 @@ button:disabled {
 
 /* chrome: frame-ko-e tab strip and status bar (ko/frame-ko-e.html .zh .tab .tadd, footer.stb) */
 .tabw {
-  padding: 0 4px 0 10px;
+  padding: 0 6px 0 10px; /* design book (tabs): padding 0 6 0 10, gap 8, dot 8 then the name */
+  gap: 8px;
   font-weight: 400;
   /* Ticket 996 (owner 11-19, draft A, VS Code's tabSizing "shrink"): tabs share the strip in equal parts, each at most as wide
      as its name (and 180 px, the cap on .tab below), down to 68 px, where the icon, the dot and a few letters still show (look
@@ -3016,7 +3032,7 @@ button:disabled {
   right: 3px;
   top: 50%;
   transform: translateY(-50%);
-  background: var(--panel);
+  background: linear-gradient(var(--tint-1), var(--tint-1)), var(--page); /* the hovered tab's own fill */
 }
 /* Owner 11-17: a tab has no Stop (it is in the tab's menu, the tree and the palette), so the only room kept after the
    name is Close's own: it shows on hover or focus in that room, and a tab never changes width or cuts its name on hover
@@ -3026,6 +3042,9 @@ button:disabled {
 }
 .tabw:hover {
   color: var(--text);
+}
+.tabw:has(> .tab[aria-selected='false']):hover {
+  background: var(--tint-1);
 }
 .tab .ticon {
   display: inline-flex;
@@ -3045,11 +3064,16 @@ button:disabled {
   display: grid;
   place-items: center;
   padding: 0;
-  border-radius: var(--r-4);
+  border-radius: 5px; /* design book (tabs): close 18 square, radius 5, x 12 */
   color: var(--muted);
   visibility: hidden; /* room kept: a hovered or focused tab never changes width */
 }
 .tabw:is(:hover, :focus-within) > .x {
+  visibility: visible;
+}
+/* The open tab always shows its close mark (design book). The button itself joins the tablist only on hover or focus, as
+   on the other tabs (a tablist owns only tabs); a click on the mark reaches the button. */
+.tabw:has(> .tab[aria-selected='true']) > .x > * {
   visibility: visible;
 }
 .tabw > .x:hover {
@@ -3057,12 +3081,11 @@ button:disabled {
   color: var(--text);
 }
 /* Ticket 377 (F4): while ⌘ is held for 200 ms (useHeldKeys sets data-held-tab) the first nine tabs show the key that opens them.
-   Ticket 996 (mockup tabs-sizing-1119, owner 11-19): the chip takes the kind icon's place (icon and gap, 20 px), so a 68 px tab
-   keeps its letters, no tab changes width and the strip does not move. */
+   Design book (tabs): the chip takes the close button's place, so no tab changes width and the strip does not move. */
 .tabw > .tkey {
   display: none;
   position: absolute;
-  left: 8px;
+  right: 4px;
   top: 50%;
   transform: translateY(-50%);
   padding: 0 2px;
@@ -3073,7 +3096,8 @@ button:disabled {
 :root[data-held-tab] .tabw > .tkey {
   display: inline;
 }
-:root[data-held-tab] .tabw:has(> .tkey) .ticon {
+:root[data-held-tab] .tabw:has(> .tkey) > .x,
+:root[data-held-tab] .tabw:has(> .tkey) > .x > * {
   visibility: hidden;
 }
 .tadd {
@@ -3102,10 +3126,42 @@ button:disabled {
   background: var(--tint-1);
   border-radius: var(--r-6);
 }
-/* Ticket 1041: an update is news, not your turn: ink text, no orange. */
-.status .rcupdate {
+/* Ticket 1041: an update is news, not your turn: ink text, no orange. Design book, status-bar note: a 24 pill, radius 7,
+   --tint-1, a 6 dot, the note in 11.5 --text; Install is its secondary small button, Later a quiet one. */
+.status .snote {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: var(--sp-8);
+  height: var(--btn-h-sm);
+  padding: 0 2px 0 var(--sp-8);
+  border-radius: var(--btn-r);
+  background: var(--tint-1);
+  color: var(--text);
+  font-size: var(--fs-meta);
+}
+.status .snote-dot {
+  flex: none;
+  width: var(--pip);
+  height: var(--pip);
+  border-radius: 50%;
+  background: var(--light-run);
+}
+.status .snote :is(.rcupdate, .rclater) {
+  height: calc(var(--btn-h-sm) - 4px);
+  padding: 0 var(--btn-pad-sm);
+  border-radius: var(--r-6);
   color: var(--text);
   font-weight: 500;
+}
+.status .snote .rcupdate {
+  background: var(--tint-2);
+}
+.status .snote .rcupdate:hover:not(:disabled) {
+  background: var(--tint-3);
+}
+.status .snote .rclater:hover {
+  background: var(--tint-2);
 }
 /* Ticket 1031: shown only while the core connection is lost; ticket 1041 N083: in the broken red. */
 .status .fcore {
@@ -3134,9 +3190,9 @@ button:disabled {
   text-overflow: ellipsis;
 }
 .shead .prchip .btn {
-  padding: 0 6px;
-  font-size: var(--fs-11);
-  line-height: 16px;
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  font-size: var(--fs-sm);
 }
 .chat .prchip {
   display: none; /* CHROME: the PR chip lives in the session header (NODUP); ChatView still mounts it */
@@ -3147,8 +3203,8 @@ button:disabled {
   display: flex;
   align-items: center;
   min-width: 0;
-  padding: 0 var(--sp-4);
-  background: var(--panel);
+  padding: 0 var(--sp-8);
+  background: var(--page);
 }
 .zh .tabs {
   flex: 0 1 auto;
@@ -3163,16 +3219,16 @@ button:disabled {
   border-top: 0;
   padding: 8px 20px 4px;
 }
-/* needs 130 (focus_ring_rounded): the mockup's `.cmp`, a 16px box. Ticket 1041 (polish-1121 .comp): no border, one tint
-   step; focus draws the neutral ring (1 px, 3:1) round the box, as the input itself draws none. */
+/* needs 130 (focus_ring_rounded): the mockup's `.cmp`, a rounded box (design book: radius 14). Ticket 1041 (polish-1121
+   .comp): no border, one tint step; focus draws the neutral ring (1 px, 3:1) round the box, as the input itself draws none. */
 .cbox {
   max-width: var(--chat-w, 700px); /* v25-chat-calm: the chat width setting; round 3: the mockup's own .cmp max-width, so the two sides shoot at one width */
   margin: 0 auto;
-  border-radius: var(--r-16);
+  border-radius: var(--composer-r);
   background: var(--tint-1);
 }
 .cbox:focus-within {
-  outline: 1px solid var(--ring-focus);
+  outline: 1px solid var(--focus-ring);
 }
 .cbox textarea {
   height: auto;
@@ -3266,16 +3322,18 @@ button:disabled {
   background: var(--select-bg);
 }
 /* Ticket 1041 (owner 11-22): Send is the ink control, not the working blue; with nothing to send, the mockup's tint. */
+/* Design book: Send is the composer's one primary, 28 round; with nothing to send it is the --tint-2 chip. */
 .send {
-  width: 32px;
-  height: 32px;
+  width: var(--btn-h);
+  height: var(--btn-h);
   border-radius: 50%;
-  background: var(--control-bg);
-  color: var(--control-text);
+  background: var(--primary);
+  color: var(--on-primary);
 }
 .send:disabled {
   background: var(--tint-2);
-  color: var(--faint);
+  color: var(--muted);
+  opacity: 1;
 }
 .send.stop {
   background: var(--text);
@@ -3486,8 +3544,9 @@ button:disabled {
   color: var(--ok-text);
 }
 .mcp-offer .btn {
-  padding: 2px var(--sp-8);
-  cursor: pointer;
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  font-size: var(--fs-sm);
 }
 .mcp-offer .mo-x {
   border: 0;
@@ -3591,16 +3650,9 @@ button:disabled {
 }
 
 /* Ticket 372: limited (a usage limit until its reset) is the yellow of the tree's clock, on the tab, header and status bar. */
-.st[data-s='limited'] {
+.st:not(.sdot)[data-s='limited'] {
   background: var(--warn);
   border-color: var(--warn);
-}
-:is(.tdot, .shead > .st)[data-s='limited'] {
-  background: var(--warn);
-}
-:is(.tdot, .shead > .st)[data-s='limited']:has(> svg) {
-  background: none;
-  color: var(--warn);
 }
 
 /* Ticket 451: the status bar's account switch (chrome/AccountSwitch.tsx); its menu opens upward, like the icon bar's ⋯ menu. */
@@ -3635,9 +3687,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   color: var(--text);
-  border-radius: var(--r-12);
-  --focus-ring: var(--ring-focus);
-}
+  border-radius: var(--r-12);}
 .acsw-pop .hd,
 .acsw-foot {
   padding: 4px 8px;
@@ -3884,7 +3934,7 @@ html[data-resizing] * {
   display: none;
 }
 .term[data-direct] {
-  outline: 2px solid var(--ring-focus); /* an outline paints over the xterm canvas; an inset shadow went under it */
+  outline: 2px solid var(--focus-ring); /* an outline paints over the xterm canvas; an inset shadow went under it */
   outline-offset: -2px;
 }
 .tdir-line {

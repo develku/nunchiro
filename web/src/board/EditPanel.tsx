@@ -74,7 +74,7 @@ export function EditPanel({ t, columns, onPut, view, onView, roles, settings, on
             <h4>{t('board.edit.doneCol')}</h4>
             <label className="berow">
               {t('board.edit.proof')}
-              <input type="checkbox" role="switch" className="btg" checked={!!columns[done].proof} onChange={(e) => void onPut(columns.map((c, i) => (i === done ? { ...c, proof: e.target.checked } : c))).catch(() => {})} />
+              <input type="checkbox" role="switch" className="stog" checked={!!columns[done].proof} onChange={(e) => void onPut(columns.map((c, i) => (i === done ? { ...c, proof: e.target.checked } : c))).catch(() => {})} />
             </label>
           </div>
         )}
@@ -147,7 +147,7 @@ export function EditPanel({ t, columns, onPut, view, onView, roles, settings, on
           </label>
           <label className="berow">
             {t('board.edit.nudge')}
-            <input type="checkbox" role="switch" className="btg" checked={settings.turn_end_nudge} onChange={(e) => void save({ ...settings, turn_end_nudge: e.target.checked })} />
+            <input type="checkbox" role="switch" className="stog" checked={settings.turn_end_nudge} onChange={(e) => void save({ ...settings, turn_end_nudge: e.target.checked })} />
           </label>
           <label className="berow">
             {t('board.edit.doneDays')}

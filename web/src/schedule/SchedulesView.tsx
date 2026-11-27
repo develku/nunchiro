@@ -10,7 +10,7 @@ import type { Key, T } from '../i18n';
 import { Icon } from '../icons/Icon';
 import { useTeam } from '../lead/lead';
 import { agentKey, LevelMark, pairShort, slotPair, slotText, useLevels } from '../lead/level';
-import { RowIcon } from '../tree/RowIcon';
+import { dotOfStatus } from '../stateDot';
 import type { Session } from '../types';
 import { ScheduleForm } from './ScheduleForm';
 import { WidenMark } from '../history/HistoryView';
@@ -116,9 +116,7 @@ export function SchedulesView({ core, t, sessions, open, where }: { core: CoreCl
     const said = !last ? '' : !last.result || waits ? `${t('schedule.lastRun')}: ${waits ? reason : result}` : last.result === 'failed' || last.result === 'held' || (last.result === 'skipped' && reason) ? `${t('schedule.lastRun')} ${result}: ${reason || ran}` : `${t('schedule.lastRun')} ${result} · ${ran}`;
     const session = live(last?.session) ? last!.session! : null;
     const glyph = dot && (
-      <i className="tdot" data-s={dot} aria-hidden>
-        {dot === 'waiting' ? <RowIcon kind="hand" /> : dot === 'failed' ? <RowIcon kind="fail" /> : null}
-      </i>
+      <i className="tdot sdot" data-s={dot} data-dot={dotOfStatus(dot)} aria-hidden />
     );
     const isOpen = shown === s.id;
     // The row says the next run short ("in 2 d"); its exact day and time are the row's tooltip and read with the row.

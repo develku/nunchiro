@@ -26,21 +26,19 @@
 .tree :is(.row.head, .row.ghead) > .dbar + .cstrip {
   margin-left: 0;
 }
-/* Ticket 1041 (owner 11-22, 15.1 item 9): "finished" is a faint filled bar, a step quieter than the strip's grey bar; no
-   outline. The count and the click are the same. */
+/* Design book: "done" is the rows' done ring (--light-done), not a bar; 3 or more are one ring and the count pill
+   (tree.css, with the strip's). The click is the same. */
+.tree :is(.row.head, .row.ghead) > .dbar {
+  align-items: center;
+}
 .dbar i {
   display: block;
-  width: 3px;
-  height: 10px;
-  border-radius: var(--r-2);
-  background: var(--mark-done);
-}
-.dbar .num {
-  margin-left: 1px;
-  font-size: var(--fs-10);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 10px;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--light-done);
 }
 .tree .row.head > button.dbar:is(:hover, [aria-expanded='true']) {
   background: var(--tint-2);
@@ -59,18 +57,9 @@
   width: 64px;
 }
 
-/* A just-finished row (mockup 4b `.r.just`): its left edge is a faint filled bar (ticket 1041, the finished mark), fading
-   from 85 % to 25 % over its 10 minutes (`--fade`, DoneBars.tsx); the name at 65 %; no icon and no words (they are the
-   row's tip and label). The only row edge in the tree that is not a state light. */
-.row.wt2.just::before {
-  content: '';
-  position: absolute;
-  left: 4px;
-  top: var(--sp-8);
-  bottom: var(--sp-8);
-  width: 3px;
-  border-radius: var(--r-2);
-  background: var(--mark-done);
+/* A just-finished row (mockup 4b `.r.just`): its dot is the done ring (design book), fading from 85 % to 25 % over its
+   10 minutes (`--fade`, DoneBars.tsx); the name at 65 %; no icon and no words (they are the row's tip and label). */
+.row.wt2.just > .sdot {
   opacity: var(--fade, 0.85);
 }
 .row.wt2.just .nm {

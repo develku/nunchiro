@@ -123,6 +123,6 @@
    window surface around the frame, outside it, so it never lies over the agent's white page. Not :focus-within: the
    chips draw their own ring. */
 .artifact-frame[data-focus] {
-  outline: 2px solid var(--ring-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }

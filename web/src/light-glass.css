@@ -1,8 +1,11 @@
 /* Ticket 1041 lane 1 (A+B+C, approved mockup docs/design/polish-1121/index.html): the two shared rules the area lanes
    apply.
 
-   State light (C): add one class to the element that shows a session's state (a tree row, a tab, the permission card).
-   .light-run      working: a thin blue line travels along the bottom edge
+   State dot (design book, tree rows and the five states): a tree row, a tab and the session header show a session's
+   state as one 8 px `.sdot` with `data-dot` (StateDot.ts): run breathes (3.6 s, one shared phase: breathe.ts), you glows
+   and holds still, bad and warn are still dots, done and idle are rings. The word stays beside it.
+
+   State light (C), for cards and bands until they move to the book: add one class to the element.
    .light-you      your turn: a warm line with a glow, breathing slowly
    .light-bad      broken: a red line with a glow, still
    .light-limited  near a limit: a yellow line with a glow, still
@@ -10,15 +13,55 @@
    .glow-you, .glow-bad, .glow-limited  the glow alone, on an element that is itself the mark (the usage bar fill, a rail dot)
    The light is drawn in ::after; an element that already uses its ::after takes the light on a child. The words stay
    ("needs you", "4m", "88%"): the light never carries state on its own. Reduced motion holds every light still: the
-   working line rests centred, the your-turn glow at full strength.
+   your-turn glow at full strength.
 
-   Glass (B): .glass on a floating layer only (popovers, menus, the command palette, the permission card); nothing in the
+   Glass (B): .glass on a floating layer only (popovers, menus, the command palette); nothing in the
    page's flow. Reduced transparency gives the opaque raised surface instead. */
 
-:where(.light-run, .light-you, .light-bad, .light-limited) {
+.sdot {
+  flex: none;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border: 0;
+  border-radius: 50%;
+}
+.sdot[data-dot='run'] {
+  background: var(--light-run);
+  animation: breathe var(--dur-breathe) ease-in-out infinite;
+}
+.sdot[data-dot='you'] {
+  background: var(--light-you);
+  box-shadow: var(--you-ring);
+}
+.sdot[data-dot='bad'] {
+  background: var(--light-bad);
+}
+.sdot[data-dot='warn'] {
+  background: var(--light-warn);
+}
+.sdot[data-dot='done'] {
+  box-shadow: inset 0 0 0 1.5px var(--light-done);
+}
+.sdot[data-dot='idle'] {
+  box-shadow: inset 0 0 0 1px var(--faint);
+}
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+:where(.light-you, .light-bad, .light-limited) {
   position: relative;
 }
-:is(.light-run, .light-you, .light-bad, .light-limited)::after {
+:is(.light-you, .light-bad, .light-limited)::after {
   content: '';
   position: absolute;
   left: var(--sp-12);
@@ -27,13 +70,6 @@
   height: 2px;
   border-radius: var(--r-2);
   pointer-events: none;
-}
-.light-run::after {
-  height: 1px;
-  background:
-    linear-gradient(90deg, transparent, var(--light-run) 50%, transparent) 50% 0 / 40% 100% no-repeat,
-    var(--run-light-track);
-  animation: light-travel var(--motion-travel) ease-in-out infinite;
 }
 .light-you::after {
   background: var(--light-you);
@@ -65,14 +101,6 @@
 .glow-limited {
   box-shadow: var(--glow-limited);
 }
-@keyframes light-travel {
-  from {
-    background-position: -67% 0, 0 0;
-  }
-  to {
-    background-position: 167% 0, 0 0;
-  }
-}
 @keyframes light-breathe {
   from {
     opacity: 0.55;
@@ -82,7 +110,8 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  :is(.light-run, .light-you)::after {
+  .sdot[data-dot],
+  .light-you::after {
     animation: none;
   }
 }
@@ -134,18 +163,5 @@
   background: var(--glass-fill);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
-  box-shadow: var(--glass-shadow);
-  --focus-ring: var(--ring-focus);
-}
-
-/* Ticket 1041 lane 5: the cards docked over the chat's lower edge (the permission card and the session's Outbox cards,
-   chat/decision-card.css .dock) float, so they are glass. Named with the dock, not in the zero-specificity list above:
-   the card's own flat looks (the Decisions widget's hosted card) must not show through here. */
-.composer > .dock .deccard {
-  border: 0;
-  background: var(--glass-fill);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
-  box-shadow: var(--glass-shadow);
-  --focus-ring: var(--ring-focus);
-}
+  box-shadow: var(--glass-shadow);}
+/* The cards docked over the chat's lower edge are solid (design book, cards): chat/decision-card.css. */

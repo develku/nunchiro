@@ -35,7 +35,7 @@ test('density, tab font, waiting strip and theme persist across a reload', async
   await openWindow(app);
   await app.getByRole('navigation', { name: 'Left bar' }).getByRole('button', { name: 'Settings' }).click(); // the visible control: an early chord can be dropped (ticket 106)
   await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name: 'Appearance' }).click(); // v25-fix-settings: Settings opens on General
-  await app.getByRole('spinbutton', { name: 'Row height' }).fill('22'); // D-20261108-07: the Density presets are gone; 22 px is compact's height // comfortable is the default (STYLE 2026-10-28)
+  await app.getByRole('spinbutton', { name: 'Row height' }).fill('24'); // D-20261108-07: the Density presets are gone; 24 px is compact's height (design book) // comfortable is the default (STYLE 2026-10-28)
   await app.getByRole('spinbutton', { name: 'Tab font size' }).fill('13'); // ticket 162: a number field with steppers
   await page(app, 'Notifications').click();
   await app.getByRole('radio', { name: /No answer strip/ }).check();
@@ -46,7 +46,8 @@ test('density, tab font, waiting strip and theme persist across a reload', async
   await expect(app.getByRole('status').filter({ hasText: /^Connected$/ })).toBeVisible();
   await app.keyboard.press('Escape'); // v25f: the reload keeps the Settings modal open; Esc closes it
   await app.locator('.tab').first().click();
-  expect(await heights(app)).toEqual({ tree: 22, tabs: 26, tabFont: '13px' });
+  // Design book: compact is the tree's 24 rows; the tab strip stays 36 (density shrinks rows, never controls).
+  expect(await heights(app)).toEqual({ tree: 24, tabs: 36, tabFont: '13px' });
   await expect(app.locator('#waiting-strip')).toHaveAttribute('data-mode', 'off');
   await expect(app.locator('html')).toHaveAttribute('data-theme', 'dark');
 });

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, REPO } from './fixtures';
-import { bookPalette, repo, show, expectMatchesMockup, outDir } from './visual/compare';
+import { bookControls, bookPalette, bookSurface, repo, show, expectMatchesMockup, outDir } from './visual/compare';
 import { openQuiet } from './tree-seed';
 import { WTDIALOG as data } from './fixtures/wtdialog';
 
@@ -27,6 +27,8 @@ for (const scheme of ['light', 'dark'] as const) {
         await bookPalette(d, m);
         const golden = m.locator('section[aria-labelledby="h-d1"] .dlg[aria-label="new worktree"]').first();
         await golden.locator('input').fill(data.words);
+        await bookControls(d, 'input', golden, 'input');
+        await bookSurface(d, golden);
         // The same copy-only translation used by the existing fidelity-wtdialog gate.
         await golden.locator('.hint').nth(0).evaluate((e, branch) => {
           e.replaceChildren(document.createTextNode('Creates '), Object.assign(document.createElement('code'), { textContent: branch }), document.createTextNode(' from current branch'));

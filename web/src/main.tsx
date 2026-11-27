@@ -6,12 +6,14 @@ import { CrashGuard, CrashScreen, testCrash } from './CrashScreen';
 import { BrowserApp } from './pairing/BrowserApp';
 import { Pairing } from './pairing/Pairing';
 import { isBrowserRole, storedToken } from './pairing/boot';
+import { syncBreathing } from './stateDot';
 import './tokens.css';
 import './book-tokens.css'; // the design book's roles over tokens.css (docs/design/design-book)
 import './light-glass.css';
 import './styles.css';
 import './widget-quiet.css'; // ticket 1041 lane 7b: quiet buttons and fields inside the widgets
 
+syncBreathing();
 let root: Root | undefined;
 // S3: every root draw sits in CrashGuard, so a throw while drawing shows the crash screen, not a white window.
 const draw = (node: ReactNode) => (root ??= createRoot(document.getElementById('root')!)).render(<CrashGuard>{node}</CrashGuard>);

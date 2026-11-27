@@ -74,6 +74,14 @@ pub struct Task {
     /// Ticket 1081: what the core's auto-advance (advance.rs) did for its seats; empty until it first acts.
     #[serde(default, skip_serializing_if = "Advance::is_empty")]
     pub advance: Advance,
+    /// The tasks of the same place it waits for, at most `AFTER_MAX`. Whether it still waits is worked out at each read
+    /// (`blockers`): one closed as merged or done holds it no more. A build without the field reads the file and drops
+    /// it on its next write.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub after: Vec<String>,
+    /// Who last changed `after`, so a lead's handover reads who ordered it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ordered: Option<Ordered>,
     pub created: u64,
     pub updated: u64,
 }
@@ -145,6 +153,132 @@ pub struct Lesson {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cites: Option<String>,
     pub at: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Ordered {
+    /// `the user`, or the lead's seat name.
+    pub by: String,
+    pub at: u64,
+}
+
+/// A task this one waits for, as a reader gets it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Blocker {
+    pub id: String,
+    pub title: String,
+    /// `plan`, `build`, `review`, `gate` (`stage`), or how it closed when that was not a landing (`dropped`).
+    pub stage: String,
+}
+
+/// A task waits for at most this many.
+pub const AFTER_MAX: usize = 8;
+
+/// It landed: closed as merged or done. A task waiting for it waits no more.
+fn landed(t: &Task) -> bool {
+    t.closed
+        .as_ref()
+        .is_some_and(|c| c.how == "merged" || c.how == "done")
+}
+
+/// The board's stage of a task, from its record only (the CLI's word; the board works out its own).
+fn stage(t: &Task) -> &str {
+    match (&t.closed, &t.review) {
+        (Some(c), _) => &c.how,
+        (_, Some(r)) if r.pass => "gate",
+        (_, Some(_)) => "review",
+        _ if t.seats.iter().any(|s| s.writes) => "build",
+        _ => "plan",
+    }
+}
+
+/// What `t` still waits for among `all`: each id of `after` whose task has not landed. An id the ledger no longer
+/// holds waits for nothing.
+/// shortcut: a dropped blocker pruned with the oldest closed tasks (`CLOSED_KEPT`) stops holding its waiter; a
+/// tombstone when a place closes that many tasks while one waits.
+pub fn blockers(t: &Task, all: &[Task]) -> Vec<Blocker> {
+    t.after
+        .iter()
+        .filter_map(|id| all.iter().find(|b| b.id == *id))
+        .filter(|b| !landed(b))
+        .map(|b| Blocker {
+            id: b.id.clone(),
+            title: b.title.clone(),
+            stage: stage(b).into(),
+        })
+        .collect()
+}
+
+/// The open tasks that wait for `t` now.
+pub fn waiters(t: &Task, all: &[Task]) -> usize {
+    all.iter()
+        .filter(|w| w.closed.is_none() && w.after.contains(&t.id) && !landed(t))
+        .count()
+}
+
+/// `after` for task `id` (`None`: a task not made yet) of `place`, checked against every task of the ledger: each id an
+/// open task of the place, not the task itself, no cycle (depth first over `after` of every open task, no cap), at most
+/// `AFTER_MAX`. The ids once each, in the given order.
+fn check_after(
+    all: &[Task],
+    id: Option<&str>,
+    place: &Path,
+    after: &[String],
+) -> Result<Vec<String>, String> {
+    let mut ids: Vec<String> = vec![];
+    for a in after.iter().map(|a| a.trim()) {
+        if !ids.iter().any(|i| i == a) {
+            ids.push(a.into());
+        }
+    }
+    if ids.len() > AFTER_MAX {
+        return Err(format!(
+            "Refused: a task waits for at most {AFTER_MAX} tasks."
+        ));
+    }
+    let title = |id: &str| {
+        all.iter()
+            .find(|t| t.id == id)
+            .map(|t| t.title.clone())
+            .unwrap_or_default()
+    };
+    for b in &ids {
+        if Some(b.as_str()) == id {
+            return Err("Refused: a task cannot wait for itself.".into());
+        }
+        match all.iter().find(|t| t.id == *b && t.place == place) {
+            Some(t) if t.closed.as_ref().is_some_and(|c| c.how == "dropped") => {
+                return Err(format!(
+                    "Refused: \"{}\" was dropped; a task cannot wait for it.",
+                    t.title
+                ));
+            }
+            Some(t) if t.closed.is_none() => {}
+            _ => return Err(format!("Refused: no open task {b} in this project.")),
+        }
+    }
+    let Some(id) = id else { return Ok(ids) };
+    // A cycle: `id` is reached from one of its new blockers.
+    for b in &ids {
+        let mut seen = std::collections::BTreeSet::new();
+        let mut stack = vec![b.as_str()];
+        while let Some(at) = stack.pop() {
+            if at == id {
+                return Err(format!(
+                    "Refused: \"{}\" would wait for \"{}\", which already waits for it.",
+                    title(id),
+                    title(b)
+                ));
+            }
+            if !seen.insert(at) {
+                continue;
+            }
+            if let Some(t) = all.iter().find(|t| t.id == at && t.closed.is_none()) {
+                stack.extend(t.after.iter().map(String::as_str));
+            }
+        }
+    }
+    Ok(ids)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -299,6 +433,15 @@ pub struct View {
     /// Ticket 1120: each seat's account label (session id to label); a seat on its lead's own default is not listed.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub accounts: std::collections::BTreeMap<String, String>,
+    /// The tasks of `after` that have not landed (`blockers`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blockers: Vec<Blocker>,
+    /// How many open tasks wait for this one.
+    #[serde(default, skip_serializing_if = "is_zero_usize")]
+    pub waiters: usize,
+}
+fn is_zero_usize(n: &usize) -> bool {
+    *n == 0
 }
 
 /// A change reads, edits and writes the whole file: one at a time, in this process (one core per home).
@@ -543,6 +686,8 @@ impl Ledger {
                 closed: None,
                 stall: None,
                 advance: Advance::default(),
+                after: vec![],
+                ordered: None,
                 created: now,
                 updated: now,
             };
@@ -550,6 +695,40 @@ impl Ledger {
             s.tasks.push(task.clone());
             Ok(((task, true), true))
         })
+    }
+
+    /// Sets what open task `id` waits for (`check_after`); `by` is who, kept on the task. Empty clears it.
+    pub fn set_after(
+        &self,
+        id: &str,
+        after: &[String],
+        by: &str,
+        now: u64,
+    ) -> Result<Task, String> {
+        self.change(|s| {
+            let t = s
+                .tasks
+                .iter()
+                .find(|t| t.id == id && t.closed.is_none())
+                .ok_or_else(|| format!("no open task {id}"))?;
+            let ids = check_after(&s.tasks, Some(id), &t.place, after)?;
+            let t = s.tasks.iter_mut().find(|t| t.id == id).ok_or("task lost")?;
+            if t.after == ids {
+                return Ok((t.clone(), false));
+            }
+            t.after = ids;
+            t.ordered = Some(Ordered {
+                by: by.into(),
+                at: now,
+            });
+            t.updated = now;
+            Ok((t.clone(), true))
+        })
+    }
+
+    /// Refused before `make` when `after` is wrong for a new task of `place`, so a refusal leaves no task behind.
+    pub(crate) fn check_new_after(&self, place: &Path, after: &[String]) -> Result<(), String> {
+        check_after(&self.list()?, None, place, after).map(|_| ())
     }
 
     /// The open task that uses the worktree at `path`.
@@ -1276,6 +1455,8 @@ pub fn view(
         waits: None,
         package: None,
         accounts: Default::default(),
+        blockers: vec![],
+        waiters: 0,
     }
 }
 
@@ -1481,6 +1662,8 @@ pub(crate) fn views(
         (now, names, levels, seen, accounts)
     };
     let roles = crate::roles::Roles::open(home).list().unwrap_or_default();
+    // Every task, for what each waits for and what waits for it.
+    let all = Ledger::open(home).list().unwrap_or_default();
     let name = |id: &str| match names.get(id) {
         Some(label) if !label.is_empty() => label.clone(),
         _ if id == crate::room::PERSON => "the user".to_string(),
@@ -1562,6 +1745,8 @@ pub(crate) fn views(
                 seen,
                 waits,
                 accounts,
+                blockers: blockers(&v.task, &all),
+                waiters: waiters(&v.task, &all),
                 ..v
             }
         })
@@ -1598,6 +1783,14 @@ pub fn lines(v: &View, whole: bool) -> String {
     out += &format!("] {}\n", t.title);
     for a in &t.accept {
         out += &format!("  accept: {a}\n");
+    }
+    for b in &v.blockers {
+        out += &format!("  waits for {} \"{}\" ({})\n", b.id, b.title, b.stage);
+    }
+    match v.waiters {
+        0 => {}
+        1 => out += "  1 task waits for this\n",
+        n => out += &format!("  {n} tasks wait for this\n"),
     }
     for w in &t.worktrees {
         out += &format!("  worktree: {}\n", w.display());
@@ -1667,6 +1860,9 @@ pub fn lines(v: &View, whole: bool) -> String {
     }
     if v.state == "merge" {
         out += "  the user said yes to merging these files\n";
+    }
+    if whole && let Some(o) = &t.ordered {
+        out += &format!("  order set by {}\n", o.by);
     }
     if whole && let Some(p) = &v.package {
         out += &package::lines(p, &t.id);

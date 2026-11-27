@@ -416,7 +416,7 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
           aria-label={first ? undefined : t('composer.label', { name: name ?? t('composer.sessionFallback') })}
           aria-describedby={first && target && agentState(target) !== 'running' ? 'composer-why' : undefined}
           disabled={!connected || !target || agentState(target) !== 'running'}
-          placeholder={target ? (agentState(target) === 'running' ? (target.kind !== 'shell' && asks(target) ? (answersText || t('composer.waitsHint')) + (dockAsks.length ? ` ${t('composer.toCard')}` : '') : t('composer.placeholder', { name: sessionName(target).replace(/(\.\.\.|…)$/, '') }) /* N8: a name cut to "..." gets the placeholder's one "…" */) : '') : pin ? t('composer.notRunning', { pin }) : t('composer.open')}
+          placeholder={target ? (agentState(target) === 'running' ? (target.kind !== 'shell' && asks(target) ? (answersText || t('composer.waitsHint')) + (asked?.kind === 'question' ? ` ${t('composer.digitsCard')}` : '') + (dockAsks.length ? ` ${t('composer.toCard')}` : '') : t('composer.placeholder', { name: sessionName(target).replace(/(\.\.\.|…)$/, '') }) /* N8: a name cut to "..." gets the placeholder's one "…" */) : '') : pin ? t('composer.notRunning', { pin }) : t('composer.open')}
           onPaste={(e) => {
             const o = offers && target ? composerOffer(e.clipboardData.getData('text/plain')) : null;
             if (o && target) setOffer({ ...o, sid: target.id });

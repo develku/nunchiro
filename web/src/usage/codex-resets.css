@@ -37,7 +37,6 @@
 }
 .cxr .cxr-conds input[type="checkbox"] {
   margin: 0;
-  accent-color: var(--accent);
 }
 .cxr .cxr-cap input[type="number"] {
   width: 48px;

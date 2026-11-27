@@ -783,7 +783,8 @@ export function Tree(p: Props) {
                       {p.wt?.creating
                         .filter((c) => c.project === g.project)
                         .map((c) => (
-                          <span key={`creating-${c.key}`} className="row wt2 idle creating light-run" role="status" aria-label={t('tree.creatingLabel', { name: c.name })}>
+                          <span key={`creating-${c.key}`} className="row wt2 idle creating" role="status" aria-label={t('tree.creatingLabel', { name: c.name })}>
+                            <i className="sdot" data-dot="run" aria-hidden />
                             <span className="n">{c.name}</span> <span className="dim">{t('tree.creating')}</span>
                           </span>
                         ))}
@@ -940,7 +941,7 @@ export function Tree(p: Props) {
           <span>{t('tree.projectsTitle')}</span>
         </span>
         <span className="r">
-          <button className="btn p addproj" title={t('tree.addProjectHint')} onClick={askAddProject}>
+          <button className="btn sm addproj" title={t('tree.addProjectHint')} onClick={askAddProject}>
             {t('tree.addProject')}
           </button>
           <button className="xall" data-hint-quiet aria-pressed={expanded} title={t('tree.expandAllHint')} onClick={(e) => expandAll.current(e.altKey)}>

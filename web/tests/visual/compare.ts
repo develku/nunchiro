@@ -222,3 +222,20 @@ export const bookPalette = async (d: Locator, m: Page) => {
   });
   await m.addStyleTag({ content: `:root,:root:not([data-theme=light]),:root[data-theme=dark]{--page:${v.page}!important;--bg:${v.bg}!important;--fg:${v.fg}!important;--mut:${v.mut}!important;--line:${v.line}!important;--hov:${v.hov}!important;--run:${v.run}!important}` });
 };
+
+/** The design book also replaced the dialog surface (solid --raised, radius 14, the float shadow, no border): the mockup's
+ *  frame `m` takes the app dialog's own surface, so the frame still compares layout, words and controls. */
+export const bookSurface = async (d: Locator, m: Locator) => {
+  const props = ['border', 'border-radius', 'background-color', 'box-shadow'];
+  const look = await d.evaluate((e, p) => Object.fromEntries(p.map((k) => [k, getComputedStyle(e).getPropertyValue(k)])), props);
+  await m.evaluate((e, l) => Object.entries(l).forEach(([k, v]) => (e as HTMLElement).style.setProperty(k, v, 'important')), look);
+};
+
+/** The design book also replaced the mockup's controls (buttons, fields, checks): each mockup control matched by
+ *  `mockSel` takes the computed look of the app control at the same index under `appSel`, so the frame still compares
+ *  layout and words. Pseudo-elements (a check's tick) are not copied. */
+export const bookControls = async (d: Locator, appSel: string, m: Locator, mockSel: string) => {
+  const props = ['height', 'width', 'padding', 'border', 'border-radius', 'background-color', 'color', 'font', 'box-shadow', 'appearance', 'line-height', 'box-sizing', 'outline', 'outline-offset'];
+  const looks = await d.locator(appSel).evaluateAll((els, p) => els.map((e) => Object.fromEntries(p.map((k) => [k, getComputedStyle(e).getPropertyValue(k)]))), props);
+  await m.locator(mockSel).evaluateAll((els, l) => els.forEach((e, i) => l[i] && Object.entries(l[i]).forEach(([k, v]) => (e as HTMLElement).style.setProperty(k, v, 'important'))), looks);
+};

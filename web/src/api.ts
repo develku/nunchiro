@@ -2,6 +2,18 @@
 // The token arrives at launch in window.__NUNCHIRO__ (Tauri page-load script, or the test harness)
 // and travels only in the WebSocket subprotocol header, never in a URL or a log line.
 export class CoreRefusal extends Error {}
+/** The core refuses a request past its in-flight cap (MAX_JOBS, http/mod.rs) while a burst (the window's connect, a
+ *  settings page's reads) still runs: retry that refusal only, 3 tries over ~0.9 s. */
+export async function busyRetry<R>(send: () => Promise<R>): Promise<R> {
+  for (let tried = 1; ; tried++) {
+    try {
+      return await send();
+    } catch (e) {
+      if (tried >= 3 || !(e instanceof CoreRefusal) || !e.message.includes('too many requests in flight')) throw e;
+      await new Promise((r) => setTimeout(r, 300 * tried));
+    }
+  }
+}
 
 /** v25-sendkeys: the two refusal prefixes the window keys off (crates/nunchiro-core/src/delivery.rs). */
 export const UNCERTAIN = 'uncertain:'; // a write that may have landed partway: never retyped
@@ -746,15 +758,8 @@ export class CoreClient {
   // The core refuses a request past its in-flight cap (MAX_JOBS, http/mod.rs) while a burst (the window's connect, a
   // settings page's reads) is still running, and callers swallow a failed list: retry that refusal only, 3 tries over ~0.9 s.
   // Ticket 459: the account readers too (account_list, account_check), which take the core's probe places.
-  private async busyRetry(req: { op: string; [k: string]: unknown }) {
-    for (let tried = 1; ; tried++) {
-      try {
-        return await this.request(req);
-      } catch (e) {
-        if (tried >= 3 || !(e instanceof CoreRefusal) || !e.message.includes('too many requests in flight')) throw e;
-        await new Promise((r) => setTimeout(r, 300 * tried));
-      }
-    }
+  private busyRetry(req: { op: string; [k: string]: unknown }) {
+    return busyRetry(() => this.request(req));
   }
   /** V2-4b: the confined handshake check of a typed entry (before any approval; the core allows one at a time). */
   acpCheck(entry: AcpEntry, confirmed = false) {

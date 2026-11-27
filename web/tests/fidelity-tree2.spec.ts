@@ -279,6 +279,8 @@ for (const section of [1, 2, 3, 5]) test(`same_data_side_by_side  section ${sect
       if (appSelector === '.more' || appSelector === '.chip') expected.fontSize = '11px';
       // Ticket 1041 (mockup polish-1121 .row .n, coordinator round 2): row names are regular weight.
       if (appSelector === '.row.run .nm') expected.fontWeight = '400';
+      // Design book (tree rows): the strip's bars are the rows' 8 px state dots now.
+      if (appSelector === '.cstrip i') Object.assign(expected, { width: '8px', borderRadius: '50%' });
       const actual = await target.locator(appSelector).first().evaluate(read, props);
       measurements.push({ mockSelector, appSelector, expected, actual });
       expect(actual).toEqual(expected);

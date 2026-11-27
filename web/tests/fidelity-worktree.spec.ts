@@ -12,7 +12,7 @@ import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { expect, test, type Core } from './fixtures';
 import { openQuiet } from './tree-seed';
-import { bookPalette, expectMatchesMockup, outDir, repo, show, type Scheme } from './visual/compare';
+import { bookControls, bookPalette, bookSurface, expectMatchesMockup, outDir, repo, show, type Scheme } from './visual/compare';
 import { MOCKUPS, mockup } from './visual/mockups';
 
 outDir('fidelity-worktree');
@@ -206,7 +206,6 @@ async function rawMockup(app: Page, prepare: (m: Page) => Promise<void>) {
   await prepare(m);
   return m;
 }
-const px = (v: string) => Math.round(parseFloat(v) * 100) / 100;
 /** Computed style of one element: what the eye reads as its colour, border and width. */
 const look = (l: Locator) =>
   l.first().evaluate((e) => {
@@ -235,15 +234,21 @@ test.describe('dark_tidy_matches_mockup_computed', { tag: '@chromium' }, () => {
       resolve: await look(d.getByRole('button', { name: /^Resolve/ })),
     };
     console.log('TIDY-DARK', JSON.stringify({ mock, got }));
-    expect(got.box.accent, 'checkbox accent').toBe(mock.box.accent);
-    expect(got.box.bg, 'checkbox background').toBe(mock.box.bg);
-    // The blue is the UA's, so the drawn box is compared: both checked, 13px, same page scheme.
-    const shot = (l: Locator) => l.first().screenshot({ animations: 'disabled' });
-    const drawn = await Promise.all([shot(m.locator(`${TIDY} input[type=checkbox]:not(:disabled)`)), shot(d.locator('input[type=checkbox]'))]);
-    expect(drawn[1].equals(drawn[0]), 'checkbox pixels equal the mockup box').toBe(true);
-    expect(got.all.border, 'All projects border').toBe(mock.all.border);
+    // Design book (controls): the check is the book's, not the mockup's UA box: 16, checked in ink (--text), never blue.
+    const ink = await app.evaluate(() => {
+      const i = document.createElement('i');
+      i.style.color = 'var(--text)';
+      document.body.append(i);
+      const c = getComputedStyle(i).color;
+      i.remove();
+      return c;
+    });
+    expect(got.box.bg, 'checked box is ink').toBe(ink);
+    expect(Math.round(got.box.width), 'check size').toBe(16);
+    expect(got.all.border.startsWith('0px none'), `All projects has no outline (design book buttons are fills): ${got.all.border}`).toBe(true);
     expect(got.all.outline, 'All projects (pressed) draws no outline of its own').toBe(mock.all.outline);
-    expect(Math.abs(px(String(got.resolve.width)) - px(String(mock.resolve.width))), `Resolve width app ${got.resolve.width} vs mockup ${mock.resolve.width}`).toBeLessThanOrEqual(1);
+    // Resolve is the book's small button (24 high, padding 0 8, 12 px), so its width no longer follows the mockup's pill.
+    expect(Math.round((await d.getByRole('button', { name: /^Resolve/ }).first().boundingBox())!.height), 'Resolve height').toBe(24);
   });
 
   for (const scheme of SCHEMES) {
@@ -298,7 +303,8 @@ for (const scheme of SCHEMES) {
 
     test('new worktree dialog', async ({ app, core }) => {
       const d = await newDialog(app, core, scheme);
-      await expectMatchesMockup(app, FILE, NEW, d, { name: 'new-worktree', prepare: on(newFill(d, scheme)) });
+      // Design book (controls): the mockup's field takes the app's book field.
+      await expectMatchesMockup(app, FILE, NEW, d, { name: 'new-worktree', prepare: async (m) => (await on(newFill(d, scheme))(m), await bookControls(d, 'input', m.locator(NEW).first(), 'input'), await bookSurface(d, m.locator(NEW).first())) });
     });
 
     // Look 1117 v11 A S3-2: the discard question is the Remove-project dialog's centred sheet now (one look for one kind of
@@ -306,17 +312,19 @@ for (const scheme of SCHEMES) {
 
     test('tidy panel', async ({ app, core }) => {
       const d = await tidyPanel(app, core, scheme);
-      await expectMatchesMockup(app, FILE, TIDY, d, { name: 'tidy', prepare: on(tidyFill(d)) });
+      // Design book (controls): the mockup's buttons and checks take the app's book buttons and checks.
+      await expectMatchesMockup(app, FILE, TIDY, d, { name: 'tidy', prepare: async (m) => (await on(tidyFill(d))(m), await bookControls(d, 'input[type=checkbox]', m.locator(TIDY).first(), 'input[type=checkbox]'), await bookControls(d, '.btn:not([aria-pressed])', m.locator(TIDY).first(), 'button'), await bookSurface(d, m.locator(TIDY).first())) });
     });
 
-    // Ticket 1041 lane 4 (B): the toast floats, so it is glass (was WTDIALOGS' dark bar, whose crop is retired); its words,
-    // Undo and dismiss stay.
+    // Design book (toasts): the toast is a solid --raised pill, never glass (was WTDIALOGS' dark bar, then glass); its
+    // words, Undo and dismiss stay.
     test('undo_toast_matches_mockup', async ({ app, core }) => {
       const t = await toast(app, core, scheme);
-      await expect(t).toHaveClass(/\bglass\b/);
+      await expect(t).not.toHaveClass(/\bglass\b/);
       await expect(t.locator('.wtundo')).toBeVisible();
       await expect(t.locator('.wtdismiss')).toBeVisible();
-      expect(await t.evaluate((e) => getComputedStyle(e).backdropFilter || getComputedStyle(e).getPropertyValue('-webkit-backdrop-filter'))).toContain('blur');
+      expect(await t.evaluate((e) => getComputedStyle(e).backdropFilter)).toBe('none');
+      expect(await t.evaluate((e) => getComputedStyle(e).borderTopLeftRadius)).toBe('10px');
     });
   });
 

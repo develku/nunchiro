@@ -167,9 +167,7 @@
   border-radius: var(--r-12);
   /* ticket 1041: a dialog, solid, no border */
   box-shadow: var(--shadow-float);
-  padding: var(--sp-16);
-  --focus-ring: var(--ring-focus);
-}
+  padding: var(--sp-16);}
 
 .pair-sheet p {
   margin: var(--sp-4) 0;
