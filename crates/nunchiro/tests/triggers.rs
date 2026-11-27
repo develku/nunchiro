@@ -65,7 +65,7 @@ struct Core {
     project: PathBuf,
     owner: String,
     port: u16,
-    _guard: home::ServeGuard,
+    _guard: Option<home::ServeGuard>,
 }
 fn core(tag: &str) -> Core {
     let home = home::short(tag);
@@ -113,7 +113,7 @@ fn core(tag: &str) -> Core {
         project,
         owner,
         port,
-        _guard: guard,
+        _guard: Some(guard),
     }
 }
 fn add(c: &Core, name: &str, on: &str, auto: bool, secret: &str) {
@@ -683,4 +683,310 @@ fn trigger_cards_together_keep_half_the_owners_queue_free() {
         assert!(Instant::now() < end, "no approval card was raised");
         std::thread::sleep(Duration::from_millis(100));
     }
+}
+
+/// A fake `gh` in its own folder: it prints the file `answer` beside it, so a test changes what GitHub says.
+/// A fake `gh`: it logs its arguments to `asked` and answers `answer-<owner>-<name>` (or `answer`) through `--jq` as
+/// the real one does (with jq); with a `fail` file it fails as a gh that is not logged in.
+fn fake_gh(c: &Core) -> PathBuf {
+    let dir = user(&c.home).join("fake-gh");
+    std::fs::create_dir_all(&dir).unwrap();
+    let gh = dir.join("gh");
+    std::fs::write(
+        &gh,
+        format!(
+            r#"#!/bin/sh
+d='{0}'
+echo "$@" >> "$d/asked"
+q=; prev=; repo=
+for a in "$@"; do
+  [ "$prev" = --jq ] && q="$a"
+  [ "$prev" = --repo ] && repo="$a"
+  prev="$a"
+done
+[ -f "$d/fail" ] && {{ echo 'gh: not logged in' >&2; exit 1; }}
+f="$d/answer"
+r=$(echo "$repo" | tr / -)
+[ -f "$d/answer-$r" ] && f="$d/answer-$r"
+if [ -n "$q" ]; then exec /usr/bin/jq -c "$q" "$f"; else exec cat "$f"; fi
+"#,
+            dir.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&gh, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    std::fs::write(dir.join("answer"), "[]").unwrap();
+    dir
+}
+const PASSING: &str = r#"[{"url": "https://github.com/o/r/pull/7", "headRefOid": "abc", "statusCheckRollup": [{"conclusion": "SUCCESS"}]}]"#;
+const FAILING: &str = r#"[{"url": "https://github.com/o/r/pull/7", "headRefOid": "abc", "statusCheckRollup": [{"conclusion": "FAILURE"}]}]"#;
+/// Open pull requests `from..to` of o/r, each with `checks` check rows that passed, and failing ones for `failed`.
+fn pulls(from: usize, to: usize, checks: usize, failed: &[usize]) -> String {
+    let rows: Vec<Value> = (from..to)
+        .map(|n| {
+            let mut rollup: Vec<Value> = (0..checks)
+                .map(|i| json!({"__typename": "CheckRun", "name": format!("check-{i}-of-a-long-workflow-name"), "status": "COMPLETED", "conclusion": "SUCCESS", "detailsUrl": format!("https://github.com/o/r/actions/runs/{n}{i}/job/{i}")}))
+                .collect();
+            if failed.contains(&n) {
+                rollup.push(json!({"conclusion": "FAILURE"}));
+            }
+            json!({"url": format!("https://github.com/o/r/pull/{n}"), "headRefOid": format!("h{n}"), "statusCheckRollup": rollup})
+        })
+        .collect();
+    Value::Array(rows).to_string()
+}
+
+/// A core whose PATH has the fake `gh`, reading GitHub every second.
+fn github_core(tag: &str) -> (Core, PathBuf) {
+    let home = home::short(tag);
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    std::fs::write(
+        home.join("settings.json"),
+        json!({"triggers_port": port, "triggers_poll_secs": 1}).to_string(),
+    )
+    .unwrap();
+    let u = user(&home);
+    let project = u.join("proj");
+    std::fs::create_dir_all(&project).unwrap();
+    let project = project.canonicalize().unwrap();
+    let probe = Core {
+        home: home.clone(),
+        project: project.clone(),
+        owner: String::new(),
+        port,
+        _guard: None,
+    };
+    let gh = fake_gh(&probe);
+    let path = format!(
+        "{}:{}/tests/fixtures/agent-cli:/usr/bin:/bin",
+        gh.display(),
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let guard = home::spawn_serve(
+        &home,
+        &[
+            ("HOME", u.to_str().unwrap()),
+            ("PATH", &path),
+            ("NUNCHIRO_LOGIN_PATH", "off"),
+        ],
+    );
+    let c = Core {
+        owner: std::fs::read_to_string(home.join("core.token")).unwrap(),
+        _guard: Some(guard),
+        ..probe
+    };
+    ok(
+        &c.home,
+        &[
+            "agent",
+            "start",
+            "here",
+            "--kind",
+            "shell",
+            "--project",
+            c.project.to_str().unwrap(),
+            "--",
+            "/bin/sh",
+            "-c",
+            "exec cat",
+        ],
+    );
+    (c, gh)
+}
+/// Adds GitHub trigger `name` on `repo` for `event`, with more flags.
+fn add_github(c: &Core, name: &str, repo: &str, event: &str, more: &[&str]) {
+    let project = c.project.to_str().unwrap();
+    let mut args = vec![
+        "trigger",
+        "add",
+        name,
+        "--on",
+        "github",
+        "--repo",
+        repo,
+        "--event",
+        event,
+        "--kind",
+        "claude",
+        "--project",
+        project,
+        "--task",
+        "Fix the failing checks.",
+    ];
+    args.extend_from_slice(more);
+    let out = nunchiro(&c.home, None, &args, "");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+fn trigger_cards(c: &Core) -> Vec<Value> {
+    let snap = call(&c.home, &c.owner, json!({"op": "snapshot"}));
+    assert!(snap["Ok"].is_object(), "{snap}");
+    // Absent while none waits.
+    snap["Ok"]["owner_decisions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|d| d["owner"]["change"] == "trigger")
+        .cloned()
+        .collect()
+}
+fn wait_for(what: &str, mut done: impl FnMut() -> bool) {
+    let until = std::time::Instant::now() + Duration::from_secs(20);
+    while !done() {
+        assert!(std::time::Instant::now() < until, "{what}");
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+#[test]
+fn a_github_trigger_starts_once_when_checks_turn_failed() {
+    let (c, gh) = github_core("tgg");
+    std::fs::write(gh.join("answer"), PASSING).unwrap();
+    add_github(&c, "ci", "o/r", "checks_failed", &["--auto"]);
+    // Passing, then read again: nothing starts.
+    std::thread::sleep(Duration::from_secs(3));
+    assert!(started(&c).is_empty());
+    let asked = std::fs::read_to_string(gh.join("asked")).unwrap_or_default();
+    assert!(asked.contains("pr list --repo o/r --state open"), "{asked}");
+    // The owner's own pull requests only, unless the trigger says any author.
+    assert!(asked.contains("--author @me"), "{asked}");
+    // The checks turn failed: one start, with the pull request in the quoted data.
+    std::fs::write(gh.join("answer"), FAILING).unwrap();
+    let first = wait_started(&c, 1).remove(0);
+    assert!(
+        first.starts_with("Fix the failing checks.")
+            && first.contains("https://github.com/o/r/pull/7"),
+        "{first}"
+    );
+    // The same state read again: no second start.
+    std::thread::sleep(Duration::from_secs(3));
+    assert_eq!(started(&c).len(), 1);
+}
+
+#[test]
+fn an_answer_over_64_kb_still_finds_the_failed_checks() {
+    let (c, gh) = github_core("tgb");
+    let seed = pulls(1, 50, 8, &[]);
+    assert!(seed.len() > 65_536, "{}", seed.len());
+    std::fs::write(gh.join("answer"), &seed).unwrap();
+    add_github(
+        &c,
+        "ci",
+        "o/r",
+        "checks_failed",
+        &["--auto", "--any-author"],
+    );
+    std::thread::sleep(Duration::from_secs(3));
+    assert!(started(&c).is_empty());
+    assert!(
+        !std::fs::read_to_string(gh.join("asked"))
+            .unwrap()
+            .contains("--author")
+    );
+    std::fs::write(gh.join("answer"), pulls(1, 50, 8, &[42])).unwrap();
+    let first = wait_started(&c, 1).remove(0);
+    assert!(first.contains("https://github.com/o/r/pull/42"), "{first}");
+}
+
+#[test]
+fn a_held_github_event_fires_on_a_later_read() {
+    let (c, gh) = github_core("tgh");
+    add_github(&c, "ci", "o/r", "checks_failed", &[]);
+    std::thread::sleep(Duration::from_secs(3));
+    // Four failing pull requests: three cards wait, one is held (and the hour's fourth start is still free).
+    std::fs::write(gh.join("answer"), pulls(1, 5, 1, &[1, 2, 3, 4])).unwrap();
+    wait_for("three cards", || trigger_cards(&c).len() == 3);
+    std::thread::sleep(Duration::from_secs(3));
+    assert_eq!(trigger_cards(&c).len(), 3);
+    // Not now on all three: the held one gets its card on a next read, and the three answered ones none again.
+    for card in trigger_cards(&c) {
+        call(
+            &c.home,
+            &c.owner,
+            json!({"op": "answer", "item": card["id"], "answer": {"type": "deny"}, "confirmed": true}),
+        );
+    }
+    wait_for("the held one", || trigger_cards(&c).len() == 1);
+    assert_eq!(
+        trigger_cards(&c)[0]["owner"]["reason"],
+        "https://github.com/o/r/pull/4"
+    );
+    std::thread::sleep(Duration::from_secs(3));
+    assert_eq!(trigger_cards(&c).len(), 1, "a card came twice");
+}
+
+#[test]
+fn a_trigger_added_again_for_another_repo_starts_from_its_first_read() {
+    let (c, gh) = github_core("tga");
+    add_github(
+        &c,
+        "ci",
+        "o/r",
+        "checks_failed",
+        &["--auto", "--any-author"],
+    );
+    std::thread::sleep(Duration::from_secs(3));
+    ok(&c.home, &["trigger", "remove", "ci"]);
+    // o/s has failing pull requests from before the trigger: its first read starts nothing.
+    std::fs::write(gh.join("answer-o-s"), pulls(1, 4, 1, &[1, 2, 3])).unwrap();
+    add_github(
+        &c,
+        "ci",
+        "o/s",
+        "checks_failed",
+        &["--auto", "--any-author"],
+    );
+    std::thread::sleep(Duration::from_secs(4));
+    assert!(started(&c).is_empty(), "{:?}", started(&c));
+}
+
+#[test]
+fn a_failing_gh_shows_as_the_triggers_last_fire() {
+    let (c, gh) = github_core("tgf");
+    std::fs::write(gh.join("fail"), "").unwrap();
+    add_github(&c, "ci", "o/r", "checks_failed", &[]);
+    let reason = || {
+        let list: Value =
+            serde_json::from_str(&ok(&c.home, &["trigger", "list", "--json"])).unwrap();
+        let list = list.get("triggers").unwrap_or(&list);
+        list[0]["last"]["reason"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string()
+    };
+    wait_for("the gh error on the trigger", || {
+        reason().contains("not logged in")
+    });
+}
+
+#[test]
+fn a_start_that_fails_is_not_tried_again_until_a_new_head_commit() {
+    let (c, gh) = github_core("tgs");
+    add_github(&c, "ci", "o/r", "checks_failed", &["--auto"]);
+    std::thread::sleep(Duration::from_secs(3));
+    // The project folder is gone: every start fails for good.
+    std::fs::remove_dir_all(&c.project).unwrap();
+    // One failing pull request: its one failed start is the last fire, and no later read starts it again.
+    std::fs::write(gh.join("answer"), pulls(1, 2, 1, &[1])).unwrap();
+    let last = || {
+        let list: Value =
+            serde_json::from_str(&ok(&c.home, &["trigger", "list", "--json"])).unwrap();
+        let list = list.get("triggers").unwrap_or(&list);
+        list[0]["last"].clone()
+    };
+    wait_for("the failed start", || {
+        last()["reason"]
+            .as_str()
+            .is_some_and(|r| r.contains("new head commit"))
+    });
+    let at = last()["at"].clone();
+    std::thread::sleep(Duration::from_secs(4));
+    assert_eq!(last()["at"], at, "tried again: {}", last());
 }

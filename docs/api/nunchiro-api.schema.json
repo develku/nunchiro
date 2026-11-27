@@ -476,6 +476,18 @@
               "const": "add",
               "type": "string"
             },
+            "github": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Github"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "What a `github` trigger watches."
+            },
             "mode": {
               "$ref": "#/$defs/Mode",
               "default": "ask"
@@ -3396,6 +3408,54 @@
         "missing"
       ],
       "type": "string"
+    },
+    "Github": {
+      "additionalProperties": false,
+      "description": "What a GitHub trigger watches: one repository and one kind of event.",
+      "properties": {
+        "any_author": {
+          "description": "Pull requests of anyone, not only the owner's own (`--author @me`): on a public repository a stranger's pull\nrequest could then start a run on code the stranger wrote.",
+          "type": "boolean"
+        },
+        "event": {
+          "$ref": "#/$defs/GithubEvent"
+        },
+        "label": {
+          "description": "The label a `labeled` trigger waits for.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo": {
+          "description": "`owner/name`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "event"
+      ],
+      "type": "object"
+    },
+    "GithubEvent": {
+      "oneOf": [
+        {
+          "const": "checks_failed",
+          "description": "An open pull request's checks failed (once per head commit).",
+          "type": "string"
+        },
+        {
+          "const": "changes_requested",
+          "description": "A review asked for changes on an open pull request (once per head commit).",
+          "type": "string"
+        },
+        {
+          "const": "labeled",
+          "description": "An open issue or pull request has the label.",
+          "type": "string"
+        }
+      ]
     },
     "Group": {
       "description": "One row of a tab: an agent, a model, a folder or an agent session.",
@@ -15564,6 +15624,11 @@
           "const": "webhook",
           "description": "`POST http://127.0.0.1:<port>/hooks/<name>`, signed (GitHub `X-Hub-Signature-256`) or with\n`X-Nunchiro-Secret`.",
           "type": "string"
+        },
+        {
+          "const": "github",
+          "description": "An event read from GitHub with the user's own `gh` (`github.rs`).",
+          "type": "string"
         }
       ]
     },
@@ -16398,6 +16463,17 @@
           },
           "type": "array"
         },
+        "github": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Github"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A GitHub trigger's repository and event."
+        },
         "last": {
           "anyOf": [
             {
@@ -16411,7 +16487,7 @@
         },
         "mac": {
           "default": "",
-          "description": "HMAC of name, on, run, mode and secret under `schedule.key`.",
+          "description": "HMAC of name, on, run, mode, secret and github under `schedule.key`.",
           "type": "string"
         },
         "mode": {

@@ -356,9 +356,9 @@ fn serve_locked(home: &Path) -> Result<(), String> {
     // V2.5-11: scheduled runs; it sees `stopping` before each start.
     let _schedule =
         crate::schedule::spawn(sessions.clone(), stopping.clone()).map_err(|e| e.to_string())?;
-    // The webhook triggers' loopback port, open only while one is on.
-    let _webhook =
-        crate::schedule::spawn_webhook(sessions.clone(), stopping.clone(), home.to_path_buf())
+    // Triggers: the webhook's loopback port and the GitHub reads, each asleep while none of its kind is on.
+    let _triggers =
+        crate::schedule::spawn_triggers(sessions.clone(), stopping.clone(), home.to_path_buf())
             .map_err(|e| e.to_string())?;
     // Held new seats that wait for memory; asleep (no reading) while none waits.
     let _memory_wait =
