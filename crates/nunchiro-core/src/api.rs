@@ -687,6 +687,21 @@ pub enum Request {
         #[serde(default)]
         head: String,
     },
+    // The Diff panel's Create PR form: what it starts with (commit subjects, the PR template, the bases). Window only.
+    PrDraft {
+        session: String,
+    },
+    // The form's Create PR: checked and pushed as `GitPush`, then `gh pr create` with the body on stdin. Window only.
+    PrCreate {
+        session: String,
+        #[serde(default)]
+        head: String,
+        title: String,
+        body: String,
+        base: String,
+        #[serde(default)]
+        draft: bool,
+    },
     // v2-10c: owner only and local (the app's `serve`), answered by the socket server before any session check.
     // Reads the library cache; Allow, auto-allow and Remove are window-only `libs::Op`, never a `Request`.
     LibsResolve {

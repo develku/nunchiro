@@ -37,6 +37,7 @@ keys-basics.spec.ts
 diff.spec.ts | lists exactly the changed and untracked files|two windows viewing the same diff|diff_list_arrows
 # the Diff header's Push run by the app behind its confirm strip (local bare remote)
 git-push.spec.ts
+pr-create.spec.ts
 
 # board and settings open
 board.spec.ts

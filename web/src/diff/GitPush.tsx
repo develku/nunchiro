@@ -53,7 +53,7 @@ export function PushStrip({ core, session, git, pr, onPushed, onCancel, t }: { c
 }
 
 /** The menu beside the button: the app's Push or asking the agent. `agentWhy`: why the agent cannot be asked now. */
-export function WayMenu({ way, agent, agentWhy, onPick, t }: { way: Way; agent: string; agentWhy?: Key; onPick: (w: Way) => void; t: T }) {
+export function WayMenu({ way, appLabel, agentLabel, agentWhy, onPick, t }: { way: Way; appLabel: string; agentLabel: string; agentWhy?: Key; onPick: (w: Way) => void; t: T }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -64,8 +64,8 @@ export function WayMenu({ way, agent, agentWhy, onPick, t }: { way: Way; agent: 
     return () => document.removeEventListener('mousedown', away);
   }, [open]);
   const rows: { w: Way; label: string; off?: boolean }[] = [
-    { w: 'app', label: t('gitActions.choice.app') },
-    { w: 'agent', label: t('gitActions.choice.agent', { agent }), off: !!agentWhy },
+    { w: 'app', label: appLabel },
+    { w: 'agent', label: agentLabel, off: !!agentWhy },
   ];
   const onKey = (e: KeyboardEvent<HTMLSpanElement>) => {
     if (e.nativeEvent.isComposing) return;

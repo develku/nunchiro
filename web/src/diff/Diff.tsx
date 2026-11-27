@@ -15,7 +15,9 @@ import type { Key, T } from '../i18n';
 import { COLOURS, HIDE_LIST } from '../features/diff-options';
 import { useFeatureSetting } from '../settings/useFeatureSetting';
 import type { Session } from '../types';
-import { agentLive, appAction, gitAction, keepWay, promptKey, storedWay, type GitFacts, type Way } from './gitAction';
+import { agentLive, appAction, ASK_AGENT, gitAction, keepWay, ladder, promptKey, storedWay, type GitFacts, type Way } from './gitAction';
+import { createdText, PrForm } from './PrForm';
+import { PrView } from '../pr/PrView';
 import { PushStrip, pushedText, WayMenu } from './GitPush';
 import { agentName } from '../chat/conversation';
 import { finishedTurnAt, keepScope, latestTurn, latestTurnPartial, scoped, storedScope, type Scope } from './scope';
@@ -164,8 +166,10 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
   // The app's Push: the strip is open for this session; `pushed` is the foot line after one.
   const [way, setWay] = useState<Way>(storedWay);
   const [strip, setStrip] = useState<string | null>(null);
-  const [pushed, setPushed] = useState<{ session: string; text: string } | null>(null);
-  useEffect(() => setStrip(null), [session]);
+  const [pushed, setPushed] = useState<{ session: string; text: string; url?: string } | null>(null);
+  const [form, setForm] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<string | null>(null); // the PR view opened from the form or its foot line
+  useEffect(() => (setStrip(null), setForm(null)), [session]);
   const working = !!owner?.attention.working;
   const wasWorking = useRef(working);
   // A refresh tick (focus, 30 s, a finished turn) may come before the agent shows working: it ends the wait only once
@@ -246,7 +250,10 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
   const live = !!ours && agentLive(ours);
   const byApp = !!appAct && (way === 'app' || !live);
   const agent = ours ? agentName(ours.kind, ours.acp_agent) : '';
-  const act = byApp ? appAct : appAct && agentAct ? { ...agentAct, label: 'gitActions.label.askPush' as const } : agentAct;
+  // The agent path's label follows the rung, also while the app path is off (the default branch).
+  const rung = appAct && list?.git ? ladder(list.git, openPr).ask : null;
+  const askLabel = rung ? ASK_AGENT[rung] : undefined;
+  const act = byApp ? appAct : askLabel && agentAct ? { ...agentAct, label: askLabel } : agentAct;
   const gitTip = byApp
     ? act?.why && t(act.why, { branch: list?.git?.branch ?? '' })
     : sent
@@ -261,7 +268,7 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
   // sends nothing and shows its own label and reason.
   const press = async () => {
     if (!gitAsk || !session || !owner) return;
-    if (byApp) return setStrip(session);
+    if (byApp) return gitAsk === 'push' ? setStrip(session) : setForm(session);
     setSent('');
     wait.current = { at: Date.now(), seen: false };
     try {
@@ -333,9 +340,10 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
         {appAct && live && (
           <WayMenu
             way={way}
-            agent={agent}
+            appLabel={t(appAct.label)}
+            agentLabel={t(askLabel ?? 'gitActions.label.askPush', { agent })}
             agentWhy={agentAct?.ask ? undefined : agentAct?.why ?? 'gitActions.why.notRunning'}
-            onPick={(w) => (setWay(w), keepWay(w), setStrip(null))}
+            onPick={(w) => (setWay(w), keepWay(w), setStrip(null), setForm(null))}
             t={t}
           />
         )}
@@ -375,6 +383,22 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
           t={t}
         />
       )}
+      {session && form === session && byApp && (appAct?.ask === 'push_pr' || appAct?.ask === 'create_pr') && (
+        <PrForm
+          core={core}
+          session={session}
+          onCancel={() => setForm(null)}
+          onOpen={setViewing}
+          onCreated={(c) => {
+            setForm(null);
+            setPushed({ session, text: createdText(t, c), url: c.url });
+            fresh.current = true;
+            setTick((n) => n + 1);
+          }}
+          t={t}
+        />
+      )}
+      {viewing && <PrView url={viewing} from={owner ? { id: owner.id, shell: owner.kind === 'shell' } : undefined} t={t} onClose={() => setViewing(null)} />}
       {session && !remoteOff && (
         <div className="dscope" role="radiogroup" aria-label={t('diff.scope.label')} onKeyDown={onScopeKey}>
           {SCOPES.map((s) => {
@@ -441,6 +465,11 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
       {pushed?.session === session && (
         <div className="dpushed" role="status">
           {pushed.text}
+          {pushed.url && (
+            <button type="button" className="btn q sm" onClick={() => setViewing(pushed.url!)}>
+              {t('gitActions.pr.open')}
+            </button>
+          )}
           <button type="button" className="dbtn" aria-label={t('gitActions.push.dismiss')} onClick={() => setPushed(null)}>
             ×
           </button>

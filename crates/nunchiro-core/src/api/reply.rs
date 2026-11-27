@@ -195,6 +195,15 @@ pub enum Reply {
         remote: String,
         branch: String,
     },
+    PrDraft {
+        draft: crate::git_write::Draft,
+    },
+    // `pr_create`: the new PR, and how many commits were pushed first.
+    PrCreated {
+        url: String,
+        number: u64,
+        pushed: u64,
+    },
     // Ticket 373: `None` when the branch has no PR of its own (or none is looked up: the default branch, no upstream).
     PrBranch {
         pr: Option<crate::pr::BranchPr>,

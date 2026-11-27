@@ -126,10 +126,12 @@ test('git actions: a local commit with no upstream offers Push & PR; a press aft
   fs.writeFileSync(path.join(s.cwd, 'login.ts'), 'export const a = 4;\n');
   git(s.cwd, 'commit', '-q', '-am', 'fix login');
   const prompts = spy(app);
+  // The agent path (the app's own path is git-push.spec.ts and pr-create.spec.ts): the last pick, kept by the window.
+  await app.addInitScript(() => localStorage.setItem('nunchiro.diffGitWay', 'agent'));
   await openWindow(app);
   await diffIcon(app).click();
   const dock = app.getByRole('complementary', { name: 'Diff' });
-  const push = dock.getByRole('button', { name: 'Push & PR', exact: true });
+  const push = dock.getByRole('button', { name: 'Ask Claude to push & open PR', exact: true });
   await expect(push).toBeVisible();
   await expect(push).not.toHaveAttribute('aria-disabled');
 

@@ -83,7 +83,7 @@ export function ladder(g: GitFacts, openPr: boolean): Action {
 }
 
 /** The asks the app runs itself, behind its own confirm (git_write.rs); every other ask goes to the agent. */
-const APP_ASKS: readonly Ask[] = ['push'];
+const APP_ASKS: readonly Ask[] = ['push', 'push_pr', 'create_pr'];
 /** How a press of an ask both can do goes: the app runs it, or the agent is asked. The last pick is kept. */
 export type Way = 'app' | 'agent';
 export const WAY_KEY = 'nunchiro.diffGitWay';
@@ -112,6 +112,13 @@ export function appAction(git: GitFacts | null, openPr: boolean): Action | null 
   if (!git.push_to || !git.head) return { label: next.label, ask: null, why: 'gitActions.why.noPushRemote' };
   return next;
 }
+
+/** The agent path's label for an ask the app also runs. */
+export const ASK_AGENT: Partial<Record<Ask, Key>> = {
+  push: 'gitActions.label.askPush',
+  push_pr: 'gitActions.label.askPushPr',
+  create_pr: 'gitActions.label.askCreatePr',
+};
 
 /** A session with an agent that can be asked now or later (not a terminal, not ended). */
 export const agentLive = (s: Session) => s.kind !== 'shell' && s.state === 'running' && !s.agent_ended;

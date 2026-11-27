@@ -401,3 +401,55 @@
 .diff .dpushed .dbtn {
   margin-left: auto;
 }
+/* The app's Create PR form (PrForm.tsx): under the header, solid panel ground, fields as the worktree dialog's. */
+.diff .dprform {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+  margin: var(--sp-8) var(--sp-8) 0;
+  padding: var(--sp-8) var(--sp-12);
+  border-radius: var(--r-6);
+  background: var(--tint-1);
+  font-size: var(--fs-sm);
+}
+.diff .dprform .dfld {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  color: var(--muted);
+}
+.diff .dprform .dfld.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sp-8);
+}
+.diff .dprform .dfld input,
+.diff .dprform .dfld textarea {
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-ui);
+}
+.diff .dprform .dfld textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+.diff .dprform .drow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-8);
+}
+.diff .dprform .dcheck {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+.diff .dprform .dfact {
+  margin: 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.diff .dprform .btn.p[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: default;
+}
