@@ -1329,6 +1329,50 @@ fn pr_create_pushes_then_hands_gh_the_text_unchanged() {
     );
 }
 
+/// The form's text is plain: hidden characters (bidi overrides, zero-width marks) leave the draft and what gh gets; a
+/// pull request template reached through a linked folder is not read.
+#[test]
+fn pr_text_has_no_hidden_characters_and_no_linked_template() {
+    let core = Core::new();
+    let dir = pr_repo(&core, 0);
+    pr_git(
+        &dir,
+        &[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "Fix\u{202E}txt.exe lexer\u{200B}",
+        ],
+    );
+    let outside = core.home.join("outside");
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(
+        outside.join("pull_request_template.md"),
+        "## From outside the repository\n",
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(&outside, dir.join(".github")).unwrap();
+    gh_create_shim(&core);
+    let s = core.start();
+    let d = core.window(json!({"op":"pr_draft","session":s.id}))["Ok"]["draft"].clone();
+    assert_eq!(d["title"], "Fixtxt.exe lexer", "{d}");
+    assert_eq!(d["template"], false, "{d}");
+    assert!(!d["body"].as_str().unwrap().contains("outside"), "{d}");
+    let p = &d["push"];
+    let r = core.window(json!({"op":"pr_create","session":s.id,"head":d["head"],"remote":p["remote"],"branch":p["branch"],"ahead":p["ahead"],"key":p["key"],"title":"Fix\u{202E} it","body":"a\u{2066}b","base":"main"}));
+    assert!(r["Ok"].is_object(), "{r}");
+    assert!(
+        fs::read_to_string(core.home.join("gh-runs"))
+            .unwrap()
+            .contains("|--title=Fix it|")
+    );
+    assert_eq!(
+        fs::read_to_string(core.home.join("gh-stdin")).unwrap(),
+        "ab"
+    );
+}
+
 #[test]
 fn pr_create_refusals_say_what_happened() {
     let core = Core::new();

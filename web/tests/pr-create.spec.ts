@@ -73,6 +73,9 @@ test('pr create: the form is filled from the commits; the edited text reaches gh
   expect(fs.readFileSync(path.join(core.home, 'gh-runs'), 'utf8')).toBe('pr|create|--repo=develku/nunchiro|--head=fix-lexer|--base=main|--title=-x Fix the lexer `now`|--body-file=-|--draft|');
   expect(fs.readFileSync(path.join(core.home, 'gh-stdin'), 'utf8')).toBe(body);
   expect(git(origin, 'rev-parse', 'refs/heads/fix-lexer')).toBe(head);
+  // The chat header shows the new PR at once, as it does for a PR the agent opened.
+  await expect(app.locator('.prchip').first()).toHaveAttribute('title', /pull\/58/, { timeout: 5000 }).catch(() => {});
+  await expect(app.locator('.prchip button').first()).toHaveAttribute('title', 'https://github.com/develku/nunchiro/pull/58');
   await shot(app, 'created');
 });
 
