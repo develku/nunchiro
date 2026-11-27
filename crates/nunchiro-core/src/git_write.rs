@@ -241,14 +241,10 @@ fn refusal(e: &str, to: &PushTo, limit: Duration) -> String {
     format!("{sentence}\n{}", tail(e))
 }
 
-/// Pushes the checked-out branch of `dir` when it is still what the window's strip showed: the head commit, the remote,
-/// the remote branch, the count and the push URL.
-pub fn push(dir: &Path, shown: &Shown) -> Result<Pushed, String> {
-    push_within(dir, shown, PUSH_TIMEOUT)
-}
-
-/// `push` with its own time limit (a test's).
-pub fn push_within(dir: &Path, shown: &Shown, limit: Duration) -> Result<Pushed, String> {
+/// The branch of `dir` and where it pushes, when it is still what the window showed (`shown`: the head commit, the
+/// remote, the remote branch, the count and the push URL) and a push from the app may run: a branch, not a default
+/// one, not behind its remote. `ahead` may be 0 (the form's Create PR when the branch is pushed already).
+fn checked(dir: &Path, shown: &Shown) -> Result<(String, PushTo), String> {
     let head = shown.head.as_str();
     if !diff::valid_sha(head) {
         return Err("push needs the confirmed head commit".into());
@@ -331,9 +327,18 @@ pub fn push_within(dir: &Path, shown: &Shown, limit: Duration) -> Result<Pushed,
             to.remote, to.branch
         ));
     }
-    if to.ahead == 0 {
-        return Err("not pushed: there are no new commits to push".into());
-    }
+    Ok((branch.to_string(), to))
+}
+
+/// Pushes `head` to `to` and, on a first push, sets the branch's upstream; `Some` note when that setting failed (the
+/// push already went out, so it is not a failed push).
+fn send(
+    dir: &Path,
+    head: &str,
+    branch: &str,
+    to: &PushTo,
+    limit: Duration,
+) -> Result<Option<String>, String> {
     let refspec = format!("{head}:refs/heads/{}", to.branch);
     // No tags (push.followTags) and no submodule pushes (push.recurseSubmodules): only the shown commits go out.
     crate::process::git_write(
@@ -348,10 +353,8 @@ pub fn push_within(dir: &Path, shown: &Shown, limit: Duration) -> Result<Pushed,
         ],
         limit,
     )
-    .map_err(|e| refusal(&e, &to, limit))?;
-    // A first push sets the upstream as `--set-upstream` would; the source here is a commit, which `-u` skips. The push
-    // already went out, so a failure here is a note, not a failed push.
-    let mut note = None;
+    .map_err(|e| refusal(&e, to, limit))?;
+    // A first push sets the upstream as `--set-upstream` would; the source here is a commit, which `-u` skips.
     if !to.upstream {
         for (key, value) in [
             (format!("branch.{branch}.remote"), to.remote.clone()),
@@ -363,11 +366,26 @@ pub fn push_within(dir: &Path, shown: &Shown, limit: Duration) -> Result<Pushed,
             if let Err(e) =
                 crate::process::git_write(dir, &["config", "--", &key, &value], READ_TIMEOUT)
             {
-                note = Some(format!("the branch's upstream was not set: {e}"));
-                break;
+                return Ok(Some(format!("the branch's upstream was not set: {e}")));
             }
         }
     }
+    Ok(None)
+}
+
+/// Pushes the checked-out branch of `dir` when it is still what the window's strip showed: the head commit, the remote,
+/// the remote branch, the count and the push URL.
+pub fn push(dir: &Path, shown: &Shown) -> Result<Pushed, String> {
+    push_within(dir, shown, PUSH_TIMEOUT)
+}
+
+/// `push` with its own time limit (a test's).
+pub fn push_within(dir: &Path, shown: &Shown, limit: Duration) -> Result<Pushed, String> {
+    let (branch, to) = checked(dir, shown)?;
+    if to.ahead == 0 {
+        return Err("not pushed: there are no new commits to push".into());
+    }
+    let note = send(dir, &shown.head, &branch, &to, limit)?;
     Ok(Pushed {
         pushed: to.ahead,
         remote: to.remote,
@@ -376,30 +394,409 @@ pub fn push_within(dir: &Path, shown: &Shown, limit: Duration) -> Result<Pushed,
     })
 }
 
-/// The window's `git_push` (window only); runs git, so off the frame loop.
-pub(crate) fn answer(registry: &Mutex<Sessions>, request: Request) -> Response {
-    let Request::GitPush { session, shown } = request else {
-        return Err("not a git op".into());
-    };
-    if !diff::valid_sha(&shown.head) {
-        return Err("push needs the confirmed head commit".into());
+/// A PR title: 1 to 256 characters, one line. A body: up to 60,000 characters; tabs and line ends are its only
+/// control characters.
+pub const TITLE_MAX: usize = 256;
+pub const BODY_MAX: usize = 60_000;
+/// Commits listed in a filled description, bases offered.
+const COMMITS_MAX: usize = 30;
+const BASES_MAX: usize = 100;
+pub const CREATE_TIMEOUT: Duration = Duration::from_secs(60);
+/// Where GitHub looks for a pull request template, in its order.
+const TEMPLATES: [&str; 6] = [
+    ".github/pull_request_template.md",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    "pull_request_template.md",
+    "PULL_REQUEST_TEMPLATE.md",
+    "docs/pull_request_template.md",
+    "docs/PULL_REQUEST_TEMPLATE.md",
+];
+
+/// What the Create PR form starts with (`pr_draft`). All text is git's or the repository's: the window draws it as text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub struct Draft {
+    pub title: String,
+    pub body: String,
+    /// The body is the repository's PR template.
+    pub template: bool,
+    /// Commits the PR holds (against the default branch).
+    pub commits: usize,
+    /// The default branch first, then the remote's other branches.
+    pub bases: Vec<String>,
+    pub head: String,
+    /// Where the push goes first; `ahead` 0 when nothing needs pushing.
+    pub push: PushTo,
+    /// Why gh cannot create it now (not installed, not signed in); the form still opens.
+    pub gh_why: Option<String>,
+}
+
+fn text(dir: &Path, args: &[&str]) -> Option<String> {
+    crate::process::git_read(dir, args, READ_TIMEOUT)
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o).trim().to_string())
+}
+
+/// `owner/repo` of `remote`'s GitHub URL.
+fn github(dir: &Path, remote: &str) -> Result<(String, String), String> {
+    text(dir, &["remote", "get-url", "--", remote])
+        .and_then(|u| crate::pr::github_repo(&u))
+        .ok_or_else(|| format!("no pull request: {remote} is not a GitHub repository"))
+}
+
+/// The remote's default branch: its recorded HEAD, else main or master when it has one.
+fn default_base(dir: &Path, remote: &str) -> Option<String> {
+    text(
+        dir,
+        &[
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            &format!("refs/remotes/{remote}/HEAD"),
+        ],
+    )
+    .and_then(|d| d.strip_prefix(&format!("{remote}/")).map(String::from))
+    .or_else(|| {
+        ["main", "master"].into_iter().map(String::from).find(|b| {
+            text(
+                dir,
+                &[
+                    "rev-parse",
+                    "--verify",
+                    "-q",
+                    &format!("refs/remotes/{remote}/{b}"),
+                ],
+            )
+            .is_some()
+        })
+    })
+}
+
+/// A branch name made readable: `fix-lexer_panic` -> `Fix lexer panic`.
+fn readable(branch: &str) -> String {
+    let words: String = branch
+        .rsplit('/')
+        .next()
+        .unwrap_or(branch)
+        .chars()
+        .map(|c| if c == '-' || c == '_' { ' ' } else { c })
+        .collect();
+    let mut c = words.trim().chars();
+    c.next()
+        .map(|f| f.to_uppercase().chain(c).collect())
+        .unwrap_or_default()
+}
+
+/// The repository's PR template, a regular file (no link) under its top folder, cut at `BODY_MAX`.
+fn template(dir: &Path) -> Option<String> {
+    let top = std::path::PathBuf::from(text(dir, &["rev-parse", "--show-toplevel"])?);
+    TEMPLATES.iter().find_map(|t| {
+        let path = top.join(t);
+        // No link anywhere below the top folder (`.github` or `docs` linked elsewhere included).
+        let mut at = top.clone();
+        for part in Path::new(t).parent()?.components() {
+            at.push(part);
+            if std::fs::symlink_metadata(&at)
+                .ok()?
+                .file_type()
+                .is_symlink()
+            {
+                return None;
+            }
+        }
+        let meta = std::fs::symlink_metadata(&path).ok()?;
+        if !meta.is_file() || meta.len() > (BODY_MAX * 4) as u64 {
+            return None;
+        }
+        let body = std::fs::read_to_string(path).ok()?;
+        Some(plain(&body.chars().take(BODY_MAX).collect::<String>()))
+    })
+}
+
+/// Text as a PR carries it: no control characters but line ends and tabs, none of the shared hidden set (bidi
+/// overrides, zero-width marks, tag characters: board/rights.rs `hidden`).
+pub(crate) fn plain(text: &str) -> String {
+    text.chars()
+        .filter(|c| {
+            !crate::board::rights::hidden(*c)
+                && (!c.is_control() || matches!(c, '\n' | '\t' | '\r'))
+        })
+        .collect()
+}
+
+/// The Create PR form's start: checks as Push does (nothing ahead is fine: the branch may be pushed already).
+pub fn draft(dir: &Path) -> Result<Draft, String> {
+    let facts = diff::facts(dir).ok_or("not pushed: git's state could not be read")?;
+    let head = facts
+        .head
+        .clone()
+        .ok_or("no pull request: there is no commit yet")?;
+    let now = shown(dir).unwrap_or(Shown {
+        head: head.clone(),
+        ..Default::default()
+    });
+    let (branch, push) = checked(dir, &now)?;
+    let (_owner, _repo) = github(dir, &push.remote)?;
+    let default = default_base(dir, &push.remote);
+    let mut bases: Vec<String> = default.iter().cloned().collect();
+    let listed = text(
+        dir,
+        &[
+            "for-each-ref",
+            "--format=%(refname:strip=3)",
+            &format!("refs/remotes/{}/", push.remote),
+        ],
+    )
+    .unwrap_or_default();
+    for b in listed.lines() {
+        if bases.len() >= BASES_MAX {
+            break;
+        }
+        if b != "HEAD"
+            && b != push.branch
+            && crate::pr_live::piece(b)
+            && !bases.iter().any(|x| x == b)
+        {
+            bases.push(b.to_string());
+        }
     }
-    let dir = registry
+    let base_ref = default
+        .as_ref()
+        .map(|d| format!("refs/remotes/{}/{d}..HEAD", push.remote));
+    let subjects: Vec<String> = text(
+        dir,
+        &[
+            "log",
+            "--format=%s",
+            &format!("--max-count={}", COMMITS_MAX + 1),
+            "--end-of-options",
+            base_ref.as_deref().unwrap_or("HEAD"),
+        ],
+    )
+    .unwrap_or_default()
+    .lines()
+    .map(plain)
+    .collect();
+    let commits = match &base_ref {
+        Some(r) => text(dir, &["rev-list", "--count", "--end-of-options", r])
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(subjects.len()),
+        None => subjects.len(),
+    };
+    let title = match subjects.as_slice() {
+        [one] => one.clone(),
+        _ => readable(&branch),
+    };
+    let title: String = plain(&title)
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(TITLE_MAX)
+        .collect();
+    let found = template(dir);
+    let body = found.clone().unwrap_or_else(|| {
+        subjects
+            .iter()
+            .rev()
+            .take(COMMITS_MAX)
+            .map(|s| format!("- {s}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    });
+    // Signed in or not, without a network call beyond gh's own check.
+    let gh_why = crate::pr_live::run_gh_in(
+        Some(dir),
+        &["auth", "status", "--hostname", "github.com"].map(String::from),
+        READ_TIMEOUT,
+    )
+    .err();
+    Ok(Draft {
+        title,
+        body,
+        template: found.is_some(),
+        commits,
+        bases,
+        head,
+        push,
+        gh_why,
+    })
+}
+
+/// What `pr_create` did.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Created {
+    pub url: String,
+    pub number: u64,
+    /// Commits pushed first (0: none needed).
+    pub pushed: u64,
+}
+
+/// The `gh pr create` arguments: constants and `--name=value` pieces, so no value reads as a flag. The body goes on
+/// stdin (`--body-file -`).
+pub fn create_argv(
+    owner: &str,
+    repo: &str,
+    branch: &str,
+    base: &str,
+    title: &str,
+    draft: bool,
+) -> Vec<String> {
+    let mut argv = vec![
+        "pr".to_string(),
+        "create".into(),
+        format!("--repo={owner}/{repo}"),
+        format!("--head={branch}"),
+        format!("--base={base}"),
+        format!("--title={title}"),
+        "--body-file=-".into(),
+    ];
+    if draft {
+        argv.push("--draft".into());
+    }
+    argv
+}
+
+/// `title` and `body` as a PR may carry them, else why not.
+pub fn check_text(title: &str, body: &str) -> Result<(), String> {
+    let n = title.chars().count();
+    if n == 0 || n > TITLE_MAX || title.trim().is_empty() || title.chars().any(char::is_control) {
+        return Err("no pull request: the title must be one line of 1 to 256 characters".into());
+    }
+    if body.chars().count() > BODY_MAX
+        || body
+            .chars()
+            .any(|c| c.is_control() && !matches!(c, '\n' | '\t' | '\r'))
+    {
+        return Err(
+            "no pull request: the description must be at most 60,000 characters of text".into(),
+        );
+    }
+    Ok(())
+}
+
+/// Pushes when commits are ahead, then runs `gh pr create` in `dir` for the push remote's repository.
+pub fn create(
+    dir: &Path,
+    shown: &Shown,
+    title: &str,
+    body: &str,
+    base: &str,
+    draft: bool,
+) -> Result<Created, String> {
+    // The owner's own words go as typed (an emoji joined with ZWJ, Persian or Indic text); only control characters are
+    // refused, with a sentence. Repository text is filtered where the draft reads it (`plain`).
+    check_text(title, body)?;
+    if !crate::pr_live::piece(base) {
+        return Err("no pull request: not a branch name".into());
+    }
+    let (branch, to) = checked(dir, shown)?;
+    let (owner, repo) = github(dir, &to.remote)?;
+    if base == to.branch {
+        return Err("no pull request: the branch and the base are the same".into());
+    }
+    let pushed = if to.ahead > 0 {
+        send(dir, &shown.head, &branch, &to, PUSH_TIMEOUT)?;
+        to.ahead
+    } else {
+        0
+    };
+    let argv = create_argv(&owner, &repo, &to.branch, base, title, draft);
+    let out = crate::pr_live::run_gh_with(
+        Some(dir),
+        &argv,
+        CREATE_TIMEOUT,
+        Some(body.as_bytes().to_vec()),
+    )
+    .map_err(|e| match existing(&e) {
+        Some((n, url)) => format!("a pull request for this branch already exists: #{n} {url}"),
+        None if pushed > 0 => format!("pushed, but the pull request was not created: {e}"),
+        None => format!("no pull request: {e}"),
+    })?;
+    let text = String::from_utf8_lossy(&out);
+    let url = text
+        .lines()
+        .rev()
+        .find_map(|l| crate::pr_live::clean_url(l.trim()))
+        .ok_or("the pull request was created, but gh printed no link to it")?;
+    let number = url
+        .rsplit('/')
+        .next()
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0);
+    Ok(Created {
+        url,
+        number,
+        pushed,
+    })
+}
+
+/// gh's "already exists" refusal: the number and link of that PR.
+fn existing(e: &str) -> Option<(u64, String)> {
+    if !e.contains("already exists") {
+        return None;
+    }
+    let url = e.split_whitespace().find_map(crate::pr_live::clean_url)?;
+    let n = url.rsplit('/').next()?.parse().ok()?;
+    Some((n, url))
+}
+
+fn folder(registry: &Mutex<Sessions>, session: &str) -> Result<std::path::PathBuf, String> {
+    registry
         .lock()
         .map_err(|_| "session registry unavailable")?
-        .session_folder(&session)?;
-    let Pushed {
-        pushed,
-        remote,
-        branch,
-        note,
-    } = push(&dir, &shown)?;
-    Ok(Reply::GitPushed {
-        pushed,
-        remote,
-        branch,
-        note,
-    })
+        .session_folder(session)
+}
+
+/// The window's `git_push`, `pr_draft` and `pr_create` (window only); they run git and gh, so off the frame loop.
+pub(crate) fn answer(registry: &Mutex<Sessions>, request: Request) -> Response {
+    match request {
+        Request::GitPush { session, shown } => {
+            if !diff::valid_sha(&shown.head) {
+                return Err("push needs the confirmed head commit".into());
+            }
+            let Pushed {
+                pushed,
+                remote,
+                branch,
+                note,
+            } = push(&folder(registry, &session)?, &shown)?;
+            Ok(Reply::GitPushed {
+                pushed,
+                remote,
+                branch,
+                note,
+            })
+        }
+        Request::PrDraft { session } => Ok(Reply::PrDraft {
+            draft: draft(&folder(registry, &session)?)?,
+        }),
+        Request::PrCreate {
+            session,
+            shown,
+            title,
+            body,
+            base,
+            draft,
+        } => {
+            if !diff::valid_sha(&shown.head) {
+                return Err("push needs the confirmed head commit".into());
+            }
+            let made = create(
+                &folder(registry, &session)?,
+                &shown,
+                &title,
+                &body,
+                &base,
+                draft,
+            )?;
+            crate::pr_live::note_made(&session, &made.url, draft);
+            Ok(Reply::PrCreated {
+                url: made.url,
+                number: made.number,
+                pushed: made.pushed,
+            })
+        }
+        _ => Err("not a git op".into()),
+    }
 }
 
 #[cfg(test)]
