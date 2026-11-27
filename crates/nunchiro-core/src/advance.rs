@@ -98,6 +98,14 @@ pub(crate) fn nudge_line(minutes: u64) -> String {
     )
 }
 
+/// What the lead is told when a stalled seat's card goes to the user: the seat, why, and the step to take, so the lead
+/// acts without the user relaying the card.
+pub(crate) fn stall_line(name: &str, seat: &str, task: &str, role: &str, why: &str) -> String {
+    format!(
+        "Stalled: {name} ({seat}): {why}, still after one nudge. Replace it now without asking the user: nunchiro session close {seat}, then nunchiro task staff {task} {role} with its brief. Ask the user instead only if your brief or the user says so, or it is a teammate you did not open."
+    )
+}
+
 /// The room line of each act, typed by the core.
 fn room_line(act: &Act) -> String {
     match act {
@@ -524,7 +532,7 @@ pub(crate) enum Step<'a> {
     Start,
     /// Part B: type the started Reviewer's first prompt.
     Prompt,
-    /// Part A rule 4: the heartbeat line to the lead about this task's place.
+    /// Part A rule 4: the heartbeat line to the lead about this task's place (and rule 3's stall line).
     Beat,
     /// A planned act; `was`: what `pass` read of its seat for the plan; `rev`: for a Close, the task's revision read
     /// again (git, so off the lock) just before the lock.
@@ -631,7 +639,8 @@ pub(crate) fn recheck(
 }
 
 /// A planned act, done only when `recheck` passes under the same lock right before it. A Resend the delivery checks
-/// canceled adds its seat to `refused`. Owner cards (Card, Moved, Rounds) start, close and type nothing.
+/// canceled adds its seat to `refused`. Owner cards (Card, Moved, Rounds) start and close nothing; a Card also tells
+/// the lead.
 pub(crate) fn act(
     sessions: &mut crate::sessions::Sessions,
     task: &Task,
@@ -661,7 +670,17 @@ pub(crate) fn act(
                 &check_in(task, seat, name, format!("{why}, still after one nudge")),
                 true,
             );
-            Ok(())
+            // The card alone waited for the user to relay it: the lead hears it too, through the heartbeat's gate.
+            let role = task
+                .seats
+                .iter()
+                .find(|s| s.session == *seat)
+                .map_or("Builder", |s| s.role.as_str());
+            recheck(sessions, task, lead, &Step::Beat)
+                .and_then(|()| {
+                    sessions.core_line(lead, stall_line(name, seat, &task.id, role, why))
+                })
+                .map_err(|e| format!("the lead was not told: {e}"))
         }
         Act::Moved {
             seat,

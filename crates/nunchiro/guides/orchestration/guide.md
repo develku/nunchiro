@@ -164,7 +164,7 @@ turn and counts against the guards below.
 
 Auto-advance (on unless the user turned it off with `nunchiro task auto off`): the core nudges a seat once when it
 stalls (a message queued over 5 minutes, or 20 minutes quiet with no done report), asks the user on a card when it is
-still stalled 5 minutes later, and every 10 minutes sends you one "Team: ..." line when reports, merges or stalled
+still stalled 5 minutes later and tells you then in one `Stalled: ...` line (replace that seat as it says), and every 10 minutes sends you one "Team: ..." line when reports, merges or stalled
 seats wait. Act on that line as on a wake line; you need not poll your seats.
 
 ### Guards the core enforces
