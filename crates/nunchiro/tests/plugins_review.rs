@@ -178,3 +178,41 @@ fn allow_and_the_sheet_show_each_parts_rights() {
     );
     assert!(said.contains("writes into the message box"), "{said}");
 }
+
+#[test]
+fn check_runs_with_none_of_the_rights_it_asks_for() {
+    let c = core("prc");
+    let secret = user(&c.home).join("secret");
+    std::fs::create_dir_all(&secret).unwrap();
+    std::fs::write(secret.join("key.txt"), "TOP-SECRET-VALUE").unwrap();
+    plugin(
+        &c.home,
+        "note",
+        &format!(
+            "/bin/cat '{}' 2>&1 || echo DENIED",
+            secret.join("key.txt").display()
+        ),
+        "read = [\"~/secret\"]",
+    );
+    let said = ok(&c.home, &["plugin", "check", "p"]);
+    assert!(!said.contains("TOP-SECRET-VALUE"), "{said}");
+    // Off, script parts are checked but not run.
+    std::fs::write(c.home.join("settings.json"), r#"{"script_widgets": false}"#).unwrap();
+    let said = ok(&c.home, &["plugin", "check", "p"]);
+    assert!(
+        said.contains("not run") && !said.contains("TOP-SECRET-VALUE"),
+        "{said}"
+    );
+    // Approved, the same part reads what it declared: the approval is what grants it.
+    std::fs::write(c.home.join("settings.json"), r#"{"script_widgets": true}"#).unwrap();
+    ok(&c.home, &["plugin", "allow", "p"]);
+    ok(&c.home, &["plugin", "on", "p"]);
+    let r = finished(&c);
+    assert!(
+        r["Ok"]["run"]["output"]["text"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("TOP-SECRET-VALUE"),
+        "{r}"
+    );
+}
