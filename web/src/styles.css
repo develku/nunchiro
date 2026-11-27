@@ -654,8 +654,7 @@ button:disabled {
    too. Look 1117 v12/v13 (A S3-D): drawn over the strip, a count overprinted the cut tab ("shell+13"); each count is its own
    box in the row (start: before the strip; end: between the strip and the "+"), so the strip gives it room. */
 .zh > .tadd {
-  order: 1;
-  margin-left: auto; /* a real drive: the "+" followed the last tab and moved with each new one; it keeps the strip's end */
+  order: 1; margin-left: auto; /* a real drive: the "+" followed the last tab and moved with each new one; it keeps the strip's end */
 }
 /* Look 1117 v12 (A): no :has() inside :has() (invalid, so this whole rule was dropped and the end never showed its count). */
 .zh:has(> .tabs[data-cut-end]):not(:has(.rtab))::after,
