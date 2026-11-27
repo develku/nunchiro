@@ -78,6 +78,9 @@ test('team_board (1115 step 2): one card per task with its stage; a waiting card
   await expect(card('t1')).toHaveAttribute('data-you', 'true');
   await expect(card('t1').locator('[data-at="you"]')).toHaveText('Build');
   await expect(card('t1').locator('[data-at="you"] .tcard-dot')).toHaveCount(1); // the book's needs-you light, not a picture
+  // On the warm chip the light takes the chip's word colour, so it shows (the warm dot vanished on the warm fill).
+  const dot = card('t1').locator('[data-at="you"] .tcard-dot');
+  expect(await dot.evaluate((e) => getComputedStyle(e).backgroundColor)).toBe(await card('t1').locator('[data-at="you"]').evaluate((e) => getComputedStyle(e).color));
   await expect(card('t1').locator('.tcard-now')).toContainText('Round to 2 decimals?');
   await expect(card('t1').getByRole('button', { name: 'Answer', exact: true })).toBeVisible();
   await expect(view.getByRole('button', { name: 'Answer', exact: true })).toHaveCount(1);
