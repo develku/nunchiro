@@ -216,3 +216,23 @@ fn check_runs_with_none_of_the_rights_it_asks_for() {
         "{r}"
     );
 }
+
+#[test]
+fn a_long_command_never_holds_the_answer() {
+    let c = core("prl");
+    plugin(&c.home, "note", "/bin/sleep 2; echo done", "");
+    ok(&c.home, &["plugin", "allow", "p"]);
+    ok(&c.home, &["plugin", "on", "p"]);
+    let t = Instant::now();
+    let first = run(&c, false);
+    assert!(t.elapsed() < Duration::from_secs(1), "{:?}", t.elapsed());
+    assert_eq!(first["Ok"]["run"]["running"], true, "{first}");
+    let until = Instant::now() + Duration::from_secs(10);
+    let mut r = run(&c, true);
+    while r["Ok"]["run"]["running"] == true {
+        assert!(Instant::now() < until);
+        std::thread::sleep(Duration::from_millis(100));
+        r = run(&c, true);
+    }
+    assert_eq!(r["Ok"]["run"]["output"]["text"], "done\n", "{r}");
+}
