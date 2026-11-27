@@ -1215,6 +1215,10 @@ button.lead-go {
   background: var(--light-you);
   vertical-align: middle;
 }
+/* On a warm stage chip the warm light would vanish: it takes the chip's word colour there. */
+.tcard-stages > [data-at='you'] .tcard-dot {
+  background: var(--on-status);
+}
 .tcard-do {
   display: flex;
   flex-wrap: wrap;
