@@ -78,3 +78,5 @@ shell-beside-agent.spec.ts
 
 # a registered Settings page keeps the focus on its title after a nav click
 settings-registered-title-focus.spec.ts
+# words typed right after Continue stay in the composer
+composer-agent-ended.spec.ts | composer_resume_typed_at_once_is_kept
