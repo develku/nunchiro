@@ -176,9 +176,20 @@ fn the_example_runs_only_when_on_and_approved() {
         ok(&home, &["plugin", "list"]).trim(),
         "quiet-hours\ton\tapproved"
     );
+    // The example reads the clock: its window is set two and three hours ahead, so this run is never in quiet time
+    // (with its 22:00 to 07:00 default the status line depended on when the test ran).
+    let (start, end) = (hours_ahead(2), hours_ahead(3));
+    for (key, value) in [("start", &start), ("end", &end)] {
+        let set = call(
+            &home,
+            &owner,
+            json!({"op": "plugin", "action": {"do": "setting", "id": "quiet-hours", "key": key, "value": value}}),
+        );
+        assert_eq!(set["Ok"]["plugins"][0]["values"][key], *value, "{set}");
+    }
     let status = ok(&home, &["plugin", "run", "quiet-hours", "status"]);
     assert!(
-        status.contains("quiet") && status.contains("22:00"),
+        status.contains("quiet") && status.contains(&start),
         "{status}"
     );
     let run = call(
@@ -193,14 +204,15 @@ fn the_example_runs_only_when_on_and_approved() {
             .contains("quiet from"),
         "{run}"
     );
-    // A setting reaches the next run.
+    // A setting reaches the next run (a later end, so the window still leaves this run out).
+    let later = hours_ahead(5);
     let set = call(
         &home,
         &owner,
-        json!({"op": "plugin", "action": {"do": "setting", "id": "quiet-hours", "key": "start", "value": "21:30"}}),
+        json!({"op": "plugin", "action": {"do": "setting", "id": "quiet-hours", "key": "end", "value": later}}),
     );
-    assert_eq!(set["Ok"]["plugins"][0]["values"]["start"], "21:30", "{set}");
-    assert!(ok(&home, &["plugin", "run", "quiet-hours", "status"]).contains("21:30"));
+    assert_eq!(set["Ok"]["plugins"][0]["values"]["end"], *later, "{set}");
+    assert!(ok(&home, &["plugin", "run", "quiet-hours", "status"]).contains(&later));
     let bad = call(
         &home,
         &owner,
@@ -230,4 +242,16 @@ fn the_example_runs_only_when_on_and_approved() {
     assert!(ok(&home, &["plugin", "list"]).contains("no plugins"));
     assert!(home.join("plugins/.removed").read_dir().unwrap().count() == 1);
     drop(core);
+}
+
+/// This Mac's wall clock `hours` from now as HH:MM, as the example plugin's `/bin/date +%H:%M` reads it.
+fn hours_ahead(hours: u32) -> String {
+    // No TZ: the plugin's sandbox runs `date` with the system zone.
+    let out = std::process::Command::new("/bin/date")
+        .env_remove("TZ")
+        .arg(format!("-v+{hours}H"))
+        .arg("+%H:%M")
+        .output()
+        .unwrap();
+    String::from_utf8(out.stdout).unwrap().trim().to_string()
 }
