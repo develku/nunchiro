@@ -160,3 +160,112 @@ fn an_update_sets_the_old_folder_aside_and_asks_again() {
         .collect();
     assert_eq!(aside.len(), 1, "{aside:?}");
 }
+
+#[test]
+fn installs_of_one_plugin_at_once_leave_it_whole() {
+    let (home, _files, catalog) = setup("pcc");
+    let catalog = Arc::new(catalog);
+    catalog.install("hello").unwrap();
+    for _ in 0..5 {
+        let runs: Vec<_> = (0..4)
+            .map(|_| {
+                let c = catalog.clone();
+                thread::spawn(move || c.install("hello"))
+            })
+            .collect();
+        for r in runs {
+            r.join().unwrap().unwrap();
+        }
+        let dir = home.join("plugins/hello");
+        assert_eq!(fs::read_to_string(dir.join("hi.sh")).unwrap(), SCRIPT);
+        assert!(dir.join("plugin.toml").is_file());
+    }
+    let left: Vec<_> = fs::read_dir(home.join("plugins"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.starts_with(".install"))
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
+}
+
+#[test]
+fn a_catalogue_must_say_its_version_and_nothing_unknown() {
+    use nunchiro_core::plugins_online::parse;
+    let entry = json!({"id": "hello", "name": "Hello", "about": "", "version": "1", "commit": COMMIT, "dir": "a",
+        "files": [{"path": "plugin.toml", "sha256": sha(b"")}]});
+    assert_eq!(
+        parse(
+            json!({"version": 1, "plugins": [entry]})
+                .to_string()
+                .as_bytes()
+        )
+        .unwrap()
+        .len(),
+        1
+    );
+    for bad in [
+        json!({"plugins": [entry]}),
+        json!({"version": 2, "plugins": [entry]}),
+        json!({"version": 1, "plugins": [entry], "extra": true}),
+        json!({"version": 1, "plugins": [{"run_after_install": "x", "id": "hello"}]}),
+    ] {
+        assert!(parse(bad.to_string().as_bytes()).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn an_update_of_an_approved_plugin_that_was_on_is_off_and_asks_again() {
+    let (home, files, catalog) = setup("pca");
+    catalog.install("hello").unwrap();
+    let view = nunchiro_core::approval::status(&home, "plugin:hello").unwrap();
+    nunchiro_core::approval::grant(
+        &home,
+        "plugin:hello",
+        nunchiro_core::approval::Level::Read,
+        &view.hash,
+    )
+    .unwrap();
+    fs::write(
+        home.join("plugins.json"),
+        json!({"on": ["hello"]}).to_string(),
+    )
+    .unwrap();
+    let hello = |home: &std::path::Path| {
+        plugins::list(home, true, false)
+            .into_iter()
+            .find(|p| p.id == "hello")
+            .unwrap()
+    };
+    assert!(hello(&home).on && hello(&home).state == Some(State::Approved));
+    publish(&files, "1.1.0");
+    catalog.install("hello").unwrap();
+    let after = hello(&home);
+    assert!(!after.on, "an update is off");
+    assert_ne!(after.state, Some(State::Approved), "and asks again");
+}
+
+#[test]
+fn a_link_where_the_plugin_goes_is_refused_and_leaves_nothing() {
+    let (home, _files, catalog) = setup("pcl");
+    fs::create_dir_all(home.join("plugins")).unwrap();
+    std::os::unix::fs::symlink("/tmp", home.join("plugins/hello")).unwrap();
+    let e = catalog.install("hello").unwrap_err();
+    assert!(
+        e.contains("plugins/hello") && e.contains("in the way"),
+        "{e}"
+    );
+    let left: Vec<_> = fs::read_dir(home.join("plugins"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+    assert_eq!(left, ["hello"]);
+    // A plugins folder that is itself a link is refused, as `plugin new` refuses it.
+    let (home, _files, catalog) = setup("pcs");
+    let elsewhere = home.join("elsewhere");
+    fs::create_dir_all(&elsewhere).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, home.join("plugins")).unwrap();
+    assert!(catalog.install("hello").unwrap_err().contains("symlink"));
+    assert_eq!(fs::read_dir(&elsewhere).unwrap().count(), 0);
+}
