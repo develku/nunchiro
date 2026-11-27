@@ -973,7 +973,8 @@ fn a_start_that_fails_is_not_tried_again_until_a_new_head_commit() {
     std::thread::sleep(Duration::from_secs(3));
     // The project folder is gone: every start fails for good.
     std::fs::remove_dir_all(&c.project).unwrap();
-    std::fs::write(gh.join("answer"), pulls(1, 3, 1, &[1, 2])).unwrap();
+    // One failing pull request: its one failed start is the last fire, and no later read starts it again.
+    std::fs::write(gh.join("answer"), pulls(1, 2, 1, &[1])).unwrap();
     let last = || {
         let list: Value =
             serde_json::from_str(&ok(&c.home, &["trigger", "list", "--json"])).unwrap();

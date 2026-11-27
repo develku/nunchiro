@@ -212,7 +212,7 @@ fn shaped(key: &str, value: &Value) -> bool {
                 .all(|u| u.as_str().is_some_and(nunchiro_core::pr_live::valid_url))
         }),
         "keep_history" => value.is_null() || value.is_boolean(),
-        "stale_after_ms" | "triggers_port" => value.is_null() || value.is_u64(),
+        "stale_after_ms" | "triggers_port" | "triggers_poll_secs" => value.is_null() || value.is_u64(),
         "worktrees_dir" => value.is_null() || value.is_string(),
         // Ticket 211: folders the owner allowed Usage to read through a link; strings only here; `settings` then keeps
         // the entries that pass `clean` (an ordinary personal path such as /Users/a/proj stays on purpose).
