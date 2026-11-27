@@ -30,14 +30,46 @@ pub struct PushTo {
     pub ahead: u64,
     /// The branch has this upstream already; a first push sets it.
     pub upstream: bool,
+    /// A fingerprint of the remote's push URL (never the URL, which may hold a token): a URL changed after the strip
+    /// showed is caught.
+    pub key: String,
 }
 
-/// What a push did.
+/// What the strip showed and the window sends back: the push is refused unless all of it still holds.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Shown {
+    #[serde(default)]
+    pub head: String,
+    #[serde(default)]
+    pub remote: String,
+    #[serde(default)]
+    pub branch: String,
+    #[serde(default)]
+    pub ahead: u64,
+    #[serde(default)]
+    pub key: String,
+}
+
+/// What the strip shows for `dir` now (the Diff list's git facts); `None` when there is nothing to push to.
+pub fn shown(dir: &Path) -> Option<Shown> {
+    let facts = diff::facts(dir)?;
+    let to = facts.push_to?;
+    Some(Shown {
+        head: facts.head?,
+        remote: to.remote,
+        branch: to.branch,
+        ahead: to.ahead,
+        key: to.key,
+    })
+}
+
+/// What a push did. `note`: the push went out but setting the branch's upstream failed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pushed {
     pub pushed: u64,
     pub remote: String,
     pub branch: String,
+    pub note: Option<String>,
 }
 
 /// A remote name the core puts on git's command line: no option look, no control characters, no spaces.
@@ -146,12 +178,27 @@ pub(crate) fn target(
         .and_then(|o| String::from_utf8_lossy(&o).trim().parse().ok())
         .ok_or("not pushed: git could not count the commits to push")?,
     };
+    let url = crate::process::git_read(
+        dir,
+        &["remote", "get-url", "--push", "--", &remote],
+        READ_TIMEOUT,
+    )
+    .map_err(|_| "not pushed: git could not read where the remote pushes")?;
     Ok(PushTo {
+        key: fingerprint(&url),
         remote,
         branch: to,
         ahead,
         upstream,
     })
+}
+
+/// A stable fingerprint of `bytes` for this build (SipHash with fixed keys): it only has to tell two URLs apart.
+fn fingerprint(bytes: &[u8]) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut h);
+    format!("{:016x}", h.finish())
 }
 
 /// The last `TAIL` lines of git's error (after `git push: `).
@@ -162,13 +209,13 @@ fn tail(e: &str) -> String {
 }
 
 /// git's refusal as a sentence the window maps to its own line, git's lines under it.
-fn refusal(e: &str, to: &PushTo) -> String {
+fn refusal(e: &str, to: &PushTo, limit: Duration) -> String {
     let (remote, branch) = (&to.remote, &to.branch);
     let said = |s: &str| e.contains(s);
     let sentence = if said("command timed out") {
         return format!(
             "not pushed: git push did not finish in {} seconds",
-            PUSH_TIMEOUT.as_secs()
+            limit.as_secs()
         );
     } else if said("[rejected]") && (said("fetch first") || said("non-fast-forward")) {
         format!("not pushed: {remote} has newer commits on {branch}")
@@ -189,16 +236,18 @@ fn refusal(e: &str, to: &PushTo) -> String {
     format!("{sentence}\n{}", tail(e))
 }
 
-/// The branch of `dir` and where it pushes, when HEAD is still `head` (the commit the window showed) and a push from the
-/// app may run: a branch, not the default one, not behind its remote, its push target known. `ahead` may be 0.
-fn checked(dir: &Path, head: &str) -> Result<(String, PushTo), String> {
+/// The branch of `dir` and where it pushes, when it is still what the window showed (`shown`: the head commit, the
+/// remote, the remote branch, the count and the push URL) and a push from the app may run: a branch, not a default
+/// one, not behind its remote. `ahead` may be 0 (the form's Create PR when the branch is pushed already).
+fn checked(dir: &Path, shown: &Shown) -> Result<(String, PushTo), String> {
+    let head = shown.head.as_str();
     if !diff::valid_sha(head) {
         return Err("push needs the confirmed head commit".into());
     }
     let facts = diff::facts(dir).ok_or("not pushed: git's state could not be read")?;
     let branch = facts
         .branch
-        .clone()
+        .as_deref()
         .ok_or("not pushed: HEAD is not on a branch")?;
     if facts.is_default {
         return Err("not pushed: this is the default branch".into());
@@ -221,20 +270,76 @@ fn checked(dir: &Path, head: &str) -> Result<(String, PushTo), String> {
                 .unwrap_or_else(|| "not pushed: where this branch pushes is unknown".into()));
         }
     };
+    if shown.remote.is_empty() || shown.branch.is_empty() || shown.key.is_empty() {
+        return Err("push needs what the strip showed".into());
+    }
+    if (
+        to.remote.as_str(),
+        to.branch.as_str(),
+        to.ahead,
+        to.key.as_str(),
+    ) != (
+        shown.remote.as_str(),
+        shown.branch.as_str(),
+        shown.ahead,
+        shown.key.as_str(),
+    ) {
+        return Err(format!(
+            "nothing was sent: where this pushes changed after this was shown (now {}/{})",
+            to.remote, to.branch
+        ));
+    }
+    // The push remote's own default branch (its recorded HEAD), on any remote, besides the names `facts` guards.
+    let remote_default = crate::process::git_read(
+        dir,
+        &[
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            &format!("refs/remotes/{}/HEAD", to.remote),
+        ],
+        READ_TIMEOUT,
+    )
+    .ok()
+    .map(|o| String::from_utf8_lossy(&o).trim().to_string());
+    if remote_default
+        .is_some_and(|d| d.strip_prefix(&format!("{}/", to.remote)) == Some(to.branch.as_str()))
+    {
+        return Err("not pushed: this is the default branch".into());
+    }
     if facts.behind > 0 {
         return Err(format!(
             "not pushed: {} has newer commits on {}",
             to.remote, to.branch
         ));
     }
-    Ok((branch, to))
+    Ok((branch.to_string(), to))
 }
 
-/// Pushes `head` to `to` and, on a first push, sets the branch's upstream.
-fn send(dir: &Path, head: &str, branch: &str, to: &PushTo) -> Result<(), String> {
+/// Pushes `head` to `to` and, on a first push, sets the branch's upstream; `Some` note when that setting failed (the
+/// push already went out, so it is not a failed push).
+fn send(
+    dir: &Path,
+    head: &str,
+    branch: &str,
+    to: &PushTo,
+    limit: Duration,
+) -> Result<Option<String>, String> {
     let refspec = format!("{head}:refs/heads/{}", to.branch);
-    crate::process::git_write(dir, &["push", "--", &to.remote, &refspec], PUSH_TIMEOUT)
-        .map_err(|e| refusal(&e, to))?;
+    // No tags (push.followTags) and no submodule pushes (push.recurseSubmodules): only the shown commits go out.
+    crate::process::git_write(
+        dir,
+        &[
+            "push",
+            "--no-follow-tags",
+            "--recurse-submodules=no",
+            "--",
+            &to.remote,
+            &refspec,
+        ],
+        limit,
+    )
+    .map_err(|e| refusal(&e, to, limit))?;
     // A first push sets the upstream as `--set-upstream` would; the source here is a commit, which `-u` skips.
     if !to.upstream {
         for (key, value) in [
@@ -244,23 +349,34 @@ fn send(dir: &Path, head: &str, branch: &str, to: &PushTo) -> Result<(), String>
                 format!("refs/heads/{}", to.branch),
             ),
         ] {
-            crate::process::git_write(dir, &["config", "--", &key, &value], READ_TIMEOUT)?;
+            if let Err(e) =
+                crate::process::git_write(dir, &["config", "--", &key, &value], READ_TIMEOUT)
+            {
+                return Ok(Some(format!("the branch's upstream was not set: {e}")));
+            }
         }
     }
-    Ok(())
+    Ok(None)
 }
 
-/// Pushes the checked-out branch of `dir` when HEAD is still `head`, the commit the window's strip showed.
-pub fn push(dir: &Path, head: &str) -> Result<Pushed, String> {
-    let (branch, to) = checked(dir, head)?;
+/// Pushes the checked-out branch of `dir` when it is still what the window's strip showed: the head commit, the remote,
+/// the remote branch, the count and the push URL.
+pub fn push(dir: &Path, shown: &Shown) -> Result<Pushed, String> {
+    push_within(dir, shown, PUSH_TIMEOUT)
+}
+
+/// `push` with its own time limit (a test's).
+pub fn push_within(dir: &Path, shown: &Shown, limit: Duration) -> Result<Pushed, String> {
+    let (branch, to) = checked(dir, shown)?;
     if to.ahead == 0 {
         return Err("not pushed: there are no new commits to push".into());
     }
-    send(dir, head, &branch, &to)?;
+    let note = send(dir, &shown.head, &branch, &to, limit)?;
     Ok(Pushed {
         pushed: to.ahead,
         remote: to.remote,
         branch: to.branch,
+        note,
     })
 }
 
@@ -361,18 +477,36 @@ pub(crate) fn template(dir: &Path) -> Option<String> {
     let top = std::path::PathBuf::from(text(dir, &["rev-parse", "--show-toplevel"])?);
     TEMPLATES.iter().find_map(|t| {
         let path = top.join(t);
+        // No link anywhere below the top folder (`.github` or `docs` linked elsewhere included).
+        let mut at = top.clone();
+        for part in Path::new(t).parent()?.components() {
+            at.push(part);
+            if std::fs::symlink_metadata(&at)
+                .ok()?
+                .file_type()
+                .is_symlink()
+            {
+                return None;
+            }
+        }
         let meta = std::fs::symlink_metadata(&path).ok()?;
         if !meta.is_file() || meta.len() > (BODY_MAX * 4) as u64 {
             return None;
         }
         let body = std::fs::read_to_string(path).ok()?;
-        Some(
-            body.chars()
-                .take(BODY_MAX)
-                .filter(|c| !c.is_control() || matches!(c, '\n' | '\t'))
-                .collect(),
-        )
+        Some(plain(&body.chars().take(BODY_MAX).collect::<String>()))
     })
+}
+
+/// Text as a PR carries it: no control characters but line ends and tabs, none of the shared hidden set (bidi
+/// overrides, zero-width marks, tag characters: board/rights.rs `hidden`).
+pub(crate) fn plain(text: &str) -> String {
+    text.chars()
+        .filter(|c| {
+            !crate::board::rights::hidden(*c)
+                && (!c.is_control() || matches!(c, '\n' | '\t' | '\r'))
+        })
+        .collect()
 }
 
 /// The Create PR form's start: checks as Push does (nothing ahead is fine: the branch may be pushed already).
@@ -382,7 +516,11 @@ pub fn draft(dir: &Path) -> Result<Draft, String> {
         .head
         .clone()
         .ok_or("no pull request: there is no commit yet")?;
-    let (branch, push) = checked(dir, &head)?;
+    let now = shown(dir).unwrap_or(Shown {
+        head: head.clone(),
+        ..Default::default()
+    });
+    let (branch, push) = checked(dir, &now)?;
     let (_owner, _repo) = github(dir, &push.remote)?;
     let default = default_base(dir, &push.remote);
     let mut bases: Vec<String> = default.iter().cloned().collect();
@@ -422,7 +560,7 @@ pub fn draft(dir: &Path) -> Result<Draft, String> {
     )
     .unwrap_or_default()
     .lines()
-    .map(String::from)
+    .map(plain)
     .collect();
     let commits = match &base_ref {
         Some(r) => text(dir, &["rev-list", "--count", "--end-of-options", r])
@@ -434,7 +572,7 @@ pub fn draft(dir: &Path) -> Result<Draft, String> {
         [one] => one.clone(),
         _ => readable(&branch),
     };
-    let title: String = title
+    let title: String = plain(&title)
         .chars()
         .filter(|c| !c.is_control())
         .take(TITLE_MAX)
@@ -523,23 +661,24 @@ pub fn check_text(title: &str, body: &str) -> Result<(), String> {
 /// Pushes when commits are ahead, then runs `gh pr create` in `dir` for the push remote's repository.
 pub fn create(
     dir: &Path,
-    head: &str,
+    shown: &Shown,
     title: &str,
     body: &str,
     base: &str,
     draft: bool,
 ) -> Result<Created, String> {
+    let (title, body) = (&plain(title), &plain(body));
     check_text(title, body)?;
     if !crate::pr_live::piece(base) {
         return Err("no pull request: not a branch name".into());
     }
-    let (branch, to) = checked(dir, head)?;
+    let (branch, to) = checked(dir, shown)?;
     let (owner, repo) = github(dir, &to.remote)?;
     if base == to.branch {
         return Err("no pull request: the branch and the base are the same".into());
     }
     let pushed = if to.ahead > 0 {
-        send(dir, head, &branch, &to)?;
+        send(dir, &shown.head, &branch, &to, PUSH_TIMEOUT)?;
         to.ahead
     } else {
         0
@@ -594,19 +733,21 @@ fn folder(registry: &Mutex<Sessions>, session: &str) -> Result<std::path::PathBu
 /// The window's `git_push`, `pr_draft` and `pr_create` (window only); they run git and gh, so off the frame loop.
 pub(crate) fn answer(registry: &Mutex<Sessions>, request: Request) -> Response {
     match request {
-        Request::GitPush { session, head } => {
-            if !diff::valid_sha(&head) {
+        Request::GitPush { session, shown } => {
+            if !diff::valid_sha(&shown.head) {
                 return Err("push needs the confirmed head commit".into());
             }
             let Pushed {
                 pushed,
                 remote,
                 branch,
-            } = push(&folder(registry, &session)?, &head)?;
+                note,
+            } = push(&folder(registry, &session)?, &shown)?;
             Ok(Reply::GitPushed {
                 pushed,
                 remote,
                 branch,
+                note,
             })
         }
         Request::PrDraft { session } => Ok(Reply::PrDraft {
@@ -614,18 +755,18 @@ pub(crate) fn answer(registry: &Mutex<Sessions>, request: Request) -> Response {
         }),
         Request::PrCreate {
             session,
-            head,
+            shown,
             title,
             body,
             base,
             draft,
         } => {
-            if !diff::valid_sha(&head) {
+            if !diff::valid_sha(&shown.head) {
                 return Err("push needs the confirmed head commit".into());
             }
             let made = create(
                 &folder(registry, &session)?,
-                &head,
+                &shown,
                 &title,
                 &body,
                 &base,
@@ -661,8 +802,15 @@ mod tests {
             branch: "fix".into(),
             ahead: 1,
             upstream: true,
+            key: String::new(),
         };
-        let r = |e: &str| refusal(e, &to).lines().next().unwrap().to_string();
+        let r = |e: &str| {
+            refusal(e, &to, PUSH_TIMEOUT)
+                .lines()
+                .next()
+                .unwrap()
+                .to_string()
+        };
         assert_eq!(
             r(
                 "git push: ! [rejected] abc -> fix (fetch first)\nerror: failed to push some refs to 'x'"

@@ -17,6 +17,7 @@ import { useFeatureSetting } from '../settings/useFeatureSetting';
 import type { Session } from '../types';
 import { agentLive, appAction, ASK_AGENT, gitAction, keepWay, ladder, promptKey, storedWay, type GitFacts, type Way } from './gitAction';
 import { createdText, PrForm } from './PrForm';
+import { prChipChanged } from '../chat/PrChip';
 import { PrView } from '../pr/PrView';
 import { PushStrip, pushedText, WayMenu } from './GitPush';
 import { agentName } from '../chat/conversation';
@@ -393,6 +394,7 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
           onCreated={(c) => {
             setForm(null);
             setPushed({ session, text: createdText(t, c), url: c.url });
+            prChipChanged(session);
             fresh.current = true;
             setTick((n) => n + 1);
           }}
@@ -465,7 +467,7 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
       {stacked && <Stack key={`${session}\u0000${shown === 'branch'}`} core={core} session={session!} machine={machine} branch={shown === 'branch'} force={force} files={files} at={current} jump={jump} t={t} quote={quote} />}
       {pushed?.session === session && (
         <div className="dpushed" role="status">
-          {pushed.text}
+          <span className="dpushed-t">{pushed.text}</span>
           {pushed.url && (
             <button type="button" className="btn q sm" onClick={() => setViewing(pushed.url!)}>
               {t('gitActions.pr.open')}

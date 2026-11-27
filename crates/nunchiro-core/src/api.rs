@@ -684,8 +684,8 @@ pub enum Request {
     // the branch again and runs `git push <remote> <head>:refs/heads/<branch>` in the session's folder. Window only.
     GitPush {
         session: String,
-        #[serde(default)]
-        head: String,
+        #[serde(flatten)]
+        shown: crate::git_write::Shown,
     },
     // The Diff panel's Create PR form: what it starts with (commit subjects, the PR template, the bases). Window only.
     PrDraft {
@@ -702,8 +702,8 @@ pub enum Request {
     },
     PrCreate {
         session: String,
-        #[serde(default)]
-        head: String,
+        #[serde(flatten)]
+        shown: crate::git_write::Shown,
         title: String,
         body: String,
         base: String,

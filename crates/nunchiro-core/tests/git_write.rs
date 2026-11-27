@@ -4,7 +4,7 @@
 //! own lines under it. Nothing here reaches a network remote.
 #[path = "fixtures/git_env.rs"]
 mod git_env;
-use nunchiro_core::git_write::{self, Pushed};
+use nunchiro_core::git_write::{self, Pushed, Shown};
 use std::{
     fs,
     os::unix::fs::PermissionsExt,
@@ -91,6 +91,15 @@ impl Drop for Repo {
     }
 }
 
+/// What the strip shows for `dir` now (the window reads it from the Diff list's git facts); a state with no push target
+/// shows the head alone.
+fn shown(dir: &Path) -> Shown {
+    git_write::shown(dir).unwrap_or_else(|| Shown {
+        head: git(dir, &["rev-parse", "HEAD"]),
+        ..Default::default()
+    })
+}
+
 fn hook(dir: &Path, name: &str, script: &str) {
     fs::create_dir_all(dir).unwrap();
     let path = dir.join(name);
@@ -103,13 +112,14 @@ fn push_moves_the_remote_branch_to_the_confirmed_head() {
     let r = Repo::new("ahead");
     r.tracked("parser-fix", 3);
     let head = r.head();
-    let got = git_write::push(&r.work(), &head).unwrap();
+    let got = git_write::push(&r.work(), &shown(&r.work())).unwrap();
     assert_eq!(
         got,
         Pushed {
             pushed: 3,
             remote: "origin".into(),
-            branch: "parser-fix".into()
+            branch: "parser-fix".into(),
+            note: None,
         }
     );
     assert_eq!(r.remote("parser-fix"), head);
@@ -119,10 +129,10 @@ fn push_moves_the_remote_branch_to_the_confirmed_head() {
 fn push_refuses_a_head_that_changed_after_it_was_shown() {
     let r = Repo::new("changed");
     r.tracked("parser-fix", 1);
-    let shown = r.head();
+    let strip = shown(&r.work());
     let before = r.remote("parser-fix");
     r.commit("made after the strip showed");
-    let e = git_write::push(&r.work(), &shown).unwrap_err();
+    let e = git_write::push(&r.work(), &strip).unwrap_err();
     let new = &r.head()[..7];
     assert_eq!(
         e,
@@ -136,16 +146,16 @@ fn push_refuses_default_detached_behind_and_nothing_ahead() {
     let r = Repo::new("refuse");
     // The default branch, one commit ahead of origin/main.
     r.commit("on main");
-    let e = git_write::push(&r.work(), &r.head()).unwrap_err();
+    let e = git_write::push(&r.work(), &shown(&r.work())).unwrap_err();
     assert_eq!(e, "not pushed: this is the default branch");
     // Detached.
     git(&r.work(), &["checkout", "-q", "--detach"]);
-    let e = git_write::push(&r.work(), &r.head()).unwrap_err();
+    let e = git_write::push(&r.work(), &shown(&r.work())).unwrap_err();
     assert_eq!(e, "not pushed: HEAD is not on a branch");
     // Nothing ahead.
     git(&r.work(), &["checkout", "-q", "-b", "same"]);
     git(&r.work(), &["push", "-q", "-u", "origin", "same"]);
-    let e = git_write::push(&r.work(), &r.head()).unwrap_err();
+    let e = git_write::push(&r.work(), &shown(&r.work())).unwrap_err();
     assert_eq!(e, "not pushed: there are no new commits to push");
     // Behind 1 (and ahead 1): the remote gained a commit this clone lacks.
     let other = r.root.join("other");
@@ -159,7 +169,7 @@ fn push_refuses_default_detached_behind_and_nothing_ahead() {
     git(&r.work(), &["fetch", "-q", "origin"]);
     r.commit("mine");
     let theirs = r.remote("same");
-    let e = git_write::push(&r.work(), &r.head()).unwrap_err();
+    let e = git_write::push(&r.work(), &shown(&r.work())).unwrap_err();
     assert_eq!(e, "not pushed: origin has newer commits on same");
     assert_eq!(r.remote("same"), theirs, "the remote moved");
 }
@@ -171,7 +181,7 @@ fn first_push_sets_the_upstream() {
     r.commit("one");
     r.commit("two");
     let head = r.head();
-    let got = git_write::push(&r.work(), &head).unwrap();
+    let got = git_write::push(&r.work(), &shown(&r.work())).unwrap();
     assert_eq!((got.pushed, got.branch.as_str()), (2, "new-work"));
     assert_eq!(r.remote("new-work"), head);
     assert_eq!(
@@ -190,7 +200,7 @@ fn a_rejecting_remote_and_a_failing_pre_push_hook_are_sentences() {
         "pre-receive",
         "#!/bin/sh\necho 'policy: no pushes today' >&2\nexit 1\n",
     );
-    let e = git_write::push(&r.work(), &r.head()).unwrap_err();
+    let e = git_write::push(&r.work(), &shown(&r.work())).unwrap_err();
     assert!(
         e.starts_with("not pushed: origin refused the push\n"),
         "{e}"
@@ -206,7 +216,7 @@ fn a_rejecting_remote_and_a_failing_pre_push_hook_are_sentences() {
         "pre-push",
         &format!("#!/bin/sh\n{lines}exit 1\n"),
     );
-    let e = git_write::push(&r.work(), &r.head()).unwrap_err();
+    let e = git_write::push(&r.work(), &shown(&r.work())).unwrap_err();
     assert!(
         e.starts_with("not pushed: the pre-push hook failed\n"),
         "{e}"
@@ -228,13 +238,156 @@ fn several_remotes_and_none_chosen_is_refused_with_the_list() {
     );
     git(&r.work(), &["checkout", "-q", "-b", "new-work"]);
     r.commit("one");
-    let e = git_write::push(&r.work(), &r.head()).unwrap_err();
+    let e = git_write::push(&r.work(), &shown(&r.work())).unwrap_err();
     assert_eq!(
         e,
         "not pushed: this branch has no remote set and there are several (fork, upstream)"
     );
     // remote.pushDefault picks one.
     git(&r.work(), &["config", "remote.pushDefault", "fork"]);
-    let got = git_write::push(&r.work(), &r.head()).unwrap();
+    let got = git_write::push(&r.work(), &shown(&r.work())).unwrap();
     assert_eq!(got.remote, "fork");
+}
+
+#[test]
+fn push_refuses_when_where_it_goes_changed_after_the_strip() {
+    let r = Repo::new("target");
+    r.tracked("shown-branch", 1);
+    git(&r.work(), &["push", "-q", "origin", "main:release"]);
+    // Another branch name at the same head.
+    let strip = shown(&r.work());
+    git(&r.work(), &["checkout", "-q", "-b", "other-branch"]);
+    let e = git_write::push(&r.work(), &strip).unwrap_err();
+    assert_eq!(
+        e,
+        "nothing was sent: where this pushes changed after this was shown (now origin/other-branch)"
+    );
+    assert_eq!(r.remote("other-branch"), "");
+    // The same branch, its upstream moved to another remote branch.
+    git(&r.work(), &["checkout", "-q", "shown-branch"]);
+    let strip = shown(&r.work());
+    git(&r.work(), &["fetch", "-q", "origin"]);
+    git(&r.work(), &["branch", "-q", "-u", "origin/release"]);
+    let release = r.remote("release");
+    let e = git_write::push(&r.work(), &strip).unwrap_err();
+    assert!(
+        e.starts_with("nothing was sent: where this pushes changed"),
+        "{e}"
+    );
+    assert_eq!(r.remote("release"), release, "origin/release moved");
+    // The same names, the remote's push URL changed.
+    git(&r.work(), &["branch", "-q", "-u", "origin/shown-branch"]);
+    let strip = shown(&r.work());
+    git(
+        &r.root,
+        &["init", "-q", "--bare", "-b", "main", "elsewhere.git"],
+    );
+    let elsewhere = r.root.join("elsewhere.git");
+    git(
+        &r.work(),
+        &[
+            "remote",
+            "set-url",
+            "--push",
+            "origin",
+            elsewhere.to_str().unwrap(),
+        ],
+    );
+    let e = git_write::push(&r.work(), &strip).unwrap_err();
+    assert!(
+        e.starts_with("nothing was sent: where this pushes changed"),
+        "{e}"
+    );
+}
+
+#[test]
+fn push_sends_no_tags_and_no_submodules() {
+    let r = Repo::new("tags");
+    r.tracked("parser-fix", 1);
+    git(&r.work(), &["config", "push.followTags", "true"]);
+    git(
+        &r.work(),
+        &["config", "push.recurseSubmodules", "on-demand"],
+    );
+    git(&r.work(), &["tag", "-a", "-m", "private", "v9", "HEAD"]);
+    git_write::push(&r.work(), &shown(&r.work())).unwrap();
+    let tags = git(&r.origin(), &["tag", "--list"]);
+    assert_eq!(tags, "", "a tag went out");
+}
+
+#[test]
+fn the_push_remotes_own_default_branch_is_refused() {
+    let r = Repo::new("forkdefault");
+    git(
+        &r.root,
+        &["init", "-q", "--bare", "-b", "trunk", "fork.git"],
+    );
+    let fork = r.root.join("fork.git");
+    git(
+        &r.work(),
+        &["remote", "add", "fork", fork.to_str().unwrap()],
+    );
+    git(&r.work(), &["push", "-q", "fork", "main:trunk"]);
+    git(&r.work(), &["remote", "set-head", "fork", "trunk"]);
+    git(
+        &r.work(),
+        &["checkout", "-q", "-b", "work", "--track", "fork/trunk"],
+    );
+    r.commit("on the fork's default");
+    let e = git_write::push(&r.work(), &shown(&r.work())).unwrap_err();
+    assert_eq!(e, "not pushed: this is the default branch");
+}
+
+/// A remote reached through `core.sshCommand` set to a script: what git prints when sign-in fails or the network is
+/// down, and a push that never ends.
+fn ssh_remote(r: &Repo, script: &str) {
+    let bin = r.root.join("fake-ssh");
+    fs::write(&bin, script).unwrap();
+    fs::set_permissions(&bin, fs::Permissions::from_mode(0o755)).unwrap();
+    git(
+        &r.work(),
+        &["config", "core.sshCommand", bin.to_str().unwrap()],
+    );
+    git(
+        &r.work(),
+        &[
+            "remote",
+            "set-url",
+            "--push",
+            "origin",
+            "ssh://git@example.invalid/o/r.git",
+        ],
+    );
+}
+
+#[test]
+fn sign_in_network_and_timeout_failures_are_sentences() {
+    let r = Repo::new("ssh");
+    r.tracked("parser-fix", 1);
+    ssh_remote(
+        &r,
+        "#!/bin/sh\necho 'git@example.invalid: Permission denied (publickey).' >&2\nexit 255\n",
+    );
+    let e = git_write::push(&r.work(), &shown(&r.work())).unwrap_err();
+    assert!(
+        e.starts_with("not pushed: git needs you to sign in\n"),
+        "{e}"
+    );
+    ssh_remote(
+        &r,
+        "#!/bin/sh\necho 'ssh: connect to host example.invalid port 22: Network is unreachable' >&2\nexit 255\n",
+    );
+    let e = git_write::push(&r.work(), &shown(&r.work())).unwrap_err();
+    assert!(
+        e.starts_with("not pushed: git push failed\n") && e.contains("Network is unreachable"),
+        "{e}"
+    );
+    ssh_remote(&r, "#!/bin/sh\nexec /bin/sleep 30\n");
+    let e = git_write::push_within(
+        &r.work(),
+        &shown(&r.work()),
+        std::time::Duration::from_secs(2),
+    )
+    .unwrap_err();
+    assert_eq!(e, "not pushed: git push did not finish in 2 seconds");
 }

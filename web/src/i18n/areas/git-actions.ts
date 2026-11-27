@@ -60,6 +60,8 @@ declare module '../index' {
     'gitActions.err.notGithub': true;
     'gitActions.err.noPr': true;
     'gitActions.err.noLink': true;
+    'gitActions.err.target': true;
+    'gitActions.push.noUpstream': true;
     'gitActions.why.noPushRemote': true;
     'gitActions.label.askPush': true;
     'gitActions.choices': true;
@@ -168,6 +170,8 @@ export const en = {
   'gitActions.ai.stop': "Stop",
   'gitActions.ai.written': "Written by {agent} from the diff. Read it before you send it.",
   'gitActions.ai.failed': "{agent} could not write it: {reason}. Your text is unchanged.",
+  'gitActions.err.target': "Nothing was sent: where this pushes changed after it was shown (now {remote}/{branch}). Look again.",
+  'gitActions.push.noUpstream': "The branch's upstream was not set; git push -u in a terminal sets it.",
 };
 export const ko = {
   'gitActions.label.commit': '커밋',
