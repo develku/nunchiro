@@ -45,6 +45,8 @@ declare module '../index' {
     'bots.moved': true;
     'bots.movedDesc': true;
     'bots.open': true;
+    'bots.levels.note': true;
+    'bots.levelsMoved': true;
     'bots.cmd.new': true;
     'bots.new.title': true;
     'bots.new.name': true;
@@ -151,6 +153,8 @@ export const en = {
   'bots.moved': 'Bots have their own view',
   'bots.movedDesc': 'Every bot with its face, its seat, its SOUL and its schedules.',
   'bots.open': 'Open Bots',
+  'bots.levels.note': 'Levels and worker models, for every bot.',
+  'bots.levelsMoved': 'Levels and worker models are in Bots, under Models and limits.',
   'bots.cmd.new': 'New bot… (a name and one sentence)',
   'bots.new.title': 'New bot',
   'bots.new.name': 'Name',

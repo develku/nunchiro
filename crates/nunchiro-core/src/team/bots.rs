@@ -27,6 +27,7 @@ const SOUL_MAX: usize = 16 * 1024;
 const BACKUP: &str = "team.json.v1.bak";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Face {
     pub shape: String,
@@ -82,6 +83,8 @@ fn with_faces(teammates: &[Teammate], kept: impl Fn(&str) -> Option<Face>) -> Ve
 
 /// One Chief for the office (Home), one Lead per project; a bot with no seat works for whoever opens it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "BotsSeat"))]
 #[serde(try_from = "SeatFile", into = "SeatFile")]
 pub enum Seat {
     None,
@@ -91,6 +94,7 @@ pub enum Seat {
 /// A seat as the file and the window write it: `{"kind":"lead","project":"/p"}`. Read by hand: serde's tagged enums
 /// take an unknown field on a variant with no fields without a word, and this file refuses what it does not know.
 #[derive(Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 struct SeatFile {
     kind: String,
@@ -129,6 +133,7 @@ impl From<Seat> for SeatFile {
 
 /// `follow`: the agent's own newest model, and a task's level picks within it. `pinned`: this model, whatever is asked.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(try_from = "RuleFile", into = "RuleFile")]
 pub enum ModelRule {
     Follow,
@@ -139,6 +144,7 @@ pub enum ModelRule {
 }
 /// A model rule as the file writes it: `{"rule":"pinned","model":"opus","effort":"high"}` (read by hand, as `SeatFile`).
 #[derive(Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 struct RuleFile {
     rule: String,
@@ -183,6 +189,7 @@ impl From<ModelRule> for RuleFile {
 /// exactly as before it: the project of a bot with no seat, and ticket 992's level rule (`Teammate::level`,
 /// `level_max`, `next_level`; `effort` is the one a follow-rule seat falls back to). Left out when empty.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct V1 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -203,6 +210,7 @@ impl V1 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Bot {
     /// The teammate id, unchanged by the move.

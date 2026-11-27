@@ -14,7 +14,7 @@ import { makeT } from './i18n-tables';
 
 const t = makeT('en', 'en');
 const NOW = Date.now();
-const CSS = ['tokens.css', 'styles.css', 'tree/tree.css', 'lead/lead.css', 'chat/perm-chip.css'].map((f) => fs.readFileSync(path.join(import.meta.dirname, '../src', f), 'utf8')).join('\n');
+const CSS = ['tokens.css', 'styles.css', 'layout.css', 'keys.css', 'chrome.css', 'tree/tree.css', 'lead/lead.css', 'chat/perm-chip.css'].map((f) => fs.readFileSync(path.join(import.meta.dirname, '../src', f), 'utf8')).join('\n');
 
 // Whether a part's box is short of its own text (the ellipsis shows).
 const cut = (e: Element) => e.scrollWidth > e.clientWidth;

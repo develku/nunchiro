@@ -454,6 +454,9 @@ pub(crate) fn spawn(
                 if let Err(e) = pass(&registry, &home, &mut beats, now) {
                     eprintln!("auto-advance: {e}");
                 }
+                // Not part of auto-advance: a lead hears what a landing freed in every place (typed into its box where
+                // auto-advance is on, in the room elsewhere).
+                release(&registry, &home);
             }
         })
 }
@@ -578,6 +581,9 @@ pub(crate) fn recheck(
                 if live_seats(&all, &now.place, &live, &lead_seat) >= place.cap as usize =>
             {
                 "the place is at its seat cap"
+            }
+            Step::Start if !crate::ledger::blockers(now, &all).is_empty() => {
+                "the task waits for another task"
             }
             Step::Act {
                 act: Act::Nudge { seat, .. },
@@ -838,15 +844,20 @@ pub(crate) fn pass(
             .then(|| crate::ledger::revision_of(task))
             .flatten();
         let free = busy.get(&task.place).copied().unwrap_or(0) < place.cap as usize;
-        let (more, adv) = review_plan(
-            task,
-            adv,
-            &place.way,
-            rev.as_deref(),
-            &fact,
-            &reported,
-            free,
-        );
+        // A task that waits for another gets no Reviewer from the core.
+        let (more, adv) = if crate::ledger::blockers(task, &all).is_empty() {
+            review_plan(
+                task,
+                adv,
+                &place.way,
+                rev.as_deref(),
+                &fact,
+                &reported,
+                free,
+            )
+        } else {
+            (vec![], adv)
+        };
         let acts: Vec<Act> = acts.into_iter().chain(more).collect();
         if adv != task.advance {
             ledger.set_advance(&task.id, adv.clone())?;
@@ -992,6 +1003,165 @@ pub(crate) fn pass(
     Ok(())
 }
 
+/// What a closed task's waiters' lead is told: `blocker` closed; `waiters` are the open tasks that waited for it and
+/// whose lead was not told yet; `line` names them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Release {
+    pub blocker: String,
+    pub place: PathBuf,
+    pub lead: String,
+    pub waiters: Vec<String>,
+    pub line: String,
+}
+
+/// Each closed task some open task still names in `after` and whose lead was not told (`Task.released`): one line per
+/// closed task and lead, however many it frees. Every task is read: no cap on the scan. A task with no lead: nothing.
+pub(crate) fn releases(all: &[Task]) -> Vec<Release> {
+    let mut out = vec![];
+    for a in all.iter().filter(|t| t.closed.is_some()) {
+        let mut by_lead: BTreeMap<&str, Vec<&Task>> = BTreeMap::new();
+        for w in all.iter().filter(|w| {
+            w.closed.is_none() && w.after.contains(&a.id) && !w.released.contains(&a.id)
+        }) {
+            if let Some(lead) = w.lead.as_deref() {
+                by_lead.entry(lead).or_default().push(w);
+            }
+        }
+        for (lead, waiters) in by_lead {
+            out.push(Release {
+                blocker: a.id.clone(),
+                place: a.place.clone(),
+                lead: lead.into(),
+                waiters: waiters.iter().map(|w| w.id.clone()).collect(),
+                line: release_line(a, &waiters, all),
+            });
+        }
+    }
+    out
+}
+
+/// `"a" landed. "b" no longer waits: start it when you are ready. "d" still waits for 1 task.`, or for a task that
+/// closed without landing, one sentence per waiter.
+fn release_line(a: &Task, waiters: &[&Task], all: &[Task]) -> String {
+    let landed = a
+        .closed
+        .as_ref()
+        .is_some_and(|c| c.how == "merged" || c.how == "done");
+    if !landed {
+        let each: Vec<(&str, &str)> = waiters
+            .iter()
+            .map(|w| (w.title.as_str(), w.id.as_str()))
+            .collect();
+        return dropped_line(&a.title, &each);
+    }
+    let (free, still): (Vec<&&Task>, Vec<&&Task>) = waiters
+        .iter()
+        .partition(|w| crate::ledger::blockers(w, all).is_empty());
+    let free: Vec<&str> = free.iter().map(|w| w.title.as_str()).collect();
+    let still: Vec<(&str, usize)> = still
+        .iter()
+        .map(|w| (w.title.as_str(), crate::ledger::blockers(w, all).len()))
+        .collect();
+    landed_line(&a.title, &free, &still)
+}
+
+/// The lead's line for a landing: what it freed, and what still waits (with how many it still waits for). One of the
+/// automatic line forms the lead's chat folds (`tests/fixtures/automatic-lines.json`).
+pub(crate) fn landed_line(a: &str, free: &[&str], still: &[(&str, usize)]) -> String {
+    let mut line = format!("\"{a}\" landed.");
+    let names = crate::ledger::quoted(free.iter().copied());
+    match free.len() {
+        0 => {}
+        1 => line += &format!(" {names} no longer waits: start it when you are ready."),
+        _ => line += &format!(" {names} no longer wait: start them when you are ready."),
+    }
+    for (title, n) in still {
+        let tasks = if *n == 1 { "task" } else { "tasks" };
+        line += &format!(" \"{title}\" still waits for {n} {tasks}.");
+    }
+    line
+}
+
+/// The lead's line for a task dropped while others waited for it: each waiter (title, id) and what to do.
+pub(crate) fn dropped_line(a: &str, waiters: &[(&str, &str)]) -> String {
+    let each: Vec<String> = waiters
+        .iter()
+        .map(|(title, id)| {
+            format!(
+                "\"{title}\" waited for it: stop waiting (nunchiro task after {id} --none) or drop it."
+            )
+        })
+        .collect();
+    format!("\"{a}\" was dropped. {}", each.join(" "))
+}
+
+/// Tells each lead what a closed task freed (`releases`), once: the waiters are marked under the registry lock right
+/// before the line, so a restart or a second caller sends nothing again. A lead whose seat is not running hears it when
+/// it runs (the next pass). The line goes through the delivery queue, behind a running turn, and into the room.
+pub(crate) fn release(registry: &Mutex<crate::sessions::Sessions>, home: &Path) {
+    let ledger = Ledger::open(home);
+    let Ok(all) = ledger.list() else { return };
+    for r in releases(&all) {
+        let sent = (|| -> Result<Option<(String, String)>, String> {
+            let mut sessions = registry
+                .lock()
+                .map_err(|_| "session registry unavailable")?;
+            let Some(seat) = sessions.seat_of(&r.lead) else {
+                return Ok(None);
+            };
+            // The core types a line into the lead's box only where auto-advance is on (`core_may`); elsewhere the lead
+            // hears it in the room, as it hears the user's choices for its place.
+            let typed = sessions.core_may(&seat).is_ok();
+            if !typed && !sessions.seat_facts(&seat).live {
+                return Ok(None);
+            }
+            let now = ledger.mark_released(&r.blocker, &r.waiters)?;
+            if now.is_empty() {
+                return Ok(None);
+            }
+            // Another caller marked some meanwhile: the line names only the ones marked now.
+            let line = if now == r.waiters {
+                r.line.clone()
+            } else {
+                let all = ledger.list()?;
+                let a = all.iter().find(|t| t.id == r.blocker).ok_or("task lost")?;
+                let ws: Vec<&Task> = all.iter().filter(|t| now.contains(&t.id)).collect();
+                release_line(a, &ws, &all)
+            };
+            if !typed {
+                let note = crate::room::TeamNote {
+                    what: "after".into(),
+                    worktree: None,
+                    name: None,
+                    branch: None,
+                    merged: None,
+                    seat: None,
+                };
+                sessions.team_note(&r.place, &r.lead, None, line, note);
+                crate::events::tasks(&r.place);
+                return Ok(None);
+            }
+            sessions.core_line(&seat, line.clone())?;
+            Ok(Some((seat, line)))
+        })();
+        match sent {
+            Ok(Some((seat, line))) => {
+                let said = format!("core told the lead: {line}");
+                if let Err(e) = crate::room::Log::open(home, &r.place).team(
+                    &seat,
+                    said.clone(),
+                    team_note(&said, None),
+                ) {
+                    eprintln!("task {}: room line not written: {e}", r.blocker);
+                }
+                crate::events::tasks(&r.place);
+            }
+            Ok(None) => {}
+            Err(e) => eprintln!("task {}: its lead was not told: {e}", r.blocker),
+        }
+    }
+}
+
 /// Part B rule 2: one fresh Reviewer through the lead's own staffing path (`staff_plan` with its level floor, then
 /// `seat_up`); `in_core` runs the steps. The started session; a seat that started but did not get its prompt is closed.
 fn staff(
@@ -1082,6 +1252,10 @@ pub(crate) fn in_core(
             // Logged once per task until it starts or the level changes: a pass retries it every 30 s.
             let who = crate::pressure::Who::Session;
             crate::pressure::check_once(&session, who, "reviewer", &task.id)
+                .map_err(|e| format!("skipped: {e}"))?;
+            // The Reviewer is started for a lead, as the lead's own start would be: a plugin's check holds.
+            let home = lock()?.home().to_path_buf();
+            crate::plugins::check_start(&home, crate::plugins::Asker::Agent, &session)
                 .map_err(|e| format!("skipped: {e}"))?;
             let (caller, launch) = {
                 let mut sessions = lock()?;
@@ -1421,6 +1595,10 @@ mod tests {
             waits: waits.map(Into::into),
             package: None,
             accounts: Default::default(),
+            blockers: vec![],
+            waiters: 0,
+            stuck: None,
+            early: None,
         };
         assert_eq!(beat(&[view(None, 0)]), None);
         assert_eq!(
@@ -1902,5 +2080,54 @@ mod tests {
             }]
         );
         assert!(judged(&next, live(NOW + MIN, false)).0.is_empty(), "once");
+    }
+
+    /// Task dependencies: a landing in a chain of 150 open tasks frees the last one (no cap on the scan), in one line;
+    /// once its waiter is marked, a reopened ledger plans nothing again; a task with no lead is told nothing.
+    #[test]
+    fn a_landing_frees_its_waiter_once_however_long_the_chain() {
+        let home = home("release");
+        let l = Ledger::open(&home);
+        let p = Path::new("/p");
+        for n in 1..=150 {
+            l.make(p, Some("lead"), &format!("n{n}"), &[], false, 1)
+                .unwrap();
+        }
+        for n in 2..=150 {
+            l.set_after(&format!("t{n}"), &[format!("t{}", n - 1)], "x", 2)
+                .unwrap();
+        }
+        l.close("t149", "merged", 3).unwrap();
+        let got = releases(&l.list().unwrap());
+        assert_eq!(got.len(), 1, "{got:?}");
+        assert_eq!(
+            (
+                got[0].blocker.as_str(),
+                &got[0].waiters,
+                got[0].line.as_str()
+            ),
+            (
+                "t149",
+                &vec!["t150".to_string()],
+                "\"n149\" landed. \"n150\" no longer waits: start it when you are ready."
+            )
+        );
+        assert_eq!(l.mark_released("t149", &got[0].waiters).unwrap(), ["t150"]);
+        assert!(l.mark_released("t149", &got[0].waiters).unwrap().is_empty());
+        assert!(
+            releases(&Ledger::open(&home).list().unwrap()).is_empty(),
+            "told once"
+        );
+        // Dropped, and a waiter with no lead.
+        let (lone, _) = l.make(p, None, "lone", &[], false, 4).unwrap();
+        l.set_after(&lone.id, &["t147".into()], "x", 4).unwrap();
+        l.close("t147", "dropped", 5).unwrap();
+        let got = releases(&l.list().unwrap());
+        assert_eq!(got.len(), 1, "{got:?}");
+        assert_eq!(
+            got[0].line,
+            "\"n147\" was dropped. \"n148\" waited for it: stop waiting (nunchiro task after t148 --none) or drop it."
+        );
+        let _ = std::fs::remove_dir_all(home);
     }
 }

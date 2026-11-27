@@ -21,6 +21,8 @@ pub const MAX_RESOLVED: usize = 4096;
 const REFRESH_EVERY: Duration = Duration::from_millis(100);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "BoardDecision"))]
 pub struct Decision {
     /// `manual:<id>` or `integration:<source_name>:<id>`.
     pub identity: String,

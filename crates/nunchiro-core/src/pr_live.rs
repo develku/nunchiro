@@ -45,6 +45,7 @@ const KEPT: [&str; 3] = ["PATH", "HOME", "GH_CONFIG_DIR"];
 
 /// What the window gets for one PR.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Live {
     pub state: PrState,
     /// `https://github.com/<owner>/<repo>/pull/<n>`, rebuilt from validated pieces.
@@ -254,6 +255,16 @@ fn gh_output_in(
     args: &[String],
     timeout: Duration,
 ) -> Result<std::process::Output, String> {
+    gh_output_with(dir, env, args, timeout, None)
+}
+/// `gh_output_in` with `input` on gh's stdin (`--body-file -`).
+fn gh_output_with(
+    dir: Option<&Path>,
+    env: &[(OsString, OsString)],
+    args: &[String],
+    timeout: Duration,
+    input: Option<Vec<u8>>,
+) -> Result<std::process::Output, String> {
     let program = crate::process::resolve_program(GH, crate::process::env_path(env));
     let mut c = crate::process::command(program);
     std::os::unix::process::CommandExt::arg0(&mut c, GH); // argv[0] stays the bare name
@@ -269,7 +280,10 @@ fn gh_output_in(
         .env("GH_TELEMETRY", "0")
         .env("NO_COLOR", "1")
         .stdin(Stdio::null());
-    crate::process::output(c, timeout)
+    match input {
+        Some(bytes) => crate::process::output_with_input(c, timeout, bytes),
+        None => crate::process::output(c, timeout),
+    }
 }
 
 /// V2.5-8/9: one `gh` run for the PR view, list or merge, with the poller's environment; stdout, or the error
@@ -283,8 +297,17 @@ pub(crate) fn run_gh_in(
     args: &[String],
     timeout: Duration,
 ) -> Result<Vec<u8>, String> {
+    run_gh_with(dir, args, timeout, None)
+}
+/// `run_gh_in` with `input` on gh's stdin.
+pub(crate) fn run_gh_with(
+    dir: Option<&Path>,
+    args: &[String],
+    timeout: Duration,
+    input: Option<Vec<u8>>,
+) -> Result<Vec<u8>, String> {
     let env = shared().env.clone();
-    let out = gh_output_in(dir, &env, args, timeout).map_err(|e| {
+    let out = gh_output_with(dir, &env, args, timeout, input).map_err(|e| {
         if e.contains("os error 2") {
             "gh was not found on PATH; the PR view needs the GitHub CLI.".to_string()
         } else {
@@ -607,6 +630,33 @@ pub(crate) fn note_found(url: &str) {
     {
         p.found.insert(pull);
     }
+}
+
+/// A PR the app created for `session` (the Diff panel's Create PR): it joins the created ones (live status, the PR view,
+/// merge) and is that session's chip until its transcript names one. Kept in memory: a core restart drops it.
+pub(crate) fn note_made(session: &str, url: &str, draft: bool) {
+    let Some(pull) = Pull::parse(url) else {
+        return;
+    };
+    shared().created.insert(pull.clone());
+    if let Ok(mut made) = MADE.lock() {
+        // shortcut: past MAX_PINNED sessions the map is emptied; a session's chip then waits for its transcript.
+        if made.len() >= MAX_PINNED {
+            made.clear();
+        }
+        made.insert(session.to_string(), (pull.url(), draft));
+    }
+}
+static MADE: std::sync::LazyLock<Mutex<BTreeMap<String, (String, bool)>>> =
+    std::sync::LazyLock::new(Default::default);
+/// The chip of the PR the app made for `session`, if any.
+pub(crate) fn made_chip(session: &str) -> Option<crate::chat::pr::PrChip> {
+    let (url, draft) = MADE.lock().ok()?.get(session)?.clone();
+    Some(crate::chat::pr::PrChip {
+        state: if draft { PrState::Draft } else { PrState::Open },
+        url,
+        at: None,
+    })
 }
 
 /// The PRs a session's agent created, from the events the tier-1 chip read scanned.

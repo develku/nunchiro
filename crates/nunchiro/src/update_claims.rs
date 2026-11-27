@@ -119,8 +119,8 @@ pub const OUTPUT_CAP: u64 = 64 * 1024;
 pub enum Output {
     /// /dev/null: nothing is kept and nothing can grow. The CLI's ditto, codesign and the candidate's serve update.
     Discard,
-    /// Two unlinked files, and the child may write no file past `OUTPUT_CAP` (RLIMIT_FSIZE): the app's `update
-    /// status`, whose one JSON line is the answer.
+    /// Two unlinked files, and the child may write no file past `OUTPUT_CAP` (the soft RLIMIT_FSIZE): the app's
+    /// `update status`, whose one JSON line is the answer; its git children raise the soft limit for main's fetch.
     KeepBounded,
     /// Two unlinked files with no size limit, read to `OUTPUT_CAP`: only the app's `update install`, whose stderr is
     /// the plain reason the owner reads. The writer is the installed app's own CLI, not a candidate; it cannot be
@@ -166,13 +166,18 @@ pub fn run_limited(
         .stderr(err)
         .process_group(0);
     if matches!(output, Output::KeepBounded) {
-        // Safety: setrlimit is async-signal-safe and touches no memory of the parent.
+        // Safety: getrlimit and setrlimit are async-signal-safe and touch no memory of the parent.
         unsafe {
             cmd.pre_exec(|| {
-                let cap = libc::rlimit {
-                    rlim_cur: OUTPUT_CAP as libc::rlim_t,
-                    rlim_max: OUTPUT_CAP as libc::rlim_t,
+                let mut cap = libc::rlimit {
+                    rlim_cur: 0,
+                    rlim_max: 0,
                 };
+                if libc::getrlimit(libc::RLIMIT_FSIZE, &mut cap) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                // The soft limit only: the child is the app's own CLI, and its status check raises it for git alone.
+                cap.rlim_cur = cap.rlim_max.min(OUTPUT_CAP as libc::rlim_t);
                 if libc::setrlimit(libc::RLIMIT_FSIZE, &cap) != 0 {
                     return Err(std::io::Error::last_os_error());
                 }

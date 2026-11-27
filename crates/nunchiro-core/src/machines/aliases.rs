@@ -44,6 +44,7 @@ pub(super) fn read_text(path: &Path) -> String {
 
 /// Ticket 1068: an alias with the `HostName` and `User` its config Host block names (first value wins, as in ssh).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Alias {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -18,6 +18,8 @@ const SNIFF: usize = 8192;
 const MAX_ENTRIES: usize = 10_000;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "FilesFileEntry"))]
 pub struct FileEntry {
     pub name: String,
     /// `dir`, `file` or `symlink`.
@@ -30,6 +32,8 @@ pub struct FileEntry {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "FilesKind"))]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
     Text,
@@ -41,6 +45,7 @@ pub enum Kind {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct FileContent {
     pub kind: Kind,
     pub size: u64,
@@ -57,6 +62,7 @@ pub struct FileContent {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Match {
     pub path: String,
     pub line: u64,

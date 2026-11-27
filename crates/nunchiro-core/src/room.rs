@@ -60,6 +60,7 @@ static CACHE: std::sync::Mutex<BTreeMap<PathBuf, Cached>> = std::sync::Mutex::ne
 static PINS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum By {
     Agent,
@@ -69,6 +70,8 @@ pub enum By {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "RoomKind"))]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
     Message,
@@ -91,6 +94,7 @@ pub enum Kind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Message {
     pub id: String,
     pub kind: Kind,
@@ -108,9 +112,14 @@ pub struct Message {
     /// Ticket 1089: on a `Kind::Typed` line, the send row that carries it to `to` (its delivery time is on that row).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub send: Option<String>,
+    /// A plugin's check replaced what the sender wrote (`plugins.rs`): its name, never the original, which every seat
+    /// in the room would read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changed_by: Option<String>,
 }
 /// What happened to a lead's team. `worktree` is the worktree's folder; `seat` the sub-bot's session.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct TeamNote {
     /// `created`, `removed`, `handed`, `taken` or `told`.
     pub what: String,
@@ -170,6 +179,8 @@ pub struct Log {
     dir: PathBuf,
     /// The room's project, named on each event the log pushes (`events::room_message`).
     project: PathBuf,
+    /// The plugin that changed the next message `add` takes (`changed_by`).
+    changed: std::cell::Cell<Option<String>>,
 }
 impl Log {
     /// `project` is the canonical project folder; its log lives under the core's home, never in the project.
@@ -179,6 +190,7 @@ impl Log {
         Self {
             dir: home.join("room").join(key),
             project: project.to_path_buf(),
+            changed: Default::default(),
         }
     }
     /// Ticket 1040 (Locate): the log's folder, whose name is a hash of the project path.
@@ -401,7 +413,7 @@ impl Log {
         if self.with(|log, bytes| log.len() >= LOG_MAX_MESSAGES || bytes >= LOG_MAX_BYTES)? {
             return Err("room_full: no typed line is written to a full room".into());
         }
-        self.append_noted(
+        self.append_full(
             Draft {
                 kind: Kind::Typed,
                 from: from.into(),
@@ -414,10 +426,19 @@ impl Log {
             },
             None,
             send,
+            self.changed.take(),
         )
     }
     fn append(&self, draft: Draft) -> Result<Message, String> {
         self.append_noted(draft, None, None)
+    }
+    /// The next message `add` takes carries the name of the plugin that changed it.
+    pub fn changed_by(self, plugin: Option<String>) -> Self {
+        self.changed.set(plugin);
+        self
+    }
+    fn append_changed(&self, draft: Draft) -> Result<Message, String> {
+        self.append_full(draft, None, None, self.changed.take())
     }
     fn append_noted(
         &self,
@@ -425,10 +446,20 @@ impl Log {
         team: Option<TeamNote>,
         send: Option<String>,
     ) -> Result<Message, String> {
+        self.append_full(draft, team, send, None)
+    }
+    fn append_full(
+        &self,
+        draft: Draft,
+        team: Option<TeamNote>,
+        send: Option<String>,
+        changed_by: Option<String>,
+    ) -> Result<Message, String> {
         let id = format!("m{}", self.with(|log, _| log.len())? + 1);
         let message = Message {
             team,
             send,
+            changed_by,
             thread: draft.thread.unwrap_or_else(|| id.clone()),
             id,
             kind: draft.kind,
@@ -510,7 +541,7 @@ impl Log {
     /// A refusal may carry one note for the person; it is appended before the refusal returns.
     fn settle(&self, verdict: Verdict, draft: Draft) -> Result<Message, String> {
         match verdict {
-            Ok(()) => self.append(draft),
+            Ok(()) => self.append_changed(draft),
             Err((reason, note)) => {
                 if let Some(note) = note {
                     self.append(*note)?;
@@ -1320,6 +1351,7 @@ mod tests {
                 ts: 0,
                 team: None,
                 send: None,
+                changed_by: None,
             })
             .unwrap();
             m.push('\n');

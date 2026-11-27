@@ -4,12 +4,13 @@
 # Exit 0 pass, 1 a count rose or is new, 2 usage.
 set -u
 root=$(cd "$(dirname "$0")/.." && pwd)
-base=$root/scripts/raw-literals.baseline
+base=${RAW_LITERALS_BASELINE:-$root/scripts/raw-literals.baseline}  # CI: .github/scripts/ratchets.py
 [ -f "$base" ] || { echo "raw-literal ratchet: $base missing" >&2; exit 2; }
 # The scan's own failure must not read as "no literals": stop before any id is written.
 counts=$(sh "$root/scripts/raw-literals.sh") || { echo "raw-literal ratchet: scripts/raw-literals.sh failed" >&2; exit 2; }
 bad=$(printf '%s\n' "$counts" | awk -v base="$base" '
   BEGIN { while ((getline l < base) > 0) { split(l, a, " "); b[a[1] " " a[2]] = a[3] } }
+  NF < 3 { next }  # no literals at all: one empty line
   { k = $1 " " $2
     if (!(k in b)) printf "%s %s: %d, not in the baseline\n", $1, $2, $3
     else if ($3 > b[k]) printf "%s %s: rose from %d to %d\n", $1, $2, b[k], $3 }')
