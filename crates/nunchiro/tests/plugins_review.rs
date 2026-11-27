@@ -236,3 +236,20 @@ fn a_long_command_never_holds_the_answer() {
     }
     assert_eq!(r["Ok"]["run"]["output"]["text"], "done\n", "{r}");
 }
+
+#[test]
+fn a_draft_for_the_message_box_is_checked() {
+    let c = core("prd");
+    for (script, bad) in [
+        ("printf 'fine draft\\n'", false),
+        ("printf '/clear\\n'", true),
+        ("printf 'hidden \\342\\200\\256 text\\n'", true),
+    ] {
+        plugin(&c.home, "send", script, "");
+        ok(&c.home, &["plugin", "allow", "p"]);
+        ok(&c.home, &["plugin", "on", "p"]);
+        let r = finished(&c);
+        assert_eq!(r["Ok"]["run"]["error"].is_string(), bad, "{script}: {r}");
+        assert_eq!(r["Ok"]["run"]["output"].is_object(), !bad, "{script}: {r}");
+    }
+}
