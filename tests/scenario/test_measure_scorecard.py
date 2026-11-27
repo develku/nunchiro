@@ -134,6 +134,16 @@ class RubricV2(unittest.TestCase):
         self.assertEqual(s.ran_green(0, "Ran 12 tests in 0.2s\n\nOK"), (True, 12))
         self.assertEqual(s.ran_green(1, "Ran 12 tests in 0.2s\n\nFAILED (failures=1)"), (False, 12))
 
+    def test_a_command_that_names_a_missing_spec_is_not_green(self):
+        # Playwright runs the specs it finds and ends 0: without this, half a check passes for the whole.
+        pw = ["pnpm", "-C", "web", "exec", "playwright", "test"]
+        self.assertEqual(s.missing_specs(pw + ["no-such-page.spec.ts", "inputs-one-style.spec.ts"]), ["no-such-page.spec.ts"])
+        self.assertEqual(s.missing_specs(pw + ["inputs-one-style.spec.ts"]), [])
+        self.assertEqual(s.missing_specs(["cargo", "test", "-p", "nunchiro", "x"]), [])
+        row = s.run_test(pw + ["no-such-page.spec.ts", "inputs-one-style.spec.ts"], {})  # refused before anything runs
+        self.assertEqual((row["green"], row["tests"], row["exit"]), (False, 0, None))
+        self.assertIn("no-such-page.spec.ts", row["tail"])
+
     def test_a_test_check_counts_only_when_its_tests_ran_green_at_this_commit(self):
         cmd = ["cargo", "test", "-p", "nunchiro", "x"]
         doc = {"commit": "abc1234", "results": [{"cmd": cmd, "green": True}, {"cmd": ["other"], "green": False}]}
@@ -170,6 +180,24 @@ class RubricV2(unittest.TestCase):
                 3: f"/Users/o/Applications/Nunchiro.app/Contents/MacOS/nunchiro hold {b}", 4: "/bin/cat hold on"}
         self.assertEqual(s.holder_pids(args, ids={a}), [2])
         self.assertEqual(s.holder_pids(args, exe="/Users/o/Applications/Nunchiro.app/Contents/MacOS/nunchiro"), [3])
+
+    def test_weigh_splits_cpu_by_group_and_keeps_the_figure_the_same_sum(self):
+        used = {1: [10.0, 10.5], 2: [3.0, 3.1], 3: [1.0, 1.01], 4: [2.0, 2.0], 5: [7.0, 9.0]}  # pid: CPU s before, after
+        calls = {}
+
+        def cputime(pids):
+            n = calls.setdefault(tuple(pids), 0)
+            calls[tuple(pids)] += 1
+            return sum(used[p][n] for p in pids)
+        clock = iter([0.0, 10.0])
+        groups = dict(core=[1], window=[2], helpers=[3], holders=[4], agents=[5])
+        cpu, by = s.weigh_cpu(groups, 10, cputime, sleep=lambda _: None, clock=lambda: next(clock))
+        self.assertEqual(by, dict(core=5.0, window=1.0, helpers=0.1, holders=0.0, agents=20.0))
+        self.assertEqual(cpu, 6.1)  # core + window + helpers + holders, as before; the agents are not in it
+        calls.clear()
+        _, by = s.weigh_cpu(dict(groups, helpers=[]), 10, cputime, sleep=lambda _: None, clock=iter([0.0, 10.0]).__next__)
+        self.assertEqual(by["helpers"], 0.0)
+        self.assertNotIn((), calls)  # an empty group is 0, never a ps call over no pids
 
     def test_mib_per_session_is_never_negative(self):
         # the 11-26 run: a baseline sampled before the window settled read higher than 20 sessions later
@@ -218,6 +246,12 @@ class Card(unittest.TestCase):
         checks = {c["id"]: c for p in self.parts["parts"] for c in p.get("checks", [])}
         for cid in sorted(s.TEST_CHECKS):
             self.assertTrue(checks[cid].get("tests"), cid)
+
+    def test_every_spec_a_check_names_is_in_this_repository(self):
+        for p in self.parts["parts"]:
+            for c in p.get("checks", []):
+                for cmd in c.get("tests", []):
+                    self.assertEqual(s.missing_specs(cmd), [], c["id"])
 
     def test_the_page_renders_and_unmeasured_parts_are_zero(self):
         res = {"date": "2026-11-27 10:00", "commit": "abc1234", "host": "h", "macos": "m", "load": [1, 2], "repeats": 1,

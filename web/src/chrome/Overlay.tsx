@@ -37,7 +37,7 @@ export function Overlay({ kind, label, onClose, children }: { kind: Exclude<Over
   close.current = onClose;
   // Ticket 991 C22: the workspace behind the modal is out of reach (Tab, VoiceOver) while it is open. Only the window's
   // own regions (cleared before focus goes back, so this effect comes first): a popover above the modal (palette, New tab) is a
-  // sibling and stays live, and the status bar stays live as the modal leaves it uncovered (its Undo line, styles.css .ovl).
+  // sibling and stays live, and the status bar stays live as the modal leaves it uncovered (its Undo line, chrome.css .ovl).
   useEffect(() => {
     const behind = [...(panel.current?.closest('.win')?.querySelectorAll<HTMLElement>(':scope > .title, :scope > .body') ?? [])];
     behind.forEach((el) => (el.inert = true));

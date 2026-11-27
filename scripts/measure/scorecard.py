@@ -13,6 +13,7 @@ Usage:
   scorecard.py tests [--target DIR] [--out FILE]
       Runs every command a check in parts.json names under "tests" (detached, as `dev` runs the gate's test stage) and
       writes docs/measure/tests-<date>.json: the commit, and per command whether it ended 0 with at least one test run.
+      A command that names a spec file missing from web/tests is not run and not green.
   scorecard.py weigh [--secs 60] [--out FILE]
       Read only, the owner-run step for idle memory and CPU with real agent sessions: the owner's running Nunchiro
       (core, window, WebKit helpers, holders) by ps and footprint, with the number of Claude and Codex sessions it
@@ -610,6 +611,22 @@ def ran_green(rc, output):
     return rc == 0 and n > 0 and not flaky, n
 
 
+def missing_specs(cmd):
+    """The spec files a command names that are not in web/tests. Playwright runs the ones it finds and still ends 0,
+    so such a command is never green, whatever the rest of it does."""
+    return [x for x in cmd if x.endswith(".spec.ts") and not (ROOT / "web/tests" / x).is_file()]
+
+
+def run_test(cmd, env):
+    """One row of tests-<date>.json. A command that names a missing spec is not run and not green."""
+    gone = missing_specs(cmd)
+    if gone:
+        return dict(cmd=cmd, green=False, tests=0, exit=None, seconds=0, tail="names a spec that is not in web/tests: " + ", ".join(gone))
+    secs, rc, out = outside_holder(cmd, env)
+    ok, n = ran_green(rc, out)
+    return dict(cmd=cmd, green=ok, tests=n, exit=rc, seconds=secs, tail="" if ok else out[-400:])
+
+
 def green_commands(doc, commit):
     """The commands of a tests-<date>.json that ran green, as joined strings; none when it is of another commit."""
     if not doc or not commit or not str(doc.get("commit", "")).startswith(commit[:7]):
@@ -1163,14 +1180,28 @@ def tests_cmd(a):
         env["CARGO_TARGET_DIR"] = str(Path(a.target).resolve())
     results = []
     for cmd in cmds:
-        secs, rc, out = outside_holder(cmd, env)
-        ok, n = ran_green(rc, out)
-        results.append(dict(cmd=cmd, green=ok, tests=n, exit=rc, seconds=secs, tail="" if ok else out[-400:]))
-        print(f"{'green' if ok else 'NOT GREEN'} ({n} tests, exit {rc}, {secs} s): {' '.join(cmd)}", flush=True)
+        r = run_test(cmd, env)
+        results.append(r)
+        print(f"{'green' if r['green'] else 'NOT GREEN'} ({r['tests']} tests, exit {r['exit']}, {r['seconds']} s): {' '.join(cmd)}"
+              + ("" if r["exit"] is not None else f" ({r['tail']})"), flush=True)
     doc = dict(date=time.strftime("%Y-%m-%d %H:%M"), commit=git("rev-parse", "--short", "HEAD").strip(), results=results)
     path = Path(a.out) if a.out else OUT_DIR / f"tests-{time.strftime('%Y-%m-%d')}.json"
     path.write_text(json.dumps(doc, indent=1) + "\n")
     print(f"wrote {path}: {sum(r['green'] for r in results)} of {len(results)} green")
+
+
+WEIGHED = ("core", "window", "helpers", "holders")  # the groups idle_cpu_pct sums; "agents" is reported beside it
+
+
+def weigh_cpu(groups, secs, cputime, sleep=time.sleep, clock=time.monotonic):
+    """(idle_cpu_pct, CPU % per group) over `secs`: idle_cpu_pct is the WEIGHED groups' summed CPU time, rounded once."""
+    def used(pids):
+        return cputime(pids) if pids else 0.0
+    before, t0 = {g: used(p) for g, p in groups.items()}, clock()
+    sleep(secs)
+    dt = clock() - t0
+    delta = {g: used(p) - before[g] for g, p in groups.items()}
+    return round(sum(delta[g] for g in WEIGHED) / dt * 100, 2), {g: round(d / dt * 100, 2) for g, d in delta.items()}
 
 
 def weigh_cmd(a):
@@ -1193,15 +1224,16 @@ def weigh_cmd(a):
     helpers = ml.attribute(procs, {p: ml.responsible_pid(p) for p in procs}, window[0], set(holders) | {core})[0]
     pids, kids = [core, window[0], *helpers, *holders], [p for ks in under.values() for p in ks]
     mib = rel.mib(sum(rel.footprint(pids).values()))
-    c0, k0, t0 = bl.cputime(pids), bl.cputime(kids) if kids else 0.0, time.monotonic()
-    time.sleep(a.secs)
-    dt = time.monotonic() - t0
-    cpu, agent_cpu = round((bl.cputime(pids) - c0) / dt * 100, 2), round(((bl.cputime(kids) if kids else 0.0) - k0) / dt * 100, 2)
+    groups = dict(core=[core], window=[window[0]], helpers=helpers, holders=holders, agents=kids)
+    cpu, by_group = weigh_cpu(groups, a.secs, bl.cputime)
+    agent_cpu = by_group["agents"]
     now = time.strftime("%Y-%m-%d %H:%M")
+    split = ", ".join(f"{g} {v} %" for g, v in by_group.items())
     evidence = (f"scorecard.py weigh {now}: the owner's running app ({exe}), window open, {len(holders)} sessions held, {len(agents)} with a "
                 f"Claude or Codex process; {len(pids)} processes (core, window, {len(helpers)} helpers, holders); the agents' own CPU in the "
-                f"same {a.secs} s was {agent_cpu} % (idle means near 0); 1-min load {rel.load()}")
-    print(json.dumps(dict(idle_mib=mib, idle_cpu_pct=cpu, sessions=len(holders), agent_sessions=len(agents), agents_cpu_pct=agent_cpu), indent=1))
+                f"same {a.secs} s was {agent_cpu} % (idle means near 0); by group: {split}; 1-min load {rel.load()}")
+    print(json.dumps(dict(idle_mib=mib, idle_cpu_pct=cpu, sessions=len(holders), agent_sessions=len(agents), agents_cpu_pct=agent_cpu,
+                          cpu_pct_by_group=by_group), indent=1))
     if len(agents) < 5:
         print(f"not written: the rubric's figure needs at least 5 Claude or Codex sessions, this app holds {len(agents)}")
         return
