@@ -313,12 +313,9 @@ mod tests {
         let at = claude.iter().position(|a| *a == "--tools").unwrap();
         assert_eq!(claude[at + 1], "");
         assert!(claude.contains(&"--no-session-persistence"));
-        let (_, codex) = argv(AgentKind::Codex).unwrap();
-        assert!(
-            codex.windows(2).any(|w| w == ["--sandbox", "read-only"])
-                && codex.contains(&"--ephemeral")
-        );
-        for a in claude.iter().chain(&codex) {
+        // Codex cannot run without its shell tool and its configured MCP servers here: Claude only for now.
+        assert!(argv(AgentKind::Codex).is_none());
+        for a in &claude {
             assert!(
                 !a.contains("dangerously") && !a.contains("bypass") && !a.contains("write"),
                 "{a}"

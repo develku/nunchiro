@@ -791,6 +791,8 @@ impl Core {
             .arg("serve")
             .env("NUNCHIRO_HOME", &home)
             .env("CLAUDE_CONFIG_DIR", home.join("agent"))
+            // Write with AI's limit, shortened so a hanging agent is seen ending.
+            .env("NUNCHIRO_WRITE_AI_MS", "4000")
             .env(
                 "PATH",
                 format!("{}:/usr/bin:/bin", home.join("bin").display()),
@@ -1444,7 +1446,7 @@ fn claude_writer(core: &Core) {
     )
     .unwrap();
     let script = format!(
-        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo \"2.1.310 (Claude Code)\"; exit; fi\nif [ \"$1\" != -p ]; then exec /bin/cat; fi\nprintf '%s|' \"$@\" > '{h}/claude-argv'\nprintf '%s' \"$CLAUDE_CONFIG_DIR\" > '{h}/claude-config'\necho $$ > '{h}/claude-pid'\n/bin/cat > '{h}/claude-stdin'\nif [ -e '{h}/claude-hang' ]; then /bin/sleep 120; fi\n/bin/cat '{h}/claude-out'\n"
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo \"2.1.310 (Claude Code)\"; exit; fi\nif [ \"$1\" != -p ]; then exec /bin/cat; fi\nprintf '%s|' \"$@\" > '{h}/claude-argv'\nprintf '%s' \"$CLAUDE_CONFIG_DIR\" > '{h}/claude-config'\nprintf '%s' \"$PWD\" > '{h}/claude-pwd'\n/bin/ls -A > '{h}/claude-ls'\necho $$ > '{h}/claude-pid'\n/bin/cat > '{h}/claude-stdin'\nif [ -e '{h}/claude-hang' ]; then /bin/sleep 120; fi\n/bin/cat '{h}/claude-out'\n"
     );
     let path = core.home.join("bin/claude");
     fs::write(&path, script).unwrap();
@@ -1464,8 +1466,28 @@ fn pr_write_runs_the_agent_once_without_tools() {
     .unwrap();
     pr_git(&dir, &["add", "lex.rs"]);
     pr_git(&dir, &["commit", "-q", "-m", "Stop the lexer at the end"]);
+    // diff.external names a program; Write with AI's diff never runs it.
+    let marker = core.home.join("external-ran");
+    let external = core.home.join("external.sh");
+    fs::write(
+        &external,
+        format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+    )
+    .unwrap();
+    fs::set_permissions(&external, fs::Permissions::from_mode(0o755)).unwrap();
+    pr_git(
+        &dir,
+        &["config", "diff.external", external.to_str().unwrap()],
+    );
     let s = core.start();
+    let transcript = "{\"type\":\"user\",\"message\":{\"content\":\"hi\"}}\n";
+    core.transcript(&s, transcript);
     claude_writer(&core);
+    fs::write(
+        core.home.join("claude-out"),
+        json!({"type":"result","is_error":false,"result":"{\"title\":\"Fix the\\u202e lexer\",\"body\":\"## Summary\\nIt stops\\u200b at the end.\"}"}).to_string(),
+    )
+    .unwrap();
     let sent_before = core.window(json!({"op":"agent_get","id":s.id}));
     assert!(sent_before["Ok"].is_object(), "{sent_before}");
     let r = core.window(json!({"op":"pr_write","session":s.id}));
@@ -1502,6 +1524,48 @@ fn pr_write_runs_the_agent_once_without_tools() {
         sent_before,
         "the session changed"
     );
+    assert!(!marker.exists(), "diff.external ran");
+    // An empty folder of the app's own, never the shared temp folder.
+    let pwd = fs::read_to_string(core.home.join("claude-pwd")).unwrap();
+    assert!(
+        pwd.starts_with(&core.home.canonicalize().unwrap().display().to_string()),
+        "{pwd}"
+    );
+    assert_eq!(fs::read_to_string(core.home.join("claude-ls")).unwrap(), "");
+    // The session's transcript is byte-equal.
+    let encoded: String = s
+        .cwd
+        .to_string_lossy()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    let file = core
+        .home
+        .join("agent/projects")
+        .join(encoded)
+        .join(format!("{}.jsonl", s.agent_session_id.as_ref().unwrap()));
+    assert_eq!(fs::read_to_string(file).unwrap(), transcript);
+}
+
+/// A Write with AI that never answers ends at its limit: the sentence, and the agent's process is gone.
+#[test]
+fn pr_write_ends_a_run_at_its_limit() {
+    let core = Core::new();
+    pr_repo(&core, 1);
+    let s = core.start();
+    claude_writer(&core);
+    fs::write(core.home.join("claude-hang"), "").unwrap();
+    let r = core.window(json!({"op":"pr_write","session":s.id}));
+    assert_eq!(
+        r["Err"], "Claude could not write it: it did not answer in 4 seconds",
+        "{r}"
+    );
+    let pid = fs::read_to_string(core.home.join("claude-pid")).unwrap();
+    let alive = std::process::Command::new("/bin/kill")
+        .args(["-0", pid.trim()])
+        .status()
+        .unwrap();
+    assert!(!alive.success(), "the agent's process is still running");
 }
 
 /// Cancel stops that run alone: the reply says so and the agent's process is gone.
