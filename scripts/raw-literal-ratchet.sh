@@ -4,7 +4,7 @@
 # Exit 0 pass, 1 a count rose or is new, 2 usage.
 set -u
 root=$(cd "$(dirname "$0")/.." && pwd)
-base=$root/scripts/raw-literals.baseline
+base=${RAW_LITERALS_BASELINE:-$root/scripts/raw-literals.baseline}  # CI: .github/scripts/ratchets.py
 [ -f "$base" ] || { echo "raw-literal ratchet: $base missing" >&2; exit 2; }
 # The scan's own failure must not read as "no literals": stop before any id is written.
 counts=$(sh "$root/scripts/raw-literals.sh") || { echo "raw-literal ratchet: scripts/raw-literals.sh failed" >&2; exit 2; }
