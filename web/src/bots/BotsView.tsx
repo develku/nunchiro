@@ -9,14 +9,15 @@ import { ErrorLine, rawError } from '../errors';
 import type { T } from '../i18n';
 import { Icon } from '../icons/Icon';
 import { PLAIN } from '../plainText';
-import { draftOf, LevelRule, MatePicks, saveOp, UpTo, type Draft } from '../features/team';
+import { draftOf, LevelRule, LevelTable as LevelsTable, MatePicks, saveOp, UpTo, type Draft } from '../features/team';
 import { openSeat, setTeam, useTeam, type Team, type Teammate } from '../lead/lead';
 import { isLevel, pairText, slotText, useLevels, type LevelTable } from '../lead/level';
 import { openSchedules, useScheduleList, whenWords } from '../schedule/schedules';
 import { basename } from '../tree';
 import type { Session } from '../types';
-import { eyesOf, type Bot, type Eyes } from './bots';
+import { eyesOf, LEVELS_FOLD, type Bot, type Eyes } from './bots';
 import { Face } from './Face';
+import { CoreFeatureClient } from '../settings/useFeatureSetting';
 import './bots.css';
 
 const agentWord = (bot: Bot) => (bot.agent === 'claude' ? 'Claude Code' : bot.agent === 'codex' ? 'Codex' : bot.agent.replace(/^acp:/, ''));
@@ -32,8 +33,8 @@ type Props = { core: CoreClient; t: T; sessions: Session[]; first?: string | nul
 
 export function BotsView({ core, t, sessions, first, open, onNew }: Props) {
   const team = useTeam(core, true);
-  const { table } = useLevels(core, true);
-  const [shown, setShown] = useState<string | null>(first ?? null);
+  const { table, agents } = useLevels(core, true);
+  const [shown, setShown] = useState<string | null>(first === LEVELS_FOLD ? null : (first ?? null));
   const bots = team.bots ?? [];
   const mates = new Map(team.teammates.map((m) => [m.id, m]));
   const eyes = new Map(bots.map((b) => [b.id, eyesOf(sessions, b.id)]));
@@ -93,6 +94,21 @@ export function BotsView({ core, t, sessions, first, open, onNew }: Props) {
               </section>
             ),
         )}
+        {/* Closed until asked for, as a bot's own fold: the level table and Worker models apply to every bot. */}
+        <details className="bot-card bot-models" data-bots-levels open={first === LEVELS_FOLD || undefined}>
+          <summary>
+            <Icon name="chevron-right" size={12} />
+            {t('bots.models')} <small>{t('bots.levels.note')}</small>
+          </summary>
+          {/* The Settings rows, drawn as Settings draws them (bots.css: the frame's own layout is dropped here). */}
+          <div className="settings bots-levels" role="region" aria-label={t('bots.models')}>
+            <div className="sbody">
+              <CoreFeatureClient.Provider value={core}>
+                <LevelsTable t={t} core={core} agents={agents} />
+              </CoreFeatureClient.Provider>
+            </div>
+          </div>
+        </details>
       </div>
     </div>
   );
