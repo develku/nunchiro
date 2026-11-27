@@ -185,7 +185,7 @@
 .wdiv:focus-visible::after {
   width: 3px;
   left: 1px;
-  background: var(--ring-focus); /* neutral, as the sidebar edge: blue is the working light (N072) */
+  background: var(--focus-ring); /* neutral, as the sidebar edge: blue is the working light (N072) */
 }
 .wdh {
   flex: none;

@@ -543,7 +543,7 @@
   height: var(--pip);
 }
 .needyou:focus-visible {
-  outline: 2px solid var(--ring-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 .row.kid {
@@ -966,7 +966,7 @@
   cursor: pointer;
 }
 .sess .q:focus-visible {
-  outline: 2px solid var(--ring-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
 .sess .q .who {
@@ -1108,12 +1108,12 @@
   background: var(--tint-2);
 }
 .qib:focus-visible {
-  outline: 2px solid var(--ring-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 /* The tooltip (the app's `data-tip`, Tooltip.tsx) says the key ("Allow (1)"); the row never prints it. */
 .peek:focus {
-  outline: 2px solid var(--ring-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 .sess .b,
@@ -1378,22 +1378,9 @@
   background: var(--hover);
   color: var(--text);
 }
-.wtdlg .btn {
-  padding: 5px 12px;
-  font: 600 var(--fs-12) system-ui;
-  border: 1px solid var(--line);
-  border-radius: var(--r-6);
-  background: var(--panel);
-  color: var(--text);
-}
+/* The dialog's buttons are the book's (styles.css .btn); a removing action is a secondary in --bad-text, never a red fill. */
 .wtdlg .btn.x {
-  background: var(--bad);
-  border-color: var(--bad);
-  color: var(--on-status);
-}
-.wtdlg .btn:focus-visible {
-  outline: var(--focus-width) solid var(--focus-ring);
-  outline-offset: 2px;
+  color: var(--bad-text);
 }
 /* Look 1117 v11 A S3-2: inside the Remove-project dialog's sheet (remove.css .rmdlg), whose gap spaces it. */
 .wtdirty .wtlist {
@@ -1456,7 +1443,7 @@
 }
 .wtoast .wtundo:focus-visible,
 .wtoast .wtdismiss:focus-visible {
-  outline: var(--focus-width) solid var(--ring-focus);
+  outline: var(--focus-width) solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -1507,10 +1494,10 @@
 }
 .wtnew .wtstart input,
 .wtstartfields input[type='radio'] {
-  width: auto;
+  width: var(--check);
+  height: var(--check);
   padding: 0;
   margin: 0;
-  accent-color: var(--focus-ring);
 }
 .wtstartfields fieldset label {
   display: inline-flex;
@@ -1816,11 +1803,6 @@
 
 /* Ticket 1041 lane 4 (A+B+C, approved mockup docs/design/polish-1121/index.html; owner answers 2026-11-22): the tree's
    state as light, the state word, the your-turn block and the quiet marks. Shared rules: light-glass.css. */
-.tree {
-  /* The tree's focus rings take the neutral ring (15.1 item 1): blue is the working light only. */
-  --focus-ring: var(--ring-focus);
-  --split-ring: inset 0 0 0 var(--focus-width) var(--ring-focus);
-}
 /* The state word (design book: the meta word, 11.5 tabular): one slot at the row's right, before the glyph. Needs you
    says it in --you-text 500, failed in --bad-text; "Limit" in the limit's (above). The age stays beside it. */
 .row.wt2 .sw {

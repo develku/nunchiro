@@ -74,24 +74,6 @@
   outline-offset: 2px;
   box-shadow: 0 0 14px 2px color-mix(in srgb, var(--you-glow) 45%, transparent);
 }
-/* A working face reads: its eyes move slowly from side to side. */
-.face .scan {
-  animation: face-scan 2.6s ease-in-out infinite;
-}
-@keyframes face-scan {
-  0%,
-  100% {
-    transform: translateX(-1.4px);
-  }
-  50% {
-    transform: translateX(1.4px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .face .scan {
-    animation: none;
-  }
-}
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .face svg {
     filter: saturate(0.92) brightness(0.9);

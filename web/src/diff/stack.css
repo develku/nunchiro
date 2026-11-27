@@ -1,11 +1,10 @@
 /* Ticket 374: the stacked Diff (diff/Stack.tsx), syntax colours and the line note (diff/PatchView.tsx). */
 .diff .dbar .btn {
-  font-size: var(--fs-11);
-  padding: 0 6px;
-  color: var(--text);
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  font-size: var(--fs-sm);
 }
 .diff .dbar .btn:disabled {
-  color: var(--muted);
   cursor: default;
 }
 .diff .dstack {

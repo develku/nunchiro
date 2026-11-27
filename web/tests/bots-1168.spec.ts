@@ -162,16 +162,13 @@ test('face_is_the_ids (1168): the same id draws the same face after a reload and
   expect(await faces()).toEqual(first);
   // The header's face is the roster's.
   expect((await faceOf(app.locator('.shead .face'))).slice(0, 2)).toEqual(first.dalsu);
-  // A working face's eyes move; with reduced motion they are still.
+  // A working face shows its working eyes, still (design book: only the working dot breathes).
   set({ Dalsu: { working: true } });
   const dalsu = view.locator('[data-bot="bot-dalsu"]');
   await expect(dalsu.locator('.face')).toHaveAttribute('data-eyes', 'work');
   await expect(dalsu.locator('.bot-now')).toHaveText('Working');
-  const moving = () => dalsu.locator('.face .scan').evaluate((e) => getComputedStyle(e).animationName);
   await app.emulateMedia({ reducedMotion: 'no-preference' });
-  expect(await moving()).toBe('face-scan');
-  await app.emulateMedia({ reducedMotion: 'reduce' });
-  expect(await moving()).toBe('none');
+  expect(await dalsu.locator('.face .scan').evaluate((e) => getComputedStyle(e).animationName)).toBe('none');
   // After the move (a change of the roster) the faces are the ones bots.json keeps: the same.
   await dalsu.click();
   const fold = app.locator('[data-bot-page="bot-dalsu"] details[data-bot-models]');

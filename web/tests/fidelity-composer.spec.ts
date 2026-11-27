@@ -400,7 +400,7 @@ test('no_uuid_in_tooltips: the project chip\'s hover text is the name it shows, 
 });
 
 // 8c. Round 3 (strict review): the input's type and the Send/Stop target were both smaller than the mockup's.
-test('composer_type_and_target_size: the input reads at the mockup\'s 14.5px and Send/Stop is its 32px box', async ({ app, core }) => {
+test('composer_type_and_target_size: the input reads at the mockup\'s 14.5px and Send/Stop is the design book\'s 28px round control', async ({ app, core }) => {
   fakeClaude(core);
   const s = core.agent(core.project('p'), 'alpha', 'opus');
   await openWindow(app);
@@ -410,10 +410,10 @@ test('composer_type_and_target_size: the input reads at the mockup\'s 14.5px and
   const send = composer(app).locator('.send');
   await expect(send).toHaveAccessibleName('Send');
   const idle = (await send.boundingBox())!;
-  expect([Math.round(idle.width), Math.round(idle.height)]).toEqual([32, 32]);
+  expect([Math.round(idle.width), Math.round(idle.height)]).toEqual([28, 28]);
   await working(app, core, s.id);
   const stop = (await composer(app).locator('.send.stop').boundingBox())!;
-  expect([Math.round(stop.width), Math.round(stop.height)]).toEqual([32, 32]);
+  expect([Math.round(stop.width), Math.round(stop.height)]).toEqual([28, 28]);
 });
 
 // 9. The mockup's `.ch`: model, effort and mode are flat text with a caret, not pills.

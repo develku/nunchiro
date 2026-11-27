@@ -352,7 +352,7 @@ export function ProviderForm({ t, core, row, start, taken, onClose, onApproved }
           </button>
         )}
         {canApprove && (
-          <button type="button" className="btn p" aria-busy={busy} onClick={() => void approve()}>
+          <button type="button" className={nameOnly ? 'btn' : 'btn p'} aria-busy={busy} onClick={() => void approve()}>
             {t('providers.approve')}
           </button>
         )}

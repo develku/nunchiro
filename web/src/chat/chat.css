@@ -4,20 +4,6 @@
    diff and changes cards are one tint step (--tint-1) with no border; buttons are quiet tints; focus is the neutral ring;
    failures are red (--error), orange is only where you answer. The floating layers (the error strip, the "new" chip,
    the docked card) are glass in light-glass.css. */
-.chat,
-.composer,
-.problem-band,
-.conv-chain {
-  --focus-ring: var(--ring-focus);
-}
-:is(.chat, .composer, .problem-band) .btn:not(.p) {
-  border-color: transparent;
-  background: var(--control-quiet-bg);
-  color: var(--text);
-}
-:is(.chat, .composer, .problem-band) .btn:not(.p):hover:not(:disabled) {
-  background: var(--control-quiet-hover);
-}
 
 /* Over the terminal, which stays mounted at its size underneath (switching never resizes the PTY). */
 .chat {
@@ -518,8 +504,9 @@
   align-items: center;
 }
 .dacts .btn {
-  height: 22px;
-  white-space: nowrap;
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  font-size: var(--fs-sm);
 }
 .dask .note {
   font-size: var(--fs-11);
@@ -553,18 +540,10 @@
   box-sizing: border-box;
 }
 .cview .btn {
-  font-size: var(--fs-11);
-  padding: 0 8px;
-  display: inline-flex;
-  align-items: center;
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
   gap: 4px;
-  /* Ticket 1041: no outline; the quiet tint (the rule at the top) keeps it reading as a control, not a label */
-  color: var(--text);
-}
-.cview .btn:hover,
-.cview .btn:focus-visible {
-  background: var(--control-quiet-hover);
-  color: var(--text);
+  font-size: var(--fs-sm);
 }
 .turnsum .sum {
   display: flex;
@@ -671,9 +650,9 @@
   opacity: 1;
 }
 .message-actions .btn {
-  border-radius: var(--r-6);
-  padding: 3px 10px;
-  line-height: 1.5;
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  font-size: var(--fs-sm);
 }
 
 .message-user {
@@ -700,9 +679,9 @@
   padding: 2px 0;
 }
 :is(.chcard .h, .chcard.one) > .btn {
-  border-radius: var(--r-6);
-  padding: 2px 9px;
-  font-size: calc(var(--fs-12) + .5px);
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  font-size: var(--fs-sm);
 }
 .chcard .rows li {
   font-size: calc(var(--fs-12) + .5px);

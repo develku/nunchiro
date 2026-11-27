@@ -17,9 +17,7 @@
   border-radius: var(--r-12);
   /* ticket 1041: solid, no border (owner 15.1 item 6) */
   box-shadow: var(--shadow-float);
-  font-size: var(--fs-13);
-  --focus-ring: var(--ring-focus);
-}
+  font-size: var(--fs-13);}
 .pr-view header {
   display: flex;
   justify-content: space-between;

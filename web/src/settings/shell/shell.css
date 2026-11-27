@@ -16,7 +16,6 @@
      radio dot, primary action) is the ink control colour and every focus ring the neutral ring, so no control reads as
      blue = working or orange = your turn. Data that means working keeps --run / --light-run by name. */
   --accent: var(--control-bg);
-  --focus-ring: var(--ring-focus);
   accent-color: var(--accent); /* the root's accent-color is resolved there (blue); native checks here take the ink */
   background: var(--page);
   color: var(--text);
@@ -53,7 +52,7 @@
 }
 .settings[role='region'] > nav > .snavsearch > svg {
   position: absolute;
-  left: var(--sp-12);
+  left: var(--sp-8);
   color: var(--muted);
   pointer-events: none;
 }
@@ -62,9 +61,9 @@
   min-width: 0; /* ticket 516 r3: shrinks at 900 px so the ⌘F chip beside it stays inside the nav */
   box-sizing: border-box;
   width: auto;
-  height: 32px;
+  height: var(--field-h);
   margin: 0;
-  padding: 0 var(--sp-12) 0 32px;
+  padding: 0 var(--sp-12) 0 28px; /* design book search: the 16 icon at 8, then the text */
 }
 /* Ticket 516: the search command's key (⌘F) sits beside the box, outside it (no overlay on the text or the clear button);
  * typing hides it but keeps its space, so the box does not move on the first keystroke. */
@@ -523,54 +522,27 @@
   color: color-mix(in srgb, var(--warn) 75%, var(--text)); /* the plain colour read 4.4:1 on its own tint */
   background: color-mix(in srgb, var(--warn) 10%, transparent);
 }
-/* Ticket 1041 A: the kit's buttons have no outline: a quiet tint, the ink fill for the one main action (owner 15.1
-   item 1). The 1 px line stays clear so no button changes size. */
-.settings[role='region'] .btn {
-  border-color: transparent;
-  background: var(--control-quiet-bg);
-}
-.settings[role='region'] .btn:hover:not(:disabled) {
-  background: var(--control-quiet-hover);
-}
-.settings[role='region'] .btn.p {
-  background: var(--control-bg);
-  color: var(--control-text);
-}
-.settings[role='region'] .btn.withicon {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-/* Ticket 991 Q6-11: an action that takes something away (Revoke), on any Settings page. */
-.settings[role='region'] .btn.danger {
-  color: var(--error);
-}
-/* The kit's icon-only button (q67 look Q6-11): no box, a square that fills under the pointer, as Keyboard's pencil
-   (.kedit) and Providers' rename (.acct-pencil). Notifications' sound preview was a boxed button no other page had. */
+/* The kit's buttons are the book's (styles.css .btn). The icon-only button is the book's small icon button: 24, radius 7,
+   --muted, a --tint-1 square under the pointer. */
 .settings[role='region'] .btn.icon {
   display: inline-grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: var(--ib-sm);
+  height: var(--ib-sm);
   padding: 0;
-  border: 0;
-  border-radius: var(--r-4);
   background: none;
   color: var(--muted);
 }
 .settings[role='region'] .btn.icon:hover:not(:disabled) {
-  background: var(--control-quiet-hover);
+  background: var(--tint-1);
   color: var(--text);
 }
-/* final.html .btn.pri: a page header's main action, in ink (owner 15.1 item 1). */
-.settings[role='region'] .btn.p.pri {
-  background: var(--control-bg);
-  color: var(--control-text);
-}
+/* A row's flat button is the book's quiet one. */
 .settings[role='region'] :is(.srow, .libs-table) .btn.flat {
-  border-width: 0; /* no border at all (a transparent one reads as black to the contrast check); padding keeps the size */
-  padding: 2px 9px;
-  background: transparent;
+  background: none;
+}
+.settings[role='region'] :is(.srow, .libs-table) .btn.flat:hover:not(:disabled) {
+  background: var(--tint-1);
 }
 /* Tickets 311, 312: the row's reset arrow, a card's "Reset to defaults", Retry after a failed read. */
 .settings[role='region'] .sreset {
@@ -672,38 +644,56 @@
 }
 /* Switch (final.html .tog): the checkbox drawn as a track and knob. Ticket 993: the Schedules widget (.schedv) draws the
    kit's switch, segments and select too. */
-:is(.settings[role='region'], .schedv) input.stog {
+/* Design book switch: a 30 x 18 track (--tint-3, a --faint hairline) with a 14 knob; on is ink. The input stays 24 high so
+   the hit target holds (hit_targets_24); the track and knob are drawn inside it. */
+:is(.settings[role='region'], .schedv, .bep) input.stog {
   appearance: none;
   position: relative;
   flex: none;
-  width: 40px; /* final.html draws 32x18; 40x24 keeps the 24 px hit target (hit_targets_24) */
-  height: 24px;
-  margin: 0;
-  border-radius: var(--r-10);
-  background: var(--faint);
+  width: var(--switch-w);
+  height: var(--hit);
+  border-radius: 0;
+  background: none;
   cursor: pointer;
-  transition: background 0.12s;
 }
-:is(.settings[role='region'], .schedv) input.stog::after {
+:is(.settings[role='region'], .schedv, .bep) input.stog::before {
   content: '';
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 18px;
-  height: 18px;
+  left: 0;
+  top: calc((var(--hit) - var(--switch-h)) / 2);
+  width: var(--switch-w);
+  height: var(--switch-h);
+  border-radius: calc(var(--switch-h) / 2);
+  background: var(--tint-3);
+  box-shadow: inset 0 0 0 1px var(--faint);
+}
+:is(.settings[role='region'], .schedv, .bep) input.stog::after {
+  content: '';
+  position: absolute;
+  top: calc((var(--hit) - var(--knob-d)) / 2);
+  left: 2px;
+  width: var(--knob-d);
+  height: var(--knob-d);
   border-radius: 50%;
-  background: var(--raised);
-  box-shadow: var(--shadow-card);
-  transition: left 0.12s;
+  background: var(--knob);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  transition: transform var(--dur-fade) var(--ease-out);
 }
-:is(.settings[role='region'], .schedv) input.stog:checked {
-  background: var(--control-bg); /* owner 15.1 item 1: on is ink, not blue (Schedules shares the kit switch) */
+:is(.settings[role='region'], .schedv, .bep) input.stog:checked::before {
+  background: var(--text);
+  box-shadow: none;
 }
-:is(.settings[role='region'], .schedv) input.stog:checked::after {
-  left: 19px;
+:is(.settings[role='region'], .schedv, .bep) input.stog:checked::after {
+  transform: translateX(12px);
+  background: var(--panel);
 }
-:is(.settings[role='region'], .schedv) input.stog:disabled,
-:is(.settings[role='region'], .schedv) input.stog[aria-disabled='true'] {
+:is(.settings[role='region'], .schedv, .bep) input.stog:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-10); /* the ring rounds round the switch's 24 high hit box */
+}
+:is(.settings[role='region'], .schedv, .bep) input.stog:disabled,
+:is(.settings[role='region'], .schedv, .bep) input.stog[aria-disabled='true'] {
   opacity: 0.45;
   cursor: default;
 }
@@ -712,33 +702,40 @@
   /* Ticket 1041 A: a tint track, no outline (owner 15.1 item 1: neutral controls); ticket 1043: the chosen part is raised. */
   display: inline-flex;
   gap: 2px;
+  height: var(--seg-h);
   padding: 2px;
-  border-radius: var(--r-6);
-  background: var(--control-quiet-bg);
+  border-radius: var(--seg-r);
+  background: var(--tint-2);
   overflow: hidden;
-  font-size: var(--fs-12);
+  font-size: var(--fs-sm);
+  font-weight: 500;
 }
 :is(.settings[role='region'], .mcard, .schedv) .sseg label {
   position: relative;
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  height: 24px;
   padding: 0 10px;
-  border-radius: var(--r-4);
+  border-radius: var(--r-6);
+  color: var(--muted);
   white-space: nowrap;
+}
+:is(.settings[role='region'], .mcard, .schedv) .sseg label:hover:not(:has(input:checked)) {
+  color: var(--text);
 }
 :is(.settings[role='region'], .mcard, .schedv) .sseg input {
   position: absolute;
   inset: 0;
+  width: auto;
+  height: auto;
   margin: 0;
   opacity: 0;
   cursor: pointer;
 }
 :is(.settings[role='region'], .mcard, .schedv) .sseg label:has(input:checked) {
   /* Ticket 1043 (mockup .seg span.on): the chosen part is a raised piece of the panel on the tint track (macOS). */
-  background: var(--panel);
+  background: var(--raised);
   color: var(--text);
-  font-weight: 500;
   box-shadow: var(--shadow-card);
 }
 :is(.settings[role='region'], .mcard, .schedv) .sseg label:has(input:focus-visible) {
@@ -780,17 +777,9 @@
 .settings[role='region'] .src.on small {
   color: var(--select-text); /* muted read 4.44:1 on the select step in dark */
 }
+/* The radio itself is the book's (styles.css plain radio). */
 .settings[role='region'] .src input {
-  appearance: none;
-  flex: none;
-  width: 14px;
-  height: 14px;
-  margin: 2px 0 0;
-  border: 1.5px solid var(--faint);
-  border-radius: 50%;
-}
-.settings[role='region'] .src input:checked {
-  border: 4px solid var(--accent);
+  margin: 1px 0 0;
 }
 .settings[role='region'] .src b {
   display: block;
@@ -829,8 +818,10 @@
   gap: var(--sp-8);
   min-width: 140px;
   height: 28px;
-  padding: 0 var(--sp-8) 0 var(--sp-12);
-  background: var(--control-quiet-bg);
+  padding: 0 var(--sp-8) 0 var(--field-pad);
+  border-radius: var(--field-r);
+  background: var(--tint-1);
+  box-shadow: inset 0 0 0 1px var(--line); /* the book's select: a field */
   font-size: var(--fs-13);
 }
 .settings[role='region'] .font-pick > button svg {

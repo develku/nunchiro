@@ -10,9 +10,7 @@
   flex-direction: column;
   align-items: center;
   padding: var(--sp-4) 0 var(--sp-8);
-  background: var(--page);
-  --focus-ring: var(--ring-focus);
-}
+  background: var(--page);}
 /* Ticket 1047: auto-hide. The bar leaves the row (the content takes its width) and floats over the content's edge; it slides in
    at the window edge or while focus is inside. No visibility:hidden, so Tab still reaches an icon and focus brings the bar back. */
 .body:has(> .ib[data-auto]) {
@@ -307,12 +305,12 @@
 }
 .ib > .bdiv:hover,
 .ib > .bdiv:focus-visible {
-  background: linear-gradient(to left, var(--ring-focus) 3px, transparent 3px);
+  background: linear-gradient(to left, var(--focus-ring) 3px, transparent 3px);
   outline: none;
 }
 .ib > .bdiv[data-side='right']:hover,
 .ib > .bdiv[data-side='right']:focus-visible {
-  background: linear-gradient(to right, var(--ring-focus) 3px, transparent 3px);
+  background: linear-gradient(to right, var(--focus-ring) 3px, transparent 3px);
 }
 /* Ticket 1052 with auto-hide (1047): a hidden bar's edge is out of reach; it comes back with the bar. */
 .ib[data-auto]:not([data-reveal='true']) > .bdiv {
@@ -346,7 +344,7 @@
 }
 .sbar > .sdiv:hover,
 .sbar > .sdiv:focus-visible {
-  background: linear-gradient(to right, var(--ring-focus) 3px, transparent 3px);
+  background: linear-gradient(to right, var(--focus-ring) 3px, transparent 3px);
   outline: none;
 }
 /* Layout's "Split session" group (placement item 3). */

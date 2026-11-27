@@ -163,9 +163,7 @@
   background: var(--glass-fill);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
-  box-shadow: var(--glass-shadow);
-  --focus-ring: var(--ring-focus);
-}
+  box-shadow: var(--glass-shadow);}
 
 /* Ticket 1041 lane 5: the cards docked over the chat's lower edge (the permission card and the session's Outbox cards,
    chat/decision-card.css .dock) float, so they are glass. Named with the dock, not in the zero-specificity list above:
@@ -175,6 +173,4 @@
   background: var(--glass-fill);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
-  box-shadow: var(--glass-shadow);
-  --focus-ring: var(--ring-focus);
-}
+  box-shadow: var(--glass-shadow);}

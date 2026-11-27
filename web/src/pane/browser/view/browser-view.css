@@ -199,9 +199,7 @@
   flex: none;
   min-width: 0;
   overflow: hidden;
-  background: var(--panel);
-  --focus-ring: var(--ring-focus);
-}
+  background: var(--panel);}
 .btabs .btablist {
   display: flex;
   gap: 2px;

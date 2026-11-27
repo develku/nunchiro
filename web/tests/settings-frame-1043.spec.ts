@@ -55,8 +55,16 @@ test('frame_1043: page tiles are coloured, never the your-turn, broken or workin
   await go(app, 'appearance');
   const on = app.locator('.settings .sseg label:has(input:checked)').first();
   const s = await on.evaluate((e) => ({ bg: getComputedStyle(e).backgroundColor, sh: getComputedStyle(e).boxShadow }));
-  const panel = await app.locator('.settings .scard').first().evaluate((e) => getComputedStyle(e).backgroundColor);
-  expect(s.bg).toBe(panel);
+  // Design book (segmented): the chosen part is the raised surface (--raised) with the card shadow.
+  const raised = await app.evaluate(() => {
+    const d = document.createElement('i');
+    d.style.color = 'var(--raised)';
+    document.body.append(d);
+    const c = getComputedStyle(d).color;
+    d.remove();
+    return c;
+  });
+  expect(s.bg).toBe(raised);
   expect(s.sh).not.toBe('none');
 });
 

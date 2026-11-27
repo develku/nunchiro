@@ -40,7 +40,9 @@
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
-  padding: 0 6px;
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  font-size: var(--fs-sm);
 }
 .bproj {
   /* The chip gives way first, so + Card and Columns stay visible in a narrow zone. */
@@ -143,7 +145,7 @@ button.bproj:focus-visible,
 }
 /* Look v34 S3-3: the neutral focus ring of the polished parts, not the accent outline. */
 .bsearch:focus-within {
-  outline: 2px solid var(--ring-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 .bsearch input {

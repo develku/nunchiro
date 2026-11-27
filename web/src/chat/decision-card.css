@@ -316,9 +316,7 @@
 .deccard.hosted {
   border: 0;
   border-radius: var(--r-8);
-  background: linear-gradient(90deg, var(--you-bg), transparent 45%), var(--tint-1);
-  --focus-ring: var(--ring-focus);
-}
+  background: linear-gradient(90deg, var(--you-bg), transparent 45%), var(--tint-1);}
 .deccard.hosted:has(.dc-item.risky),
 .deccard.hosted:is([data-stall], [data-schedule-card='failed']) {
   background: var(--tint-1);
@@ -346,7 +344,7 @@
   color: var(--on-status);
 }
 .deccard.hosted .b:focus-visible {
-  outline-color: var(--ring-focus);
+  outline-color: var(--focus-ring);
 }
 .deccard.hosted .opt {
   border: 0;

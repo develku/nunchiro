@@ -35,7 +35,7 @@ test('density, tab font, waiting strip and theme persist across a reload', async
   await openWindow(app);
   await app.getByRole('navigation', { name: 'Left bar' }).getByRole('button', { name: 'Settings' }).click(); // the visible control: an early chord can be dropped (ticket 106)
   await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name: 'Appearance' }).click(); // v25-fix-settings: Settings opens on General
-  await app.getByRole('spinbutton', { name: 'Row height' }).fill('22'); // D-20261108-07: the Density presets are gone; 22 px is compact's height // comfortable is the default (STYLE 2026-10-28)
+  await app.getByRole('spinbutton', { name: 'Row height' }).fill('24'); // D-20261108-07: the Density presets are gone; 24 px is compact's height (design book) // comfortable is the default (STYLE 2026-10-28)
   await app.getByRole('spinbutton', { name: 'Tab font size' }).fill('13'); // ticket 162: a number field with steppers
   await page(app, 'Notifications').click();
   await app.getByRole('radio', { name: /No answer strip/ }).check();

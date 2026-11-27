@@ -30,28 +30,13 @@
   flex: none;
   color: var(--warn);
 }
+/* The book's small buttons; .q is the quiet one (styles.css). */
 .memwait .btn,
 .memwait-pop .btn {
   flex: none;
-  border-color: transparent;
-  background: var(--control-quiet-bg);
-  color: var(--text);
-  font-weight: 500;
-  padding: 1px 7px;
-  font-size: var(--fs-1);
-}
-.memwait .btn:hover,
-.memwait-pop .btn:hover {
-  background: var(--control-quiet-hover);
-}
-.memwait .btn.q,
-.memwait-pop .btn.q {
-  background: none;
-  color: var(--muted);
-}
-.memwait .btn.q:hover,
-.memwait-pop .btn.q:hover {
-  background: var(--tint-1);
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
+  font-size: var(--fs-sm);
 }
 .memwait-pop {
   position: fixed;
@@ -63,9 +48,7 @@
   padding: 14px 14px 8px;
   border-radius: var(--r-16);
   color: var(--text);
-  white-space: normal;
-  --focus-ring: var(--ring-focus);
-}
+  white-space: normal;}
 .memwait-pop h4 {
   margin: 0;
   display: flex;

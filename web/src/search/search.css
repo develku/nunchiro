@@ -336,7 +336,7 @@
 }
 /* the event a hit opened: border plus colour, never colour alone; neutral (ticket 1041: orange is only "needs you") */
 .crow[data-hit] > .cin {
-  outline: 1.5px solid var(--ring-focus);
+  outline: 1.5px solid var(--focus-ring);
   outline-offset: 2px;
   border-radius: var(--r-6);
   background: var(--select-bg);

@@ -38,7 +38,7 @@
 .room-seat-top { display: flex; align-items: center; gap: 6px; }
 .room-seat-name { flex: 1; font: inherit; font-weight: 600; background: none; border: 0; padding: 0; color: var(--text); text-align: left; cursor: pointer; }
 .room-last { overflow-wrap: anywhere; }
-.room-pinned { background: var(--panel); border-left-color: var(--ring-focus); margin-bottom: 6px; border-radius: 0 var(--r-6) var(--r-6) 0; }
+.room-pinned { background: var(--panel); border-left-color: var(--focus-ring); margin-bottom: 6px; border-radius: 0 var(--r-6) var(--r-6) 0; }
 .room-role { font-size: var(--fs-11, 11px); background: var(--panel); border-radius: var(--r-4); padding: 0 4px; color: var(--muted); }
 /* Ticket 594: the lost-seat card, one next action. */
 .room-lost { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; padding: 6px 8px; border-left: 3px solid var(--light-bad); border-radius: var(--r-6); background: var(--tint-1); }
