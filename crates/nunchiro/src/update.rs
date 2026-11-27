@@ -3,8 +3,9 @@
 //! The owner names the folder in Settings > About; the app writes it to `<home>/update-source` (one line; no file or an
 //! empty one = off). The folder holds a built `Nunchiro.app` and the stamp `nunchiro-build.json` beside it:
 //! `{"commit": "<git sha>", "built": "<RFC 3339 time>", "sha256": {"nunchiro": "<hex>", "nunchiro-app": "<hex>"}}`,
-//! where `sha256` names every file in `Nunchiro.app/Contents/MacOS` by its name. A stamp whose commit differs from this
-//! build's and whose hashes match the bundle is a new build ready.
+//! where `sha256` names every file in `Nunchiro.app/Contents/MacOS` by its name. A stamp whose hashes match the bundle
+//! and whose commit is later than this build's on main (the same live check `install` makes, below) is a new build
+//! ready; an older or off-main one, or one that cannot be judged now, is not offered.
 //!
 //! `install` copies that bundle beside the installed one, checks the copy again (hashes, bundle id, `codesign -v`),
 //! keeps the installed bundle as a backup, swaps the two and runs the new bundle's `serve update`: the core is replaced
@@ -193,11 +194,16 @@ fn status(home: &Path) -> serde_json::Value {
 }
 
 /// What `status` says of the build in `source` for the build `running`.
-fn offer(source: &Path, _work: &Path, running: &str, _repo: Option<&str>) -> serde_json::Value {
+/// A build install would refuse (older, off main, or main not reachable now) is "none" with the reason, never "ready":
+/// the window then offers nothing for the folder and still checks the signed feed, as for an empty folder.
+fn offer(source: &Path, work: &Path, running: &str, repo: Option<&str>) -> serde_json::Value {
     match ready(source, running) {
-        Ok(Some(stamp)) => {
-            serde_json::json!({"state": "ready", "source": source, "commit": stamp.commit, "built": stamp.built})
-        }
+        Ok(Some(stamp)) => match update_repo(repo).and_then(|r| newer(work, r, &stamp, running)) {
+            Ok(()) => {
+                serde_json::json!({"state": "ready", "source": source, "commit": stamp.commit, "built": stamp.built})
+            }
+            Err(reason) => serde_json::json!({"state": "none", "source": source, "reason": reason}),
+        },
         Ok(None) => serde_json::json!({"state": "none", "source": source}),
         Err(reason) => serde_json::json!({"state": "refused", "source": source, "reason": reason}),
     }
@@ -415,20 +421,7 @@ fn install(
         (Candidate::Archive(_), None) => unreachable!("an archive is unpacked above"),
     };
     let stamp = ready(source, running)?.ok_or("no new build is ready")?;
-    // Threat 4: the order comes from main, live, not from anything beside the build.
-    if stamp.commit.len() != 40 {
-        return Err("refused: the stamp's commit must be a full 40-character sha".into());
-    }
-    // Ticket 1112: gh's sign-in is for GitHub only, so a test's file:// origin never runs gh.
-    let token = repo
-        .starts_with("https://github.com/")
-        .then(gh_token)
-        .flatten();
-    newer_on_main(
-        &main_line(&work, repo, token.as_deref())?,
-        &stamp.commit,
-        running,
-    )?;
+    newer(&work, repo, &stamp, running)?;
     let staged = work.join("new").join(name);
     let _ = fs::remove_dir_all(&staged);
     let from = source.canonicalize().map_err(|e| e.to_string())?.join(APP);
@@ -658,6 +651,25 @@ fn main_line(work: &Path, repo: &str, token: Option<&str>) -> Result<Vec<String>
     })();
     let _ = fs::remove_dir_all(&dir);
     line
+}
+
+/// Threat 4: the stamp's commit is later than `running` on `repo`'s main, fetched live, not from anything beside the
+/// build. The one check both `install` and `status` use.
+fn newer(work: &Path, repo: &str, stamp: &Stamp, running: &str) -> Result<(), String> {
+    if stamp.commit.len() != 40 {
+        return Err("refused: the stamp's commit must be a full 40-character sha".into());
+    }
+    own_dir(work)?;
+    // Ticket 1112: gh's sign-in is for GitHub only, so a test's file:// origin never runs gh.
+    let token = repo
+        .starts_with("https://github.com/")
+        .then(gh_token)
+        .flatten();
+    newer_on_main(
+        &main_line(work, repo, token.as_deref())?,
+        &stamp.commit,
+        running,
+    )
 }
 
 /// Part B round 2 (threat 4): `candidate` must be on main's first-parent `line` and later on it than `running`. A
