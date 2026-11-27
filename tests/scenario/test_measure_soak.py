@@ -22,15 +22,23 @@ class Figures(unittest.TestCase):
     def test_a_clean_day_of_5_sessions_gives_the_memory_ratio_only(self):
         f = soak.figures(clean_day(5))
         self.assertEqual(f["written"], dict(mem_growth_24h_ratio=1.2))
-        self.assertIn("soak_clean_hours needs 20 sessions, ran 5", f["not_written"])
+        self.assertIn("soak_clean_hours needs exactly 20 sessions, ran 5", f["not_written"])
 
-    def test_a_clean_day_of_20_sessions_gives_both(self):
-        self.assertEqual(soak.figures(clean_day(20))["written"], dict(mem_growth_24h_ratio=1.2, soak_clean_hours=24))
+    def test_a_clean_day_of_20_sessions_gives_the_clean_hours_only(self):
+        f = soak.figures(clean_day(20))
+        self.assertEqual(f["written"], dict(soak_clean_hours=24))
+        self.assertIn("mem_growth_24h_ratio needs exactly 5 sessions, ran 20", f["not_written"])
+
+    def test_another_count_gives_neither(self):
+        f = soak.figures(clean_day(6))
+        self.assertEqual(f["written"], {})
+        self.assertIn("soak_clean_hours needs exactly 20 sessions, ran 6", f["not_written"])
 
     def test_the_first_failure_ends_the_clean_hours_and_the_ratio(self):
         f = soak.figures(run(20, [(120, 100, {}), (10 * 3600, 105, dict(stuck=["c3"])), (11 * 3600, 106, dict(core=False))]))
         self.assertEqual(f["written"], dict(soak_clean_hours=10.0))
         self.assertEqual(f["failure"], "stuck terminal c3 at 10.0 h")
+        f = soak.figures(run(5, [(120, 100, {}), (10 * 3600, 105, dict(stuck=["c3"]))]))
         self.assertIn("mem_growth_24h_ratio: the run failed at 10.0 h", f["not_written"])
 
     def test_a_stopped_run_writes_nothing(self):
