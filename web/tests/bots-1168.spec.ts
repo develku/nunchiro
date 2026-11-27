@@ -67,7 +67,7 @@ test('faces_header_only (1168): the tree has no face, the lead\'s header has one
   await expect(face.getByRole('img')).toHaveAccessibleName('Dalsu, needs you');
   const you = await app.evaluate(() => {
     const probe = document.body.appendChild(document.createElement('i'));
-    probe.style.color = 'var(--you)';
+    probe.style.color = 'var(--light-you)'; // design book (faces): the ring is the needs-you light, as the row's dot
     const c = getComputedStyle(probe).color;
     probe.remove();
     return c;

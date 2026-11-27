@@ -169,11 +169,21 @@
   --c: var(--tree-idle);
   position: relative;
   overflow: visible;
-  margin: 1px 0 1px 22px;
-  width: calc(100% - 22px);
-  padding: 0 8px 0 14px;
-  gap: 8px;
+  /* Design book (tree rows): 34 high (compact 24, the tree's --row below), radius 8, padding 0 10 0 24, gap 10; the
+     state dot first, then the name. */
+  margin: 1px 0;
+  width: 100%;
+  padding: 0 10px 0 24px;
+  gap: 10px;
+  border-radius: var(--r-8);
   color: var(--text);
+}
+/* The tree's rows take the book's heights for the density presets; a typed row height (Settings) still wins. */
+:root:is([data-density='comfortable'], [data-density='spacious']) .tree {
+  --row: var(--row-h);
+}
+:root[data-density='compact'] .tree {
+  --row: var(--row-h-compact);
 }
 .row.wt2.you {
   --c: var(--tree-you);
@@ -307,7 +317,7 @@
 .tree .row.head,
 .tree .pgrp > .row.ghead {
   height: min(var(--row), 25px);
-  padding: 4px 8px;
+  padding: 4px 10px 4px 8px; /* the strip ends on the rows' 10 px right padding (design book rows) */
   gap: 6px;
   font-size: var(--fs-2);
   font-weight: 600;
@@ -512,24 +522,25 @@
 .needyou {
   flex: none;
   order: 2;
+  /* Design book (badge): a neutral 18 pill with a 6 state dot first; it never fills with a state colour. */
   display: inline-flex;
   align-items: center;
-  gap: var(--sp-3);
+  gap: 6px;
+  height: 18px;
   margin: 0 var(--sp-6) 0 var(--sp-2);
-  padding: 1px var(--sp-6);
-  font: inherit;
-  font-size: var(--fs-11);
-  font-weight: 600;
+  padding: 0 7px;
+  font: 500 var(--fs-kbd) / 1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  color: var(--you);
-  background: var(--you-bg);
-  border: 1px solid var(--you);
-  border-radius: var(--r-pill);
+  color: var(--text);
+  background: var(--tint-2);
+  border: 0;
+  border-radius: 5px;
   cursor: pointer;
 }
-.needyou svg {
-  width: 12px;
-  height: 12px;
+.needyou > .sdot {
+  width: var(--pip);
+  height: var(--pip);
 }
 .needyou:focus-visible {
   outline: 2px solid var(--ring-focus);
@@ -652,28 +663,56 @@
 .sg[data-tone='b'] {
   --c: var(--tree-run);
 }
+/* Design book: each session is the rows' state dot (light-glass.css .sdot), not a coloured bar; 3 or more of a colour
+   are one dot and a count pill (the book's count: --tint-2, --text), never a number in the state colour. */
+.sg {
+  align-items: center;
+}
 .sg i {
   display: block;
-  width: 3px;
-  height: 10px;
-  border-radius: var(--r-2);
-  background: var(--c);
+  flex: none;
+  box-sizing: border-box;
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--faint);
 }
-.sg:is([data-tone='r'], [data-tone='o']) i,
-.gbox .sg i {
-  height: 14px;
+.sg[data-tone='r'] i {
+  background: var(--light-bad);
+  box-shadow: none;
 }
-/* Ticket 462 (owner 11-12): no notch on the failed bar, the mockup's solid shape. Its colour and the row's x icon say failed. */
-.sg .num {
-  font-size: var(--fs-10);
-  font-weight: 700;
+.sg[data-tone='o'] i {
+  background: var(--light-you);
+  box-shadow: var(--you-ring);
+}
+.sg:is([data-tone='w'], [data-tone='y']) i {
+  background: var(--light-warn);
+  box-shadow: none;
+}
+.sg[data-tone='b'] i {
+  background: var(--light-run);
+  box-shadow: none;
+  animation: breathe var(--dur-breathe) ease-in-out infinite;
+}
+.sg .num,
+.dbar .num {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--tint-2);
+  color: var(--text);
+  font: 600 var(--fs-kbd) / 1 var(--font-ui);
   font-variant-numeric: tabular-nums;
-  line-height: 10px;
-  color: var(--c);
 }
-/* The 388 mock's grey number is its muted text colour (`.n.tg`), not the idle bar's (they differ in the light theme). */
-.sg[data-tone='g'] .num {
-  color: var(--tree-mut);
+@media (prefers-reduced-motion: reduce) {
+  .sg[data-tone] i {
+    animation: none;
+  }
 }
 .sg:focus-visible {
   outline: var(--focus-width) solid var(--focus-ring);
@@ -892,15 +931,15 @@
 .sess > .row.wt2.you,
 .sess > .wtwrap > .row.wt2.you {
   margin-bottom: 0;
-  border-radius: var(--r-6) var(--r-6) 0 0;
+  border-radius: var(--r-8) var(--r-8) 0 0;
 }
 .sess .q {
   position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: -1px 0 4px 22px;
-  padding: 3px 6px 4px 14px;
+  margin: -1px 0 4px;
+  padding: 3px 6px 4px 42px; /* under the row's name: its 24 padding, the 8 dot and the 10 gap */
   /* One height for the one-line question (buttons, the answered mark), so answering moves no row (needs 49). The
      question stays on one line with an ellipsis; the tooltip and the peek hold the full text (ko/hiderows-r6.html .q). */
   /* One height for the one-line question (buttons, the answered mark), so answering moves no row (needs 49); the ko/
@@ -910,7 +949,7 @@
   box-sizing: border-box;
   font-size: var(--fs-1);
   color: var(--text);
-  border-radius: 0 0 var(--r-6) var(--r-6);
+  border-radius: 0 0 var(--r-8) var(--r-8);
   animation: qin 150ms ease-out;
 }
 /* Opacity only: a height animation would end in a jump of every row below (needs 49). */
@@ -996,12 +1035,19 @@
   padding: 1px 5px;
   flex: none;
 }
-/* Ticket 1041 (N118): the count is a quiet number in the your-turn colour, no filled pill. */
+/* Design book (counts): the needs-you count is the 16 pill in --primary / --on-primary, never a number on a raw warm. */
 .two {
-  font: 700 var(--fs-1) system-ui;
-  color: var(--you);
-  padding: 0 2px;
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
   flex: none;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font: 600 var(--fs-kbd) / 1 var(--font-ui);
   font-variant-numeric: tabular-nums;
 }
 .sess .ag,
@@ -1716,8 +1762,8 @@
   color: var(--warn);
 }
 .row.wt2 .tm.lim {
-  color: var(--warn);
-  font-size: var(--fs-1);
+  color: var(--warn-text);
+  font-size: var(--fs-meta);
 }
 .bar .seg[data-tone='warn'] {
   background: var(--warn);
@@ -1774,19 +1820,19 @@
   /* The tree's focus rings take the neutral ring (15.1 item 1): blue is the working light only. */
   --focus-ring: var(--ring-focus);
   --split-ring: inset 0 0 0 var(--focus-width) var(--ring-focus);
-  /* The mockup's .v-c .row.you wash: the warm light fading out from the row's left edge. */
-  --you-wash: linear-gradient(90deg, color-mix(in srgb, var(--light-you) 20%, transparent), transparent 58%);
 }
-/* The state word (owner 11-22, 15.1 item 4): one 11 px slot at the row's right, before the glyph. Your turn and broken
-   say it in their light's text colour; "Limit" in the limit's (above). The age stays beside it. */
+/* The state word (design book: the meta word, 11.5 tabular): one slot at the row's right, before the glyph. Needs you
+   says it in --you-text 500, failed in --bad-text; "Limit" in the limit's (above). The age stays beside it. */
 .row.wt2 .sw {
   flex: none;
-  font-size: var(--fs-1);
-  font-weight: 600;
+  font-size: var(--fs-meta);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .row.wt2 .sw[data-word='you'] {
-  color: var(--you);
+  color: var(--you-text);
+  font-weight: 500;
 }
 .row.wt2 .sw[data-word='bad'] {
   color: var(--bad-text);
@@ -1809,7 +1855,7 @@
 }
 /* N124: every row's age is the 11 px muted meta, not only a decision block's. */
 .row.wt2 .tm {
-  font-size: var(--fs-1);
+  font-size: var(--fs-meta);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -1825,24 +1871,11 @@
 .tree .row.wt2[aria-current='true'] :is(.tm:not(.sw), .prn) {
   color: var(--select-text);
 }
-/* N056: a your-turn row and its decision line are one block with one warm edge and one wash. The row's own edge
-   steps back while the block draws it; a project-level line (no session row) is a block of its own. */
+/* N056: a your-turn row and its decision line are one block with one wash (design book: the needs-you wash; the row's
+   dot glows, no edge); a project-level line (no session row) is a block of its own. */
 .sess:has(> .row.wt2.you, > .wtwrap > .row.wt2.you, > .q:not(.note, .answered)) {
   background: var(--you-wash);
-  border-radius: var(--r-6);
-}
-.sess:has(> .row.wt2.you, > .wtwrap > .row.wt2.you, > .q:not(.note, .answered))::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: var(--sp-6);
-  bottom: var(--sp-6);
-  width: 2px;
-  border-radius: var(--r-2);
-  background: var(--light-you);
-  box-shadow: var(--glow-you);
-  pointer-events: none;
-  animation: light-breathe var(--motion-breathe) ease-in-out infinite alternate;
+  border-radius: var(--r-8);
 }
 .sess:has(> .q) > .row.wt2.you,
 .sess:has(> .q) > .wtwrap > .row.wt2.you {
@@ -1856,19 +1889,6 @@
 .sess:has(> .q) > .wtwrap > .row.wt2.you[aria-current='true'] {
   background: var(--select-bg);
 }
-.sess:has(> .q) > .row.wt2.you::after,
-.sess:has(> .q) > .wtwrap > .row.wt2.you::after {
-  content: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .sess:has(> .row.wt2.you, > .wtwrap > .row.wt2.you, > .q:not(.note, .answered))::before {
-    animation: none;
-  }
-}
-/* The block's own margin, so its edge sits where a lone row's would. */
-.sess:has(> .q) {
-  margin-left: 22px;
-}
 .sess:has(> .q) > .row.wt2,
 .sess:has(> .q) > .wtwrap > .row.wt2,
 .sess:has(> .q) > .q,
@@ -1878,13 +1898,6 @@
 .sess:has(> .q) > .row.wt2,
 .sess:has(> .q) > .wtwrap > .row.wt2 {
   width: 100%;
-}
-/* The head strip and the edge gather strip keep every bar and number; the urgent colours glow (C, N119). */
-.sg:is([data-tone='r']) i {
-  box-shadow: var(--glow-bad);
-}
-.sg:is([data-tone='o']) i {
-  box-shadow: var(--glow-you);
 }
 /* N117: the "!" skip mark and the Lead tag are tint marks, not outlined chips; the "!" glyph stays (not colour alone). */
 .tree .row .skipm {

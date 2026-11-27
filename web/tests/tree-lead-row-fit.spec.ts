@@ -34,9 +34,9 @@ test('lead_row_name_whole_when_working: "!", "<1 min", bars, model and effort an
   const first = rows.nth(0);
   for (const part of ['.skipm', '.tm', '.lvl', '.lvl-pair']) await expect(first.locator(part), part).toBeVisible();
   await expect(first.locator('.ic'), 'ticket 1041: a working row has no arc; its light and age say it').toHaveCount(0);
-  await expect(first).toHaveClass(/\blight-run\b/);
+  await expect(first.locator('.sdot')).toHaveAttribute('data-dot', 'run'); // design book: the working dot
   await expect(page.locator('.kidcount').first()).toHaveText('↳ 2');
-  await expect(first.locator('.tm')).toHaveText('<1 min');
+  await expect(first.locator('.tm')).toHaveText(/^\d+:\d\d$/); // design book: the working row's elapsed time, 0:20
   expect(await first.locator('.tm').evaluate(cut), 'the age is cut while the pair can still give way').toBe(false);
   // The name's box holds the whole word: no wrap into the clamped second line ("Le…"), no width short of the text.
   const fit = (nm: string) => page.locator('.row.wt2 .nm', { hasText: nm }).evaluate((e) => {

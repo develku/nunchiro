@@ -91,14 +91,16 @@ test('polish_tokens_bundled_1041: light, dark (media) and dark (attribute) each 
 });
 
 test('polish_rules_1041: the shared state light holds still under reduced motion; glass has an opaque reduced-transparency form', () => {
-  for (const c of ['light-run', 'light-you', 'light-bad', 'light-limited', 'light-edge', 'glow-you', 'glow-bad', 'glow-limited', 'glass']) expect(rules, c).toContain(`.${c}`);
+  // Design book: the travelling working line retired; the state dot (.sdot) and the card lights remain.
+  for (const c of ['sdot', 'light-you', 'light-bad', 'light-limited', 'light-edge', 'glow-you', 'glow-bad', 'glow-limited', 'glass']) expect(rules, c).toContain(`.${c}`);
+  expect(rules).not.toContain('.light-run');
   const still = rules.slice(rules.indexOf('@media (prefers-reduced-motion: reduce)'));
-  expect(still).toMatch(/:is\(\.light-run, \.light-you\)::after \{\s*animation: none;/);
+  expect(still).toMatch(/\.sdot\[data-dot\],\s*\.light-you::after \{\s*animation: none;/);
   // Ticket 1041 lane 6: every glass layer reads its fill and blur from two properties the reduced-transparency query swaps.
   expect(rules).toMatch(/@media \(prefers-reduced-transparency: reduce\) \{\s*:root \{\s*--glass-fill: var\(--raised\);\s*--glass-filter: none;/);
   expect(rules).toMatch(/\.glass,\s*:where\([^)]*\.cmenu[^)]*\) \{\s*border: 0;\s*background: var\(--glass-fill\);\s*-webkit-backdrop-filter: var\(--glass-filter\);\s*backdrop-filter: var\(--glass-filter\);/);
-  // Only the two moving lights animate.
-  expect(rules.match(/animation: light-/g)?.length).toBe(2);
+  // Only the working dot breathes and the your-turn card light moves.
+  expect(rules.match(/animation: (light-|breathe)/g)?.length).toBe(2);
 });
 
 test('polish_defaults_1041: new sizes only for a user who never changed them; a size picked by hand stays', async () => {

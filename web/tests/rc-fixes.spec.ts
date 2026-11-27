@@ -43,10 +43,10 @@ test('main_waiting_row: a waiting main-folder session has its own orange your-tu
   await expect(row).toHaveClass(/\byou\b/);
   await expect(row).toHaveAttribute('data-kind', 'hand');
   await expect(row.locator('.tip')).toContainText(/\d+\s*(min|s|h)|now/); // ticket 1041: the age is in the tip; the row shows its word
-  // Ticket 1041 (C): no rail; the row and its decision line are one block lit by the warm edge in --you.
-  await expect(row).toHaveClass(/\blight-you\b/);
+  // Design book (tree rows): no rail or edge; the row's needs-you dot in --light-you, and its word.
+  await expect(row.locator('.sdot')).toHaveAttribute('data-dot', 'you');
   await expect(row.locator('.sw')).toHaveText('needs you');
-  expect(await row.locator('xpath=ancestor::div[contains(concat(" ", @class, " "), " sess ")][1]').evaluate((e) => getComputedStyle(e, '::before').backgroundColor)).toBe(await tokenColour(app, 'var(--light-you)')); // the edge is a mark: --light-you since the design book
+  expect(await row.locator('.sdot').evaluate((e) => getComputedStyle(e).backgroundColor)).toBe(await tokenColour(app, 'var(--light-you)'));
   await expect(row).toContainText('main-a');
 });
 

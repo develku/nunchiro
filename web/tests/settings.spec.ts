@@ -46,7 +46,8 @@ test('density, tab font, waiting strip and theme persist across a reload', async
   await expect(app.getByRole('status').filter({ hasText: /^Connected$/ })).toBeVisible();
   await app.keyboard.press('Escape'); // v25f: the reload keeps the Settings modal open; Esc closes it
   await app.locator('.tab').first().click();
-  expect(await heights(app)).toEqual({ tree: 22, tabs: 26, tabFont: '13px' });
+  // Design book: compact is the tree's 24 rows; the tab strip stays 36 (density shrinks rows, never controls).
+  expect(await heights(app)).toEqual({ tree: 24, tabs: 36, tabFont: '13px' });
   await expect(app.locator('#waiting-strip')).toHaveAttribute('data-mode', 'off');
   await expect(app.locator('html')).toHaveAttribute('data-theme', 'dark');
 });

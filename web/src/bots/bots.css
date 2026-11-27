@@ -68,10 +68,11 @@
   stroke-width: 2.2;
   stroke-linecap: round;
 }
-/* Needs you: the ring says it at every size (under about 20 px the eyes cannot be read). Orange is "your turn" only. */
+/* Needs you (design book, faces): the warm outline 1.5 at offset 2 and its glow, the same light as the row; still. */
 .face[data-you] {
-  outline: max(1.5px, calc(var(--s) / 20)) solid var(--you);
-  outline-offset: max(1.5px, calc(var(--s) / 20));
+  outline: 1.5px solid var(--light-you);
+  outline-offset: 2px;
+  box-shadow: 0 0 14px 2px color-mix(in srgb, var(--you-glow) 45%, transparent);
 }
 /* A working face reads: its eyes move slowly from side to side. */
 .face .scan {

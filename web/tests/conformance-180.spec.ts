@@ -51,7 +51,9 @@ async function expectPage(app: Page, page: string, panel: string) {
   // Ticket 1041 (mockup polish-1121): the tree sidebar sits on the page tint with its icon bar; the tab strip is a panel.
   expect(await bg(app, 'aside.sbar.l'), 'the tree sidebar is the page').toBe(page);
   expect(await bg(app, 'aside.dock.l'), 'the tree shows the sidebar through').toBe('rgba(0, 0, 0, 0)');
-  expect(await bg(app, '.zh'), 'the tab strip is a panel').toBe(panel);
+  // Design book (tabs): the strip is the chrome ground; the open tab is the panel, joined to the sheet.
+  expect(await bg(app, '.zh'), 'the tab strip is the page').toBe(page);
+  expect(await bg(app, '.tabw:has(> .tab[aria-selected="true"])'), 'the open tab is a panel').toBe(panel);
 }
 
 test('page_colour_f6f6f4: light page and rails #f1f2f0 behind #fafaf9 panels, fresh and old store; dark #15171a / #1b1e21', async ({ app, core }) => {
@@ -84,8 +86,10 @@ test('page_colour_f6f6f4 user pick kept: a catalog theme the user picked keeps i
   await app.addInitScript(([k, p]) => localStorage.getItem(k) ?? localStorage.setItem(k, JSON.stringify({ themeMode: 'fixed', themeFixed: p })), [SETTINGS, pick] as const);
   await openWindow(app);
   const probe = (c: string) => app.evaluate((v) => { const d = document.createElement('i'); d.style.color = v; document.body.append(d); const r = getComputedStyle(d).color; d.remove(); return r; }, c);
-  expect(await bg(app, '.zh')).toBe(await probe(pick.colors.background)); // ticket 1041: the panel is the tab strip; the tree sits on the page
+  // Design book (tabs): the open tab is the panel (the theme's background); the strip and the tree sit on the page.
+  expect(await bg(app, '.tabw:has(> .tab[aria-selected="true"])')).toBe(await probe(pick.colors.background));
   const page = await app.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--page').trim());
+  expect(await bg(app, '.zh')).toBe(await probe(page));
   expect(await bg(app, 'nav.ib.l')).toBe(await probe(page));
   expect(await probe(page)).not.toBe(RGB['#f1f2f0']);
   expect((await app.evaluate((k) => JSON.parse(localStorage.getItem(k)!), SETTINGS)).themeFixed.id).toBe('catalog:Catppuccin Latte');
@@ -112,8 +116,8 @@ test('tree_working_row_arc: a working main-folder session has a row with the blu
   const alone = block(app, 'solo').locator('.row.wt2[data-kind="work"]');
   await expect(alone).toHaveCount(1);
   await expect(alone).toContainText('alone');
-  // Ticket 1041 lane 4 (08150d02e): rows lose the rail and the working arc; the state is a light (light-glass.css). Working is the blue travelling line.
-  await expect(alone).toHaveClass(/\blight-run\b/);
+  // Design book (tree rows): the state is a dot (light-glass.css .sdot); working is the breathing blue dot.
+  await expect(alone.locator('.sdot')).toHaveAttribute('data-dot', 'run');
   // Working + waiting in one project: both rows, the waiting one first.
   patch.set('asks', { waiting: true });
   // RC gap 3 (needs 92, needs 95): the waiting main-folder session has its own hand row inside its line's block.

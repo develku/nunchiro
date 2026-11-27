@@ -60,13 +60,8 @@ function fill(core: Core) {
 const shotsDir = process.env.SHOTS_DIR;
 const style = (l: Locator, prop: 'color' | 'backgroundColor') => l.evaluate((e, p) => getComputedStyle(e)[p], prop);
 const rowOf = (app: Page, label: string) => app.locator('.row.wt2').filter({ has: app.locator('.nm').getByText(label, { exact: true }) }).first();
-// Ticket 1041 lane 4 (08150d02e): the row's rail is gone; its state light is the row's ::after, or the .sess block's
-// ::before when a your-turn row and its decision line are one block (tree-polish-1041.spec.ts).
-const rail = (row: Locator) =>
-  row.evaluate((e) => {
-    const own = getComputedStyle(e, '::after');
-    return own.content !== 'none' ? own.backgroundColor : getComputedStyle(e.closest('.sess')!, '::before').backgroundColor;
-  });
+// Design book (tree rows): the row's state light is its 8 px dot (tree-dots.spec.ts).
+const rail = (row: Locator) => row.locator('.sdot').evaluate((e) => getComputedStyle(e).backgroundColor);
 
 for (const pick of PICKS)
   for (const scheme of ['light', 'dark'] as const)

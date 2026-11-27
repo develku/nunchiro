@@ -65,9 +65,9 @@ test.describe('fidelity bar: tree rows equal or better than the mockup', { tag: 
     // lumen has a main session and one worktree: one bar per session, the waiting one first (ticket 388: orange, then grey).
     await expect(segs).toHaveCount(2);
     expect(await head.locator('.cstrip > .sg').evaluateAll((es) => es.map((e) => e.getAttribute('data-tone')))).toEqual(['o', 'g']);
-    // Each bar is 3 px wide, never one merged slab; your turn stands 14 px, the rest 10 px (mock final/388.html).
-    const boxes = await segs.evaluateAll((es) => es.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }));
-    expect(boxes).toEqual([[3, 14], [3, 10]]);
+    // Each session is its own 8 px state dot (design book, was a 3 px bar), never one merged slab.
+    const boxes = await segs.evaluateAll((es) => es.map((e) => [(e as HTMLElement).offsetWidth, (e as HTMLElement).offsetHeight]));
+    expect(boxes).toEqual([[8, 8], [8, 8]]);
     const bar = await head.locator('.cstrip').boundingBox();
     expect(await head.boundingBox()).not.toBeNull();
     // The bar stays inside its row: no overflow past the row's right edge.

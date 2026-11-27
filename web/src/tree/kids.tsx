@@ -145,7 +145,7 @@ export function Kids({ id, kids, open, now, onOpen, t }: { id: string; kids: Nes
       return [
         <div
           key={k.id}
-          className={`row kid${s === 'running' ? ' light-run' : s === 'failed' ? ' light-bad light-edge' : ''}`} // ticket 1041 (C)
+          className="row kid"
           role="button"
           tabIndex={0}
           aria-label={name}
@@ -158,6 +158,8 @@ export function Kids({ id, kids, open, now, onOpen, t }: { id: string; kids: Nes
           onClick={(e) => (e.stopPropagation(), go())}
           onKeyDown={press}
         >
+          {/* design book: the state dot; a child nobody reported rests as an idle ring */}
+          <i className="sdot" data-dot={s === 'running' ? 'run' : s === 'failed' ? 'bad' : s === 'done' ? 'done' : 'idle'} aria-hidden />
           <span className="n">{k.label}</span>
           {word && (
             <span className="s" aria-hidden="true">

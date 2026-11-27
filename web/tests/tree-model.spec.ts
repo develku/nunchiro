@@ -175,7 +175,8 @@ test('row_state_mapping: decision kinds, session states, facts and the #pr rule'
   expect(rowState(wt([s]), [session('/p', { kind: 'shell' })], undefined, NOW, undefined, es).tip).toEqual(['inactiva · Shell']);
   // Verify look (ticket 991 A7): a shell restarted in the row joins the finished one; the live one names the row.
   const restarted = [session('/p', { kind: 'shell', state: 'closed' }), session('/p', { kind: 'shell' })];
-  expect(rowState(wt(restarted), restarted, undefined, NOW, undefined, en)).toEqual({ kind: 'idle', tone: 'idle', tip: ['idle · Shell'] });
+  // `ago`: since when it has rested, for the row's "idle · 2h" (design book), the live session's last activity.
+  expect(rowState(wt(restarted), restarted, undefined, NOW, undefined, en)).toEqual({ kind: 'idle', tone: 'idle', tip: ['idle · Shell'], ago: 0 });
   // Facts.
   const idle = session('/p');
   expect(of(idle, { gone: true })).toMatchObject({ kind: 'gone', tip: ['Folder gone', 'Deleted outside the app'] });

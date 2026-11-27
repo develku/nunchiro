@@ -468,7 +468,7 @@ button:disabled {
 }
 
 /* state dots: shape and word carry the state, colour only adds */
-.st {
+.st:not(.sdot) {
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -476,19 +476,19 @@ button:disabled {
   display: inline-block;
   border: 1.5px solid var(--muted);
 }
-.st[data-s='waiting'] {
+.st:not(.sdot)[data-s='waiting'] {
   background: var(--you);
   border-color: var(--you);
 }
-.st[data-s='stale'] {
+.st:not(.sdot)[data-s='stale'] {
   border-style: dashed;
 }
 /* Look 1117 v6r (A S3-3): done is the tab's and the palette's filled done dot here too; the bare ring is idle's. */
-.st[data-s='done'] {
+.st:not(.sdot)[data-s='done'] {
   background: var(--done);
   border-color: var(--done);
 }
-.st[data-s='failed'] {
+.st:not(.sdot)[data-s='failed'] {
   border-color: var(--text);
   background: linear-gradient(45deg, transparent 40%, var(--text) 40% 60%, transparent 60%);
 }
@@ -501,27 +501,29 @@ button:disabled {
   flex-direction: column;
   min-width: 0;
 }
+/* Design book (tabs): the strip is 36 on the chrome ground, tabs sit on its bottom edge 2 apart; the open tab is the
+   reading surface and joins the sheet under it. */
 .tabs {
-  height: var(--tabh);
+  height: var(--tabs-h);
   flex: none;
   display: flex;
-  align-items: center;
-  gap: var(--sp-4);
+  align-items: flex-end;
+  gap: 2px;
   padding: 0; /* the strip scrolls by whole tabs from its edge (CentreView showActive); the row (.zh) holds the inset */
-  background: var(--panel);
+  background: var(--page);
   overflow-x: auto;
   scrollbar-width: none;
 }
 /* .tabw is a tab's drawn box; the role="tab" .tab inside it and its Stop and Close buttons are siblings (real-app 11-10 defect 6). */
-/* Ticket 1041 lane 2 (the mockup's `.tab`): a 28 px box with no border, told apart by tint and a 4 px gap. */
+/* Design book (tabs): a 30 px box, radius 8 8 0 0, no border, told apart by surface. */
 .tabw {
   position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
+  height: var(--tab-h);
   padding: 0 10px;
-  border-radius: var(--r-8);
+  border-radius: var(--tab-r);
   font-size: var(--tabf);
   color: var(--muted);
   white-space: nowrap;
@@ -530,7 +532,7 @@ button:disabled {
   display: flex;
   align-items: center;
   align-self: stretch;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 .tab .tname {
@@ -563,13 +565,12 @@ button:disabled {
   position: sticky;
   right: 0;
   z-index: 1;
-  background: var(--panel);
+  background: var(--page);
   /* Ticket 1041: the pinned tab covers the strip's whole height (a tab scrolled under it showed a 1 px sliver above its
-     28 px box); the drawn box stays 28 px, the 4 px above and below are transparent border. */
+     box); the drawn box stays the tab's 30 px, the 6 px above is transparent border. */
   align-self: stretch;
   height: auto;
-  border-block: 4px solid transparent;
-  border-radius: var(--r-12);
+  border-top: 6px solid transparent;
   background-clip: padding-box;
 }
 /* Look 1117 v11 B N11-S3-3: the strip scrolls by whole tabs (CentreView `showActive`), so the start's fade stays within the
@@ -595,7 +596,7 @@ button:disabled {
   font-size: var(--fs-11);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  background: linear-gradient(to right, transparent, var(--panel) 18px);
+  background: linear-gradient(to right, transparent, var(--page) 18px);
   pointer-events: none;
 }
 .tabs[data-cut-end]:not(:has(.rtab)) {
@@ -627,22 +628,16 @@ button:disabled {
 .tabs[data-cut-start][data-cut-end]:not(:has(.rtab)) {
   mask-image: linear-gradient(to right, transparent, black 10px, black calc(100% - 24px), transparent);
 }
-/* The shown tab: one tint step (owner 2026-11-22), not the blue bar on top, which is the working colour. */
+/* The shown tab is the reading surface (design book), joined to the sheet under it; the state is the tab's dot. */
 .tabw:has(> .tab[aria-selected='true']),
 .tabw:has(> .stab[aria-selected='true']),
 .tabw:has(> .rtab[aria-selected='true']) {
-  background: var(--select-bg);
-  color: var(--select-text);
-  font-weight: 500;
+  background: var(--panel);
+  color: var(--text);
 }
 .tabs > .tabw:has(> .rtab[aria-selected='true']) {
-  background: linear-gradient(var(--select-bg), var(--select-bg)), var(--panel);
+  background: var(--panel);
   background-clip: padding-box;
-}
-/* C, agent state as light (light-glass.css): a working tab carries the travelling blue line along its bottom edge, a
-   your-turn tab a warm glow under it. The glyph and the name stay; reduced motion holds both still. */
-.tabs > .tabw.light-you {
-  background-image: radial-gradient(90% 120% at 50% 118%, color-mix(in srgb, var(--light-you) 26%, transparent), transparent 70%);
 }
 .tabw > .x {
   color: var(--faint);
@@ -671,46 +666,9 @@ button:disabled {
 .tabw[draggable='true'] {
   cursor: grab;
 }
-/* Ticket 1041 (inventory N048): the tab and the session header draw one state mark (the header's `.st` takes the tab's). */
-:is(.tdot, .shead > .st) {
-  width: 7px;
-  height: 7px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--faint);
-  flex: none;
-}
-:is(.tdot, .shead > .st)[data-s='waiting'] {
-  background: var(--you);
-}
-:is(.tdot, .shead > .st)[data-s='idle'] {
-  background: var(--tint-2);
-}
-/* Ticket 1041 lane 2: asked (a seat waits for its lead's answer) and stale had no mark of their own; asked is idle's dot
-   in the muted ink, stale in the stale yellow-brown. The words are in the name. */
-:is(.tdot, .shead > .st)[data-s='asked'] {
-  background: var(--muted);
-}
-:is(.tdot, .shead > .st)[data-s='stale'] {
-  background: var(--stale-line);
-}
-/* Ticket 1025 (look v26 a), ticket 1041 (owner 2026-11-22, 15.1 item 9): a finished or ended session's tab and header
-   mark is the tree's done bar, one quiet look: a faint filled bar (one tint step), no outline. 2px each side keeps the
-   7px dot's room. */
-:is(.tdot, .shead > .st)[data-s='done'] {
-  box-sizing: border-box;
-  width: 3px;
-  height: 10px;
-  margin: 0 2px;
-  border: 0;
-  border-radius: var(--r-2);
-  background: var(--mark-done); /* one look with the tree's done bars (tokens.css) */
-}
-/* Motion language (needs 140): working is the turning arc of the tree (TREEROWS), on the tab, the session header and the
-   board card, so on the tab strip (as in the tree) the number of turning arcs is the number of
-   sessions at work. Reduced motion keeps the arc, still. Ticket 1041: the tab adds C's travelling line (below). */
-:is(.tdot, .shead > .st)[data-s='working'],
-.st[data-s='working'] {
+/* Design book (tree rows, tabs): the tab and the session header draw the tree's state dot (.sdot, light-glass.css). The
+   arc stays for the other .st marks (board card, room, dialogs). */
+.st:not(.sdot)[data-s='working'] {
   width: 10px;
   height: 10px;
   background: none;
@@ -719,37 +677,12 @@ button:disabled {
   border-right-color: var(--run);
   animation: arcspin var(--motion-spin) linear infinite;
 }
-:is(.tdot, .shead > .st)[data-s='failed'] {
-  background: var(--bad);
-}
-/* A glyph, not a disc, for the two states a colour alone would not separate (hand = your turn, x-circle = broken). */
-:is(.tdot, .shead > .st)[data-s]:has(> svg) {
-  /* The glyph is drawn over the dot's own 7px footprint, so a state change moves no tab. */
-  position: relative;
-  background: none;
-  border-radius: 0;
-}
-:is(.tdot, .shead > .st)[data-s]:has(> svg) svg {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 12px;
-  height: 12px;
-  transform: translate(-50%, -50%);
-}
-:is(.tdot, .shead > .st)[data-s='waiting']:has(> svg) {
-  color: var(--you);
-}
-:is(.tdot, .shead > .st)[data-s='failed']:has(> svg) {
-  color: var(--bad);
-}
 @keyframes arcspin {
   to {
     transform: rotate(360deg);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  :is(.tdot, .shead > .st)[data-s='working'],
   .st[data-s='working'] {
     animation: none;
   }
@@ -2988,7 +2921,8 @@ button:disabled {
 
 /* chrome: frame-ko-e tab strip and status bar (ko/frame-ko-e.html .zh .tab .tadd, footer.stb) */
 .tabw {
-  padding: 0 4px 0 10px;
+  padding: 0 6px 0 10px; /* design book (tabs): padding 0 6 0 10, gap 8, dot 8 then the name */
+  gap: 8px;
   font-weight: 400;
   /* Ticket 996 (owner 11-19, draft A, VS Code's tabSizing "shrink"): tabs share the strip in equal parts, each at most as wide
      as its name (and 180 px, the cap on .tab below), down to 68 px, where the icon, the dot and a few letters still show (look
@@ -3016,7 +2950,7 @@ button:disabled {
   right: 3px;
   top: 50%;
   transform: translateY(-50%);
-  background: var(--panel);
+  background: linear-gradient(var(--tint-1), var(--tint-1)), var(--page); /* the hovered tab's own fill */
 }
 /* Owner 11-17: a tab has no Stop (it is in the tab's menu, the tree and the palette), so the only room kept after the
    name is Close's own: it shows on hover or focus in that room, and a tab never changes width or cuts its name on hover
@@ -3026,6 +2960,9 @@ button:disabled {
 }
 .tabw:hover {
   color: var(--text);
+}
+.tabw:has(> .tab[aria-selected='false']):hover {
+  background: var(--tint-1);
 }
 .tab .ticon {
   display: inline-flex;
@@ -3045,11 +2982,16 @@ button:disabled {
   display: grid;
   place-items: center;
   padding: 0;
-  border-radius: var(--r-4);
+  border-radius: 5px; /* design book (tabs): close 18 square, radius 5, x 12 */
   color: var(--muted);
   visibility: hidden; /* room kept: a hovered or focused tab never changes width */
 }
 .tabw:is(:hover, :focus-within) > .x {
+  visibility: visible;
+}
+/* The open tab always shows its close mark (design book). The button itself joins the tablist only on hover or focus, as
+   on the other tabs (a tablist owns only tabs); a click on the mark reaches the button. */
+.tabw:has(> .tab[aria-selected='true']) > .x > * {
   visibility: visible;
 }
 .tabw > .x:hover {
@@ -3057,12 +2999,11 @@ button:disabled {
   color: var(--text);
 }
 /* Ticket 377 (F4): while ⌘ is held for 200 ms (useHeldKeys sets data-held-tab) the first nine tabs show the key that opens them.
-   Ticket 996 (mockup tabs-sizing-1119, owner 11-19): the chip takes the kind icon's place (icon and gap, 20 px), so a 68 px tab
-   keeps its letters, no tab changes width and the strip does not move. */
+   Design book (tabs): the chip takes the close button's place, so no tab changes width and the strip does not move. */
 .tabw > .tkey {
   display: none;
   position: absolute;
-  left: 8px;
+  right: 4px;
   top: 50%;
   transform: translateY(-50%);
   padding: 0 2px;
@@ -3073,7 +3014,8 @@ button:disabled {
 :root[data-held-tab] .tabw > .tkey {
   display: inline;
 }
-:root[data-held-tab] .tabw:has(> .tkey) .ticon {
+:root[data-held-tab] .tabw:has(> .tkey) > .x,
+:root[data-held-tab] .tabw:has(> .tkey) > .x > * {
   visibility: hidden;
 }
 .tadd {
@@ -3147,8 +3089,8 @@ button:disabled {
   display: flex;
   align-items: center;
   min-width: 0;
-  padding: 0 var(--sp-4);
-  background: var(--panel);
+  padding: 0 var(--sp-8);
+  background: var(--page);
 }
 .zh .tabs {
   flex: 0 1 auto;
@@ -3591,16 +3533,9 @@ button:disabled {
 }
 
 /* Ticket 372: limited (a usage limit until its reset) is the yellow of the tree's clock, on the tab, header and status bar. */
-.st[data-s='limited'] {
+.st:not(.sdot)[data-s='limited'] {
   background: var(--warn);
   border-color: var(--warn);
-}
-:is(.tdot, .shead > .st)[data-s='limited'] {
-  background: var(--warn);
-}
-:is(.tdot, .shead > .st)[data-s='limited']:has(> svg) {
-  background: none;
-  color: var(--warn);
 }
 
 /* Ticket 451: the status bar's account switch (chrome/AccountSwitch.tsx); its menu opens upward, like the icon bar's ⋯ menu. */
