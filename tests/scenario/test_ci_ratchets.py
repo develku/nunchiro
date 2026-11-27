@@ -83,6 +83,17 @@ class Ratchets(unittest.TestCase):
             self.assertIn("src/big.rs", out, rel)
             self.git("reset", "-q", "--hard", "base")
 
+    def test_a_file_named_like_an_option_still_counts(self):
+        self.put("web/src/-b.css", "b { color: #abc; }\n")
+        self.commit("dash file")
+        self.assertEqual(self.check()[0], 1)
+
+    def test_the_first_landing_runs_the_checkout_s_copy(self):
+        # main before this gate has no ratchets.py at HEAD^: the step falls back to the checkout's copy
+        ci = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertIn('git cat-file -e HEAD^:.github/scripts/ratchets.py', ci)
+        self.assertIn('|| cp .github/scripts/ratchets.py', ci)
+
     def test_no_base_commit_says_so_in_one_line(self):
         code, out = self.check("no-such-ref")
         self.assertEqual(code, 2)
