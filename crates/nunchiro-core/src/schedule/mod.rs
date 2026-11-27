@@ -1051,15 +1051,16 @@ fn hold_run(entry: &Entry, now_ms: u64) {
         use crate::pressure::Done;
         match done {
             Done::Released | Done::Anyway => {
-                // The schedule as it is now: a removed one runs nothing, one switched off since is a skipped slot (a
-                // once entry is switched off when it fires, so only a change since then counts).
+                // The schedule as it is now: a removed one runs nothing, a daily one switched off since is a skipped
+                // slot. A once entry is off because it fired (`take_due`), so its state says nothing: the owner
+                // stops it by removing it or cancelling the wait.
                 let now = lock(registry)?
                     .schedules
                     .list()?
                     .into_iter()
                     .find(|e| e.id == entry.id)
                     .ok_or("the schedule was removed while it waited for memory")?;
-                if now.paused && !entry.paused {
+                if now.paused && entry.daily {
                     let mut sessions = lock(registry)?;
                     sessions
                         .schedules
