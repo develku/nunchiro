@@ -50,6 +50,18 @@ test('old_setup_ask_is_listed_in_decisions_and_opens_sheet_on_review', async ({ 
   await expect(card).toHaveCount(1); // Cancel leaves the ask waiting
 });
 
+// An ask whose worktree went outside Nunchiro (git worktree remove, rm) can never be approved: Not now drops it.
+test('setup_card_not_now_drops_the_ask', async ({ app, core }) => {
+  const dir = repo(core);
+  create(core, dir, 'older');
+  await openWindow(app);
+  await app.getByRole('navigation', { name: 'Right bar' }).getByRole('button', { name: 'Decisions' }).click();
+  const card = app.locator('[data-widget-body="decisions"] [data-setup]');
+  await card.getByRole('button', { name: 'Not now' }).click();
+  await expect(card).toHaveCount(0);
+  expect(asks(core)).toEqual([]);
+});
+
 test('setup_ask_of_removed_worktree_is_gone', async ({ app, core }) => {
   const dir = repo(core);
   const wt = create(core, dir, 'gone');
@@ -71,4 +83,18 @@ test('window_own_create_still_opens_the_sheet', async ({ app, core }) => {
   await dialog.getByRole('textbox', { name: 'New worktree name, task, or GitHub PR or issue URL' }).fill('fresh');
   await dialog.getByRole('textbox', { name: 'New worktree name, task, or GitHub PR or issue URL' }).press('Enter');
   await expect(sheet(app).locator('[data-field="script"]')).toHaveText('echo from-repo > ran.txt', { timeout: 10_000 });
+});
+
+// New tab > New worktree is the window's own create too: its ask opens the sheet, or the agent waits on a setup never asked.
+test('new_session_in_new_worktree_opens_the_sheet', async ({ app, core }) => {
+  const dir = repo(core);
+  await openWindow(app);
+  await app.keyboard.press('Meta+KeyK');
+  await app.getByRole('dialog', { name: 'Command palette' }).locator('[data-command="session.new"]').click();
+  const dlg = app.getByRole('dialog', { name: 'New tab' });
+  await dlg.getByRole('combobox').fill(dir);
+  await dlg.getByRole('option', { name: /Start in folder/ }).click();
+  await dlg.getByRole('radiogroup', { name: 'Where the session works' }).getByRole('radio', { name: 'New worktree' }).click();
+  await dlg.getByRole('option', { name: 'Claude', exact: true }).click();
+  await expect(sheet(app).locator('[data-field="script"]')).toHaveText('echo from-repo > ran.txt', { timeout: 15_000 });
 });

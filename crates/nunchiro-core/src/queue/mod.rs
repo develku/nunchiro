@@ -3438,6 +3438,26 @@ mod owner_tests {
         fs::remove_dir_all(home).unwrap();
     }
 
+    // A worktree removed while the core runs (auto-clean, git worktree remove, rm): the core's sweep drops its ask too.
+    #[test]
+    fn a_setup_ask_for_a_gone_worktree_is_dropped_by_the_sweep() {
+        let home = home("setup-sweep");
+        let setup = |name: &str| OwnerAsk::Setup {
+            path: home.join("wt").join(name),
+            hash: "h".into(),
+        };
+        fs::create_dir_all(home.join("wt/kept")).unwrap();
+        fs::create_dir_all(home.join("wt/gone")).unwrap();
+        let mut q = Queue::open(&home).unwrap();
+        q.ask_owner("s1", setup("kept")).unwrap();
+        q.ask_owner("s1", setup("gone")).unwrap();
+        fs::remove_dir(home.join("wt/gone")).unwrap();
+        q.drop_gone_setups().unwrap();
+        let owners: Vec<_> = q.owner_items().into_iter().filter_map(|i| i.owner).collect();
+        assert_eq!(owners, vec![setup("kept")]);
+        fs::remove_dir_all(home).unwrap();
+    }
+
     const SEND: &str = "mcp__gmail__send_message";
     fn outward(body: &str) -> OwnerAsk {
         let args = json!({"to":["a@b.co"],"subject":"s","body":body});
