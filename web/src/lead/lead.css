@@ -1193,7 +1193,8 @@ button.lead-go {
   opacity: 0;
 }
 /* The words of a waiting card's one pill read 4.5:1 through the card's dimming (--faint would not). */
-.tcard[data-waits-task] .tcard-stages > span {
+.tcard[data-waits-task] .tcard-stages > span,
+.tcard[data-waits-seat] .tcard-stages > span {
   color: var(--text);
 }
 /* A dimmed card is its own stacking layer: the card whose menu is open goes over the cards after it. */
