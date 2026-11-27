@@ -2,7 +2,7 @@
 // cards, one per task. A card shows the task's stage (Plan · Build · Review · Gate · Landed), one line of what goes on, and
 // the seat's model. A press peeks at the task's most urgent seat in the drawer beside the board (TeamView); no tab opens
 // until "Open as tab". A reviewer seat is the Review stage of its task's card, never a card of its own.
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { CoreClient } from '../api';
 import { unmark } from '../board/tasks';
 import { ago, useSummary } from '../board/WatchGrid';
@@ -39,17 +39,25 @@ function blockerStage(t: T, id: string, stage: string, tasks: TaskView[]) {
   const at = view ? STAGES[stageOf(view)] : stage;
   return (STAGES as readonly string[]).includes(at) ? t(`tboard.stage.${at as (typeof STAGES)[number]}`) : closedWord(t, at);
 }
+/** The ids a task still waits for and may keep: open blockers only (a landed one waits for nothing and the core refuses
+ *  it; a dropped one is what Stop waiting ends). */
+const pending = (x: TaskView) => (x.blockers ?? []).filter((b) => !b.dropped).map((b) => b.id);
 /** Sets what `task` waits for, as a whole; the core's refusal comes back as the error. */
 const setAfter = (core: CoreClient, task: TaskView, after: string[]) => core.request({ op: 'task', operation: 'after', id: task.id, project: task.place, after }).then(() => tasksChanged());
 
 /** The card menu's and the drawer's "Wait for…": the place's open tasks to tick, this task greyed, and "Wait for nothing".
  *  A tick that would make an order go round shows the core's sentence and changes nothing. */
-export function WaitFor({ t, core, task, tasks }: { t: T; core: CoreClient; task: TaskView; tasks: TaskView[] }) {
+export function WaitFor({ t, core, task, tasks, close }: { t: T; core: CoreClient; task: TaskView; tasks: TaskView[]; close?: () => void }) {
   const [error, setError] = useState('');
-  const now = task.after ?? [];
+  const [up, setUp] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const now = pending(task);
   const set = (after: string[]) => void setAfter(core, task, after).then(() => setError(''), (e: unknown) => setError(rawError(e)));
+  // Opened near the window's bottom edge it opens upward; the focus goes to its first row.
+  useLayoutEffect(() => setUp(!!box.current && box.current.getBoundingClientRect().bottom > window.innerHeight), []);
+  useEffect(() => box.current?.querySelector<HTMLElement>('button:not(:disabled)')?.focus(), []);
   return (
-    <div className="lead-menu" role="menu" data-wait-menu={task.id}>
+    <div ref={box} className="lead-menu" role="menu" data-wait-menu={task.id} data-up={up || undefined} onKeyDown={(e) => e.key === 'Escape' && close && (e.preventDefault(), e.stopPropagation(), close())}>
       {tasks
         .filter((x) => !x.closed && x.place === task.place)
         .map((x) =>
@@ -125,6 +133,8 @@ function TaskCard({ t, core, x, tasks, list, byId, open, decide, menu, peek, set
   // Freed: it waited, and the last task it waited for landed then.
   const ready = waitsSeat(x) && x.after?.length ? Math.max(0, ...tasks.filter((b) => x.after!.includes(b.id) && b.closed).map((b) => b.closed!.at)) : 0;
   const dropped = !x.closed && x.stuck ? x.blockers?.find((b) => b.dropped) : undefined;
+  const [error, setError] = useState('');
+  const failed = (e: unknown) => setError(rawError(e));
   const line = dropped ? t('tboard.stuck', { title: dropped.title }) : (waitsSeat(x) || waits) && !x.seats?.length ? '' : x.closed ? (landed ? '' : closedWord(t, x.closed.how)) : x.advance?.review === 'waits' ? t('lead.task.reviewWaits') : asks ? sayOf(t, x, byId, []) : unmark(summary ?? '') || stateWord(t, x);
   const step = (i: number) => (i < at || (x.closed && landed) ? 'done' : i > at ? 'next' : you ? 'you' : 'now');
   return (
@@ -167,13 +177,18 @@ function TaskCard({ t, core, x, tasks, list, byId, open, decide, menu, peek, set
       </button>
       {dropped && (
         <span className="tcard-do">
-          <button className="lead-answer" onClick={() => void setAfter(core, x, (x.after ?? []).filter((id) => !x.blockers?.some((b) => b.dropped && b.id === id))).catch(() => {})}>
+          <button className="lead-answer" onClick={() => void setAfter(core, x, pending(x)).then(() => setError(''), failed)}>
             {t('tboard.stopWaiting')}
           </button>
-          <button className="lead-answer" data-kind="quiet-bad" onClick={() => void core.request({ op: 'task', operation: 'drop', id: x.id, project: x.place }).then(() => tasksChanged(), () => {})}>
+          <button className="lead-answer" data-kind="quiet-bad" onClick={() => void core.request({ op: 'task', operation: 'drop', id: x.id, project: x.place }).then(() => (setError(''), tasksChanged()), failed)}>
             {t('tboard.dropTask')}
           </button>
         </span>
+      )}
+      {error && (
+        <p className="place-err" role="alert">
+          {error}
+        </p>
       )}
       {(waiting || (x.merge && decide && x.state !== 'merge')) && (
         <button className="lead-answer" onClick={() => (x.merge && decide ? decide(x.merge) : open(waiting!.id))}>
@@ -189,7 +204,11 @@ function TaskCard({ t, core, x, tasks, list, byId, open, decide, menu, peek, set
  *  "Wait for…" and "Start anyway". */
 function WaitsDrawer({ t, core, task, tasks, lead, close }: { t: T; core: CoreClient; task: TaskView; tasks: TaskView[]; lead: string; close: () => void }) {
   const [menu, setMenu] = useState(false);
+  const [error, setError] = useState('');
   const blockers = task.blockers ?? [];
+  // It no longer waits (Start anyway, or its blockers landed): the drawer has nothing left to say.
+  const done = !waitsTask(task);
+  useEffect(() => void (done && close()), [done, close]);
   return (
     <aside className="tdrawer" data-drawer-task={task.id} aria-label={t('tboard.waitsDrawer', { name: task.title })}>
       <div className="tdrawer-h">
@@ -212,11 +231,16 @@ function WaitsDrawer({ t, core, task, tasks, lead, close }: { t: T; core: CoreCl
           <button className="lead-answer" data-kind="secondary" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>
             {t('tboard.waitFor')}
           </button>
-          <button className="lead-answer" data-kind="secondary" onClick={() => void setAfter(core, task, []).catch(() => {})}>
+          <button className="lead-answer" data-kind="secondary" onClick={() => void setAfter(core, task, []).then(close, (e: unknown) => setError(rawError(e)))}>
             {t('tboard.startAnyway')}
           </button>
         </span>
-        {menu && <WaitFor t={t} core={core} task={task} tasks={tasks} />}
+        {error && (
+          <p className="place-err" role="alert">
+            {error}
+          </p>
+        )}
+        {menu && <WaitFor t={t} core={core} task={task} tasks={tasks} close={() => setMenu(false)} />}
       </div>
     </aside>
   );

@@ -326,7 +326,7 @@ export function TeamTasks({ t, core, project, mate, sessions, tasks, place, wt, 
             )}
           </div>
         )}
-        {menu === `wait:${task.id}` && <WaitFor t={t} core={core} task={task} tasks={tasks} />}
+        {menu === `wait:${task.id}` && <WaitFor t={t} core={core} task={task} tasks={tasks} close={() => (setMenu(null), document.querySelector<HTMLElement>(`.tcard[data-task="${CSS.escape(task.id)}"] > .lead-more`)?.focus())} />}
       </>
     );
   };
