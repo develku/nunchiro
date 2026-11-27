@@ -5,7 +5,8 @@ Usage:
 Build (skipped with --no-build): the shipped web bundle (`vite build`, the normal config) into .scratch/q4w/page, plus
 interact_window.js (the in-window driver, never in web/dist) loaded by a script tag in that copy's index.html, then a
 release app (`tauri build --no-bundle`, release profile) whose frontendDist is that copy, in its own target dir
-.scratch/q4w/target. No app source and no normal build output changes.
+.scratch/q4w/target (or MEASURE_TARGET). No app source and no normal build output changes. The chat-open-mark row is
+p33's long-chat open (scorecard.py chatopen).
 Run: interact.py's fixture (20 sessions, a 5,000-event chat, a lead with two tasks) on a scratch core, plus one changed
 file in shop's git repo (the Diff row) and one manual card (the card rows); the app started by release.Nunchiro.open()
 (its own bundle id, the scratch NUNCHIRO_HOME); the driver takes the job over the WebSocket sink and sends a row at a
@@ -24,7 +25,8 @@ import release as rel  # noqa: E402
 import window as win  # noqa: E402
 
 Q4W = ROOT / ".scratch/q4w"
-PAGE, TARGET = Q4W / "page", Q4W / "target"
+PAGE = Q4W / "page"
+TARGET = Path(os.environ.get("MEASURE_TARGET") or Q4W / "target")  # MEASURE_TARGET: a roomier disk, as startup.py
 APP = TARGET / "release/nunchiro-app"
 OUT = ROOT / ".scratch/perf-baseline"
 CARD = "Q4 card"
@@ -135,6 +137,37 @@ def table(rows):
     return "\n".join(lines)
 
 
+def measure(sink, repeats, composer_n, max_load, only, tag="q4w"):
+    """One window run of the driver's rows (`only`: name prefixes, empty = all) -> (result dict, run folder)."""
+    if not rel.CORE.is_file():
+        raise SystemExit(f"needs the release core {rel.CORE} (or NUNCHIRO_MEASURE_CORE)")
+    load0 = rel.load()
+    if load0 >= max_load:
+        raise SystemExit(f"1-min load {load0} >= {max_load:g}; not measuring")
+    lock = ml.Lock(str(ROOT / ".scratch/measure.lock"))  # noqa: F841
+    out = ROOT / ".scratch/measure" / time.strftime(f"%Y%m%d-%H%M%S-{tag}")
+    out.mkdir(parents=True)
+    swift = out / "window_id.swift"
+    swift.write_text(win.WINDOW_ID)
+    rel.APP = APP  # release.Nunchiro.open() starts this binary under its own bundle id
+    arm = rel.Nunchiro(v1b="plain")
+    res = dict(load_start=load0, budget_ms=ia.BUDGET_MS, app=str(APP), core=str(rel.CORE), home=str(arm.home))
+    try:
+        fx = ia.fixture(arm)
+        if not only or any(not p.startswith("chat-open-mark") for p in only):
+            extra_fixture(arm, fx)
+        job = dict(terms=fx["terms"], chats=fx["chats"], lead=fx["lead"], long_events=fx["long_events"], repeats=repeats,
+                   composer_n=composer_n, keys=list(rel.WORK["keys"]), card_title=CARD, only=only)
+        arm.open()
+        got, shots, fatal = collect(sink, job, arm.app.pid, out, swift, timeout=3600)
+        res.update(rows=summarise(got), raw=got, shots=shots, fatal=fatal, sessions=len(fx["terms"]) + len(fx["chats"]) + 1)
+    finally:
+        arm.stop()
+    res["load_end"] = rel.load()
+    res["versions"] = rel.versions()
+    return res, out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--repeats", type=int, default=30)
@@ -152,31 +185,7 @@ def main():
         build(sink.port)
         if a.build_only:
             return
-    if not rel.CORE.is_file():
-        raise SystemExit(f"needs the release core {rel.CORE} (or NUNCHIRO_MEASURE_CORE)")
-    load0 = rel.load()
-    if load0 >= a.max_load:
-        raise SystemExit(f"1-min load {load0} >= {a.max_load:g}; not measuring")
-    lock = ml.Lock(str(ROOT / ".scratch/measure.lock"))  # noqa: F841
-    out = ROOT / ".scratch/measure" / time.strftime("%Y%m%d-%H%M%S-q4w")
-    out.mkdir(parents=True)
-    swift = out / "window_id.swift"
-    swift.write_text(win.WINDOW_ID)
-    rel.APP = APP  # release.Nunchiro.open() starts this binary under its own bundle id
-    arm = rel.Nunchiro(v1b="plain")
-    res = dict(load_start=load0, budget_ms=ia.BUDGET_MS, app=str(APP), core=str(rel.CORE))
-    try:
-        fx = ia.fixture(arm)
-        extra_fixture(arm, fx)
-        job = dict(terms=fx["terms"], chats=fx["chats"], lead=fx["lead"], long_events=fx["long_events"], repeats=a.repeats,
-                   composer_n=a.composer_n, keys=list(rel.WORK["keys"]), card_title=CARD, only=[x for x in a.only.split(",") if x])
-        arm.open()
-        got, shots, fatal = collect(sink, job, arm.app.pid, out, swift, timeout=3600)
-        res.update(rows=summarise(got), raw=got, shots=shots, fatal=fatal)
-    finally:
-        arm.stop()
-    res["load_end"] = rel.load()
-    res["versions"] = rel.versions()
+    res, out = measure(sink, a.repeats, a.composer_n, a.max_load, [x for x in a.only.split(",") if x])
     (OUT / "interact-window.json").parent.mkdir(parents=True, exist_ok=True)
     (OUT / "interact-window.json").write_text(json.dumps(res, indent=1, ensure_ascii=False))
     shutil.copy2(OUT / "interact-window.json", out / "result.json")

@@ -31,6 +31,13 @@ Usage:
       record holds prompts delivered and those that needed a person, and the sessions before and after each core
       restart. Writes missed_prompts_per_1000 and seats_lost_per_restart into the manual file once the record holds 7
       days (the seats figure only when a restart fell in them).
+  scorecard.py chatopen [--repeats 10] [--no-build] [--out FILE]
+      The owner-run step for p33's long-chat open. Builds (or reuses) the RC core and interact_window.py's measure app
+      (MEASURE_TARGET), starts that app as a copy under its own bundle id on a fresh HOME and NUNCHIRO_HOME with 20
+      sessions and the 5,000-event fixture chat (no model). The window is visible and takes the front for about a
+      minute: a hidden window draws no frames. --repeats times: another session selected, then the chat's tree row,
+      from the press to the page's nunchiro:chat-drawn mark. Writes chat_open_5000_ms (the median; p95, n and misses
+      in its evidence) into the manual file only when every open has its mark; exit 1 otherwise.
   scorecard.py dev [--target DIR] [--out FILE]
       Maintainability figures (part p26): a cold and a warm debug build of the Rust workspace in DIR (a fresh cargo
       target, removed first), the web build, the pull-request gate's Rust test stage (TEST_STAGE) on that target,
@@ -881,7 +888,7 @@ def restored_launch(cli, app, sessions, home, check):
     the first drawn snapshot; the first launch on that home warms WebKit. check(app pid, core pid) is the owner check.
     shortcut: DRAWN is the first snapshot drawn, not the conversation's own first paint (chat_open_5000_ms, p33). The
     page reports that paint (chat-drawn mark, read by measurelib.chat_open), but this gate window is hidden and draws
-    no frames; upgrade when a run shows the window."""
+    no frames; `chatopen` reads that mark in a visible window."""
     import measurelib as ml
     import release as rel
     import startup as su
@@ -1220,6 +1227,59 @@ def record_cmd(a):
                  f"core, {res['person']} needed a person; {res['restarts']} core restarts, {res['lost']} sessions not back")
 
 
+def chat_open_verdict(opens, want):
+    """(measurelib.chat_open figures, why it is not written or None): written only when all `want` opens have a mark."""
+    import measurelib as ml
+    r = ml.chat_open(opens)
+    why = ([f"{r['misses']} opens with no chat-drawn mark in 5 s"] if r["misses"] else []) + \
+          ([f"{r['n']} marked opens of the {want} asked"] if r["n"] < want else [])
+    return r, "; ".join(why) or None
+
+
+def chatopen_cmd(a):
+    """p33's long-chat open in a visible window: interact_window.py's measure app (its driver page, own bundle id)
+    on the RC core, row chat-open-mark; the page clock times leave the page over the driver's 127.0.0.1 sink."""
+    import interact_window as iw
+    import release as rel
+    from lib import clean_env
+    os.environ.setdefault("CARGO_BUILD_JOBS", "2")
+    core = iw.TARGET / "release/nunchiro"
+    if a.no_build:
+        sink = iw.win.Sink(json.loads((iw.Q4W / "sink.json").read_text())["port"])
+    else:
+        # NUNCHIRO_BUILD: an RC CLI, which refuses to start a core on the owner's home (startup.py build).
+        subprocess.run(["cargo", "build", "--release", "--locked", "-p", "nunchiro"], cwd=ROOT, check=True,
+                       env=dict(os.environ, CARGO_TARGET_DIR=str(iw.TARGET), NUNCHIRO_BUILD="1"))
+        sink = iw.win.Sink()
+        iw.build(sink.port)
+    if not (core.is_file() and iw.APP.is_file()):
+        raise SystemExit(f"no build at {core} and {iw.APP}; run without --no-build")
+    rel.CORE = core
+    home = fresh("ns-sh-")  # a fresh HOME too, as restored_launch: the fixture never reads ~/.claude
+    rel.clean_env = lambda extra=None: clean_env(dict(extra or {}, HOME=str(home)))
+    try:
+        res, out = iw.measure(sink, a.repeats, 0, a.max_load, ["chat-open-mark"], tag="chatopen")
+    finally:
+        rel.clean_env = clean_env
+    (out / "result.json").write_text(json.dumps(res, indent=1, ensure_ascii=False))
+    row = res["raw"].get("chat-open-mark") or {}
+    if res.get("fatal") or row.get("error") or "opens" not in row:
+        raise SystemExit(f"not written: the driver stopped ({res.get('fatal') or row.get('error') or 'no chat-open-mark row'}); "
+                         f"see {out / 'result.json'}")
+    r, why = chat_open_verdict(row["opens"], a.repeats)
+    print(json.dumps({k: r[k] for k in ("n", "misses", "median_ms", "p95_ms", "max_ms", "values")}))
+    if why:
+        print(f"not written: {why}")
+        sys.exit(1)
+    now = time.strftime("%Y-%m-%d %H:%M")
+    write_manual(a.out, dict(chat_open_5000_ms=r["median_ms"]),
+                 f"scorecard.py chatopen {now}: the measure app's visible window (own bundle id, fresh HOME and NUNCHIRO_HOME) "
+                 f"on the RC core, {res['sessions']} sessions incl. the {iw.ia.LONG_EVENTS}-event fixture chat (no model); "
+                 f"{r['n']} opens (another session selected, then the chat's tree row, its tab closed), press to the page's "
+                 f"nunchiro:chat-drawn mark: median {r['median_ms']} ms, p95 {r['p95_ms']} ms, max {r['max_ms']} ms, "
+                 f"misses {r['misses']}; 1-min load {res['load_start']} to {res['load_end']}; raw {out.name}/result.json")
+
+
 def write_manual(out, values, evidence):
     """An owner-run step's figures into docs/measure/manual-<date>.json (or `out`), other figures kept."""
     path = Path(out) if out else OUT_DIR / f"manual-{time.strftime('%Y-%m-%d')}.json"
@@ -1301,6 +1361,11 @@ def main():
     w = sub.add_parser("weigh")
     w.add_argument("--secs", type=int, default=60)
     w.add_argument("--out")
+    co = sub.add_parser("chatopen")
+    co.add_argument("--repeats", type=int, default=10)
+    co.add_argument("--max-load", type=float, default=6.0, help="refuse to start above this 1-min load")
+    co.add_argument("--no-build", action="store_true")
+    co.add_argument("--out")
     a, rest = ap.parse_known_args()
     if a.cmd in ("accuracy", "waits", "record"):
         # accuracy.py's own options, --help too, in the order given: parse_known_args splits "--days 7" into
@@ -1310,7 +1375,7 @@ def main():
         ap.error("unrecognized arguments: " + " ".join(rest))
     {"run": run_cmd, "ops": ops_cmd, "dev": dev_cmd, "merge": merge_cmd, "check": check_cmd, "page": page_cmd,
      "tests": tests_cmd, "weigh": weigh_cmd, "accuracy": accuracy_cmd, "waits": waits_cmd,
-     "record": record_cmd}[a.cmd](a)
+     "record": record_cmd, "chatopen": chatopen_cmd}[a.cmd](a)
 
 
 if __name__ == "__main__":
