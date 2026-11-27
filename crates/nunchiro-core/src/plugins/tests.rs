@@ -229,3 +229,29 @@ fn an_id_ending_in_underscore_is_refused() {
     );
     fs::remove_dir_all(&h).unwrap();
 }
+
+/// A task seat's prompt gets a header before the checked words (`with_notes`): its send row still names the plugin.
+#[test]
+fn a_replacement_is_found_behind_a_task_header() {
+    replaced().lock().unwrap().push(Pending {
+        sender: "lead".into(),
+        to: "seat".into(),
+        text: "Words a plugin chose.".into(),
+        replaced: crate::delivery::Replaced {
+            plugin: "Guard".into(),
+            original: "raw".into(),
+        },
+        at: std::time::Instant::now(),
+    });
+    let content = "Task t1: tidy\n\nWords a plugin chose.";
+    assert_eq!(
+        take_replaced("lead", "seat", content)
+            .map(|r| r.plugin)
+            .as_deref(),
+        Some("Guard")
+    );
+    assert!(
+        take_replaced("lead", "seat", content).is_none(),
+        "taken once"
+    );
+}

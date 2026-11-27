@@ -41,6 +41,8 @@ for (const scheme of ['light', 'dark'] as const) {
     await app.locator('[data-room-tab]').click();
     const changed = app.locator('.room-msg', { hasText: 'Words a plugin chose.' });
     await expect(changed.locator('.changed-tag')).toHaveText('Changed by Guard');
+    // The seats column's last-message line says it too.
+    await expect(app.locator('.room-last', { hasText: 'Words a plugin chose.' })).toContainText('changed by Guard');
     await expect(app.locator('.room-msg', { hasText: 'raw agent words' })).toHaveCount(0);
     const mine = app.locator('.room-msg[data-created-by="person"]', { hasText: 'my own words' });
     await expect(mine).toBeVisible();

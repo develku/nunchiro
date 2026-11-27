@@ -413,7 +413,7 @@ impl Log {
         if self.with(|log, bytes| log.len() >= LOG_MAX_MESSAGES || bytes >= LOG_MAX_BYTES)? {
             return Err("room_full: no typed line is written to a full room".into());
         }
-        self.append_noted(
+        self.append_full(
             Draft {
                 kind: Kind::Typed,
                 from: from.into(),
@@ -426,6 +426,7 @@ impl Log {
             },
             None,
             send,
+            self.changed.take(),
         )
     }
     fn append(&self, draft: Draft) -> Result<Message, String> {

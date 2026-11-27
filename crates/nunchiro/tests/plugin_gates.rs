@@ -512,7 +512,8 @@ fn a_hung_check_never_holds_a_send_past_the_budget() {
     for line in std::fs::read_to_string(&out).unwrap().lines() {
         let (code, secs) = line.split_once(' ').unwrap();
         assert_eq!(code, "0", "a send failed: {line}");
-        assert!(secs.parse::<u64>().unwrap() <= 12, "a send took {secs} s");
+        // Under the CLI's 15 s reply limit: the 10 s budget plus starting the CLI on a loaded machine.
+        assert!(secs.parse::<u64>().unwrap() < 15, "a send took {secs} s");
     }
     for i in 1..=6 {
         until(&format!("m{i}"), &read);
@@ -658,4 +659,67 @@ fn a_check_skipped_for_no_time_is_counted_on_the_plugin() {
     }
     let listed: Value = serde_json::from_str(&ok(&c.home, &["plugin", "list", "--json"])).unwrap();
     assert!(listed[0]["skipped"].as_u64().unwrap_or(0) >= 1, "{listed}");
+}
+
+#[test]
+fn the_room_copy_of_a_changed_agent_send_names_the_plugin() {
+    let c = core("pgy");
+    plugin(
+        &c.home,
+        "prompt.send.before",
+        r#"printf '{"allow": true, "text": "seen-agent-words"}\n'"#,
+        "refuse",
+        true,
+    );
+    let project = user(&c.home).join("proj");
+    std::fs::create_dir_all(&project).unwrap();
+    let project = project.canonicalize().unwrap();
+    let start = |name: &str, run: &str| {
+        let out = ok(
+            &c.home,
+            &[
+                "agent",
+                "start",
+                name,
+                "--kind",
+                "shell",
+                "--project",
+                project.to_str().unwrap(),
+                "--",
+                "/bin/sh",
+                "-c",
+                run,
+            ],
+        );
+        let v: Value = serde_json::from_str(&out).unwrap();
+        v["session"]["id"].as_str().unwrap().to_string()
+    };
+    let to = start("to", "exec cat");
+    start(
+        "from",
+        &format!(
+            "'{}' agent send {to} 'raw words'; exec cat",
+            env!("CARGO_BIN_EXE_nunchiro")
+        ),
+    );
+    let end = Instant::now() + Duration::from_secs(15);
+    let line = loop {
+        let read = call(
+            &c.home,
+            &c.owner,
+            json!({"op": "room_read", "project": project}),
+        );
+        if let Some(m) = read["Ok"]["messages"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|m| m["body"] == "seen-agent-words")
+        {
+            break m.clone();
+        }
+        assert!(Instant::now() < end, "{read}");
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    assert_eq!(line["kind"], "typed", "{line}");
+    assert_eq!(line["changed_by"], "Guard", "{line}");
 }

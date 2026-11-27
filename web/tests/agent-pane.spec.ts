@@ -29,7 +29,7 @@ const record = (page: Page) =>
       return send.call(this, data);
     };
   });
-type Req = { op: string; id?: string; text?: string; keys?: unknown; session?: { kind: string; project: string } };
+type Req = { op: string; id?: string; text?: string; keys?: unknown; folder?: string; session?: { kind: string; project: string } };
 const sent = (page: Page, op: string) => page.evaluate(([o, k]) => (eval(k) as Req[]).filter((r) => r.op === o), [op, SEEN] as const);
 
 const SIDE = '[data-side-pane]';
@@ -257,7 +257,7 @@ test('shell_beside_one_chord', async ({ app, core }) => {
   await app.keyboard.press('Control+Backquote');
   await expect(pane(app)).toBeVisible();
   await expect.poll(async () => (await sent(app, 'start')).length).toBe(1);
-  expect((await sent(app, 'start'))[0].session).toMatchObject({ kind: 'shell', project: a.cwd });
+  expect((await sent(app, 'start'))[0]).toMatchObject({ session: { kind: 'shell' }, folder: a.cwd }); // the worktree, as the start's folder
   const shellsNow = () => (core.cli('snapshot', '--json').sessions as { id: string; kind: string; cwd: string }[]).filter((s) => s.kind === 'shell');
   await expect.poll(() => shellsNow().length).toBe(1);
   const sh = shellsNow()[0];
@@ -281,7 +281,7 @@ test('pane_shell_tabs', async ({ app, core }) => {
   await open(app, a.id);
   await termIcon(app).click(); // the icon starts the pane's shell (shell-beside-agent.spec.ts)
   const start = await expect.poll(async () => (await sent(app, 'start')).length).toBe(1).then(() => sent(app, 'start'));
-  expect(start[0].session).toMatchObject({ kind: 'shell', project: a.cwd });
+  expect(start[0]).toMatchObject({ session: { kind: 'shell' }, folder: a.cwd });
   const shellsNow = () => (core.cli('snapshot', '--json').sessions as { id: string; kind: string; cwd: string }[]).filter((s) => s.kind === 'shell');
   await expect.poll(() => shellsNow().length).toBe(1);
   const shells = shellsNow();
@@ -323,7 +323,7 @@ chatTest('pane_preview_tab', async ({ page, chatCore }) => {
   await showPreview(page);
   await expect(pane(page).locator('.preview')).toContainText('Nothing to preview yet');
   await termI.click(); // the pane is on Preview: the Terminal icon brings its shell back
-  await expect(page.locator('[data-side-pane] .term')).toBeVisible();
+  await expect(page.locator('[data-side-pane] .term:visible')).toHaveCount(1);
   await termI.click();
   await expect(pane(page)).toHaveCount(0);
   // Open on a chat card shows the pane on the Preview tab, with the session's current target. Ticket 1086: a written

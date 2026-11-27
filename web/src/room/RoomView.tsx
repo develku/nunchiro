@@ -356,7 +356,12 @@ export function RoomView({ core, t, project, sessions, byId: rows, messages, pin
                 {role(s) && <span className="room-role">{t(`room.role.${role(s)!}` as const)}</span>}
               </div>
               <div className="room-meta">{t(`mw.status.${status(s)}`)}</div>
-              {ask ? <div className="room-meta room-last room-ask">{clean(ask)}</div> : last && <div className="room-meta room-last">{t('room.seatLast', { text: [...clean(last.body)].length > 80 ? `${[...clean(last.body)].slice(0, 80).join('')}…` : clean(last.body) })}</div>}
+              {ask ? <div className="room-meta room-last room-ask">{clean(ask)}</div> : last && (
+                <div className="room-meta room-last">
+                  {t('room.seatLast', { text: [...clean(last.body)].length > 80 ? `${[...clean(last.body)].slice(0, 80).join('')}…` : clean(last.body) })}
+                  {last.changed_by && ` · ${t('plugins.changedByLower', { name: clean(last.changed_by) })}`}
+                </div>
+              )}
               <div className="room-meta">{mine.length ? t('room.seatThreads', { list: mine.map(clean).join(', ') }) : t('room.seatNoThreads')}</div>
             </div>
           );

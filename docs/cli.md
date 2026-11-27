@@ -680,9 +680,18 @@ outcome with acceptance conditions that uses zero or more worktrees. The owner's
 with `--project DIR`); a session reaches the tasks of its own place. Add `--json` for the record as JSON.
 
 ### `nunchiro task new "<outcome>"`
-`nunchiro task new "<outcome>" [--accept "<condition>"]... [--project DIR]`. For the lead of a place and the owner.
+`nunchiro task new "<outcome>" [--accept "<condition>"]... [--after <id>]... [--project DIR]`. For the lead of a place and the owner.
 Asked twice with the same outcome, it gives the same open task back. A worktree a lead makes joins the open task of
-its name, else gets a task of its own.
+its name, else gets a task of its own. `--after` names a task of the same place this one waits for (see `task after`).
+
+### `nunchiro task after`
+`nunchiro task after <id> <id>... | --none` sets the tasks of the same place that task `<id>` waits for, at most 8, as a
+whole; `--none` clears them. For the lead of a place and the owner; who set it is kept on the task (`order set by`).
+A task waits while one of them has not landed (closed as merged or done). `task list` and `task show` say
+`waits for <id> "<title>" (<stage>)` per task it waits for, and `<n> tasks wait for this` on a task others wait for.
+Refused with a sentence: the task itself, an id that is no open task of this place, a dropped task, an order that
+would go round (a task waiting for one that already waits for it, however far), more than 8. An older Nunchiro opens
+a ledger with this order and drops it on its next write.
 
 ### `nunchiro task list`
 `nunchiro task list [--all] [--project DIR]` and `nunchiro task show <id>`. Each task with its state now (`needs`,

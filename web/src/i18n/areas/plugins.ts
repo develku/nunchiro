@@ -4,6 +4,7 @@ declare module '../index' {
     'field.plugins': true;
     'searchWords.plugins': true;
     'plugins.title': true;
+    'plugins.changedByLower': true;
     'plugins.changedBy': true;
     'plugins.skipped': true;
     'plugins.sheet.checkStart': true;
@@ -63,6 +64,7 @@ export const en = {
   "field.plugins": "Plugins",
   "searchWords.plugins": "plugins, extensions, add-ons, panels, commands",
   "plugins.title": "Plugins",
+  "plugins.changedByLower": "changed by {name}",
   "plugins.changedBy": "Changed by {name}",
   "plugins.skipped": "{n} of its checks got no time and were skipped since Nunchiro started; those actions went by its on_error.",
   "plugins.sheet.checkStart": "Runs before every new agent session, and can stop it.",

@@ -8,7 +8,7 @@ import type { Page } from '@playwright/test';
 import { expect, openWindow, test, type Core } from './fixtures';
 import { icon } from './d5b';
 
-type Snap = { id: string; kind: string; cwd: string; state: string };
+type Snap = { id: string; kind: string; project: string; cwd: string; state: string };
 const shells = (core: Core) => (core.cli('snapshot', '--json').sessions as Snap[]).filter((s) => s.kind === 'shell');
 const pane = (page: Page) => page.locator('[data-side-pane]:not([hidden])');
 const termIcon = (page: Page) => icon(page, 'right', 'Terminal');
@@ -35,6 +35,8 @@ test('terminal_icon_opens_shell_in_agent_folder: one press shows a shell in the 
   await expect.poll(() => shells(core).length).toBe(1);
   const sh = shells(core)[0];
   expect(fs.realpathSync(sh.cwd)).toBe(fs.realpathSync(a.cwd));
+  // It belongs to the agent's project (the tree draws it under that project's worktree row, not as a project of its own).
+  expect(fs.realpathSync(sh.project)).toBe(fs.realpathSync(a.dir));
   await expect(app.locator(`.term[data-session="${sh.id}"] .xterm-screen`)).toBeVisible();
   await expect(app.locator(`.term[data-session="${sh.id}"] .xterm-helper-textarea`)).toBeFocused();
   // The agent's own screen is one tab away.
@@ -61,4 +63,5 @@ test('new_terminal_from_worktree_agent_starts_in_its_folder: the popover\'s New 
   await app.getByRole('dialog', { name: 'New tab' }).getByRole('option', { name: 'New terminal' }).click();
   await expect.poll(() => shells(core).length).toBe(1);
   expect(fs.realpathSync(shells(core)[0].cwd)).toBe(fs.realpathSync(a.cwd));
+  expect(fs.realpathSync(shells(core)[0].project)).toBe(fs.realpathSync(a.dir));
 });
