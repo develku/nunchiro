@@ -588,6 +588,51 @@ fn an_idle_window_and_browser_supervisor_wake_rarely() {
     );
 }
 
+// Idle CPU: a window whose frames change nothing (the Mac window's once-a-second `queue_connect`, here four a second)
+// builds and serialises no snapshot for them; with nothing changed it builds one a `SNAPSHOT_FORCE` at most.
+#[test]
+fn an_idle_window_builds_no_snapshot_for_frames_that_change_nothing() {
+    let (mut ws, stopping, home) = window("idle-builds");
+    if let tungstenite::stream::MaybeTlsStream::Plain(s) = ws.get_ref() {
+        s.set_read_timeout(Some(Duration::from_millis(50))).unwrap();
+    }
+    let counts = super::output_counts(&home);
+    let builds = || counts.builds.load(Ordering::SeqCst);
+    let woken = || crate::pty::output_seq() + crate::pty::RINGS.load(Ordering::SeqCst);
+    let mut rounds = 0;
+    let (rate, quiet) = loop {
+        rounds += 1;
+        let seq = woken();
+        let settle = Instant::now() + Duration::from_millis(2500);
+        while Instant::now() < settle {
+            let _ = ws.read();
+        }
+        let (b, at) = (builds(), Instant::now());
+        let mut id = 1;
+        while at.elapsed() < Duration::from_secs(4) {
+            id += 1;
+            let beat = serde_json::json!({"id": id, "request": {"op": "queue_connect"}});
+            ws.send(Message::Text(beat.to_string().into())).unwrap();
+            let next = Instant::now() + Duration::from_millis(250);
+            while Instant::now() < next {
+                let _ = ws.read();
+            }
+        }
+        let rate = (builds() - b) as f64 / at.elapsed().as_secs_f64();
+        let quiet = woken() == seq;
+        if quiet || rounds == 4 {
+            break (rate, quiet);
+        }
+    };
+    stopping.store(true, Ordering::SeqCst);
+    let _ = std::fs::remove_dir_all(&home);
+    eprintln!("idle snapshot builds per second with 4 frames a second: {rate:.1} (quiet: {quiet})");
+    assert!(
+        !quiet || rate <= 1.5,
+        "the idle window built {rate:.1} snapshots a second"
+    );
+}
+
 /// v1a-55: a core with no sessions and one authenticated window on it; the core stops when `stopping` is set.
 fn window(
     name: &str,

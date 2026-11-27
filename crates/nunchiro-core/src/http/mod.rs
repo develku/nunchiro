@@ -110,6 +110,7 @@ fn tick() -> Duration {
 pub(crate) struct OutputCounts {
     locks: std::sync::atomic::AtomicU64,
     pub(crate) passes: std::sync::atomic::AtomicU64,
+    pub(crate) builds: std::sync::atomic::AtomicU64, // snapshots built
 }
 #[cfg(test)]
 pub(crate) fn output_counts(home: &Path) -> Arc<OutputCounts> {
@@ -1565,6 +1566,8 @@ fn serve(
             crate::machines::refresh_tests::record(home, true);
             // MachineDetails reports registry errors; they must not disconnect local windows.
             let _ = crate::machines::ensure_channels(registry, home, stopping);
+            #[cfg(test)]
+            output_counts.builds.fetch_add(1, Ordering::SeqCst);
             let mut snapshot = registry
                 .lock()
                 .map_err(|_| "session registry unavailable")?

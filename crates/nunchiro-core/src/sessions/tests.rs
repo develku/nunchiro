@@ -7481,6 +7481,26 @@ fn idle_board_builds_rows_once() {
     }
     finish(core, home);
 }
+// Idle CPU: the tick's worker pass reads an ended worker's state alone; only a running worker is built into a
+// snapshot (it ran four times a second over every worker ever started).
+#[test]
+fn idle_tick_builds_no_snapshot_of_ended_workers() {
+    let (mut core, home, worker, lead) = two_shells("idlewake");
+    core.grants.parents.insert(worker.clone(), lead.clone());
+    core.entry(&worker).unwrap().meta.state = SessionState::Exited;
+    core.wake_parents();
+    let snapshots = |core: &Sessions| core.snapshots.load(std::sync::atomic::Ordering::SeqCst);
+    let before = snapshots(&core);
+    for _ in 0..5 {
+        core.wake_parents();
+    }
+    assert_eq!(
+        snapshots(&core),
+        before,
+        "the worker pass built snapshots of an ended worker"
+    );
+    finish(core, home);
+}
 fn send_clones(core: &Sessions) -> usize {
     core.send_clones.load(std::sync::atomic::Ordering::SeqCst)
 }
