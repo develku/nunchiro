@@ -168,7 +168,7 @@ test('just_finished_row_for_ten_minutes: a session that ends stays as a fading r
   const just = grp.locator('.row.wt2.just', { hasText: 'quick' });
   await expect(just).toBeVisible();
   await expect(just).toHaveAttribute('aria-label', /^quick, Just finished · /);
-  const fade = () => just.evaluate((e) => Number(getComputedStyle(e, '::before').opacity));
+  const fade = () => just.locator('.sdot').evaluate((e) => Number(getComputedStyle(e).opacity)); // design book: the done ring fades
   expect(await fade()).toBeCloseTo(0.85, 1);
   await app.locator('.sbar.l').screenshot({ path: path.join(SHOTS, '1022-tree-just.png') });
   // A just-finished row is not counted until it leaves.
@@ -238,11 +238,11 @@ test('polish_1025: the bars and the strip hold still when the tools of the head 
   expect(await boxes()).toEqual(rest);
   await h.locator('button.dbar').click();
   await app.locator(`[data-done-pop] [data-done-item="${id}"]`).click();
-  const look = (q: string) => app.locator(q).evaluate((e) => [e.getAttribute('data-s'), getComputedStyle(e).width, getComputedStyle(e).height, getComputedStyle(e).backgroundColor, getComputedStyle(e).borderTopWidth]);
-  // Ticket 1041 (owner 2026-11-22, 15.1 item 9): one quiet look, a faint filled bar (--mark-done, the tree's done bar) with no outline.
-  const tint = await app.evaluate(() => { const d = document.createElement('i'); d.style.backgroundColor = 'var(--mark-done)'; document.body.append(d); const c = getComputedStyle(d).backgroundColor; d.remove(); return c; });
-  expect(await head(app, 'demo').locator('.dbar i').first().evaluate((e) => getComputedStyle(e).backgroundColor)).toBe(tint); // the head's bars, the same look
-  const bar = ['done', '3px', '10px', tint, '0px'];
+  const look = (q: string) => app.locator(q).evaluate((e) => [e.getAttribute('data-s'), getComputedStyle(e).width, getComputedStyle(e).height, getComputedStyle(e).boxShadow]);
+  // Design book: one look for done, the 8 px ring in --light-done, on the tab, the header and the head's count.
+  const ring = await app.evaluate(() => { const d = document.createElement('i'); d.style.boxShadow = 'inset 0 0 0 1.5px var(--light-done)'; document.body.append(d); const c = getComputedStyle(d).boxShadow; d.remove(); return c; });
+  expect(await head(app, 'demo').locator('.dbar i').first().evaluate((e) => getComputedStyle(e).boxShadow)).toBe(ring); // the head's rings, the same look
+  const bar = ['done', '8px', '8px', ring];
   await expect.poll(() => look(`.tab[data-tab="${id}"] .tdot`)).toEqual(bar);
   expect(await look('.shead > .st')).toEqual(bar);
 });

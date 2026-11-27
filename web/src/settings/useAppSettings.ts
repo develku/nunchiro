@@ -28,6 +28,7 @@ export function useAppSettings() {
     const root = document.documentElement;
     const d = heights(settings); // ticket 162: a typed row height wins over the density's
     root.style.setProperty('--row', `${d.row}px`);
+    root.dataset.density = settings.rowHeight === null ? settings.density : 'typed'; // the tree's book heights (tree.css)
     root.style.setProperty('--arow', `${d.arow}px`);
     root.style.setProperty('--tabh', `${d.tabh}px`);
     root.style.setProperty('--tabf', `${settings.tabFont}px`);

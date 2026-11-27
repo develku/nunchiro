@@ -210,7 +210,7 @@ test('schedule_run_now: Run now starts the run; the dot is running, then finishe
   fs.writeFileSync(path.join(demo, 'go'), '');
   await expect(r).toHaveAttribute('data-last', 'waiting', { timeout: 15_000 });
   await expect(r.locator('button.sched-dot')).toHaveAccessibleName(/^Last run needs you · today/);
-  await expect(r.locator('.sched-dot svg[data-icon="hand"]')).toBeVisible();
+  await expect(r.locator('.sched-dot .sdot')).toHaveAttribute('data-dot', 'you'); // design book: the tab's dot, no glyph
   // The dot (Enter on it) and "Open last run" open the run's session.
   await app.keyboard.press('Enter');
   await expect(app.locator(`.tab[data-tab="${session}"]`)).toHaveAttribute('aria-selected', 'true');
@@ -239,7 +239,7 @@ test('schedule_dots: a failed run is the broken red with its reason; the bar ico
   const dot = r.locator('.sched-dot');
   await expect(dot).toHaveAccessibleName('Last run failed: Lister is no longer a teammate');
   await expect(dot).toHaveAttribute('data-tip', 'Last run failed: Lister is no longer a teammate');
-  await expect(dot.locator('svg[data-icon="fail"]')).toBeVisible();
+  await expect(dot.locator('.sdot')).toHaveAttribute('data-dot', 'bad'); // design book: the tab's dot, no glyph
   expect(await dot.evaluate((e) => e.tagName)).toBe('SPAN'); // it reached no session: nothing to open
   await expect(r.locator('.sched-last')).toHaveText(/^Last run today \d+:\d\d\s[AP]M · failed: Lister is no longer a teammate$/);
   await expect(icon.locator('.wdot[data-failed]')).toHaveAccessibleName('A scheduled run failed');

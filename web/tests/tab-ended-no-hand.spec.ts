@@ -28,6 +28,7 @@ test('failed_tab_never_waits: a failed session with a leftover waiting flag show
   ended = true;
   for (const ws of sockets) ws.send(apply(last));
   await expect(dot).toHaveAttribute('data-s', 'failed');
-  await expect(dot.locator('[data-icon], svg')).toHaveCount(1);
+  // Design book (tabs): the tab carries the tree's dot, no glyph: failed is the still red dot, never the warm one.
+  await expect(dot).toHaveAttribute('data-dot', 'bad');
   await app.screenshot({ path: path.join(REPO, '.scratch/shots/w87-failed-tab-no-hand.png') });
 });

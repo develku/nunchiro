@@ -5,15 +5,16 @@ import { shellFixture, working } from './design-shell.fixture';
 const running = (app: import('@playwright/test').Page) =>
   app.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running').map((a) => (a as CSSAnimation).animationName ?? 'transition'));
 
-test('motion_shows_working: each working session turns one arc on its tab, so the count reads at a glance', async ({ app, core }) => {
+test('motion_shows_working: each working session breathes one dot on its tab, so the count reads at a glance', async ({ app, core }) => {
   const { a, b } = shellFixture(core);
   await openWindow(app);
   await working(core, a.id, b.id);
   await expect(app.locator('.tab .tdot[data-s="working"]')).toHaveCount(2);
-  await expect.poll(async () => (await running(app)).filter((n) => n === 'arcspin').length).toBeGreaterThanOrEqual(2);
-  // The session header's dot for the shown working session turns the same arc.
+  // Design book (motion): the working dot breathes; the travelling arc retired.
+  await expect.poll(async () => (await running(app)).filter((n) => n === 'breathe').length).toBeGreaterThanOrEqual(2);
+  // The session header's dot for the shown working session breathes the same way.
   await app.locator(`.tab[data-tab="${a.id}"]`).click();
-  await expect(app.locator('.shead .st[data-s="working"]')).toHaveCSS('animation-name', 'arcspin');
+  await expect(app.locator('.shead .st[data-s="working"]')).toHaveCSS('animation-name', 'breathe');
 });
 
 test('motion_respects_reduced_motion: with reduced motion nothing in the window animates and the motion tokens are zero', async ({ app, core }) => {

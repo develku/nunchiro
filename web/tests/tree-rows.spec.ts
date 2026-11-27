@@ -139,14 +139,15 @@ test('your_turn_orange_tinted_broken_red_untinted: the state lights and icon col
     const row = (k: string) => app.locator(`.grp[data-project="repo"] .row.wt2[data-kind="${k}"]`).first();
     expect(await css(row('fail'), 'background-color')).toBe('rgba(0, 0, 0, 0)');
     for (const k of ['hand', 'fail', 'work']) expect(await row(k).evaluate((e) => getComputedStyle(e, '::before').content), `${k}: no rail`).toBe('none');
-    // Your turn: the block (the row, or the row and its decision line) has the warm edge and the warm wash.
+    // Design book: your turn is the warm dot and the warm wash on its block (the row, or the row and its decision line);
+    // failed and working are their dots, no edge and no line.
     const block = row('hand').locator('xpath=ancestor-or-self::*[contains(concat(" ", normalize-space(@class), " "), " sess ")][1]');
     const own = (await block.count()) ? block : row('hand');
-    const edge = await own.evaluate((e) => [getComputedStyle(e, '::before'), getComputedStyle(e, '::after')].find((s) => s.content !== 'none' && s.width === '2px')!.backgroundColor);
-    expect(edge).toBe(await probe('var(--light-you)'));
+    const dot = (k: string) => row(k).locator('.sdot').evaluate((e) => getComputedStyle(e).backgroundColor);
+    expect(await dot('hand')).toBe(await probe('var(--light-you)'));
     expect(await css(own, 'background-image')).toContain('linear-gradient');
-    expect(await row('fail').evaluate((e) => getComputedStyle(e, '::after').backgroundColor)).toBe(await probe('var(--light-bad)'));
-    expect(await row('work').evaluate((e) => getComputedStyle(e, '::after').backgroundImage)).toContain('linear-gradient');
+    expect(await dot('fail')).toBe(await probe('var(--light-bad)'));
+    expect(await dot('work')).toBe(await probe('var(--light-run)'));
     expect(await css(row('hand').locator('.ic'), 'color')).toBe(await probe(you));
   }
 });
@@ -226,15 +227,15 @@ test.describe('tap', () => {
   });
 });
 
-// Ticket 1041 (C): the working arc is the row's travelling light; reduced motion holds it still and it stays drawn.
-test('spinner_static_under_reduced_motion: the working light travels normally and stands still when motion is reduced', async ({ app, core }) => {
+// Design book: the working light is the row's breathing dot; reduced motion holds it still and it stays drawn.
+test('spinner_static_under_reduced_motion: the working dot breathes normally and stands still when motion is reduced', async ({ app, core }) => {
   await five(app, core);
   const work = app.locator('.row.wt2[data-kind="work"]').first();
   await expect(work.locator('.arc')).toHaveCount(0);
-  const light = () => work.evaluate((e) => ({ anim: getComputedStyle(e, '::after').animationName, content: getComputedStyle(e, '::after').content }));
-  await expect.poll(light).toEqual({ anim: 'light-travel', content: '""' });
+  const light = () => work.locator('.sdot').evaluate((e) => ({ anim: getComputedStyle(e).animationName, opacity: getComputedStyle(e).opacity }));
+  await expect.poll(async () => (await light()).anim).toBe('breathe');
   await app.emulateMedia({ reducedMotion: 'reduce' });
-  await expect.poll(light).toEqual({ anim: 'none', content: '""' });
+  await expect.poll(light).toEqual({ anim: 'none', opacity: '1' });
 });
 
 test('head_counts_split_orange_red: 2 waiting and 1 failed give an orange 2 and a red 1; stale is not in red; the label keeps every count', async ({ app, core }) => {

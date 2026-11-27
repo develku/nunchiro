@@ -42,6 +42,7 @@ export function JustRow({ s, now, t, onOpen }: { s: Session; now: number; t: T; 
   const said = t('history.just', { age: age(t, now - (finishedAt(s) ?? now)) });
   return (
     <button type="button" className="row wt2 just" data-just={s.id} data-menu="treerow" data-menu-session={s.id} data-menu-title={name} data-hint-kind="agent" data-hint-session={s.id} data-tip={said} aria-label={`${name}, ${said}`} style={{ '--fade': (0.85 - 0.6 * gone).toFixed(2) } as CSSProperties} onClick={onOpen}>
+      <i className="sdot" data-dot="done" aria-hidden />
       <span className="n">
         <span className="nm wordcut">{name}</span>
       </span>

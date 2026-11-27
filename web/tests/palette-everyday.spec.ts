@@ -244,13 +244,12 @@ test('idle_shell_closes_under_one_name_and_its_tab_says_done', async ({ app, cor
   // tab's filled dot): one look for one state.
   const head = app.locator('.shead .st');
   await expect(head).toHaveAttribute('data-s', 'done');
-  const fill = (l: typeof dot) => l.evaluate((e) => getComputedStyle(e).backgroundColor);
+  const fill = (l: typeof dot) => l.evaluate((e) => getComputedStyle(e).boxShadow);
   expect(await fill(head)).toBe(await fill(dot));
   // Past the Undo window the core drops the row: the tab still reads done, never idle.
   await expect.poll(() => (core.cli('snapshot', '--json').sessions as { id: string; state: string }[]).find((s) => s.id === t02.id)?.state ?? 'gone', { timeout: 20_000 }).toMatch(/closed|gone/);
   await app.waitForTimeout(1500);
   await expect(dot).toHaveAttribute('data-s', 'done');
-  // And it looks ended: not the idle ring a live idle tab draws. Ticket 1025 item 4: the mark is the tree's hollow bar
-  // (3px wide), no longer the filled done dot.
-  expect(await dot.evaluate((e) => getComputedStyle(e).width)).toBe('3px');
+  // And it looks ended: not the idle ring a live idle tab draws. Design book: the tree's done ring.
+  await expect(dot).toHaveAttribute('data-dot', 'done');
 });

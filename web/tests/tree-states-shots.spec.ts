@@ -40,7 +40,8 @@ for (const [name, pick] of PICKS)
   for (const density of ['comfortable', 'compact'] as const)
     test(`tree_states_shot ${name} ${density} @shots`, async ({ app, core }) => {
       await app.emulateMedia({ reducedMotion: 'reduce' }); // a still picture: every light at full strength
-      await app.addInitScript(([p, d]) => localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ themeMode: 'fixed', themeFixed: p, density: d, densityPicked: true })), [pick, density] as const);
+      // densityPicked only for compact: a picked comfortable with no typed height loads as a typed 30 (settings.ts).
+      await app.addInitScript(([p, d]) => localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ themeMode: 'fixed', themeFixed: p, density: d, densityPicked: d === 'compact' })), [pick, density] as const);
       await app.setViewportSize({ width: 1100, height: 640 });
       await seed(app, core);
       await app.waitForTimeout(400);

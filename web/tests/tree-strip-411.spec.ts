@@ -81,7 +81,8 @@ test('strip_failed_uses_mock_red: a theme whose failed colour is tan keeps the m
   // (owner 11-12): the tree keeps the mockup's red (light #cf222e here); the tan stays for tabs and status dots.
   await app.evaluate(() => document.documentElement.style.setProperty('--bad', '#d59a71'));
   const mock = 'rgb(179, 68, 59)'; // the design book's failed light (--light-bad), was the mockup's #cf222e
-  await expect(app.locator('.tab .tdot[data-s="failed"]').first()).toHaveCSS('color', 'rgb(213, 154, 113)');
+  // Design book (tabs): the tab carries the tree's dot, so it takes the failed light too, not the theme's --bad.
+  await expect(app.locator('.tab .tdot[data-s="failed"]').first()).toHaveCSS('background-color', mock);
   await expect(red).toHaveCSS('background-color', mock);
   await expect(app.locator(`button.row.wt2[data-menu-session="${ids.x}"] .ic`)).toHaveCSS('color', mock);
 });

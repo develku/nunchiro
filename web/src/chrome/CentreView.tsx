@@ -26,7 +26,7 @@ import { TerminalView } from '../Terminal';
 import { SessionFacts, useDiffStat } from './SessionFacts';
 import { ChromeIcon } from './icons';
 import { AgentLogo } from '../tree/AgentLogo';
-import { RowIcon } from '../tree/RowIcon';
+import { dotOfStatus } from '../stateDot';
 import { noCheckout, shownStatus, statusKey, type Session } from '../types';
 import { NotifyLevel, useNotifications } from '../queue/notify';
 import { Landing } from '../firstrun/Landing';
@@ -82,9 +82,6 @@ export const place = (list: { project: string; path: string; branch: string }[],
   // (a plain folder read "plain-folder / main", as if it were on a branch named main).
   return w ? { project: base(w.project), place: ownBranch(w) || sessionName(s) } : { project: base(s.project), place: s.cwd === s.project ? (noCheckout(s) ? '' : main) : sessionName(s) };
 };
-
-/** WCAG 1.4.1: your turn, broken and limited carry the tree rows' hand, x-circle and clock, not only a colour (ticket 293 round 3). */
-const markGlyph = (st: string) => (st === 'waiting' ? <RowIcon kind="hand" /> : st === 'failed' ? <RowIcon kind="fail" /> : st === 'limited' ? <RowIcon kind="limit" /> : null);
 
 /** The tab's name as a text field: Enter saves (not while an IME composes), Escape or leaving cancels. */
 function RenameField({ t, name, initial, error, onSave, onCancel }: { t: T; name: string; initial: string; error: string; onSave: (text: string) => void; onCancel: (focusBack: boolean) => void }) {
@@ -468,7 +465,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
             // buttons' names. `.tabw` is the drawn box and takes the pointer gestures; the tab inside it takes focus and keys.
             <div
               key={id}
-              className={`tabw${!s ? '' : st === 'working' ? ' light-run' : st === 'waiting' ? ' light-you' : ''}` /* ticket 1041 C: the state as light */}
+              className="tabw"
               role="presentation"
               data-menu={s ? 'tab' : 'tabx'} // V2-6a: session tabs get the session commands; file tabs only close and move (needs 171)
               data-menu-session={id} // the menu makes the right-clicked tab active before its command runs
@@ -501,9 +498,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
                   {file ? <ChromeIcon name="file" /> : s?.kind === 'shell' ? <Icon name="terminal" size={14} /> : s ? <AgentLogo kind={s.kind} name={s.acp_agent ?? undefined} /> : <ChromeIcon name="comment-discussion" />}
                 </span>
                 {s && (
-                  <i className="tdot" data-s={st} aria-label={t(st === 'done' && s?.state === 'resumable' ? 'mw.status.resumable' : `mw.status.${st}`)} role="img">
-                    {markGlyph(st)}
-                  </i>
+                  <i className="tdot sdot" data-s={st} data-dot={dotOfStatus(st)} aria-label={t(st === 'done' && s?.state === 'resumable' ? 'mw.status.resumable' : `mw.status.${st}`)} role="img" />
                 )}
                 {renaming?.id === id && s ? (
                   <RenameField
@@ -610,9 +605,7 @@ export function CentreView({ pin, t, projectCount, tabs, shown: strip, project, 
       {current && (
         <div className="shead" data-hint-region="top">
           {/* Ticket 1041 (N048): the tab's mark; the state word is in the details after the name. */}
-          <i className="st" data-s={shownStatus(current)} aria-hidden>
-            {markGlyph(shownStatus(current))}
-          </i>
+          <i className="st sdot" data-s={shownStatus(current)} data-dot={dotOfStatus(shownStatus(current))} aria-hidden />
           {/* Ticket 1168 (mockup bots-1166 panel 4): the lead's face, once, in the header only (never in a tree row, a tab or the chat). */}
           {leadMate && leadBot && <Face t={t} face={leadBot.face} name={leadMate.name} eyes={needsYou > 0 ? 'look' : eyesOf(sessions, leadMate.id)} size={22} />}
           {/* Mockup bots-1166 panel 3: any bot's own chat has its face at the header's left, as a lead's has. */}

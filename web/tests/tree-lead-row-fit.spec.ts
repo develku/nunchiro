@@ -34,7 +34,7 @@ test('lead_row_name_whole_when_working: "!", "<1 min", bars, model and effort an
   const first = rows.nth(0);
   for (const part of ['.skipm', '.tm', '.lvl', '.lvl-pair']) await expect(first.locator(part), part).toBeVisible();
   await expect(first.locator('.ic'), 'ticket 1041: a working row has no arc; its light and age say it').toHaveCount(0);
-  await expect(first).toHaveClass(/\blight-run\b/);
+  await expect(first.locator('.sdot')).toHaveAttribute('data-dot', 'run'); // design book: the working dot
   await expect(page.locator('.kidcount').first()).toHaveText('↳ 2');
   await expect(first.locator('.tm')).toHaveText('<1 min');
   expect(await first.locator('.tm').evaluate(cut), 'the age is cut while the pair can still give way').toBe(false);

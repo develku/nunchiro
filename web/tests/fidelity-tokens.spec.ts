@@ -105,23 +105,24 @@ for (const pick of PICKS)
   });
 
 const box = (l: Locator) => l.evaluate((e) => ({ h: e.getBoundingClientRect().height, r: getComputedStyle(e).borderTopLeftRadius }));
-test('row_height_32_default: a fresh profile draws 32px session rows (ticket 1041, owner 15.1 item 7; was the ko/ 30) with an 8px radius (the design book; was 6) and 25px project heads (ko/ .proj, kept by ticket 1041); compact gives 22px', async ({ app, core }) => {
+test('row_height_34_default: a fresh profile draws the design book\'s 34px session rows (was 32) with an 8px radius and 25px project heads (ko/ .proj, kept by ticket 1041); compact gives the book\'s 24px', async ({ app, core }) => {
   const { grp } = await tree(app, core);
   expect(await box(grp.locator('.row.head'))).toEqual({ h: 25, r: '8px' });
-  expect(await box(grp.locator('.row.wt2'))).toEqual({ h: 32, r: '8px' });
+  expect(await box(grp.locator('.row.wt2'))).toEqual({ h: 34, r: '8px' });
   await app.getByRole('button', { name: 'Settings', exact: true }).click();
   await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name: 'Appearance' }).click(); // v25-fix-settings: Settings opens on General
   await app.getByRole('spinbutton', { name: 'Row height' }).fill('22'); // D-20261108-07: the Density presets are gone; 22 px is compact's height
   await app.keyboard.press('Escape'); // v25f: Settings is a modal over the tabs; Esc closes it first
   await app.locator('.tab:not([data-tab="settings"])').first().click(); // back to a session tab
-  await expect.poll(() => box(grp.locator('.row.head'))).toEqual({ h: 22, r: '8px' });
-  expect((await box(grp.locator('.row.wt2'))).h).toBe(22);
+  // 22 picks the compact preset; the tree draws the book's compact height, 24 (a hit target never under 24).
+  await expect.poll(() => box(grp.locator('.row.head'))).toEqual({ h: 24, r: '8px' });
+  expect((await box(grp.locator('.row.wt2'))).h).toBe(24);
 });
 
 test('density_migration: a stored compact without the explicit-choice flag (the old default saved on start) moves to comfortable once', async ({ app, core }) => {
   await app.addInitScript(() => localStorage.getItem('nunchiro.settings.v1') ?? localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ density: 'compact' })));
   const { grp } = await tree(app, core);
-  expect((await box(grp.locator('.row.wt2'))).h).toBe(32); // the comfortable default, 32 since ticket 1041
+  expect((await box(grp.locator('.row.wt2'))).h).toBe(34); // the comfortable default, the design book's 34
   await expect.poll(() => app.evaluate(() => JSON.parse(localStorage.getItem('nunchiro.settings.v1')!))).toMatchObject({ density: 'comfortable', densityPicked: false });
 });
 
@@ -133,7 +134,7 @@ test('density_migration: compact picked in Settings keeps 22px across a reload; 
   await expect.poll(() => app.evaluate(() => JSON.parse(localStorage.getItem('nunchiro.settings.v1')!))).toMatchObject({ density: 'compact', densityPicked: true });
   await app.reload();
   await expect(app.getByRole('status').filter({ hasText: /^Connected$/ })).toBeVisible();
-  await expect.poll(async () => (await box(grp.locator('.row.wt2'))).h).toBe(22);
+  await expect.poll(async () => (await box(grp.locator('.row.wt2'))).h).toBe(24); // the tree's compact, the design book's 24
 });
 
 plain('density_migration: parse keeps explicit picks and old non-default densities, moves the bare old default', () => {

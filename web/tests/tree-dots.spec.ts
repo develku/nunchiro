@@ -49,7 +49,7 @@ test('row_size_and_dot_per_state: 34 high, radius 8, padding 0 10 0 24; one dot 
     const d = row(app, name).locator('.sdot');
     await expect(d, name).toHaveCount(1);
     await expect(d, name).toHaveAttribute('data-dot', dot);
-    expect(await d.evaluate((e) => [e.getBoundingClientRect().width, e.getBoundingClientRect().height]), `${name}: an 8 px light`).toEqual([8, 8]);
+    expect(await d.evaluate((e) => [(e as HTMLElement).offsetWidth, (e as HTMLElement).offsetHeight]), `${name}: an 8 px light`).toEqual([8, 8]);
     if (word) await expect(row(app, name).locator('.sw'), name).toHaveText(word);
   }
   // The travelling line and the edge lights are gone: no ::after light on any row, no breathing edge on the your-turn block.
@@ -57,7 +57,8 @@ test('row_size_and_dot_per_state: 34 high, radius 8, padding 0 10 0 24; one dot 
     expect(await row(app, name).evaluate((e) => getComputedStyle(e, '::after').content), `${name}: no row light`).toBe('none');
   // Needs you: the glow ring and the wash; its word in --you-text, failed in --bad-text.
   expect((await css(row(app, 'asks').locator('.sdot'), 'box-shadow'))['box-shadow']).toContain('10px 2px');
-  expect((await css(row(app, 'asks'), 'background-image'))['background-image']).toContain('linear-gradient');
+  // The wash is on the row, or on its block when its decision line shows under it.
+  expect(await row(app, 'asks').evaluate((e) => getComputedStyle(e.closest('.sess:has(> .q)') ?? e).backgroundImage)).toContain('linear-gradient');
   expect((await css(row(app, 'asks').locator('.sw'), 'color')).color).toBe(await token(app, '--you-text'));
   expect((await css(row(app, 'broke').locator('.sw'), 'color')).color).toBe(await token(app, '--bad-text'));
   // Failed is still and does not glow; idle and done are rings (no fill).
@@ -113,13 +114,22 @@ test('tabs_join_the_sheet: 30 high, radius 8 8 0 0, the open tab on the reading 
   const shown = app.locator('.tabw:has(> .tab[aria-selected="true"])');
   const other = app.locator('.tabw:has(> .tab[aria-selected="false"])').first();
   for (const t of [shown, other]) expect(await css(t, 'height', 'border-top-left-radius', 'border-bottom-left-radius')).toEqual({ height: '30px', 'border-top-left-radius': '8px', 'border-bottom-left-radius': '0px' });
-  expect((await css(shown, 'background-color'))['background-color']).toBe(await app.evaluate(() => getComputedStyle(document.querySelector('.centre')!).backgroundColor));
+  const bg = (n: string) =>
+    app.evaluate((v) => {
+      const probe = document.createElement('i');
+      probe.style.background = `var(${v})`;
+      document.body.append(probe);
+      const c = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return c;
+    }, n);
+  expect((await css(shown, 'background-color'))['background-color']).toBe(await bg('--panel'));
   expect((await css(app.locator('.tabs'), 'background-color'))['background-color']).not.toBe((await css(shown, 'background-color'))['background-color']);
   const dot = (name: string) => app.locator('.tabw', { hasText: name }).locator('.tdot');
   await expect(dot('asks').locator('svg')).toHaveCount(0);
   expect((await css(dot('asks'), 'box-shadow'))['box-shadow']).toContain('10px 2px');
   expect((await css(dot('works'), 'animation-name'))['animation-name']).toBe('breathe');
-  expect(await dot('works').evaluate((e) => [e.getBoundingClientRect().width, e.getBoundingClientRect().height])).toEqual([8, 8]);
+  expect(await dot('works').evaluate((e) => [(e as HTMLElement).offsetWidth, (e as HTMLElement).offsetHeight])).toEqual([8, 8]);
 });
 
 test('face_needs_you_frame: warm outline 1.5 at offset 2 and the glow; no frame otherwise', async ({ app, core }) => {
@@ -137,7 +147,9 @@ test('face_needs_you_frame: warm outline 1.5 at offset 2 and the glow; no frame 
       return out;
     }, you);
   const you = await frame(true);
-  expect([you.style, you.width, you.offset]).toEqual(['solid', '1.5px', '2px']);
+  // A 1 dppx screen draws the 1.5 outline at 1 px; the rule says 1.5.
+  expect([you.style, you.offset]).toEqual(['solid', '2px']);
+  expect(['1px', '1.5px']).toContain(you.width);
   expect(you.glow).toContain('14px 2px');
   const rest = await frame(false);
   expect([rest.style, rest.glow]).toEqual(['none', 'none']);

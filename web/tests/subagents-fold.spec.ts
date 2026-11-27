@@ -129,9 +129,9 @@ test('subagent_rows_dimmed: expanded children are indented one step past the ses
   await expect(rows.first().locator('.s')).toHaveText('working 1m');
   await expect(rows.nth(1).locator('.s')).toHaveText('done');
   await expect(app.locator('.row.kid .s', { hasText: 'unknown' })).toHaveCount(0);
-  // Ticket 1041 lane 4 (08150d02e): rows lose the rail and the working arc; the state is a light (light-glass.css). A working child has the blue working light, a done one none (kids.tsx).
-  await expect(rows.first()).toHaveClass(/\blight-run\b/);
-  await expect(rows.nth(1)).not.toHaveClass(/\blight-/);
+  // Design book (tree rows): the state is a dot (kids.tsx): a working child breathes, a done one is the done ring.
+  await expect(rows.first().locator('.sdot')).toHaveAttribute('data-dot', 'run');
+  await expect(rows.nth(1).locator('.sdot')).toHaveAttribute('data-dot', 'done');
   // Dimmed and indented one step past the session row: option A's proportions, shared tokens (no rail since ticket 1041).
   expect(await rows.first().evaluate((e) => getComputedStyle(e).color)).toBe(await probe(app, await tok(app, '--muted')));
   // One step in from the row they hang under (a main-folder session has no row of its own: its project head is the row),

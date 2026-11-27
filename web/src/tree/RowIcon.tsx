@@ -11,6 +11,7 @@ import { CacheTimer } from './CacheTimer'; // ticket 257
 import { askTitle, whatWhy, type Waiting } from './decisions';
 import { showTeamTab, type TeamAt } from '../lead/team';
 import { sessionName } from '../sessionNames';
+import { dotOfRow } from '../stateDot';
 
 export const ICONS = ['hand', 'ask', 'fail', 'work', 'pr', 'merge', 'new', 'gone', 'stale', 'idle', 'limit', 'done', 'rest'] as const;
 export type IconKind = (typeof ICONS)[number];
@@ -150,11 +151,7 @@ export function HeadName({ name, path, children, ...rest }: { name: string; path
   );
 }
 
-/** Ticket 1041 (A+B+C, C): the row's state light by tone (light-glass.css): working travels along the bottom, your turn,
- *  broken and a limit light the row's left edge. Other tones have no light; their icon says the state. */
-const LIGHT: Partial<Record<RowState['tone'], string>> = { run: 'light-run', you: 'light-you light-edge', bad: 'light-bad light-edge', warn: 'light-limited light-edge' };
-
-/** One worktree row: its state light, name, optional `#53`, the 11 px state word (ticket 1041, owner 11-22: "needs you",
+/** One worktree row: its state dot (design book), name, optional `#53`, the 11 px state word (ticket 1041, owner 11-22: "needs you",
  *  "failed", "Limit"; a working row's word is its age), one icon; the tooltip and the label keep the whole words. */
 export function WtRow({ name, pre, state, sessionId, selected, sub, count, onOpen, menu = 'tree', menuTitle, since, jumpKey, tag, note, seat, cacheIds, t = enT }: WtRowProps) {
   const [tap, setTap] = useState(false); // touch has no hover or focus ring: a tap shows the tooltip until the next tap elsewhere
@@ -189,7 +186,7 @@ export function WtRow({ name, pre, state, sessionId, selected, sub, count, onOpe
   return (
     <button
       ref={row}
-      className={`row wt2 ${state.tone}${sub ? ' sub' : LIGHT[state.tone] ? ` ${LIGHT[state.tone]}` : ''}`}
+      className={`row wt2 ${state.tone}${sub ? ' sub' : ''}`}
       data-kind={state.kind}
       data-skip={state.skip ? true : undefined}
       data-menu={sub ? undefined : menu}
@@ -212,6 +209,7 @@ export function WtRow({ name, pre, state, sessionId, selected, sub, count, onOpe
       onFocus={() => (measure(), setOff(false), setHot(true))}
       onBlur={() => (setHot(false), setOff(false))}
     >
+      {!sub && <i className="sdot" data-dot={dotOfRow(state)} aria-hidden />}
       <span className="n">
         {pre && <span className="pre">{pre} · </span>}
         <span className="nm wordcut" ref={nm}>
@@ -280,7 +278,7 @@ export function NeedYou({ t, n, tip, onOpen }: { t: T; n: number; tip: string; o
   const say = t('tree.needYou', { n });
   return (
     <button className="needyou" title={tip} aria-label={`${say}. ${tip}`} onClick={onOpen}>
-      <RowIcon kind="hand" />
+      <i className="sdot" data-dot="you" aria-hidden />
       {say}
     </button>
   );
