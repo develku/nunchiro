@@ -15,7 +15,7 @@
    ("needs you", "4m", "88%"): the light never carries state on its own. Reduced motion holds every light still: the
    your-turn glow at full strength.
 
-   Glass (B): .glass on a floating layer only (popovers, menus, the command palette, the permission card); nothing in the
+   Glass (B): .glass on a floating layer only (popovers, menus, the command palette); nothing in the
    page's flow. Reduced transparency gives the opaque raised surface instead. */
 
 .sdot {
@@ -164,13 +164,4 @@
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
   box-shadow: var(--glass-shadow);}
-
-/* Ticket 1041 lane 5: the cards docked over the chat's lower edge (the permission card and the session's Outbox cards,
-   chat/decision-card.css .dock) float, so they are glass. Named with the dock, not in the zero-specificity list above:
-   the card's own flat looks (the Decisions widget's hosted card) must not show through here. */
-.composer > .dock .deccard {
-  border: 0;
-  background: var(--glass-fill);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
-  box-shadow: var(--glass-shadow);}
+/* The cards docked over the chat's lower edge are solid (design book, cards): chat/decision-card.css. */

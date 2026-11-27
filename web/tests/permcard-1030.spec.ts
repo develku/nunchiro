@@ -152,7 +152,7 @@ test('three_buttons_in_mockup_order: Allow once, Allow for this session (when th
   await ask(app, wt.a, 'a', PERMISSION('touch out-a'));
   const buttons = docked(app).locator('.dc-btns > button');
   await expect(buttons).toHaveCount(3);
-  const order = await buttons.evaluateAll((els) => els.sort((x, y) => x.getBoundingClientRect().left - y.getBoundingClientRect().left).map((e) => (e as HTMLElement).innerText.replace(/\s+/g, ' ').trim()));
+  const order = await buttons.evaluateAll((els) => els.sort((x, y) => x.getBoundingClientRect().left - y.getBoundingClientRect().left).map((e) => (e as HTMLElement).textContent!.replace(/\s+/g, ' ').trim()));
   expect(order).toEqual(['Allow once1', 'Allow for this session', 'Deny3']);
   await settled(app, core);
   await docked(app).locator('[data-act="allow-always"]').click();

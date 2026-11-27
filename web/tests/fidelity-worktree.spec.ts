@@ -12,7 +12,7 @@ import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { expect, test, type Core } from './fixtures';
 import { openQuiet } from './tree-seed';
-import { bookControls, bookPalette, expectMatchesMockup, outDir, repo, show, type Scheme } from './visual/compare';
+import { bookControls, bookPalette, bookSurface, expectMatchesMockup, outDir, repo, show, type Scheme } from './visual/compare';
 import { MOCKUPS, mockup } from './visual/mockups';
 
 outDir('fidelity-worktree');
@@ -304,7 +304,7 @@ for (const scheme of SCHEMES) {
     test('new worktree dialog', async ({ app, core }) => {
       const d = await newDialog(app, core, scheme);
       // Design book (controls): the mockup's field takes the app's book field.
-      await expectMatchesMockup(app, FILE, NEW, d, { name: 'new-worktree', prepare: async (m) => (await on(newFill(d, scheme))(m), await bookControls(d, 'input', m.locator(NEW).first(), 'input')) });
+      await expectMatchesMockup(app, FILE, NEW, d, { name: 'new-worktree', prepare: async (m) => (await on(newFill(d, scheme))(m), await bookControls(d, 'input', m.locator(NEW).first(), 'input'), await bookSurface(d, m.locator(NEW).first())) });
     });
 
     // Look 1117 v11 A S3-2: the discard question is the Remove-project dialog's centred sheet now (one look for one kind of
@@ -313,17 +313,18 @@ for (const scheme of SCHEMES) {
     test('tidy panel', async ({ app, core }) => {
       const d = await tidyPanel(app, core, scheme);
       // Design book (controls): the mockup's buttons and checks take the app's book buttons and checks.
-      await expectMatchesMockup(app, FILE, TIDY, d, { name: 'tidy', prepare: async (m) => (await on(tidyFill(d))(m), await bookControls(d, 'input[type=checkbox]', m.locator(TIDY).first(), 'input[type=checkbox]'), await bookControls(d, '.btn:not([aria-pressed])', m.locator(TIDY).first(), 'button')) });
+      await expectMatchesMockup(app, FILE, TIDY, d, { name: 'tidy', prepare: async (m) => (await on(tidyFill(d))(m), await bookControls(d, 'input[type=checkbox]', m.locator(TIDY).first(), 'input[type=checkbox]'), await bookControls(d, '.btn:not([aria-pressed])', m.locator(TIDY).first(), 'button'), await bookSurface(d, m.locator(TIDY).first())) });
     });
 
-    // Ticket 1041 lane 4 (B): the toast floats, so it is glass (was WTDIALOGS' dark bar, whose crop is retired); its words,
-    // Undo and dismiss stay.
+    // Design book (toasts): the toast is a solid --raised pill, never glass (was WTDIALOGS' dark bar, then glass); its
+    // words, Undo and dismiss stay.
     test('undo_toast_matches_mockup', async ({ app, core }) => {
       const t = await toast(app, core, scheme);
-      await expect(t).toHaveClass(/\bglass\b/);
+      await expect(t).not.toHaveClass(/\bglass\b/);
       await expect(t.locator('.wtundo')).toBeVisible();
       await expect(t.locator('.wtdismiss')).toBeVisible();
-      expect(await t.evaluate((e) => getComputedStyle(e).backdropFilter || getComputedStyle(e).getPropertyValue('-webkit-backdrop-filter'))).toContain('blur');
+      expect(await t.evaluate((e) => getComputedStyle(e).backdropFilter)).toBe('none');
+      expect(await t.evaluate((e) => getComputedStyle(e).borderTopLeftRadius)).toBe('10px');
     });
   });
 

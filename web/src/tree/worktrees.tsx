@@ -941,7 +941,7 @@ function ToastView({ t, toast, onUndo, onDismiss }: { t: T; toast: Toast | null;
   return (
     <div role="status" aria-live="polite" className="wtoast" style={{ position: 'fixed', left: '50%', bottom: 16, transform: 'translateX(-50%)', zIndex: 30 }}>
       {toast && (
-        <span className="wtbar glass">
+        <span className="wtbar">
           <span className="wtmsg">
             {toast.text}
             <ErrorDetails t={t} details={toast.details} />

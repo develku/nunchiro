@@ -199,7 +199,10 @@ for (const [theme, p] of PICKS) {
     await expect(docked(app).locator('.dc-item[data-item="p1"]')).toHaveCount(1);
     await app.mouse.move(5, 5);
     await app.waitForTimeout(400);
-    await around(app, app.locator('.composer').first(), file(theme, 'permission'));
+    // The card floats above the composer (absolute): the picture spans both.
+    const [c, k] = await Promise.all([docked(app).boundingBox(), app.locator('.composer .cbox').first().boundingBox()]);
+    const y = c!.y - 24;
+    await app.screenshot({ path: file(theme, 'permission'), clip: { x: k!.x - 24, y, width: k!.width + 48, height: k!.y + k!.height + 16 - y } });
   });
 
   test(`cards_shot question outbox ${theme} @shots`, async ({ app, core }) => {
@@ -264,7 +267,7 @@ for (const [theme, p] of PICKS) {
     await app.waitForTimeout(300);
     await around(app, toast, file(theme, 'toast'));
     await app.mouse.move(640, 300);
-    await around(app, app.locator('.empty').first(), file(theme, 'empty'), 8);
+    await around(app, app.locator('.tree .empty'), file(theme, 'empty'), 8);
     await expect(app.locator('footer.status .rcupdate')).toBeVisible();
     await app.locator('footer.status').screenshot({ path: file(theme, 'status-note') });
   });
