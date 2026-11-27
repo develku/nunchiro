@@ -2968,3 +2968,133 @@ fn a_core_restart_drops_the_waiting_starts() {
         "a start after the restart"
     );
 }
+
+/// A core at `level` with the due daily run "nightly" (and "late") held when it starts; its home and project.
+fn waiting_runs(tag: &str, labels: &[&str]) -> (PathBuf, PathBuf, PathBuf, home::ServeGuard) {
+    let (home, proj, path) = setup(tag);
+    let mut core = serve(&home, &path);
+    shell(&home, &proj, "exec cat");
+    core.stop();
+    let mut s = Schedules::load(&home);
+    for label in labels {
+        s.add(
+            run(&proj, label),
+            "21:00".into(),
+            true,
+            None,
+            &known(&proj),
+            0,
+            UTC,
+        )
+        .unwrap();
+    }
+    drop(s);
+    let file = level_file(&format!("lvl-{tag}"), "2");
+    let env = waiting(&file, 600_000);
+    let claude_home = home.join("claude-home").to_string_lossy().into_owned();
+    let mut envs = vec![
+        ("PATH", path.as_str()),
+        ("CLAUDE_CONFIG_DIR", claude_home.as_str()),
+    ];
+    envs.extend_from_slice(&as_env(&env));
+    let core = home::spawn_serve(&home, &envs);
+    wait("the due runs do not wait", || {
+        waiting_list(&home).len() == labels.len()
+    });
+    (home, proj, file, core)
+}
+
+/// A waiting run whose schedule is removed, or switched off, leaves the list and never starts when memory is free.
+#[test]
+fn a_removed_or_paused_schedule_does_not_start_after_waiting() {
+    let (home, _proj, file, _core) = waiting_runs("sch-wait-gone", &["nightly", "late"]);
+    let id = |label: &str| {
+        schedules(&home)
+            .into_iter()
+            .find(|e| e.run.label == label)
+            .unwrap()
+            .id
+    };
+    call(&home, Request::ScheduleRemove { id: id("nightly") }).unwrap();
+    call(
+        &home,
+        Request::SchedulePause {
+            id: id("late"),
+            paused: true,
+        },
+    )
+    .unwrap();
+    assert!(waiting_list(&home).is_empty(), "{:?}", waiting_list(&home));
+    let late = serde_json::to_value(entry(&home, &id("late")).last.unwrap()).unwrap();
+    assert_eq!(late["result"], "skipped", "{late}");
+    fs::write(&file, "1").unwrap();
+    thread::sleep(Duration::from_millis(2500));
+    assert!(
+        rows(&home)
+            .iter()
+            .all(|r| r.label != "nightly" && r.label != "late"),
+        "a removed or paused schedule started"
+    );
+}
+
+/// Run now refused by the hold (critical) keeps the due run waiting: it still runs once memory is free. A Run now that
+/// starts takes its place.
+#[test]
+fn run_now_held_keeps_the_waiting_run() {
+    let (home, _proj, file, _core) = waiting_runs("sch-wait-runnow", &["nightly"]);
+    let id = schedules(&home)[0].id.clone();
+    fs::write(&file, "4").unwrap();
+    let refused = call(&home, Request::ScheduleRunNow { id: id.clone() }).unwrap_err();
+    assert!(refused.contains("memory"), "{refused}");
+    assert_eq!(
+        waiting_list(&home).len(),
+        1,
+        "Run now refused lost the waiting run"
+    );
+    let last = serde_json::to_value(entry(&home, &id).last.unwrap()).unwrap();
+    assert_eq!(last["reason"], "waiting for memory", "{last}");
+    fs::write(&file, "1").unwrap();
+    wait_long("the waiting run never ran", || {
+        rows(&home).iter().any(|r| r.label == "nightly")
+    });
+    assert_eq!(
+        rows(&home).iter().filter(|r| r.label == "nightly").count(),
+        1
+    );
+}
+
+/// A waiting start whose asker ended meanwhile (a lead's team open, a session's start) starts nothing.
+#[test]
+fn a_waiting_start_of_an_ended_asker_starts_nothing() {
+    let file = level_file("lvl-ended", "1");
+    let env = waiting(&file, 600_000);
+    let l = leads_with("sch-wait-ended", &as_env(&env));
+    fs::write(&file, "2").unwrap();
+    let held = raw(&l.home, &l.main, json!({"op":"team_open","name":"Helper"}));
+    assert!(
+        held["Err"].as_str().is_some_and(|e| e.contains("waiting")),
+        "{held}"
+    );
+    let start = json!({"op":"start","session":{"account":null,"kind":"claude","project":l.proj,"worktree":false,"label":"one","args":[],"model":null,"effort":null,"resume":null}});
+    assert!(
+        raw(&l.home, &l.main, start)["Err"]
+            .as_str()
+            .is_some_and(|e| e.contains("waiting"))
+    );
+    let lead = rows(&l.home)
+        .into_iter()
+        .find(|r| r.label == "Main")
+        .unwrap();
+    call(&l.home, Request::Close { id: lead.id }).unwrap();
+    fs::write(&file, "1").unwrap();
+    wait_long("the entries did not leave", || {
+        waiting_list(&l.home).is_empty()
+    });
+    thread::sleep(Duration::from_millis(1500));
+    let started: Vec<_> = rows(&l.home)
+        .into_iter()
+        .filter(|r| r.state == SessionState::Running && (r.label == "Helper" || r.label == "one"))
+        .map(|r| r.label)
+        .collect();
+    assert!(started.is_empty(), "{started:?}");
+}
