@@ -472,6 +472,35 @@ del.r { color: var(--bad-text); text-decoration: none; }
 .swg { display: grid; grid-template-columns: 150px repeat(4, minmax(0, 1fr)) minmax(0, 1.6fr); }
 .palette-tab td.v .sw { width: 14px; height: 14px; border-radius: 4px; }
 
+
+/* mark (the drawn files in docs/brand/assets, used as they are) */
+.mk { display: block; flex: none; color: var(--text); }
+.mk.mu { color: var(--muted); }
+.mk-cell { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.mk-grid { position: relative; width: 120px; height: 120px; background-color: var(--raised); background-image: linear-gradient(var(--tint-2) 1px, transparent 1px), linear-gradient(90deg, var(--tint-2) 1px, transparent 1px); background-size: 5px 5px; box-shadow: 0 0 0 1px var(--line); }
+.mk-grid .mk { width: 120px; height: 120px; }
+.mk-clear { padding: 12px; outline: 1px dashed var(--faint); outline-offset: 0; background: var(--tint-1); border-radius: 4px; }
+.mk-row { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+.mk-row .lbl { display: block; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.mbar { display: inline-flex; align-items: center; gap: 14px; height: 24px; padding: 0 12px; border-radius: 6px; font: 500 13px var(--font-ui); }
+.mbar.l { background: rgb(246 246 246); color: rgb(0 0 0); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08); }
+.mbar.d { background: rgb(40 40 42); color: rgb(255 255 255); }
+.mbar.d .tmpl { filter: invert(1); } /* macOS draws a template image in the bar's own colour; the file stays black */
+.appi { display: block; flex: none; }
+.mis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 860px) { .mis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.mis > div { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; font-size: 12.5px; color: var(--muted); }
+.mis .tile { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 10px; background: var(--panel); box-shadow: 0 0 0 1px var(--tint-2); overflow: hidden; }
+.mkw { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: flex-start; }
+.mkw .lbl b { color: var(--text); font-weight: 600; }
+.mkw .lbl .n-badge { margin-right: 6px; }
+.crop { position: relative; overflow: hidden; border-radius: 10px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent); flex: none; }
+.crop .lights { position: absolute; left: 12px; top: 12px; display: flex; gap: 8px; } /* window controls at 20, 20 from the window edge */
+.crop .lights i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
+.crop .lights i:nth-child(2) { background: #febc2e; }
+.crop .lights i:nth-child(3) { background: #28c840; }
+.crop .pmk { position: absolute; left: 12px; top: 44px; padding: 4px; margin: -4px; border-radius: 6px; outline: 1.5px dashed var(--faint); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
@@ -483,7 +512,7 @@ body.still *, body.still *::before, body.still *::after { animation-play-state: 
   <b>Book</b>
   <a href="#start">How to use it</a><a href="#principles">Principles</a><a href="#colour">Colour roles</a><a href="#derive">Theme derive rule</a>
   <b>Foundations</b>
-  <a href="#type">Type</a><a href="#space">Space and radius</a><a href="#layout">Layout grid</a><a href="#motion">Motion</a><a href="#icons">Icons</a>
+  <a href="#type">Type</a><a href="#space">Space and radius</a><a href="#layout">Layout grid</a><a href="#motion">Motion</a><a href="#icons">Icons</a><a href="#mark">Mark</a>
   <b>Controls</b>
   <a href="#buttons">Buttons</a><a href="#iconbuttons">Icon buttons and key chips</a><a href="#inputs">Fields, search, select</a><a href="#choices">Segmented, check, radio, switch, slider</a>
   <b>Surfaces</b>
@@ -496,7 +525,7 @@ body.still *, body.still *::before, body.still *::after { animation-play-state: 
 
 <main>
 <header class="top" id="start">
-  <span class="eyebrow">Nunchiro · design book · v0.1 draft</span>
+  <span class="eyebrow">Nunchiro · design book · v0.2 draft</span>
   <h1>The quiet room, built to measure</h1>
   <p class="lede">Every part a builder needs, drawn in four themes with its exact values. Shape, type, spacing, motion and state signals are fixed rules; colour comes from the theme. Concept 4, the recommended blend: 눈치 is the idea, the precision instrument decides how numbers are shown, Liquid Glass stays on the outer chrome.</p>
   <p class="small">Each part is drawn four times: Nunchiro light and dark (the default theme, hand-set) and Catppuccin Latte and Mocha (the two catalog themes in the bundle, coloured by the derive rule). Builders: read <a href="README.md">README.md</a> first, copy values from here, import <a href="tokens.css">tokens.css</a>; the move order is in <a href="migration.md">migration.md</a>. The hover, pressed and focus states are drawn still so you can read them.</p>
@@ -666,6 +695,56 @@ body.still *, body.still *::before, body.still *::after { animation-play-state: 
   <div class="sh"><span class="eyebrow">Foundations</span><h2>Icons</h2>
   <p class="rule">GitHub Octicons, 16 grid, drawn in currentColor. Standalone icons are 16; icons inside a line of text and fold carets are 12. An icon the set lacks is drawn on the same 16 grid with a 1.5 stroke, round caps and joins.</p></div>
   <div class="spec" data-tpl="t-icons"></div>
+</section>
+
+<!-- ================= MARK ================= -->
+<section class="sec" id="mark">
+  <div class="sh"><span class="eyebrow">Foundations</span><h2>Mark</h2>
+  <p class="rule">The mark says who made the window; it never shows a state. It is drawn once on a 24 grid in currentColor, so it takes the text colour of what it sits on. Use the files in docs/brand/assets as they are: a new or redrawn mark is not a builder's call.</p></div>
+  <div class="spec" data-tpl="t-mark"></div>
+  <div class="spec one" data-tpl="t-appicon" data-only="nl"></div>
+  <div class="vals"><table><tbody>
+    <tr><td>Files</td><td class="v">logo-mark.svg (24 grid, currentColor) · logo-menubar.svg and logo-menubar-waiting.svg (16 grid, menu bar) · app-icon.svg (128 grid, its own tile and colours)</td></tr>
+    <tr><td>Drawing</td><td class="v">two uprights and a fold on the 24 grid, stroke 2, round caps and joins, filled dot r 2.5 · as drawn, never redrawn or re-weighted</td></tr>
+    <tr><td>Clear space</td><td class="v">a quarter of the mark's size on every side (6 on the 24 grid, 4 at 16) · no text, icon or edge inside it</td></tr>
+    <tr><td>Sizes</td><td class="v">minimum 16 · 16 (menu bar, inline) · 24 (onboarding header) · 32 · 48 (empty window) · larger only on the docs site</td></tr>
+    <tr><td>Colour</td><td class="v">--text by default, --muted where it should stay quiet · nothing else: no accent, no warm, no state colour, no gradient</td></tr>
+    <tr><td>Menu bar</td><td class="v">template image, 16 · macOS draws it in the bar's colour, light or dark · the waiting file adds a dot the same size as the needs-you dot; the dot is the only warm thing and only while something waits for you</td></tr>
+    <tr><td>App icon</td><td class="v">the mark on its own dark tile · Finder and Dock sizes 16 · 32 · 64 · 128 · 256 · 512 (and their 2× files) · the same in every theme</td></tr>
+  </tbody></table></div>
+  <div class="vals"><table>
+    <thead><tr><th>Where</th><th>File</th><th>Size</th><th>Colour</th></tr></thead>
+    <tbody>
+    <tr><td>Menu bar</td><td class="v">logo-menubar.svg, logo-menubar-waiting.svg</td><td class="v">16</td><td class="v">template (the system's bar colour); waiting dot warm</td></tr>
+    <tr><td>Dock, Finder, Launchpad</td><td class="v">app-icon.svg</td><td class="v">16 to 512</td><td class="v">its own tile</td></tr>
+    <tr><td>About window</td><td class="v">app-icon.svg</td><td class="v">64</td><td class="v">its own tile</td></tr>
+    <tr><td>Onboarding, first screen</td><td class="v">logo-mark.svg</td><td class="v">24, above the title</td><td class="v">--text</td></tr>
+    <tr><td>Empty window (no project open)</td><td class="v">logo-mark.svg</td><td class="v">48, centred above the headline</td><td class="v">--muted</td></tr>
+    <tr><td>Docs site header</td><td class="v">logo-mark.svg</td><td class="v">20</td><td class="v">--text</td></tr>
+    <tr><td>Download page</td><td class="v">app-icon.svg</td><td class="v">44 to 64, centred above the headline</td><td class="v">its own tile</td></tr>
+    <tr><td>Release notes</td><td class="v">app-icon.svg</td><td class="v">32, first line of the notes</td><td class="v">its own tile</td></tr>
+    <tr><td>Window chrome (title bar, sidebar header)</td><td class="v">not decided</td><td class="v">—</td><td class="v">see the proposal and the open question below</td></tr>
+    </tbody></table></div>
+  <div class="spec one" data-tpl="t-mark-win" data-only="nl nd"></div>
+  <div class="dd">
+    <div class="do"><span class="verdict">Do</span><div class="line" style="gap:20px"><svg class="mk" width="32" height="32" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg><svg class="mk mu" width="32" height="32" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg><span class="n-badge" style="gap:8px"><svg class="mk" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg>Nunchiro</span></div><span class="why">The mark as drawn, in --text or --muted, flat, on a solid surface or the chrome, with its clear space.</span></div>
+    <div class="dont"><span class="verdict">Don't</span><div class="mis">
+      <div><span class="tile"><svg class="mk" width="32" height="32" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark" style="color:var(--accent)"><use href="#nm-mark"/></svg></span>Recoloured: only --text or --muted.</div>
+      <div><span class="tile"><svg class="mk" width="32" height="32" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark" style="transform:scaleX(1.5)"><use href="#nm-mark"/></svg></span>Stretched or squashed.</div>
+      <div><span class="tile"><svg class="mk" width="32" height="32" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark" style="filter:drop-shadow(0 0 4px var(--accent)) drop-shadow(0 2px 2px rgb(0 0 0 / 0.4))"><use href="#nm-mark"/></svg></span>Effects: no glow, shadow or outline.</div>
+      <div><span class="tile"><svg class="mk" width="32" height="32" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark" style="color:var(--primary)"><use href="#nm-mark"/></svg></span>Warm: warm means something needs you.</div>
+      <div><span class="tile" style="background:repeating-linear-gradient(45deg, var(--tint-3) 0 6px, transparent 6px 12px), linear-gradient(120deg, var(--you-glow), var(--light-run))"><svg class="mk" width="32" height="32" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg></span>On glass or images busier than the chrome.</div>
+    </div><span class="why">Each of these makes the mark look like a state, a button or a sticker.</span></div>
+  </div>
+  <div class="col">
+  <div class="n-card ask stack" role="group" aria-label="Open question">
+    <div class="hd"><svg class="mk" width="16" height="16" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg><span class="who">Open question</span><span class="m">not decided</span></div>
+    <div class="q">Should the mark sit in the window chrome?</div>
+    <div><div class="opt"><i class="n-radio on"></i>C · Not in the window chrome: only About, onboarding and the empty window<span class="n-badge" style="margin-left:auto">Recommended</span><span class="n-kbd" style="margin-left:0">1</span></div><div class="opt"><i class="n-radio"></i>A · Sidebar header, 16, --muted<span class="n-kbd">2</span></div><div class="opt"><i class="n-radio"></i>B · Title bar, centred<span class="n-kbd">3</span></div></div>
+    <span class="fine">The Dock and the menu bar already say which app this is, and Linear, Arc and Zed keep their logo out of the window chrome and show it on welcome and empty screens; the sidebar header belongs to the project.</span>
+    <span class="n-field" style="width:100%"><span class="ph">Something else…</span></span>
+  </div>
+  </div>
 </section>
 
 <!-- ================= BUTTONS ================= -->
@@ -992,6 +1071,64 @@ pnpm test -- login</div><div class="n-menu glass" style="width:200px;margin-left
   <div class="line" style="font-size:13px"><svg class="i s" viewBox="0 0 16 16"><use href="#o-git-branch"/></svg><span>main</span><span class="lbl">← 12 inside a line</span></div>
 </template>
 
+<template id="t-mark">
+  <div class="mk-row" style="align-items:flex-start;gap:32px">
+    <div class="mk-cell"><div class="mk-grid"><svg class="mk" width="120" height="120" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg></div><span class="lbl">On its 24 grid, as drawn</span></div>
+    <div class="mk-cell"><div class="mk-clear"><svg class="mk" width="48" height="48" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg></div><span class="lbl">Clear space: ¼ of the size</span></div>
+    <div class="mk-cell"><div class="mk-row">
+      <span><svg class="mk" width="16" height="16" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg><span class="lbl">16 min</span></span><span><svg class="mk" width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg><span class="lbl">24</span></span><span><svg class="mk" width="32" height="32" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg><span class="lbl">32</span></span><span><svg class="mk" width="48" height="48" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg><span class="lbl">48</span></span><span><svg class="mk mu" width="48" height="48" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg><span class="lbl">48 --muted</span></span>
+    </div></div>
+  </div>
+  <div class="line" style="gap:12px 20px">
+    <span class="mbar l"><svg class="tmpl" width="16" height="16" viewBox="0 0 16 16" role="img" aria-label="Nunchiro menu bar icon"><use href="#nm-menubar"/></svg><svg class="" width="16" height="16" viewBox="0 0 16 16" role="img" aria-label="Nunchiro, waiting"><use href="#nm-menubar-waiting"/></svg><span>Wi-Fi</span><span>14:20</span></span>
+    <span class="mbar d"><svg class="tmpl" width="16" height="16" viewBox="0 0 16 16" role="img" aria-label="Nunchiro menu bar icon"><use href="#nm-menubar"/></svg><svg class="" width="16" height="16" viewBox="0 0 16 16" role="img" aria-label="Nunchiro, waiting"><use href="#nm-menubar-waiting"/></svg><span>Wi-Fi</span><span>14:20</span></span>
+    <span class="lbl">Menu bar, light and dark: the template icon, then the waiting icon</span>
+  </div>
+</template>
+
+<template id="t-appicon">
+  <div class="mk-row" style="gap:24px">
+    <span><svg class="appi" width="16" height="16" viewBox="0 0 128 128" role="img" aria-label="Nunchiro app icon"><use href="#nm-app"/></svg><span class="lbl">16</span></span><span><svg class="appi" width="32" height="32" viewBox="0 0 128 128" role="img" aria-label="Nunchiro app icon"><use href="#nm-app"/></svg><span class="lbl">32</span></span><span><svg class="appi" width="64" height="64" viewBox="0 0 128 128" role="img" aria-label="Nunchiro app icon"><use href="#nm-app"/></svg><span class="lbl">64</span></span><span><svg class="appi" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Nunchiro app icon"><use href="#nm-app"/></svg><span class="lbl">128</span></span><span><svg class="appi" width="256" height="256" viewBox="0 0 128 128" role="img" aria-label="Nunchiro app icon"><use href="#nm-app"/></svg><span class="lbl">256</span></span><span><svg class="appi" width="512" height="512" viewBox="0 0 128 128" role="img" aria-label="Nunchiro app icon"><use href="#nm-app"/></svg><span class="lbl">512</span></span>
+  </div>
+  <span class="lbl">App icon, the same in every theme. The tile, its colours and the 2× files come from app-icon.svg.</span>
+</template>
+
+<template id="t-mark-win">
+  <span class="lbl">Real size, 1:1: each drawing is a cropped region of the 1280 × 800 window.</span>
+  <div class="mkw">
+    <div class="mk-cell">
+      <span class="lbl"><b>Empty window</b> · centre of the main area, 360 × 240</span>
+      <div class="crop" style="width:360px;height:240px;background:var(--panel)">
+        <div class="empty" style="height:100%;justify-content:center;padding:0 20px"><svg class="mk mu" width="48" height="48" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg><h4>No project open</h4><p>Open a folder and its sessions show here.</p><div class="line"><button class="n-btn secondary">Open folder</button><span class="lbl">or press</span><span class="n-kbd">⌘O</span></div></div>
+      </div>
+      <span class="lbl">mark 48, --muted, centred above the headline</span>
+    </div>
+    <div class="mk-cell">
+      <span class="lbl"><b>Onboarding, first screen</b> · centre of the window, 360 × 240</span>
+      <div class="crop" style="width:360px;height:240px;background:var(--panel);display:grid;place-items:center">
+        <div style="width:300px;background:var(--raised);border-radius:14px;box-shadow:var(--shadow-card);padding:20px;display:flex;flex-direction:column;gap:8px"><svg class="mk" width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg><b style="font:600 15px/1.3 var(--font-display);margin-top:4px">Quick setup</b><span style="font-size:13px;color:var(--muted)">Pick a folder and tell the agent what to do.</span></div>
+      </div>
+      <span class="lbl">mark 24, --text, above the title</span>
+    </div>
+    <div class="mk-cell">
+      <span class="lbl"><span class="n-badge">Proposal, not decided</span> option A · top-left of the window, 320 × 200</span>
+      <div class="crop" style="width:320px;height:200px;background:var(--page)">
+        <div class="side" style="position:absolute;left:8px;top:8px;width:280px;height:230px;padding:0;border-radius:12px">
+          <span class="lights"><i></i><i></i><i></i></span>
+          <span class="pmk"><svg class="mk mu" width="16" height="16" viewBox="0 0 24 24" role="img" aria-label="Nunchiro mark"><use href="#nm-mark"/></svg></span>
+          <div style="position:absolute;left:8px;right:8px;top:76px">
+            <div class="n-proj" style="margin-top:0"><b>nunchiro</b><span class="br">main</span></div>
+            <div class="n-row run"><i class="st"></i><span class="n">Fix login test</span><span class="m">working 4:12</span></div>
+            <div class="n-row idle"><i class="st"></i><span class="n">Docs pass</span><span class="m">idle · 2h</span></div>
+          </div>
+        </div>
+        <div style="position:absolute;left:296px;top:46px;right:0;bottom:0;background:var(--panel);border-radius:10px 0 0 0"></div>
+      </div>
+      <span class="lbl">mark 16, --muted, in the sidebar header under the window controls (traffic lights at 20, 20)</span>
+    </div>
+  </div>
+</template>
+
 <template id="t-buttons">
   <div class="grid-st">
     <span></span><span class="lbl">Rest</span><span class="lbl">Hover</span><span class="lbl">Pressed</span><span class="lbl">Focus</span><span class="lbl">Disabled</span>
@@ -1204,6 +1341,7 @@ pnpm test -- login</div><div class="n-menu glass" style="width:200px;margin-left
 </template>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs></defs></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="nm-mark" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V11.25M19 5V19"/> <path d="M6.9 8.1L8.1 6.9L19 13.1V19.9Z" fill="currentColor" stroke-width="1"/> <circle cx="5" cy="5.25" r="2.5" fill="currentColor" stroke="none"/></g></symbol><symbol id="nm-menubar" viewBox="0 0 16 16"><g fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13V8.25M13 3V13"/> <path d="M4.3 5.7L5.3 4.7L13 8.6V14Z" fill="#000" stroke-width=".75"/> <circle cx="3" cy="3.25" r="1.9" fill="#000" stroke="none"/></g></symbol><symbol id="nm-menubar-waiting" viewBox="0 0 16 16"><g fill="none" stroke="#8a8a8a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13V8.25M13 3V13"/> <path d="M4.3 5.7L5.3 4.7L13 8.6V14Z" fill="#8a8a8a" stroke-width=".75"/> <circle cx="3" cy="3.25" r="1.9" fill="#e8590c" stroke="none"/></g></symbol><symbol id="nm-app" viewBox="0 0 128 128"><g > <defs><linearGradient id="nunchiro-tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d333c"/><stop offset="1" stop-color="#171b21"/></linearGradient></defs> <path d="M116.00 64.00L115.96 81.47L115.82 87.03L115.60 91.05L115.28 94.28L114.88 97.03L114.38 99.41L113.78 101.52L113.09 103.41L112.30 105.11L111.40 106.64L110.39 108.02L109.27 109.27L108.02 110.39L106.64 111.40L105.11 112.30L103.41 113.09L101.52 113.78L99.41 114.38L97.03 114.88L94.28 115.28L91.05 115.60L87.03 115.82L81.47 115.96L64.00 116.00L46.53 115.96L40.97 115.82L36.95 115.60L33.72 115.28L30.97 114.88L28.59 114.38L26.48 113.78L24.59 113.09L22.89 112.30L21.36 111.40L19.98 110.39L18.73 109.27L17.61 108.02L16.60 106.64L15.70 105.11L14.91 103.41L14.22 101.52L13.62 99.41L13.12 97.03L12.72 94.28L12.40 91.05L12.18 87.03L12.04 81.47L12.00 64.00L12.04 46.53L12.18 40.97L12.40 36.95L12.72 33.72L13.12 30.97L13.62 28.59L14.22 26.48L14.91 24.59L15.70 22.89L16.60 21.36L17.61 19.98L18.73 18.73L19.98 17.61L21.36 16.60L22.89 15.70L24.59 14.91L26.48 14.22L28.59 13.62L30.97 13.12L33.72 12.72L36.95 12.40L40.97 12.18L46.53 12.04L64.00 12.00L81.47 12.04L87.03 12.18L91.05 12.40L94.28 12.72L97.03 13.12L99.41 13.62L101.52 14.22L103.41 14.91L105.11 15.70L106.64 16.60L108.02 17.61L109.27 18.73L110.39 19.98L111.40 21.36L112.30 22.89L113.09 24.59L113.78 26.48L114.38 28.59L114.88 30.97L115.28 33.72L115.60 36.95L115.82 40.97L115.96 46.53Z" transform="translate(0 2)" fill="rgba(0,0,0,.22)"/> <path d="M116.00 64.00L115.96 81.47L115.82 87.03L115.60 91.05L115.28 94.28L114.88 97.03L114.38 99.41L113.78 101.52L113.09 103.41L112.30 105.11L111.40 106.64L110.39 108.02L109.27 109.27L108.02 110.39L106.64 111.40L105.11 112.30L103.41 113.09L101.52 113.78L99.41 114.38L97.03 114.88L94.28 115.28L91.05 115.60L87.03 115.82L81.47 115.96L64.00 116.00L46.53 115.96L40.97 115.82L36.95 115.60L33.72 115.28L30.97 114.88L28.59 114.38L26.48 113.78L24.59 113.09L22.89 112.30L21.36 111.40L19.98 110.39L18.73 109.27L17.61 108.02L16.60 106.64L15.70 105.11L14.91 103.41L14.22 101.52L13.62 99.41L13.12 97.03L12.72 94.28L12.40 91.05L12.18 87.03L12.04 81.47L12.00 64.00L12.04 46.53L12.18 40.97L12.40 36.95L12.72 33.72L13.12 30.97L13.62 28.59L14.22 26.48L14.91 24.59L15.70 22.89L16.60 21.36L17.61 19.98L18.73 18.73L19.98 17.61L21.36 16.60L22.89 15.70L24.59 14.91L26.48 14.22L28.59 13.62L30.97 13.12L33.72 12.72L36.95 12.40L40.97 12.18L46.53 12.04L64.00 12.00L81.47 12.04L87.03 12.18L91.05 12.40L94.28 12.72L97.03 13.12L99.41 13.62L101.52 14.22L103.41 14.91L105.11 15.70L106.64 16.60L108.02 17.61L109.27 18.73L110.39 19.98L111.40 21.36L112.30 22.89L113.09 24.59L113.78 26.48L114.38 28.59L114.88 30.97L115.28 33.72L115.60 36.95L115.82 40.97L115.96 46.53Z" fill="url(#nunchiro-tile)"/> <path d="M116.00 64.00L115.96 81.47L115.82 87.03L115.60 91.05L115.28 94.28L114.88 97.03L114.38 99.41L113.78 101.52L113.09 103.41L112.30 105.11L111.40 106.64L110.39 108.02L109.27 109.27L108.02 110.39L106.64 111.40L105.11 112.30L103.41 113.09L101.52 113.78L99.41 114.38L97.03 114.88L94.28 115.28L91.05 115.60L87.03 115.82L81.47 115.96L64.00 116.00L46.53 115.96L40.97 115.82L36.95 115.60L33.72 115.28L30.97 114.88L28.59 114.38L26.48 113.78L24.59 113.09L22.89 112.30L21.36 111.40L19.98 110.39L18.73 109.27L17.61 108.02L16.60 106.64L15.70 105.11L14.91 103.41L14.22 101.52L13.62 99.41L13.12 97.03L12.72 94.28L12.40 91.05L12.18 87.03L12.04 81.47L12.00 64.00L12.04 46.53L12.18 40.97L12.40 36.95L12.72 33.72L13.12 30.97L13.62 28.59L14.22 26.48L14.91 24.59L15.70 22.89L16.60 21.36L17.61 19.98L18.73 18.73L19.98 17.61L21.36 16.60L22.89 15.70L24.59 14.91L26.48 14.22L28.59 13.62L30.97 13.12L33.72 12.72L36.95 12.40L40.97 12.18L46.53 12.04L64.00 12.00L81.47 12.04L87.03 12.18L91.05 12.40L94.28 12.72L97.03 13.12L99.41 13.62L101.52 14.22L103.41 14.91L105.11 15.70L106.64 16.60L108.02 17.61L109.27 18.73L110.39 19.98L111.40 21.36L112.30 22.89L113.09 24.59L113.78 26.48L114.38 28.59L114.88 30.97L115.28 33.72L115.60 36.95L115.82 40.97L115.96 46.53Z" fill="none" stroke="rgba(255,255,255,.09)" stroke-width="1"/> <g transform="translate(35.875 35.5) scale(2.5)" color="#f4efe6" fill="none" stroke="currentColor" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V11.25M19 5V19"/> <path d="M6.9 8.1L8.1 6.9L19 13.1V19.9Z" fill="currentColor" stroke-width="1"/> <circle cx="5" cy="5.25" r="2.5" fill="currentColor" stroke="none"/></g></g></symbol></svg>
 
 <script>
 /* ---- Book core: the Nunchiro theme, the derive rule and the contrast check. One source for the page and for tokens.css. ---- */

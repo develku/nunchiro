@@ -1,6 +1,8 @@
 # Nunchiro design book: builder rules
 
-v0.1 draft. The picture of every part, in four themes, with its values: [index.html](index.html). Tokens: [tokens.css](tokens.css). Move order: [migration.md](migration.md).
+v0.2 draft. The picture of every part, in four themes, with its values: [index.html](index.html). Tokens: [tokens.css](tokens.css). Move order: [migration.md](migration.md).
+
+Parts in the book: colour roles, type, space and radius, layout grid, motion, icons, mark, buttons, icon buttons and key chips, fields, choices, tabs, tree rows, badges and chips, cards, diff and code, menus and popovers, dialogs, toasts and notes, status bar and gauges, empty and loading states, bot faces, scrollbars and focus.
 
 The look is a blend: quiet surfaces where state is a small light, one warm signal when the owner is needed, exact figures and two small gauges where numbers decide something, glass only on the outer chrome.
 
@@ -31,6 +33,16 @@ The look is a blend: quiet surfaces where state is a small light, one warm signa
 - A web-drawn window corner, a 1 px border around a region, a new font size, a new radius, a shadow other than `--shadow-card` and `--shadow-float`.
 - Terminal colours from anywhere but the theme file.
 - New UI words in another language than English, title case, "please", exclamation marks, internal words (seat, lane, core, PTY).
+
+## Mark
+
+The mark says who made the window; it never shows a state. Files: `docs/brand/assets/` (`logo-mark.svg` 24 grid in currentColor, `logo-menubar.svg` and `logo-menubar-waiting.svg` 16 grid, `app-icon.svg` 128 grid). Use them as they are; a new or redrawn mark is not a builder's call.
+
+- Sizes: minimum 16. Menu bar 16 (template image), onboarding 24, empty window 48, docs site header 20, About 64 (app icon), release notes 32 (app icon), app icon 16 to 512.
+- Colour: `--text`, or `--muted` where it should stay quiet. The app icon keeps its own tile. In the menu bar macOS draws the template in the bar's colour; the waiting file adds the one warm dot.
+- Clear space: a quarter of the mark's size on every side.
+- Where: menu bar, Dock and Finder, About, the onboarding first screen, the empty window, the docs site, the download page, the release notes. In the window chrome (title bar or sidebar header): not decided; the book draws it only as a proposal next to the open question.
+- Never: another colour (no accent, warm or state colour), stretched, glow, shadow or outline, warm (warm means something needs you), on glass or images busier than the chrome.
 
 ## Checks before you land
 
