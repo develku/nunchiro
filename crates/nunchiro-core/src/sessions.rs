@@ -453,7 +453,9 @@ pub struct Sessions {
     pub(crate) schedule_reruns: Vec<String>,
     /// The owner's Start on a trigger's card (its name and the run with the quoted payload); the schedule timer starts
     /// them off this lock (`schedule::fire`).
-    pub(crate) trigger_starts: Vec<(String, crate::schedule::Run)>,
+    /// Each: the card's id, the trigger, the run and the subject the fire took. The card stays until the start ran, so a
+    /// core that quits first keeps it for the owner's next Start.
+    pub(crate) trigger_starts: Vec<(String, String, crate::schedule::Run, Option<String>)>,
     /// Ticket 1004: the check-ins that wait for the judge, at most one per task (`check_in_due`); the server's loop
     /// has them judged off this lock (`start_judge`: git is read there).
     pub(crate) check_ins: Vec<crate::ledger::CheckIn>,

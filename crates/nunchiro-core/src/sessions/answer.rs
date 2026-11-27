@@ -378,6 +378,7 @@ impl Sessions {
                 when,
                 place,
                 line,
+                reason,
                 ..
             }) = &item.owner
             {
@@ -389,12 +390,24 @@ impl Sessions {
                 // Look 11-17 v8 (Home S2-B): a failed run's card. Yes: it runs again now, off this lock (the schedule
                 // timer takes it within a second; a new failure is a new card). No: only the card goes; the entry
                 // keeps its failed run until its next good run or an edit.
-                // A trigger's card: Start runs the run the card carries, off this lock; Not this time drops it.
+                // A trigger's card: Start runs the run the card carries, off this lock, and the card goes once it ran
+                // (a core that quits first keeps the card); Not now drops it and frees the subject.
                 if change == "trigger" {
-                    self.queue.answer_owner(|i| i.id == id)?;
+                    let name = entry.clone().unwrap_or_default();
                     if yes {
-                        self.trigger_starts
-                            .push((entry.clone().unwrap_or_default(), run.clone()));
+                        if !self.trigger_starts.iter().any(|(card, ..)| *card == *id) {
+                            self.trigger_starts.push((
+                                id.to_string(),
+                                name,
+                                run.clone(),
+                                reason.clone(),
+                            ));
+                        }
+                    } else {
+                        self.queue.answer_owner(|i| i.id == id)?;
+                        if let Some(s) = reason {
+                            crate::schedule::triggers::release(&self.home, &name, s);
+                        }
                     }
                     return Ok(Reply::Ack);
                 }

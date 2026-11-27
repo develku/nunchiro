@@ -16,6 +16,11 @@ use std::time::Duration;
 pub const PORT: u16 = 47800;
 pub const BODY_MAX: usize = 256 * 1024;
 const HEAD_MAX: usize = 16 * 1024;
+/// Requests read at once; a connection past it is closed unanswered.
+const LIVE_MAX: usize = 8;
+/// One request, head and body, is read within this or dropped.
+const REQUEST_DEADLINE: Duration = Duration::from_secs(10);
+static LIVE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 fn port(home: &Path) -> u16 {
     crate::store::read_settings(&home.join("settings.json"))
@@ -55,9 +60,18 @@ pub(crate) fn spawn(
                     if let Some(l) = &open
                         && let Ok((stream, _)) = l.accept()
                     {
+                        // At most LIVE_MAX requests are read at once: idle connections cannot pile up threads.
+                        if LIVE.fetch_add(1, Ordering::SeqCst) >= LIVE_MAX {
+                            LIVE.fetch_sub(1, Ordering::SeqCst);
+                            drop(stream);
+                            continue;
+                        }
                         let (registry, stopping, home) =
                             (registry.clone(), stopping.clone(), home.clone());
-                        std::thread::spawn(move || serve(stream, &registry, &stopping, &home));
+                        std::thread::spawn(move || {
+                            serve(stream, &registry, &stopping, &home);
+                            LIVE.fetch_sub(1, Ordering::SeqCst);
+                        });
                         continue;
                     }
                     std::thread::sleep(Duration::from_millis(50));
@@ -75,12 +89,19 @@ fn answer(mut s: &TcpStream, status: &str) {
 
 fn serve(stream: TcpStream, registry: &Mutex<Sessions>, stopping: &AtomicBool, home: &Path) {
     let _ = stream.set_nonblocking(false);
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+    let deadline = std::time::Instant::now() + REQUEST_DEADLINE;
+    // Each read gets only what is left of the request's deadline.
+    let left = || {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        (!left.is_zero()).then_some(left)
+    };
     let mut reader = BufReader::new(&stream);
     let mut head = vec![];
     let mut line = String::new();
     loop {
         line.clear();
+        let Some(left) = left() else { return };
+        let _ = stream.set_read_timeout(Some(left));
         match reader.read_line(&mut line) {
             Ok(0) | Err(_) => return,
             Ok(_) if line == "\r\n" || line == "\n" => break,
@@ -120,6 +141,8 @@ fn serve(stream: TcpStream, registry: &Mutex<Sessions>, stopping: &AtomicBool, h
         return answer(&stream, "413 Payload Too Large");
     }
     let mut body = vec![0; length];
+    let Some(left) = left() else { return };
+    let _ = stream.set_read_timeout(Some(left));
     if reader.read_exact(&mut body).is_err() {
         return answer(&stream, "400 Bad Request");
     }

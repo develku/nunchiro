@@ -325,7 +325,9 @@ fn running() -> &'static Mutex<Running> {
     RUNNING.get_or_init(Default::default)
 }
 
-/// One fire: the limits, then a start (`auto`) or the owner's card (`ask`).
+/// One fire: the limits, then a start (`auto`) or the owner's card (`ask`). The hour's slot and the subject are taken
+/// under the file's lock before anything starts, so fires at once (a webhook takes each request on its own thread)
+/// never pass the limits together; a start that fails gives its slot and its subject back.
 pub(crate) fn fire(
     registry: &Mutex<Sessions>,
     stopping: &AtomicBool,
@@ -335,6 +337,7 @@ pub(crate) fn fire(
     payload: &str,
 ) -> Response {
     let now = crate::queue::now_ms();
+    let about = subject(payload);
     let trigger = {
         let _w = WRITE.lock().map_err(|_| "triggers unavailable")?;
         let mut all = load(home)?;
@@ -362,58 +365,140 @@ pub(crate) fn fire(
             save(home, all)?;
             return Err(note);
         }
-        t.clone()
+        if let Some(s) = &about
+            && busy(registry, home, name, s)?
+        {
+            return Err(format!(
+                "trigger {name}: its run for {s} still works; not started again"
+            ));
+        }
+        // Taken now: this fire's slot of the hour, and its subject.
+        t.fired.push(now);
+        let trigger = t.clone();
+        save(home, all)?;
+        if let Some(s) = &about {
+            claim(home, name, s, PENDING);
+        }
+        trigger
     };
-    let key_of = |s: &str| (home.to_path_buf(), name.to_string(), s.to_string());
-    if let Some(s) = subject(payload)
-        && let Some(id) = running()
-            .lock()
-            .ok()
-            .and_then(|r| r.get(&key_of(&s)).cloned())
-        && super::lock(registry)?
-            .session_of(&id)
-            .is_ok_and(|s| s.state == crate::api::SessionState::Running)
-    {
-        return Err(format!(
-            "trigger {name}: its run for {s} still works; not started again"
-        ));
-    }
     let mut run = trigger.run.clone();
     run.task = Some(message(&trigger.run, source, payload));
     match trigger.mode {
         Mode::Ask => {
-            super::lock(registry)?.trigger_card(&trigger.name, run, source)?;
+            let card =
+                super::lock(registry)?.trigger_card(&trigger.name, run, source, about.clone());
+            if let Err(e) = card {
+                give_back(home, name, now, about.as_deref());
+                return Err(e);
+            }
+            if let Some(s) = &about {
+                claim(home, name, s, ASKED);
+            }
             record(
                 home,
                 name,
-                now,
                 Last {
                     session: None,
                     at: now,
                     result: None,
                     reason: Some("waiting for your yes in Decisions".into()),
                 },
-                true,
             )?;
             Ok(Reply::Ack)
         }
-        Mode::Auto => {
-            let started = start(
-                registry,
-                stopping,
-                home,
-                name,
-                &run,
-                crate::pressure::Who::Session,
-            );
-            if let (Ok(id), Some(s)) = (&started, subject(payload))
-                && let Ok(mut r) = running().lock()
-            {
-                r.insert(key_of(&s), id.clone());
+        Mode::Auto => match start(
+            registry,
+            stopping,
+            home,
+            name,
+            &run,
+            crate::pressure::Who::Session,
+        ) {
+            Ok(id) => {
+                if let Some(s) = &about {
+                    claim(home, name, s, &id);
+                }
+                Ok(Reply::Ack)
             }
-            started.map(|_| Reply::Ack)
-        }
+            Err(e) => {
+                give_back(home, name, now, about.as_deref());
+                Err(e)
+            }
+        },
     }
+}
+
+/// A subject taken by a fire that is still starting, or waiting for the owner's card.
+const PENDING: &str = "";
+const ASKED: &str = "ask";
+fn slot(home: &Path, name: &str, s: &str) -> (PathBuf, String, String) {
+    (home.to_path_buf(), name.to_string(), s.to_string())
+}
+/// Whether `s` is taken: a fire still starting, a card waiting, or a session that still runs.
+fn busy(registry: &Mutex<Sessions>, home: &Path, name: &str, s: &str) -> Result<bool, String> {
+    let Some(held) = running()
+        .lock()
+        .ok()
+        .and_then(|r| r.get(&slot(home, name, s)).cloned())
+    else {
+        return Ok(false);
+    };
+    if held == PENDING || held == ASKED {
+        return Ok(true);
+    }
+    Ok(super::lock(registry)?
+        .session_of(&held)
+        .is_ok_and(|x| x.state == crate::api::SessionState::Running))
+}
+fn claim(home: &Path, name: &str, s: &str, by: &str) {
+    if let Ok(mut r) = running().lock() {
+        r.insert(slot(home, name, s), by.to_string());
+    }
+}
+/// The owner said Not now on a card, or its start failed: the subject is free again.
+pub(crate) fn release(home: &Path, name: &str, s: &str) {
+    if let Ok(mut r) = running().lock() {
+        r.remove(&slot(home, name, s));
+    }
+}
+/// A fire that started nothing: its slot of the hour and its subject go back.
+fn give_back(home: &Path, name: &str, at: u64, about: Option<&str>) {
+    if let Some(s) = about {
+        release(home, name, s);
+    }
+    let Ok(_w) = WRITE.lock() else { return };
+    let Ok(mut all) = load(home) else { return };
+    if let Some(t) = all.iter_mut().find(|t| t.name == name)
+        && let Some(i) = t.fired.iter().position(|f| *f == at)
+    {
+        t.fired.remove(i);
+        let _ = save(home, all);
+    }
+}
+
+/// The owner's Start on an asking trigger's card: the subject the fire took is the started session's now.
+pub(crate) fn start_card(
+    registry: &Mutex<Sessions>,
+    stopping: &AtomicBool,
+    home: &Path,
+    name: &str,
+    run: &Run,
+    about: Option<&str>,
+) -> Result<String, String> {
+    let started = start(
+        registry,
+        stopping,
+        home,
+        name,
+        run,
+        crate::pressure::Who::Window,
+    );
+    match (&started, about) {
+        (Ok(id), Some(s)) => claim(home, name, s, id),
+        (Err(_), Some(s)) => release(home, name, s),
+        _ => {}
+    }
+    started
 }
 
 /// Starts a trigger's run (its `auto` fire, or the owner's Start on its card) and records it as the last fire.
@@ -463,20 +548,16 @@ pub(crate) fn start(
             reason: Some(e.chars().take(200).collect()),
         },
     };
-    let counts = result.is_ok();
-    record(home, name, now, last, counts)?;
+    record(home, name, last)?;
     if let Err(e) = &result {
         eprintln!("trigger {name}: {e}");
     }
     result
 }
-fn record(home: &Path, name: &str, now: u64, last: Last, counts: bool) -> Result<(), String> {
+fn record(home: &Path, name: &str, last: Last) -> Result<(), String> {
     let _w = WRITE.lock().map_err(|_| "triggers unavailable")?;
     let mut all = load(home)?;
     if let Some(t) = all.iter_mut().find(|t| t.name == name) {
-        if counts {
-            t.fired.push(now);
-        }
         t.last = Some(last);
     }
     save(home, all)

@@ -67,6 +67,18 @@ export function ScheduleCard({ d, sessions, core, onAnswer, t }: { d: Decision; 
       setBusy(false);
     }
   };
+  // A trigger's third answer: switch the trigger off, then this card's Not now.
+  const triggerOff = async () => {
+    setErr(null);
+    setBusy(true);
+    try {
+      await core.request({ op: 'trigger', action: { do: 'pause', name: ask.id, paused: true } });
+      await onAnswer(d, { type: 'deny' }, true);
+    } catch (e) {
+      setErr(e);
+      setBusy(false);
+    }
+  };
   const next = twice && row ? nextExact(t, row) : '';
   const title = twice ? t('look8.card.failedTwice') : ask.change === 'failed' ? t('look8.card.failedTitle') : t(`schedule.card.title.${ask.change}` as Key);
   // A trigger's card names a trigger, not a row of the Schedules list.
@@ -91,7 +103,7 @@ export function ScheduleCard({ d, sessions, core, onAnswer, t }: { d: Decision; 
         ) : (
           <b>{plain(ask.run.label)}</b>
         )}{' '}
-        · {trigger ? t('schedule.card.fromTrigger', { name: ask.id ?? '' }) : whenWords(t, ask.when)}
+        · {trigger ? `${t('schedule.card.fromTrigger', { name: ask.id ?? '' })} · ${ask.run.kind} · ${ask.run.project.split('/').filter(Boolean).at(-1) ?? ask.run.project}` : whenWords(t, ask.when)}
         {level && (
           <>
             {' · '}
@@ -130,6 +142,11 @@ export function ScheduleCard({ d, sessions, core, onAnswer, t }: { d: Decision; 
             <button type="button" className="b" data-act={failed ? 'dismiss' : 'not-now'} disabled={busy} onClick={() => void send({ type: 'deny' })}>
               {t(failed ? 'own.ans.dismiss' : 'lead.roleCard.notNow')}
             </button>
+            {trigger && (
+              <button type="button" className="b" data-act="trigger-off" disabled={busy} onClick={() => void triggerOff()}>
+                {t('schedule.card.triggerOff')}
+              </button>
+            )}
           </>
         )}
       </div>

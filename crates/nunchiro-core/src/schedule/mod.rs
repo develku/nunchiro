@@ -975,11 +975,14 @@ pub fn fire(
     for entry in &again {
         let _ = run_entry(registry, stopping, entry, now_ms, Who::Window);
     }
-    // The owner's Start on a trigger's card.
+    // The owner's Start on a trigger's card; the card goes once the start ran.
     let home = lock(registry).map(|s| s.home().to_path_buf());
-    for (name, run) in starts {
+    for (card, name, run, about) in starts {
         if let Ok(home) = &home {
-            let _ = triggers::start(registry, stopping, home, &name, &run, Who::Window);
+            let _ = triggers::start_card(registry, stopping, home, &name, &run, about.as_deref());
+            if let Ok(mut sessions) = lock(registry) {
+                let _ = sessions.queue.answer_owner(|i| i.id == card);
+            }
         }
     }
     due.into_iter()

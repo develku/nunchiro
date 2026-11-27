@@ -274,6 +274,7 @@ impl Sessions {
         name: &str,
         run: crate::schedule::Run,
         source: crate::schedule::triggers::Source,
+        subject: Option<String>,
     ) -> Result<(), String> {
         let from = match source {
             crate::schedule::triggers::Source::Cli => "the command line",
@@ -282,7 +283,7 @@ impl Sessions {
         let ask = queue::OwnerAsk::Schedule {
             change: "trigger".into(),
             id: Some(name.into()),
-            line: format!("Trigger {name} fired from {from}: start {}?", run.label),
+            line: format!("Trigger {name} fired from {from}"),
             place: run.project.clone(),
             run,
             when: crate::schedule::When {
@@ -290,7 +291,8 @@ impl Sessions {
                 daily: false,
                 days: vec![],
             },
-            reason: None,
+            // The subject the fire took (a pull request, an issue), so a Start or a Not now settles it.
+            reason: subject,
         };
         self.queue
             .ask_owner(&format!("trigger-{name}"), ask)
