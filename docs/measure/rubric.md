@@ -542,6 +542,20 @@ How far a user's agent team runs without the person stepping in.
 2. Peer tasks (p04, p11, p13): driven and timed in the running apps, one path rule, the lower of the step score and
    the time score, T1 from the download page. Reason: v1 counted steps from code, Nunchiro on its best path and the
    peers on their default path; one more step per task moved Usability from 86 to 53.
+   A later change, after the first drives: the seconds of a computer-use drive are a fixed user time per step plus
+   the app's own waits, where they were the wall time of the drive. The user time is the Keystroke-Level Model's (a
+   click 2.73 s, a key or a typed field 1.35 s + 0.28 s per key or character); a wait runs from the time stamped
+   right before a step's input to the first picture, in a time-stamped recording of the app's window, that shows the
+   screen ready for the next step or the done state. The apps of a run are driven in one session and take turns, and
+   a peer's seconds are not carried into a later run (its steps are, while its version is the same). Reason: by
+   computer use the wall time measures the driver, not the app. The same four-step path took 7 s from a driver that
+   sent its steps without looking and 27 s from one that looked before each step, and the peers had been driven at
+   a third pace, so "every app driven the same way" could not be met by wall time, and no wall time could be kept
+   for a run with another driver. With a fixed user time the time score differs from the step score only by the
+   app's waits and by the kind of its steps (a key is quicker than a pointed click), which is what "a short path with
+   long waits does not win" asks for. Not looser: every wait counts in full, with the tool's own time to deliver the
+   input inside it, and the peers are driven again in every run. A hand drive with a recording is unchanged, the
+   score formula is unchanged, and no seconds of a drive made before this change count.
 3. Speed (p15): the warm launch is measured on a home with 20 sessions and a 5,000-event conversation, 100 at 0.3 s
    and 0 at 1.5 s (v1: 0.5 and 3.0 on an empty home); the cold launch's 0 point moves from 5.0 to 3.5 s; terminal key
    to paint p95 replaces "send to agent", which every local socket passed. "Send to agent" is still measured and shown.
