@@ -291,3 +291,71 @@ fn a_check_replaces_what_an_agent_sends_but_never_the_owners_words() {
     wait(&to, "replaced by the plugin");
     assert!(!read(&to).contains("agent words"));
 }
+
+/// Shell sessions in `c`'s user folder: `to` echoes what it gets; `from` runs `script` (from inside its session, so as
+/// an agent) and then `cat`. Returns `to`'s id and a reader of its screen.
+fn pair(c: &Core, script: &str) -> (String, impl Fn() -> String + use<>) {
+    let project = user(&c.home);
+    let start = |name: &str, run: &str| {
+        let out = ok(
+            &c.home,
+            &[
+                "agent",
+                "start",
+                name,
+                "--kind",
+                "shell",
+                "--project",
+                project.to_str().unwrap(),
+                "--",
+                "/bin/sh",
+                "-c",
+                run,
+            ],
+        );
+        let v: Value = serde_json::from_str(&out).unwrap();
+        v["session"]["id"].as_str().unwrap().to_string()
+    };
+    let to = start("to", "echo READY; exec cat");
+    let read = {
+        let (home, owner, to) = (c.home.clone(), c.owner.clone(), to.clone());
+        move || {
+            let r = call(&home, &owner, json!({"op": "read", "id": to}));
+            let bytes: Vec<u8> = r["Ok"]["data"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|b| b.as_u64().map(|b| b as u8))
+                .collect();
+            String::from_utf8_lossy(&bytes).into_owned()
+        }
+    };
+    let script = script
+        .replace("{to}", &to)
+        .replace("{bin}", env!("CARGO_BIN_EXE_nunchiro"));
+    start("from", &format!("{script}; exec cat"));
+    (to, read)
+}
+fn until(what: &str, read: &dyn Fn() -> String) {
+    let end = Instant::now() + Duration::from_secs(15);
+    while !read().contains(what) {
+        assert!(Instant::now() < end, "{what} never arrived: {}", read());
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn every_way_an_agent_sends_text_is_checked() {
+    let c = core("pga");
+    plugin(
+        &c.home,
+        "prompt.send.before",
+        r#"printf '{"allow": true, "text": "replaced by the plugin"}\n'"#,
+        "refuse",
+        true,
+    );
+    // `session send-text`, then a room reply: both from inside an agent's session.
+    let (_, read) = pair(&c, "'{bin}' session send-text {to} 'raw agent words'");
+    until("replaced by the plugin", &read);
+    assert!(!read().contains("raw agent words"), "{}", read());
+}
