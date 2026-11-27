@@ -454,7 +454,8 @@ pub(crate) fn spawn(
                 if let Err(e) = pass(&registry, &home, &mut beats, now) {
                     eprintln!("auto-advance: {e}");
                 }
-                // Not part of auto-advance: a lead hears what a landing freed in every place.
+                // Not part of auto-advance: a lead hears what a landing freed in every place (typed into its box where
+                // auto-advance is on, in the room elsewhere).
                 release(&registry, &home);
             }
         })
@@ -1108,7 +1109,10 @@ pub(crate) fn release(registry: &Mutex<crate::sessions::Sessions>, home: &Path) 
             let Some(seat) = sessions.seat_of(&r.lead) else {
                 return Ok(None);
             };
-            if sessions.core_may(&seat).is_err() {
+            // The core types a line into the lead's box only where auto-advance is on (`core_may`); elsewhere the lead
+            // hears it in the room, as it hears the user's choices for its place.
+            let typed = sessions.core_may(&seat).is_ok();
+            if !typed && !sessions.seat_facts(&seat).live {
                 return Ok(None);
             }
             let now = ledger.mark_released(&r.blocker, &r.waiters)?;
@@ -1124,6 +1128,18 @@ pub(crate) fn release(registry: &Mutex<crate::sessions::Sessions>, home: &Path) 
                 let ws: Vec<&Task> = all.iter().filter(|t| now.contains(&t.id)).collect();
                 release_line(a, &ws, &all)
             };
+            if !typed {
+                let note = crate::room::TeamNote {
+                    what: "after".into(),
+                    worktree: None,
+                    name: None,
+                    branch: None,
+                    merged: None,
+                    seat: None,
+                };
+                sessions.team_note(&r.place, &r.lead, None, line, note);
+                return Ok(None);
+            }
             sessions.core_line(&seat, line.clone())?;
             Ok(Some((seat, line)))
         })();

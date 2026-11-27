@@ -1234,7 +1234,7 @@ fn a_waiting_task_gets_no_reviewer_and_its_lead_hears_its_release_once() {
 // box then), once.
 #[test]
 fn with_auto_advance_off_the_lead_hears_a_landing_in_the_room() {
-    let (registry, home, lead, task) = lead_core("advance-after-off", None);
+    let (registry, home, _lead, task) = lead_core("advance-after-off", None);
     let ledger = Ledger::open(&home);
     ledger.set_place(&home, None, None, Some(false)).unwrap();
     let (first, _) = ledger
