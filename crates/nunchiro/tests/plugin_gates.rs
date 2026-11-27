@@ -402,3 +402,18 @@ fn the_send_log_keeps_the_original_and_the_plugin() {
     assert_eq!(row["replaced"]["plugin"], "Guard", "{row}");
     assert_eq!(row["replaced"]["original"], "first words", "{row}");
 }
+
+#[test]
+fn the_sheet_says_what_a_check_can_do() {
+    let c = core("pgw");
+    plugin(&c.home, "prompt.send.before", "exit 0", "allow", false);
+    let view = call(
+        &c.home,
+        &c.owner,
+        json!({"op": "approval_status", "name": "plugin:guard"}),
+    );
+    let part = &view["Ok"]["view"]["parts"][0];
+    assert_eq!(part["kind"], "check");
+    assert_eq!(part["check_on"], "prompt.send.before", "{view}");
+    assert_eq!(part["on_error"], "allow", "{view}");
+}
