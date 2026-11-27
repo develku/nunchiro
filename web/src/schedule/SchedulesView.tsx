@@ -110,7 +110,10 @@ export function SchedulesView({ core, t, sessions, open, where }: { core: CoreCl
     const ran = last ? dayWords(t, last.at) : '';
     const reason = last?.reason ? knownOrRaw(t, last.reason) : '';
     const result = !last ? t('schedule.never') : !last.result ? t('schedule.running') : t(`schedule.result.${last.result}` as Key);
-    const said = !last ? '' : !last.result ? `${t('schedule.lastRun')}: ${result}` : last.result === 'failed' || last.result === 'held' ? `${t('schedule.lastRun')} ${result}: ${reason || ran}` : `${t('schedule.lastRun')} ${result} · ${ran}`;
+    // A run held for low memory that waits to run by itself (pressure.rs WAITING_SCHEDULE) reads as waiting; a skipped slot
+    // says why when it has a reason (dropped after the longest wait: "low memory").
+    const waits = last?.result === 'held' && last.reason === 'waiting for memory';
+    const said = !last ? '' : !last.result || waits ? `${t('schedule.lastRun')}: ${waits ? reason : result}` : last.result === 'failed' || last.result === 'held' || (last.result === 'skipped' && reason) ? `${t('schedule.lastRun')} ${result}: ${reason || ran}` : `${t('schedule.lastRun')} ${result} · ${ran}`;
     const session = live(last?.session) ? last!.session! : null;
     const glyph = dot && (
       <i className="tdot" data-s={dot} aria-hidden>

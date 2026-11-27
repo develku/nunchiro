@@ -1,5 +1,6 @@
 // A window start held while the Mac is low on memory says so in a short line with Start anyway (mockup
-// docs/design/memory-hold-m8/index.html, panel 2). The core's hold is faked here: its `start` of an agent answers the
+// docs/design/memory-hold-m8/index.html, panel 2). The tree's + and the + menu wait for memory instead
+// (memory-wait.spec.ts); refused by a core without the waiting list, they show the same note. The core's hold is faked here: its `start` of an agent answers the
 // window's hold sentence, and a `start_anyway` goes through as its start (crates/nunchiro/tests/sessions.rs checks the
 // core's side, at a faked critical reading).
 import { execFileSync } from 'node:child_process';
@@ -22,7 +23,9 @@ async function holdStarts(app: Page, prompts: string[] = [], snap?: (s: Snap & R
     ws.onMessage((m) => {
       const frame = typeof m === 'string' ? JSON.parse(m) : null;
       const r = frame?.request;
-      if (r?.op === 'start' || r?.op === 'start_anyway') sent.push(r.op);
+      if (r?.op === 'start' || r?.op === 'start_anyway' || r?.op === 'start_or_wait') sent.push(r.op);
+      // A start that would wait for memory, refused as a core without the waiting list does: the note's fallback.
+      if (r?.op === 'start_or_wait') return ws.send(JSON.stringify({ id: frame.id, response: { Err: HELD } }));
       if (r?.op === 'agent_prompt') prompts.push(r.text);
       if (r?.op === 'start' && r.session?.kind !== 'shell') return ws.send(JSON.stringify({ id: frame.id, response: { Err: HELD } }));
       if (r?.op === 'start_anyway' && r.start?.op === 'start') return server.send(JSON.stringify({ ...frame, request: r.start }));
@@ -64,7 +67,7 @@ test('held_start_note_starts_anyway: the tree\'s + held for low memory says so w
   expect(agents(core)).toHaveLength(0);
   await anyway.click();
   await expect.poll(() => agents(core).map((s) => s.project), { timeout: 15_000 }).toEqual([p]);
-  expect(sent).toEqual(['start', 'start_anyway']);
+  expect(sent).toEqual(['start_or_wait', 'start_anyway']);
   await expect(app.locator('.tab[aria-selected="true"]')).toHaveAttribute('data-tab', agents(core)[0].id);
   await expect(bar).not.toContainText('low on memory');
 });
@@ -77,7 +80,7 @@ test('held_start_note_dismissed_starts_nothing: × closes the note and starts no
   await bar.getByRole('button', { name: 'Dismiss' }).click();
   await expect(bar).not.toContainText('low on memory');
   await app.waitForTimeout(500);
-  expect(sent).toEqual(['start']);
+  expect(sent).toEqual(['start_or_wait']);
   expect(agents(core)).toHaveLength(0);
 });
 
@@ -91,7 +94,7 @@ test('held_start_in_new_tab_menu_starts_anyway: the + menu says the hold in its 
   await expect(alert).not.toContainText('Not started:');
   await alert.getByRole('button', { name: 'Start anyway' }).click();
   await expect.poll(() => agents(core).map((s) => s.project), { timeout: 15_000 }).toEqual([p]);
-  expect(sent).toEqual(['start', 'start_anyway']);
+  expect(sent).toEqual(['start_or_wait', 'start_anyway']);
   await expect(pop).toHaveCount(0);
 });
 

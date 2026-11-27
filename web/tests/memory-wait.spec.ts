@@ -36,6 +36,7 @@ const setup = async (app: Page, core: Core, answers?: Record<string, unknown>) =
   const p = core.project('nunchiro');
   core.shell(p, 'main-shell');
   openQuiet(core);
+  await app.addInitScript(() => localStorage.getItem('nunchiro.settings.v1') === null && localStorage.setItem('nunchiro.settings.v1', JSON.stringify({ features: { 'onboarding.default_agent': 'claude' } })));
   const fake = await fakeWaiting(app, answers);
   await openWindow(app);
   await fake.say([]);
@@ -97,7 +98,7 @@ test('memory_wait_tree_plus_waits: the tree\'s + held for low memory waits inste
   const { sent } = await setup(app, core, { start_or_wait: { type: 'memory_waiting', text: 'held' } });
   const head = app.locator('.row.head', { hasText: 'nunchiro' });
   await head.hover();
-  await head.getByRole('button', { name: /^New .* session in nunchiro$/ }).click();
+  await head.getByRole('button', { name: 'New Claude session in nunchiro' }).click();
   await expect.poll(() => sent.map((r) => r.op).filter((op) => op.startsWith('start'))).toEqual(['start_or_wait']);
   await app.waitForTimeout(300);
   await expect(app.locator('.pane-status')).not.toContainText('not started');

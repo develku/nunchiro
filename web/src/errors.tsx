@@ -13,8 +13,10 @@ type T = (key: Key, args?: Record<string, string | number>) => string;
 const LOW_MEMORY = /^(Your|This) Mac is low on memory, so the new session was not started/;
 /** Whether a start was refused by the low-memory hold, which the owner's "Start anyway" passes. */
 export const isLowMemory = (e: unknown) => LOW_MEMORY.test(rawError(e));
-/** A window start as sent: `anyway` wraps it as the owner's Start anyway, past a low-memory hold. */
-export const startOp = (start: { op: 'start'; [k: string]: unknown }, anyway = false) => (anyway ? { op: 'start_anyway', start } : start);
+/** A window start as sent: `anyway` wraps it as the owner's Start anyway, past a low-memory hold; `wait` as a start that,
+ *  when held, waits for memory and starts by itself (its reply is `memory_waiting`, the status bar lists it). */
+export const startOp = (start: { op: 'start'; [k: string]: unknown }, anyway = false, wait = false) =>
+  anyway ? { op: 'start_anyway', start } : wait ? { op: 'start_or_wait', start } : start;
 
 // [pattern, what happened, what to do]. The web gets only the core's message string (no code), so patterns are the
 // core's own wording. Order matters: the first match wins. A named group (`(?<name>...)`) fills that placeholder.
@@ -57,6 +59,8 @@ export const KNOWN: [RegExp, Key, Key?][] = [
   // Ticket 1059, session_context.rs may_refresh: the Context widget's Show breakdown raced a turn, a question or typed words.
   [/^context breakdown not sent: (?<why>.+)$/, 'err.contextNotSent'],
   // Ticket 536: the rest of 534's list that the window can show (the ticket's table names each place).
+  // pressure/wait.rs `answer`: Start anyway or Cancel on a start that left the list meanwhile (it started or was dropped).
+  [/^this start is no longer waiting for memory$/, 'err.memWait.gone'],
   [/^answer the waiting decision first$/, 'err.decisionWaiting', 'err.decisionWaiting.todo'], // sessions.rs:6284
   [/^approve the agent first$/, 'err.agentNotApproved', 'err.agentNotApproved.todo'], // acp/add.rs:187,224
   [/^start a session in a project folder first$/, 'agents.sheet.startFirst'], // acp/add.rs:318

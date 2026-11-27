@@ -650,7 +650,7 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
           />
         )}
       </div>
-      <StatusBar {...{ current, t, core, sessions, ordered, open, store, editing, moved1, pane, paneNote, setPaneNote, fold, foldName, connected, manageAccounts }} />
+      <StatusBar {...{ current, t, core, sessions, ordered, open, store, editing, moved1, pane, paneNote, setPaneNote, fold, foldName, connected, manageAccounts, addTab }} />
       {arrange.toast && (
         <div className="toast" role="status" key={arrange.toast.n}>
           <span>{arrange.toast.text}</span>

@@ -1,0 +1,104 @@
+/* The starts waiting for memory (mockup memory-hold-m8, panel 3): the limit clock's yellow, quiet tint buttons, no × (Cancel
+   does that), and the list in the usage popover's glass. */
+.memwait,
+.memwait-n {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-8);
+  min-width: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+.memwait-n {
+  gap: 5px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--r-6);
+}
+.memwait-n.on,
+.memwait-n:hover {
+  background: var(--tint-1);
+}
+.memwait-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.memwait .clk,
+.memwait-n .clk,
+.memwait-pop .clk {
+  display: inline-flex;
+  flex: none;
+  color: var(--warn);
+}
+.memwait .btn,
+.memwait-pop .btn {
+  flex: none;
+  border-color: transparent;
+  background: var(--control-quiet-bg);
+  color: var(--text);
+  font-weight: 500;
+  padding: 1px 7px;
+  font-size: var(--fs-1);
+}
+.memwait .btn:hover,
+.memwait-pop .btn:hover {
+  background: var(--control-quiet-hover);
+}
+.memwait .btn.q,
+.memwait-pop .btn.q {
+  background: none;
+  color: var(--muted);
+}
+.memwait .btn.q:hover,
+.memwait-pop .btn.q:hover {
+  background: var(--tint-1);
+}
+.memwait-pop {
+  position: fixed;
+  z-index: 60;
+  bottom: 30px;
+  width: 400px;
+  max-width: calc(100vw - 8px);
+  box-sizing: border-box;
+  padding: 14px 14px 8px;
+  border-radius: var(--r-16);
+  color: var(--text);
+  white-space: normal;
+  --focus-ring: var(--ring-focus);
+}
+.memwait-pop h4 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-2);
+  font-weight: 500;
+}
+.memwait-pop p {
+  margin: 2px 0 8px;
+  color: var(--muted);
+  font-size: var(--fs-1);
+}
+.memwait-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  padding: 6px 0;
+  border-top: 1px solid var(--hover);
+}
+.memwait-row .n {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.memwait-row b {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.memwait-row small {
+  color: var(--muted);
+  font-size: var(--fs-1);
+}
