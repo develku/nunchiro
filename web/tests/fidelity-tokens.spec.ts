@@ -80,7 +80,7 @@ plain('tokens_cited: every custom property in tokens.css names its ko/ mockup so
 
 plain('r8_values_gone: the retired R8 surface and focus hexes are out of styles.css, tree.css and tokens.css', () => {
   const r8 = /#1c1c1c|#d4d4d4|#e9e9e9|#696969|#e8590c|#1b1b1b/i;
-  for (const f of ['styles.css', 'tree/tree.css', 'tokens.css', 'chat/chat.css', 'chat/problem.css']) expect(read(f).split('\n').filter((l) => r8.test(l)), f).toEqual([]);
+  for (const f of ['styles.css', 'layout.css', 'keys.css', 'chrome.css', 'tree/tree.css', 'tokens.css', 'chat/chat.css', 'chat/problem.css']) expect(read(f).split('\n').filter((l) => r8.test(l)), f).toEqual([]);
   expect(read('chat/problem.css')).not.toContain('var(--bad,');
 });
 
