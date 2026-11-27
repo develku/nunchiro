@@ -359,3 +359,17 @@ fn every_way_an_agent_sends_text_is_checked() {
     until("replaced by the plugin", &read);
     assert!(!read().contains("raw agent words"), "{}", read());
 }
+
+#[test]
+fn two_checks_at_once_each_read_their_own_message() {
+    let c = core("pgc");
+    // The check echoes the text it was given, after a pause, so two runs overlap.
+    let echo = r#"t=$(/usr/bin/sed -n 's/.*"text":"\([a-z]*\)".*/\1/p' "$NUNCHIRO_CONTEXT"); /bin/sleep 1; printf '{"allow": true, "text": "seen-%s"}\n' "$t""#;
+    plugin(&c.home, "prompt.send.before", echo, "refuse", true);
+    let (_, read) = pair(
+        &c,
+        "'{bin}' agent send {to} alpha & /bin/sleep 0.2; '{bin}' agent send {to} beta; wait",
+    );
+    until("seen-alpha", &read);
+    until("seen-beta", &read);
+}
