@@ -612,6 +612,13 @@ pub(crate) fn serve(
             let task = named(&ask.id)?;
             let session = ask.session.as_deref().ok_or("requires a session id")?;
             let (label, cwd) = lock()?.seat_place(session, &task.place)?;
+            // A writer started by hand and assigned waits with its task as a staffed one does.
+            if crate::roles::of(&home, &label).1 {
+                let waits = blockers(&task, &ledger.list()?);
+                if !waits.is_empty() {
+                    return Err(not_started(&task, &waits));
+                }
+            }
             // A seat inside one of the task's worktrees is under the one-writer rule like a start there.
             let worktree = task.worktrees.iter().find(|w| **w == cwd).cloned();
             if let Some(w) = &worktree

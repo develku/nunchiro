@@ -862,8 +862,7 @@ impl Ledger {
                 }
             }
             let target = s.tasks[to].id.clone();
-            s.tasks
-                .retain(|t| t.id == target || !(t.auto && t.closed.is_none() && empty(t)));
+            drop_unused(&mut s.tasks, Some(&target), now);
             let t = s
                 .tasks
                 .iter_mut()
@@ -932,8 +931,7 @@ impl Ledger {
                     changed = true;
                 }
             }
-            s.tasks
-                .retain(|t| !(t.auto && t.closed.is_none() && empty(t)));
+            drop_unused(&mut s.tasks, None, now);
             Ok(((), changed))
         })
     }
@@ -1296,6 +1294,8 @@ impl Ledger {
             // 11-17: a lead made its worktrees, then its own tasks, and the view read "2 dropped today").
             if how == "dropped"
                 && closed.auto
+                // Its waiters read it as dropped and ask; gone, they would start as if it had landed.
+                && !s.tasks.iter().any(|w| w.closed.is_none() && w.after.contains(&closed.id))
                 && closed.seats.is_empty()
                 && closed.told.is_empty()
                 && closed.review.is_none()
@@ -1332,6 +1332,30 @@ fn in_project(t: &Task) -> bool {
             .and_then(|out| String::from_utf8(out).ok())
             .is_some_and(|base| base.trim() == commit)
     })
+}
+
+/// An automatic task left with nothing (no worktree, seat, word or review) goes, but `keep`; one an open task waits for
+/// closes as dropped instead, so its waiters ask rather than start as if it had landed.
+fn drop_unused(tasks: &mut Vec<Task>, keep: Option<&str>, now: u64) {
+    let unused = |t: &Task| Some(t.id.as_str()) != keep && t.auto && t.closed.is_none() && empty(t);
+    let waited: Vec<String> = tasks
+        .iter()
+        .filter(|t| {
+            unused(t)
+                && tasks
+                    .iter()
+                    .any(|w| w.closed.is_none() && w.after.contains(&t.id))
+        })
+        .map(|t| t.id.clone())
+        .collect();
+    for t in tasks.iter_mut().filter(|t| waited.contains(&t.id)) {
+        t.closed = Some(Closed {
+            at: now,
+            how: "dropped".into(),
+        });
+        t.updated = now;
+    }
+    tasks.retain(|t| !unused(t));
 }
 
 fn empty(t: &Task) -> bool {
