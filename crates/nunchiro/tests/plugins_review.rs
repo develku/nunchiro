@@ -253,3 +253,34 @@ fn a_draft_for_the_message_box_is_checked() {
         assert_eq!(r["Ok"]["run"]["output"].is_object(), !bad, "{script}: {r}");
     }
 }
+
+#[test]
+fn off_stops_a_running_part_and_remove_forgets_the_approval() {
+    let c = core("pro");
+    let dir = plugin(&c.home, "note", "/bin/sleep 4; echo late", "");
+    ok(&c.home, &["plugin", "allow", "p"]);
+    ok(&c.home, &["plugin", "on", "p"]);
+    assert_eq!(run(&c, false)["Ok"]["run"]["running"], true);
+    let t = Instant::now();
+    ok(&c.home, &["plugin", "off", "p"]);
+    let mut r = run(&c, true);
+    while r["Ok"]["run"]["running"] == true {
+        std::thread::sleep(Duration::from_millis(100));
+        r = run(&c, true);
+    }
+    assert!(
+        t.elapsed() < Duration::from_secs(3),
+        "the part was not stopped: {:?}",
+        t.elapsed()
+    );
+    assert!(r["Ok"]["run"]["output"]["text"] != "late\n", "{r}");
+    ok(&c.home, &["plugin", "remove", "p"]);
+    let moved = std::fs::read_dir(c.home.join("plugins/.removed"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    std::fs::rename(moved, &dir).unwrap();
+    assert!(ok(&c.home, &["plugin", "list"]).contains("not approved"));
+}
