@@ -462,6 +462,7 @@ pub(crate) fn forwarded(
             sessions.start_granted(&caller, &launch, true)
         })?; // v1a-22
         launch.committed = true;
+        drop(_sessions); // the record takes the registry lock itself
         crate::server::record_started_worktree(registry, worktree, &session);
         return Ok(Reply::Started { session });
     }
