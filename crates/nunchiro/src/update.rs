@@ -180,8 +180,21 @@ fn status(home: &Path) -> serde_json::Value {
     };
     let found = current_exe()
         .and_then(|exe| installed(&exe))
-        .and_then(|_| ready(&source, running()?));
+        .and_then(|bundle| {
+            let folder = bundle
+                .parent()
+                .ok_or("the installed bundle has no folder")?;
+            Ok((folder.join(WORK), running()?))
+        });
     match found {
+        Ok((work, running)) => offer(&source, &work, running, REPO),
+        Err(reason) => serde_json::json!({"state": "refused", "source": source, "reason": reason}),
+    }
+}
+
+/// What `status` says of the build in `source` for the build `running`.
+fn offer(source: &Path, _work: &Path, running: &str, _repo: Option<&str>) -> serde_json::Value {
+    match ready(source, running) {
         Ok(Some(stamp)) => {
             serde_json::json!({"state": "ready", "source": source, "commit": stamp.commit, "built": stamp.built})
         }

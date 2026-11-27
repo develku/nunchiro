@@ -1180,6 +1180,46 @@ fn main_decides_which_build_is_newer() {
     fs::remove_dir_all(work).unwrap();
 }
 
+#[test]
+fn status_offers_only_a_build_install_would_take() {
+    // A stale update folder holding an older build was offered as "New build ready", then refused at install.
+    let (url, c) = main_repo();
+    let dir = folder("offer", OWNER_ID);
+    let work = dir.join("work");
+    let running = &c[1][..9];
+    for (commit, repo, said) in [
+        (c[0].as_str(), Some(url.as_str()), "is not newer on main"),
+        (c[1].as_str(), Some(url.as_str()), ""),
+        (
+            c[2].as_str(),
+            Some(url.as_str()),
+            "is not on main's first-parent history",
+        ),
+        (&c[4][..12], Some(url.as_str()), "full 40-character sha"),
+        (
+            c[4].as_str(),
+            Some("file:///nonexistent/nunchiro-1082b"),
+            "main could not be fetched",
+        ),
+        (c[4].as_str(), None, "names no update repository"),
+    ] {
+        stamp_for(&dir, commit);
+        let said_now = offer(&dir, &work, running, repo);
+        assert_eq!(said_now["state"], "none", "{commit}: {said_now}");
+        let reason = said_now["reason"].as_str().unwrap_or_default();
+        assert!(reason.contains(said), "{commit}: {said_now}");
+    }
+    stamp_for(&dir, &c[4]);
+    let said_now = offer(&dir, &work, running, Some(url));
+    assert_eq!(said_now["state"], "ready", "{said_now}");
+    assert_eq!(said_now["commit"], c[4].as_str());
+    assert!(
+        fs::read_dir(&work).map_or(true, |mut d| d.next().is_none()),
+        "the check leaves nothing in the work folder"
+    );
+    fs::remove_dir_all(dir).unwrap();
+}
+
 /// Ticket 1112: a smart-HTTP copy of `main_repo` on 127.0.0.1 that answers 401 to any request without the
 /// `x-access-token:tok1112` Basic sign-in, as a private GitHub repository does. Its URL. One per test process.
 /// Ticket 1142: smart HTTP (`git http-backend`), as GitHub serves, so `main_line`'s `--filter=tree:0` is honoured;
