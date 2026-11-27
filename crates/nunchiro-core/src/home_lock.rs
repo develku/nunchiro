@@ -276,10 +276,45 @@ pub fn nunchiro_line(command: &str) -> bool {
         ])
 }
 
+const SETUP: &str = "Home seat: a setup step of its brief";
+
+/// The two setup steps a seat's brief names, unasked in every mode (they asked before the seat was ready):
+/// `nunchiro task list`, and `cat` of a bot's SOUL file in this core's `team/<bot>/` folder (a plain file, no link:
+/// another session could plant one). Exactly that line: anything more asks as before.
+pub fn setup_line(home: &Path, command: &str) -> bool {
+    if command.contains(['\n', '\r']) {
+        return false; // one command only: a line break runs each word as its own
+    }
+    let words: Vec<&str> = command.split_whitespace().collect();
+    match words[..] {
+        ["nunchiro", "task", "list"] => true,
+        ["cat", path]
+            if !path.contains(['\'', '"', '$', '`', '\\', ';', '&', '|', '<', '>', '(', ')']) =>
+        {
+            let path = Path::new(path);
+            let team = std::fs::canonicalize(home.join("team"));
+            path.file_name() == Some("SOUL.md".as_ref())
+                && path.components().all(|c| {
+                    matches!(
+                        c,
+                        std::path::Component::RootDir | std::path::Component::Normal(_)
+                    )
+                })
+                && std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_file())
+                && path
+                    .parent()
+                    .and_then(Path::parent)
+                    .and_then(|t| std::fs::canonicalize(t).ok())
+                    .is_some_and(|t| team.is_ok_and(|team| team == t))
+        }
+        _ => false,
+    }
+}
+
 /// Fail closed: a built-in runs only from `BUILTIN`, an MCP tool only by exact read name or as a spent outward call.
 /// `input` is the call's `tool_input` (a Bash line is read from it). Fable review R3: the file tools are never allowed
 /// by the hook (Claude's own mode and `--restricted` decide them), so no path outside the folder gets a hook yes.
-pub fn decide(tool: &str, input: &Value, mode: Mode) -> Decision {
+pub fn decide(tool: &str, input: &Value, mode: Mode, home: &Path) -> Decision {
     let full = mode >= Mode::Full;
     let allow_full = if full {
         Decision::Allow(FULL)
@@ -289,6 +324,14 @@ pub fn decide(tool: &str, input: &Value, mode: Mode) -> Decision {
     let Some(rest) = tool.strip_prefix("mcp__") else {
         return match tool {
             "Bash" if mode == Mode::FullShell => Decision::Allow(FULL),
+            "Bash"
+                if input
+                    .get("command")
+                    .and_then(Value::as_str)
+                    .is_some_and(|c| setup_line(home, c)) =>
+            {
+                Decision::Allow(SETUP)
+            }
             "Bash"
                 if full
                     && input
@@ -427,7 +470,8 @@ mod tests {
     fn hook_fails_closed_and_shell_follows_the_mode() {
         let none = json!({});
         let bash = |c: &str| json!({"command": c});
-        let d = |tool: &str, m| decide(tool, &none, m);
+        let home = Path::new("/nonexistent-home");
+        let d = |tool: &str, m| decide(tool, &none, m, home);
         for tool in [
             "mcp__claude_ai_Gmail__search_threads",
             "mcp__claude_ai_Google_Calendar__list_events",
@@ -473,7 +517,7 @@ mod tests {
         }
         // Decision B: Bash asks in Full access (one plain `nunchiro` line on the verb list excepted) and not in "Full
         // access, shell included".
-        let b = |c: &str, m| decide("Bash", &bash(c), m);
+        let b = |c: &str, m| decide("Bash", &bash(c), m, home);
         assert!(matches!(b("echo hi", Mode::Full), Decision::Ask(_)));
         for line in [
             "nunchiro task list",
@@ -483,7 +527,7 @@ mod tests {
             assert!(matches!(b(line, Mode::Full), Decision::Allow(_)), "{line}");
         }
         assert!(matches!(
-            b("nunchiro task list", Mode::AcceptEdits),
+            b("nunchiro agent list", Mode::AcceptEdits),
             Decision::Ask(_)
         ));
         for line in [
@@ -511,6 +555,48 @@ mod tests {
             (named("full-access-shell"), named("bogus")),
             (Mode::FullShell, Mode::Ask)
         );
+    }
+
+    // A bot-task trial: the chief of staff's first turn asked twice before it was ready, for the two setup steps its
+    // brief names. Those two run unasked in every mode; any other line, file or form still asks.
+    #[test]
+    fn the_seats_own_setup_steps_run_unasked() {
+        let home = std::env::temp_dir().join(format!("home-lock-setup-{}", std::process::id()));
+        let bot = home.join("team/593a1861");
+        std::fs::create_dir_all(&bot).unwrap();
+        std::fs::write(bot.join("SOUL.md"), "who I am").unwrap();
+        std::fs::write(bot.join("MEMORY.md"), "notes").unwrap();
+        std::os::unix::fs::symlink("/etc/hosts", bot.join("LINK.md")).unwrap();
+        let other = home.join("team/other");
+        std::fs::create_dir_all(&other).unwrap();
+        std::os::unix::fs::symlink("/etc/hosts", other.join("SOUL.md")).unwrap();
+        let b = |c: &str, m| decide("Bash", &json!({ "command": c }), m, &home);
+        let soul = format!("cat {}", bot.join("SOUL.md").display());
+        for m in [Mode::Ask, Mode::AcceptEdits, Mode::Full] {
+            assert!(
+                matches!(b("nunchiro task list", m), Decision::Allow(_)),
+                "{m:?}"
+            );
+            assert!(matches!(b(&soul, m), Decision::Allow(_)), "{m:?}");
+        }
+        for line in [
+            "nunchiro task list --all-places".to_string(),
+            "nunchiro agent list".into(),
+            "nunchiro task list; rm -rf x".into(),
+            "nunchiro\ntask\nlist".into(),
+            soul.replace(' ', "\n"),
+            format!("{soul}; rm -rf x"),
+            format!("{soul} /etc/hosts"),
+            format!("cat {}", bot.join("MEMORY.md").display()),
+            format!("cat {}", bot.join("LINK.md").display()),
+            format!("cat {}", other.join("SOUL.md").display()),
+            format!("cat {}", bot.join("../593a1861/SOUL.md").display()),
+            format!("cat {}", home.join("SOUL.md").display()),
+            format!("less {}", bot.join("SOUL.md").display()),
+        ] {
+            assert!(matches!(b(&line, Mode::Ask), Decision::Ask(_)), "{line}");
+        }
+        let _ = std::fs::remove_dir_all(home);
     }
 
     /// A stand-in core for `OutboxSpend` (lane 2's rule: the card id once for the one approved hash, Err otherwise); it
