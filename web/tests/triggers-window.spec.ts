@@ -6,7 +6,7 @@ import { expect, openWindow, test } from './fixtures';
 import { owner } from './leader-990';
 import { openWidget } from './schedules-seed';
 
-type Listed = { name: string; on: string; mode: string; paused?: boolean; secret?: string; github?: { repo: string; event: string; label?: string }; run: { task?: string } };
+type Listed = { name: string; on: string; mode: string; paused?: boolean; secret?: string; github?: { repo: string; event: string; label?: string; any_author?: boolean }; run: { task?: string } };
 const triggers = (core: Parameters<typeof owner>[0]) => owner(core, { op: 'trigger', action: { do: 'list' } }).Ok.triggers as Listed[];
 
 for (const scheme of ['light', 'dark'] as const) {
@@ -26,6 +26,8 @@ for (const scheme of ['light', 'dark'] as const) {
     let form = section.getByRole('form', { name: 'New trigger' });
     await form.getByRole('combobox', { name: 'When' }).selectOption({ label: 'GitHub: checks fail on my pull request' });
     await form.getByRole('textbox', { name: 'Repository' }).fill('o/r');
+    // Only the owner's own pull requests unless the owner says anyone's (a stranger's could start a run).
+    await expect(form.getByRole('checkbox', { name: "Anyone's, not only mine" })).not.toBeChecked();
     await form.getByRole('textbox', { name: 'Name' }).fill('fix checks');
     await form.getByRole('textbox', { name: 'What' }).fill('Find why the checks failed and fix it.');
     await form.getByRole('button', { name: 'Add', exact: true }).click();
@@ -34,6 +36,7 @@ for (const scheme of ['light', 'dark'] as const) {
     await expect(fix).toContainText('not fired yet');
     await expect(fix.locator('.chip')).toHaveText('Ask me first');
     expect(triggers(core)).toMatchObject([{ name: 'fix-checks', on: 'github', mode: 'ask', github: { repo: 'o/r', event: 'checks_failed' }, run: { task: 'Find why the checks failed and fix it.' } }]);
+    expect(triggers(core)[0].github?.any_author).toBeUndefined();
 
     // A webhook trigger that starts by itself: the address shows, and the secret is shown once after Add.
     await section.getByRole('button', { name: 'Add trigger' }).click();

@@ -31,6 +31,11 @@ schedules, so an entry another program wrote or changed is refused.
   fires once for each open pull request whose checks failed or whose review asked for changes (once per head commit),
   or each open issue or pull request with the label. What is there when the core first reads it is the starting point
   and fires nothing; a core restart starts from what is there again. `gh` keeps the login; Nunchiro reads no token.
+  Pull request events watch your own pull requests (`--author @me`). `--any-author` (in the window, Anyone's) watches
+  everyone's: on a public repository a stranger's pull request could then start a run, and with `--auto` a run
+  with your agent's rights on code the stranger wrote. A fire that is held (its cards, its hour, a run of the same
+  pull request still at work) is tried again on the next read. A trigger paused and resumed fires what appeared
+  while it was off. A `gh` that fails (not installed, not logged in) shows as the trigger's last fire.
 
 ## Fire one
 

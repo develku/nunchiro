@@ -97,3 +97,8 @@
     grid-row: 1;
   }
 }
+.trig-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-6);
+}

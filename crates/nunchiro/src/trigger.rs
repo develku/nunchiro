@@ -10,7 +10,7 @@ use nunchiro_core::{
 use std::io::Read;
 use std::path::Path;
 
-const USAGE: &str = "usage: nunchiro trigger add <name> --on cli|webhook|github [--repo <owner/name> --event checks_failed|changes_requested|labeled [--issue-label <l>]] --kind claude|codex --project <dir> --task <text> [--label <name>] [--model <m>] [--effort <e>] [--auto] | list [--json] | fire <name> [--data @<file>|-] | pause <name> | resume <name> | remove <name>";
+const USAGE: &str = "usage: nunchiro trigger add <name> --on cli|webhook|github [--repo <owner/name> --event checks_failed|changes_requested|labeled [--issue-label <l>] [--any-author]] --kind claude|codex --project <dir> --task <text> [--label <name>] [--model <m>] [--effort <e>] [--auto] | list [--json] | fire <name> [--data @<file>|-] | pause <name> | resume <name> | remove <name>";
 
 pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
     let words: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -100,11 +100,14 @@ fn fire(name: &str, from: Option<&str>) -> Result<Action, String> {
 fn add(name: &str, rest: &[&str]) -> Result<Action, String> {
     let (mut on, mut kind, mut project, mut task, mut label, mut model, mut effort, mut mode) =
         (None, None, None, None, None, None, None, Mode::Ask);
-    let (mut repo, mut event, mut gh_label) = (None, None, None);
+    let (mut repo, mut event, mut gh_label, mut any_author) = (None, None, None, false);
     let mut i = 0;
     while i < rest.len() {
-        if rest[i] == "--auto" {
-            mode = Mode::Auto;
+        if rest[i] == "--auto" || rest[i] == "--any-author" {
+            match rest[i] {
+                "--auto" => mode = Mode::Auto,
+                _ => any_author = true,
+            }
             i += 1;
             continue;
         }
@@ -161,6 +164,7 @@ fn add(name: &str, rest: &[&str]) -> Result<Action, String> {
             repo,
             event,
             label: gh_label,
+            any_author,
         }),
         (Source::Github, ..) => return Err("--on github needs --repo and --event".into()),
         _ => None,

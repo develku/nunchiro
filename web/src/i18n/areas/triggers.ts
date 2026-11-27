@@ -34,6 +34,9 @@ declare module '../index' {
     'trigger.onOf': true;
     'trigger.removeAsk': true;
     'trigger.removeOf': true;
+    'trigger.authors': true;
+    'trigger.anyAuthor': true;
+    'trigger.anyAuthorNote': true;
   }
 }
 
@@ -71,4 +74,7 @@ export const en = {
   "trigger.onOf": "Trigger {name}",
   "trigger.removeAsk": "Remove this trigger?",
   "trigger.removeOf": "Remove trigger {name}",
+  "trigger.authors": "Pull requests",
+  "trigger.anyAuthor": "Anyone's, not only mine",
+  "trigger.anyAuthorNote": "Off: only your own pull requests. On a public repository anyone's pull request could start a run on code they wrote.",
 };

@@ -20,7 +20,7 @@ interface Trigger {
   run: { kind: string; project: string; task?: string };
   mode: 'ask' | 'auto';
   paused?: boolean;
-  github?: { repo: string; event: Event; label?: string };
+  github?: { repo: string; event: Event; label?: string; any_author?: boolean };
   last?: { at: number; result?: string; reason?: string };
 }
 /** The form's When: a GitHub event, a webhook or a command. */
@@ -42,6 +42,7 @@ function TriggerForm({ core, t, projects, onDone, onCancel }: { core: CoreClient
   const [mode, setMode] = useState<'ask' | 'auto'>('ask');
   const [repo, setRepo] = useState('');
   const [label, setLabel] = useState('');
+  const [anyAuthor, setAnyAuthor] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const event = when.startsWith('github:') ? (when.slice(7) as Event) : null;
@@ -59,7 +60,7 @@ function TriggerForm({ core, t, projects, onDone, onCancel }: { core: CoreClient
         run: { kind, project, label: name, task: task.trim() },
         mode,
         ...(secret ? { secret } : {}),
-        ...(event ? { github: { repo, event, ...(event === 'labeled' ? { label: label.trim() } : {}) } } : {}),
+        ...(event ? { github: { repo, event, ...(event === 'labeled' ? { label: label.trim() } : { any_author: anyAuthor }) } } : {}),
       });
       onDone(list, secret ? { name, secret } : undefined);
     } catch (e) {
@@ -90,6 +91,14 @@ function TriggerForm({ core, t, projects, onDone, onCancel }: { core: CoreClient
         </Select>,
       )}
       {event && field(t('trigger.repo'), <input {...PLAIN} aria-label={t('trigger.repo')} placeholder="owner/name" value={repo} onChange={(e) => setRepo(e.target.value.trim())} />, t('trigger.githubNote'))}
+      {event && event !== 'labeled' &&
+        field(
+          t('trigger.authors'),
+          <label className="trig-check">
+            <input type="checkbox" checked={anyAuthor} onChange={(e) => setAnyAuthor(e.target.checked)} /> {t('trigger.anyAuthor')}
+          </label>,
+          t('trigger.anyAuthorNote'),
+        )}
       {event === 'labeled' && field(t('trigger.label'), <input {...PLAIN} aria-label={t('trigger.label')} value={label} onChange={(e) => setLabel(e.target.value)} />)}
       {field(t('trigger.name'), <input {...PLAIN} aria-label={t('trigger.name')} placeholder="fix-checks" maxLength={64} value={name} onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '-'))} />)}
       {field(

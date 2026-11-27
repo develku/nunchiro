@@ -3334,6 +3334,10 @@
       "additionalProperties": false,
       "description": "What a GitHub trigger watches: one repository and one kind of event.",
       "properties": {
+        "any_author": {
+          "description": "Pull requests of anyone, not only the owner's own (`--author @me`): on a public repository a stranger's pull\nrequest could then start a run on code the stranger wrote.",
+          "type": "boolean"
+        },
         "event": {
           "$ref": "#/$defs/GithubEvent"
         },

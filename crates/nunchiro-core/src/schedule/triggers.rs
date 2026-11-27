@@ -48,6 +48,10 @@ pub struct Github {
     /// The label a `labeled` trigger waits for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    /// Pull requests of anyone, not only the owner's own (`--author @me`): on a public repository a stranger's pull
+    /// request could then start a run on code the stranger wrote.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub any_author: bool,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
@@ -685,7 +689,7 @@ pub(crate) fn start(
     }
     result
 }
-fn record(home: &Path, name: &str, last: Last) -> Result<(), String> {
+pub(super) fn record(home: &Path, name: &str, last: Last) -> Result<(), String> {
     let _w = WRITE.lock().map_err(|_| "triggers unavailable")?;
     let mut all = load(home)?;
     if let Some(t) = all.iter_mut().find(|t| t.name == name) {

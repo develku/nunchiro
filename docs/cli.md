@@ -1197,9 +1197,10 @@ to undo.
 A trigger starts an agent run when something outside calls it; see [triggers.md](triggers.md). Only the owner adds,
 pauses and removes one; the owner or a token of the `trigger` scope fires one.
 
-### `nunchiro trigger add <name> --on cli|webhook|github --kind claude|codex --project <dir> --task <text> [--repo <owner/name> --event checks_failed|changes_requested|labeled] [--issue-label <l>] [--label <name>] [--model <m>] [--effort <e>] [--auto]`
+### `nunchiro trigger add <name> --on cli|webhook|github --kind claude|codex --project <dir> --task <text> [--repo <owner/name> --event checks_failed|changes_requested|labeled] [--issue-label <l>] [--any-author] [--label <name>] [--model <m>] [--effort <e>] [--auto]`
 Owner only. Adds a trigger that starts this run. `--on webhook` reads the shared secret from stdin (one line, at
-least 16 characters). `--on github` reads `--repo` with your `gh` for `--event` (`labeled` takes `--issue-label`).
+least 16 characters). `--on github` reads `--repo` with your `gh` for `--event` (`labeled` takes `--issue-label`); pull request events
+watch your own pull requests unless `--any-author`.
 Without `--auto` a fire leaves a card in Decisions and starts on Start.
 
 ### `nunchiro trigger list [--json]`

@@ -27,97 +27,77 @@ fn every(home: &Path) -> Duration {
         .unwrap_or(EVERY)
 }
 
+/// gh's own filter (`--jq`), so its answer holds only what is needed: a check row is about 300 bytes, and the whole
+/// answer of 50 pull requests would pass `process::OUTPUT_CAP` (64 KB) and be refused.
+const FAILED_JQ: &str = r#"[.[] | select([.statusCheckRollup[]? | .conclusion, .state] | any(. == "FAILURE" or . == "TIMED_OUT" or . == "ERROR" or . == "STARTUP_FAILURE")) | {url, headRefOid}]"#;
+const CHANGES_JQ: &str =
+    r#"[.[] | select(.reviewDecision == "CHANGES_REQUESTED") | {url, headRefOid}]"#;
+const URL_JQ: &str = "[.[] | {url}]";
+
 /// The `gh` run for `g`, and the events it reads now: each event's key (what makes it new) and its payload.
 fn events(g: &Github, run: Gh) -> Result<Vec<(String, Value)>, String> {
-    let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-    let rows = |out: Vec<u8>| -> Result<Vec<Value>, String> {
-        serde_json::from_slice::<Value>(&out)
-            .map_err(|e| format!("gh answered something else: {e}"))?
-            .as_array()
-            .cloned()
-            .ok_or_else(|| "gh answered something else".to_string())
-    };
-    let pull = |r: &Value, what: &str| {
-        let url = r["url"].as_str().unwrap_or_default().to_string();
-        (
-            format!("{url}@{}", r["headRefOid"].as_str().unwrap_or_default()),
-            json!({"source": "github", "event": what, "repo": g.repo, "pull_request": {"html_url": url}}),
-        )
-    };
-    Ok(match g.event {
-        GithubEvent::ChecksFailed => {
-            let out = run(&args(&[
-                "pr",
-                "list",
-                "--repo",
-                &g.repo,
-                "--state",
-                "open",
-                "--limit",
-                "50",
-                "--json",
-                "url,headRefOid,statusCheckRollup",
-            ]))?;
-            rows(out)?
-                .iter()
-                .filter(|r| {
-                    r["statusCheckRollup"]
-                        .as_array()
-                        .into_iter()
-                        .flatten()
-                        .any(|c| {
-                            let bad = |v: &Value| {
-                                matches!(
-                                    v.as_str(),
-                                    Some("FAILURE" | "TIMED_OUT" | "ERROR" | "STARTUP_FAILURE")
-                                )
-                            };
-                            bad(&c["conclusion"]) || bad(&c["state"])
-                        })
-                })
-                .map(|r| pull(r, "checks_failed"))
-                .collect()
+    let pulls = |fields: &str, jq: &str| {
+        let mut a = vec![
+            "pr", "list", "--repo", &g.repo, "--state", "open", "--limit", "50",
+        ];
+        if !g.any_author {
+            a.extend(["--author", "@me"]);
         }
-        GithubEvent::ChangesRequested => {
-            let out = run(&args(&[
-                "pr",
-                "list",
-                "--repo",
-                &g.repo,
-                "--state",
-                "open",
-                "--limit",
-                "50",
-                "--json",
-                "url,headRefOid,reviewDecision",
-            ]))?;
-            rows(out)?
-                .iter()
-                .filter(|r| r["reviewDecision"] == "CHANGES_REQUESTED")
-                .map(|r| pull(r, "changes_requested"))
-                .collect()
-        }
+        a.extend(["--json", fields, "--jq", jq]);
+        run(&a.iter().map(|s| s.to_string()).collect::<Vec<_>>())
+    };
+    let out = match g.event {
+        GithubEvent::ChecksFailed => pulls("url,headRefOid,statusCheckRollup", FAILED_JQ)?,
+        GithubEvent::ChangesRequested => pulls("url,headRefOid,reviewDecision", CHANGES_JQ)?,
         GithubEvent::Labeled => {
             let label = g.label.clone().unwrap_or_default();
-            let out = run(&args(&[
+            let a = [
                 "issue", "list", "--repo", &g.repo, "--state", "open", "--label", &label,
-                "--limit", "50", "--json", "url",
-            ]))?;
-            rows(out)?
-                .iter()
-                .map(|r| {
-                    let url = r["url"].as_str().unwrap_or_default().to_string();
-                    (url.clone(), json!({"source": "github", "event": "labeled", "label": label, "repo": g.repo, "issue": {"html_url": url}}))
-                })
-                .collect()
+                "--limit", "50", "--json", "url", "--jq", URL_JQ,
+            ];
+            run(&a.iter().map(|s| s.to_string()).collect::<Vec<_>>())?
         }
-    })
+    };
+    let rows = serde_json::from_slice::<Value>(&out)
+        .map_err(|e| format!("gh answered something else: {e}"))?
+        .as_array()
+        .cloned()
+        .ok_or_else(|| "gh answered something else".to_string())?;
+    let what = match g.event {
+        GithubEvent::ChecksFailed => "checks_failed",
+        GithubEvent::ChangesRequested => "changes_requested",
+        GithubEvent::Labeled => "labeled",
+    };
+    Ok(rows
+        .iter()
+        .map(|r| {
+            let url = r["url"].as_str().unwrap_or_default().to_string();
+            match g.event {
+                GithubEvent::Labeled => (
+                    url.clone(),
+                    json!({"source": "github", "event": what, "label": g.label, "repo": g.repo, "issue": {"html_url": url}}),
+                ),
+                _ => (
+                    format!("{url}@{}", r["headRefOid"].as_str().unwrap_or_default()),
+                    json!({"source": "github", "event": what, "repo": g.repo, "pull_request": {"html_url": url}}),
+                ),
+            }
+        })
+        .collect())
 }
 
-/// The events each trigger has seen, by (home, trigger); absent until its first read, which only sets the start.
-type Seen = BTreeMap<(PathBuf, String), BTreeSet<String>>;
+/// What the poller keeps per trigger, by (home, trigger, what it watches): a trigger removed and added again for
+/// another repository starts from its own first read.
+#[derive(Default)]
+pub(crate) struct Seen {
+    /// The events that fired or raised a card; absent until the trigger's first read, which only sets the start.
+    fired: BTreeMap<(PathBuf, String, String), BTreeSet<String>>,
+    /// The last gh failure each trigger recorded, so a failing gh is one line in its last fire, not one a poll.
+    failing: BTreeMap<(PathBuf, String), String>,
+}
 
-/// One pass over the GitHub triggers that are on: the new events of each fire it, in order.
+/// One pass over the GitHub triggers that are on: the new events of each fire it, in order. An event whose fire was
+/// held (its cards, its hour, a run of its subject still at work) is not seen yet: the next pass tries it again.
 pub(crate) fn poll(
     registry: &Mutex<Sessions>,
     stopping: &AtomicBool,
@@ -130,29 +110,51 @@ pub(crate) fn poll(
     };
     for t in all.iter().filter(|t| t.on == Source::Github && !t.paused) {
         let Some(g) = &t.github else { continue };
+        let named = (home.to_path_buf(), t.name.clone());
         let found = match events(g, run) {
             Ok(found) => found,
             Err(e) => {
-                eprintln!("trigger {}: {e}", t.name);
+                if seen.failing.get(&named) != Some(&e) {
+                    let last = super::Last {
+                        session: None,
+                        at: crate::queue::now_ms(),
+                        result: Some(super::Outcome::Failed),
+                        reason: Some(e.chars().take(200).collect()),
+                    };
+                    let _ = super::triggers::record(home, &t.name, last);
+                    eprintln!("trigger {}: {e}", t.name);
+                    seen.failing.insert(named, e);
+                }
                 continue;
             }
         };
-        let key = (home.to_path_buf(), t.name.clone());
-        let first = !seen.contains_key(&key);
-        let known = seen.entry(key).or_default();
+        seen.failing.remove(&named);
+        let key = (
+            named.0,
+            named.1,
+            serde_json::to_string(g).unwrap_or_default(),
+        );
+        let Some(known) = seen.fired.get_mut(&key) else {
+            seen.fired
+                .insert(key, found.into_iter().map(|(k, _)| k).collect());
+            continue;
+        };
         for (k, payload) in found {
-            if known.insert(k)
-                && !first
-                && let Err(e) = super::triggers::fire(
-                    registry,
-                    stopping,
-                    home,
-                    &t.name,
-                    Source::Github,
-                    &payload.to_string(),
-                )
-            {
-                eprintln!("trigger {}: {e}", t.name);
+            if known.contains(&k) {
+                continue;
+            }
+            match super::triggers::fire(
+                registry,
+                stopping,
+                home,
+                &t.name,
+                Source::Github,
+                &payload.to_string(),
+            ) {
+                Ok(_) => {
+                    known.insert(k);
+                }
+                Err(e) => eprintln!("trigger {}: {e}", t.name),
             }
         }
     }
@@ -167,7 +169,7 @@ pub(crate) fn spawn(
     std::thread::Builder::new()
         .name("github-triggers".into())
         .spawn(move || {
-            let mut seen = Seen::new();
+            let mut seen = Seen::default();
             let mut last: Option<Instant> = None;
             while !stopping.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(500));
@@ -192,13 +194,14 @@ mod tests {
             repo: "o/r".into(),
             event,
             label: None,
+            any_author: false,
         }
     }
 
     #[test]
-    fn a_failed_check_is_one_event_per_head_commit() {
-        let answer = r#"[{"url": "https://github.com/o/r/pull/1", "headRefOid": "abc", "statusCheckRollup": [{"conclusion": "SUCCESS"}, {"conclusion": "FAILURE"}]},
-                          {"url": "https://github.com/o/r/pull/2", "headRefOid": "def", "statusCheckRollup": [{"conclusion": "SUCCESS"}]}]"#;
+    fn a_failed_check_is_one_event_per_head_commit_of_the_owners_own_pulls() {
+        // gh filters with `--jq`: its answer is the failing pull requests only.
+        let answer = r#"[{"url": "https://github.com/o/r/pull/1", "headRefOid": "abc"}]"#;
         let asked = Mutex::new(vec![]);
         let run = |a: &[String]| {
             asked.lock().unwrap().push(a.to_vec());
@@ -211,9 +214,14 @@ mod tests {
             found[0].1["pull_request"]["html_url"],
             "https://github.com/o/r/pull/1"
         );
-        assert_eq!(
-            asked.lock().unwrap()[0][..4],
-            ["pr", "list", "--repo", "o/r"]
+        let asked = asked.lock().unwrap()[0].join(" ");
+        assert!(
+            asked.starts_with("pr list --repo o/r --state open"),
+            "{asked}"
+        );
+        assert!(
+            asked.contains("--author @me") && asked.contains("--jq"),
+            "{asked}"
         );
     }
 }
