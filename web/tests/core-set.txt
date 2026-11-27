@@ -78,3 +78,6 @@ shell-beside-agent.spec.ts
 
 # a registered Settings page keeps the focus on its title after a nav click
 settings-registered-title-focus.spec.ts
+
+# task dependencies on the Team board: waiting, blocking, freed, stuck and early cards; the drawer and the Wait for menu
+task-deps.spec.ts
