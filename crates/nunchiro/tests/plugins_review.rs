@@ -151,3 +151,30 @@ fn a_part_cannot_be_approved_alone() {
     assert!(!said.contains("waiting for the owner"), "{said}");
     assert!(ok(&c.home, &["plugin", "list"]).contains("not approved"));
 }
+
+#[test]
+fn allow_and_the_sheet_show_each_parts_rights() {
+    let c = core("prr");
+    plugin(
+        &c.home,
+        "send",
+        "echo hi",
+        "network = [\"api.github.com\"]\nread = [\"~/notes\"]",
+    );
+    let status = call(
+        &c.home,
+        &c.owner,
+        json!({"op": "approval_status", "name": "plugin:p"}),
+    );
+    let part = &status["Ok"]["view"]["parts"][0];
+    assert_eq!(part["network"], json!(["api.github.com"]), "{status}");
+    assert_eq!(part["read"], json!(["~/notes"]), "{status}");
+    assert_eq!(part["writes_draft"], true, "{status}");
+    let said = ok(&c.home, &["plugin", "allow", "p"]);
+    assert!(
+        said.contains("network: api.github.com")
+            && said.contains("reads beyond its project: ~/notes"),
+        "{said}"
+    );
+    assert!(said.contains("writes into the message box"), "{said}");
+}
