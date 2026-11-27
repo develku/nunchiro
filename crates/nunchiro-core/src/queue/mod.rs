@@ -76,6 +76,11 @@ pub fn deny_note(text: &str) -> String {
 }
 
 pub const DEFAULT_STALE_MS: u64 = 20 * 60 * 1000;
+/// How old queue.json's activity time of a session with output may get. Within a core run `attention` reads the exact
+/// time from memory; only the next core start reads this checkpoint, so it sits well under the shortest idle rule
+/// that reads it (`IDLE_SETTLE_MS`, 30 s). Each checkpoint rewrites the whole store with two full syncs while the
+/// registry is locked, and at once a second per streaming session the keys typed into a terminal waited behind it.
+const ACTIVITY_CHECKPOINT_MS: u64 = 10_000;
 const MAX_STORE: u64 = 8 * 1024 * 1024;
 pub(crate) const OWNER_ITEMS: usize = 64; // v1a-23
 /// v1a-71: how long after a resize of its session a screen item waits for the agent's redraw (one redraw only).
@@ -1026,8 +1031,10 @@ impl Queue {
             .entry(id.into())
             .and_modify(|at| *at = (*at).max(now))
             .or_insert(now);
-        // Keep exact live activity; checkpoint timestamps at most once per second.
-        if !state.attention.stale && now.saturating_sub(state.attention.last_activity) < 1000 {
+        // Keep exact live activity; checkpoint timestamps at most every ACTIVITY_CHECKPOINT_MS.
+        if !state.attention.stale
+            && now.saturating_sub(state.attention.last_activity) < ACTIVITY_CHECKPOINT_MS
+        {
             return Ok(());
         }
         self.change(|q| {
