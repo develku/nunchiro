@@ -352,12 +352,24 @@ pub(crate) fn answer(
     }
 }
 
-/// Drops the entry asked as `key` without running it (another start took its place).
-pub(crate) fn forget(key: &str) {
+/// The entry asked as `key`, out of the list without running it; `restore` puts it back.
+pub(crate) fn take_key(key: &str) -> Option<Entry> {
     let mut list = list();
-    if let Some(at) = list.entries.iter().position(|e| e.key == key) {
-        list.entries.remove(at);
-    }
+    let at = list.entries.iter().position(|e| e.key == key)?;
+    Some(list.entries.remove(at))
+}
+
+/// Drops the entry asked as `key` without running it (its schedule went, or another start took its place); whether
+/// one waited.
+pub(crate) fn forget(key: &str) -> bool {
+    take_key(key).is_some()
+}
+
+/// An entry taken by `take_key` waits again, as it was (its time, its count of free reads).
+pub(crate) fn restore(entry: Entry) {
+    list().entries.push(entry);
+    ADDED.notify_all();
+    crate::pty::wake_windows();
 }
 
 /// The waiting starts, for the owner's list.

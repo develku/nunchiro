@@ -700,7 +700,10 @@ impl Schedules {
             (all.len() < before)
                 .then_some(())
                 .ok_or_else(|| "no such schedule".into())
-        })
+        })?;
+        // A run of it that waits for memory goes with it.
+        crate::pressure::forget(&waiting_key(id));
+        Ok(())
     }
     /// Ticket 993: switches an entry off or on. A resumed one runs at its next time from now, never for a time that
     /// passed while it was off.
@@ -718,6 +721,10 @@ impl Schedules {
                 .ok_or("no such schedule")?;
             if e.paused && !paused {
                 e.next_ms = resume_ms(e, now_ms, offset)?;
+            }
+            // Switched off, its run that waits for memory goes too: a skipped slot.
+            if paused && !e.paused && crate::pressure::forget(&waiting_key(id)) {
+                push_last(e, skipped_waiting(now_ms, SWITCHED_OFF));
             }
             e.paused = paused;
             Ok(())
@@ -1019,34 +1026,64 @@ fn run_entry(
 
 /// A due run held for low memory, kept to run by itself; dropped after the longest wait (or cancelled) it is a
 /// skipped slot. The same schedule waits once.
+/// The waiting list's key of a schedule's held run.
+fn waiting_key(id: &str) -> String {
+    format!("schedule:{id}")
+}
+/// Why a waiting run was not run: its schedule was switched off meanwhile.
+const SWITCHED_OFF: &str = "switched off while it waited for memory";
+/// A waiting run's slot that was not run.
+fn skipped_waiting(at: u64, reason: &str) -> Last {
+    Last {
+        session: None,
+        at,
+        result: Some(Outcome::Skipped),
+        reason: Some(reason.into()),
+    }
+}
+
 fn hold_run(entry: &Entry, now_ms: u64) {
-    let key = format!("schedule:{}", entry.id);
+    let key = waiting_key(&entry.id);
     let agent = entry.run.label.clone();
     let project = crate::pressure::place_name(&entry.run.project);
     let entry = entry.clone();
     let go: crate::pressure::Go = Box::new(move |registry, stopping, done| {
         use crate::pressure::Done;
         match done {
-            Done::Released | Done::Anyway => run_entry(
-                registry,
-                stopping,
-                &entry,
-                crate::queue::now_ms(),
-                crate::pressure::Who::Session,
-            ),
+            Done::Released | Done::Anyway => {
+                // The schedule as it is now: a removed one runs nothing, one switched off since is a skipped slot (a
+                // once entry is switched off when it fires, so only a change since then counts).
+                let now = lock(registry)?
+                    .schedules
+                    .list()?
+                    .into_iter()
+                    .find(|e| e.id == entry.id)
+                    .ok_or("the schedule was removed while it waited for memory")?;
+                if now.paused && !entry.paused {
+                    let mut sessions = lock(registry)?;
+                    sessions
+                        .schedules
+                        .record(&now, skipped_waiting(now_ms, SWITCHED_OFF));
+                    sessions.schedules_changed();
+                    return Err(SWITCHED_OFF.into());
+                }
+                run_entry(
+                    registry,
+                    stopping,
+                    &now,
+                    crate::queue::now_ms(),
+                    crate::pressure::Who::Session,
+                )
+            }
             Done::Cancelled | Done::Dropped => {
                 let reason = match done {
                     Done::Dropped => crate::pressure::DROPPED_SCHEDULE,
                     _ => "cancelled while it waited for memory",
                 };
                 if let Ok(mut sessions) = lock(registry) {
-                    let last = Last {
-                        session: None,
-                        at: now_ms,
-                        result: Some(Outcome::Skipped),
-                        reason: Some(reason.into()),
-                    };
-                    sessions.schedules.record(&entry, last);
+                    sessions
+                        .schedules
+                        .record(&entry, skipped_waiting(now_ms, reason));
                     sessions.schedules_changed();
                 }
                 Err(String::new())
@@ -1064,16 +1101,33 @@ pub(crate) fn run_now(registry: &Mutex<Sessions>, id: &str) -> crate::api::Respo
         .into_iter()
         .find(|e| e.id == id)
         .ok_or("no such schedule")?;
-    // The owner's run takes the place of a due run still waiting for memory.
-    crate::pressure::forget(&format!("schedule:{id}"));
+    // The owner's run takes the place of a due run still waiting for memory, once it starts: refused by the hold, the
+    // waiting run waits on, and its record says so again.
+    let waiting = crate::pressure::take_key(&waiting_key(id));
     // `start` and `open_seat` refuse a core the owner stopped (`Sessions::stopped`).
-    run_entry(
+    let now_ms = crate::queue::now_ms();
+    let ran = run_entry(
         registry,
         &AtomicBool::new(false),
         &entry,
-        crate::queue::now_ms(),
+        now_ms,
         crate::pressure::Who::Window, // the owner's press in the window
-    )?;
+    );
+    if let (Err(e), Some(waiting)) = (&ran, waiting)
+        && e == crate::pressure::HELD_SCHEDULE
+    {
+        crate::pressure::restore(waiting);
+        let mut sessions = lock(registry)?;
+        let last = Last {
+            session: None,
+            at: now_ms,
+            result: Some(Outcome::Held),
+            reason: Some(crate::pressure::WAITING_SCHEDULE.into()),
+        };
+        sessions.schedules.record(&entry, last);
+        sessions.schedules_changed();
+    }
+    ran?;
     Ok(crate::api::Reply::Schedules {
         schedules: lock(registry)?.schedules.shown()?,
     })

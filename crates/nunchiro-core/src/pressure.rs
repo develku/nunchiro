@@ -54,7 +54,9 @@ pub(crate) fn asker_line(name: &str, done: wait::Done, result: &Result<String, S
 }
 
 mod wait;
-pub(crate) use wait::{Asker, Done, Go, answer, event, forget, hold, shown, spawn, version};
+pub(crate) use wait::{
+    Asker, Done, Go, answer, event, forget, hold, restore, shown, spawn, take_key, version,
+};
 
 /// An agent's name in a waiting start's line.
 pub(crate) fn kind_name(kind: crate::api::AgentKind) -> &'static str {
