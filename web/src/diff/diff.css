@@ -290,14 +290,13 @@
 }
 /* Ticket 373: the one git button in the header (mock 373.html `.ph .btn`). */
 .diff .ph .dgit {
-  font-size: var(--fs-11);
-  font-weight: 500;
+  display: block; /* a block line, so a narrow dock can cut the label */
+  height: var(--btn-h-sm);
+  font-size: var(--fs-sm);
+  line-height: var(--btn-h-sm);
   text-transform: none;
   letter-spacing: 0;
-  color: var(--text);
-  padding: 0 6px;
-  line-height: 18px;
-  white-space: nowrap;
+  padding: 0 var(--btn-pad-sm);
   margin-left: 4px;
   /* A narrow dock cuts the label (its tooltip shows it whole), never the refresh and close buttons. */
   flex: 0 1 auto;

@@ -228,7 +228,7 @@ export const fieldCommand = (id: string) => /^settings\.[\w-]+\./.test(id);
 
 /** Row heights in px (needs 39: compact = R7-2, comfortable = R7-1; spacious from the R8 settings draft). */
 export const DENSITY: Record<Density, { row: number; arow: number; tabh: number }> = {
-  compact: { row: 22, arow: 20, tabh: 26 },
+  compact: { row: 24, arow: 20, tabh: 26 }, // design book: the compact tree row is 24 (the hit-target floor)
   comfortable: { row: 32, arow: 24, tabh: 36 }, // ticket 1041 (owner 15.1 item 7): A+B+C rows 32 and tab strip 36 on the 8 px grid (was the ko/ 30 / 32)
   spacious: { row: 34, arow: 28, tabh: 36 }, // stays a step above comfortable
 };

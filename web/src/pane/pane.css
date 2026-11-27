@@ -30,7 +30,7 @@
 .pdiv:focus-visible::after {
   width: 3px;
   left: 1px;
-  background: var(--ring-focus); /* ticket 1041: neutral, blue is the working light only */
+  background: var(--focus-ring); /* ticket 1041: neutral, blue is the working light only */
 }
 .spane {
   position: relative;
@@ -39,9 +39,7 @@
   max-width: calc(100% - 321px); /* 320 px of chat and the divider's 1 px */
   display: flex;
   flex-direction: column;
-  background: var(--panel);
-  --focus-ring: var(--ring-focus);
-}
+  background: var(--panel);}
 .sview:has(> .spane[data-max]) > .pane,
 .sview:has(> .spane[data-max]) > .pdiv {
   display: none;

@@ -38,7 +38,7 @@ const theme = EditorView.theme({
   // Ticket 1041 lane 7b (15.2 item 5): the line you jumped to is the neutral selected step; orange stays "needs you".
   '.cm-target': { backgroundColor: 'var(--select-bg)' },
   // Find panel (ticket 200): window tokens only, so it follows the light/dark switch with the rest of the window. Ticket 1041:
-  // a tint step under the panel; matches use the focus ring, which is the neutral --ring-focus inside the file view
+  // a tint step under the panel; matches use the focus ring, which is the one --focus-ring (the book's --accent)
   // (widget-quiet.css), so they are no longer the working blue.
   '.cm-panels': { backgroundColor: 'var(--page)', color: 'var(--text)', border: '0' },
   '.fv-find': { display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', fontSize: 'var(--fs-12)' },

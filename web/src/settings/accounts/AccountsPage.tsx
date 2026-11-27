@@ -875,12 +875,12 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
         <span className="prv-meta" />
         <span className="prv-act">
           {missing ? (
-            <button type="button" className="btn p" onClick={() => void openExternal(INSTALL[agent])}>
+            <button type="button" className="btn" onClick={() => void openExternal(INSTALL[agent])}>
               {t('providers.install')}
             </button>
           ) : (
             own && (
-              <button type="button" className="btn p" disabled={!!signin} onClick={() => void ownSignIn(own)}>
+              <button type="button" className="btn" disabled={!!signin} onClick={() => void ownSignIn(own)}>
                 {t('providers.loginTerminal')}
               </button>
             )
@@ -1086,7 +1086,7 @@ function RemoveSheet({ t, removal, onLogout, onLeftovers, onCancel }: { t: T; re
             {t('settings.accounts.logout')} {code == null ? t('settings.accounts.didNotFinish') : t('settings.accounts.exited', { code })}. {account.agent === 'claude' ? t('settings.accounts.keychain') : t('settings.accounts.someLeft')}
             {t('settings.accounts.removeAnyway', { label: account.label })}
           </p>
-          <button className="btn p" onClick={onLeftovers}>
+          <button className="btn danger" onClick={onLeftovers}>
             {t('settings.accounts.removeAnywayBtn')}
           </button>
           <button ref={go} className="btn" onClick={onCancel}>
@@ -1096,7 +1096,7 @@ function RemoveSheet({ t, removal, onLogout, onLeftovers, onCancel }: { t: T; re
       ) : phase === 'blocked' ? (
         <>
           <p>{t('settings.accounts.inUseByTab', { label: account.label, tabs: (tabs ?? []).map((s) => quoted(s.label)).join(', ') })}</p>
-          <button className="btn p" onClick={onLogout}>
+          <button className="btn danger" onClick={onLogout}>
             {t('settings.accounts.closeRemove')}
           </button>
           <button ref={go} className="btn" onClick={onCancel}>
@@ -1113,7 +1113,7 @@ function RemoveSheet({ t, removal, onLogout, onLeftovers, onCancel }: { t: T; re
               {t('settings.accounts.loggingOut')}
             </p>
           )}
-          <button className="btn p" disabled={phase === 'logout'} aria-busy={phase === 'logout'} onClick={onLogout}>
+          <button className="btn danger" disabled={phase === 'logout'} aria-busy={phase === 'logout'} onClick={onLogout}>
             {phase === 'logout' ? t('settings.accounts.loggingOutBtn') : t('settings.accounts.logoutRemove')}
           </button>
           <button ref={go} className="btn" disabled={phase === 'logout'} onClick={onCancel}>

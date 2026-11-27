@@ -184,7 +184,7 @@ function Soul({ core, t, bot }: { core: CoreClient; t: T; bot: Bot }) {
         <form onSubmit={save}>
           <textarea {...PLAIN} className="sinp" aria-label={t('bots.soul.label', { name: bot.name })} value={draft} autoFocus onChange={(e) => setDraft(e.target.value)} />
           <div className="bot-acts">
-            <button type="submit" className="btn p" disabled={!draft.trim()}>
+            <button type="submit" className="btn" disabled={!draft.trim()}>
               {t('bots.soul.save')}
             </button>
             <button type="button" className="btn" onClick={() => (setDraft(null), setError(''))}>
@@ -231,7 +231,7 @@ function Models({ core, t, mate, table }: { core: CoreClient; t: T; mate: Teamma
       </div>
       <ErrorLine t={t} error={error ? rawError(error) : ''} />
       <div className="bot-acts">
-        <button type="submit" className="btn p" disabled={busy || !dirty} aria-busy={busy || undefined}>
+        <button type="submit" className="btn" disabled={busy || !dirty} aria-busy={busy || undefined}>
           {t('bots.models.save')}
         </button>
       </div>

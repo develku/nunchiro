@@ -32,7 +32,7 @@
   background: var(--tint-1);
 }
 .phead:focus-visible {
-  outline: 2px solid var(--ring-focus);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
 .pc {

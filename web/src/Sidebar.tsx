@@ -941,7 +941,7 @@ export function Tree(p: Props) {
           <span>{t('tree.projectsTitle')}</span>
         </span>
         <span className="r">
-          <button className="btn p addproj" title={t('tree.addProjectHint')} onClick={askAddProject}>
+          <button className="btn sm addproj" title={t('tree.addProjectHint')} onClick={askAddProject}>
             {t('tree.addProject')}
           </button>
           <button className="xall" data-hint-quiet aria-pressed={expanded} title={t('tree.expandAllHint')} onClick={(e) => expandAll.current(e.altKey)}>

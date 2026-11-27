@@ -3,7 +3,7 @@
 /* Ticket 1041: blue is the working light only; a drop target is the selected tint with the neutral ring (a visible target). */
 .row.head[data-hot] {
   background: var(--select-bg);
-  outline: var(--focus-width) solid var(--ring-focus);
+  outline: var(--focus-width) solid var(--focus-ring);
 }
 .tree .row.head[data-hot] > :is(.r, .d, .padd) {
   display: none; /* the pill takes their place while a widget is over the row */
@@ -171,7 +171,7 @@ nav[data-bar] [data-slot][data-hot] {
    label takes the place of the head's counts and strip, and the ghost is the dragged project's name at the pointer. */
 .row.ghead[data-hot] {
   background: var(--select-bg);
-  outline: var(--focus-width) solid var(--ring-focus);
+  outline: var(--focus-width) solid var(--focus-ring);
 }
 .tree .row.ghead[data-hot] > :is(.r, .d, .bar) {
   display: none;

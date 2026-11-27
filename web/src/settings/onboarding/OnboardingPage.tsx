@@ -305,8 +305,12 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
     ['onboarding.quick.git', t('onboarding.quick.gitValue')],
   ];
   const status = shown.skipped ? t('onboarding.skipped') : t(shown.done ? 'onboarding.done' : 'onboarding.notDone');
+  // Design book, one warm primary per view: while the quick setup card shows, its button is the page's primary and the
+  // step panel's actions are secondary.
+  const quickShown = !hasProject && !steps[steps.length - 1].done;
+  const P = quickShown ? 'btn' : 'btn p';
   const open = (page: string, primary = true) => (
-    <button type="button" className={primary ? 'btn p' : 'btn'} data-go={page} onClick={() => update({ settingsPage: page })}>
+    <button type="button" className={primary ? P : 'btn'} data-go={page} onClick={() => update({ settingsPage: page })}>
       {t('onboarding.open', { page: pageName(page) })}
     </button>
   );
@@ -566,7 +570,7 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
                   desc={<span role="status">{permNote}</span>}
                   control={
                     notify === 'default' ? (
-                      <button type="button" className="btn p" disabled={asking} onClick={() => (setAsking(true), void askPermission().then(readPermission).then(setNotify).finally(() => setAsking(false)))}>
+                      <button type="button" className={P} disabled={asking} onClick={() => (setAsking(true), void askPermission().then(readPermission).then(setNotify).finally(() => setAsking(false)))}>
                         {t('onboarding.notify.askNow')}
                       </button>
                     ) : undefined
@@ -609,11 +613,11 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
           {shown.id === 'project' && (
             <div className="ob-acts">
               {startIn && (
-                <button type="button" className="btn p" data-go="session" onClick={() => startSession(startIn.path)}>
+                <button type="button" className={P} data-go="session" onClick={() => startSession(startIn.path)}>
                   {startWord}
                 </button>
               )}
-              <button type="button" className={startIn ? 'btn' : 'btn p'} data-go="project" onClick={() => addProject()}>
+              <button type="button" className={startIn ? 'btn' : P} data-go="project" onClick={() => addProject()}>
                 {t('landing.addProject')}
               </button>
               {!shown.done && (
@@ -636,11 +640,11 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
               </p>
               <div className="ob-acts">
                 {startIn ? (
-                  <button type="button" className={shown.done ? 'btn' : 'btn p'} data-go="session" onClick={() => startSession(startIn.path)}>
+                  <button type="button" className={shown.done ? 'btn' : P} data-go="session" onClick={() => startSession(startIn.path)}>
                     {startWord}
                   </button>
                 ) : (
-                  <button type="button" className={shown.done ? 'btn' : 'btn p'} data-go="project" onClick={() => addProject()}>
+                  <button type="button" className={shown.done ? 'btn' : P} data-go="project" onClick={() => addProject()}>
                     {t('landing.addProject')}
                   </button>
                 )}
@@ -669,7 +673,7 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
               </p>
               <ErrorLine t={t} error={chiefError ? rawError(chiefError) : ''} />
               <div className="ob-acts">
-                <button type="button" className="btn p" data-go="assistant" onClick={() => openChief(assistant.id)}>
+                <button type="button" className={P} data-go="assistant" onClick={() => openChief(assistant.id)}>
                   {t('onboarding.assistant.open', { name: assistant.name })}
                 </button>
                 {open('assistants', false)}
@@ -698,7 +702,7 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
               )}
               <div className="ob-acts">
                 {!noClaude && (
-                  <button type="submit" className="btn p" data-go="assistant" disabled={naming || !chief.trim()} aria-busy={naming || undefined}>
+                  <button type="submit" className={P} data-go="assistant" disabled={naming || !chief.trim()} aria-busy={naming || undefined}>
                     {t('onboarding.assistant.save')}
                   </button>
                 )}

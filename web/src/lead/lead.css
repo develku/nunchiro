@@ -647,16 +647,16 @@ button.lead-go {
   font-weight: 600;
   white-space: nowrap;
 }
+/* The book's small warm primary: the lead is asking you. */
 .lead-answer {
   flex: none;
-  padding: 2px var(--sp-8);
+  height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-sm);
   border: 0;
-  border-radius: var(--r-6);
-  background: var(--control-bg); /* the ink primary (owner 15.1 item 1) */
-  color: var(--control-text);
-  font: inherit;
-  font-size: var(--fs-12);
-  font-weight: 600;
+  border-radius: var(--btn-r);
+  background: var(--primary);
+  color: var(--on-primary);
+  font: 500 var(--fs-sm) / 1 var(--font-ui);
   cursor: pointer;
 }
 .lead-row[data-gone] {

@@ -111,10 +111,10 @@ test('row_height_34_default: a fresh profile draws the design book\'s 34px sessi
   expect(await box(grp.locator('.row.wt2'))).toEqual({ h: 34, r: '8px' });
   await app.getByRole('button', { name: 'Settings', exact: true }).click();
   await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name: 'Appearance' }).click(); // v25-fix-settings: Settings opens on General
-  await app.getByRole('spinbutton', { name: 'Row height' }).fill('22'); // D-20261108-07: the Density presets are gone; 22 px is compact's height
+  await app.getByRole('spinbutton', { name: 'Row height' }).fill('24'); // D-20261108-07: the Density presets are gone; 24 px is compact's height (design book)
   await app.keyboard.press('Escape'); // v25f: Settings is a modal over the tabs; Esc closes it first
   await app.locator('.tab:not([data-tab="settings"])').first().click(); // back to a session tab
-  // 22 picks the compact preset; the tree draws the book's compact height, 24 (a hit target never under 24).
+  // 24 picks the compact preset; the tree draws the book's compact height, 24 (a hit target never under 24).
   await expect.poll(() => box(grp.locator('.row.head'))).toEqual({ h: 24, r: '8px' });
   expect((await box(grp.locator('.row.wt2'))).h).toBe(24);
 });
@@ -126,11 +126,11 @@ test('density_migration: a stored compact without the explicit-choice flag (the 
   await expect.poll(() => app.evaluate(() => JSON.parse(localStorage.getItem('nunchiro.settings.v1')!))).toMatchObject({ density: 'comfortable', densityPicked: false });
 });
 
-test('density_migration: compact picked in Settings keeps 22px across a reload; a stored explicit compact survives', async ({ app, core }) => {
+test('density_migration: compact picked in Settings keeps 24px across a reload; a stored explicit compact survives', async ({ app, core }) => {
   const { grp } = await tree(app, core);
   await app.getByRole('button', { name: 'Settings', exact: true }).click();
   await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name: 'Appearance' }).click(); // v25-fix-settings: Settings opens on General
-  await app.getByRole('spinbutton', { name: 'Row height' }).fill('22'); // D-20261108-07: the Density presets are gone; 22 px is compact's height
+  await app.getByRole('spinbutton', { name: 'Row height' }).fill('24'); // D-20261108-07: the Density presets are gone; 24 px is compact's height (design book)
   await expect.poll(() => app.evaluate(() => JSON.parse(localStorage.getItem('nunchiro.settings.v1')!))).toMatchObject({ density: 'compact', densityPicked: true });
   await app.reload();
   await expect(app.getByRole('status').filter({ hasText: /^Connected$/ })).toBeVisible();

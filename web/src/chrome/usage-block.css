@@ -122,9 +122,7 @@
   color: var(--text);
   border-radius: var(--r-16);
   font-size: var(--fs-1);
-  white-space: normal;
-  --focus-ring: var(--ring-focus);
-}
+  white-space: normal;}
 .usg-pop .grow {
   flex: 1;
 }
@@ -273,18 +271,10 @@
   padding-left: 0;
   margin: 0 -4px;
 }
-/* No outlined buttons (A): quiet tint, the primary in ink (15.1 item 1), the line's one accent. */
-.usg-pop .rst .btn {
-  border: 0;
-  background: var(--control-quiet-bg);
-  color: var(--text);
-}
-.usg-pop .rst .btn:hover:not(:disabled) {
-  background: var(--control-quiet-hover);
-}
+/* The book's buttons; the line's main action is the warm primary. */
 .usg-pop .rst .btn.pri {
-  background: var(--control-bg);
-  color: var(--control-text);
+  background: var(--primary);
+  color: var(--on-primary);
 }
 .usg-pop .rst .cxr-confirm {
   flex: 1;

@@ -115,41 +115,13 @@
   gap: 4px;
   margin-right: 4px;
 }
-/* Look v35 b S3-4: the Columns dialog's boxes too (it drew the UA's blue). */
-:is(.beg, .bcoled) input[type='checkbox']:not(.btg) {
-  accent-color: var(--control-bg); /* a control, not the working blue (owner 15.1 item 1) */
+:is(.beg, .bcoled) input[type='checkbox']:not(.stog) {
   margin: 0;
 }
-/* Draft B .tg: a 26 x 14 switch, green when on. */
-.btg {
-  appearance: none;
-  flex: none;
-  margin: 0 0 0 auto;
-  width: 26px;
-  height: 14px;
-  border-radius: calc(var(--r-4) * 1.75);
-  background: var(--faint);
-  position: relative;
-  cursor: pointer;
+/* The kit's switch (shell.css input.stog), at the row's end. */
+.bep input.stog {
+  margin-left: auto;
 }
-.btg::after {
-  content: '';
-  position: absolute;
-  left: 2px;
-  top: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--on-status);
-}
-.btg:checked {
-  background: var(--ok);
-}
-.btg:checked::after {
-  left: auto;
-  right: 2px;
-}
-.btg:focus-visible,
 .bnum:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
