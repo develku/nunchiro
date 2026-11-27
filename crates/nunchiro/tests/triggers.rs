@@ -387,3 +387,74 @@ fn a_trigger_that_asks_first_starts_on_the_owners_yes() {
         "{first}"
     );
 }
+
+/// Fires at the same moment (a webhook takes each request on its own thread, a script can start many CLIs).
+fn fire_together(c: &Core, n: usize, payload: impl Fn(usize) -> String) -> Vec<Output> {
+    let home = c.home.clone();
+    let threads: Vec<_> = (0..n)
+        .map(|i| {
+            let (home, data) = (home.clone(), payload(i));
+            std::thread::spawn(move || {
+                nunchiro(
+                    &home,
+                    None,
+                    &["trigger", "fire", "burst", "--data", "-"],
+                    &data,
+                )
+            })
+        })
+        .collect();
+    threads.into_iter().map(|t| t.join().unwrap()).collect()
+}
+
+#[test]
+fn twelve_fires_at_once_start_at_most_four() {
+    let c = core("tgb");
+    add(&c, "burst", "cli", true, "");
+    let out = fire_together(&c, 12, |i| format!("{{\"subject\": \"s{i}\"}}"));
+    assert!(out.iter().filter(|o| o.status.success()).count() <= 4);
+    std::thread::sleep(Duration::from_secs(2));
+    assert!(started(&c).len() <= 4, "{} started", started(&c).len());
+}
+
+#[test]
+fn four_fires_for_one_subject_at_once_start_one() {
+    let c = core("tgs");
+    add(&c, "burst", "cli", true, "");
+    let out = fire_together(&c, 4, |_| r#"{"subject": "the same"}"#.into());
+    assert_eq!(
+        out.iter().filter(|o| o.status.success()).count(),
+        1,
+        "{out:?}"
+    );
+    std::thread::sleep(Duration::from_secs(2));
+    assert_eq!(started(&c).len(), 1);
+}
+
+#[test]
+fn idle_connections_are_closed_and_the_address_still_answers() {
+    let c = core("tgi");
+    let secret = "a-long-shared-secret-1234";
+    add(&c, "ci", "webhook", true, secret);
+    let until = Instant::now() + Duration::from_secs(5);
+    while TcpStream::connect(("127.0.0.1", c.port)).is_err() {
+        assert!(Instant::now() < until);
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    // Twenty connections that send nothing: each is closed within the request deadline (or at once past the cap).
+    let idle: Vec<TcpStream> = (0..20)
+        .map(|_| TcpStream::connect(("127.0.0.1", c.port)).unwrap())
+        .collect();
+    let t = Instant::now();
+    for mut s in idle {
+        s.set_read_timeout(Some(Duration::from_secs(15))).unwrap();
+        let mut buf = [0u8; 64];
+        let _ = s.read(&mut buf); // EOF (closed) or an error, never a hang past the deadline
+    }
+    assert!(
+        t.elapsed() < Duration::from_secs(13),
+        "idle connections held {:?}",
+        t.elapsed()
+    );
+    assert!(post(c.port, "ci", &[("X-Nunchiro-Secret", secret)], b"{}").contains("202"));
+}
