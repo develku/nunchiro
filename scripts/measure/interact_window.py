@@ -13,7 +13,7 @@ file in shop's git repo (the Diff row) and one manual card (the card rows); the 
 time. Every PID started is stopped here. Result: .scratch/perf-baseline/interact-window.json and the printed table
 (p50/p95/max as interact.py), with the 1-min load at start and end. Limits: 100 ms p95; 50 ms per frame for the scroll
 row; 1 s for the B17 rows and the lead row."""
-import argparse, json, os, shutil, signal, subprocess, sys, time
+import argparse, json, os, plistlib, shutil, signal, subprocess, sys, tempfile, time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -137,7 +137,22 @@ def table(rows):
     return "\n".join(lines)
 
 
-def measure(sink, repeats, composer_n, max_load, only, tag="q4w"):
+def app_bundle():
+    """The measure app in a bundle with the release core beside it, in a new system-temp folder: the core gives the
+    window its token only when the window is an executable named nunchiro-app with a `nunchiro` file next to it
+    (crates/nunchiro-core/src/peer.rs is_app), as in the shipped bundle."""
+    bundle = Path(tempfile.mkdtemp(prefix="ns-q4w-")) / "Nunchiro.app"
+    macos = bundle / "Contents/MacOS"
+    macos.mkdir(parents=True)
+    shutil.copy2(APP, macos / "nunchiro-app")
+    shutil.copy2(rel.CORE, macos / "nunchiro")
+    (bundle / "Contents/Info.plist").write_bytes(plistlib.dumps({
+        "CFBundleIdentifier": "dev.nunchiro.q4w", "CFBundleExecutable": "nunchiro-app", "CFBundleName": "Nunchiro",
+        "CFBundlePackageType": "APPL"}))  # OwnApp replaces the id with its own
+    return bundle
+
+
+def measure(sink, repeats, composer_n, max_load, only, tag="q4w", timeout=3600):
     """One window run of the driver's rows (`only`: name prefixes, empty = all) -> (result dict, run folder)."""
     if not rel.CORE.is_file():
         raise SystemExit(f"needs the release core {rel.CORE} (or NUNCHIRO_MEASURE_CORE)")
@@ -149,20 +164,22 @@ def measure(sink, repeats, composer_n, max_load, only, tag="q4w"):
     out.mkdir(parents=True)
     swift = out / "window_id.swift"
     swift.write_text(win.WINDOW_ID)
-    rel.APP = APP  # release.Nunchiro.open() starts this binary under its own bundle id
+    rel.APP = app_bundle()  # release.Nunchiro.open() starts this bundle's copy under its own bundle id
     arm = rel.Nunchiro(v1b="plain")
     res = dict(load_start=load0, budget_ms=ia.BUDGET_MS, app=str(APP), core=str(rel.CORE), home=str(arm.home))
     try:
-        fx = ia.fixture(arm)
-        if not only or any(not p.startswith("chat-open-mark") for p in only):
+        chat_only = bool(only) and all(p.startswith("chat-open-mark") for p in only)
+        fx = ia.fixture(arm, lead=not chat_only)  # the lead and the card need the window's token
+        if not chat_only:
             extra_fixture(arm, fx)
         job = dict(terms=fx["terms"], chats=fx["chats"], lead=fx["lead"], long_events=fx["long_events"], repeats=repeats,
                    composer_n=composer_n, keys=list(rel.WORK["keys"]), card_title=CARD, only=only)
         arm.open()
-        got, shots, fatal = collect(sink, job, arm.app.pid, out, swift, timeout=3600)
-        res.update(rows=summarise(got), raw=got, shots=shots, fatal=fatal, sessions=len(fx["terms"]) + len(fx["chats"]) + 1)
+        got, shots, fatal = collect(sink, job, arm.app.pid, out, swift, timeout=timeout)
+        res.update(rows=summarise(got), raw=got, shots=shots, fatal=fatal, sessions=len(fx["terms"]) + len(fx["chats"]) + bool(fx["lead"]))
     finally:
         arm.stop()
+        shutil.rmtree(rel.APP.parent, ignore_errors=True)
     res["load_end"] = rel.load()
     res["versions"] = rel.versions()
     return res, out

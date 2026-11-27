@@ -1258,7 +1258,8 @@ def chatopen_cmd(a):
     home = fresh("ns-sh-")  # a fresh HOME too, as restored_launch: the fixture never reads ~/.claude
     rel.clean_env = lambda extra=None: clean_env(dict(extra or {}, HOME=str(home)))
     try:
-        res, out = iw.measure(sink, a.repeats, 0, a.max_load, ["chat-open-mark"], tag="chatopen")
+        res, out = iw.measure(sink, a.repeats, 0, a.max_load, ["chat-open-mark"], tag="chatopen",
+                              timeout=60 + 30 * a.repeats)  # about 5 s per open; a stuck driver ends the run
     finally:
         rel.clean_env = clean_env
     (out / "result.json").write_text(json.dumps(res, indent=1, ensure_ascii=False))
@@ -1361,7 +1362,8 @@ def main():
     w = sub.add_parser("weigh")
     w.add_argument("--secs", type=int, default=60)
     w.add_argument("--out")
-    co = sub.add_parser("chatopen")
+    co = sub.add_parser("chatopen", help="p33 long-chat open; the measure app's window shows and takes the front "
+                                         "for about a minute")
     co.add_argument("--repeats", type=int, default=10)
     co.add_argument("--max-load", type=float, default=6.0, help="refuse to start above this 1-min load")
     co.add_argument("--no-build", action="store_true")
