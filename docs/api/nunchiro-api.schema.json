@@ -1094,6 +1094,27 @@
       ],
       "type": "string"
     },
+    "Blocker": {
+      "description": "A task this one waits for, as a reader gets it.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "stage": {
+          "description": "`plan`, `build`, `review`, `gate` (`stage`), or how it closed when that was not a landing (`dropped`).",
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "stage"
+      ],
+      "type": "object"
+    },
     "BoardDecision": {
       "properties": {
         "column": {
@@ -3604,6 +3625,13 @@
           "$ref": "#/$defs/Advance",
           "description": "Ticket 1081: what the core's auto-advance (advance.rs) did for its seats; empty until it first acts."
         },
+        "after": {
+          "description": "The tasks of the same place it waits for, at most `AFTER_MAX`. Whether it still waits is worked out at each read\n(`blockers`): one closed as merged or done holds it no more. A build without the field reads the file and drops\nit on its next write.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "asking": {
           "description": "The seats (session ids) with an open ask: they wait for the answer, also while their turn runs the wait. The\nwindow reads the state from the seats again with it (look 1117 v11 B N11-S2-3).",
           "items": {
@@ -3621,6 +3649,13 @@
         "auto": {
           "description": "Made by the core for a lead's worktree that named no task: its title is the worktree's name.",
           "type": "boolean"
+        },
+        "blockers": {
+          "description": "The tasks of `after` that have not landed (`blockers`).",
+          "items": {
+            "$ref": "#/$defs/Blocker"
+          },
+          "type": "array"
         },
         "closed": {
           "anyOf": [
@@ -3678,6 +3713,17 @@
             }
           ],
           "description": "Slice h: the user's yes to the merge, for the files at this revision only."
+        },
+        "ordered": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Ordered"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Who last changed `after`, so a lead's handover reads who ordered it."
         },
         "package": {
           "anyOf": [
@@ -3750,6 +3796,12 @@
         },
         "updated": {
           "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "waiters": {
+          "description": "How many open tasks wait for this one.",
+          "format": "uint",
           "minimum": 0,
           "type": "integer"
         },
@@ -4866,6 +4918,24 @@
           "type": "boolean"
         }
       },
+      "type": "object"
+    },
+    "Ordered": {
+      "properties": {
+        "at": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "by": {
+          "description": "`the user`, or the lead's seat name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "by",
+        "at"
+      ],
       "type": "object"
     },
     "Outcome": {
@@ -13303,6 +13373,13 @@
                 "string",
                 "null"
               ]
+            },
+            "after": {
+              "description": "`new` and `after`: the ids of the tasks of the same place it waits for; `after` with none clears them.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
             },
             "all": {
               "default": false,

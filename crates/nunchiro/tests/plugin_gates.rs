@@ -512,7 +512,8 @@ fn a_hung_check_never_holds_a_send_past_the_budget() {
     for line in std::fs::read_to_string(&out).unwrap().lines() {
         let (code, secs) = line.split_once(' ').unwrap();
         assert_eq!(code, "0", "a send failed: {line}");
-        assert!(secs.parse::<u64>().unwrap() <= 12, "a send took {secs} s");
+        // Under the CLI's 15 s reply limit: the 10 s budget plus starting the CLI on a loaded machine.
+        assert!(secs.parse::<u64>().unwrap() < 15, "a send took {secs} s");
     }
     for i in 1..=6 {
         until(&format!("m{i}"), &read);

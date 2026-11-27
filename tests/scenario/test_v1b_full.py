@@ -115,6 +115,23 @@ class Manifest(Home):
         self.assertTrue(any(sibling in p for p in problems), problems)
         self.assertTrue(any("skills/synced/a_b/SKILL.md" in p for p in problems), problems)
 
+    def test_claude_run_markers_are_ignored_but_their_neighbours_are_not(self):
+        plugin = ".claude/plugins/synced/a_b/pdf-viewer"
+        before = v1b_full.manifest(self.home)
+        for rel in (plugin + "/.in_use/22555", ".claude/plugins/.last_inuse_sweep",
+                    ".claude/plugins/store/cc-plugin-diff_builtin-3903e77c01b1.json"):
+            self.put(rel, '{"pid":22555,"procStart":"Fri Nov 27 09:16:10 2026"}')  # a Claude process starts
+        self.assertEqual(self.diff(before), ([], []))
+        for rel in (plugin + "/.in_use/hook.sh", plugin + "/.mcp.json", ".claude/skills/s/.in_use/22555",
+                    ".claude/plugins/marketplaces/m/p/.in_use/22555", ".claude/plugins/store/mine_local-1.json",
+                    ".claude/plugins/x/.last_inuse_sweep",
+                    plugin + "/.in_use/7/hook.sh", ".claude/plugins/store/x_builtin-1.json/hook.sh"):  # a folder is still walked
+            with self.subTest(rel):
+                before = v1b_full.manifest(self.home)
+                self.put(rel, "a")
+                problems, _ = self.diff(before)
+                self.assertTrue(any(rel in p for p in problems), problems)
+
     def test_cache_named_config_is_not_hidden(self):
         for rel in (".claude/hooks/cache-guard.sh", ".claude/skills/s/cache/SKILL.md", ".codex/skills/s/caches/x.md",
                     ".claude/skills/s/logs/x.md", ".claude/plugins/marketplaces/m/src/proxyCache.ts", ".claude/skills/s/run.log",
