@@ -612,7 +612,9 @@ Where v2 differs from the audit's proposal, and why:
   a second account links to is read once. The journal is read whole and kept to the project by the script, with the
   core's own lines that name no project: a core start or a full day file ends the states left open (before, a seat
   gone with a stopped core stayed in its last state until the run). A journal that cannot be read leaves seat use and
-  permission waits null, not 0. No anchor or band changed.
+  permission waits null, not 0, and so does a journal with no live seat of the project. Owner touches are counted
+  only for lanes started after the record's first live ask or answer: a record that holds verdicts but never an ask
+  gives null owner figures, not 0 touches (stricter). No anchor or band changed.
 - Owner decision 2026-11-26 (stricter): p14 adds memory-pressure kills over 7 days and row ML1. The Mac staying responsive is the owner's second priority, and the idle figures alone scored a frozen Mac the same as a calm one.
 
 Not changed in v2 (the audit's lower-priority list, outside the approval of 2026-11-26): the weight of the default
