@@ -31,7 +31,7 @@ import { useScheduleList } from '../schedule/schedules';
 import { PLACE_FIELD, PlaceSection } from '../lead/place';
 import type { Place } from '../lead/tasks';
 import { registerSettingsPage, type PageContext } from './registry';
-import { OpenBots } from '../bots/BotsMoved'; // ticket 1168
+import { LevelsMoved, OpenBots } from '../bots/BotsMoved'; // ticket 1168
 import '../lead/lead.css'; // the row menu (.lead-more, .lead-menu), as the Schedules tab's rows
 import './team.css';
 
@@ -363,8 +363,8 @@ function TeamPage({ core, t, projects, closeSettings, toast, sessions }: Pick<Pa
           );
         })}
       </Sec>
-      {/* Shown with no teammate too: levels also apply to staffed roles and schedules. */}
-      <LevelTable t={t} core={core} agents={agents} />
+      {/* Shown with no teammate too: levels also apply to staffed roles and schedules. Their table is in the Bots view. */}
+      <LevelsMoved t={t} />
     </div>
   );
 }
@@ -442,7 +442,7 @@ export function LevelRule({ t, table, draft, setDraft }: { t: PageContext['t']; 
  *  and Codex's cells as a session start checks `--model` and `--effort`, and asks an ACP agent only for what it lists).
  *  A row whose three levels are the same says so. A changed row has the kit's row reset, the card its "Reset to
  *  defaults" (tickets 311, 453), so nothing here is a disabled button. */
-function LevelTable({ t, core, agents }: { t: PageContext['t']; core: PageContext['core']; agents: AcpRow[] }) {
+export function LevelTable({ t, core, agents }: { t: PageContext['t']; core: PageContext['core']; agents: AcpRow[] }) {
   const [table, set, error] = useCoreFeature<Table>(LEVELS_KEY, {});
   const [open, setOpen] = useState(false);
   // The rows, chips and menus of the window follow the table at once (not the empty one this starts with, before the

@@ -714,3 +714,18 @@
   padding: 0 9px;
   font-size: var(--fs-12);
 }
+/* Models and limits on the roster: Settings' level table and Worker models inside the fold, without Settings' frame
+   (its absolute box, page background and two-column grid). */
+.bots-levels.settings[role='region'] {
+  position: static;
+  display: block;
+  overflow: visible;
+  background: transparent;
+}
+.bots-levels > .sbody {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-16);
+  padding: var(--sp-8) 0 0;
+  overflow: visible;
+}
