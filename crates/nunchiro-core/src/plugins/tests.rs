@@ -221,6 +221,10 @@ fn an_id_ending_in_underscore_is_refused() {
     let err = parse("id = \"x_\"\nname = \"X\"\nversion = \"1.0.0\"\n", "x_").unwrap_err();
     assert!(err.contains("invalid plugin id"), "{err}");
     let h = home("und");
-    assert!(scaffold(&h, "x_", &[]).unwrap_err().contains("invalid plugin id"));
+    assert!(
+        scaffold(&h, "x_", &[])
+            .unwrap_err()
+            .contains("invalid plugin id")
+    );
     fs::remove_dir_all(&h).unwrap();
 }

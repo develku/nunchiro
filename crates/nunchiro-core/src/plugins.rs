@@ -129,6 +129,11 @@ pub enum SettingKind {
     Choice,
 }
 
+/// A plugin id: a widget name with no `__` (it separates id and part) and no `_` at the end (`plugin__x___c` would
+/// read as plugin `x`, part `_c`).
+fn valid_id(id: &str) -> bool {
+    approval::valid_name(id) && !id.contains("__") && !id.ends_with('_')
+}
 /// The widget name of one part, `plugin__<id>__<part>`: plain widget-name characters, so a panel is placed, framed
 /// and stored in a layout like any widget (`widget:<name>`).
 pub const PART_PREFIX: &str = "plugin__";
@@ -161,7 +166,7 @@ pub fn parse(text: &str, id: &str) -> Result<Plugin, String> {
         ));
     }
     // `__` separates the id from a part in a part's widget name.
-    if !approval::valid_name(&p.id) || p.id.contains("__") {
+    if !valid_id(&p.id) {
         return Err(
             "invalid plugin id: use a-z, 0-9, - and _ (up to 64, not starting with - or _)".into(),
         );
@@ -425,14 +430,7 @@ pub(crate) fn input(
     context: &widgets::Context,
 ) -> Result<Vec<u8>, String> {
     let (id, part) = split(proof.name()).ok_or("not a plugin part")?;
-    // The manifest the approval hashed, never a second read of the folder.
-    let text = proof
-        .files()
-        .iter()
-        .find(|f| f.path() == MANIFEST)
-        .map(|f| String::from_utf8_lossy(f.bytes()).into_owned())
-        .ok_or("missing plugin.toml")?;
-    let p = parse(&text, id)?;
+    let p = approved(proof).ok_or("missing plugin.toml")?;
     let mut v = serde_json::to_value(context).map_err(|e| e.to_string())?;
     let event = if p.panel.iter().any(|x| Some(x.name.as_str()) == part) {
         "panel"
@@ -444,6 +442,13 @@ pub(crate) fn input(
     v["part"] = part.unwrap_or_default().into();
     v["settings"] = serde_json::to_value(values(home, &p)).map_err(|e| e.to_string())?;
     serde_json::to_vec(&v).map_err(|e| e.to_string())
+}
+
+/// The manifest a proof carries: the bytes the approval hashed, never a second read of the folder.
+fn approved(proof: &approval::Proof) -> Option<Plugin> {
+    let (id, _) = split(proof.name())?;
+    let text = proof.files().iter().find(|f| f.path() == MANIFEST)?.bytes();
+    parse(&String::from_utf8_lossy(text), id).ok()
 }
 
 fn dir(home: &Path) -> PathBuf {
@@ -672,13 +677,17 @@ pub(crate) fn handle(
         Action::Set { id, on } => {
             read(home, &id)?;
             let mut store = load(home);
+            let off = !on;
             if on {
-                store.on.insert(id);
+                store.on.insert(id.clone());
             } else {
                 store.on.remove(&id);
+            }
+            // Saved first, so no new run starts between the stop and the switch.
+            save(home, &store)?;
+            if off {
                 crate::sandbox::stop_subjects(home, &part_name(&id, "")); // a part still running stops now
             }
-            save(home, &store)?;
             listed(home)
         }
         Action::Setting { id, key, value: v } => {
@@ -706,8 +715,13 @@ pub(crate) fn handle(
                 .iter()
                 .find(|c| c.name == command)
                 .ok_or_else(|| format!("plugin {id} has no command {command}"))?;
-            let show = c.show;
             let name = part_name(&id, &command);
+            // Where the output goes, as the approved manifest says (a later edit asks again before it counts).
+            let show = approval::check(home, &name)
+                .ok()
+                .and_then(|proof| approved(&proof))
+                .and_then(|p| p.command.into_iter().find(|c| c.name == command))
+                .map_or(c.show, |c| c.show);
             let key = (home.to_path_buf(), name.clone());
             let pending = |name: &str| widgets::Run {
                 name: name.into(),
@@ -867,7 +881,7 @@ pub const PARTS: [&str; 3] = ["panel", "command", "setting"];
 
 /// `nunchiro plugin new <id>`: a starter plugin that passes `plugin check`. Writes files only; never replaces any.
 pub fn scaffold(home: &Path, id: &str, with: &[&str]) -> Result<PathBuf, String> {
-    if !approval::valid_name(id) {
+    if !valid_id(id) {
         return Err(
             "invalid plugin id: use a-z, 0-9, - and _ (up to 64, not starting with - or _)".into(),
         );
