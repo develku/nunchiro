@@ -13,6 +13,8 @@ A prompt's first text block picks the behaviour:
   elicit         ask a URL elicitation, end the turn once it is answered
   cancel-me      ask permission and hold the turn; on session/cancel ask again, end the turn once that is answered
   edit:PATH      ask permission, write PATH through fs/write_text_file, report it as a completed edit with a diff, end the turn
+  opencode:DIR   OpenCode 2.2.5's own updates for a write (new file), a read and an edit in DIR, as it sent them on the
+                 wire (it writes files itself: no fs request); the write's diff is only its in_progress rawInput, end turn
   read:PATH      fs/read_text_file PATH, end the turn
   write:PATH     fs/write_text_file PATH, end the turn
   term           terminal/create /bin/echo, wait, read its output, release, end the turn
@@ -140,6 +142,28 @@ def on_prompt(message):
             else:
                 end_turn()
         permission(session, allowed)
+    elif text.startswith("opencode:"):
+        d = text[9:]
+        none = {"metadata": {"truncated": False}}
+        for tid, name, kind, path, raw_in, content, out in [
+            ("w", "write", "edit", "hello.txt", {"path": "hello.txt", "content": "hello world\n"},
+             [{"type": "content", "content": {"type": "text", "text": "Created file successfully: hello.txt"}}], none),
+            ("r", "read", "read", "notes.txt", {"path": "notes.txt"},
+             [{"type": "content", "content": {"type": "text", "text": "Read file notes.txt, lines 1-3\n1: alpha"}}], none),
+            ("e", "edit", "edit", "notes.txt", {"path": "notes.txt", "oldString": "beta", "newString": "BETA"},
+             [{"type": "content", "content": {"type": "text", "text": "Edited notes.txt (1 replacement)"}},
+              {"type": "diff", "path": d + "/notes.txt", "oldText": "alpha\nbeta\ngamma\n", "newText": "alpha\nBETA\ngamma\n"}],
+             {"metadata": {"files": [{"file": "notes.txt", "status": "modified", "additions": 1, "deletions": 1}],
+                           "truncated": False}}),
+        ]:
+            at = [{"path": d + "/" + path}]
+            update(session, {"sessionUpdate": "tool_call", "toolCallId": tid, "name": name, "title": name, "kind": kind,
+                             "status": "pending", "locations": [], "rawInput": {}})
+            update(session, {"sessionUpdate": "tool_call_update", "toolCallId": tid, "status": "in_progress",
+                             "kind": kind, "title": name, "locations": at, "rawInput": raw_in})
+            update(session, {"sessionUpdate": "tool_call_update", "toolCallId": tid, "status": "completed",
+                             "locations": at, "content": content, "rawOutput": out})
+        end_turn()
     elif text.startswith("read:") or text.startswith("write:"):
         kind, path = text.split(":", 1)
         if kind == "read":

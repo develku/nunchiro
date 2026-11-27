@@ -296,6 +296,30 @@ fn started(core: &Core) -> String {
         .to_string()
 }
 
+/// OpenCode 2.2.5's wire: a write (new file) whose diff is only the in_progress update's rawInput, a read, and an edit
+/// whose completed update carries a diff item. One edit card for each file change, none for the read.
+#[test]
+fn acp_edit_card_for_each_file_change_wherever_the_diff_is() {
+    let core = Core::new("acpoc", FAKE);
+    let id = started(&core);
+    let dir = core.project.display().to_string();
+    core.prompt(&id, &format!("opencode:{dir}"));
+    wait_completion(&core, &id, 1);
+    let edits: Vec<Value> = core
+        .chat(&id)
+        .into_iter()
+        .filter(|d| d["kind"] == "edit")
+        .map(|d| json!({"tool_id": d["tool_id"], "path": d["path"], "added": d["added"], "removed": d["removed"]}))
+        .collect();
+    assert_eq!(
+        edits,
+        [
+            json!({"tool_id": "w", "path": format!("{dir}/hello.txt"), "added": 1, "removed": null}),
+            json!({"tool_id": "e", "path": format!("{dir}/notes.txt"), "added": 3, "removed": 3}),
+        ]
+    );
+}
+
 /// The permission answers the agent got: only allow_once / reject_once option ids or `cancelled`, never an always.
 fn assert_once_only(responses: &[Value]) {
     for r in responses {
