@@ -266,6 +266,17 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
       setGoing(false);
     }
   };
+  // "Add a project without starting": the folder picked above is added (Assistants' folder is no project: Add project then).
+  const addOnly = async () => {
+    if (!folder || inHome) return quick();
+    try {
+      await accept();
+      window.dispatchEvent(new CustomEvent(TREE_SET, { detail: await core.treeEdit({ op: 'add', project: folder, added: true }) }));
+      flushSync(closeSettings);
+    } catch (e) {
+      setGoError(e);
+    }
+  };
   // held.ts gives a held message back to the box while its session is not in the window's list yet, so the prompt is
   // held, and Settings closed, only once the window lists the new session.
   useEffect(() => {
@@ -479,7 +490,7 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
                 <button type="submit" className="btn p" data-go="start" disabled={going} aria-busy={going || undefined}>
                   {t('firstUse.start', { name: NAMES[lead] })} <span aria-hidden>⏎</span>
                 </button>
-                <button type="button" className="btn" data-go="quick" onClick={() => void quick()}>
+                <button type="button" className="btn" data-go="quick" onClick={() => void addOnly()}>
                   {t('firstUse.addOnly')}
                 </button>
                 </div>

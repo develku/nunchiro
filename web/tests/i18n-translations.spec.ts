@@ -17,11 +17,10 @@ test('all_keys_all_languages: every key in every language or pending, none outsi
     if (id === 'system') continue;
     const table = TABLES[id] ?? {};
     expect(Object.keys(table).filter((k) => !(k in EN)), id).toEqual([]);
+    // One expect per language, not two per key: 56 000 expects held a CI shard for 7 to 10 minutes.
     const have = keys.filter((k) => k in table);
-    for (const key of have) {
-      expect(table[key]?.trim(), `${id}: ${key}`).toBeTruthy();
-      expect(placeholders(table[key]!), `${id}: ${key}`).toEqual(placeholders(EN[key]));
-    }
+    expect(have.filter((key) => !table[key]?.trim()), `${id}: empty lines`).toEqual([]);
+    expect(have.filter((key) => placeholders(table[key]!).join() !== placeholders(EN[key]).join()), `${id}: placeholders unlike English`).toEqual([]);
     expect(htmlLang(id, 'en')).toBe(id);
     if (id === 'en') continue;
     expect(keys.filter((k) => !(k in table)), `${id}: missing keys not in tests/i18n-pending.json`).toEqual(PENDING[id] ?? []);

@@ -96,11 +96,15 @@ folder in Settings > About; the app writes it to `$NUNCHIRO_HOME/update-source` 
 The folder holds a built `Nunchiro.app` and `nunchiro-build.json` beside it:
 `{"commit": "<git sha>", "built": "<RFC 3339 time>", "sha256": {"nunchiro": "<hex>", "nunchiro-app": "<hex>"}}`, where
 `sha256` names every file in `Nunchiro.app/Contents/MacOS`. Prints
-`{"state": "off" | "none" | "ready" | "refused", "source", "commit", "built", "reason"}`: `ready` is a stamp of another
-commit than this build whose hashes match the bundle. Refused, with the reason: a folder or bundle that is a symlink, not
-owned by you, or writable by group or others; a bundle id other than `dev.nunchiro.app`; a hash that does not match; a
-build that is not an installed `Nunchiro.app` (the isolated test build keeps its own home and never updates). Changes
-nothing. Like `update install`, it refuses to run with a session token (`NUNCHIRO_TOKEN`): it is for the owner.
+`{"state": "off" | "none" | "ready" | "refused", "source", "commit", "built", "reason"}`: `ready` is a stamp whose hashes
+match the bundle and whose commit is later than this build's on the update repository's main first-parent line, the same
+check `update install` makes. To judge that it fetches main over the network (with gh's GitHub sign-in) into
+`.nunchiro-update/` beside the installed bundle and keeps the last lasting verdict there, so the same pair of commits is
+not fetched again. An older or off-main build, or one that cannot be judged now (offline, no sign-in, a build with no
+update repository), is `none` with the reason. Refused, with the reason: a folder or bundle that is a symlink, not owned
+by you, or writable by group or others; a bundle id other than `dev.nunchiro.app`; a hash that does not match; a build
+that is not an installed `Nunchiro.app` (the isolated test build keeps its own home and never updates). Changes nothing
+else. Like `update install`, it refuses to run with a session token (`NUNCHIRO_TOKEN`): it is for the owner.
 
 ### `nunchiro update install [--archive <file>]`
 Copies the ready bundle beside the installed one (`.nunchiro-update/new`), checks the copy again (hashes, bundle id,
@@ -679,9 +683,28 @@ outcome with acceptance conditions that uses zero or more worktrees. The owner's
 with `--project DIR`); a session reaches the tasks of its own place. Add `--json` for the record as JSON.
 
 ### `nunchiro task new "<outcome>"`
-`nunchiro task new "<outcome>" [--accept "<condition>"]... [--project DIR]`. For the lead of a place and the owner.
+`nunchiro task new "<outcome>" [--accept "<condition>"]... [--after <id>]... [--project DIR]`. For the lead of a place and the owner.
 Asked twice with the same outcome, it gives the same open task back. A worktree a lead makes joins the open task of
-its name, else gets a task of its own.
+its name, else gets a task of its own. `--after` names a task of the same place this one waits for (see `task after`).
+
+### `nunchiro task after`
+`nunchiro task after <id> <id>... | --none` sets the tasks of the same place that task `<id>` waits for, at most 8, as a
+whole; `--none` clears them. For the lead of a place and the owner; who set it is kept on the task (`order set by`).
+A task waits while one of them has not landed (closed as merged or done). `task list` and `task show` say
+`waits for <id> "<title>" (<stage>)` per task it waits for, and `<n> tasks wait for this` on a task others wait for.
+Refused with a sentence: the task itself, an id that is no open task of this place, a dropped task, an order that
+would go round (a task waiting for one that already waits for it, however far), more than 8. An older Nunchiro opens
+a ledger with this order and drops it on its next write.
+While a task waits, `task staff` and every start of a seat that writes in its worktree are refused ("Not started:
+…"); a seat that does not write may start, and the core starts no Reviewer for it. When a task lands, the lead of
+the tasks that waited for it gets one line (through its queue, and in the room) naming those it freed and those that
+still wait (typed into the lead's box where auto-advance is on, as a room line where it is off); it is sent once,
+also over a restart, and only while the lead's seat runs (else when it runs again). An automatic task others wait for
+is never removed unseen: when its worktree goes back to the user or it is dropped empty, it closes as dropped, so its
+waiters ask. A
+task whose blocker was dropped reads `needs` with `asks: …` and its lead is told; the user's clear (`task after
+<id> --none` from the owner's shell or the board) is told to the lead too. A wait added to a task whose writer already
+runs leaves the seat alone and reads `started before "<title>" landed`.
 
 ### `nunchiro task list`
 `nunchiro task list [--all] [--project DIR]` and `nunchiro task show <id>`. Each task with its state now (`needs`,

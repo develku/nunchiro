@@ -1603,6 +1603,9 @@ pub enum Request {
         /// else the caller's own.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         account: Option<String>,
+        /// `new` and `after`: the ids of the tasks of the same place it waits for; `after` with none clears them.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        after: Vec<String>,
     },
     /// Ticket 990 slice i: the user's roles (`roles.rs`). `list`: anyone. `save` (`role`) and `remove` (`name`): the
     /// owner's only. `propose` (`role`, `why`): a place's lead asks the user on a card.

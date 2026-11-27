@@ -252,6 +252,7 @@ const BEFORE: Record<string, string> = {
   'chat.empty.seatTitle': 'What should {name} do?',
   'composer.waitsHint': 'Answer its question first. A message you send now waits until you answer.', // A9 (ticket 991)
   'composer.toCard': 'Shift+Tab: to the card.', // ticket 1030
+  'composer.digitsCard': "Or press an option's number.",
   // Ticket 1044: a clipboard image's chip name, and /new in Claude's slash menu (English only until ticket 1035).
   'composer.imageN': 'Image #{n}',
   'composer.cmd.claude.new': 'Start a new conversation (same as /clear)',
