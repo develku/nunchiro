@@ -1045,6 +1045,32 @@ impl Queue {
             Ok(())
         })
     }
+    /// Saves each session's exact in-memory activity time over its older checkpoint (a clean exit or restart), so
+    /// the next core, which starts with no in-memory times, reads where each session really was.
+    pub fn flush_activity(&mut self) -> Result<(), String> {
+        let behind: Vec<(String, u64)> = self
+            .activity
+            .iter()
+            .filter(|(id, at)| {
+                self.disk
+                    .sessions
+                    .get(*id)
+                    .is_some_and(|s| s.attention.last_activity < **at)
+            })
+            .map(|(id, at)| (id.clone(), *at))
+            .collect();
+        if behind.is_empty() {
+            return Ok(());
+        }
+        self.change(|q| {
+            for (id, at) in &behind {
+                if let Some(s) = q.disk.sessions.get_mut(id) {
+                    s.attention.last_activity = *at;
+                }
+            }
+            Ok(())
+        })
+    }
     /// V2-1b: a reattached session's items (restored, or replayed from the hook journal) are shown and counted but
     /// answerable only after fresh proof, which gives them a new id; an old hook is never answered through.
     pub fn checking(&mut self, id: &str) -> Result<(), String> {
