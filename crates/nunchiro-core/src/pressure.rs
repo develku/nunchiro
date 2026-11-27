@@ -42,6 +42,18 @@ pub(crate) fn unprompted_line(name: &str, id: &str) -> String {
     )
 }
 
+/// The line a session's held start sends its asker: `unprompted_line` once it started, else `asker_line`.
+pub(crate) fn session_line(
+    name: &str,
+    done: wait::Done,
+    result: &Result<String, String>,
+) -> String {
+    match result {
+        Ok(id) => unprompted_line(name, id),
+        Err(_) => asker_line(name, done, result),
+    }
+}
+
 /// The line a waiting start's asker gets when it leaves the list.
 pub(crate) fn asker_line(name: &str, done: wait::Done, result: &Result<String, String>) -> String {
     use wait::Done;
@@ -223,7 +235,8 @@ fn checked(
     let log = key.is_none_or(|key| first_hold(key, result.is_err(), level));
     result.map_err(|held| {
         if log {
-            eprintln!("memory pressure: held a new seat (level {level}, {path})");
+            let free = free().map_or("?".into(), |f| f.to_string());
+            eprintln!("memory pressure: held a new seat (level {level}, {free} % free, {path})");
         }
         held.to_string()
     })
