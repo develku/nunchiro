@@ -1243,11 +1243,16 @@ fn serve(
                             crate::accounts::probe_reply(&home, request)
                         })
                     }
-                    // Ticket 358: sign-in reads the reported methods first and sign-out waits for the answer.
+                    // Ticket 358: sign-in reads the reported methods first and sign-out waits for the answer; the
+                    // test message waits up to 60 s for the agent's turn.
                     Ok(frame)
                         if matches!(
                             frame.request,
-                            Some(Request::AcpAgentSignIn { .. } | Request::AcpAgentSignOut { .. })
+                            Some(
+                                Request::AcpAgentSignIn { .. }
+                                    | Request::AcpAgentSignOut { .. }
+                                    | Request::AcpAgentTry { .. }
+                            )
                         ) =>
                     {
                         let (registry, home) = (registry.clone(), home.to_path_buf());

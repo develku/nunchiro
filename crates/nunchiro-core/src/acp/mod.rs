@@ -6,6 +6,7 @@ pub(crate) mod add;
 mod client;
 pub mod config;
 pub mod probe;
+pub(crate) mod turn;
 
 use crate::{
     api::{Reply, Response, Session},
@@ -334,6 +335,7 @@ pub(crate) fn setup(
             terminal: crate::firstrun::detect_all(),
             acp: rows(home)?,
             file: home.join("agents.toml"),
+            turns: turn::turns(home),
         })
     };
     match request {
@@ -376,6 +378,7 @@ pub(crate) fn setup(
         Request::AcpAgentSignInState { attempt } => add::state(&attempt),
         Request::AcpAgentSignInCancel { attempt } => add::cancel(&attempt),
         Request::AcpAgentSignOut { name } => add::sign_out(home, &name),
+        Request::AcpAgentTry { name, cancel } => turn::try_turn(home, &name, cancel, stopping),
         _ => Err("not an agent setup request".into()),
     }
 }
