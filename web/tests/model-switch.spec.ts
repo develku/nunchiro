@@ -81,7 +81,9 @@ test('a_default_model_session_passes_its_effort_on', async ({ app, core }) => {
   app.on('websocket', (ws) =>
     ws.on('framesent', (f) => {
       const request = typeof f.payload === 'string' && f.payload.includes('"op":"start"') ? JSON.parse(f.payload).request : null;
-      if (request?.op === 'start') starts.push(request.session);
+      // Since #57 the New tab menu sends its start as `start_or_wait`, the start inside it.
+      const start = request?.op === 'start_or_wait' ? request.start : request;
+      if (start?.op === 'start') starts.push(start.session);
     }),
   );
   await openWindow(app);
