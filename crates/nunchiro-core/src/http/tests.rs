@@ -398,9 +398,9 @@ mod pending {
 // Phase 1: session B, which the window does not
 // watch, streams for 1 s; a loop woken into the registry by each read counts far more locks than the resyncs
 // allow, and an unbatched loop far more passes. Phase 2: the watched session A streams for 1 s; batching keeps
-// the loop at one output pass per `BATCH`.
+// the loop at one output pass per `BATCH`, and its output is read off the registry, which it takes only to resync.
 #[test]
-fn a_window_takes_the_registry_only_for_output_it_watches_and_once_per_batch() {
+fn a_window_takes_the_registry_only_to_resync_its_watches() {
     use crate::{api::StartSession, sessions::Sessions};
     use std::sync::{Arc, Mutex, atomic::AtomicBool};
     let home = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -502,17 +502,18 @@ fn a_window_takes_the_registry_only_for_output_it_watches_and_once_per_batch() {
             }
         })
     };
-    let (before, at) = (locks(), Instant::now());
+    let (before, passed, at) = (locks(), passes(), Instant::now());
     feed(&a);
     done(&a);
     let (watched, streamed) = (locks() - before, at.elapsed());
+    let watched_passes = passes() - passed;
     reading.store(false, Ordering::SeqCst);
     reader.join().unwrap();
     stopping.store(true, Ordering::SeqCst);
     let _ = registry.lock().unwrap().stop();
     let _ = std::fs::remove_dir_all(&home);
     eprintln!(
-        "v1a-27 output-pass registry locks: B unwatched {unwatched} ({unwatched_passes} passes) in {quiet:?}, A watched {watched} in {streamed:?}"
+        "v1a-27 output-pass registry locks: B unwatched {unwatched} ({unwatched_passes} passes) in {quiet:?}, A watched {watched} ({watched_passes} passes) in {streamed:?}"
     );
     // Resyncs alone run once per SNAPSHOT_EVERY; the slack covers the done() polls' 20 ms granularity.
     let resyncs = |d: Duration| (d.as_millis() / SNAPSHOT_EVERY.as_millis()) as u64 + 5;
@@ -527,10 +528,15 @@ fn a_window_takes_the_registry_only_for_output_it_watches_and_once_per_batch() {
         unwatched_passes <= batches(quiet) + ticks(quiet) + 5,
         "{unwatched_passes} passes for unwatched output in {quiet:?}"
     );
-    let batches = batches(streamed);
     assert!(
-        watched <= batches + resyncs(streamed),
-        "{watched} passes in {streamed:?}"
+        watched_passes <= batches(streamed) + resyncs(streamed),
+        "{watched_passes} passes in {streamed:?}"
+    );
+    // Watched output between resyncs is read from the session's own ring: a key's echo never waits for a registry
+    // lock the core's tick or another request holds.
+    assert!(
+        watched <= resyncs(streamed),
+        "{watched} registry locks for watched output in {streamed:?}"
     );
 }
 
