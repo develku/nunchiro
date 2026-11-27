@@ -135,7 +135,7 @@ test('no_lead_row_fallback: a lead whose seat is not running here leaves the sea
   }
 });
 
-const CSS = ['tokens.css', 'styles.css', 'tree/tree.css', 'lead/lead.css'].map((f) => fs.readFileSync(path.join(import.meta.dirname, '../src', f), 'utf8')).join('\n');
+const CSS = ['tokens.css', 'styles.css', 'layout.css', 'keys.css', 'chrome.css', 'tree/tree.css', 'lead/lead.css'].map((f) => fs.readFileSync(path.join(import.meta.dirname, '../src', f), 'utf8')).join('\n');
 test('pill_fits_270: on a 270 px tree the pill stays whole and the lead name gives way first', async ({ page }) => {
   const s = session({ teammate: 'm-lead', cwd: P, label: 'Lead of the release notes and changelog' });
   const html = renderToStaticMarkup(

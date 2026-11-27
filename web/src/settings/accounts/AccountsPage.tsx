@@ -15,7 +15,8 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 're
 // Ticket 391 (final.html scene a): this is Settings > Providers, the old Agents and Accounts pages in one. Each provider is a
 // one-line card head (head.tsx); an open Claude or Codex card has 연결·로그인, 계정, 모델, 새 세션 기본값 and 고급, an ACP card
 // 연결·로그인, 모델 and 고급. The default agent (defaults.tsx) and agents.toml moved here from the Agents page.
-import { accountName, type Account, type AccountAgent, type AccountUsage, type AcpRow, type CommandView, type CoreClient, type SignInState, type TerminalAgent } from '../../api';
+import { accountName, type Account, type AccountAgent, type AccountUsage, type AcpRow, type AcpTurn, type CommandView, type CoreClient, type SignInState, type TerminalAgent } from '../../api';
+import { AcpTry, TryChip } from './acpTry';
 import { AcpLogin, AcpLoginChip } from './acpSignIn';
 import type { Key } from '../../i18n';
 import { ageText } from '../../chat/PrChip';
@@ -142,6 +143,7 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
   const [opened, setOpened] = useState('');
   const [terminal, setTerminal] = useState<TerminalAgent[] | null>(null);
   const [rows, setRows] = useState<AcpRow[]>([]);
+  const [turns, setTurns] = useState<Record<string, AcpTurn>>({});
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [rechecking, setRechecking] = useState(false);
   const [now, setNow] = useState(Date.now);
@@ -176,6 +178,7 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
     setFile(r.file);
     setTerminal(r.terminal);
     setRows(r.acp);
+    setTurns(r.turns ?? {});
     setCheckedAt(new Date().toISOString());
     setNow(Date.now());
     return r;
@@ -755,6 +758,8 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
     const missing = review ? [] : missingOf(r.env, r.env_set);
     const absent = !review && !r.found_path;
     const bad = !!r.refused || absent || missing.length > 0;
+    // A test message needs an approved ACP entry that is installed and whole; a terminal-only CLI has none.
+    const tryable = r.acp && !review && !bad;
     const runner = r.source === 'service' ? rows.find((x) => x.name === r.command.split('/').pop())?.label : undefined;
     const version = versionOf(r.version);
     const login = (
@@ -823,6 +828,7 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
             <>
               {absent ? <Chip word={t('agents.page.stMissing')} tone="bad" /> : bad ? <Chip word={t('providers.failed')} tone="bad" /> : review ? <Chip word={t('providers.needsApproval')} tone="warn" /> : <Chip word={t('providers.approved')} />}
               <AcpLoginChip t={t} name={r.name} bad={bad} />
+              {tryable && <TryChip t={t} turn={turns[r.name]} version={r.version} />}
             </>
           }
           open={open}
@@ -834,6 +840,7 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
             <Block title={t('providersPage.login')}>
               {login}
               {!form && <AcpLogin t={t} core={core} row={r} />}
+              {!form && tryable && <AcpTry t={t} core={core} name={r.name} label={r.label} turn={turns[r.name]} onDone={() => void readAgents().catch(() => {})} />}
               <span className="prv-calm">{t('providersPage.calm')}</span>
             </Block>
             {!form && <AcpModelSection t={t} row={r} />}

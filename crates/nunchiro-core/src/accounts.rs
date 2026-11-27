@@ -32,6 +32,8 @@ use std::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "AccountsAgent"))]
 #[serde(rename_all = "snake_case")]
 pub enum Agent {
     Claude,
@@ -159,6 +161,7 @@ fn find(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SignedIn {
     Yes,
@@ -167,6 +170,7 @@ pub enum SignedIn {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Account {
     pub agent: Agent,
     pub id: String,

@@ -958,6 +958,7 @@ fn widgets_act_sender_validation() {
         status: "delivered".into(),
         settle: None,
         remote: None,
+        replaced: None,
     };
     delivery::validate(&[row("widget:pick-2")]).unwrap();
     delivery::validate(&[row("user")]).unwrap();

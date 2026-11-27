@@ -5,6 +5,7 @@ use crate::api::AgentKind;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Case {
     NotInstalled,
@@ -25,6 +26,7 @@ pub enum Case {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Problem {
     pub case: Case,
     /// One line, shown on the band.
@@ -45,6 +47,7 @@ pub fn lenient<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Problem>
 
 /// A fix the window asks for on an ended session. Owner and window only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Fix {
     Restart,

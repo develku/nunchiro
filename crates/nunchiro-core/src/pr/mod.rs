@@ -39,6 +39,7 @@ pub struct Check {
 /// Ticket 373: one failing check, outside text: the window shows it as text and a link, and the fix prompt wraps it as
 /// untrusted data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Failed {
     pub name: String,
     /// An `https://` link, or empty.
@@ -100,12 +101,15 @@ pub fn checks(all: &[Check]) -> &'static str {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Reviewer {
     pub who: String,
     /// `requested`, or the review state (APPROVED, CHANGES_REQUESTED, COMMENTED, ...).
     pub state: String,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "PrEvent"))]
 pub struct Event {
     pub at: String,
     /// `commit`, `review` or `comment`.
@@ -117,6 +121,7 @@ pub struct Event {
     pub text: String,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct File {
     pub path: String,
     pub additions: u64,
@@ -125,6 +130,8 @@ pub struct File {
 
 /// What the PR view shows.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "PrView"))]
 pub struct View {
     pub url: String,
     pub number: u64,
@@ -161,6 +168,8 @@ pub struct View {
 
 /// One row of the PR list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "PrItem"))]
 pub struct Item {
     pub repo: String,
     pub number: u64,
@@ -485,6 +494,7 @@ pub fn parse_list(owner: &str, repo: &str, stdout: &[u8]) -> Result<Vec<Item>, S
 
 /// Ticket 373: the PR of a worktree's own branch, whoever opened it (an agent, or the person on GitHub).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct BranchPr {
     pub url: String,
     pub number: u64,

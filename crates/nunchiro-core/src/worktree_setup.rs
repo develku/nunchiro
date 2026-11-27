@@ -206,6 +206,8 @@ pub fn tab_args(label: &str, exit: &Path, script: &str) -> Vec<String> {
 /// What the window's start-an-agent does after a create: `Wait` while the setup tab runs, `Start` when no setup ran or it
 /// exited 0, `User` when it failed, was skipped or waits for approval (the start is left to the user).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "WorktreeSetupAgent"))]
 #[serde(rename_all = "snake_case")]
 pub enum Agent {
     Start,
@@ -225,6 +227,8 @@ pub fn agent(wait: bool, decision_ran: Option<bool>, running: bool, exit: Option
 
 /// The reply of `setup_status`: the repo script's sheet (absent with no repo script) and what start-an-agent does now.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "WorktreeSetupStatus"))]
 pub struct Status {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view: Option<SetupView>,

@@ -18,6 +18,8 @@ printf 'fake chat agent\\r\\n'
 esc=$(printf '\\033'); cr=$(printf '\\r'); line=''
 # Claude Code 2.1.310's edit prompt for the tests' a.txt edit (old -> new): rule, diff, prompt line, choices.
 dialog() { printf '\\033[2J\\033[H\\342\\217\\272 Update(a.txt)\\r\\n\\r\\n%s\\r\\n Edit file\\r\\n a.txt\\r\\n%s\\r\\n 1 -old\\r\\n 1 +new\\r\\n%s\\r\\n Do you want to make this edit to a.txt?\\r\\n > 1. %s\\r\\n   2. No\\r\\n\\r\\n Esc to cancel\\r\\n' '${'\u2500'.repeat(60)}' '${'\u254c'.repeat(60)}' '${'\u254c'.repeat(60)}' "$1"; }
+# Its Bash prompt, for a Bash ask: the dialog Claude draws is the one for the asked tool.
+bashdialog() { printf '\\033[2J\\033[H%s\\r\\n Bash command\\r\\n   %s\\r\\n Do you want to proceed?\\r\\n > 1. Yes\\r\\n   2. No\\r\\n\\r\\n Esc to cancel\\r\\n' '${'\u2500'.repeat(60)}' "$1"; }
 ask() { out='${home}'/hook-$$.out; printf '%s' "$1" | '${BIN}' hook PermissionRequest > "$out" 2>&1; grep -q behavior "$out" && printf '\\033[2J\\033[Hhook answered\\r\\n'; }
 while :; do
   c=$(dd bs=1 count=1 2>/dev/null)
@@ -26,6 +28,7 @@ while :; do
   case "$line" in
     EXIT) exit 0 ;;
     STOP) printf '{}' | '${BIN}' hook UserPromptSubmit >/dev/null 2>&1; printf '{}' | '${BIN}' hook Stop >/dev/null 2>&1 ;;
+    PERM\\ *'"tool_name":"Bash"'*) ask "\${line#PERM }" & bashdialog "$(printf '%s' "$line" | sed 's/.*"command":"\\([^"]*\\)".*/\\1/')" ;;
     PERM\\ *) ask "\${line#PERM }" & dialog Yes ;;
     PERSIST\\ *) ask "\${line#PERSIST }" & dialog "Yes, and don't ask again for this file" ;;
     '') ;;

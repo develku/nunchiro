@@ -45,6 +45,8 @@ pub fn act_refused(manifest: &approval::Manifest) -> Option<String> {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "WebPage"))]
 pub struct Page {
     pub name: String,
     /// The approval hash of the folder the entry was read from (the app's frame id carries a prefix of it).
@@ -60,6 +62,7 @@ pub struct Page {
 /// Where a web widget's act goes: a running session labelled `session` in the placement's project, or a new
 /// `start` agent there. Exactly one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Target {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -79,6 +82,7 @@ pub fn page(home: &Path, enabled: bool, name: &str, context: Context) -> Result<
     if !enabled {
         return Err(OFF.into());
     }
+    crate::plugins::on(home, name)?;
     let proof = approval::check(home, name).map_err(|e| format!("needs approval: {e}"))?;
     let manifest = proof.manifest();
     if manifest.kind != "web" {

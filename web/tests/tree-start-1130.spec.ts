@@ -45,7 +45,8 @@ test('t2_row_plus_one_step: one click on the project row\'s + starts the default
   const plus = head.getByRole('button', { name: 'New Claude session in api-server' });
   await plus.click();
   await expect.poll(() => sessions(core).filter((s) => s.kind === 'claude' && s.state === 'running').map((s) => s.project), { timeout: 15_000 }).toEqual([p]);
-  const starts = sent.filter((r) => r.op === 'start');
+  // Since #57 the tree's + sends its start as `start_or_wait` (a held start waits for memory), the start inside it.
+  const starts = sent.map((r) => (r.op === 'start_or_wait' ? (r.start as typeof r) : r)).filter((r) => r.op === 'start');
   expect(starts).toHaveLength(1);
   expect((starts[0].session as { project: string; kind: string })).toMatchObject({ project: p, kind: 'claude' });
   await expect(app.locator('.newtab')).toHaveCount(0);

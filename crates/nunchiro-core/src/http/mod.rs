@@ -110,6 +110,7 @@ fn tick() -> Duration {
 pub(crate) struct OutputCounts {
     locks: std::sync::atomic::AtomicU64,
     pub(crate) passes: std::sync::atomic::AtomicU64,
+    pub(crate) builds: std::sync::atomic::AtomicU64, // snapshots built
 }
 #[cfg(test)]
 pub(crate) fn output_counts(home: &Path) -> Arc<OutputCounts> {
@@ -126,9 +127,23 @@ pub(crate) fn output_counts(home: &Path) -> Arc<OutputCounts> {
 /// v1a-27: after a wake the loop ignores further wakes this long, so a flooding session costs each window at most
 /// one output pass per interval; output that arrives meanwhile goes out in one frame.
 const BATCH: Duration = Duration::from_millis(2);
-/// The accept loop's longest wait; a connection ends it at once.
-const ACCEPT_WAIT: Duration = Duration::from_millis(250);
+/// The accept loop's longest wait; a connection ends it at once. It only bounds how late `stopping` is seen.
+const ACCEPT_WAIT: Duration = Duration::from_secs(1);
 const SNAPSHOT_EVERY: Duration = Duration::from_millis(100);
+/// A window loop's timed checks (snapshot, resync, chat, layout) run every `SNAPSHOT_EVERY` until `WINDOW_ACTIVE`
+/// after the last agent output or holder end (`pty::output_seq`), then every `IDLE_EVERY`, so an open window on an
+/// idle core wakes about twice a second instead of 10-14 times. Output itself still goes out on its wake at once.
+const IDLE_EVERY: Duration = Duration::from_millis(500);
+const WINDOW_ACTIVE: Duration = Duration::from_secs(2);
+/// The longest a window goes without building a snapshot while nothing it counts changed.
+const SNAPSHOT_FORCE: Duration = Duration::from_secs(1);
+fn cadence(active_until: Instant) -> Duration {
+    if Instant::now() < active_until {
+        SNAPSHOT_EVERY
+    } else {
+        IDLE_EVERY
+    }
+}
 /// How often each window's loop looks at layout.toml for hand edits and other windows' saves.
 const LAYOUT_EVERY: Duration = Duration::from_millis(250);
 /// v1a-53: output bytes a window may have sent and not acked as parsed, per watched session, whatever the rest of the
@@ -447,6 +462,8 @@ const MAX_JOBS: usize = 4;
 /// Ticket 459: requests that run an agent's status or `--version` command (up to two 5 s runs, 15 s for a joined
 /// "Your own" check) take places of their own, so a slow probe never refuses a fast read. Measured 11-22: the window's
 /// connect burst holds 4 jobs at once (one an account list of ~2.4 s); Providers opening sends 4 probes at once.
+/// Window starts waiting on plugin checks at once.
+const MAX_START_JOBS: usize = 4;
 const MAX_PROBE_JOBS: usize = 6;
 
 #[derive(Deserialize)]
@@ -689,6 +706,9 @@ fn serve(
     let mut chat_watches: BTreeMap<String, (u64, u64, u64)> = BTreeMap::new();
     let mut last_snapshot = String::new();
     let mut snapshot_at = Instant::now() - SNAPSHOT_EVERY;
+    let mut active_until = Instant::now() + WINDOW_ACTIVE;
+    let mut output_seen = crate::pty::output_seq();
+    let (mut built, mut built_at) = (None, Instant::now());
     // Ticket 592: the newest core event this window has heard of; room events after it are pushed.
     let mut room_since = crate::events::read(None, |_| false).1;
     // v1a-47: Browse online replies, sent by the loop when a fetch finishes.
@@ -699,15 +719,42 @@ fn serve(
     let kid_lease = lease.clone();
     let mut kid_reads: Option<KidReads> = None; // Q9 psn-J12-5
     let mut probes = Jobs::with_cap(lease.clone(), MAX_PROBE_JOBS); // ticket 459
+    // Window starts that wait on a plugin's checks (up to 10 s each) take their own slots, so they never fill the
+    // window's other jobs.
+    let mut start_jobs = Jobs::with_cap(lease.clone(), MAX_START_JOBS);
     let mut jobs = Jobs::new(lease);
     // v2-7: per Search panel (`channel`), a newer page cancels the one still scanning; at most 8 panels kept.
     let mut search_cancel = SearchCancel(vec![]);
     while !stopping.load(Ordering::SeqCst) {
         // S9: an idle read lasts until the next timed check below, not a fixed 8 ms tick.
-        let layout_due = window.is_some().then(|| layout_at + LAYOUT_EVERY);
-        ws.get_mut().due = (snapshot_at.min(synced_at) + SNAPSHOT_EVERY)
-            .min(layout_due.unwrap_or(snapshot_at + SNAPSHOT_EVERY));
-        match ws.read() {
+        let every = cadence(active_until);
+        let layout_due = window
+            .is_some()
+            .then(|| layout_at + LAYOUT_EVERY.max(every));
+        ws.get_mut().due =
+            (snapshot_at.min(synced_at) + every).min(layout_due.unwrap_or(snapshot_at + every));
+        let read = ws.read();
+        let idle_read = matches!(&read, Err(tungstenite::Error::Io(e))
+            if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut));
+        let seq = crate::pty::output_seq();
+        // The idle read ended on the wake pipe (`Deadline::quiet` is set only then): a ring that is no output.
+        let rung = idle_read && ws.get_ref().quiet.is_some();
+        if seq != output_seen {
+            output_seen = seq;
+            active_until = Instant::now() + WINDOW_ACTIVE;
+        } else if !idle_read || rung {
+            // A frame (the window's own once-a-second heartbeat among them) or another ring (a job reply, a board
+            // change) gets one prompt timed pass, so what it changed shows at once, without keeping the loop at the
+            // fast cadence.
+            active_until = active_until.max(Instant::now() + SNAPSHOT_EVERY);
+        }
+        let every = cadence(active_until);
+        if every == IDLE_EVERY && Instant::now() >= ws.get_ref().due {
+            // Idle: every timed check runs in this one pass, so their clocks never drift apart into separate wakes.
+            let first = snapshot_at.min(synced_at).min(layout_at);
+            (snapshot_at, synced_at, layout_at) = (first, first, first);
+        }
+        match read {
             Ok(Message::Text(text)) => {
                 // V2.5-15: the browser role's allowlist, before any dispatch below.
                 if let Some(role) = role
@@ -919,6 +966,40 @@ fn serve(
                         let response: Response = Ok(Reply::Ack);
                         Some(serde_json::json!({"id":frame.id,"response":response}))
                     }
+                    // A plugin's checks before a new session run up to 10 s: while one is on, the window's starts run
+                    // off this loop, answered by the same `answer` as here.
+                    Ok(frame)
+                        if matches!(
+                            frame.request,
+                            Some(
+                                Request::Start { .. }
+                                    | Request::StartOrWait { .. }
+                                    | Request::StartAnyway { .. }
+                            )
+                        ) && crate::plugins::start_checks_on(home) =>
+                    {
+                        let (registry, stopping, home) =
+                            (registry.clone(), stopping.clone(), home.to_path_buf());
+                        let (id, request) = (frame.id, frame.request);
+                        start_jobs.spawn(id, move || {
+                            let frame: Frame = serde_json::from_value(
+                                serde_json::json!({"id": id, "request": request}),
+                            )
+                            .map_err(|e| e.to_string())?;
+                            let mut stamp = (0, None);
+                            let v = answer(
+                                frame,
+                                &registry,
+                                &stopping,
+                                &mut BTreeMap::new(),
+                                &home,
+                                None,
+                                &mut stamp,
+                            );
+                            serde_json::from_value::<Response>(v["response"].clone())
+                                .map_err(|e| e.to_string())?
+                        })
+                    }
                     Ok(frame) if matches!(frame.request, Some(Request::FirstRun)) => {
                         jobs.spawn(frame.id, crate::firstrun::reply)
                     }
@@ -974,6 +1055,23 @@ fn serve(
                         let registry = registry.clone();
                         let request = frame.request.unwrap();
                         jobs.spawn(frame.id, move || crate::pr::answer(&registry, request))
+                    }
+                    // The Diff panel's Push runs git for up to 120 s: off this loop.
+                    Ok(frame)
+                        if matches!(
+                            frame.request,
+                            Some(
+                                Request::GitPush { .. }
+                                    | Request::PrDraft { .. }
+                                    | Request::PrCreate { .. }
+                            )
+                        ) =>
+                    {
+                        let registry = registry.clone();
+                        let request = frame.request.unwrap();
+                        jobs.spawn(frame.id, move || {
+                            crate::git_write::answer(&registry, request)
+                        })
                     }
                     // V2.5-8/9: `gh` runs of up to 15 s (a merge up to 60 s): off this loop.
                     Ok(frame)
@@ -1154,11 +1252,16 @@ fn serve(
                             crate::accounts::probe_reply(&home, request)
                         })
                     }
-                    // Ticket 358: sign-in reads the reported methods first and sign-out waits for the answer.
+                    // Ticket 358: sign-in reads the reported methods first and sign-out waits for the answer; the
+                    // test message waits up to 60 s for the agent's turn.
                     Ok(frame)
                         if matches!(
                             frame.request,
-                            Some(Request::AcpAgentSignIn { .. } | Request::AcpAgentSignOut { .. })
+                            Some(
+                                Request::AcpAgentSignIn { .. }
+                                    | Request::AcpAgentSignOut { .. }
+                                    | Request::AcpAgentTry { .. }
+                            )
                         ) =>
                     {
                         let (registry, home) = (registry.clone(), home.to_path_buf());
@@ -1323,7 +1426,11 @@ fn serve(
             Err(tungstenite::Error::ConnectionClosed) => return Ok(()),
             Err(e) => return Err(e.to_string()),
         }
-        while let Some(reply) = jobs.ready().or_else(|| probes.ready()) {
+        while let Some(reply) = jobs
+            .ready()
+            .or_else(|| probes.ready())
+            .or_else(|| start_jobs.ready())
+        {
             ws.send(Message::Text(reply.to_string().into()))
                 .map_err(|e| e.to_string())?;
         }
@@ -1345,10 +1452,10 @@ fn serve(
             turn = (turn + 1) % cursors.len();
             cursors.rotate_left(turn);
         }
-        // A registry pass per watch at least every SNAPSHOT_EVERY still reports ended or replaced sessions.
+        // A registry pass per watch at least every `every` still reports ended or replaced sessions.
         #[cfg(test)]
         output_counts.passes.fetch_add(1, Ordering::SeqCst);
-        let resync = synced_at.elapsed() >= SNAPSHOT_EVERY;
+        let resync = synced_at.elapsed() >= every;
         if resync {
             synced_at = Instant::now();
             tails.retain(|id, _| watches.contains_key(id));
@@ -1437,7 +1544,7 @@ fn serve(
                 }
             }
         }
-        if window.is_some() && layout_at.elapsed() >= LAYOUT_EVERY {
+        if window.is_some() && layout_at.elapsed() >= LAYOUT_EVERY.max(every) {
             layout_at = Instant::now();
             let now = layout::stamp(home);
             if now != layout_stamp {
@@ -1457,7 +1564,7 @@ fn serve(
             }
         }
         // v1b-02: chat polling shares the snapshot cadence, not the 8 ms terminal cadence.
-        if snapshot_at.elapsed() >= SNAPSHOT_EVERY {
+        if snapshot_at.elapsed() >= every {
             for (session, (after, skipped, generation)) in chat_watches.clone() {
                 let reply = read_chat(registry, &session, None, Some(after), Some(generation));
                 match reply {
@@ -1486,7 +1593,7 @@ fn serve(
         // Ticket 592: the Mac window hears that a room changed (the core event stream's `room_*` events), so its Room
         // panel reads at once instead of polling. No project or body: the panel's incremental `room_read` stays the one
         // read path, and a window's project path need not match the room's canonical one.
-        if role.is_none() && !feed && snapshot_at.elapsed() >= SNAPSHOT_EVERY {
+        if role.is_none() && !feed && snapshot_at.elapsed() >= every {
             // The schedule list the same way (`schedules_changed`): the Schedules widget reads `schedule_list` when it
             // hears `{"event":"schedules"}`.
             let schedules = |e: &crate::events::Event| e.kind == "schedules_changed";
@@ -1504,7 +1611,7 @@ fn serve(
             room_since = latest;
         }
         // V2.5-15: the Mac window hears of pairings and of what browsers did.
-        if role.is_none() && !feed && snapshot_at.elapsed() >= SNAPSHOT_EVERY {
+        if role.is_none() && !feed && snapshot_at.elapsed() >= every {
             let event = browsers.event().to_string();
             if event != last_browser {
                 ws.send(Message::Text(event.clone().into()))
@@ -1513,7 +1620,7 @@ fn serve(
             }
         }
         // The starts waiting for memory: the Mac window's status bar item, sent when the list or its notes change.
-        if role.is_none() && !feed && snapshot_at.elapsed() >= SNAPSHOT_EVERY {
+        if role.is_none() && !feed && snapshot_at.elapsed() >= every {
             let version = crate::pressure::version();
             if Some(version) != last_wait {
                 ws.send(Message::Text(crate::pressure::event().into()))
@@ -1521,19 +1628,45 @@ fn serve(
                 last_wait = Some(version);
             }
         }
-        if feed && snapshot_at.elapsed() >= SNAPSHOT_EVERY {
+        if feed && snapshot_at.elapsed() >= every {
             snapshot_at = Instant::now();
         }
-        if snapshot_at.elapsed() >= SNAPSHOT_EVERY {
+        if snapshot_at.elapsed() >= every {
             snapshot_at = Instant::now();
             #[cfg(test)]
             crate::machines::refresh_tests::record(home, true);
             // MachineDetails reports registry errors; they must not disconnect local windows.
             let _ = crate::machines::ensure_channels(registry, home, stopping);
-            let mut snapshot = registry
-                .lock()
-                .map_err(|_| "session registry unavailable")?
-                .snapshot();
+            // Idle CPU: no build and no serialising while nothing the snapshot reads has moved (`Sessions::revision`,
+            // agent output); what those miss (the clock, a file) is read again after `SNAPSHOT_FORCE`.
+            let fresh = {
+                let registry = registry
+                    .lock()
+                    .map_err(|_| "session registry unavailable")?;
+                let key = (
+                    registry.revision(),
+                    crate::pty::output_seq(),
+                    crate::board::sources::revision(), // board.json holds the board's decisions
+                );
+                // Measured from this pass's start, so the force lands on the pass a second later, not the one after.
+                let fresh = built != Some(key) || snapshot_at - built_at >= SNAPSHOT_FORCE;
+                if fresh {
+                    (built, built_at) = (Some(key), snapshot_at);
+                }
+                fresh
+            };
+            #[cfg(test)]
+            if fresh {
+                output_counts.builds.fetch_add(1, Ordering::SeqCst);
+            }
+            let mut snapshot = if fresh {
+                registry
+                    .lock()
+                    .map_err(|_| "session registry unavailable")?
+                    .snapshot()
+            } else {
+                Err(String::new()) // unchanged: nothing to send
+            };
             // Q10: the owner window shows the machines' pushed rows, as the owner socket's snapshot does.
             if role.is_none()
                 && let Ok(reply) = &mut snapshot
@@ -1713,8 +1846,13 @@ fn read_pr_chip(registry: &Mutex<Sessions>, id: &str) -> Response {
     let (mut before, mut generation, mut events, mut chip, mut past) =
         (None, None, vec![], None, 0);
     for _ in 0..PAGES {
-        let Reply::ChatPage { page, .. } = read_chat(registry, id, before, None, generation)?
-        else {
+        let read = read_chat(registry, id, before, None, generation);
+        // A session with no conversation to read (a terminal) still shows the PR the app made for it.
+        let Ok(Reply::ChatPage { page, .. }) = read else {
+            if let Some(chip) = crate::pr_live::made_chip(id) {
+                return Ok(Reply::PrChip { chip: Some(chip) });
+            }
+            read?;
             return Err("chat unavailable".into());
         };
         // Every later page must match the first page's generation: after a reset, start over from the newest page.
@@ -1742,6 +1880,8 @@ fn read_pr_chip(registry: &Mutex<Sessions>, id: &str) -> Response {
     if chip.is_some() {
         crate::pr_live::note_created(&events); // v2-8c
     }
+    // A PR the app created from the Diff panel, until the transcript names one.
+    let chip = chip.or_else(|| crate::pr_live::made_chip(id));
     Ok(Reply::PrChip { chip })
 }
 
@@ -1836,7 +1976,7 @@ fn launch_cursor(registry: &Mutex<Sessions>, id: &str, kid: &str) -> Option<u64>
 mod flow_tests; // v1a-53
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 /// v1a-53: the window parsed `bytes` of the session's output since its last watch (the data of the Output frames).
 #[derive(Deserialize)]

@@ -1,0 +1,19 @@
+{
+  "date": "2026-11-27",
+  "self_test": false,
+  "counted": 1,
+  "kinds": [
+    {
+      "kind": "opencode",
+      "path": "/opt/homebrew/bin/opencode",
+      "version": "opencode v2.2.5",
+      "sent": true,
+      "answer_read": true,
+      "turn_end": true,
+      "ms": 3836,
+      "text": "ready",
+      "failure": null
+    }
+  ],
+  "skipped": []
+}

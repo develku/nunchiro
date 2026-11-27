@@ -1,0 +1,38 @@
+#:schema https://raw.githubusercontent.com/develku/nunchiro/main/docs/api/plugin.schema.json
+id = "quiet-hours"
+name = "Quiet hours"
+version = "0.1.0"
+about = "Shows whether it is quiet time and which agents are still working."
+author = "Nunchiro examples"
+
+[[setting]]
+key = "start"
+label = "Quiet from"
+type = "time"
+default = "22:00"
+
+[[setting]]
+key = "end"
+label = "Quiet until"
+type = "time"
+default = "07:00"
+
+[[panel]]
+name = "now"
+title = "Quiet hours"
+kind = "script"
+command = ["/bin/sh", "panel.sh"]
+interval_secs = 60
+
+[[command]]
+name = "status"
+title = "Quiet hours: am I in quiet time?"
+command = ["/bin/sh", "status.sh"]
+show = "note"
+
+[[gate]]
+name = "starts"
+title = "No new agent sessions in quiet hours, unless you start them"
+on = "session.start.before"
+command = ["/bin/sh", "gate.sh"]
+on_error = "allow"

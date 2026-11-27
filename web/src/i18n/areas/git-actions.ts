@@ -30,6 +30,56 @@ declare module '../index' {
     'gitActions.prompt.pushPr': true;
     'gitActions.prompt.createPr': true;
     'gitActions.prompt.pull': true;
+    'gitActions.label.askPushPr': true;
+    'gitActions.label.askCreatePr': true;
+    'gitActions.label.pushCreatePr': true;
+    'gitActions.pr.title': true;
+    'gitActions.pr.body': true;
+    'gitActions.pr.base': true;
+    'gitActions.pr.draft': true;
+    'gitActions.pr.filled': true;
+    'gitActions.pr.fromTemplate': true;
+    'gitActions.pr.pushFirst.one': true;
+    'gitActions.pr.pushFirst.other': true;
+    'gitActions.pr.creating': true;
+    'gitActions.pr.needsGh': true;
+    'gitActions.pr.open': true;
+    'gitActions.pr.openGit': true;
+    'gitActions.pr.created': true;
+    'gitActions.err.exists': true;
+    'gitActions.err.pushedNoGh': true;
+    'gitActions.err.pushedNoPr': true;
+    'gitActions.err.title': true;
+    'gitActions.err.body': true;
+    'gitActions.err.notGithub': true;
+    'gitActions.err.noPr': true;
+    'gitActions.err.noLink': true;
+    'gitActions.err.url': true;
+    'gitActions.err.target': true;
+    'gitActions.push.noUpstream': true;
+    'gitActions.why.noPushRemote': true;
+    'gitActions.label.askPush': true;
+    'gitActions.choices': true;
+    'gitActions.choice.appTip': true;
+    'gitActions.push.confirm.one': true;
+    'gitActions.push.confirm.other': true;
+    'gitActions.push.prGets': true;
+    'gitActions.push.go': true;
+    'gitActions.push.going': true;
+    'gitActions.push.cancel': true;
+    'gitActions.push.done.one': true;
+    'gitActions.push.done.other': true;
+    'gitActions.push.dismiss': true;
+    'gitActions.err.changed': true;
+    'gitActions.err.newer': true;
+    'gitActions.err.signin': true;
+    'gitActions.err.hook': true;
+    'gitActions.err.refused': true;
+    'gitActions.err.several': true;
+    'gitActions.err.default': true;
+    'gitActions.err.nothing': true;
+    'gitActions.err.failed': true;
+    'gitActions.err.failed.todo': true;
   }
 }
 
@@ -62,6 +112,56 @@ export const en = {
   'gitActions.prompt.pushPr': 'Push this branch, then open a PR. Never push to the default branch.',
   'gitActions.prompt.createPr': 'Open a PR for this branch. Never push to the default branch.',
   'gitActions.prompt.pull': "Pull the new commits from this branch's remote. If there are conflicts, stop and tell me.",
+  'gitActions.why.noPushRemote': "This branch has no remote to push to that the app can pick. Push it once with git push -u in a terminal.",
+  'gitActions.label.askPush': "Ask {agent} to push",
+  'gitActions.choices': "Push choices",
+  'gitActions.choice.appTip': "The app pushes after you confirm the commits and where they go.",
+  'gitActions.push.confirm.one': "Push 1 commit to {remote}/{branch}? Head commit: {head}.",
+  'gitActions.push.confirm.other': "Push {n} commits to {remote}/{branch}? Head commit: {head}.",
+  'gitActions.push.prGets': "PR #{pr} gets them.",
+  'gitActions.push.go': "Push",
+  'gitActions.push.going': "Pushing…",
+  'gitActions.push.cancel': "Cancel",
+  'gitActions.push.done.one': "Pushed 1 commit to {remote}/{branch}.",
+  'gitActions.push.done.other': "Pushed {n} commits to {remote}/{branch}.",
+  'gitActions.push.dismiss': "Dismiss",
+  'gitActions.err.changed': "Nothing was sent: the branch changed after this was shown (new head {head}). Look again.",
+  'gitActions.err.newer': "Not pushed: {remote} has newer commits on {branch}. Pull first, then push again.",
+  'gitActions.err.signin': "Not pushed: git needs you to sign in. Run git push once in a terminal tab, then try again.",
+  'gitActions.err.hook': "Not pushed: the pre-push hook failed.",
+  'gitActions.err.refused': "Not pushed: {remote} refused the push.",
+  'gitActions.err.several': "Not pushed: this branch has no remote set and there are several. Push it once with git push -u in a terminal.",
+  'gitActions.err.default': "Not pushed: this is the default branch. Work in a worktree.",
+  'gitActions.err.nothing': "Not pushed: there are no new commits to push.",
+  'gitActions.err.failed': "Not pushed.",
+  'gitActions.err.failed.todo': "The details below say why.",
+  'gitActions.label.askPushPr': "Ask {agent} to push & open PR",
+  'gitActions.label.askCreatePr': "Ask {agent} to open a PR",
+  'gitActions.label.pushCreatePr': "Push & create PR",
+  'gitActions.pr.title': "Title",
+  'gitActions.pr.body': "Description",
+  'gitActions.pr.base': "Into",
+  'gitActions.pr.draft': "Draft",
+  'gitActions.pr.filled': "Filled from your commits. You can edit it.",
+  'gitActions.pr.fromTemplate': "Filled from the repository's pull request template. You can edit it.",
+  'gitActions.pr.pushFirst.one': "Pushes 1 commit to {remote}/{branch} first. Head commit: {head}.",
+  'gitActions.pr.pushFirst.other': "Pushes {n} commits to {remote}/{branch} first. Head commit: {head}.",
+  'gitActions.pr.creating': "Creating…",
+  'gitActions.pr.needsGh': "Creating a pull request needs the GitHub CLI (gh), installed and signed in.",
+  'gitActions.pr.open': "Open",
+  'gitActions.pr.openGit': "Open Settings › Git",
+  'gitActions.pr.created': "Pull request #{pr} created.",
+  'gitActions.err.exists': "A pull request for this branch already exists: #{pr}.",
+  'gitActions.err.pushedNoGh': "Pushed, but the pull request was not created: the GitHub CLI (gh) is not signed in.",
+  'gitActions.err.pushedNoPr': "Pushed, but the pull request was not created.",
+  'gitActions.err.title': "No pull request: the title must be one line of 1 to 256 characters.",
+  'gitActions.err.body': "No pull request: the description is longer than 60,000 characters.",
+  'gitActions.err.notGithub': "No pull request: {remote} is not a GitHub repository.",
+  'gitActions.err.noPr': "No pull request was created.",
+  'gitActions.err.noLink': "The pull request was created, but gh did not say where. Look in the PRs tab.",
+  'gitActions.err.target': "Nothing was sent: where this pushes changed after it was shown (now {remote}/{branch}). Look again.",
+  'gitActions.push.noUpstream': "The branch's upstream was not set; git push -u in a terminal sets it.",
+  'gitActions.err.url': "Nothing was sent: the push URL of {remote} changed after this was shown. Look again.",
 };
 export const ko = {
   'gitActions.label.commit': '커밋',

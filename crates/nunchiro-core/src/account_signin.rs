@@ -49,6 +49,8 @@ use std::{
 
 /// What the page shows for one attempt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "AccountSigninState"))]
 pub struct State {
     pub attempt: String,
     pub agent: Agent,
@@ -64,6 +66,8 @@ pub struct State {
     pub account: Option<Account>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "AccountSigninPhase"))]
 #[serde(rename_all = "snake_case")]
 pub enum Phase {
     Starting,
@@ -73,6 +77,8 @@ pub enum Phase {
     Cancelled,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "AccountSigninReason"))]
 #[serde(rename_all = "snake_case")]
 pub enum Reason {
     /// Orca's "did not accept that code": the login exited non-zero after a pasted code.
