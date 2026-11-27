@@ -45,6 +45,14 @@ class DocsOnly(unittest.TestCase):
         self.commit("README.md", "CHANGELOG.md", "docs/product.md")
         self.assertEqual(self.detect(), 0)
 
+    def test_design_book_skips(self):
+        self.commit("docs/design/design-book/index.html", "docs/design/design-book/README.md")
+        self.assertEqual(self.detect(), 0)
+
+    def test_other_design_files_run(self):
+        self.commit("docs/design/v25-threat-model.md")
+        self.assertEqual(self.detect(), 1)
+
     def test_mixed_runs(self):
         self.commit("README.md", "src/lib.rs")
         self.assertEqual(self.detect(), 1)
