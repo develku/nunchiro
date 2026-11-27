@@ -1229,3 +1229,34 @@ fn a_waiting_task_gets_no_reviewer_and_its_lead_hears_its_release_once() {
     drop(core);
     end_handoff(registry, home);
 }
+
+// Task dependencies: with auto-advance off the lead still hears a landing, in the room (the core types nothing into its
+// box then), once.
+#[test]
+fn with_auto_advance_off_the_lead_hears_a_landing_in_the_room() {
+    let (registry, home, lead, task) = lead_core("advance-after-off", None);
+    let ledger = Ledger::open(&home);
+    ledger.set_place(&home, None, None, Some(false)).unwrap();
+    let (first, _) = ledger
+        .make(&home, Some("lead"), "first", &[], false, 1)
+        .unwrap();
+    ledger
+        .set_after(&task.id, std::slice::from_ref(&first.id), "the user", 2)
+        .unwrap();
+    ledger.close(&first.id, "done", 3).unwrap();
+    for _ in 0..2 {
+        crate::advance::release(&registry, &home);
+    }
+    let said: Vec<String> = crate::room::Log::open(&home, &home)
+        .find(|m| m.body.contains("landed"))
+        .unwrap()
+        .into_iter()
+        .map(|m| m.body)
+        .collect();
+    assert_eq!(
+        said,
+        ["\"first\" landed. \"tax\" no longer waits: start it when you are ready."]
+    );
+    drop(said);
+    end_handoff(registry, home);
+}

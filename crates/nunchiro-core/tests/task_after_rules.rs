@@ -208,6 +208,23 @@ fn a_waiting_task_starts_no_writer_and_its_lead_hears_once_when_it_is_free() {
         "{out}{err}"
     );
     assert_eq!(rows(&home).len(), before, "no session row appeared");
+    // A writer started by hand and then assigned is held the same way.
+    let owner = fs::read_to_string(home.join("core.token")).unwrap();
+    let hand = raw(
+        &home,
+        owner.trim(),
+        json!({"op":"start","session":{"account":null,"kind":"claude","project":proj,"worktree":false,"label":"lane-b","args":[],"model":null,"effort":null,"resume":null}}),
+    );
+    let hand = hand["Ok"]["session"]["id"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{hand}"))
+        .to_string();
+    let (assigned, out, err) = run(&["assign", "t3", &hand]);
+    assert!(
+        !assigned && err.contains("Not started: \"b\" waits for \"a\""),
+        "{out}{err}"
+    );
+    raw(&home, owner.trim(), json!({"op":"close","id":hand}));
     // A seat that does not write starts.
     ok(&["staff", "t3", "reviewer"]);
     assert!(rows(&home).iter().any(|r| r.label == "Reviewer · b"));
