@@ -575,6 +575,7 @@ fn a_task_with_no_package_prints_as_before() {
         advance: Advance::default(),
         after: vec![],
         ordered: None,
+        released: vec![],
         created: 1,
         updated: 2,
     };
@@ -768,5 +769,34 @@ fn a_task_waits_until_its_blocker_lands() {
         l.list().unwrap()[2].ordered.as_ref().unwrap().by,
         "Lead · x"
     );
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// Task dependencies: an automatic task others wait for is never deleted unseen (its worktree taken back, or dropped
+/// empty): it closes as dropped, so its waiters ask instead of starting as if it had landed.
+#[test]
+fn an_automatic_blocker_that_goes_leaves_its_waiter_asking() {
+    let home = home("after-auto");
+    let l = Ledger::open(&home);
+    let p = Path::new("/p");
+    let wt = home.join("wt");
+    std::fs::create_dir_all(&wt).unwrap();
+    let a = l.worktree_made(p, "lead", &wt, "wt-a", 1).unwrap();
+    let (b, _) = l.make(p, Some("lead"), "b", &[], false, 1).unwrap();
+    l.set_after(&b.id, std::slice::from_ref(&a.id), "x", 2)
+        .unwrap();
+    l.worktree_taken(&wt, 3).unwrap();
+    let all = l.list().unwrap();
+    let got = blockers(all.iter().find(|t| t.id == b.id).unwrap(), &all);
+    assert_eq!(got.len(), 1, "{all:?}");
+    assert!(got[0].dropped);
+    // Dropped by hand while empty: the same.
+    let (c, _) = l.make(p, None, "wt-c", &[], true, 4).unwrap();
+    let (d, _) = l.make(p, Some("lead"), "d", &[], false, 4).unwrap();
+    l.set_after(&d.id, std::slice::from_ref(&c.id), "x", 5)
+        .unwrap();
+    l.close(&c.id, "dropped", 6).unwrap();
+    let all = l.list().unwrap();
+    assert!(blockers(all.iter().find(|t| t.id == d.id).unwrap(), &all)[0].dropped);
     let _ = std::fs::remove_dir_all(home);
 }
