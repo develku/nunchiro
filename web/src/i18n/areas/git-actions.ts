@@ -30,6 +30,7 @@ declare module '../index' {
     'gitActions.prompt.pushPr': true;
     'gitActions.prompt.createPr': true;
     'gitActions.prompt.pull': true;
+    'gitActions.ai.claudeOnly': true;
     'gitActions.ai.write': true;
     'gitActions.ai.again': true;
     'gitActions.ai.writing': true;
@@ -172,6 +173,7 @@ export const en = {
   'gitActions.ai.failed': "{agent} could not write it: {reason}. Your text is unchanged.",
   'gitActions.err.target': "Nothing was sent: where this pushes changed after it was shown (now {remote}/{branch}). Look again.",
   'gitActions.push.noUpstream': "The branch's upstream was not set; git push -u in a terminal sets it.",
+  'gitActions.ai.claudeOnly': "Write with AI runs in Claude sessions only for now.",
 };
 export const ko = {
   'gitActions.label.commit': '커밋',

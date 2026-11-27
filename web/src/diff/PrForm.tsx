@@ -21,7 +21,7 @@ const KEPT = new Map<string, Text>();
 
 /** `onOpen`: open a PR in the PR view (after a create, or the one that already exists). `writer`: the session's agent
  *  that Write with AI runs (Claude or Codex); none for an ACP agent or a terminal, which get no button. */
-export function PrForm({ core, session, writer, onCreated, onCancel, onOpen, t }: { core: CoreClient; session: string; writer?: string; onCreated: (c: Created) => void; onCancel: () => void; onOpen: (url: string) => void; t: T }) {
+export function PrForm({ core, session, writer, writerOff, onCreated, onCancel, onOpen, t }: { core: CoreClient; session: string; writer?: string; writerOff?: boolean; onCreated: (c: Created) => void; onCancel: () => void; onOpen: (url: string) => void; t: T }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [text, setText] = useState<Text | null>(KEPT.get(session) ?? null);
   const [busy, setBusy] = useState(false);
@@ -139,6 +139,7 @@ export function PrForm({ core, session, writer, onCreated, onCancel, onOpen, t }
               {written && !writing && <span className="dfact">{t('gitActions.ai.written', { agent: writer })}</span>}
             </div>
           )}
+          {writerOff && <p className="dfact">{t('gitActions.ai.claudeOnly')}</p>}
           <ErrorLine t={t} error={aiError} className="dpush-err" />
           <p className="dfact">
             {t(draft.template ? 'gitActions.pr.fromTemplate' : 'gitActions.pr.filled', { n: draft.commits })}

@@ -529,10 +529,10 @@
  "git's state could not be read": "internal: a Write with AI reason; text_gen.rs answer sends it as '<agent> could not write it: <reason>', which KNOWN maps",
  "this branch has no remote to compare with": "internal: a Write with AI reason; text_gen.rs answer sends it as '<agent> could not write it: <reason>', which KNOWN maps",
  "the remote's default branch is unknown": "internal: a Write with AI reason; text_gen.rs answer sends it as '<agent> could not write it: <reason>', which KNOWN maps",
- "this session has no agent that can write it": "internal: a Write with AI reason; text_gen.rs answer sends it as '<agent> could not write it: <reason>', which KNOWN maps",
  "{} was not found on PATH": "internal: a Write with AI reason; text_gen.rs answer sends it as '<agent> could not write it: <reason>', which KNOWN maps",
  "cancelled": "internal: a Write with AI reason; text_gen.rs answer sends it as '<agent> could not write it: <reason>', which KNOWN maps",
  "it did not answer in {} seconds": "internal: a Write with AI reason; text_gen.rs answer sends it as '<agent> could not write it: <reason>', which KNOWN maps",
  "not a text op": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip",
- "push needs what the strip showed": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip"
+ "push needs what the strip showed": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip",
+ "this session has no agent that can write it": "internal: a Write with AI reason; text_gen.rs answer sends it as '<agent> could not write it: <reason>', which KNOWN maps"
 }
