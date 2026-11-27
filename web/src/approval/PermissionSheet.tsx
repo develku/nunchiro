@@ -1,5 +1,6 @@
 // Permission sheet (R8-final frame 5): who made it, the exact command, read / act / never, network hosts,
 // files it reads (v1b-33), the manifest viewer and the equivalent CLI line. Everything shown comes from the core's parsed manifest.
+import { busyRetry } from '../api';
 import { ErrorLine } from '../errors';
 import { useEffect, useRef, useState } from 'react';
 import './sheet.css';
@@ -52,8 +53,8 @@ function SetupSheet({ core, name: path, onClose, t: given }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const back = useRef<Element | null>(document.activeElement);
   useEffect(() => {
-    core
-      .request({ op: 'setup_status', path })
+    // A busy refusal (the window's connect burst) is retried: shown as is, the ask could not be reviewed at all.
+    busyRetry(() => core.request({ op: 'setup_status', path }))
       .then((r) => {
         const v = (r as { status: SetupStatus }).status.view;
         if (v) setView(v);

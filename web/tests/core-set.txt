@@ -25,6 +25,10 @@ chat-stop.spec.ts
 permission-sheet.spec.ts
 permission-needed.spec.ts
 
+# repo setup scripts: the approval sheet, and an old ask that waits in Decisions instead of opening at launch
+setup-scripts.spec.ts
+setup-ask-quiet.spec.ts
+
 # terminal tab and keys basics
 terminal.spec.ts
 keys-basics.spec.ts
@@ -62,3 +66,6 @@ i18n-translations.spec.ts | cjk_punctuation
 i18n-remaining-catalogue.spec.ts
 i18n-chat-catalogue.spec.ts
 i18n-key-sets.spec.ts
+
+# a shell beside the agent: the Terminal icon opens one in the agent's folder, New terminal too
+shell-beside-agent.spec.ts

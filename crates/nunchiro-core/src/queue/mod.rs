@@ -424,6 +424,25 @@ struct State {
     #[serde(default)]
     local_command: bool,
 }
+/// A setup ask whose worktree is gone: only a gone folder whose parent is there counts, so a worktree on an unmounted
+/// volume keeps its ask; a lookup that fails (permission, I/O) proves nothing either.
+fn gone_setup(i: &Decision) -> bool {
+    let Some(OwnerAsk::Setup { path, .. }) = &i.owner else {
+        return false;
+    };
+    let gone = matches!(path.try_exists(), Ok(false))
+        && path
+            .parent()
+            .is_some_and(|p| matches!(p.try_exists(), Ok(true)));
+    if gone {
+        eprintln!(
+            "queue: setup ask {} dropped: worktree {} is gone",
+            i.id,
+            path.display()
+        );
+    }
+    gone
+}
 /// Ticket 1133: `Disk` equality without `seen`. Destructured so a new field must be named here.
 fn same_except_seen(a: &Disk, b: &Disk) -> bool {
     let Disk {
@@ -752,26 +771,14 @@ impl Queue {
                 item.hook_event_id = None;
             }
         }
-        // Ticket 1109: a setup ask for a worktree removed while it waited opened the start-up sheet at every start. Only a
-        // gone folder whose parent is there counts, so a worktree on an unmounted volume keeps its ask; a lookup that fails
-        // (permission, I/O) proves nothing either.
-        queue.disk.owner.retain(|i| match &i.owner {
-            Some(OwnerAsk::Setup { path, .. })
-                if matches!(path.try_exists(), Ok(false))
-                    && path
-                        .parent()
-                        .is_some_and(|p| matches!(p.try_exists(), Ok(true))) =>
-            {
-                eprintln!(
-                    "queue: setup ask {} dropped: worktree {} is gone",
-                    i.id,
-                    path.display()
-                );
-                false
-            }
-            _ => true,
-        });
+        // Ticket 1109: a setup ask for a worktree removed while it waited opened the start-up sheet at every start.
+        queue.disk.owner.retain(|i| !gone_setup(i));
         Ok(queue)
+    }
+    /// The same drop while the core runs (its auto-clean task calls this every 30 s): a worktree removed by the
+    /// auto-clean, `git worktree remove` or `rm` takes its ask with it. A sweep that drops nothing writes nothing.
+    pub fn drop_gone_setups(&mut self) -> Result<(), String> {
+        self.answer_owner(gone_setup)
     }
     fn validate(disk: &Disk) -> Result<(), String> {
         // `version` is 1 or 2 here: `open` sets any other integer aside and the typed parse refuses the rest.
@@ -3443,6 +3450,30 @@ mod owner_tests {
             .collect();
         fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
         assert_eq!(owners, vec![setup("kept"), unmounted, unreadable]);
+        fs::remove_dir_all(home).unwrap();
+    }
+
+    // A worktree removed while the core runs (auto-clean, git worktree remove, rm): the core's sweep drops its ask too.
+    #[test]
+    fn a_setup_ask_for_a_gone_worktree_is_dropped_by_the_sweep() {
+        let home = home("setup-sweep");
+        let setup = |name: &str| OwnerAsk::Setup {
+            path: home.join("wt").join(name),
+            hash: "h".into(),
+        };
+        fs::create_dir_all(home.join("wt/kept")).unwrap();
+        fs::create_dir_all(home.join("wt/gone")).unwrap();
+        let mut q = Queue::open(&home).unwrap();
+        q.ask_owner("s1", setup("kept")).unwrap();
+        q.ask_owner("s1", setup("gone")).unwrap();
+        fs::remove_dir(home.join("wt/gone")).unwrap();
+        q.drop_gone_setups().unwrap();
+        let owners: Vec<_> = q
+            .owner_items()
+            .into_iter()
+            .filter_map(|i| i.owner)
+            .collect();
+        assert_eq!(owners, vec![setup("kept")]);
         fs::remove_dir_all(home).unwrap();
     }
 

@@ -957,7 +957,13 @@ pub(crate) fn spawn(
                     continue;
                 }
                 next = Instant::now() + EVERY;
-                let Ok((on, root, running)) = registry.lock().map(|s| s.auto_clean_view()) else {
+                let Ok((on, root, running)) = registry.lock().map(|mut s| {
+                    // A worktree gone since the last look (this task's removal, git, rm) takes its setup ask with it.
+                    if let Err(e) = s.queue.drop_gone_setups() {
+                        eprintln!("queue: gone setup asks not dropped: {e}");
+                    }
+                    s.auto_clean_view()
+                }) else {
                     return;
                 };
                 let now = SystemTime::now()

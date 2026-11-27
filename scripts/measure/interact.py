@@ -59,8 +59,9 @@ def window_request(auth, request, timeout=30):
         ws.s.close()
 
 
-def fixture(arm):
-    """20 sessions in 3 projects, one long chat, a lead with two tasks. Returns the ids the page script needs."""
+def fixture(arm, lead=True):
+    """20 sessions in 3 projects, one long chat, a lead with two tasks. Returns the ids the page script needs.
+    lead=False: the 19 sessions without the lead, which needs the window's token (the core gives it to its app only)."""
     projects = {}
     for name in PROJECTS:
         p = arm.home / "p" / name
@@ -103,6 +104,9 @@ def fixture(arm):
             time.sleep(0.5)
         if got != n:
             raise RuntimeError(f"chat {label}: core serves {got} events, expected {n}; refusing to measure a partial chat")
+    if not lead:
+        return dict(auth=None, terms=terms, chats={k: v[0] for k, v in chats.items()}, lead=None, projects=projects,
+                    long_events=LONG_EVENTS)
     # The lead (ticket 990): a teammate that leads shop, its seat opened as Settings > Team > Open does, two tasks.
     (arm.home / "team").mkdir(exist_ok=True)
     (arm.home / "team/team.json").write_text(json.dumps({"version": 1, "teammates": [
