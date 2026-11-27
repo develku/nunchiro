@@ -99,6 +99,11 @@ test('git push: a commit made after the strip showed is refused and the remote s
   await app.evaluate(() => window.dispatchEvent(new Event('focus')));
   await app.waitForTimeout(800);
   await expect(strip).toContainText('Push 1 commit to origin/fix-login?');
+  // A scope switch and back reads the list again; the strip still shows what it showed when it opened.
+  await dock.getByRole('radio', { name: 'Branch' }).click();
+  await dock.getByRole('radio', { name: 'Changes' }).click();
+  await app.waitForTimeout(800);
+  await expect(strip).toContainText('Push 1 commit to origin/fix-login?');
   await strip.getByRole('button', { name: 'Push', exact: true }).click();
   await expect(strip).toContainText(`Nothing was sent: the branch changed after this was shown (new head ${now.slice(0, 7)}). Look again.`);
   expect(remoteHead(origin)).toBe('');
