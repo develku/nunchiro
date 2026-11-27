@@ -163,7 +163,8 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
   const [sent, setSent] = useState<string | null>(null);
   // The app's Push: the strip is open for this session; `pushed` is the foot line after one.
   const [way, setWay] = useState<Way>(storedWay);
-  const [strip, setStrip] = useState<string | null>(null);
+  // The strip keeps the git facts of the press: a list re-read (scope, refresh, an error) never re-arms it.
+  const [strip, setStrip] = useState<{ session: string; git: GitFacts } | null>(null);
   const [pushed, setPushed] = useState<{ session: string; text: string } | null>(null);
   useEffect(() => setStrip(null), [session]);
   const working = !!owner?.attention.working;
@@ -261,7 +262,7 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
   // sends nothing and shows its own label and reason.
   const press = async () => {
     if (!gitAsk || !session || !owner) return;
-    if (byApp) return setStrip(session);
+    if (byApp) return list?.git ? setStrip({ session, git: list.git }) : undefined;
     setSent('');
     wait.current = { at: Date.now(), seen: false };
     try {
@@ -359,11 +360,11 @@ export function DiffDock({ core, session, label, owner, focus, onClose, t, machi
           </button>
         )}
       </div>
-      {session && strip === session && byApp && appAct?.ask && list?.git && (
+      {session && strip?.session === session && (
         <PushStrip
           core={core}
           session={session}
-          git={list.git}
+          git={strip.git}
           pr={prNumber}
           onCancel={() => setStrip(null)}
           onPushed={(r) => {

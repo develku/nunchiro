@@ -180,12 +180,15 @@ pub(crate) fn target(
     };
     let url = crate::process::git_read(
         dir,
-        &["remote", "get-url", "--push", "--", &remote],
+        &["remote", "get-url", "--push", "--all", "--", &remote],
         READ_TIMEOUT,
     )
     .map_err(|_| "not pushed: git could not read where the remote pushes")?;
     Ok(PushTo {
-        key: fingerprint(&url),
+        // Every push URL (a push goes to all of them), without a user or password part.
+        key: fingerprint(
+            crate::process::without_userinfo(&String::from_utf8_lossy(&url)).as_bytes(),
+        ),
         remote,
         branch: to,
         ahead,
@@ -276,6 +279,15 @@ pub fn push_within(dir: &Path, shown: &Shown, limit: Duration) -> Result<Pushed,
     };
     if shown.remote.is_empty() || shown.branch.is_empty() || shown.key.is_empty() {
         return Err("push needs what the strip showed".into());
+    }
+    if (to.remote.as_str(), to.branch.as_str(), to.ahead)
+        == (shown.remote.as_str(), shown.branch.as_str(), shown.ahead)
+        && to.key != shown.key
+    {
+        return Err(format!(
+            "nothing was sent: the push URL of {} changed after this was shown",
+            to.remote
+        ));
     }
     if (
         to.remote.as_str(),

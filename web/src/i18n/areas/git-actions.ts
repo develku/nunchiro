@@ -30,6 +30,7 @@ declare module '../index' {
     'gitActions.prompt.pushPr': true;
     'gitActions.prompt.createPr': true;
     'gitActions.prompt.pull': true;
+    'gitActions.err.url': true;
     'gitActions.err.target': true;
     'gitActions.push.noUpstream': true;
     'gitActions.why.noPushRemote': true;
@@ -116,6 +117,7 @@ export const en = {
   'gitActions.err.failed.todo': "The details below say why.",
   'gitActions.err.target': "Nothing was sent: where this pushes changed after it was shown (now {remote}/{branch}). Look again.",
   'gitActions.push.noUpstream': "The branch's upstream was not set; git push -u in a terminal sets it.",
+  'gitActions.err.url': "Nothing was sent: the push URL of {remote} changed after this was shown. Look again.",
 };
 export const ko = {
   'gitActions.label.commit': '커밋',

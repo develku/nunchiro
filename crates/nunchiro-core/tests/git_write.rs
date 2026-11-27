@@ -295,7 +295,7 @@ fn push_refuses_when_where_it_goes_changed_after_the_strip() {
     );
     let e = git_write::push(&r.work(), &strip).unwrap_err();
     assert!(
-        e.starts_with("nothing was sent: where this pushes changed"),
+        e == "nothing was sent: the push URL of origin changed after this was shown",
         "{e}"
     );
 }
