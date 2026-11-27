@@ -2644,12 +2644,16 @@ fn level_file(tag: &str, level: &str) -> PathBuf {
 }
 /// The waiting list's times shortened: a read every 200 ms, starts 1 s apart, dropped after `max` ms.
 fn waiting(file: &Path, max: u64) -> [(&'static str, String); 2] {
+    waiting_gap(file, 1000, max)
+}
+/// `waiting` with starts `gap` ms apart.
+fn waiting_gap(file: &Path, gap: u64, max: u64) -> [(&'static str, String); 2] {
     [
         (
             "NUNCHIRO_TEST_MEMORY_PRESSURE",
             file.to_string_lossy().into_owned(),
         ),
-        ("NUNCHIRO_TEST_MEMORY_WAIT", format!("200,1000,{max}")),
+        ("NUNCHIRO_TEST_MEMORY_WAIT", format!("200,{gap},{max}")),
     ]
 }
 fn as_env<'a>(env: &'a [(&'static str, String); 2]) -> [(&'static str, &'a str); 2] {
@@ -2731,12 +2735,13 @@ fn a_leads_held_team_open_waits_and_opens_by_itself() {
     assert!(waiting_list(&l.home).is_empty());
 }
 
-/// Three waiting starts go one at a time, at least the gap apart (1 s here), oldest first; warning again in between
-/// stops the rest until memory is free again. Each asker hears its own line.
+/// Three waiting starts go one at a time, at least the gap apart (5 s here, so a slow start's own preparation does not
+/// blur it), oldest first; warning again in between stops the rest until memory is free again. Each asker hears its
+/// own line. The exact gap is the unit test's (`pressure::wait`); here a seat's start time comes after its preparation.
 #[test]
 fn waiting_starts_go_one_at_a_time() {
     let file = level_file("lvl-three", "1");
-    let env = waiting(&file, 600_000);
+    let env = waiting_gap(&file, 5000, 600_000);
     let l = leads_with("sch-wait-three", &as_env(&env));
     fs::write(&file, "2").unwrap();
     for label in ["one", "two", "three"] {
@@ -2750,22 +2755,27 @@ fn waiting_starts_go_one_at_a_time() {
     }
     assert_eq!(waiting_list(&l.home).len(), 3);
     let up = |label: &str| rows(&l.home).iter().any(|r| r.label == label);
+    let started = |label: &str| {
+        rows(&l.home)
+            .into_iter()
+            .find(|r| r.label == label)
+            .and_then(|r| r.started_at)
+            .unwrap()
+    };
     fs::write(&file, "1").unwrap();
     wait_long("the first did not start", || up("one"));
-    let first = Instant::now();
     fs::write(&file, "2").unwrap();
-    thread::sleep(Duration::from_millis(2500));
+    thread::sleep(Duration::from_millis(6000));
     assert!(!up("two") && !up("three"), "warning again stops the rest");
     fs::write(&file, "1").unwrap();
     wait_long("the second did not start", || up("two"));
     assert!(!up("three"), "one at a time");
-    let second = Instant::now();
     wait_long("the third did not start", || up("three"));
-    assert!(
-        Instant::now() - second >= Duration::from_millis(1000),
-        "the gap"
-    );
-    assert!(second - first >= Duration::from_millis(1000));
+    // Released 5 s apart; a start time follows its preparation, which takes well under 2 s.
+    for (a, b) in [("one", "two"), ("two", "three")] {
+        let apart = started(b).saturating_sub(started(a));
+        assert!(apart >= 3000, "{a} to {b}: {apart} ms");
+    }
     wait("the asker got no lines", || {
         ["one", "two", "three"].iter().all(|n| {
             told(
