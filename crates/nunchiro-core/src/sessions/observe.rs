@@ -379,6 +379,7 @@ impl Sessions {
         path: Option<PathBuf>,
         result: Result<Option<waiting::transcript::Batch>, String>,
     ) -> Result<(), String> {
+        self.changed(); // a transcript read can change a row without a save
         // v1b-15
         self.observe_board();
         let Some(entry) = self.entries.get_mut(&job.session.id) else {

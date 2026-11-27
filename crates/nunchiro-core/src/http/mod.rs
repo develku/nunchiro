@@ -135,6 +135,8 @@ const SNAPSHOT_EVERY: Duration = Duration::from_millis(100);
 /// idle core wakes about twice a second instead of 10-14 times. Output itself still goes out on its wake at once.
 const IDLE_EVERY: Duration = Duration::from_millis(500);
 const WINDOW_ACTIVE: Duration = Duration::from_secs(2);
+/// The longest a window goes without building a snapshot while nothing it counts changed.
+const SNAPSHOT_FORCE: Duration = Duration::from_secs(1);
 fn cadence(active_until: Instant) -> Duration {
     if Instant::now() < active_until {
         SNAPSHOT_EVERY
@@ -704,6 +706,7 @@ fn serve(
     let mut snapshot_at = Instant::now() - SNAPSHOT_EVERY;
     let mut active_until = Instant::now() + WINDOW_ACTIVE;
     let mut output_seen = crate::pty::output_seq();
+    let (mut built, mut built_at) = (None, Instant::now());
     // Ticket 592: the newest core event this window has heard of; room events after it are pushed.
     let mut room_since = crate::events::read(None, |_| false).1;
     // v1a-47: Browse online replies, sent by the loop when a fetch finishes.
@@ -1566,12 +1569,31 @@ fn serve(
             crate::machines::refresh_tests::record(home, true);
             // MachineDetails reports registry errors; they must not disconnect local windows.
             let _ = crate::machines::ensure_channels(registry, home, stopping);
+            // Idle CPU: no build and no serialising while nothing the snapshot reads has moved (`Sessions::revision`,
+            // agent output); what those miss (the clock, a file) is read again after `SNAPSHOT_FORCE`.
+            let fresh = {
+                let registry = registry
+                    .lock()
+                    .map_err(|_| "session registry unavailable")?;
+                let key = (registry.revision(), crate::pty::output_seq());
+                let fresh = built != Some(key) || built_at.elapsed() >= SNAPSHOT_FORCE;
+                if fresh {
+                    (built, built_at) = (Some(key), Instant::now());
+                }
+                fresh
+            };
             #[cfg(test)]
-            output_counts.builds.fetch_add(1, Ordering::SeqCst);
-            let mut snapshot = registry
-                .lock()
-                .map_err(|_| "session registry unavailable")?
-                .snapshot();
+            if fresh {
+                output_counts.builds.fetch_add(1, Ordering::SeqCst);
+            }
+            let mut snapshot = if fresh {
+                registry
+                    .lock()
+                    .map_err(|_| "session registry unavailable")?
+                    .snapshot()
+            } else {
+                Err(String::new()) // unchanged: nothing to send
+            };
             // Q10: the owner window shows the machines' pushed rows, as the owner socket's snapshot does.
             if role.is_none()
                 && let Ok(reply) = &mut snapshot

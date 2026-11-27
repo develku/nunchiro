@@ -435,6 +435,8 @@ pub struct Sessions {
     #[cfg(test)]
     saves: std::sync::atomic::AtomicUsize,
     // Ticket 300 step 2: rows an ended session's cancel walked, and session snapshots taken (tests count lock work).
+    /// Counts saves, requests and transcript reads (`revision`), so a window skips a snapshot nothing changed.
+    revision: std::sync::atomic::AtomicU64,
     #[cfg(test)]
     exit_walked: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
@@ -519,6 +521,17 @@ struct Writes {
 /// after its own, and the Stop reply's drain returns only once an earlier tick's drain is done.
 static DRAINING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 impl Sessions {
+    /// What the snapshot reads moved (a save, a transcript read, a machine's push); `revision` adds the queue's saves.
+    /// A request that changes the store saves it; a read-only one (a window's once-a-second heartbeat) counts nothing.
+    pub(crate) fn changed(&self) {
+        self.revision
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+    /// Idle CPU: a window loop builds no snapshot while this and the output count stand still (http/mod.rs). What it
+    /// does not count (the clock, a file) a window still sees within its `SNAPSHOT_FORCE`.
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision.load(std::sync::atomic::Ordering::SeqCst) + self.queue.revision()
+    }
     pub fn handle(&mut self, request: Request) -> Response {
         if self.left {
             return Err("core is stopping".into());

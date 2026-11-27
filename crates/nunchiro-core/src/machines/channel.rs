@@ -361,6 +361,7 @@ fn run(registry: &Mutex<Sessions>, home: &Path, alias: &str, slot: usize, stoppi
     }
 }
 fn set(s: &mut Sessions, alias: &str, state: ChannelState, error: Option<String>) {
+    s.changed(); // the window's machine rows
     let Some(channel) = s.remote.channels.get_mut(alias) else {
         return;
     };
@@ -594,6 +595,7 @@ fn accept(registry: &Mutex<Sessions>, alias: &str, stopping: &Stop, line: &[u8])
     if let Ok(mut s) = registry.lock()
         && !stopping.stopped()
     {
+        s.changed(); // the window's machine rows
         // A push read before the remote applied an answer must not offer that item again; once a push no longer
         // holds it, the remote is done with it and the mark goes.
         let pushed: BTreeSet<String> = rows

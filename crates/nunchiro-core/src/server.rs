@@ -289,9 +289,10 @@ fn serve_locked(home: &Path) -> Result<(), String> {
     let observer_registry = sessions.clone();
     let observer_stopping = stopping.clone();
     let observer = thread::spawn(move || {
-        // S9 r3: as the tick: every TICK while output or a transcript line came in the last ACTIVE, else every IDLE_TICK.
+        // S9 r3: as the tick: every TICK while output or a transcript line came in the last ACTIVE, else every OBSERVER_IDLE.
         let wake = crate::pty::Wake::subscribe().ok();
         let mut active_until = std::time::Instant::now() + ACTIVE;
+        let mut output_seen = crate::pty::output_seq();
         while !observer_stopping.load(Ordering::SeqCst) {
             let jobs = {
                 let Ok(mut registry) = observer_registry.lock() else {
@@ -322,14 +323,18 @@ fn serve_locked(home: &Path) -> Result<(), String> {
             let period = if std::time::Instant::now() < active_until {
                 TICK
             } else {
-                IDLE_TICK
+                OBSERVER_IDLE
             };
             // Only an idle wait ends on output: while active, output keeps it at TICK, never faster.
             match &wake {
-                Some(wake) if period == IDLE_TICK => wait_readable(&[wake.fd()], period),
+                Some(wake) if period == OBSERVER_IDLE => wait_readable(&[wake.fd()], period),
                 _ => thread::sleep(period),
             }
-            if wake.as_ref().is_some_and(crate::pty::Wake::drain) {
+            // A window's job reply or layout command rings too: only agent output makes the observer active.
+            if wake.as_ref().is_some_and(crate::pty::Wake::drain)
+                && output_seen != crate::pty::output_seq()
+            {
+                output_seen = crate::pty::output_seq();
                 active_until = std::time::Instant::now() + ACTIVE;
             }
         }
@@ -361,6 +366,7 @@ fn serve_locked(home: &Path) -> Result<(), String> {
     // end or a holder's), else every IDLE_TICK. Output and holder ends ring `wake`, which this loop waits on.
     let wake = crate::pty::Wake::subscribe().ok();
     let mut active_until = std::time::Instant::now() + ACTIVE;
+    let mut output_seen = crate::pty::output_seq();
     while !stopping.load(Ordering::SeqCst) {
         // V2.5-34i: SIGTERM, SIGINT or SIGHUP takes the `exit` path (agents keep running for the next core, no
         // sign-in login outlives this one), then the core winds down as after an `exit` request.
@@ -369,8 +375,14 @@ fn serve_locked(home: &Path) -> Result<(), String> {
             stopping.store(true, Ordering::SeqCst);
             continue;
         }
-        if wake.as_ref().is_some_and(crate::pty::Wake::drain) {
+        // Agent output makes the tick active for ACTIVE; any other ring (a changed board file, a memory wait, a
+        // window's job reply) asks for one prompt tick only, so a window's polls never hold the tick at TICK.
+        let rung = wake.as_ref().is_some_and(crate::pty::Wake::drain);
+        if rung && output_seen != crate::pty::output_seq() {
+            output_seen = crate::pty::output_seq();
             active_until = std::time::Instant::now() + ACTIVE;
+        } else if rung {
+            active_until = active_until.max(std::time::Instant::now() + TICK);
         }
         let period = if std::time::Instant::now() < active_until {
             TICK
@@ -1882,6 +1894,9 @@ const TICK: Duration = Duration::from_millis(50);
 /// S9 r3: the tick once nothing moved for ACTIVE: what it still finds then is an agent that ended without a last output
 /// (seen in the process table) or a clock (a stale mark, a limit resume), which this bounds.
 const IDLE_TICK: Duration = Duration::from_millis(250);
+/// Idle CPU: the transcript observer's idle wait. Agents write their transcripts while they draw output, which
+/// ends the wait at once; a line written with no output (rare) is read within this.
+const OBSERVER_IDLE: Duration = Duration::from_secs(1);
 /// S9 r3: how long the tick stays at TICK after a request, output or an agent's end.
 const ACTIVE: Duration = Duration::from_secs(2);
 /// S9: blocks until one of `fds` is readable (an accept is waiting) or `timeout` passes; an accept loop's idle wait.

@@ -450,9 +450,9 @@ fn measure(
                 session.id
             )))
             .unwrap();
-            // Ticket 463: as the window does while idle: live PR status on (the owner's setting), the status bar's change
-            // counts (`diff_list`, chrome/SessionFacts.tsx) at once and every 30 s, its branch PR (`pr_branch`) every
-            // 60 s. Only this thread writes from here on.
+            // Ticket 463: as the window does while idle: its heartbeat every second, live PR status on (the owner's
+            // setting), the status bar's change counts (`diff_list`, chrome/SessionFacts.tsx) at once and every 30 s,
+            // its branch PR (`pr_branch`) every 60 s. Only this thread writes from here on.
             let mut writer = ws.try_clone().unwrap();
             let (id, cwd) = (session.id.clone(), session.cwd.display().to_string());
             thread::spawn(move || {
@@ -482,7 +482,14 @@ fn measure(
                             serde_json::json!({"op": "pr_branch", "path": cwd}),
                         );
                     }
-                    thread::sleep(Duration::from_secs(30));
+                    // The window's `queue_connect` heartbeat (queue/connect.ts), once a second between the reads.
+                    for beat in 0..30 {
+                        let frame = serde_json::json!({"op": "queue_connect"});
+                        if !send(&mut writer, 2_000_000 + tick * 30 + beat, frame) {
+                            return;
+                        }
+                        thread::sleep(Duration::from_secs(1));
+                    }
                 }
             });
             // Drain what the core pushes so it never blocks on a full socket.
