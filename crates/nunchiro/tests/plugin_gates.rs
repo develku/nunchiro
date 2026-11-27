@@ -373,3 +373,32 @@ fn two_checks_at_once_each_read_their_own_message() {
     until("seen-alpha", &read);
     until("seen-beta", &read);
 }
+
+#[test]
+fn the_send_log_keeps_the_original_and_the_plugin() {
+    let c = core("pgl");
+    plugin(
+        &c.home,
+        "prompt.send.before",
+        r#"printf '{"allow": true, "text": "replaced by the plugin"}\n'"#,
+        "refuse",
+        true,
+    );
+    let (to, read) = pair(&c, "'{bin}' agent send {to} 'first words'");
+    until("replaced by the plugin", &read);
+    let snap = call(&c.home, &c.owner, json!({"op": "snapshot"}));
+    let row = snap["Ok"]["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == to.as_str())
+        .unwrap()["send_log"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["content"] == "replaced by the plugin")
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(row["replaced"]["plugin"], "Guard", "{row}");
+    assert_eq!(row["replaced"]["original"], "first words", "{row}");
+}
