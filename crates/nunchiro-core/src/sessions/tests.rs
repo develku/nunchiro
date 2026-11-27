@@ -2222,6 +2222,14 @@ fn flood(name: &str, bytes: &[u8]) -> Flood {
 // v1a-19 r2: `body` runs after `stty raw -echo`, then the session idles; bounded: at most 300 s after `body` (outlasts wait_end's bound),
 // less once the test writes the stop file.
 fn flood_script(name: &str, bytes: &[u8], body: &str) -> Flood {
+    let (core, id, home) = launch_script(name, bytes, body);
+    let mut flood = Flood { core, id, home };
+    // Shell sessions never queue a screen decision; detect as Claude would.
+    flood.core.entries.get_mut(&flood.id).unwrap().meta.kind = AgentKind::Claude;
+    flood
+}
+/// `flood_script`'s session, for a test that hands the registry to a window server.
+fn launch_script(name: &str, bytes: &[u8], body: &str) -> (Sessions, String, PathBuf) {
     let home = scratch(name);
     fs::write(home.join("burst"), bytes).unwrap();
     let script = home.join("flood.sh");
@@ -2248,14 +2256,7 @@ fn flood_script(name: &str, bytes: &[u8], body: &str) -> Flood {
         .unwrap();
     let session = core.start(&launch).unwrap();
     launch.committed = true;
-    let mut flood = Flood {
-        core,
-        id: session.id,
-        home,
-    };
-    // Shell sessions never queue a screen decision; detect as Claude would.
-    flood.core.entries.get_mut(&flood.id).unwrap().meta.kind = AgentKind::Claude;
-    flood
+    (core, session.id, home)
 }
 // Ticket 995: the holder's start size mark comes before a session's first output.
 const MARK: &[u8] = b"\x1b[8;50;160t";

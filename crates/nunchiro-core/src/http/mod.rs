@@ -1901,7 +1901,7 @@ fn launch_cursor(registry: &Mutex<Sessions>, id: &str, kid: &str) -> Option<u64>
 mod flow_tests; // v1a-53
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 /// v1a-53: the window parsed `bytes` of the session's output since its last watch (the data of the Output frames).
 #[derive(Deserialize)]

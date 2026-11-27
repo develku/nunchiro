@@ -654,7 +654,7 @@ fn window(
     (connect(port, &token), stopping, home)
 }
 
-fn connect(
+pub(crate) fn connect(
     port: u16,
     token: &str,
 ) -> tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<std::net::TcpStream>> {
