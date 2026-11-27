@@ -3,6 +3,7 @@
 // reads the process list and the test's own sentinel HOME only.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { expect, nunchiro, REPO, test } from './fixtures';
 
@@ -126,4 +127,11 @@ test('spec-home-guard: the guarded runner resolves a `..` path before checking i
   expect(() => nunchiro({ NUNCHIRO_HOME: home, HOME: home, PATH: '/usr/bin:/bin' }, ['--version'])).toThrow(/must be this test's folder under \.scratch/);
   const inside = `${SCRATCH}pw-x/../../.scratch/pw-x`;
   expect(path.resolve(inside).startsWith(SCRATCH)).toBe(true); // a `..` that stays inside is fine
+});
+
+test('spec-home-guard: a real-agent scenario home (lib.SCENARIO_HOMES, outside any repo) is allowed; a `..` out of it is not', () => {
+  const homes = path.join(os.userInfo().homedir, 'Library/Caches/nunchiro-scenario-homes') + path.sep;
+  const env = (h: string) => ({ NUNCHIRO_HOME: h, HOME: `${h}/sentinel-home`, PATH: '/usr/bin:/bin' });
+  expect(nunchiro(env(`${homes}cabc`), ['--version'])).toMatch(/nunchiro/i);
+  expect(() => nunchiro(env(`${homes}../escaped`), ['--version'])).toThrow(/must be this test's folder under \.scratch/);
 });
