@@ -142,7 +142,7 @@ test.describe('existing', () => {
     await app.getByRole('navigation', { name: 'Settings pages' }).getByRole('button', { name: 'Skills & hooks' }).click();
     const own = app.locator('[data-mcp="own"]');
     const command = own.getByRole('textbox', { name: 'Command' });
-    await expect(command).toBeFocused();
+    await expect(command).toBeVisible(); // a nav click leaves the focus on the page's title, as on every Settings page
     await command.fill('npx -y @modelcontextprotocol/server-github');
     await expect(own.getByRole('textbox', { name: 'Server name' })).toHaveValue('github');
     await command.fill('claude mcp add x -- /bin/echo hi');

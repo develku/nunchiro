@@ -99,6 +99,7 @@ export const GROUPS: Record<string, string[]> = {
     'project must be an absolute path of at most {} bytes without NUL', 'duplicate in {}', 'a project is in two groups', '{} is not a folder', 'invalid widget name: use a-z, 0-9, - and _ (up to 64, not starting with - or _)', 'invalid network host "{}"',
     '{}: a Home seat runs with the mode in Settings > Assistants and its lock; this argument is not taken', 'shared path "{}" {}', // ticket 1002 (Home chief of staff, Outbox), worktree sharing; nightly 11-21
     "fast mode runs on Opus 5.5 or Fable 5.2; pick one of them first", // sessions/claude_modes.rs (fast mode, ultracode, restart); nightly 11-21
+    'project: a full folder path', 'a server named {} is already added for {}; remove it first or pick another name', // extensions.rs: an MCP server added for one project
   ],
   'err.h.notFor': [
     'not a repository of a PR an agent created or you watch', "no config folder for the agent's own account", 'only Claude and Codex have a command to approve', 'this service has no sign-in command', 'this service has no sign-out command', 'merge is only for a PR an agent made or you pinned', 'a shell session has no model picker', "an ACP agent has no model picker here", "an ACP agent's effort is set in the agent",
@@ -108,8 +109,9 @@ export const GROUPS: Record<string, string[]> = {
     'this worktree has no setup script to approve', 'setup scripts are off for this project', 'not a worktree Nunchiro made', // ticket 259
     "the chief of staff's seat is not handed off in v1", "Home seats are Claude in v1 (the chief of staff's lock is for Claude seats)", // ticket 1002 (Home chief of staff, Outbox), worktree sharing; nightly 11-21
     "ultracode is Claude's only", "fast mode is Claude's only", "only Claude and Codex restart", "this session keeps the settings it started with", // sessions/claude_modes.rs (fast mode, ultracode, restart); nightly 11-21
+    'your own prompt does not wait for you', 'only a message with words can be attached', 'only one line of words goes back into the box', // sessions/deliver.rs knock, sessions/home.rs ⌘Z put back
   ],
-  'err.h.nothingUndo': ['nothing to undo on this card', 'nothing to undo (up to {} steps)'],
+  'err.h.nothingUndo': ['nothing to undo on this card', 'nothing to undo (up to {} steps)', "no message of another sender is waiting in the agent's box"], // sessions/home.rs: ⌘Z take back
   'err.h.noLimit': ["no usage limit with a reset time ahead is on this session's screen"],
   'err.h.nothingInterrupt': ['nothing to send now'],
   'err.h.signIn': ['glab reports no signed-in host'],
@@ -146,6 +148,8 @@ export const GROUPS: Record<string, string[]> = {
     'the branch changed while the worktree was made; try again', 'the worktree folder is there again; nothing was removed', 'handoff target changed; try again', 'this card offers another fix', 'act grant changed before the send; nothing sent', 'widget changed since the confirm; nothing sent (review {} again)',
     'setup script changed since it was shown; review it again', // ticket 259
     'it is already sending: only Undo answers it now', // ticket 1002 (Home chief of staff, Outbox), worktree sharing; nightly 11-21
+    'the schedule was removed while it waited for memory', // schedule/mod.rs: a held scheduled run whose schedule left meanwhile
+    'the message is not attached', "the agent's box is not empty: nothing was written", // sessions/deliver.rs knock, sessions/home.rs ⌘Z put back
   ],
   // Ticket 259: the owner's cleanup script refused a remove; the worktree stays.
   // sessions.rs teammate_removed: the window's Remove teammate; the core's sentence under Details names what is left.

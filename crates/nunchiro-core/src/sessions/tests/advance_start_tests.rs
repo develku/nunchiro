@@ -360,6 +360,7 @@ fn task_ask(operation: &str, text: &str, project: Option<&Path>) -> Request {
         package: None,
         why: None,
         account: None,
+        after: vec![],
     }
 }
 /// The account a plan of `staff_plan` starts its seat on.

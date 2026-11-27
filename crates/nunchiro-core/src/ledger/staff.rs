@@ -256,6 +256,7 @@ pub fn seat_up(
             package: None,
             why: None,
             account: None,
+            after: vec![],
         })?;
     }
     if let Some(text) = prompt {
@@ -277,6 +278,7 @@ pub fn seat_up(
             package: None,
             why: None,
             account: None,
+            after: vec![],
         }) {
             Ok(Reply::Text { text }) => text,
             // The seat runs: it gets the words without the package rather than no prompt at all.

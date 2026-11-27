@@ -1421,6 +1421,8 @@ mod tests {
             waits: waits.map(Into::into),
             package: None,
             accounts: Default::default(),
+            blockers: vec![],
+            waiters: 0,
         };
         assert_eq!(beat(&[view(None, 0)]), None);
         assert_eq!(

@@ -33,7 +33,10 @@ interface Props {
 export async function startShell(core: CoreClient, session: Session, then?: (shell: string, picked: PaneTab, open: boolean) => void): Promise<Note | null> {
   try {
     const label = `shell ${shellsOf(session.id).length + 1}`;
-    const reply = (await core.request({ op: 'start', session: { kind: 'shell', project: session.cwd, label, resume: null } })) as { session?: Session };
+    // In a worktree: the project with the worktree as `folder`, so the tree keeps the shell under the agent's project.
+    const start = (inFolder: boolean) => core.request({ op: 'start', session: { kind: 'shell', project: inFolder ? session.project : session.cwd, label, resume: null }, ...(inFolder ? { folder: session.cwd } : {}) });
+    // A folder that is no managed worktree of the project (a resumed session's old folder) starts as a folder of its own.
+    const reply = (await (session.cwd === session.project ? start(false) : start(true).catch((e) => (/not a managed worktree/.test(String(e)) ? start(false) : Promise.reject(e))))) as { session?: Session };
     // `picked` and `open`: the pane's tab and whether it was open when the shell started (a choice made meanwhile is kept).
     const picked = tabNow(session.id);
     const open = openNow(session.id);
