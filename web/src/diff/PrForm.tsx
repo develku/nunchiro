@@ -33,7 +33,11 @@ export function PrForm({ core, session, onCreated, onCancel, onOpen, t }: { core
         if (!live) return;
         const d = (r as { draft: Draft }).draft;
         setDraft(d);
-        setText((kept) => kept ?? { title: d.title, body: d.body, base: d.bases[0] ?? 'main', draft: false });
+        // A kept base the list no longer has falls back to the first shown one; with none shown, Create stays off.
+        setText((kept) => {
+          const base = kept && d.bases.includes(kept.base) ? kept.base : (d.bases[0] ?? '');
+          return { ...(kept ?? { title: d.title, body: d.body, draft: false }), base };
+        });
       },
       (e: unknown) => live && setError(e),
     );
@@ -46,12 +50,12 @@ export function PrForm({ core, session, onCreated, onCancel, onOpen, t }: { core
   }, [draft]);
   const edit = (patch: Partial<Text>) =>
     setText((x) => {
-      const next = { ...(x ?? { title: '', body: '', base: 'main', draft: false }), ...patch };
+      const next = { ...(x ?? { title: '', body: '', base: '', draft: false }), ...patch };
       KEPT.set(session, next);
       return next;
     });
   const n = draft?.push.ahead ?? 0;
-  const off = !draft || !text || busy || !!draft.gh_why || !text.title.trim();
+  const off = !draft || !text || busy || !!draft.gh_why || !text.title.trim() || !draft.bases.includes(text.base);
   const go = () => {
     if (off || !draft || !text) return;
     setBusy(true);
@@ -108,11 +112,11 @@ export function PrForm({ core, session, onCreated, onCancel, onOpen, t }: { core
           </p>
         </>
       )}
-      <div className="drow">
-        <button type="button" className="btn p" aria-disabled={off || undefined} data-tip={draft?.gh_why ? t('gitActions.pr.needsGh') : undefined} onClick={go}>
+      <div className="drow dbtns">
+        <button type="button" className="btn p sm" aria-disabled={off || undefined} data-tip={draft?.gh_why ? t('gitActions.pr.needsGh') : undefined} onClick={go}>
           {busy ? t('gitActions.pr.creating') : t(n > 0 ? 'gitActions.label.pushCreatePr' : 'gitActions.label.createPr')}
         </button>
-        <button type="button" className="btn" disabled={busy} onClick={onCancel}>
+        <button type="button" className="btn sm" disabled={busy} onClick={onCancel}>
           {t('gitActions.push.cancel')}
         </button>
       </div>

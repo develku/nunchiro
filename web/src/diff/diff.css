@@ -453,3 +453,19 @@
   opacity: 0.5;
   cursor: default;
 }
+/* Buttons keep one line and sit side by side; the foot line wraps its words instead of clipping them. */
+.diff .dprform .drow .btn {
+  flex: none;
+  white-space: nowrap;
+}
+.diff .dpushed {
+  flex-wrap: wrap;
+  line-height: 1.4;
+}
+.diff .dpushed .dpushed-t {
+  flex: 1 1 8em;
+  min-width: 0;
+}
+.diff .dprform .dbtns {
+  flex-wrap: nowrap;
+}

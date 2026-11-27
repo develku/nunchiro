@@ -477,18 +477,36 @@ fn template(dir: &Path) -> Option<String> {
     let top = std::path::PathBuf::from(text(dir, &["rev-parse", "--show-toplevel"])?);
     TEMPLATES.iter().find_map(|t| {
         let path = top.join(t);
+        // No link anywhere below the top folder (`.github` or `docs` linked elsewhere included).
+        let mut at = top.clone();
+        for part in Path::new(t).parent()?.components() {
+            at.push(part);
+            if std::fs::symlink_metadata(&at)
+                .ok()?
+                .file_type()
+                .is_symlink()
+            {
+                return None;
+            }
+        }
         let meta = std::fs::symlink_metadata(&path).ok()?;
         if !meta.is_file() || meta.len() > (BODY_MAX * 4) as u64 {
             return None;
         }
         let body = std::fs::read_to_string(path).ok()?;
-        Some(
-            body.chars()
-                .take(BODY_MAX)
-                .filter(|c| !c.is_control() || matches!(c, '\n' | '\t'))
-                .collect(),
-        )
+        Some(plain(&body.chars().take(BODY_MAX).collect::<String>()))
     })
+}
+
+/// Text as a PR carries it: no control characters but line ends and tabs, none of the shared hidden set (bidi
+/// overrides, zero-width marks, tag characters: board/rights.rs `hidden`).
+pub(crate) fn plain(text: &str) -> String {
+    text.chars()
+        .filter(|c| {
+            !crate::board::rights::hidden(*c)
+                && (!c.is_control() || matches!(c, '\n' | '\t' | '\r'))
+        })
+        .collect()
 }
 
 /// The Create PR form's start: checks as Push does (nothing ahead is fine: the branch may be pushed already).
@@ -542,7 +560,7 @@ pub fn draft(dir: &Path) -> Result<Draft, String> {
     )
     .unwrap_or_default()
     .lines()
-    .map(String::from)
+    .map(plain)
     .collect();
     let commits = match &base_ref {
         Some(r) => text(dir, &["rev-list", "--count", "--end-of-options", r])
@@ -554,7 +572,7 @@ pub fn draft(dir: &Path) -> Result<Draft, String> {
         [one] => one.clone(),
         _ => readable(&branch),
     };
-    let title: String = title
+    let title: String = plain(&title)
         .chars()
         .filter(|c| !c.is_control())
         .take(TITLE_MAX)
@@ -649,6 +667,7 @@ pub fn create(
     base: &str,
     draft: bool,
 ) -> Result<Created, String> {
+    let (title, body) = (&plain(title), &plain(body));
     check_text(title, body)?;
     if !crate::pr_live::piece(base) {
         return Err("no pull request: not a branch name".into());
