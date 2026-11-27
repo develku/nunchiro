@@ -1213,11 +1213,79 @@ fn status_offers_only_a_build_install_would_take() {
     let said_now = offer(&dir, &work, running, Some(url));
     assert_eq!(said_now["state"], "ready", "{said_now}");
     assert_eq!(said_now["commit"], c[4].as_str());
-    assert!(
-        fs::read_dir(&work).map_or(true, |mut d| d.next().is_none()),
-        "the check leaves nothing in the work folder"
+    // A verdict main gave is remembered for this pair of commits: no second fetch (the next one could not reach main).
+    let gone = Some("file:///nonexistent/nunchiro-1082b");
+    assert_eq!(offer(&dir, &work, running, gone)["state"], "ready");
+    stamp_for(&dir, &c[0]);
+    let said_now = offer(&dir, &work, running, gone);
+    let reason = said_now["reason"].as_str().unwrap_or_default();
+    assert!(reason.contains("is not newer on main"), "{said_now}");
+    // Off main is not remembered: that commit may still land on main.
+    stamp_for(&dir, &c[2]);
+    let said_now = offer(&dir, &work, running, gone);
+    let reason = said_now["reason"].as_str().unwrap_or_default();
+    assert!(reason.contains("main could not be fetched"), "{said_now}");
+    let left: Vec<_> = fs::read_dir(&work)
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(
+        left,
+        ["status-verdict"],
+        "only the remembered verdict stays"
     );
     fs::remove_dir_all(dir).unwrap();
+}
+
+/// The app runs `update status` under its output cap (`Output::KeepBounded`), so the status check's git runs under
+/// it too: a newer build must still read as ready there, and no truncated cache file may be left behind.
+#[test]
+fn status_judges_a_build_under_the_apps_output_cap() {
+    let (url, c) = main_repo();
+    let dir = folder("offer-cap", OWNER_ID);
+    stamp_for(&dir, &c[4]);
+    let work = dir.join("work");
+    let args = serde_json::json!({"dir": dir, "work": work, "running": &c[1], "repo": url});
+    let mut cmd = Command::new(std::env::current_exe().unwrap());
+    cmd.env("NUNCHIRO_TEST_OFFER", args.to_string()).args([
+        "--exact",
+        "update::tests::offer_in_a_child",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1",
+    ]);
+    let ran = crate::update_claims::run_limited(
+        &mut cmd,
+        &dir,
+        Some(std::time::Duration::from_secs(60)),
+        crate::update_claims::Output::KeepBounded,
+        || Ok(()),
+    )
+    .unwrap();
+    let out = String::from_utf8_lossy(&ran.stdout);
+    let said = out
+        .lines()
+        .find_map(|l| l.strip_prefix("offer: "))
+        .unwrap_or_else(|| panic!("{out}"));
+    let said: serde_json::Value = serde_json::from_str(said).unwrap();
+    assert_eq!(said["state"], "ready", "{said}");
+    fs::remove_dir_all(dir).unwrap();
+}
+
+/// Run only by the test above, in a child under the cap.
+#[test]
+#[ignore]
+fn offer_in_a_child() {
+    let args: serde_json::Value =
+        serde_json::from_str(&std::env::var("NUNCHIRO_TEST_OFFER").unwrap()).unwrap();
+    let path = |k: &str| PathBuf::from(args[k].as_str().unwrap());
+    let said = offer(
+        &path("dir"),
+        &path("work"),
+        args["running"].as_str().unwrap(),
+        args["repo"].as_str(),
+    );
+    println!("offer: {said}");
 }
 
 /// Ticket 1112: a smart-HTTP copy of `main_repo` on 127.0.0.1 that answers 401 to any request without the
