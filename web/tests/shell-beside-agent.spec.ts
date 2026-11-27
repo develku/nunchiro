@@ -46,6 +46,11 @@ test('terminal_icon_opens_shell_in_agent_folder: one press shows a shell in the 
   await expect(app.locator(`.term[data-session="${sh.id}"] .xterm-screen`)).toBeVisible();
   await app.waitForTimeout(300);
   expect(shells(core)).toHaveLength(1);
+  // The row is a tablist of tabs only; Delete on the shell's tab closes it.
+  await pane(app).getByRole('tab', { name: /shell/ }).focus();
+  await app.keyboard.press('Delete');
+  await expect(pane(app).getByRole('tab', { name: /shell/ })).toHaveCount(0);
+  await expect.poll(() => shells(core).find((s) => s.id === sh.id)?.state).not.toBe('running');
 });
 
 test('new_terminal_from_worktree_agent_starts_in_its_folder: the popover\'s New terminal opens where the agent works', async ({ app, core }) => {
