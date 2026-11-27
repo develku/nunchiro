@@ -165,6 +165,8 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
   const keys = trap(root, onClose);
 
   const m = view?.manifest;
+  // A plugin (`plugin:<id>`): its parts take the command's place; the rest of the sheet reads the same.
+  const plugin = name.startsWith('plugin:') ? name.slice('plugin:'.length).split('/')[0] : null;
   const canAct = !!m?.permissions.includes('act') && !view?.act_refused;
   // v1b-20: the manifest's `[act]` table, shown verbatim (types.ts predates it).
   const actTable = (m as { act?: Act | null } | undefined)?.act ?? null;
@@ -173,10 +175,10 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
       <div className="ps-scrim" onClick={onClose} />
       <div ref={root} className="ps" role="dialog" aria-modal="true" aria-labelledby="ps-title" onKeyDown={keys}>
         <div>
-          <h3 id="ps-title">{t('approval.title', { name })}</h3>
+          <h3 id="ps-title">{t('approval.title', { name: plugin ?? name })}</h3>
           <div className="ps-meta">
-            {isSource ? t('approval.kindSource') : t('approval.kindWidget')}
-            {m && ` · ${m.kind}`}
+            {isSource ? t('approval.kindSource') : plugin ? t('plugins.sheet.kind') : t('approval.kindWidget')}
+            {m && !plugin && ` · ${m.kind}`}
             {m && (
               <>
                 {' · '}
@@ -187,7 +189,7 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
             )}
             {' · '}
             <span className="mono">
-              ~/.nunchiro/{isSource ? 'sources' : 'widgets'}/{name}/
+              ~/.nunchiro/{isSource ? 'sources' : plugin ? `plugins/${plugin}` : `widgets/${name}`}/
             </span>
             {/* v1a-23 r2: the content this approval is bound to. */}
             {view && (
@@ -207,9 +209,23 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
             {t('approval.changed')}
           </p>
         )}
+        {view && m && plugin && (
+          <div data-field="parts">
+            <p className="ps-meta">{t('plugins.sheet.notOurs')}</p>
+            <b>{t('plugins.sheet.runs')}</b>
+            <ul className="ps-parts">
+              {(view.parts ?? []).map((p) => (
+                <li key={p.name}>
+                  {p.kind === 'panel' ? t('plugins.sheet.panel') : t('plugins.sheet.command')} · {p.title}
+                  <pre>{p.runs.map(word).join(' ')}</pre>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {view && m && (
           <>
-            <div>
+            <div hidden={!!plugin}>
               <b>
                 {m.kind === 'web'
                   ? t('approval.pageToShow')
@@ -235,7 +251,7 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
                 </ul>
                 <span className="ps-tag">{t('approval.tagDefaultOn')}</span>
               </div>
-              <div className="ps-row">
+              <div className="ps-row" hidden={!!plugin}>
                 <span className="ps-pk">{t('approval.act')}</span>
                 <ul>
                   {view.act_refused ? (
@@ -328,10 +344,10 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
         )}
         <div className="ps-acts">
           <button className="btn" aria-expanded={source} disabled={!view} onClick={() => setSource(!source)}>
-            {source ? t('approval.hideToml') : t('approval.viewToml')}
+            {plugin ? (source ? t('plugins.sheet.hideToml') : t('plugins.sheet.viewToml')) : source ? t('approval.hideToml') : t('approval.viewToml')}
           </button>
           <span className="dim mono" data-field="cli">
-            = {view ? view.cli.replace(/--read$/, `--${level}`) : `nunchiro widget allow ${name} --${level}`}
+            = {view ? view.cli.replace(/--read$/, `--${level}`) : plugin ? `nunchiro plugin allow ${plugin}` : `nunchiro widget allow ${name} --${level}`}
           </span>
           <span className="sp" />
           <button className="btn" data-cancel onClick={onClose}>

@@ -1,0 +1,12 @@
+/* Settings > Plugins: one block per plugin, its settings and folder as sub rows (settings/shell Row). */
+.plg + .plg {
+  margin-top: var(--sp-12);
+}
+.plg-about {
+  display: block;
+  color: var(--text);
+}
+.plg-value {
+  width: 140px;
+  font-variant-numeric: tabular-nums;
+}

@@ -114,6 +114,9 @@ pub struct View {
     /// v1b-34: why act cannot be granted for this content (a web widget naming a script CDN host).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub act_refused: Option<String>,
+    /// A plugin's panels and commands with what each runs (the sheet lists them; `manifest.command` is empty).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parts: Vec<crate::plugins::Part>,
 }
 
 /// Held by whatever runs a subject. Only `check` makes one; re-run `check` right before spawning, because
@@ -287,7 +290,12 @@ fn view(name: &str, s: Subject, stored: Option<&store::Approval>) -> View {
     };
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
     let read_home_wide = home.is_some_and(|h| s.manifest.read.iter().any(|e| home_wide(e, &h))); // v1b-33
+    let parts = crate::plugins::split(name)
+        .and_then(|(id, _)| crate::plugins::parse(&s.text, id).ok())
+        .map(|p| crate::plugins::parts(&p))
+        .unwrap_or_default();
     View {
+        parts,
         read_home_wide,
         act_refused,
         name: name.into(),

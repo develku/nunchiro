@@ -823,6 +823,13 @@
         "name": {
           "type": "string"
         },
+        "parts": {
+          "description": "A plugin's panels and commands with what each runs (the sheet lists them; `manifest.command` is empty).",
+          "items": {
+            "$ref": "#/$defs/Part"
+          },
+          "type": "array"
+        },
         "read_home_wide": {
           "default": false,
           "description": "v1b-33: a `read` entry covers the user's whole home (`home_wide` against the core's HOME); the sheet warns.",
@@ -5450,6 +5457,35 @@
       "required": [
         "name",
         "kind"
+      ],
+      "type": "object"
+    },
+    "Part": {
+      "description": "One part as the permission sheet lists it: what it is and exactly what it runs.",
+      "properties": {
+        "kind": {
+          "description": "`panel` or `command`.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "runs": {
+          "description": "The argv, or a web panel's entry file as its one word.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "title",
+        "kind",
+        "runs"
       ],
       "type": "object"
     },

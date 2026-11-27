@@ -270,6 +270,36 @@ pub(crate) fn part_manifest(p: &Plugin, part: &str) -> Result<approval::Manifest
         .map_err(|e| format!("{part}: {}", e.replace("widget folder", "plugin folder")))
 }
 
+/// One part as the permission sheet lists it: what it is and exactly what it runs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub struct Part {
+    pub name: String,
+    pub title: String,
+    /// `panel` or `command`.
+    pub kind: String,
+    /// The argv, or a web panel's entry file as its one word.
+    pub runs: Vec<String>,
+}
+pub(crate) fn parts(p: &Plugin) -> Vec<Part> {
+    let panels = p.panel.iter().map(|x| Part {
+        name: x.name.clone(),
+        title: x.title.clone().unwrap_or_else(|| x.name.clone()),
+        kind: "panel".into(),
+        runs: x
+            .command
+            .clone()
+            .unwrap_or_else(|| x.entry.iter().cloned().collect()),
+    });
+    let commands = p.command.iter().map(|x| Part {
+        name: x.name.clone(),
+        title: x.title.clone().unwrap_or_else(|| x.name.clone()),
+        kind: "command".into(),
+        runs: x.command.clone(),
+    });
+    panels.chain(commands).collect()
+}
+
 /// What the permission sheet shows for the whole plugin: every host and read path any part may use.
 pub(crate) fn summary(p: &Plugin) -> approval::Manifest {
     let mut network = vec![];
