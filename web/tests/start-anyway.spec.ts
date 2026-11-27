@@ -1,5 +1,6 @@
 // A window start held while the Mac is low on memory says so in a short line with Start anyway (mockup
-// docs/design/memory-hold-m8/index.html, panel 2). The core's hold is faked here: its `start` of an agent answers the
+// docs/design/memory-hold-m8/index.html, panel 2). The tree's + and the + menu wait for memory instead
+// (memory-wait.spec.ts); refused by a core without the waiting list, they show the same note. The core's hold is faked here: its `start` of an agent answers the
 // window's hold sentence, and a `start_anyway` goes through as its start (crates/nunchiro/tests/sessions.rs checks the
 // core's side, at a faked critical reading).
 import { execFileSync } from 'node:child_process';
@@ -13,20 +14,29 @@ const HELD = 'Your Mac is low on memory, so the new session was not started. Clo
 type Snap = { id: string; project: string; state: string; kind: string };
 const agents = (core: Core) => (core.cli('snapshot', '--json').sessions as Snap[]).filter((s) => s.kind === 'claude' && s.state === 'running');
 
-/** Every agent `start` is held; a `start_anyway` reaches the core as its plain start. Returns the ops the window sent. */
-async function holdStarts(app: Page) {
+/** Every agent `start` is held; a `start_anyway` reaches the core as its plain start. Returns the ops the window sent;
+ *  `prompts` gets each `agent_prompt`'s text. `snap` may change each snapshot the window reads. */
+async function holdStarts(app: Page, prompts: string[] = [], snap?: (s: Snap & Record<string, unknown>) => void) {
   const sent: string[] = [];
   await app.routeWebSocket(/\/ws$/, (ws) => {
     const server = ws.connectToServer();
     ws.onMessage((m) => {
       const frame = typeof m === 'string' ? JSON.parse(m) : null;
       const r = frame?.request;
-      if (r?.op === 'start' || r?.op === 'start_anyway') sent.push(r.op);
+      if (r?.op === 'start' || r?.op === 'start_anyway' || r?.op === 'start_or_wait') sent.push(r.op);
+      // A start that would wait for memory, refused as a core without the waiting list does: the note's fallback.
+      if (r?.op === 'start_or_wait') return ws.send(JSON.stringify({ id: frame.id, response: { Err: HELD } }));
+      if (r?.op === 'agent_prompt') prompts.push(r.text);
       if (r?.op === 'start' && r.session?.kind !== 'shell') return ws.send(JSON.stringify({ id: frame.id, response: { Err: HELD } }));
       if (r?.op === 'start_anyway' && r.start?.op === 'start') return server.send(JSON.stringify({ ...frame, request: r.start }));
       server.send(m);
     });
-    server.onMessage((m) => ws.send(m));
+    server.onMessage((m) => {
+      if (!snap || typeof m !== 'string' || !m.startsWith('{"event":"snapshot"')) return ws.send(m);
+      const event = JSON.parse(m);
+      for (const s of event.sessions) snap(s);
+      ws.send(JSON.stringify(event));
+    });
   });
   return sent;
 }
@@ -57,7 +67,7 @@ test('held_start_note_starts_anyway: the tree\'s + held for low memory says so w
   expect(agents(core)).toHaveLength(0);
   await anyway.click();
   await expect.poll(() => agents(core).map((s) => s.project), { timeout: 15_000 }).toEqual([p]);
-  expect(sent).toEqual(['start', 'start_anyway']);
+  expect(sent).toEqual(['start_or_wait', 'start_anyway']);
   await expect(app.locator('.tab[aria-selected="true"]')).toHaveAttribute('data-tab', agents(core)[0].id);
   await expect(bar).not.toContainText('low on memory');
 });
@@ -70,7 +80,7 @@ test('held_start_note_dismissed_starts_nothing: × closes the note and starts no
   await bar.getByRole('button', { name: 'Dismiss' }).click();
   await expect(bar).not.toContainText('low on memory');
   await app.waitForTimeout(500);
-  expect(sent).toEqual(['start']);
+  expect(sent).toEqual(['start_or_wait']);
   expect(agents(core)).toHaveLength(0);
 });
 
@@ -84,7 +94,7 @@ test('held_start_in_new_tab_menu_starts_anyway: the + menu says the hold in its 
   await expect(alert).not.toContainText('Not started:');
   await alert.getByRole('button', { name: 'Start anyway' }).click();
   await expect.poll(() => agents(core).map((s) => s.project), { timeout: 15_000 }).toEqual([p]);
-  expect(sent).toEqual(['start', 'start_anyway']);
+  expect(sent).toEqual(['start_or_wait', 'start_anyway']);
   await expect(pop).toHaveCount(0);
 });
 
@@ -130,4 +140,76 @@ test('held_worktree_dialog_starts_anyway: the New worktree card says the hold in
   await expect.poll(() => agents(core).map((s) => s.project), { timeout: 15_000 }).toEqual([p]);
   expect(sent).toEqual(['start', 'start_anyway']);
   await expect(card).toHaveCount(0);
+});
+
+/** Cmd+Enter held, then the box changed or emptied before Start anyway: the text that was held is what is sent. */
+async function heldSend(app: Page, core: Core, then: string) {
+  fs.writeFileSync(path.join(core.home, 'bin/claude'), fs.readFileSync(path.join(REPO, 'crates/nunchiro-core/tests/fixtures/claude-mode')), { mode: 0o700 });
+  const p = core.project('api-server');
+  const s = core.agent(p, 'alpha', 'x');
+  const prompts: string[] = [];
+  const sent = await holdStarts(app, prompts);
+  await openWindow(app);
+  await app.locator(`.tab[data-tab="${s.id}"]`).click();
+  const box = app.locator('.composer textarea');
+  await box.fill('write the tests first');
+  await box.press('Meta+Enter');
+  const bar = app.locator('.pane-status');
+  await expect(bar).toContainText('Your Mac is low on memory, so Claude was not started.');
+  await box.fill(then);
+  await bar.getByRole('button', { name: 'Start anyway' }).click();
+  await expect.poll(() => agents(core).length, { timeout: 15_000 }).toBe(2);
+  await expect.poll(() => prompts).toEqual(['write the tests first']);
+  expect(sent).toEqual(['start', 'start_anyway']);
+  return box;
+}
+
+test('held_background_send_sends_the_held_text: Start anyway sends the text that was held, not what the box holds at the click', async ({ app, core }) => {
+  const box = await heldSend(app, core, 'another thought');
+  await expect(box).toHaveValue('another thought');
+});
+
+test('held_background_send_from_an_empty_box: Start anyway after the box was emptied still sends the held text', async ({ app, core }) => {
+  await heldSend(app, core, '');
+});
+
+test('held_custom_model_start_offers_start_anyway: the picker\'s start on a custom id held for low memory offers Start anyway, which starts it', async ({ app, core }) => {
+  fs.copyFileSync(path.join(REPO, 'crates/nunchiro/tests/fixtures/claude-picker'), path.join(core.home, 'bin/claude'));
+  const s = core.cli('session', 'start', '--kind', 'claude', '--project', core.project('demo'), '--label', 'claude').session as { id: string };
+  await openWindow(app);
+  // The custom id is stored first, over the window's own socket; the held starts are faked after it, from a reload.
+  await app.evaluate(
+    () =>
+      new Promise<void>((ok) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${window.__NUNCHIRO__!.port}/ws`, ['nunchiro.v1', `nunchiro.token.${window.__NUNCHIRO__!.token}`]);
+        ws.onopen = () => ws.send(JSON.stringify({ id: 1, request: { op: 'quit_settings', patch: { features: { 'agents.custom_models': { claude: [{ id: 'claude-x-preview', name: 'Mine' }] } } } } }));
+        ws.onmessage = (e) => JSON.parse(e.data).id === 1 && (ws.close(), ok());
+      }),
+  );
+  const sent = await holdStarts(app);
+  await openWindow(app);
+  await app.locator(`.tab[data-tab="${s.id}"]`).click();
+  await app.locator('[data-picker="model"]').click();
+  await app.locator('[data-menu="model"] [data-item="more"]').click();
+  await app.locator('[data-menu="more"]').getByRole('menuitemradio', { name: 'Mine' }).click();
+  const msg = app.locator('.pk-msg');
+  await expect(msg).toContainText('low on memory');
+  await msg.getByRole('button', { name: 'Start anyway' }).click();
+  type Row = { kind: string; state: string; model?: string };
+  await expect.poll(() => (core.cli('snapshot', '--json').sessions as Row[]).find((r) => r.model === 'claude-x-preview')?.state, { timeout: 15_000 }).toBe('running');
+  expect(sent).toEqual(['start', 'start_anyway']);
+});
+
+test('held_holder_restart_offers_start_anyway: a fresh restart for an older holder held for low memory offers Start anyway, which starts it', async ({ app, core }) => {
+  const p = core.project('api-server');
+  const s = core.agent(p, 'alpha', 'x');
+  const sent = await holdStarts(app, [], (row) => row.id === s.id && row.state === 'running' && (row.holder_status = 'needs_restart'));
+  await openWindow(app);
+  await app.locator(`.tab[data-tab="${s.id}"]`).click();
+  await app.getByRole('button', { name: 'Restart session' }).click();
+  const line = app.locator('.perm-needed').getByRole('alert');
+  await expect(line).toContainText('low on memory');
+  await line.getByRole('button', { name: 'Start anyway' }).click();
+  await expect.poll(() => agents(core).filter((a) => a.id !== s.id).length, { timeout: 15_000 }).toBe(1);
+  expect(sent).toEqual(['start', 'start_anyway']);
 });

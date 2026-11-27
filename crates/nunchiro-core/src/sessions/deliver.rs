@@ -481,6 +481,7 @@ impl Sessions {
         self.steers.retain(waits);
         self.wake_rows.retain(waits);
         self.core_rows.retain(waits);
+        self.memory_rows.retain(waits);
         self.joined_rows.retain(|send, _| waits(send));
         self.retried.retain(waits);
         self.drops.retain(|send, _| waits(send));
@@ -975,7 +976,7 @@ impl Sessions {
     /// A queued row the flush cancels: its sender no longer owns the target, or a widget act lost its grant.
     fn send_refused(&self, id: &str, send: &crate::delivery::Send) -> bool {
         // Ticket 1081: the core's own line has no sender to check; `core_may` checks its target right before the write.
-        if self.core_rows.contains(&send.id) {
+        if self.core_rows.contains(&send.id) || self.memory_rows.contains(&send.id) {
             return false;
         }
         let caller = self

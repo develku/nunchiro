@@ -238,10 +238,24 @@ impl Sessions {
     /// Ticket 1056 + 1081: a queued wake or core line no longer to be written: a wake line's worker was closed or its
     /// task closed; a core line's target fails `core_may` now.
     pub(super) fn row_gone(&self, id: &str, row: &crate::delivery::Send) -> bool {
+        if self.memory_rows.contains(&row.id) {
+            return false;
+        }
         if self.core_rows.contains(&row.id) {
             return self.core_may(id).is_err();
         }
         self.wake_gone(&row.sender)
+    }
+    /// A start that waited for memory tells its asker how it ended (`pressure::wait`): a line as `CORE` through the
+    /// normal send path, queued behind the user's rows as a wake line is. Unlike `core_line` it needs no task.
+    pub(crate) fn memory_line(&mut self, id: &str, text: String) -> Result<(), String> {
+        if let Reply::Delivery { send } = self.send_line(CORE, id, text)?
+            && send.status == "queued"
+        {
+            self.wake_rows.insert(send.id.clone());
+            self.memory_rows.insert(send.id);
+        }
+        Ok(())
     }
     /// Ticket 1081: a line the core itself types into `id` through the normal send path, as `CORE` (no seat's or
     /// token's identity is borrowed). `core_may` decides before the write here and before a queued row is written

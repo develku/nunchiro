@@ -629,6 +629,10 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | TreeEdit { .. }
         | Start { .. }
         | StartAnyway { .. }
+        | StartOrWait { .. } // the starts waiting for memory are the owner's
+        | MemoryWaitList
+        | MemoryWaitGo { .. }
+        | MemoryWaitCancel { .. }
         | SendKeys { .. }
         | Resize { .. }
         | Close { .. }

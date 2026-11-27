@@ -962,7 +962,7 @@ pub(crate) enum Opener<'a> {
 
 impl Opener<'_> {
     /// How a seat this opener starts is held under memory pressure, and its name in the hold's log line. A new
-    /// conversation is checked before its handover (`fresh_lead`), and an Undo resumes, so neither is held here.
+    /// conversation is checked before its handover (the window's `TeamOpen`), and an Undo resumes, so neither is held here.
     fn pressure(&self) -> Option<(crate::pressure::Who, &'static str)> {
         use crate::pressure::Who;
         match self {
@@ -1265,9 +1265,17 @@ pub(crate) fn open_seat(
         if resumes {
             start.resume = sessions.seat_to_resume(&mate.id, &start, level, None);
         }
-        // Only a seat that starts now is held (an open seat took the task above, a resumed one never is).
-        if let Some((who, path)) = opener.pressure() {
-            crate::pressure::check_start(&start, who, false, path)?;
+        // Only a seat that starts now is held (an open seat took the task above, a resumed one never is). A lead's
+        // open waits and goes by itself (`pressure::wait`); the lead hears how it ended.
+        if let Some((who, path)) = opener.pressure()
+            && let Err(held) = crate::pressure::check_start(&start, who, false, path)
+        {
+            return Err(match &opener {
+                Opener::Lead(caller) => {
+                    hold_lead_open(&mut sessions, caller, &mate, asked, start.kind)
+                }
+                _ => held,
+            });
         }
         match &opener {
             Opener::Window | Opener::WindowAnyway | Opener::Fresh(_) | Opener::Undo(..) => sessions
@@ -1372,6 +1380,54 @@ pub(crate) fn open_seat(
     })
 }
 
+/// A lead's held `team open`, kept to go by itself; the sentence it answers. The seat opens as the lead's worker with
+/// its brief (the task with it), and the lead gets one line when it opens or does not.
+fn hold_lead_open(
+    sessions: &mut crate::sessions::Sessions,
+    caller: &crate::grants::Caller,
+    mate: &Teammate,
+    asked: Option<Level>,
+    kind: AgentKind,
+) -> String {
+    let lead = sessions
+        .session_of(&caller.id)
+        .map(|s| s.label)
+        .unwrap_or_default();
+    let agent = format!("{} ({})", mate.name, crate::pressure::kind_name(kind));
+    let project = mate
+        .project
+        .as_deref()
+        .map(crate::pressure::place_name)
+        .unwrap_or_else(|| "Home".into());
+    let key = format!("lead:{}:{}", caller.id, mate.id);
+    let (caller, id, name) = (caller.clone(), mate.id.clone(), mate.name.clone());
+    let go: crate::pressure::Go = Box::new(move |registry, _, done| {
+        use crate::pressure::Done;
+        let result = match done {
+            Done::Released | Done::Anyway => {
+                open_seat(registry, &id, None, asked, Opener::Lead(&caller)).map(|o| o.session.id)
+            }
+            Done::Cancelled | Done::Dropped => Err(String::new()),
+        };
+        let line = crate::pressure::asker_line(&name, done, &result);
+        if let Ok(mut sessions) = registry.lock()
+            && let Err(e) = sessions.memory_line(&caller.id, line)
+        {
+            eprintln!("memory pressure: the waiting seat's line was not sent: {e}");
+        }
+        result
+    });
+    crate::pressure::hold(
+        key,
+        agent,
+        project,
+        crate::pressure::Asker::Session(lead),
+        2,
+        go,
+    );
+    crate::pressure::waiting_lead(&mate.name)
+}
+
 /// Ticket 1096: how a fresh Lead conversation treats a running old seat.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1438,8 +1494,6 @@ pub(crate) fn fresh_lead(
         return Err("a new conversation is already being opened".into());
     }
     let _one = Handing(id.to_string());
-    // Before the handover: a held new conversation must leave the old seat running.
-    crate::pressure::check(crate::pressure::Who::Window, false, "new conversation")?;
     let lock = || {
         registry
             .lock()
@@ -1792,8 +1846,13 @@ pub fn window(
         Op::TeamOpen {
             id,
             fresh: Some(how),
+            anyway,
             ..
-        } => fresh_lead(registry, &id, how, HANDOVER_WAIT).map(Opened::reply),
+        } => {
+            // Before the handover: a held new conversation leaves the old seat running; Start anyway passes it.
+            crate::pressure::check(crate::pressure::Who::Window, anyway, "new conversation")?;
+            fresh_lead(registry, &id, how, HANDOVER_WAIT).map(Opened::reply)
+        }
         Op::TeamBrief { id } => {
             team.brief(&id, None)
                 .map(|(teammate, project, prompt)| Reply::TeamBrief {

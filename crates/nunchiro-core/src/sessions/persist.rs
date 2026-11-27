@@ -292,6 +292,7 @@ impl Sessions {
             steers: std::collections::BTreeSet::new(),
             wake_rows: std::collections::BTreeSet::new(),
             core_rows: std::collections::BTreeSet::new(),
+            memory_rows: std::collections::BTreeSet::new(),
             joined_rows: BTreeMap::new(),
             left_typed: std::collections::BTreeSet::new(),
             retried: std::collections::BTreeSet::new(),

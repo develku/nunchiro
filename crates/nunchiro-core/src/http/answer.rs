@@ -183,50 +183,59 @@ pub(super) fn answer(
                 // Held as the socket's start, at critical only; the window's "Start anyway" passes it.
                 let who = crate::pressure::Who::Window;
                 crate::pressure::check_start(&session, who, anyway, "window start")?;
-                let launch = registry
-                    .lock()
-                    .map_err(|_| "session registry unavailable")?
-                    .launch(session.clone())
-                    .owner_start() // ticket 362: the window is the owner
-                    .with_folder(folder.clone())
-                    .with_env(env)?;
-                // v2-5b: a missing agent still opens a tab, with its card.
-                let mut launch = match launch.prepare() {
-                    Ok(launch) => launch,
-                    Err(e) => {
-                        return registry
-                            .lock()
-                            .map_err(|_| "session registry unavailable")?
-                            .start_failed_at(&session, folder.as_deref(), e);
-                    }
-                };
-                let result = registry
-                    .lock()
-                    .map_err(|_| "session registry unavailable")?
-                    .start(&launch);
-                // F15: as the owner socket's Start, the refusal is named off the lock.
-                let result = result.map_err(|e| {
-                    crate::sessions::refused_start(
-                        crate::sessions::probe_folder,
-                        session.kind,
-                        &launch.cwd,
-                        e,
-                    )
-                });
-                if result.is_ok() {
-                    launch.committed = true;
-                }
-                // V2-4b: as the owner socket's Start: a failed ACP agent leaves a row with its card.
-                if let Err(e) = &result
-                    && session.kind == crate::api::AgentKind::Acp
-                {
-                    return registry
-                        .lock()
-                        .map_err(|_| "session registry unavailable")?
-                        .start_failed_at(&session, folder.as_deref(), e.clone());
-                }
-                result.map(|session| Reply::Started { session })
+                window_start(registry, &session, folder, env)
             }
+            // The owner's held click waits and starts by itself; the status bar lists it with Start anyway and Cancel.
+            Request::StartOrWait { start } => {
+                let Request::Start {
+                    session,
+                    folder,
+                    env,
+                    ..
+                } = *start
+                else {
+                    return Err("start_or_wait carries a start only".into());
+                };
+                let who = crate::pressure::Who::Window;
+                if let Err(held) =
+                    crate::pressure::check_start(&session, who, false, "window start")
+                {
+                    let agent = crate::pressure::kind_name(session.kind).to_string();
+                    let project = crate::pressure::place_name(&session.project);
+                    // shortcut: no key, so two clicks are two entries, as two clicks are two sessions when memory is free.
+                    let key = format!("window:{}", crate::queue::now_ms());
+                    let go: crate::pressure::Go = Box::new(move |registry, _, done| match done {
+                        crate::pressure::Done::Released | crate::pressure::Done::Anyway => {
+                            match window_start(registry, &session, folder, env)? {
+                                Reply::Started { session } => Ok(session.id),
+                                _ => Err("the core started nothing".into()),
+                            }
+                        }
+                        _ => Err(String::new()),
+                    });
+                    let from = crate::pressure::from(who);
+                    crate::pressure::hold(
+                        key,
+                        agent,
+                        project,
+                        crate::pressure::Asker::Owner,
+                        from,
+                        go,
+                    );
+                    return Ok(Reply::MemoryWaiting { text: held });
+                }
+                window_start(registry, &session, folder, env)
+            }
+            Request::MemoryWaitGo { id } => crate::pressure::answer(registry, stopping, &id, true),
+            Request::MemoryWaitCancel { id } => {
+                crate::pressure::answer(registry, stopping, &id, false)
+            }
+            Request::MemoryWaitList => Ok(Reply::MemoryWait {
+                entries: crate::pressure::shown()
+                    .iter()
+                    .filter_map(|e| serde_json::to_value(e).ok())
+                    .collect(),
+            }),
             // Ticket 396: as the owner socket's answer, it waits for a resize redraw off the registry lock.
             request @ Request::Answer { .. } => {
                 let reply = Sessions::past_busy_worktree(registry, |sessions| {
@@ -281,4 +290,51 @@ pub(super) fn answer(
         }
     })();
     serde_json::json!({ "id": frame.id, "response": response })
+}
+
+/// The window's start past its memory check: as the owner socket's.
+fn window_start(
+    registry: &Mutex<Sessions>,
+    session: &crate::api::StartSession,
+    folder: Option<std::path::PathBuf>,
+    env: std::collections::BTreeMap<String, String>,
+) -> Response {
+    let launch = registry
+        .lock()
+        .map_err(|_| "session registry unavailable")?
+        .launch(session.clone())
+        .owner_start() // ticket 362: the window is the owner
+        .with_folder(folder.clone())
+        .with_env(env)?;
+    // v2-5b: a missing agent still opens a tab, with its card.
+    let mut launch = match launch.prepare() {
+        Ok(launch) => launch,
+        Err(e) => {
+            return registry
+                .lock()
+                .map_err(|_| "session registry unavailable")?
+                .start_failed_at(session, folder.as_deref(), e);
+        }
+    };
+    let result = registry
+        .lock()
+        .map_err(|_| "session registry unavailable")?
+        .start(&launch);
+    // F15: as the owner socket's Start, the refusal is named off the lock.
+    let result = result.map_err(|e| {
+        crate::sessions::refused_start(crate::sessions::probe_folder, session.kind, &launch.cwd, e)
+    });
+    if result.is_ok() {
+        launch.committed = true;
+    }
+    // V2-4b: as the owner socket's Start: a failed ACP agent leaves a row with its card.
+    if let Err(e) = &result
+        && session.kind == crate::api::AgentKind::Acp
+    {
+        return registry
+            .lock()
+            .map_err(|_| "session registry unavailable")?
+            .start_failed_at(session, folder.as_deref(), e.clone());
+    }
+    result.map(|session| Reply::Started { session })
 }

@@ -6,6 +6,7 @@ import type { LayoutStore } from '../layout/store';
 import { UndoLine } from '../undo/UndoLine';
 import { AccountSwitch } from './AccountSwitch';
 import { UsageBlock } from './UsageBlock';
+import { MemoryWait } from './MemoryWait';
 import { noteWorking, useRcUpdate } from './rcUpdate';
 import { status, type Session } from '../types';
 import type { T } from '../i18n';
@@ -29,12 +30,14 @@ type Props = {
   connected: boolean;
   /** Ticket 451: opens Settings > Providers from the account switch. */
   manageAccounts: () => void;
+  /** A tab in the strip and the tree without switching to it (a start that waited for memory). */
+  addTab: (id: string) => void;
 };
 
 /** The window's status bar (ticket 1031): the usage block, the account switch, and what shows only when something is off: the stale count,
  *  layout file errors and notes, Undo, pane mode and fold notes, an update, a lost core connection. The session's state,
  *  branch and changes are in its header and the tree. */
-export function StatusBar({ current, t, core, sessions, ordered, open, store, editing, moved1, pane, paneNote, setPaneNote, fold, foldName, connected, manageAccounts }: Props) {
+export function StatusBar({ current, t, core, sessions, ordered, open, store, editing, moved1, pane, paneNote, setPaneNote, fold, foldName, connected, manageAccounts, addTab }: Props) {
   const staleCount = useMemo(() => sessions.filter((s) => status(s) === 'stale').length, [sessions]);
   const update = useRcUpdate();
   noteWorking(sessions.filter((s) => s.state === 'running' && s.attention.working).length); // ticket 1082: asked before an install
@@ -73,6 +76,7 @@ export function StatusBar({ current, t, core, sessions, ordered, open, store, ed
         </span>
       )}
       {store.notice && <span className="lnote">{store.notice}</span>}
+      <MemoryWait t={t} core={core} addTab={addTab} open={open} setNote={setPaneNote} />
       <UndoLine />
       {moved1 && <span className="lnote" role="status">{moved1}</span>}
       <span className="pane-status" role="status" aria-live="polite">

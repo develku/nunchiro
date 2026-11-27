@@ -350,6 +350,9 @@ fn serve_locked(home: &Path) -> Result<(), String> {
     // V2.5-11: scheduled runs; it sees `stopping` before each start.
     let _schedule =
         crate::schedule::spawn(sessions.clone(), stopping.clone()).map_err(|e| e.to_string())?;
+    // Held new seats that wait for memory; asleep (no reading) while none waits.
+    let _memory_wait =
+        crate::pressure::spawn(sessions.clone(), stopping.clone()).map_err(|e| e.to_string())?;
     let active = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let draining = Arc::new(AtomicBool::new(false)); // V1A-74 follow-up
     let judging = Arc::new(AtomicBool::new(false)); // ticket 1004: a check-in judge runs
@@ -588,6 +591,10 @@ pub(crate) fn remote_from_owner(
     if matches!(
         request,
         Request::ChatPage { .. }
+            | Request::StartOrWait { .. } // the starts waiting for memory: this Mac's own
+            | Request::MemoryWaitList
+            | Request::MemoryWaitGo { .. }
+            | Request::MemoryWaitCancel { .. }
             | Request::HandoffPreview { .. } // v2-3b
             | Request::HandoffSend { .. }
             | Request::PrChip { .. } // v2-8b
@@ -704,6 +711,132 @@ pub(crate) fn remote_from_owner(
         return Err("operation is local owner-only; remote forwarding is not permitted".into());
     }
     crate::machines::dispatch(sessions, home, true, token, machine, request, stopping)
+}
+
+/// A new seat's start over the socket, past its memory check: the owner's (`caller` none) or a session's, which is
+/// checked again by its token at the start.
+fn start_seat(
+    registry: &Mutex<Sessions>,
+    stopping: &AtomicBool,
+    caller: Option<&crate::grants::Caller>,
+    token: &str,
+    session: &StartSession,
+    folder: Option<std::path::PathBuf>,
+    start_env: std::collections::BTreeMap<String, String>,
+) -> Response {
+    let mut launch = registry
+        .lock()
+        .map_err(|_| "session registry unavailable")?
+        .launch_as(caller, session.clone(), false)?
+        .with_folder(folder.clone())
+        .with_env(start_env)?;
+    if caller.is_none() {
+        launch = launch.owner_terminal(); // ticket 1008 round 2
+    }
+    // v2-5b: the owner's Start of a missing agent still opens a tab, with its card.
+    let mut launch = match (launch.prepare(), caller) {
+        (Ok(launch), _) => launch,
+        (Err(e), None) => {
+            return registry
+                .lock()
+                .map_err(|_| "session registry unavailable")?
+                .start_failed_at(session, folder.as_deref(), e);
+        }
+        (Err(e), Some(_)) => return Err(e),
+    };
+    let result = {
+        let mut sessions = registry
+            .lock()
+            .map_err(|_| "session registry unavailable")?;
+        if stopping.load(Ordering::SeqCst) {
+            Err("core is stopping".into())
+        } else if let Some(caller) = caller {
+            sessions
+                .agent_caller(token)
+                .and_then(|_| sessions.start_granted(caller, &launch, false))
+        } else {
+            sessions.start(&launch)
+        }
+    };
+    // F15: off the lock, so a folder that does not answer holds this request only.
+    let result = result.map_err(|e| {
+        crate::sessions::refused_start(crate::sessions::probe_folder, session.kind, &launch.cwd, e)
+    });
+    if result.is_ok() {
+        launch.committed = true;
+    }
+    // V2-4b: an owner's ACP agent that cannot start leaves a failed row with its card (none for an entry not
+    // approved or changed: the window opens the setup sheet). A session caller's failure records nothing.
+    if let Err(e) = &result
+        && caller.is_none()
+        && session.kind == AgentKind::Acp
+    {
+        return registry
+            .lock()
+            .map_err(|_| "session registry unavailable")?
+            .start_failed_at(session, folder.as_deref(), e.clone());
+    }
+    result.map(|session| Reply::Started { session })
+}
+
+/// A session's held start, kept to go by itself (`pressure::wait`); the sentence it answers. The session hears how it
+/// ended in one line.
+fn hold_session_start(
+    sessions: &mut Sessions,
+    caller: &crate::grants::Caller,
+    token: &str,
+    session: StartSession,
+    folder: Option<std::path::PathBuf>,
+    start_env: std::collections::BTreeMap<String, String>,
+) -> String {
+    let asker = sessions
+        .session_of(&caller.id)
+        .map(|s| s.label)
+        .unwrap_or_default();
+    let agent = match session.label.trim() {
+        "" => crate::pressure::kind_name(session.kind).to_string(),
+        label => label.to_string(),
+    };
+    // The same start asked again while it waits is the same entry.
+    let key =
+        serde_json::to_string(&(&caller.id, &session, &folder, &start_env)).unwrap_or_default();
+    let project = crate::pressure::place_name(&session.project);
+    let (caller, token, name) = (caller.clone(), token.to_string(), agent.clone());
+    let go: crate::pressure::Go = Box::new(move |registry, stopping, done| {
+        use crate::pressure::Done;
+        let result = match done {
+            Done::Released | Done::Anyway => start_seat(
+                registry,
+                stopping,
+                Some(&caller),
+                &token,
+                &session,
+                folder,
+                start_env,
+            )
+            .and_then(|reply| match reply {
+                Reply::Started { session } => Ok(session.id),
+                _ => Err("the core started nothing".to_string()),
+            }),
+            Done::Cancelled | Done::Dropped => Err(String::new()),
+        };
+        let line = crate::pressure::asker_line(&name, done, &result);
+        if let Ok(mut sessions) = registry.lock()
+            && let Err(e) = sessions.memory_line(&caller.id, line)
+        {
+            eprintln!("memory pressure: the waiting start's line was not sent: {e}");
+        }
+        result
+    });
+    crate::pressure::hold(
+        key,
+        agent,
+        project,
+        crate::pressure::Asker::Session(asker),
+        2,
+        go,
+    );
+    crate::pressure::WAITING_SESSION.to_string()
 }
 
 fn connection(
@@ -1220,6 +1353,32 @@ fn connection(
                 .read()
                 .map(|page| Reply::ChatPage { session: id, page });
         }
+        // The starts waiting for memory: the owner's alone (`check_agent` refuses a session caller too).
+        if let Request::MemoryWaitList
+        | Request::MemoryWaitGo { .. }
+        | Request::MemoryWaitCancel { .. }
+        | Request::StartOrWait { .. } = &env.request
+        {
+            if caller.is_some() {
+                return Err("operation not granted".into());
+            }
+            drop(sessions);
+            return match &env.request {
+                Request::MemoryWaitGo { id } => {
+                    crate::pressure::answer(registry, stopping, id, true)
+                }
+                Request::MemoryWaitCancel { id } => {
+                    crate::pressure::answer(registry, stopping, id, false)
+                }
+                Request::MemoryWaitList => Ok(Reply::MemoryWait {
+                    entries: crate::pressure::shown()
+                        .iter()
+                        .filter_map(|e| serde_json::to_value(e).ok())
+                        .collect(),
+                }),
+                _ => Err("start_or_wait is the window's".into()),
+            };
+        }
         // Ticket 990: a lead opens a teammate of its place; the seat starts as the lead's worker.
         if let Request::TeamOpen { name, level } = &env.request {
             let caller = caller.as_ref().ok_or(
@@ -1288,70 +1447,38 @@ fn connection(
                 claim.0 = Some(key);
             }
             // A new agent seat waits while the Mac is low on memory; a plain terminal is no seat, and a saved
-            // conversation resumed is never held.
+            // conversation resumed is never held. A session's start waits and goes by itself (`pressure::wait`).
             let who = match caller {
                 None => crate::pressure::Who::Owner,
                 Some(_) => crate::pressure::Who::Session,
             };
-            crate::pressure::check_start(&session, who, anyway, "start")?;
-            let mut launch = sessions
-                .launch_as(caller.as_ref(), session.clone(), false)?
-                .with_folder(folder.clone())
-                .with_env(start_env)?;
-            if caller.is_none() {
-                launch = launch.owner_terminal(); // ticket 1008 round 2
+            if let Err(held) = crate::pressure::check_start(&session, who, anyway, "start") {
+                let Some(caller) = &caller else {
+                    return Err(held);
+                };
+                return Err(hold_session_start(
+                    &mut sessions,
+                    caller,
+                    &env.token,
+                    session,
+                    folder,
+                    start_env,
+                ));
             }
             drop(sessions);
-            // v2-5b: the owner's Start of a missing agent still opens a tab, with its card.
-            let mut launch = match (launch.prepare(), &caller) {
-                (Ok(launch), _) => launch,
-                (Err(e), None) => {
-                    return registry
-                        .lock()
-                        .map_err(|_| "session registry unavailable")?
-                        .start_failed_at(&session, folder.as_deref(), e);
-                }
-                (Err(e), Some(_)) => return Err(e),
-            };
-            let result = {
-                let mut sessions = registry
-                    .lock()
-                    .map_err(|_| "session registry unavailable")?;
-                if stopping.load(Ordering::SeqCst) {
-                    Err("core is stopping".into())
-                } else if let Some(caller) = &caller {
-                    sessions
-                        .agent_caller(&env.token)
-                        .and_then(|_| sessions.start_granted(caller, &launch, false))
-                } else {
-                    sessions.start(&launch)
-                }
-            };
-            // F15: off the lock, so a folder that does not answer holds this request only.
-            let result = result.map_err(|e| {
-                crate::sessions::refused_start(
-                    crate::sessions::probe_folder,
-                    session.kind,
-                    &launch.cwd,
-                    e,
-                )
-            });
-            if let Ok(session) = &result {
-                launch.committed = true;
+            let reply = start_seat(
+                registry,
+                stopping,
+                caller.as_ref(),
+                &env.token,
+                &session,
+                folder,
+                start_env,
+            );
+            if let Ok(Reply::Started { session }) = &reply {
                 claim.started(&session.id);
             }
-            // V2-4b: an owner's ACP agent that cannot start leaves a failed row with its card (none for an entry not
-            // approved or changed: the window opens the setup sheet). A session caller's failure records nothing.
-            if let Err(e) = &result
-                && caller.is_none()
-                && session.kind == AgentKind::Acp
-            {
-                return registry
-                    .lock()
-                    .map_err(|_| "session registry unavailable")?
-                    .start_failed_at(&session, folder.as_deref(), e.clone());
-            }
-            return result.map(|session| Reply::Started { session });
+            return reply;
         }
         if let Request::Layout { args } = env.request {
             drop(sessions);

@@ -81,20 +81,22 @@ export function lastAccount(ordered: Session[], kind: AgentKind, project: string
 /** The keys' own start (New terminal, Claude, Codex): a session of this kind in the current session's project, with that
  * project's last account and the current model and effort, as the popover's rows start it. Returns the session or throws. */
 /** Ticket 610: with no session tab open (the Room tab), `project` is the selected project's and the session starts there. */
-export async function quickStart(core: CoreClient, ordered: Session[], current: Session | null, kind: 'shell' | 'claude' | 'codex', project = current?.project, anyway = false) {
+/** `wait`: a start held for low memory waits and starts by itself (the status bar lists it); nothing is returned then. */
+export async function quickStart(core: CoreClient, ordered: Session[], current: Session | null, kind: 'shell' | 'claude' | 'codex', project = current?.project, anyway = false, wait = false) {
   if (agentOff(kind) || !project) return; // ticket 358: its key does nothing and says nothing
   const agent = kind !== 'shell';
   const accounts = agent ? await core.accounts().then((r) => r.accounts, () => [] as Account[]) : [];
   const account = agent ? lastAccount(ordered, kind, project, accounts) : null;
   const like = agent ? likeNew(current, ordered, kind, project) : { model: null, effort: null };
-  const reply = (await core.request(startOp({ op: 'start', session: { kind, project, ...like, resume: null, ...(account ? { account } : {}) } }, anyway))) as { session?: Session };
+  const reply = (await core.request(startOp({ op: 'start', session: { kind, project, ...like, resume: null, ...(account ? { account } : {}) } }, anyway, wait))) as { session?: Session };
   return reply.session;
 }
 
-/** quickStart from the tree's +, the keys and the palette: the started session opens; a refusal is the status bar's note,
- *  and a low-memory hold's note offers Start anyway, which runs the same start past it. */
+/** quickStart from the tree's +, the keys and the palette: the started session opens; a refusal is the status bar's note.
+ *  A start held for low memory waits and starts by itself (the status bar's waiting item); a core that refuses it instead
+ *  (another version) gets the note with Start anyway, which runs the same start past it. */
 export function quickStartNoted(core: CoreClient, ordered: Session[], current: Session | null, kind: 'shell' | 'claude' | 'codex', project: string | undefined, opened: (s: Session) => void, setNote: (n: Note) => void, t: T, anyway = false) {
-  void quickStart(core, ordered, current, kind, project, anyway).then(
+  void quickStart(core, ordered, current, kind, project, anyway, !anyway).then(
     (s) => s && opened(s),
     (e) => setNote(heldNote(t, e, agentName(kind), () => quickStartNoted(core, ordered, current, kind, project, opened, setNote, t, true)) ?? errorNote(t('err.note.notStarted', { error: notePlain(t, e) }), e)),
   );
@@ -282,7 +284,8 @@ export function NewSession({ core, ordered, current, project, machine, prefer, g
       const session = { kind, project: path, ...like, resume: null, ...(account ? { account } : {}), ...(opts.acp ? { args: [opts.acp] } : {}) };
       const wt = place === 'worktree' && canWorktree ? await newWorktree(path) : place === 'given' && given && !machine ? given.path : null;
       if (place === 'worktree' && canWorktree && !wt) return setBusy(false);
-      const request = startOp({ op: 'start', session, ...(wt ? { folder: wt } : {}) }, opts.anyway);
+      // A start held for low memory waits and starts by itself (this Mac's hold), unless the card's words wait for it here.
+      const request = startOp({ op: 'start', session, ...(wt ? { folder: wt } : {}) }, opts.anyway, !card && !machine);
       const reply = (await core.request(machine ? { op: 'remote', machine, request } : request)) as { session?: Session };
       // The remote core's row does not name its machine; the tab and the tree know it by this.
       finish(reply.session && machine ? { ...reply.session, machine } : reply.session);
