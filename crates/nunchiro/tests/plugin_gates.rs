@@ -417,3 +417,19 @@ fn the_sheet_says_what_a_check_can_do() {
     assert_eq!(part["check_on"], "prompt.send.before", "{view}");
     assert_eq!(part["on_error"], "allow", "{view}");
 }
+
+#[test]
+fn an_agent_resuming_a_conversation_is_checked() {
+    let c = core("pgr2");
+    plugin(&c.home, "session.start.before", REFUSE, "refuse", true);
+    let out = user(&c.home).join("resume-out");
+    let script = format!(
+        "'{}' session start --kind claude --project '{}' --resume abc > '{}' 2>&1",
+        env!("CARGO_BIN_EXE_nunchiro"),
+        user(&c.home).display(),
+        out.display()
+    );
+    pair(&c, &script);
+    let read = || std::fs::read_to_string(&out).unwrap_or_default();
+    until("refused it", &read);
+}
