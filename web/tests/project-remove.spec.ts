@@ -175,7 +175,7 @@ test('remove_refuses_a_worktree: the listed worktree would bring the head back, 
   const project = core.project('alpha');
   fs.writeFileSync(`${project}/f`, 'x');
   for (const a of [['init', '-q'], ['add', '.'], ['-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-qm', 'x']]) execFileSync('git', a, { cwd: project });
-  const inWt = core.agent(project, 'wt', `${project}/never`, true).id;
+  const inWt = core.agent(project, 'wt', 'never', true).id;
   const shell = core.shell(project, 'live').id;
   await ended(core, project, 'done', '/usr/bin/true', 'exited');
   openQuiet(core);

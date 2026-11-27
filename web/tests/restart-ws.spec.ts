@@ -6,7 +6,6 @@
 // reported that unclean close as a console error; Chromium stayed silent. V1A-55 fixed it: the window loop now sends
 // and flushes its Close reply, and the second test pins the clean close.
 import fs from 'node:fs';
-import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, openWindow, test, type Core } from './fixtures';
 
@@ -33,7 +32,7 @@ async function restartBlocked(app: Page, core: Core) {
   const project = core.project('locked');
   fs.chmodSync(project, 0o100);
   try {
-    core.cli('session', 'start', '--kind', 'claude', '--project', project, '--label', 'ext', '--model', path.join(project, 'never'));
+    core.cli('session', 'start', '--kind', 'claude', '--project', project, '--label', 'ext', '--model', 'never');
     await expect.poll(() => core.cli('snapshot', '--json').sessions[0].blocked, { timeout: 10_000 }).toBeTruthy();
     await openWindow(app);
     // #0 is the window's API socket, #1 the chat feed's (a Claude tab is open).
