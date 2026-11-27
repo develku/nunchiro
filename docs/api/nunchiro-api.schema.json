@@ -8038,6 +8038,13 @@
               },
               "type": "array"
             },
+            "turns": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Turn"
+              },
+              "description": "The last test message per ACP agent name.",
+              "type": "object"
+            },
             "type": {
               "const": "acp_agents",
               "type": "string"
@@ -8047,7 +8054,8 @@
             "type",
             "terminal",
             "acp",
-            "file"
+            "file",
+            "turns"
           ],
           "type": "object"
         },
@@ -8061,6 +8069,22 @@
           },
           "required": [
             "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "turn": {
+              "$ref": "#/$defs/Turn"
+            },
+            "type": {
+              "const": "acp_turn",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "turn"
           ],
           "type": "object"
         },
@@ -11935,6 +11959,28 @@
             },
             "op": {
               "const": "acp_agent_sign_out",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "name"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "description": "The test message of an approved agent (one fixed sentence, confined as the check, 60 s); `cancel` ends a running one.",
+          "properties": {
+            "cancel": {
+              "default": false,
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "op": {
+              "const": "acp_agent_try",
               "type": "string"
             }
           },
@@ -15984,6 +16030,66 @@
       "required": [
         "name",
         "projects"
+      ],
+      "type": "object"
+    },
+    "Turn": {
+      "description": "The three flags are the scorecard's words: a prompt sent, an answer read, the turn's end seen.",
+      "properties": {
+        "answer_read": {
+          "type": "boolean"
+        },
+        "at": {
+          "description": "Unix seconds of the try.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "error": {
+          "description": "The failure's detail, one line.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "failure": {
+          "description": "Why the try failed: `no_answer`, `not_signed_in`, `error` (the agent's own words in `error`), `empty`, `no_end`\n(it stopped before the turn ended) or `other`; none when it answered.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ms": {
+          "description": "From the start of the run to the turn's end (or to the failure).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sent": {
+          "type": "boolean"
+        },
+        "text": {
+          "description": "The answer's first `TEXT_MAX` characters, control characters removed.",
+          "type": "string"
+        },
+        "turn_end": {
+          "type": "boolean"
+        },
+        "version": {
+          "description": "The agent's `--version`, as the check reads it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "sent",
+        "answer_read",
+        "turn_end",
+        "ms",
+        "text",
+        "at"
       ],
       "type": "object"
     },
