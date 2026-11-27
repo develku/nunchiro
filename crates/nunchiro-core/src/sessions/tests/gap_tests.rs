@@ -437,3 +437,138 @@ fn at_box_reads_the_input_box_and_no_question() {
     };
     assert!(!session.at_box);
 }
+
+/// The window's snapshot rows of `id`, read off its socket until `want` holds or `bound` passes; the wait it took.
+fn window_sees(
+    ws: &mut tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<std::net::TcpStream>>,
+    id: &str,
+    bound: std::time::Duration,
+    want: impl Fn(&serde_json::Value) -> bool,
+) -> Option<std::time::Duration> {
+    let at = std::time::Instant::now();
+    while at.elapsed() < bound {
+        let Ok(tungstenite::Message::Text(text)) = ws.read() else {
+            continue;
+        };
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+        let rows = v["sessions"].as_array().cloned().unwrap_or_default();
+        if v["event"] == "snapshot" && rows.iter().any(|s| s["id"] == id && want(s)) {
+            return Some(at.elapsed());
+        }
+    }
+    None
+}
+
+// Type in terminal: an agent that draws its box in its last write shows `at_box` in the window soon after the tick
+// reads that screen, not a snapshot bound later (the output count moved before the tick read the screen).
+#[test]
+fn the_window_sees_the_box_the_tick_read_from_the_last_output() {
+    use std::sync::{Arc, Mutex, atomic::AtomicBool};
+    use std::time::Duration;
+    // A started agent (its first box seen and saved), then a turn: streamed lines, the box again in one last write.
+    // The stream outlasts a second, so its tick saves the activity mark and the box's tick (well within a second) saves
+    // nothing: only the screen read marks what changed.
+    let body = "cat burst; : > boxed; while [ ! -f turn ]; do sleep 0.01; done\n\
+                printf '\\033[2J\\033[H'; j=0; while [ $j -lt 60 ]; do printf 'working %s\\r\\n' $j; sleep 0.02; j=$((j+1)); done\n\
+                : > streamed; while [ ! -f go ]; do sleep 0.01; done; cat burst\n";
+    let burst = claude_box("");
+    let (mut core, id, home) = super::launch_script("gap-box-window", burst.as_bytes(), body);
+    core.entries.get_mut(&id).unwrap().meta.kind = AgentKind::Claude;
+    let until = std::time::Instant::now() + Duration::from_secs(60);
+    let wait = |file: &str| {
+        while !home.join(file).exists() {
+            assert!(
+                std::time::Instant::now() < until,
+                "the agent never wrote {file}"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    wait("boxed");
+    core.tick().unwrap();
+    assert!(
+        core.entries[&id].observer.screen.started(),
+        "the first box was not seen"
+    );
+    fs::write(home.join("turn"), "").unwrap();
+    wait("streamed");
+    core.tick().unwrap();
+    let registry = Arc::new(Mutex::new(core));
+    let stopping = Arc::new(AtomicBool::new(false));
+    let (port, token) = crate::http::spawn(&home, registry.clone(), stopping.clone()).unwrap();
+    let mut ws = crate::http::tests::connect(port, &token);
+    if let tungstenite::stream::MaybeTlsStream::Plain(s) = ws.get_ref() {
+        s.set_read_timeout(Some(Duration::from_millis(20))).unwrap();
+    }
+    let streaming = window_sees(&mut ws, &id, Duration::from_secs(10), |s| {
+        s["at_box"] != true
+    });
+    // The box arrives; the window's pass on that output builds from the screen the tick has not read yet.
+    let end = registry.lock().unwrap().entries[&id]
+        .pty
+        .as_ref()
+        .unwrap()
+        .end();
+    fs::write(home.join("go"), "").unwrap();
+    while registry.lock().unwrap().entries[&id]
+        .pty
+        .as_ref()
+        .unwrap()
+        .end()
+        < end + burst.len() as u64
+    {
+        assert!(
+            std::time::Instant::now() < until,
+            "the box never reached the replay"
+        );
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let settle = std::time::Instant::now() + Duration::from_millis(250);
+    while std::time::Instant::now() < settle {
+        let _ = ws.read();
+    }
+    let saved = |r: &Sessions| {
+        let saves = r.saves.load(std::sync::atomic::Ordering::SeqCst);
+        (saves, r.queue.revision())
+    };
+    let before = saved(&registry.lock().unwrap());
+    registry.lock().unwrap().tick().unwrap();
+    let after = saved(&registry.lock().unwrap());
+    let boxed = window_sees(&mut ws, &id, Duration::from_secs(3), |s| {
+        s["at_box"] == true
+    });
+    // The bound for what no count marks: a label set behind the registry's back still reaches the window.
+    registry
+        .lock()
+        .unwrap()
+        .entries
+        .get_mut(&id)
+        .unwrap()
+        .meta
+        .label = "Unmarked".into();
+    let unmarked = window_sees(&mut ws, &id, Duration::from_secs(3), |s| {
+        s["label"] == "Unmarked"
+    });
+    stopping.store(true, std::sync::atomic::Ordering::SeqCst);
+    let _ = fs::write(home.join("stop"), "");
+    let _ = registry.lock().unwrap().handle(Request::Stop);
+    let _ = fs::remove_dir_all(&home);
+    assert!(streaming.is_some(), "no snapshot of the streaming agent");
+    assert_eq!(
+        before, after,
+        "the box's tick saved: the test no longer shows the screen read alone"
+    );
+    eprintln!("at_box after the tick: {boxed:?}; unmarked change: {unmarked:?}");
+    let boxed = boxed.expect("the window never showed at_box");
+    assert!(
+        boxed <= Duration::from_millis(300),
+        "the window showed at_box {boxed:?} after the tick read the box"
+    );
+    // `SNAPSHOT_FORCE` (1 s) from the last build, plus the pass cadence that lands on it.
+    let unmarked = unmarked.expect("an unmarked change never reached the window");
+    assert!(
+        unmarked <= Duration::from_millis(1600),
+        "an unmarked change took {unmarked:?}"
+    );
+}

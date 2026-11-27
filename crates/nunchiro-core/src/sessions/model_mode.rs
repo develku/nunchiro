@@ -498,6 +498,9 @@ impl Sessions {
             .filter(|(_, e)| e.walk.is_some())
             .map(|(id, _)| id.clone())
             .collect();
+        if !ids.is_empty() {
+            self.changed(); // as `settle_walks`
+        }
         for id in ids {
             let Some(entry) = self.entries.get_mut(&id) else {
                 continue;
@@ -557,6 +560,14 @@ impl Sessions {
     /// observes first) means a pick right after the footer reached the target is not refused as busy, and the confirm
     /// that came with it is already kept.
     pub(super) fn settle_walks(&mut self) {
+        // A walk or hold can end on the clock alone (`WALK_BEHIND`): the window's snapshot key is moved while one runs.
+        if self
+            .entries
+            .values()
+            .any(|e| e.walk.is_some() || e.skip_hold.is_some())
+        {
+            self.changed();
+        }
         for entry in self.entries.values_mut() {
             let reached = entry.walk.as_ref().is_some_and(|w| {
                 entry.agent_live()

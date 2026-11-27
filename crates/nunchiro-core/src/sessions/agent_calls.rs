@@ -123,6 +123,7 @@ impl Sessions {
             | Request::PrList
             | Request::PrMerge { .. }
             | Request::PrBranch { .. } // ticket 373: runs the user's gh in a worktree folder
+            | Request::GitPush { .. } // pushes as the user after the window's confirm
             | Request::AccountList // v2-2a: agent config folders and their login
             | Request::AccountCheck { .. }
             | Request::AccountAdd { .. }
@@ -715,6 +716,7 @@ impl Sessions {
         caller: &crate::grants::Caller,
         request: Request,
     ) -> Response {
+        self.changed(); // as `handle`: an agent's request may change what a window's snapshot reads
         self.refresh()?;
         self.observe()?;
         self.check_agent(caller, &request)?;

@@ -430,6 +430,8 @@ impl Feed {
             self.bytes -= size;
             self.dropped += 1;
         }
+        // An ACP agent's chat is its output: windows keep their fast cadence and send it now.
+        crate::pty::notify_output();
     }
     fn page_of(&self, from: u64, to: u64, older: bool) -> crate::chat::Page {
         crate::chat::Page {

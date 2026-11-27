@@ -791,19 +791,20 @@
   font-size: var(--fs-1);
   color: var(--muted);
 }
-/* Select (final.html .sel): the native menu in the draft's box. */
-:is(.settings[role='region'], .mcard, .schedv, .acsw-pop) .ssel {
+/* Select (final.html .sel): the native menu in the draft's box. The Bots view's Models fold holds Settings > Team's
+   selects, so it draws them the same way (one chevron, not the system's beside ours). */
+:is(.settings[role='region'], .mcard, .schedv, .acsw-pop, .bot-models) .ssel {
   position: relative;
   display: inline-flex;
   align-items: center;
 }
-:is(.settings[role='region'], .mcard, .schedv, .acsw-pop) .ssel select {
+:is(.settings[role='region'], .mcard, .schedv, .acsw-pop, .bot-models) .ssel select {
   appearance: none;
   min-width: 140px;
   height: 28px;
   padding: 0 28px 0 var(--sp-12);
 }
-:is(.settings[role='region'], .mcard, .schedv, .acsw-pop) .ssel svg {
+:is(.settings[role='region'], .mcard, .schedv, .acsw-pop, .bot-models) .ssel svg {
   position: absolute;
   right: var(--sp-8);
   color: var(--muted);

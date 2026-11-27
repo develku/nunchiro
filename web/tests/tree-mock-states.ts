@@ -16,7 +16,9 @@ export async function patchSnapshots(app: Page) {
     for (const s of msg.sessions ?? []) {
       const p = patches[s.label];
       if (!p) continue;
-      Object.assign(s.attention, { working: !!p.working, stale: !!p.stale, failed: !!p.failed, waiting: !!p.waiting, last_activity: p.at ?? Date.now() - 600_000 });
+      // Every flag the row reads is the patch's, input_blocked too: a fake seat whose brief write was slow on a loaded runner
+      // read as "not reading input" (failed), and a face patched to working stayed at rest (bots-1168, hosted WebKit).
+      Object.assign(s.attention, { working: !!p.working, stale: !!p.stale, failed: !!p.failed, waiting: !!p.waiting, input_blocked: false, last_activity: p.at ?? Date.now() - 600_000 });
       if (p.at !== undefined && s.ended_at !== undefined) s.ended_at = p.at; // lane w59: an ended run's own stamp follows the time the patch gives it
       if (p.exited) s.state = 'exited';
       if (p.limited) s.limit = { resets: '14:30', until: Date.now() + 3_600_000 }; // ticket 1041: a usage limit (ticket 372)

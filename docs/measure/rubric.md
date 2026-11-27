@@ -641,6 +641,20 @@ Where v2 differs from the audit's proposal, and why:
   runs the others is never put on a lane. Sessions joined to none are summed apart as unassigned. 1-hour cache writes
   are priced at twice the input price (the price page). Lanes built on another machine have no cost here (not
   measured, not 0); models with no published token price stay unpriced, listed by model.
+- Two readings put back on what their anchors name (2026-11-28, the PR flow). No anchor changed.
+  Owner installs that landed (p05): each of the last 20 green main CI runs is one outcome: landed when an owner
+  install of its commit is recorded, not landed otherwise (a wait, a refusal or a rollback, a failure, or no try).
+  With fewer than 20 green runs in the log the figure is not measured (rule 1). Before, the script read the last 20
+  install lines, which were one per green run while the local watcher tried an install after each; with installs made
+  by hand and a wait no longer written as an outcome it read 100 % from four lines, an easier condition than the
+  anchor names (rule 2). On the log of this day the reading is 2 of 20, as on the card before.
+  Files shared by open lanes (p26): a branch whose pull request is merged or closed is not open. A squash merge
+  leaves the branch's own commits outside main, so "a commit that origin/main lacks" stayed true for every landed
+  lane, and by the evening a day's hundred landed branches all read as open. A branch that another open branch
+  carries (a lane built on it, a reviewer's copy) is the same line of work and is counted once. A branch with an open
+  pull request is open whatever the day of its last commit (stricter). Open pull requests are not read in place of
+  the branches: a lane has no pull request while it is being built, so that reading would be easier. When the pull
+  requests cannot be read, no branch counts as landed.
 - Owner decision 2026-11-26 (stricter): p14 adds memory-pressure kills over 7 days and row ML1. The Mac staying responsive is the owner's second priority, and the idle figures alone scored a frozen Mac the same as a calm one.
 
 Not changed in v2 (the audit's lower-priority list, outside the approval of 2026-11-26): the weight of the default
