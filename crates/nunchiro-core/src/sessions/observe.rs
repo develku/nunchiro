@@ -100,6 +100,12 @@ impl Sessions {
                     entry.observer.screen.reset();
                 }
                 entry.observer.screen.feed(&data);
+                // Idle CPU: the window's snapshot key counted these bytes before this read; what the snapshot reads off
+                // the screen (at_box, the modes, starting) changed only now.
+                if !data.is_empty() {
+                    self.revision
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                }
                 // Ticket 286: a shell left after its agent quit is fed for the screen gates only: no activity, no
                 // decisions read from what the shell prints.
                 if entry.agent_ended {

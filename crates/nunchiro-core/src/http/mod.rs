@@ -732,12 +732,15 @@ fn serve(
         let idle_read = matches!(&read, Err(tungstenite::Error::Io(e))
             if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut));
         let seq = crate::pty::output_seq();
+        // The idle read ended on the wake pipe (`Deadline::quiet` is set only then): a ring that is no output.
+        let rung = idle_read && ws.get_ref().quiet.is_some();
         if seq != output_seen {
             output_seen = seq;
             active_until = Instant::now() + WINDOW_ACTIVE;
-        } else if !idle_read {
-            // A frame (the window's own once-a-second heartbeat among them) gets one prompt timed pass, so what it
-            // changed shows at once, without keeping the loop at the fast cadence.
+        } else if !idle_read || rung {
+            // A frame (the window's own once-a-second heartbeat among them) or another ring (a job reply, a board
+            // change) gets one prompt timed pass, so what it changed shows at once, without keeping the loop at the
+            // fast cadence.
             active_until = active_until.max(Instant::now() + SNAPSHOT_EVERY);
         }
         let every = cadence(active_until);
