@@ -279,6 +279,7 @@ impl Sessions {
         let from = match source {
             crate::schedule::triggers::Source::Cli => "the command line",
             crate::schedule::triggers::Source::Webhook => "a webhook",
+            crate::schedule::triggers::Source::Github => "GitHub",
         };
         // All trigger cards together take at most half of the owner's queue, so approvals, proposals and setup cards
         // always fit.

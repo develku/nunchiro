@@ -24,6 +24,12 @@ Only the owner adds, pauses (`trigger pause`, `trigger resume`) and removes trig
 them with their last fire. `triggers.json` is written by the core alone, each entry under the same key as the
 schedules, so an entry another program wrote or changed is refused.
 
+- `--on github --repo owner/name --event checks_failed|changes_requested|labeled [--issue-label <label>]`: read from
+  GitHub with your own `gh` every 2 minutes (settings.json `triggers_poll_secs` moves it) while the trigger is on. It
+  fires once for each open pull request whose checks failed or whose review asked for changes (once per head commit),
+  or each open issue or pull request with the label. What is there when the core first reads it is the starting point
+  and fires nothing; a core restart starts from what is there again. `gh` keeps the login; Nunchiro reads no token.
+
 ## Fire one
 
 ```sh
@@ -74,7 +80,7 @@ or a field: it is only text after your task.
 
 ## Not yet
 
-- A GitHub event read by polling with your `gh` (use a GitHub webhook to this address for now).
+- A GitHub mention event.
 - Slack and Linear signatures (use `X-Nunchiro-Secret` from a relay).
 - Adding triggers in the window; agents proposing a trigger.
 - The address reads at most 8 requests at once, each within 10 seconds; a connection past 8 is closed unanswered.

@@ -30,7 +30,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-pub mod triggers; // a schedule whose time is an event
+mod github;
+pub mod triggers; // a schedule whose time is an event // GitHub triggers, read with the user's `gh`
+pub(crate) use github::spawn as spawn_github;
 mod webhook; // the loopback address webhook triggers are fired at
 pub(crate) use webhook::spawn as spawn_webhook;
 const FILE: &str = "schedules.json";

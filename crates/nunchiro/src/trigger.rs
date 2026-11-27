@@ -4,13 +4,13 @@ use nunchiro_core::{
     api::*,
     schedule::{
         Run,
-        triggers::{Action, Mode, Source},
+        triggers::{Action, Github, GithubEvent, Mode, Source},
     },
 };
 use std::io::Read;
 use std::path::Path;
 
-const USAGE: &str = "usage: nunchiro trigger add <name> --on cli|webhook --kind claude|codex --project <dir> --task <text> [--label <name>] [--model <m>] [--effort <e>] [--auto] | list [--json] | fire <name> [--data @<file>|-] | pause <name> | resume <name> | remove <name>";
+const USAGE: &str = "usage: nunchiro trigger add <name> --on cli|webhook|github [--repo <owner/name> --event checks_failed|changes_requested|labeled [--issue-label <l>]] --kind claude|codex --project <dir> --task <text> [--label <name>] [--model <m>] [--effort <e>] [--auto] | list [--json] | fire <name> [--data @<file>|-] | pause <name> | resume <name> | remove <name>";
 
 pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
     let words: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -54,6 +54,7 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
                 let on = match t.on {
                     Source::Cli => "cli",
                     Source::Webhook => "webhook",
+                    Source::Github => "github",
                 };
                 let mode = if t.mode == Mode::Auto { "auto" } else { "ask" };
                 let state = if t.paused { "off" } else { "on" };
@@ -99,6 +100,7 @@ fn fire(name: &str, from: Option<&str>) -> Result<Action, String> {
 fn add(name: &str, rest: &[&str]) -> Result<Action, String> {
     let (mut on, mut kind, mut project, mut task, mut label, mut model, mut effort, mut mode) =
         (None, None, None, None, None, None, None, Mode::Ask);
+    let (mut repo, mut event, mut gh_label) = (None, None, None);
     let mut i = 0;
     while i < rest.len() {
         if rest[i] == "--auto" {
@@ -112,7 +114,8 @@ fn add(name: &str, rest: &[&str]) -> Result<Action, String> {
                 on = Some(match value {
                     "cli" => Source::Cli,
                     "webhook" => Source::Webhook,
-                    _ => return Err("--on is cli or webhook".into()),
+                    "github" => Source::Github,
+                    _ => return Err("--on is cli, webhook or github".into()),
                 })
             }
             "--kind" => {
@@ -124,8 +127,20 @@ fn add(name: &str, rest: &[&str]) -> Result<Action, String> {
             "--project" => project = Some(std::path::absolute(value).map_err(|e| e.to_string())?),
             "--task" => task = Some(value.to_string()),
             "--label" => label = Some(value.to_string()),
+            "--issue-label" => gh_label = Some(value.to_string()),
             "--model" => model = Some(value.to_string()),
             "--effort" => effort = Some(value.to_string()),
+            "--repo" => repo = Some(value.to_string()),
+            "--event" => {
+                event = Some(match value {
+                    "checks_failed" => GithubEvent::ChecksFailed,
+                    "changes_requested" => GithubEvent::ChangesRequested,
+                    "labeled" => GithubEvent::Labeled,
+                    _ => {
+                        return Err("--event is checks_failed, changes_requested or labeled".into());
+                    }
+                })
+            }
             _ => return Err(USAGE.into()),
         }
         i += 2;
@@ -139,7 +154,16 @@ fn add(name: &str, rest: &[&str]) -> Result<Action, String> {
                 .map_err(|e| e.to_string())?;
             Some(line.trim().to_string())
         }
-        Source::Cli => None,
+        Source::Cli | Source::Github => None,
+    };
+    let github = match (on, repo, event) {
+        (Source::Github, Some(repo), Some(event)) => Some(Github {
+            repo,
+            event,
+            label: gh_label,
+        }),
+        (Source::Github, ..) => return Err("--on github needs --repo and --event".into()),
+        _ => None,
     };
     Ok(Action::Add {
         name: name.into(),
@@ -156,5 +180,6 @@ fn add(name: &str, rest: &[&str]) -> Result<Action, String> {
         },
         mode,
         secret,
+        github,
     })
 }

@@ -354,6 +354,10 @@ fn serve_locked(home: &Path) -> Result<(), String> {
     let _webhook =
         crate::schedule::spawn_webhook(sessions.clone(), stopping.clone(), home.to_path_buf())
             .map_err(|e| e.to_string())?;
+    // GitHub triggers read with the user's `gh`, asleep while none is on.
+    let _github =
+        crate::schedule::spawn_github(sessions.clone(), stopping.clone(), home.to_path_buf())
+            .map_err(|e| e.to_string())?;
     // Held new seats that wait for memory; asleep (no reading) while none waits.
     let _memory_wait =
         crate::pressure::spawn(sessions.clone(), stopping.clone()).map_err(|e| e.to_string())?;

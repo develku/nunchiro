@@ -125,6 +125,8 @@ struct Settings {
     usage_link_roots: Vec<PathBuf>,
     // The triggers' webhook port (`schedule/webhook.rs` reads the file itself); absent is 47800.
     triggers_port: Option<u16>,
+    // How often GitHub triggers read their repository (`schedule/github.rs` reads the file itself); absent is 120 s.
+    triggers_poll_secs: Option<u64>,
     // Ticket 250: absorb features' own values by dotted key (`quit_settings` checks key and size); read with `feature`.
     features: BTreeMap<String, serde_json::Value>,
 }

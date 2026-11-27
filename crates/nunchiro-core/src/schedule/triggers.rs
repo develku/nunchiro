@@ -33,6 +33,32 @@ pub enum Source {
     /// `POST http://127.0.0.1:<port>/hooks/<name>`, signed (GitHub `X-Hub-Signature-256`) or with
     /// `X-Nunchiro-Secret`.
     Webhook,
+    /// An event read from GitHub with the user's own `gh` (`github.rs`).
+    Github,
+}
+
+/// What a GitHub trigger watches: one repository and one kind of event.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Github {
+    /// `owner/name`.
+    pub repo: String,
+    pub event: GithubEvent,
+    /// The label a `labeled` trigger waits for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum GithubEvent {
+    /// An open pull request's checks failed (once per head commit).
+    ChecksFailed,
+    /// A review asked for changes on an open pull request (once per head commit).
+    ChangesRequested,
+    /// An open issue or pull request has the label.
+    Labeled,
 }
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
@@ -57,7 +83,10 @@ pub struct Trigger {
     /// A webhook's shared secret, kept only in this 0600 file the core writes; never in a reply.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub secret: Option<String>,
-    /// HMAC of name, on, run, mode and secret under `schedule.key`.
+    /// A GitHub trigger's repository and event.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github: Option<Github>,
+    /// HMAC of name, on, run, mode, secret and github under `schedule.key`.
     #[serde(default)]
     pub mac: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -90,8 +119,10 @@ struct Stored {
 }
 
 fn mac_of(key: &[u8], t: &Trigger) -> String {
-    let msg = serde_json::to_vec(&(&t.name, t.on, &t.run, t.mode, &t.secret, t.paused))
-        .unwrap_or_default();
+    let msg = serde_json::to_vec(&(
+        &t.name, t.on, &t.run, t.mode, &t.secret, t.paused, &t.github,
+    ))
+    .unwrap_or_default();
     super::hmac(key, &msg)
         .iter()
         .map(|b| format!("{b:02x}"))
@@ -164,6 +195,9 @@ pub enum Action {
         mode: Mode,
         #[serde(default)]
         secret: Option<String>,
+        /// What a `github` trigger watches.
+        #[serde(default)]
+        github: Option<Github>,
     },
     Remove {
         name: String,
@@ -200,6 +234,7 @@ pub(crate) fn handle(
             run,
             mode,
             secret,
+            github,
         } => {
             if !crate::approval::valid_name(&name) {
                 return Err("trigger name: a-z, 0-9, - and _ (up to 64)".into());
@@ -218,8 +253,18 @@ pub(crate) fn handle(
                         "a webhook trigger needs a secret of at least {SECRET_MIN} characters"
                     ));
                 }
-                (Source::Cli, None) => {}
-                (Source::Cli, Some(_)) => return Err("only a webhook trigger has a secret".into()),
+                (Source::Cli | Source::Github, None) => {}
+                (Source::Cli | Source::Github, Some(_)) => {
+                    return Err("only a webhook trigger has a secret".into());
+                }
+            }
+            match (on, &github) {
+                (Source::Github, Some(g)) => g.check()?,
+                (Source::Github, None) => {
+                    return Err("a GitHub trigger needs a repository and an event".into());
+                }
+                (_, Some(_)) => return Err("only a GitHub trigger watches a repository".into()),
+                (_, None) => {}
             }
             let _w = WRITE.lock().map_err(|_| "triggers unavailable")?;
             let mut all = load(home)?;
@@ -235,6 +280,7 @@ pub(crate) fn handle(
                 run,
                 mode,
                 secret,
+                github,
                 mac: String::new(),
                 paused: false,
                 fired: vec![],
@@ -280,6 +326,39 @@ pub(crate) fn handle(
     }
 }
 
+impl Github {
+    /// A repository name and a label of plain characters: they become `gh` arguments.
+    fn check(&self) -> Result<(), String> {
+        let part = |p: &str| {
+            !p.is_empty()
+                && p.len() <= 100
+                && !p.starts_with('-')
+                && p.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+        };
+        if !self
+            .repo
+            .split_once('/')
+            .is_some_and(|(o, n)| part(o) && part(n))
+        {
+            return Err("the repository is owner/name".into());
+        }
+        match (self.event, &self.label) {
+            (GithubEvent::Labeled, Some(l))
+                if !l.trim().is_empty()
+                    && l.len() <= 50
+                    && !l.starts_with('-')
+                    && !l.chars().any(char::is_control) =>
+            {
+                Ok(())
+            }
+            (GithubEvent::Labeled, _) => Err("a labeled trigger needs the label".into()),
+            (_, Some(_)) => Err("only a labeled trigger has a label".into()),
+            (_, None) => Ok(()),
+        }
+    }
+}
+
 /// The session's first message: the owner's task, then what the caller sent as a quoted, redacted block. Its words
 /// stay data: they come after the task, fenced, and nothing in them is read as a field or an instruction.
 pub(crate) fn message(run: &Run, source: Source, payload: &str) -> String {
@@ -298,6 +377,7 @@ pub(crate) fn message(run: &Run, source: Source, payload: &str) -> String {
     let source = match source {
         Source::Cli => "the command line",
         Source::Webhook => "a webhook",
+        Source::Github => "GitHub",
     };
     let task = run.task.clone().unwrap_or_default();
     let quoted = if cut.is_empty() {
