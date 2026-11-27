@@ -443,7 +443,7 @@ function ExtensionsPage({ core, t, commands, closeSettings, current, focus, proj
   // Not when the page opened on a target (a Settings search hit, a palette field, a reveal): that focus is the user's.
   const target = useRef(!!focus);
   const noOwn = list?.own.length === 0;
-  useEffect(() => void (noOwn && !target.current && !focus && commandField.current?.focus()), [noOwn]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => void (noOwn && !target.current && !focus && commandField.current?.focus({ preventScroll: true })), [noOwn]); // the page stays at its top (Skills first) // eslint-disable-line react-hooks/exhaustive-deps
   // Owner 11-25 Q3: the open agent session restarts with the server; Restart session resumes its conversation.
   const live = current && current.kind !== 'shell' && current.state === 'running' && !current.side_chat ? current : null;
   // Restart waits until the session is idle: not working, not waiting on a question, not stale. Only a conversation id
