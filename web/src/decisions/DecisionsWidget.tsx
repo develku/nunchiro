@@ -223,9 +223,21 @@ function TidyCard({ d, onAnswer, t }: { d: Decision; onAnswer: OnAnswer; t: T })
 
 /** A repo setup script that waits for approval: a quiet card (no dot, not counted), whose Review opens the setup sheet.
  *  The sheet reads the script from the worktree and approves exactly what it shows. */
-function SetupCard({ d, core, t }: { d: Decision; core: CoreClient; t: T }) {
+function SetupCard({ d, core, onAnswer, t }: { d: Decision; core: CoreClient; onAnswer: OnAnswer; t: T }) {
   const [open, setOpen] = useState(false);
+  const [done, setDone] = useState(false);
+  const [err, setErr] = useState('');
   if (d.owner?.type !== 'setup') return null;
+  // Not now drops the ask (the setup does not run); an ask whose worktree went outside Nunchiro has no other way out.
+  const dismiss = () => {
+    const p = onAnswer(d, { type: 'deny' });
+    if (!p) return;
+    setDone(true);
+    p.then(
+      () => {},
+      (e: Error) => (setErr(rawError(e)), setDone(false)),
+    );
+  };
   const { path } = d.owner;
   const title = t('setupSheet.title', { name: plain(basename(path)) });
   return (
@@ -239,9 +251,13 @@ function SetupCard({ d, core, t }: { d: Decision; core: CoreClient; t: T }) {
           {title}
         </p>
         <p className="dc-why">{t('setupSheet.kind')}</p>
+        <ErrorLine t={t} error={err} className="dc-hint err" />
         <div className="dc-btns">
-          <button type="button" className="b" data-act="review" onClick={() => setOpen(true)}>
+          <button type="button" className="b" data-act="review" disabled={done} onClick={() => setOpen(true)}>
             {t('rest.shell.strip.review')}
+          </button>
+          <button type="button" className="b" data-act="not-now" disabled={done} onClick={dismiss}>
+            {t('lead.roleCard.notNow')}
           </button>
         </div>
       </div>
@@ -317,7 +333,7 @@ export function DecisionsWidget({ sessions, onAnswer, ask, onBack, onFocused, on
             <TidyCard key={d.id} d={d} onAnswer={onAnswer} t={t} />
           ))}
           {setups.map((d) => (
-            <SetupCard key={d.id} d={d} core={core} t={t} />
+            <SetupCard key={d.id} d={d} core={core} onAnswer={onAnswer} t={t} />
           ))}
           {waiting.map((s) => (
             <DecisionCard key={s.id} session={s} onAnswer={onAnswer} onBack={onBack} hosted={{ age: age(t, Date.now() - oldest(s)), place: s.teammate && s.project !== home ? basename(s.project) : undefined }} focusAsk={ask?.to === s.id ? ask.n : undefined} onFocused={onFocused} onAnswered={onAnswered} t={t} note={s.id === front ? t('decisions.alsoInChat') : undefined} />

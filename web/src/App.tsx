@@ -725,7 +725,7 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
       {palette && <Palette commands={commands} recent={recent.current.filter((id) => id !== active)} bindings={bindings} onClose={() => setPalette(false)} t={t} />}
       {quickOpen && <QuickOpen core={core} root={filesSession?.id ?? null} bindings={bindings} onClose={() => setQuickOpen(false)} t={t} />}
       <PairSheet core={core} /> {/* V2.5-15 */}
-      {starting && <NewSession core={core} ordered={ordered} current={current} project={starting.project} machine={starting.machine} prefer={starting.agent} go={starting.go} worktree={starting.worktree} soleProject={projectList.length === 1 ? projectList[0].project : undefined} home={team.home || undefined} bindings={bindings} onStarted={(s, background) => (background ? addTab(s.id) : openStarted(s))} onNote={setPaneNote} onClose={() => setStarting(null)} onReopen={() => void reopen()} /> /* v1a-59 */}
+      {starting && <NewSession core={core} ordered={ordered} current={current} project={starting.project} machine={starting.machine} prefer={starting.agent} go={starting.go} worktree={starting.worktree} soleProject={projectList.length === 1 ? projectList[0].project : undefined} home={team.home || undefined} bindings={bindings} onStarted={(s, background) => (background ? addTab(s.id) : openStarted(s))} onNote={setPaneNote} onClose={() => setStarting(null)} onReopen={() => void reopen()} onWorktree={wt.made} /> /* v1a-59 */}
       {stopping && byId.get(stopping.id) && (
         <StopAsk name={sessionName(byId.get(stopping.id)!)} error={stopping.error} onCancel={() => setStopping(null)} onStop={() => void stopSession(stopping.id, true)} />
       )}

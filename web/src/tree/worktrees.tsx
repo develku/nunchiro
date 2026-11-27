@@ -56,6 +56,8 @@ export interface Worktrees {
   creating: { key: number; project: string; name: string }[];
   /** The worktrees this window made since it loaded: only their setup asks open the setup sheet by themselves. */
   madeHere: readonly string[];
+  /** A worktree this window made outside `create` (New tab > New worktree): its setup ask opens the sheet too. */
+  made: (path: string) => void;
   /** The worktree row last focused or clicked: what the palette's worktree commands act on. */
   selected: string | null;
   select: (path: string | null) => void;
@@ -348,6 +350,7 @@ export function useWorktrees(core: CoreClient, connected: boolean, sessions: Ses
     facts,
     creating,
     madeHere,
+    made: (path) => setMadeHere((m) => [...m, path]),
     selected,
     select,
     renaming,
