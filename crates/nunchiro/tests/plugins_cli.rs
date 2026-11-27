@@ -178,7 +178,9 @@ fn the_example_runs_only_when_on_and_approved() {
     );
     let status = ok(&home, &["plugin", "run", "quiet-hours", "status"]);
     assert!(
-        status.contains("quiet") && status.contains("22:00"),
+        // Inside the quiet hours it says when they end, outside when they start.
+        status.to_lowercase().contains("quiet")
+            && (status.contains("22:00") || status.contains("07:00")),
         "{status}"
     );
     let run = call(
@@ -200,7 +202,13 @@ fn the_example_runs_only_when_on_and_approved() {
         json!({"op": "plugin", "action": {"do": "setting", "id": "quiet-hours", "key": "start", "value": "21:30"}}),
     );
     assert_eq!(set["Ok"]["plugins"][0]["values"]["start"], "21:30", "{set}");
-    assert!(ok(&home, &["plugin", "run", "quiet-hours", "status"]).contains("21:30"));
+    // The status names the end at any time of day (the start only outside the quiet hours).
+    call(
+        &home,
+        &owner,
+        json!({"op": "plugin", "action": {"do": "setting", "id": "quiet-hours", "key": "end", "value": "06:45"}}),
+    );
+    assert!(ok(&home, &["plugin", "run", "quiet-hours", "status"]).contains("06:45"));
     let bad = call(
         &home,
         &owner,
