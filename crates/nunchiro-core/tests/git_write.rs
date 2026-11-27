@@ -295,7 +295,7 @@ fn push_refuses_when_where_it_goes_changed_after_the_strip() {
     );
     let e = git_write::push(&r.work(), &strip).unwrap_err();
     assert!(
-        e.starts_with("nothing was sent: where this pushes changed"),
+        e == "nothing was sent: the push URL of origin changed after this was shown",
         "{e}"
     );
 }
@@ -390,4 +390,90 @@ fn sign_in_network_and_timeout_failures_are_sentences() {
     )
     .unwrap_err();
     assert_eq!(e, "not pushed: git push did not finish in 2 seconds");
+}
+
+#[test]
+fn a_second_push_url_or_a_new_url_is_caught_and_said() {
+    let r = Repo::new("pushurls");
+    r.tracked("feat", 1);
+    git(
+        &r.root,
+        &["init", "-q", "--bare", "-b", "main", "other.git"],
+    );
+    let other = r.root.join("other.git");
+    // A second push URL added after the strip showed: nothing goes to either.
+    let strip = shown(&r.work());
+    git(
+        &r.work(),
+        &[
+            "config",
+            "--add",
+            "remote.origin.pushurl",
+            r.origin().to_str().unwrap(),
+        ],
+    );
+    git(
+        &r.work(),
+        &[
+            "config",
+            "--add",
+            "remote.origin.pushurl",
+            other.to_str().unwrap(),
+        ],
+    );
+    let e = git_write::push(&r.work(), &strip).unwrap_err();
+    assert_eq!(
+        e,
+        "nothing was sent: the push URL of origin changed after this was shown"
+    );
+    let other_has = git_env::scrubbed("git")
+        .arg("-C")
+        .arg(&other)
+        .args(["rev-parse", "--verify", "-q", "refs/heads/feat"])
+        .output()
+        .unwrap();
+    assert!(!other_has.status.success(), "other.git got the branch");
+}
+
+#[test]
+fn the_push_url_key_holds_no_password() {
+    let r = Repo::new("userinfo");
+    r.tracked("feat", 1);
+    git(
+        &r.work(),
+        &[
+            "remote",
+            "set-url",
+            "--push",
+            "origin",
+            "https://me:first@example.invalid/o/r.git",
+        ],
+    );
+    let a = shown(&r.work()).key;
+    git(
+        &r.work(),
+        &[
+            "remote",
+            "set-url",
+            "--push",
+            "origin",
+            "https://me:second@example.invalid/o/r.git",
+        ],
+    );
+    let b = shown(&r.work()).key;
+    assert_eq!(
+        a, b,
+        "the key changes with the password, so it is made from it"
+    );
+    git(
+        &r.work(),
+        &[
+            "remote",
+            "set-url",
+            "--push",
+            "origin",
+            "https://example.invalid/o/other.git",
+        ],
+    );
+    assert_ne!(shown(&r.work()).key, a);
 }
