@@ -290,7 +290,8 @@ card for it), with `scorecard.py waits`.
    8. Sort ten fixture mails into three labels (at least nine of ten right).
    9. Draft a reply to a fixture mail and stop at the approval card (a draft exists, nothing was sent).
    10. Find a free hour in a fixture calendar and propose it (the hour is free in the fixture).
-   The fixtures (repository, mails, calendar) do not exist yet; making them is the first step of the first run.
+   The fixtures (repository, mails, calendar) are in scripts/measure/fixtures/p35; the runner's steps and each
+   task's check are in [p35-runner.md](p35-runner.md) (`scorecard.py bottasks`).
 2. Owner touches per task in that set, median.
 3. First-pass review rate of the real lanes of the last 7 days (`scripts/measure-dev-speed.py`, rework.first_pass_pct,
    from the verdicts in the private review record).
@@ -323,7 +324,7 @@ sandboxes. A phone client is row M2 of p01.
 | 24 h soak | 20 real agent sessions on a core with its own NUNCHIRO_HOME for 24 h with a heartbeat prompt every 10 min; clean hours until the first crash, stuck terminal or lost session (`python3 -B scripts/measure/soak.py --nunchiro <RC nunchiro> --sessions 20`; raw samples in soak-<date>.jsonl, `--report FILE` for a stopped run; it writes soak_clean_hours only from a day of exactly 20 sessions) | soak_clean_hours |
 | Accuracy trial | p34 above: `python3 -B scripts/measure/scorecard.py accuracy --machine <alias> --remote-project <dir on the second Mac>` (raw records in accuracy-<date>.json; the figures go into the manual file only when the run is counted; `--self-test` checks the script on a fixture agent and is never counted) | the five p34 trial figures, prompt_delivery_ms |
 | Waits with no card | p34 above: `python3 -B scripts/measure/scorecard.py waits` on the owner's Mac for 7 days (read only; samples in waits-<date>.jsonl; `--report <file>` gives the figure of a stopped run) | waited_no_card_min_per_day |
-| Bot task set | p35 above | bot_task_success_pct, bot_owner_touches |
+| Bot task set | p35 above: `scorecard.py bottasks` setup, check and report ([p35-runner.md](p35-runner.md)) | bot_task_success_pct, bot_owner_touches |
 | Reach | p37 above | RE1-RE5 |
 
 | Long-chat open | p33 above: `python3 -B scripts/measure/scorecard.py chatopen` (builds the RC core and the measure app, or `--no-build`; the window shows and takes the front for about a minute) | chat_open_5000_ms |

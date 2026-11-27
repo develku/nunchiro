@@ -1,0 +1,9 @@
+From: Billing <no-reply@tools.example.net>
+To: Sam Owner <sam@example.com>
+Subject: Payment failed for your subscription
+Date: Tue, 01 Dec 2026 08:30:00 +0000
+Message-ID: <pay-fail-3@example.net>
+Content-Type: text/plain; charset=utf-8
+
+We could not charge your card for the Pro plan (9.00 USD). Please update your payment method within 7 days.
+This is a fake fixture mail.
