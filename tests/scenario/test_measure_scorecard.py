@@ -134,6 +134,16 @@ class RubricV2(unittest.TestCase):
         self.assertEqual(s.ran_green(0, "Ran 12 tests in 0.2s\n\nOK"), (True, 12))
         self.assertEqual(s.ran_green(1, "Ran 12 tests in 0.2s\n\nFAILED (failures=1)"), (False, 12))
 
+    def test_a_command_that_names_a_missing_spec_is_not_green(self):
+        # Playwright runs the specs it finds and ends 0: without this, half a check passes for the whole.
+        pw = ["pnpm", "-C", "web", "exec", "playwright", "test"]
+        self.assertEqual(s.missing_specs(pw + ["no-such-page.spec.ts", "inputs-one-style.spec.ts"]), ["no-such-page.spec.ts"])
+        self.assertEqual(s.missing_specs(pw + ["inputs-one-style.spec.ts"]), [])
+        self.assertEqual(s.missing_specs(["cargo", "test", "-p", "nunchiro", "x"]), [])
+        row = s.run_test(pw + ["no-such-page.spec.ts", "inputs-one-style.spec.ts"], {})  # refused before anything runs
+        self.assertEqual((row["green"], row["tests"], row["exit"]), (False, 0, None))
+        self.assertIn("no-such-page.spec.ts", row["tail"])
+
     def test_a_test_check_counts_only_when_its_tests_ran_green_at_this_commit(self):
         cmd = ["cargo", "test", "-p", "nunchiro", "x"]
         doc = {"commit": "abc1234", "results": [{"cmd": cmd, "green": True}, {"cmd": ["other"], "green": False}]}
@@ -218,6 +228,12 @@ class Card(unittest.TestCase):
         checks = {c["id"]: c for p in self.parts["parts"] for c in p.get("checks", [])}
         for cid in sorted(s.TEST_CHECKS):
             self.assertTrue(checks[cid].get("tests"), cid)
+
+    def test_every_spec_a_check_names_is_in_this_repository(self):
+        for p in self.parts["parts"]:
+            for c in p.get("checks", []):
+                for cmd in c.get("tests", []):
+                    self.assertEqual(s.missing_specs(cmd), [], c["id"])
 
     def test_the_page_renders_and_unmeasured_parts_are_zero(self):
         res = {"date": "2026-11-27 10:00", "commit": "abc1234", "host": "h", "macos": "m", "load": [1, 2], "repeats": 1,

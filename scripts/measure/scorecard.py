@@ -13,6 +13,7 @@ Usage:
   scorecard.py tests [--target DIR] [--out FILE]
       Runs every command a check in parts.json names under "tests" (detached, as `dev` runs the gate's test stage) and
       writes docs/measure/tests-<date>.json: the commit, and per command whether it ended 0 with at least one test run.
+      A command that names a spec file missing from web/tests is not run and not green.
   scorecard.py weigh [--secs 60] [--out FILE]
       Read only, the owner-run step for idle memory and CPU with real agent sessions: the owner's running Nunchiro
       (core, window, WebKit helpers, holders) by ps and footprint, with the number of Claude and Codex sessions it
@@ -610,6 +611,22 @@ def ran_green(rc, output):
     return rc == 0 and n > 0 and not flaky, n
 
 
+def missing_specs(cmd):
+    """The spec files a command names that are not in web/tests. Playwright runs the ones it finds and still ends 0,
+    so such a command is never green, whatever the rest of it does."""
+    return [x for x in cmd if x.endswith(".spec.ts") and not (ROOT / "web/tests" / x).is_file()]
+
+
+def run_test(cmd, env):
+    """One row of tests-<date>.json. A command that names a missing spec is not run and not green."""
+    gone = missing_specs(cmd)
+    if gone:
+        return dict(cmd=cmd, green=False, tests=0, exit=None, seconds=0, tail="names a spec that is not in web/tests: " + ", ".join(gone))
+    secs, rc, out = outside_holder(cmd, env)
+    ok, n = ran_green(rc, out)
+    return dict(cmd=cmd, green=ok, tests=n, exit=rc, seconds=secs, tail="" if ok else out[-400:])
+
+
 def green_commands(doc, commit):
     """The commands of a tests-<date>.json that ran green, as joined strings; none when it is of another commit."""
     if not doc or not commit or not str(doc.get("commit", "")).startswith(commit[:7]):
@@ -1163,10 +1180,10 @@ def tests_cmd(a):
         env["CARGO_TARGET_DIR"] = str(Path(a.target).resolve())
     results = []
     for cmd in cmds:
-        secs, rc, out = outside_holder(cmd, env)
-        ok, n = ran_green(rc, out)
-        results.append(dict(cmd=cmd, green=ok, tests=n, exit=rc, seconds=secs, tail="" if ok else out[-400:]))
-        print(f"{'green' if ok else 'NOT GREEN'} ({n} tests, exit {rc}, {secs} s): {' '.join(cmd)}", flush=True)
+        r = run_test(cmd, env)
+        results.append(r)
+        print(f"{'green' if r['green'] else 'NOT GREEN'} ({r['tests']} tests, exit {r['exit']}, {r['seconds']} s): {' '.join(cmd)}"
+              + ("" if r["exit"] is not None else f" ({r['tail']})"), flush=True)
     doc = dict(date=time.strftime("%Y-%m-%d %H:%M"), commit=git("rev-parse", "--short", "HEAD").strip(), results=results)
     path = Path(a.out) if a.out else OUT_DIR / f"tests-{time.strftime('%Y-%m-%d')}.json"
     path.write_text(json.dumps(doc, indent=1) + "\n")

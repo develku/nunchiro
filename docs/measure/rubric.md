@@ -589,6 +589,17 @@ How far a user's agent team runs without the person stepping in.
     stamp of the sweep that clears those markers, and the built-in plugins' state store. Reason: with them counted,
     no real-agent run could end clean, and none of them is the user's configuration. Every other file beside them is
     still counted (scripts/scenario/v1b_full.py `EXCLUDED_FILES`, tests/scenario/test_v1b_full.py).
+14. Design (p23): DE3 rests on `settings-one-head.spec.ts` with `inputs-one-style.spec.ts`, where parts.json named
+    `settings-shell.spec.ts`. Reason: that spec compares the Settings shell with a mockup that is not in this
+    repository, so the spec is not here either and the head half of the check could never run. No spec here asserted
+    the same rule (`settings-frame-1043.spec.ts` walks every page for its summary line, `settings-kit-head.spec.ts`
+    checks the head on five pages), so the new one carries it over: on the built-in pages the title and the
+    description of the label table in the head, and focus on the title, as before. Stricter than before: the head and
+    its title are counted (exactly one of each), and the registered pages are walked too. Not carried over: the
+    Korean lines, which were compared with the mockup, and the old file's other tests (nav order against the mockup,
+    search, registered sections), which were never this check's rule. `scorecard.py tests` now refuses a command that
+    names a spec missing from web/tests: Playwright ran the other spec and ended 0, which would have counted half of
+    the check as the whole.
 
 Where v2 differs from the audit's proposal, and why:
 
