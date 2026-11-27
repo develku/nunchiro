@@ -88,7 +88,8 @@ class CiLog(UtcClock):
         r = s.parse_main_log(self.text())
         self.assertEqual((r["runs"], r["green"], r["median_min"], r["max_min"]), (5, 4, 12.0, 25.0))
         i = r["installs"]
-        self.assertEqual((i["n"], i["installed"], i["skipped"], i["failed"]), (3, 1, 1, 1))
+        # four green runs: A twice (it waited, never landed), B (landed), D (failed); the wait on red C is no green run
+        self.assertEqual((i["n"], i["installed"], i["skipped"], i["failed"], i["landed_pct"]), (4, 1, 2, 1, None))
         self.assertEqual(s.log_start(self.text()), datetime.date(2026, 11, 24))
         d = s.parse_deploys(self.text(), s.log_start(self.text()))
         # the first line after the old log is later in the day than its last line, and 11-27 has no line at all
