@@ -7,7 +7,6 @@ declare module '../index' {
     'plugins.desc': true;
     'plugins.summary': true;
     'plugins.section': true;
-    'plugins.lede': true;
     'plugins.none': true;
     'plugins.panels.one': true;
     'plugins.panels.other': true;
@@ -48,10 +47,9 @@ export const en = {
   "field.plugins": "Plugins",
   "searchWords.plugins": "plugins, extensions, add-ons, panels, commands",
   "plugins.title": "Plugins",
-  "plugins.desc": "Folders that add panels, commands and settings. Nothing in one runs until you review it.",
+  "plugins.desc": "Folders that add panels, commands and settings. Nothing in one runs until you review it and turn it on.",
   "plugins.summary": "Plugins",
   "plugins.section": "Your plugins",
-  "plugins.lede": "A plugin is a folder that adds panels, commands and settings to Nunchiro. Nothing in it runs until you review it and turn it on.",
   "plugins.none": "No plugins yet. Copy a plugin folder into ~/.nunchiro/plugins, or make one with",
   "plugins.panels.one": "{n} panel",
   "plugins.panels.other": "{n} panels",

@@ -73,7 +73,7 @@ function PluginsPage({ core, t }: Pick<PageContext, 'core' | 't'>) {
     <div className="ssec-group">
       <PageSummary parts={[[t('plugins.summary'), list?.length]]} />
       <ErrorLine t={t} error={error ? rawError(error) : ''} />
-      <Sec id="h-plugins" className="plg-list" title={t('plugins.section')} lede={t('plugins.lede')}>
+      <Sec id="h-plugins" className="plg-list" title={t('plugins.section')}>
         {list && list.length === 0 && (
           <p className="sds" data-setting="plugins">
             {t('plugins.none')} <code>nunchiro plugin new &lt;id&gt;</code>
