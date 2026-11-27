@@ -376,14 +376,28 @@ class DevSpeed(UtcClock):
 
     def test_lanes_before_the_record_are_unknown_not_zero(self):
         prs = [pr("lead/a", T + "00:00:00Z", T + "01:00:00Z", A, number=1), pr("lead/b", T + "03:00:00Z", T + "04:00:00Z", B, number=2)]
-        d = self.measure(prs=prs, record=[dict(at=T + "02:00:00Z", kind="review_start", pr=2)])
+        d = self.measure(prs=prs, record=[dict(at=T + "02:00:00Z", kind="ask", pr=9), dict(at=T + "02:10:00Z", kind="answer", pr=9)])
         self.assertEqual({r["lane"]: r.get("owner_touches") for r in d["lanes"]}, {"lead/a": None, "lead/b": 0})
         self.assertEqual((d["owner"]["measured"], d["owner"]["lanes"]), ("part", 1))
         # lines copied in later from older notes say nothing about the asks of their days
-        d = self.measure(prs=prs, record=[dict(at="2026-11-20T00:00:00Z", kind="verdict", pr=1, verdict="accept", note="backfill x"),
-                                          dict(at=T + "02:00:00Z", kind="review_start", pr=2)])
-        self.assertEqual((d["owner"]["measured"], d["coverage"]["record_from"]), ("part", "2026-11-27 02:00"))
+        d = self.measure(prs=prs, record=[dict(at="2026-11-20T00:00:00Z", kind="ask", pr=1, note="backfill x"),
+                                          dict(at=T + "02:00:00Z", kind="ask", pr=9)])
+        self.assertEqual((d["owner"]["measured"], d["coverage"]["asks_from"]), ("part", "2026-11-27 02:00"))
         self.assertIsNone(self.measure(prs=prs)["owner"]["measured"])
+
+    def test_a_record_without_asks_gives_no_owner_figures(self):
+        # verdicts only: the record never saw an ask, so 0 touches would be a guess that scores well
+        prs = [pr("lead/a", T + "03:00:00Z", T + "04:00:00Z", A, number=1)]
+        d = self.measure(prs=prs, record=[dict(at=T + "02:00:00Z", kind="verdict", pr=1, verdict="accept", by="acceptance")])
+        self.assertIsNone(d["lanes"][0].get("owner_touches"))
+        o = d["owner"]
+        self.assertEqual((o["measured"], o["lanes"], o["touches"], o["median_per_lane"], o["max_wait_min"]), (None, 0, None, None, None))
+
+    def test_no_seat_of_the_project_in_the_journal_is_not_measured(self):
+        at = lambda t: speed.iso(t) * 1000  # noqa: E731
+        d = self.measure([dict(type="core_started", at=at(T + "00:00:00Z"))])
+        self.assertEqual((d["seat_use"]["seat_hours"], d["seat_use"]["share_pct"]), (None, None))
+        self.assertIn("no live seat", d["seat_use"]["journal"])
 
     def test_task_line_by_branch_gives_task_to_main(self):
         d = self.measure(record=self.FLOW_A)
