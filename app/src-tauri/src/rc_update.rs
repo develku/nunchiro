@@ -229,7 +229,7 @@ async fn update_cli(what: &'static str, archive: Option<PathBuf>) -> Result<Stri
             INSTALL_LIMIT
         };
         // The twin of the CLI's subprocess runs: one helper (update_claims.rs), no pipes, group kill at the limit.
-        // status: its one JSON line, no file past 64 KiB (RLIMIT_FSIZE). install: its stderr is the owner's plain
+        // status: its one JSON line, no file past 64 KiB (soft RLIMIT_FSIZE; its git raises it for itself). install: its stderr is the owner's plain
         // reason; it cannot have a file limit (its ditto writes the bundle) and it is the app's own CLI, not a candidate.
         let output = if what == "status" {
             crate::update_claims::Output::KeepBounded

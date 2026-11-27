@@ -215,6 +215,8 @@ const VERDICT: &str = "status-verdict";
 
 /// `newer` for `status`, remembering a lasting verdict so a build left in the folder is not fetched for every check.
 fn judged(work: &Path, repo: &str, stamp: &Stamp, running: &str) -> Result<(), String> {
+    // A verdict in a folder someone else can write proves nothing: the same ownership check install makes, first.
+    own_dir(work)?;
     let key = format!("{} {running}", stamp.commit);
     let path = work.join(VERDICT);
     let kept = read_small(&path, 4096).and_then(|b| String::from_utf8(b).ok());
