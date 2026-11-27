@@ -60,6 +60,13 @@ impl Sessions {
                 .ok_or_else(|| "session not found".into()),
         )
     }
+    /// The folder a session runs in, for the Diff panel's Push (`git_write`), which runs after the lock is released.
+    pub(crate) fn session_folder(&self, id: &str) -> Result<PathBuf, String> {
+        self.entries
+            .get(id)
+            .map(|e| e.meta.cwd.clone())
+            .ok_or_else(|| "session not found".into())
+    }
     // v1b-05: the data home for an upload to a known session; the write runs after the lock is released.
     pub(crate) fn image_home(
         &self,

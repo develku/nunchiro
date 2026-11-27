@@ -46,6 +46,7 @@ struct Known {
 /// What the add steps show for a listed agent: how to install it, how it signs in, what it costs. From this bundled table
 /// only; the window types the install command into a terminal tab and never runs it.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Setup {
     /// The package-manager form, as an argv.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -113,6 +114,7 @@ fn display_names(entries: &[config::Entry]) -> BTreeMap<String, String> {
 
 /// Ticket 358: one model an agent reported in its Session Config Options; `value` goes back to it exactly as it came.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct AcpModel {
     pub value: String,
     pub label: String,
@@ -160,6 +162,7 @@ fn remember(home: &Path, file: &str, agent: &str, models: &[AcpModel]) {
 
 /// One row of Settings > Agents' ACP table.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct AcpRow {
     pub name: String,
     pub label: String,
@@ -468,6 +471,8 @@ impl Feed {
             self.bytes -= size;
             self.dropped += 1;
         }
+        // An ACP agent's chat is its output: windows keep their fast cadence and send it now.
+        crate::pty::notify_output();
     }
     fn page_of(&self, from: u64, to: u64, older: bool) -> crate::chat::Page {
         crate::chat::Page {

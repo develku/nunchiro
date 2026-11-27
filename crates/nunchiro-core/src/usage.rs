@@ -37,6 +37,7 @@ pub struct Totals {
 }
 /// V2.5-10: what the last 24 h or 7 days (rolling, not local days) spent on one account.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Window {
     pub tokens: u64,
     /// List-price estimate in millionths of a US dollar, over the tokens of models `PRICES` knows.
@@ -46,11 +47,14 @@ pub struct Window {
 }
 /// V2.5-10: an agent's own record of a usage limit, still ahead (Codex rollouts carry it; Claude's transcripts do not).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Limit {
     pub left_pct: u8,
     pub resets_at: i64,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "UsageRow"))]
 pub struct Row {
     pub agent: Agent,
     pub id: String,
@@ -83,6 +87,7 @@ pub struct Row {
 }
 /// Why a link in the user's own default folder was or was not read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum LinkStatus {
     Followed,
@@ -94,6 +99,8 @@ pub enum LinkStatus {
     Unsafe,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "UsageLink"))]
 pub struct Link {
     pub target: String,
     pub status: LinkStatus,
@@ -440,6 +447,7 @@ fn rows_with(
 /// cache share (cache read / (new input + cache read), `usage-overview-model.ts:72-73`) and the 42-day window
 /// (`UsageOverviewPane.tsx:13`).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Sum {
     pub tokens: u64,
     /// New input, output, cache write, cache read.
@@ -471,6 +479,7 @@ impl Sum {
 }
 /// One row of a tab: an agent, a model, a folder or an agent session.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Group {
     pub key: String,
     #[serde(flatten)]
@@ -488,6 +497,7 @@ pub struct Group {
     pub cwd: Option<String>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Detail {
     pub days: u32,
     pub total: Sum,

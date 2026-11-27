@@ -26,6 +26,7 @@ const INITIALIZE: u64 = 0;
 const OPEN: u64 = 1;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Check {
     pub found_path: Option<String>,
     pub version: Option<String>,
@@ -53,6 +54,7 @@ pub struct Check {
 /// One sign-in method as the agent reported it, bounded. `kind` is `agent` or `terminal` only: a browser and a device code
 /// are both `agent` (ACP cannot tell them apart), and `env_var` is left out, since Nunchiro stores no key.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct AuthMethod {
     pub id: String,
     pub name: String,

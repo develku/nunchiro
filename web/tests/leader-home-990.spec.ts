@@ -41,7 +41,9 @@ test('home_group (990 d8): Home teammates sit in a Home group above the projects
   await expect.poll(() => sessions(core).find((s) => s.teammate === 'mate-inbox' && s.state === 'running')?.id ?? '').not.toBe('');
   const seat = sessions(core).find((s) => s.teammate === 'mate-inbox')!;
   await expect(app.locator(`.tab[data-tab="${seat.id}"]`)).toHaveAttribute('aria-selected', 'true');
-  await expect(group.locator('.home-mate[data-mate="mate-inbox"] .tm')).toHaveCount(0);
+  // Since #67 the design book gives an idle row its word and age ("idle · <1m"), where "not running" stood.
+  await expect(group.locator('.home-mate[data-mate="mate-inbox"] .tm')).toHaveText(/^idle · /);
+  await expect(group.locator('.home-mate[data-mate="mate-inbox"] .row.wt2')).toHaveAttribute('data-kind', 'idle');
   await expect(app.locator('.shead .dim').first()).toContainText('Assistants · claude');
   await expect(app.locator('.shead .dim').first()).not.toContainText('main');
   // Look 1117 v12 Home S3-3: Home is no project in the tree, so the palette's Remove is greyed and says why.

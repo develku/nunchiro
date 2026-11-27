@@ -23,6 +23,7 @@ const JOB_MAX: usize = 2000;
 const MEMORY_QUOTE_MAX: usize = 6 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Teammate {
     pub id: String,
@@ -65,6 +66,8 @@ impl Teammate {
 
 /// Ticket 992: how much a task needs. Ordered, so Auto's upper limit is a `min`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "TeamLevel"))]
 #[serde(rename_all = "snake_case")]
 pub enum Level {
     Light,
@@ -1221,6 +1224,15 @@ pub(crate) fn open_seat(
             why,
         }))
     };
+    // A plugin's check before a new teammate seat runs once the lock has decided a session starts (below), off it.
+    // A new conversation is checked where the owner asks for it (`Op`).
+    let asker = match &opener {
+        Opener::Window => Some(crate::plugins::Asker::Owner),
+        Opener::Schedule(..) => Some(crate::plugins::Asker::Schedule),
+        Opener::Lead(_) => Some(crate::plugins::Asker::Agent),
+        Opener::Fresh(_) | Opener::Undo(..) | Opener::WindowAnyway => None,
+    };
+
     let undo = matches!(opener, Opener::Undo(..));
     let mut parent = match &opener {
         Opener::Fresh(parent) => parent.clone(),
@@ -1285,6 +1297,11 @@ pub(crate) fn open_seat(
             Opener::Lead(caller) => sessions.launch_as(Some(caller), start.clone(), false)?,
         }
     };
+    // A session starts now (an open seat that took the task returned above): a plugin's check, off the lock, before
+    // anything is prepared.
+    if let Some(asker) = asker {
+        crate::plugins::check_start(&home, asker, &start)?;
+    }
     // As the owner's Start: a missing agent still opens a tab, with its card.
     let mut launch = match launch.prepare() {
         Ok(launch) => launch,
@@ -1849,8 +1866,23 @@ pub fn window(
             anyway,
             ..
         } => {
-            // Before the handover: a held new conversation leaves the old seat running; Start anyway passes it.
+            // Before the handover: a held new conversation leaves the old seat running; Start anyway passes it, a
+            // plugin's check as a memory hold.
             crate::pressure::check(crate::pressure::Who::Window, anyway, "new conversation")?;
+            if !anyway && let Some(mate) = team.list()?.into_iter().find(|t| t.id == id) {
+                let start = crate::api::StartSession {
+                    account: None,
+                    kind: mate.kind,
+                    project: mate.project.clone().unwrap_or_else(|| team.home()),
+                    worktree: false,
+                    label: mate.name.clone(),
+                    args: vec![],
+                    model: None,
+                    effort: None,
+                    resume: None,
+                };
+                crate::plugins::check_start(home, crate::plugins::Asker::Owner, &start)?;
+            }
             fresh_lead(registry, &id, how, HANDOVER_WAIT).map(Opened::reply)
         }
         Op::TeamBrief { id } => {

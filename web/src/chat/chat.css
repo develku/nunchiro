@@ -108,6 +108,13 @@
   color: var(--dim);
   margin-bottom: 2px;
 }
+/* A message a plugin's check changed names the plugin, under the words (also in the Room, room.css). */
+.changed-tag {
+  display: block;
+  margin-top: var(--sp-4);
+  font-size: var(--fs-11);
+  color: var(--muted);
+}
 .ut {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

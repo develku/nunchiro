@@ -13,6 +13,10 @@ type T = (key: Key, args?: Record<string, string | number>) => string;
 const LOW_MEMORY = /^(Your|This) Mac is low on memory, so the new session was not started/;
 /** Whether a start was refused by the low-memory hold, which the owner's "Start anyway" passes. */
 export const isLowMemory = (e: unknown) => LOW_MEMORY.test(rawError(e));
+/** plugins.rs STOPPED_START: the owner's start a plugin's check refused ("Quiet hours stopped this start: ..."). */
+const STOPPED = / stopped this start: /;
+/** A start the owner's Start anyway passes: a low-memory hold or a plugin's check. */
+export const isHeld = (e: unknown) => isLowMemory(e) || STOPPED.test(rawError(e));
 /** A window start as sent: `anyway` wraps it as the owner's Start anyway, past a low-memory hold; `wait` as a start that,
  *  when held, waits for memory and starts by itself (its reply is `memory_waiting`, the status bar lists it). */
 export const startOp = (start: { op: 'start'; [k: string]: unknown }, anyway = false, wait = false) =>
@@ -21,6 +25,18 @@ export const startOp = (start: { op: 'start'; [k: string]: unknown }, anyway = f
 // [pattern, what happened, what to do]. The web gets only the core's message string (no code), so patterns are the
 // core's own wording. Order matters: the first match wins. A named group (`(?<name>...)`) fills that placeholder.
 export const KNOWN: [RegExp, Key, Key?][] = [
+  // git_write.rs: the Diff panel's Push. First, as git's own lines under the sentence may hold "fatal: " (the git row).
+  [/^nothing was sent: the branch changed after this was shown \(new head (?<head>\S+)\)/, 'gitActions.err.changed'],
+  [/^nothing was sent: the push URL of (?<remote>\S+) changed after this was shown/, 'gitActions.err.url'],
+  [/^nothing was sent: where this pushes changed after this was shown \(now (?<remote>[^/\s]+)\/(?<branch>\S+)\)/, 'gitActions.err.target'],
+  [/^not pushed: (?<remote>\S+) has newer commits on (?<branch>\S+)/, 'gitActions.err.newer'],
+  [/^not pushed: git needs you to sign in/, 'gitActions.err.signin'],
+  [/^not pushed: the pre-push hook failed/, 'gitActions.err.hook'],
+  [/^not pushed: (?<remote>\S+) refused the push/, 'gitActions.err.refused'],
+  [/^not pushed: this branch has no remote set and there are several/, 'gitActions.err.several'],
+  [/^not pushed: this is the default branch$/, 'gitActions.err.default'],
+  [/^not pushed: there are no new commits to push$/, 'gitActions.err.nothing'],
+  [/^not pushed: /, 'gitActions.err.failed', 'gitActions.err.failed.todo'],
   [/core disconnected|core is stopping/i, 'settings.err.core'],
   // The core's own wording only: SSH and agent output also says "timed out" or "Permission denied (publickey)".
   [/too many requests in flight/, 'settings.err.busy'],
@@ -195,7 +211,7 @@ export const KNOWN: [RegExp, Key, Key?][] = [
 ];
 
 /** Known lines that name the whole failure, so no raw text is kept under Details. */
-const SAYS_ALL: Key[] = ['schedule.past', 'schedule.pastOff'];
+const SAYS_ALL: Key[] = ['schedule.past', 'schedule.pastOff', 'gitActions.err.changed'];
 
 /** A refusal in the window's own plain words (the layout editor's): shown as written, never the generic line (ticket 599). */
 export class OwnWords extends Error {}
@@ -218,7 +234,7 @@ export const errorNote = (text: string, e: unknown, session?: string): Note => (
 /** A window start's low-memory hold as a note naming the agent, with Start anyway (`again`: the same start, past the hold);
  *  null for any other refusal. */
 export const heldNote = (t: T, e: unknown, agent: string, again: () => void): Note | null =>
-  isLowMemory(e) ? { text: t('err.lowMemory.agent', { agent }), details: rawError(e), action: { label: t('err.startAnyway'), tip: t('err.startAnyway.tip'), run: again } } : null;
+  isHeld(e) ? { text: isLowMemory(e) ? t('err.lowMemory.agent', { agent }) : rawError(e), details: rawError(e), action: { label: t('err.startAnyway'), tip: t(isLowMemory(e) ? 'err.startAnyway.tip' : 'plugins.startAnyway.tip'), run: again } } : null;
 
 /** What happened, what to do, and the raw text for Details. `foreign`: the text comes from another program (SSH), so it is
  *  never matched to a sentence about Nunchiro. Anything not listed gets the generic line and keeps its words in Details. */
@@ -282,9 +298,9 @@ export function ErrorLine({ t, error, retry, anyway, className = 'conflict', for
           {t('settings.kit.retry')}
         </button>
       )}
-      {anyway && isLowMemory(error) && (
+      {anyway && isHeld(error) && (
         <span className="held-act">
-          <button type="button" className="btn" data-tip={t('err.startAnyway.tip')} onClick={anyway}>
+          <button type="button" className="btn" data-tip={t(isLowMemory(error) ? 'err.startAnyway.tip' : 'plugins.startAnyway.tip')} onClick={anyway}>
             {t('err.startAnyway')}
           </button>
         </span>

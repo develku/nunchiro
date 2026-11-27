@@ -68,6 +68,7 @@ const LOG_DOWN: &str =
     "the Codex reset log cannot be read or written, so no reset is used without the owner";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum How {
     /// The owner's own click (window or owner socket).
@@ -84,6 +85,8 @@ pub enum How {
 
 /// One line of the use log.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "CodexResetEntry"))]
 pub struct Entry {
     /// Unix seconds.
     pub at: u64,
@@ -110,6 +113,7 @@ pub struct Entry {
 
 /// What a read shows: the available count and the earliest expiry (Unix seconds) among available credits.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Summary {
     pub available: u64,
     pub next_expires_at: Option<i64>,
@@ -533,6 +537,7 @@ fn entry(t: &Target, how: How) -> Entry {
 
 /// What is wrong with the log, for the Usage page.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct LogProblem {
     /// The log file cannot be read now (the next log write moves it aside).
     pub unreadable: bool,

@@ -11,6 +11,7 @@ fn is_false(v: &bool) -> bool {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Reply {
     SessionContext {
@@ -188,6 +189,14 @@ pub enum Reply {
     },
     PrMerged {
         url: String,
+    },
+    // `git_push`: how many commits went to which remote branch.
+    GitPushed {
+        pushed: u64,
+        remote: String,
+        branch: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        note: Option<String>,
     },
     // Ticket 373: `None` when the branch has no PR of its own (or none is looked up: the default branch, no upstream).
     PrBranch {
@@ -408,6 +417,14 @@ pub enum Reply {
     // v1b-22
     WidgetPage {
         page: crate::widgets::web::Page,
+    },
+    Plugins {
+        plugins: Vec<crate::plugins::Listed>,
+    },
+    /// A plugin command's run and where the window shows its output.
+    PluginRun {
+        run: crate::widgets::Run,
+        show: crate::plugins::Show,
     },
     /// v1b-20: the target session (started for a `start` act) and its send row.
     WidgetAct {

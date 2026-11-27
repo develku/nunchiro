@@ -88,7 +88,8 @@ class CiLog(UtcClock):
         r = s.parse_main_log(self.text())
         self.assertEqual((r["runs"], r["green"], r["median_min"], r["max_min"]), (5, 4, 12.0, 25.0))
         i = r["installs"]
-        self.assertEqual((i["n"], i["installed"], i["skipped"], i["failed"]), (3, 1, 1, 1))
+        # four green runs: A twice (it waited, never landed), B (landed), D (failed); the wait on red C is no green run
+        self.assertEqual((i["n"], i["installed"], i["skipped"], i["failed"], i["landed_pct"]), (4, 1, 2, 1, None))
         self.assertEqual(s.log_start(self.text()), datetime.date(2026, 11, 24))
         d = s.parse_deploys(self.text(), s.log_start(self.text()))
         # the first line after the old log is later in the day than its last line, and 11-27 has no line at all
@@ -496,6 +497,17 @@ class DevSpeed(UtcClock):
         for secret in ("SECRET", "agent-secret9", "m1"):
             self.assertNotIn(secret, text)
         self.assertEqual(d["cost"]["lanes_with_cost"], 1)
+
+    def test_the_journal_s_advance_lines_count_without_a_body(self):
+        # the journal keeps the core's advance lines as {kind, team: {what, seat}, act, quiet_min}, never the body
+        at = lambda t: speed.iso(t) * 1000  # noqa: E731
+        line = lambda t, act, quiet: dict(type="room_message", at=at(t), data=dict(  # noqa: E731
+            kind="team", team=dict(what="advance", seat="s1"), act=act, quiet_min=quiet))
+        core = [dict(type="session_started", at=at(T + "00:00:00Z"), session="s1", state="waiting"),
+                line(T + "00:30:00Z", "nudge", 21), line(T + "00:40:00Z", "resend", 0), line(T + "00:50:00Z", "moved", 0),
+                dict(type="session_ended", at=at(T + "01:00:00Z"), session="s1")]
+        s = self.measure(core)["seat_use"]
+        self.assertEqual((s["stall_nudges"], s["stalled_min"], s["resends"], s["moved_again"]), (1, 21, 1, 1))
 
     def test_journal_events_feed_seat_time_and_say_what_they_lack(self):
         at = lambda t: speed.iso(t) * 1000  # noqa: E731

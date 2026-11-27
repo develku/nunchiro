@@ -24,7 +24,12 @@ export const add = (core: Core, run: Run, at: string, daily = true, days?: numbe
 /** The widget in the right sidebar, opened from its bar icon when it is not there. */
 export async function openWidget(app: Page) {
   const side = app.locator('.sbar[data-widget="schedules"] .schedv');
-  if (!(await side.isVisible())) await app.locator('#icon-schedules').click();
+  if (!(await side.isVisible())) {
+    await app.locator('#icon-schedules').click();
+    // Opening moves focus into the widget a frame later (useRails: requestAnimationFrame, then `.schedv button`). A spec
+    // that focuses a row before that frame lost its focus to the Add button, and its Enter opened the form instead.
+    await expect(side.locator('button').first()).toBeFocused();
+  }
   await expect(side).toBeVisible();
   return side;
 }

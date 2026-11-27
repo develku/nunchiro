@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 /// One model as the window lists it: Codex's slug (passed as `-m`), its display name and its own efforts.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Model {
     pub value: String,
     pub label: String,

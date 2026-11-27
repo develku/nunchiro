@@ -290,7 +290,8 @@ card for it), with `scorecard.py waits`.
    8. Sort ten fixture mails into three labels (at least nine of ten right).
    9. Draft a reply to a fixture mail and stop at the approval card (a draft exists, nothing was sent).
    10. Find a free hour in a fixture calendar and propose it (the hour is free in the fixture).
-   The fixtures (repository, mails, calendar) do not exist yet; making them is the first step of the first run.
+   The fixtures (repository, mails, calendar) are in scripts/measure/fixtures/p35; the runner's steps and each
+   task's check are in [p35-runner.md](p35-runner.md) (`scorecard.py bottasks`).
 2. Owner touches per task in that set, median.
 3. First-pass review rate of the real lanes of the last 7 days (`scripts/measure-dev-speed.py`, rework.first_pass_pct,
    from the verdicts in the private review record).
@@ -323,7 +324,7 @@ sandboxes. A phone client is row M2 of p01.
 | 24 h soak | 20 real agent sessions on a core with its own NUNCHIRO_HOME for 24 h with a heartbeat prompt every 10 min; clean hours until the first crash, stuck terminal or lost session (`python3 -B scripts/measure/soak.py --nunchiro <RC nunchiro> --sessions 20`; raw samples in soak-<date>.jsonl, `--report FILE` for a stopped run; it writes soak_clean_hours only from a day of exactly 20 sessions) | soak_clean_hours |
 | Accuracy trial | p34 above: `python3 -B scripts/measure/scorecard.py accuracy --machine <alias> --remote-project <dir on the second Mac>` (raw records in accuracy-<date>.json; the figures go into the manual file only when the run is counted; `--self-test` checks the script on a fixture agent and is never counted) | the five p34 trial figures, prompt_delivery_ms |
 | Waits with no card | p34 above: `python3 -B scripts/measure/scorecard.py waits` on the owner's Mac for 7 days (read only; samples in waits-<date>.jsonl; `--report <file>` gives the figure of a stopped run) | waited_no_card_min_per_day |
-| Bot task set | p35 above | bot_task_success_pct, bot_owner_touches |
+| Bot task set | p35 above: `scorecard.py bottasks` setup, check and report ([p35-runner.md](p35-runner.md)) | bot_task_success_pct, bot_owner_touches |
 | Reach | p37 above | RE1-RE5 |
 
 | Long-chat open | p33 above: `python3 -B scripts/measure/scorecard.py chatopen` (builds the RC core and the measure app, or `--no-build`; the window shows and takes the front for about a minute) | chat_open_5000_ms |
@@ -589,6 +590,17 @@ How far a user's agent team runs without the person stepping in.
     stamp of the sweep that clears those markers, and the built-in plugins' state store. Reason: with them counted,
     no real-agent run could end clean, and none of them is the user's configuration. Every other file beside them is
     still counted (scripts/scenario/v1b_full.py `EXCLUDED_FILES`, tests/scenario/test_v1b_full.py).
+14. Design (p23): DE3 rests on `settings-one-head.spec.ts` with `inputs-one-style.spec.ts`, where parts.json named
+    `settings-shell.spec.ts`. Reason: that spec compares the Settings shell with a mockup that is not in this
+    repository, so the spec is not here either and the head half of the check could never run. No spec here asserted
+    the same rule (`settings-frame-1043.spec.ts` walks every page for its summary line, `settings-kit-head.spec.ts`
+    checks the head on five pages), so the new one carries it over: on the built-in pages the title and the
+    description of the label table in the head, and focus on the title, as before. Stricter than before: the head and
+    its title are counted (exactly one of each), and the registered pages are walked too. Not carried over: the
+    Korean lines, which were compared with the mockup, and the old file's other tests (nav order against the mockup,
+    search, registered sections), which were never this check's rule. `scorecard.py tests` now refuses a command that
+    names a spec missing from web/tests: Playwright ran the other spec and ended 0, which would have counted half of
+    the check as the whole.
 
 Where v2 differs from the audit's proposal, and why:
 
@@ -630,6 +642,20 @@ Where v2 differs from the audit's proposal, and why:
   runs the others is never put on a lane. Sessions joined to none are summed apart as unassigned. 1-hour cache writes
   are priced at twice the input price (the price page). Lanes built on another machine have no cost here (not
   measured, not 0); models with no published token price stay unpriced, listed by model.
+- Two readings put back on what their anchors name (2026-11-28, the PR flow). No anchor changed.
+  Owner installs that landed (p05): each of the last 20 green main CI runs is one outcome: landed when an owner
+  install of its commit is recorded, not landed otherwise (a wait, a refusal or a rollback, a failure, or no try).
+  With fewer than 20 green runs in the log the figure is not measured (rule 1). Before, the script read the last 20
+  install lines, which were one per green run while the local watcher tried an install after each; with installs made
+  by hand and a wait no longer written as an outcome it read 100 % from four lines, an easier condition than the
+  anchor names (rule 2). On the log of this day the reading is 2 of 20, as on the card before.
+  Files shared by open lanes (p26): a branch whose pull request is merged or closed is not open. A squash merge
+  leaves the branch's own commits outside main, so "a commit that origin/main lacks" stayed true for every landed
+  lane, and by the evening a day's hundred landed branches all read as open. A branch that another open branch
+  carries (a lane built on it, a reviewer's copy) is the same line of work and is counted once. A branch with an open
+  pull request is open whatever the day of its last commit (stricter). Open pull requests are not read in place of
+  the branches: a lane has no pull request while it is being built, so that reading would be easier. When the pull
+  requests cannot be read, no branch counts as landed.
 - Owner decision 2026-11-26 (stricter): p14 adds memory-pressure kills over 7 days and row ML1. The Mac staying responsive is the owner's second priority, and the idle figures alone scored a frozen Mac the same as a calm one.
 
 Not changed in v2 (the audit's lower-priority list, outside the approval of 2026-11-26): the weight of the default

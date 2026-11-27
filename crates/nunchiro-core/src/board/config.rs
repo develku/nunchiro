@@ -21,6 +21,7 @@ struct Document {
 /// `turn_end_nudge` turns ticket 187's turn-end context line on or off (default true). One struct for both keys:
 /// `deny_unknown_fields` refuses any other key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, default)]
 pub struct Settings {
     pub stale_minutes: u32,

@@ -89,3 +89,11 @@
 .roompane-head b { font-size: var(--fs-13); }
 .roompane-body { position: relative; flex: 1; min-height: 0; }
 .roompane-body > .room-empty { padding: 12px; margin: 0; }
+
+/* A room message a plugin's check changed names the plugin, under the quote. */
+.room-msg .changed-tag {
+  display: block;
+  margin-top: var(--sp-4);
+  font-size: var(--fs-11);
+  color: var(--muted);
+}

@@ -1253,6 +1253,10 @@ pub(crate) fn in_core(
             let who = crate::pressure::Who::Session;
             crate::pressure::check_once(&session, who, "reviewer", &task.id)
                 .map_err(|e| format!("skipped: {e}"))?;
+            // The Reviewer is started for a lead, as the lead's own start would be: a plugin's check holds.
+            let home = lock()?.home().to_path_buf();
+            crate::plugins::check_start(&home, crate::plugins::Asker::Agent, &session)
+                .map_err(|e| format!("skipped: {e}"))?;
             let (caller, launch) = {
                 let mut sessions = lock()?;
                 recheck(&sessions, task, lead, &Step::Start)?;

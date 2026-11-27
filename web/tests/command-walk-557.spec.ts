@@ -190,6 +190,9 @@ for (const id of SPENDS) {
     await openPalette(app);
     const row = (await rows(app)).find((r) => r.id === id)!;
     expect(row, `${id} is in the palette`).toBeTruthy();
+    // The listing's palette is closed before the walk clicks a tab: it is drawn over the tab strip and takes that click.
+    await app.keyboard.press('Escape');
+    await expect(app.locator('#palette-list')).toHaveCount(0);
     if (id === 'tab.reopen') (await run(app, 'Close tab', 'tab.close'), await confirm(app)); // the command is greyed until a tab was closed
     if (id === 'session.restart' || id === 'session.close') {
       // Both act on an ended session: a shell that quits on its own is `exited` (a stopped agent is `closed`, which neither takes).
