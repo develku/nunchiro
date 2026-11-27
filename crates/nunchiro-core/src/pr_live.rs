@@ -758,3 +758,33 @@ pub(crate) fn answer(registry: &Mutex<Sessions>, request: Request) -> Response {
         hint: on.then(|| p.hint().map(String::from)).flatten(),
     })
 }
+
+#[cfg(test)]
+mod link_tests {
+    use super::*;
+
+    #[test]
+    fn pr_links_read_terminal_text() {
+        let out = b"\x1b[32mhttps://github.com/develku/nunchiro/pull/12\x1b[0m\r\n\
+            see https://user:token@github.com/develku/nunchiro/pull/13 and https://github.com/other/thing/pull/7.\n\
+            https://github.com/develku/nunchiro/pull/12 again, https://gitlab.com/o/r/pull/1";
+        assert_eq!(
+            pr_links(out),
+            vec![
+                "https://github.com/develku/nunchiro/pull/12".to_string(),
+                "https://github.com/other/thing/pull/7".to_string(),
+            ]
+        );
+        let many: String = (1..=50)
+            .map(|n| format!("https://github.com/o/r/pull/{n} "))
+            .collect();
+        assert_eq!(pr_links(many.as_bytes()).len(), LINKS_MAX);
+    }
+
+    #[test]
+    fn link_checks_are_rate_limited_per_session() {
+        assert!(link_due("rate-a"));
+        assert!(!link_due("rate-a"), "a second look within 30 s");
+        assert!(link_due("rate-b"));
+    }
+}

@@ -1664,6 +1664,29 @@ fn pr_link_from_terminal_output_needs_the_branch_check() {
         "{:?}",
         gh_runs(&core)
     );
+    assert_eq!(
+        chip(&on.id)["linked"],
+        "Shell",
+        "the chip says it was linked from the output"
+    );
+    // The agent opens a new PR on another branch: the branch's own PR changes, the chip follows it.
+    pr_git(&dir, &["checkout", "-q", "-b", "fix-parser"]);
+    pr_git(&dir, &["commit", "-q", "--allow-empty", "-m", "parser"]);
+    pr_git(&dir, &["push", "-q", "-u", "origin", "fix-parser"]);
+    let pr13 = json!({"number":13,"url":A13,"state":"OPEN","isDraft":false,"reviewDecision":"","headRefName":"fix-parser",
+        "headOwner":"develku","headRepo":"nunchiro","checks":[]});
+    fs::write(core.home.join("gh-branch"), pr13.to_string()).unwrap();
+    core.window(json!({"op":"send_text","id":on.id,"text":format!("Opened {A13}\n")}));
+    let until = Instant::now() + Duration::from_secs(45);
+    while chip(&on.id)["url"] != A13 {
+        assert!(
+            Instant::now() < until,
+            "the chip never moved to the new PR: {}",
+            chip(&on.id)
+        );
+        thread::sleep(Duration::from_millis(500));
+    }
+
     // A link to another PR than the branch's: never linked.
     let other = printed(A13);
     assert!(
