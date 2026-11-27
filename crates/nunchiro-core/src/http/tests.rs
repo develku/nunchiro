@@ -535,7 +535,7 @@ fn a_window_takes_the_registry_only_for_output_it_watches_and_once_per_batch() {
 }
 
 // An open window on an idle core sleeps until there is work: its loop and the browser supervisor each wake at most a
-// few times a second. (Wakes are process-wide: run it in its own process, as nextest does, not beside output tests.)
+// few times a second. (Output wakes are process-wide; nextest runs it in its own process, where every round is quiet.)
 #[test]
 fn an_idle_window_and_browser_supervisor_wake_rarely() {
     let (mut ws, stopping, home) = window("idle-wakes");
@@ -552,20 +552,31 @@ fn an_idle_window_and_browser_supervisor_wake_rarely() {
     let browser = super::browser::of(&home);
     let passes = || counts.passes.load(Ordering::SeqCst);
     let supervised = || browser.wakes.load(Ordering::SeqCst);
-    let (p, b, at) = (passes(), supervised(), Instant::now());
-    thread::sleep(Duration::from_secs(4));
-    let secs = at.elapsed().as_secs_f64();
-    let (window_rate, browser_rate) = (
-        (passes() - p) as f64 / secs,
-        (supervised() - b) as f64 / secs,
-    );
+    // Output of other tests in this process (plain `cargo test`) wakes every window: such a round is measured again.
+    let mut rounds = 0;
+    let (window_rate, browser_rate, quiet) = loop {
+        rounds += 1;
+        let seq = crate::pty::output_seq();
+        thread::sleep(Duration::from_millis(2500)); // past the loop's active period after any earlier output
+        let (p, b, at) = (passes(), supervised(), Instant::now());
+        thread::sleep(Duration::from_secs(4));
+        let secs = at.elapsed().as_secs_f64();
+        let quiet = crate::pty::output_seq() == seq;
+        if quiet || rounds == 4 {
+            break (
+                (passes() - p) as f64 / secs,
+                (supervised() - b) as f64 / secs,
+                quiet,
+            );
+        }
+    };
     stopping.store(true, Ordering::SeqCst);
     let _ = std::fs::remove_dir_all(&home);
     eprintln!(
-        "idle wakes per second: window loop {window_rate:.1}, browser supervisor {browser_rate:.1}"
+        "idle wakes per second: window loop {window_rate:.1}, browser supervisor {browser_rate:.1} (quiet: {quiet})"
     );
     assert!(
-        window_rate <= 3.0,
+        !quiet || window_rate <= 3.0,
         "the idle window loop woke {window_rate:.1} times a second"
     );
     assert!(

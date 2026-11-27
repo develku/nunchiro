@@ -78,6 +78,8 @@ const LINE_MAX: usize = 8 * 1024 * 1024;
 // ConnectTimeout plus the remote login shell.
 const HELLO_WAIT: Duration = Duration::from_secs(10);
 const BACKOFF_SECS: [u64; 6] = [1, 2, 4, 8, 16, 30];
+/// An idle channel's longest wait between stop, retry and hello checks; relay output ends it at once.
+const IDLE_WAIT: Duration = Duration::from_millis(250);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -354,7 +356,7 @@ fn run(registry: &Mutex<Sessions>, home: &Path, alias: &str, slot: usize, stoppi
             if stopping.stopped() {
                 return;
             }
-            thread::sleep(Duration::from_millis(20));
+            thread::sleep(IDLE_WAIT.min(until.saturating_duration_since(Instant::now())));
         }
     }
 }
@@ -539,14 +541,15 @@ fn stream(
         }
         if !progress {
             // Wait on readiness, not on time: a sleep here capped the stream at one pipe buffer per tick (V2.5-41).
-            // The 20 ms timeout keeps the stop and hello checks above responsive.
+            // The timeout only bounds how late the stop and hello checks above run (it was 20 ms: 50 wakes a second
+            // for an idle machine).
             let err_fd = if err_open { err.as_raw_fd() } else { -1 };
             let mut fds = [out.as_raw_fd(), err_fd].map(|fd| libc::pollfd {
                 fd,
                 events: libc::POLLIN,
                 revents: 0,
             });
-            unsafe { libc::poll(fds.as_mut_ptr(), 2, 20) };
+            unsafe { libc::poll(fds.as_mut_ptr(), 2, IDLE_WAIT.as_millis() as i32) };
         }
     }
 }

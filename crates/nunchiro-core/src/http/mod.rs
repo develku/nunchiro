@@ -126,9 +126,21 @@ pub(crate) fn output_counts(home: &Path) -> Arc<OutputCounts> {
 /// v1a-27: after a wake the loop ignores further wakes this long, so a flooding session costs each window at most
 /// one output pass per interval; output that arrives meanwhile goes out in one frame.
 const BATCH: Duration = Duration::from_millis(2);
-/// The accept loop's longest wait; a connection ends it at once.
-const ACCEPT_WAIT: Duration = Duration::from_millis(250);
+/// The accept loop's longest wait; a connection ends it at once. It only bounds how late `stopping` is seen.
+const ACCEPT_WAIT: Duration = Duration::from_secs(1);
 const SNAPSHOT_EVERY: Duration = Duration::from_millis(100);
+/// A window loop's timed checks (snapshot, resync, chat, layout) run every `SNAPSHOT_EVERY` until `WINDOW_ACTIVE`
+/// after the last agent output or holder end (`pty::output_seq`), then every `IDLE_EVERY`, so an open window on an
+/// idle core wakes about twice a second instead of 10-14 times. Output itself still goes out on its wake at once.
+const IDLE_EVERY: Duration = Duration::from_millis(500);
+const WINDOW_ACTIVE: Duration = Duration::from_secs(2);
+fn cadence(active_until: Instant) -> Duration {
+    if Instant::now() < active_until {
+        SNAPSHOT_EVERY
+    } else {
+        IDLE_EVERY
+    }
+}
 /// How often each window's loop looks at layout.toml for hand edits and other windows' saves.
 const LAYOUT_EVERY: Duration = Duration::from_millis(250);
 /// v1a-53: output bytes a window may have sent and not acked as parsed, per watched session, whatever the rest of the
@@ -689,6 +701,8 @@ fn serve(
     let mut chat_watches: BTreeMap<String, (u64, u64, u64)> = BTreeMap::new();
     let mut last_snapshot = String::new();
     let mut snapshot_at = Instant::now() - SNAPSHOT_EVERY;
+    let mut active_until = Instant::now() + WINDOW_ACTIVE;
+    let mut output_seen = crate::pty::output_seq();
     // Ticket 592: the newest core event this window has heard of; room events after it are pushed.
     let mut room_since = crate::events::read(None, |_| false).1;
     // v1a-47: Browse online replies, sent by the loop when a fetch finishes.
@@ -704,10 +718,31 @@ fn serve(
     let mut search_cancel = SearchCancel(vec![]);
     while !stopping.load(Ordering::SeqCst) {
         // S9: an idle read lasts until the next timed check below, not a fixed 8 ms tick.
-        let layout_due = window.is_some().then(|| layout_at + LAYOUT_EVERY);
-        ws.get_mut().due = (snapshot_at.min(synced_at) + SNAPSHOT_EVERY)
-            .min(layout_due.unwrap_or(snapshot_at + SNAPSHOT_EVERY));
-        match ws.read() {
+        let every = cadence(active_until);
+        let layout_due = window
+            .is_some()
+            .then(|| layout_at + LAYOUT_EVERY.max(every));
+        ws.get_mut().due =
+            (snapshot_at.min(synced_at) + every).min(layout_due.unwrap_or(snapshot_at + every));
+        let read = ws.read();
+        let idle_read = matches!(&read, Err(tungstenite::Error::Io(e))
+            if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut));
+        let seq = crate::pty::output_seq();
+        if seq != output_seen {
+            output_seen = seq;
+            active_until = Instant::now() + WINDOW_ACTIVE;
+        } else if !idle_read {
+            // A frame (the window's own once-a-second heartbeat among them) gets one prompt timed pass, so what it
+            // changed shows at once, without keeping the loop at the fast cadence.
+            active_until = active_until.max(Instant::now() + SNAPSHOT_EVERY);
+        }
+        let every = cadence(active_until);
+        if every == IDLE_EVERY && Instant::now() >= ws.get_ref().due {
+            // Idle: every timed check runs in this one pass, so their clocks never drift apart into separate wakes.
+            let first = snapshot_at.min(synced_at).min(layout_at);
+            (snapshot_at, synced_at, layout_at) = (first, first, first);
+        }
+        match read {
             Ok(Message::Text(text)) => {
                 // V2.5-15: the browser role's allowlist, before any dispatch below.
                 if let Some(role) = role
@@ -1345,10 +1380,10 @@ fn serve(
             turn = (turn + 1) % cursors.len();
             cursors.rotate_left(turn);
         }
-        // A registry pass per watch at least every SNAPSHOT_EVERY still reports ended or replaced sessions.
+        // A registry pass per watch at least every `every` still reports ended or replaced sessions.
         #[cfg(test)]
         output_counts.passes.fetch_add(1, Ordering::SeqCst);
-        let resync = synced_at.elapsed() >= SNAPSHOT_EVERY;
+        let resync = synced_at.elapsed() >= every;
         if resync {
             synced_at = Instant::now();
             tails.retain(|id, _| watches.contains_key(id));
@@ -1437,7 +1472,7 @@ fn serve(
                 }
             }
         }
-        if window.is_some() && layout_at.elapsed() >= LAYOUT_EVERY {
+        if window.is_some() && layout_at.elapsed() >= LAYOUT_EVERY.max(every) {
             layout_at = Instant::now();
             let now = layout::stamp(home);
             if now != layout_stamp {
@@ -1457,7 +1492,7 @@ fn serve(
             }
         }
         // v1b-02: chat polling shares the snapshot cadence, not the 8 ms terminal cadence.
-        if snapshot_at.elapsed() >= SNAPSHOT_EVERY {
+        if snapshot_at.elapsed() >= every {
             for (session, (after, skipped, generation)) in chat_watches.clone() {
                 let reply = read_chat(registry, &session, None, Some(after), Some(generation));
                 match reply {
@@ -1486,7 +1521,7 @@ fn serve(
         // Ticket 592: the Mac window hears that a room changed (the core event stream's `room_*` events), so its Room
         // panel reads at once instead of polling. No project or body: the panel's incremental `room_read` stays the one
         // read path, and a window's project path need not match the room's canonical one.
-        if role.is_none() && !feed && snapshot_at.elapsed() >= SNAPSHOT_EVERY {
+        if role.is_none() && !feed && snapshot_at.elapsed() >= every {
             // The schedule list the same way (`schedules_changed`): the Schedules widget reads `schedule_list` when it
             // hears `{"event":"schedules"}`.
             let schedules = |e: &crate::events::Event| e.kind == "schedules_changed";
@@ -1504,7 +1539,7 @@ fn serve(
             room_since = latest;
         }
         // V2.5-15: the Mac window hears of pairings and of what browsers did.
-        if role.is_none() && !feed && snapshot_at.elapsed() >= SNAPSHOT_EVERY {
+        if role.is_none() && !feed && snapshot_at.elapsed() >= every {
             let event = browsers.event().to_string();
             if event != last_browser {
                 ws.send(Message::Text(event.clone().into()))
@@ -1513,7 +1548,7 @@ fn serve(
             }
         }
         // The starts waiting for memory: the Mac window's status bar item, sent when the list or its notes change.
-        if role.is_none() && !feed && snapshot_at.elapsed() >= SNAPSHOT_EVERY {
+        if role.is_none() && !feed && snapshot_at.elapsed() >= every {
             let version = crate::pressure::version();
             if Some(version) != last_wait {
                 ws.send(Message::Text(crate::pressure::event().into()))
@@ -1521,10 +1556,10 @@ fn serve(
                 last_wait = Some(version);
             }
         }
-        if feed && snapshot_at.elapsed() >= SNAPSHOT_EVERY {
+        if feed && snapshot_at.elapsed() >= every {
             snapshot_at = Instant::now();
         }
-        if snapshot_at.elapsed() >= SNAPSHOT_EVERY {
+        if snapshot_at.elapsed() >= every {
             snapshot_at = Instant::now();
             #[cfg(test)]
             crate::machines::refresh_tests::record(home, true);

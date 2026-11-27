@@ -73,7 +73,16 @@ impl Drop for Wake {
             .retain(|(id, _)| *id != self.id);
     }
 }
+/// Counts output and holder ends (not `wake_windows`), so a window loop can tell agent activity from its own polls.
+static OUTPUT_SEQ: AtomicU64 = AtomicU64::new(0);
+pub(crate) fn output_seq() -> u64 {
+    OUTPUT_SEQ.load(Ordering::SeqCst)
+}
 fn notify_output() {
+    OUTPUT_SEQ.fetch_add(1, Ordering::SeqCst);
+    ring();
+}
+fn ring() {
     for (_, tx) in WAKERS.lock().unwrap_or_else(|e| e.into_inner()).iter() {
         let _ = (&*tx).write(&[1]);
     }
@@ -81,7 +90,7 @@ fn notify_output() {
 /// S9: wakes every window loop for something other than output (a layout command, a finished job's reply), so its
 /// idle wait can last until its next timed check.
 pub(crate) fn wake_windows() {
-    notify_output();
+    ring();
 }
 
 #[cfg(test)]
