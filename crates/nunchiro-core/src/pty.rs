@@ -101,6 +101,11 @@ impl Tail {
     pub fn end(&self) -> u64 {
         self.0.lock().unwrap_or_else(|e| e.into_inner()).end
     }
+    /// The bytes after `after`, from the same ring `Pty::read` reads, without the session registry.
+    pub(crate) fn read(&self, after: u64) -> Result<crate::api::Reply, String> {
+        let r = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        r.read_at_most(after, usize::MAX)
+    }
 }
 
 #[derive(Default)]

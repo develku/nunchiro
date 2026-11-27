@@ -1364,23 +1364,32 @@ fn serve(
             if !replay && !resync && (held || pending == Some(0)) {
                 continue;
             }
-            #[cfg(test)]
-            output_counts.locks.fetch_add(1, Ordering::SeqCst);
-            let (read, tail) = {
-                let registry = registry
-                    .lock()
-                    .map_err(|_| "session registry unavailable")?;
-                // v1a-53: a held session is read at its end: nothing copied, only whether it is still there.
-                let at = if held {
-                    cursor + pending.unwrap_or(0)
-                } else {
-                    cursor
-                };
-                (registry.output(&id, at), registry.tail(&id))
-            };
-            match tail {
-                Some(tail) => tails.insert(id.clone(), tail),
-                None => tails.remove(&id),
+            // Between resyncs new output is read from the ring the tail shares with the session's PTY (what
+            // `output` reads), so an echo never waits for a registry lock the tick or a request holds. A session
+            // that ended or was replaced meanwhile shows no new bytes in its old ring; the resync finds it.
+            let read = match tails.get(&id) {
+                Some(tail) if !replay && !resync => tail.read(cursor),
+                _ => {
+                    #[cfg(test)]
+                    output_counts.locks.fetch_add(1, Ordering::SeqCst);
+                    let (read, tail) = {
+                        let registry = registry
+                            .lock()
+                            .map_err(|_| "session registry unavailable")?;
+                        // v1a-53: a held session is read at its end: nothing copied, only whether it is still there.
+                        let at = if held {
+                            cursor + pending.unwrap_or(0)
+                        } else {
+                            cursor
+                        };
+                        (registry.output(&id, at), registry.tail(&id))
+                    };
+                    match tail {
+                        Some(tail) => tails.insert(id.clone(), tail),
+                        None => tails.remove(&id),
+                    };
+                    read
+                }
             };
             if held && read.is_ok() {
                 continue;
