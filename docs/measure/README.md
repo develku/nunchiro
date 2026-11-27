@@ -67,7 +67,7 @@ alone. Never on a machine whose accounts are not the owner's own.
    the checks name and writes tests-<today>.json; a check whose tests are not green there is not counted. It needs
    `pnpm install` and a web build first (the specs, and the app crate's tests, read web/dist), and runs at the commit
    that `run` measured.
-   The owner-run steps of rubric.md (peer task drives, `scorecard.py weigh`, `scorecard.py chatopen`, the paint figures, the trials) fill
+   The owner-run steps of rubric.md (peer task drives, `scorecard.py weigh`, `scorecard.py chatopen`, `scorecard.py stream8`, the paint figures, the trials) fill
    tasks.json and manual-<today>.json; what was not done scores 0.
    `python3 -B scripts/measure/peers.py "/Applications/Orca.app" --out docs/measure/evidence/peers-<today>-orca.json`
    re-measures a peer when its version changed (it refuses when the app already runs and stops only what it started).
