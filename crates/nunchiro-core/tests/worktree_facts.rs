@@ -314,9 +314,14 @@ fn a_worktree_start_is_listed_when_it_answers() {
         .unwrap();
     let cwd = started["session"]["cwd"].as_str().unwrap().to_string();
     assert_ne!(PathBuf::from(&cwd), core.repo, "{started}");
-    let row = core.row(&json!(cwd)).expect("the start's worktree is listed at once");
+    let row = core
+        .row(&json!(cwd))
+        .expect("the start's worktree is listed at once");
     assert_eq!(row["missing"], false);
-    assert!(row["branch"].as_str().unwrap().starts_with("nunchiro/"), "{row}");
+    assert!(
+        row["branch"].as_str().unwrap().starts_with("nunchiro/"),
+        "{row}"
+    );
 }
 
 #[test]
@@ -1128,9 +1133,11 @@ fn adopt_session_worktree_then_rename_and_remove_ask() {
         panic!()
     };
     let path = json!(session.cwd);
+    // The start records its worktree before it answers (a_worktree_start_is_listed_when_it_answers); the window's adopt
+    // of the same folder is then a no-op.
     assert!(
-        core.row(&path).is_none(),
-        "a session's worktree has no record yet"
+        core.row(&path).is_some(),
+        "a session's worktree is recorded by its start"
     );
     let git_before = git(&core.repo, &["worktree", "list", "--porcelain"]);
     let r = core.wt("adopt", json!({"path":path})).unwrap();

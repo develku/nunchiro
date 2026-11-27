@@ -790,6 +790,27 @@ fn start_seat(
             .map_err(|_| "session registry unavailable")?
             .start_failed_at(session, folder.as_deref(), e.clone());
     }
+    // A `--worktree` start's folder is recorded before the start answers, as a create's is: only an open window adopted
+    // it before, later, and a project Remove read in between took its agent for a plain session (stopped, its history
+    // deleted). The record only (git is read, never written); a refusal leaves the window's adopt to try again.
+    if let Ok(started) = &result
+        && session.worktree
+        && started.cwd != started.project
+    {
+        let adopt = Request::Worktree {
+            operation: "adopt".into(),
+            project: Some(started.project.clone()),
+            path: Some(started.cwd.clone()),
+            branch: None,
+            base: String::new(),
+            label: String::new(),
+            from: None,
+            confirm: None,
+        };
+        if let Err(e) = worktree(registry, None, adopt, Some(stopping)) {
+            eprintln!("session {}: its worktree was not recorded: {e}", started.id);
+        }
+    }
     result.map(|session| Reply::Started { session })
 }
 
