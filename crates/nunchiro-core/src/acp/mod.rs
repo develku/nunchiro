@@ -530,6 +530,9 @@ pub(crate) struct Acp {
     feed: Feed,
     /// V2-CF4: the children the agent announced, folded from the `subagent_update`s; never part of the chat.
     kids: crate::chat::kids::Kids,
+    /// Open tool calls by id: whether the kind is `edit`, and the file and line count of a whole-file write its
+    /// rawInput gave (OpenCode's write tool sends no diff item, only `{path, content}` before it completes).
+    tools: BTreeMap<String, (bool, Option<(String, usize)>)>,
     /// Consecutive chunks of one kind, shown as one chat message once another kind or the turn's end arrives.
     chunk: Option<(&'static str, String, bool)>,
     prompting: bool,
@@ -594,6 +597,7 @@ impl Acp {
             asks: BTreeMap::new(),
             feed: Default::default(),
             kids: Default::default(),
+            tools: BTreeMap::new(),
             chunk: None,
             prompting: false,
             exited: None,
@@ -843,6 +847,12 @@ impl Acp {
             return;
         }
         self.flush();
+        if matches!(
+            u["sessionUpdate"].as_str(),
+            Some("tool_call" | "tool_call_update")
+        ) {
+            self.note_tool(u);
+        }
         match u["sessionUpdate"].as_str().unwrap_or_default() {
             // V2-CF4: the association names the child in the body's own `sessionId`; it is kept for the tree, not as a
             // chat row (the child's transcript still arrives on its own sessionId and stays out of this feed).
@@ -850,10 +860,18 @@ impl Acp {
             "tool_call" => self.push_cut(u, json!({"kind":"tool_use","tool_id":u["toolCallId"],
                 "name":u["title"].as_str().or(u["kind"].as_str()).unwrap_or("tool"),"input":u["rawInput"]})),
             "tool_call_update" if matches!(u["status"].as_str(), Some("completed" | "failed")) => {
+                let tool = self.tools.remove(u["toolCallId"].as_str().unwrap_or_default());
+                let mut diffs = 0;
                 for c in u["content"].as_array().into_iter().flatten().filter(|c| c["type"] == "diff") {
                     let lines = |v: &Value| v.as_str().map(|s| s.lines().count());
                     self.push(json!({"kind":"edit","tool_id":u["toolCallId"],"path":c["path"],
                         "added":lines(&c["newText"]).unwrap_or(0),"removed":lines(&c["oldText"]),"hunks":[]}));
+                    diffs += 1;
+                }
+                // A completed edit with no diff item: the whole-file write its rawInput named, as a new file.
+                if let (0, "completed", Some((true, Some((path, added))))) = (diffs, u["status"].as_str().unwrap_or_default(), tool) {
+                    self.push(json!({"kind":"edit","tool_id":u["toolCallId"],"path":path,
+                        "added":added,"removed":null,"hunks":[]}));
                 }
                 self.push_cut(u, json!({"kind":"tool_result","tool_id":u["toolCallId"],
                     "output":if u["rawOutput"].is_null() { u["content"].clone() } else { u["rawOutput"].clone() },
@@ -864,6 +882,28 @@ impl Acp {
                 self.config(meta, &u["configOptions"]);
             }
             _ => {}
+        }
+    }
+
+    /// What a tool call's updates told so far: its kind (the last one given) and, for a `{path, content}` rawInput, the
+    /// file (its first location, absolute, else the rawInput path) and the content's line count. A cut update's
+    /// rawInput is not read.
+    fn note_tool(&mut self, u: &Value) {
+        let Some(id) = u["toolCallId"].as_str() else {
+            return;
+        };
+        let tool = self.tools.entry(id.into()).or_default();
+        if let Some(kind) = u["kind"].as_str() {
+            tool.0 = kind == "edit";
+        }
+        let input = &u["rawInput"];
+        if let (Some(path), Some(content), false) = (
+            input["path"].as_str(),
+            input["content"].as_str(),
+            u["truncated"] == true,
+        ) {
+            let path = u["locations"][0]["path"].as_str().unwrap_or(path);
+            tool.1 = Some((path.into(), content.lines().count()));
         }
     }
 
