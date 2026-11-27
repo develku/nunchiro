@@ -374,12 +374,17 @@ pub(crate) fn serve(
             let mut tasks = ledger.list()?;
             // A task whose approved commit is in the project is closed here, not when its lead gets to say done
             // (real-app look 11-17: a merged task read "merge" for minutes while the lead worked on the next one).
+            let mut merged = false;
             for t in tasks.iter_mut().filter(|t| mine(t)) {
                 if in_project(t) {
                     *t = ledger.close(&t.id, "merged", now)?;
                     lock()?.retire_merge_card(&t.id)?;
                     crate::events::tasks(&t.place);
+                    merged = true;
                 }
+            }
+            if merged {
+                crate::advance::release(registry, &home);
             }
             let tasks = tasks
                 .into_iter()
@@ -557,7 +562,36 @@ pub(crate) fn serve(
         "after" => {
             decides("change the order of")?;
             let task = named(&ask.id)?;
-            vec![ledger.set_after(&task.id, &ask.after, &orderer, now)?]
+            let was = blockers(&task, &ledger.list()?);
+            let set = ledger.set_after(&task.id, &ask.after, &orderer, now)?;
+            // The user's Start anyway or Stop waiting: the lead hears which wait the user ended.
+            let ended: Vec<String> = was
+                .iter()
+                .filter(|b| !set.after.contains(&b.id))
+                .map(|b| {
+                    format!(
+                        "The owner let \"{}\" start without waiting for \"{}\".",
+                        set.title, b.title
+                    )
+                })
+                .collect();
+            if let (None, Some(lead), false) = (&who.session, &who.lead, ended.is_empty()) {
+                lock()?.team_note(
+                    &set.place,
+                    lead,
+                    None,
+                    ended.join(" "),
+                    crate::room::TeamNote {
+                        what: "after".into(),
+                        worktree: None,
+                        name: None,
+                        branch: None,
+                        merged: None,
+                        seat: None,
+                    },
+                );
+            }
+            vec![set]
         }
         "attach" => {
             decides("staff")?;
@@ -578,6 +612,13 @@ pub(crate) fn serve(
             let task = named(&ask.id)?;
             let session = ask.session.as_deref().ok_or("requires a session id")?;
             let (label, cwd) = lock()?.seat_place(session, &task.place)?;
+            // A writer started by hand and assigned waits with its task as a staffed one does.
+            if crate::roles::of(&home, &label).1 {
+                let waits = blockers(&task, &ledger.list()?);
+                if !waits.is_empty() {
+                    return Err(not_started(&task, &waits));
+                }
+            }
             // A seat inside one of the task's worktrees is under the one-writer rule like a start there.
             let worktree = task.worktrees.iter().find(|w| **w == cwd).cloned();
             if let Some(w) = &worktree
@@ -760,6 +801,8 @@ pub(crate) fn serve(
                 now,
             )?;
             lock()?.retire_merge_card(&closed.id)?;
+            // Its waiters' lead hears it now, not at the next pass.
+            crate::advance::release(registry, &home);
             vec![closed]
         }
         _ => return Err("unknown task operation".into()),
