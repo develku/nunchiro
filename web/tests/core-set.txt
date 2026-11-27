@@ -69,3 +69,5 @@ i18n-key-sets.spec.ts
 
 # onboarding adds the picked folder without starting; Skills & hooks opens at its top
 onboarding-folder-skills-top.spec.ts
+# a shell beside the agent: the Terminal icon opens one in the agent's folder, New terminal too
+shell-beside-agent.spec.ts
