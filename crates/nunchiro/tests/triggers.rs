@@ -965,3 +965,27 @@ fn a_failing_gh_shows_as_the_triggers_last_fire() {
         reason().contains("not logged in")
     });
 }
+
+#[test]
+fn a_start_that_fails_is_not_tried_again_until_a_new_head_commit() {
+    let (c, gh) = github_core("tgs");
+    add_github(&c, "ci", "o/r", "checks_failed", &["--auto"]);
+    std::thread::sleep(Duration::from_secs(3));
+    // The project folder is gone: every start fails for good.
+    std::fs::remove_dir_all(&c.project).unwrap();
+    std::fs::write(gh.join("answer"), pulls(1, 3, 1, &[1, 2])).unwrap();
+    let last = || {
+        let list: Value =
+            serde_json::from_str(&ok(&c.home, &["trigger", "list", "--json"])).unwrap();
+        let list = list.get("triggers").unwrap_or(&list);
+        list[0]["last"].clone()
+    };
+    wait_for("the failed start", || {
+        last()["reason"]
+            .as_str()
+            .is_some_and(|r| r.contains("new head commit"))
+    });
+    let at = last()["at"].clone();
+    std::thread::sleep(Duration::from_secs(4));
+    assert_eq!(last()["at"], at, "tried again: {}", last());
+}
