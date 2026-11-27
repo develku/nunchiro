@@ -1340,11 +1340,7 @@ mod tests {
             );
             let checked = s.checked.as_deref().unwrap_or_default();
             assert!(
-                checked.len() == 10
-                    && checked
-                        .split('-')
-                        .map(|p| p.parse::<u32>().is_ok())
-                        .all(|ok| ok),
+                checked.len() == 10 && checked.split('-').all(|p| p.parse::<u32>().is_ok()),
                 "{}: checked {checked}",
                 k.name
             );
