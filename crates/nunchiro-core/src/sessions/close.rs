@@ -196,6 +196,7 @@ impl Sessions {
             cap_log(&mut entry.meta.send_log);
         }
         // The saved activity times lag up to `ACTIVITY_CHECKPOINT_MS`; the next core reads them for idle rules and seat order.
+        // Serve update, restart and rollback reach this through `ExitIfIdle` (tests/activity_exit.rs).
         if let Err(e) = self.queue.flush_activity() {
             eprintln!("queue activity at exit: {e}");
         }
