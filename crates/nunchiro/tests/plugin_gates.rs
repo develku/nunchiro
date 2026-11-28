@@ -167,11 +167,10 @@ fn an_off_unapproved_or_changed_plugin_decides_nothing() {
     assert!(!c.home.join("plugins/guard/cache").exists());
     ok(&c.home, &["plugin", "allow", "guard"]);
     assert!(stderr(&start(&c.home, None, false)).contains("stopped this start"));
-    std::fs::write(
-        c.home.join("plugins/guard/gate.sh"),
-        format!("#!/bin/sh\n{REFUSE}\n# changed\n"),
-    )
-    .unwrap();
+    // A change that adds access (a host its check reaches): it decides nothing until approved again.
+    let toml = c.home.join("plugins/guard/plugin.toml");
+    let text = std::fs::read_to_string(&toml).unwrap();
+    std::fs::write(&toml, format!("{text}network = [\"example.com\"]\n")).unwrap();
     assert!(!stderr(&start(&c.home, None, false)).contains("stopped this start"));
     ok(&c.home, &["plugin", "allow", "guard"]);
     ok(&c.home, &["plugin", "off", "guard"]);

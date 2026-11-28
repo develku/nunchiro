@@ -56,7 +56,16 @@ fn approval_covers_every_part_and_a_change_stops_them() {
         ["/bin/sh", "command.sh"]
     );
     assert!(approval::grant(&h, "plugin:x", approval::Level::Act, &view.hash).is_err());
+    // Its script alone changes: it asks for nothing new, so it stays approved.
     fs::write(dir.join("command.sh"), "#!/bin/sh\necho changed\n").unwrap();
+    assert_eq!(
+        approval::status(&h, "plugin:x").unwrap().state,
+        approval::State::Approved
+    );
+    // A new part is new access: every part stops until it is approved again.
+    let toml = dir.join("plugin.toml");
+    let text = fs::read_to_string(&toml).unwrap();
+    fs::write(&toml, format!("{text}\n[[command]]\nname = \"more\"\ncommand = [\"/bin/sh\", \"x.sh\"]\nshow = \"note\"\n")).unwrap();
     assert_eq!(
         approval::status(&h, "plugin:x").unwrap().state,
         approval::State::Changed
