@@ -17,6 +17,8 @@ counts only when the test ran green in the same run, and anchors come from measu
   evidence, the capability rows and counts, and the test commands a check rests on.
 - results-<date>.json: the figures of one measure run (median, range and every value).
 - tests-<date>.json: which of those test commands ran green in the run (`scorecard.py tests`).
+- [p35-runner.md](p35-runner.md): the runner's steps for p35's bot task set; its checked runs go to
+  bottasks-<date>.jsonl (`scorecard.py bottasks`).
 - soak-<date>.jsonl: the samples of a 24 h soak (`scripts/measure/soak.py`), one line per heartbeat round.
 - manual-<date>.json: figures no script measures yet, each with how it was measured (rubric.md, "Owner-run steps").
 - evidence/peers-<date>-<app>.json: launch, idle memory and idle CPU of an installed peer (`scripts/measure/peers.py`).

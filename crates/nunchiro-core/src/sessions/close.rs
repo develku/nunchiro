@@ -195,6 +195,10 @@ impl Sessions {
             cancel_queue(&mut entry.meta);
             cap_log(&mut entry.meta.send_log);
         }
+        // The saved activity times lag up to `ACTIVITY_CHECKPOINT_MS`; the next core reads them for idle rules and seat order.
+        if let Err(e) = self.queue.flush_activity() {
+            eprintln!("queue activity at exit: {e}");
+        }
         self.save()?;
         self.left = true;
         for entry in self.entries.values_mut() {
@@ -214,6 +218,9 @@ impl Sessions {
         crate::projects::clone::stop_all(); // ticket 370: ends its group, removes its folder
         self.finish_close(u64::MAX); // V2-6d: a full quit ends the window; nothing waits for a next start
         self.note_asks_ending_at_stop(); // look 11-17 v5 item 3: before the stop closes the items
+        if let Err(e) = self.queue.flush_activity() {
+            eprintln!("queue activity at stop: {e}"); // as at `leave`
+        }
         // v1b-15. S9: the last read before the stop always runs, never held back by the idle board clock.
         self.board_observed = None;
         self.observe_board();
