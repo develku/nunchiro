@@ -200,7 +200,8 @@ async function readRemoval(core: ProjectTree['core'], project: string): Promise<
   // `state`, not agentState: an agent that quit left the user's shell running, and Close would end it.
   // A listed worktree counts even when its folder is gone: withListed brings the head back for it all the same.
   const worktrees = (listed.worktrees ?? []).filter((w) => w.project === project);
-  const elsewhere = sessions.filter((s) => s.cwd !== project && !worktrees.some((w) => s.cwd === w.path || s.cwd.startsWith(`${w.path}/`)));
+  // Every row, a stopped one too: its row (and its history) stays until it is closed, so a Stop does not lift the block.
+  const elsewhere = rows.filter((s) => !isAccountTab(s) && !s.machine && s.cwd !== project && !worktrees.some((w) => s.cwd === w.path || s.cwd.startsWith(`${w.path}/`)));
   return { sessions, running: sessions.filter((s) => s.state === 'running'), worktrees, merging, elsewhere };
 }
 const COUNTS: [Session['state'], Key][] = [['resumable', 'tree.project.count.resumable'], ['exited', 'tree.project.count.exited'], ['failed', 'tree.project.count.failed']];
@@ -245,6 +246,26 @@ function RemoveDialog({ t, pt, wt, project, onClose }: { t: T; pt: ProjectTree; 
       setBusy(false);
     }
   };
+  // An ended row in a folder of its own: the sheet closes it on a press (a closed row's close drops it), then reads again.
+  const closeElsewhere = async () => {
+    if (!live) return;
+    setBusy(true);
+    setErr(null);
+    let closed = 0;
+    const ended = live.elsewhere.filter((s) => s.state !== 'running');
+    try {
+      for (const s of ended) {
+        await core.request({ op: 'close', id: s.id });
+        if (s.state !== 'closed' && (await rowsOf(core, project)).some((r) => r.id === s.id)) await core.request({ op: 'close', id: s.id });
+        closed++;
+      }
+      setLive(await readRemoval(core, project));
+    } catch (e) {
+      setErr({ text: t('tree.project.removeFailed', { closed, total: ended.length, error: plainError(t, e) }), details: rawError(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
   // Look 1117 v10 (A): running sessions alone no longer block; the confirm lists them and its action stops them (Close stops a running session).
   if (!live || live.worktrees.length || live.elsewhere.length)
     return (
@@ -283,6 +304,11 @@ function RemoveDialog({ t, pt, wt, project, onClose }: { t: T; pt: ProjectTree; 
               </div>
             ))}
             <p className="rmmuted">{t('tree.project.blockedElsewhereFix')}</p>
+            {live.elsewhere.some((s) => s.state !== 'running') && (
+              <button className="btn" disabled={busy} data-close-elsewhere onClick={() => void closeElsewhere()}>
+                {t('tree.project.closeElsewhere')}
+              </button>
+            )}
           </section>
         )}
         {err && (
