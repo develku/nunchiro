@@ -19,6 +19,8 @@ const KEEP = new Set(
     'WireGuard', 'Ghostty', 'iTerm', 'iTerm2', 'Zed', 'Finder', 'macOS', 'Mac', 'cdnjs', 'jsdelivr', 'localhost', 'Anthropic', 'OpenAI', 'Homebrew',
     'GitCafe', 'Google', // a Git host and a search engine named on the Git and in-app browser pages
     'Gmail', // the mail connector's product name (Settings > Assistants)
+    // agent products in Settings > Providers' add tiles, named as their makers name them
+    'Copilot', 'Kiro', 'Kilo', 'Mistral', 'Vibe', 'Cline', 'Hermes', 'Qwen', 'Factory', 'Droid', 'Auggie',
     // Nunchiro's own bundled skill names (the Skills and hooks page lists them as they are named on disk)
     'artifacts', 'orchestration',
     // loanwords and key/format names written in Latin in CJK (Authored is from the Co-Authored-By trailer)
