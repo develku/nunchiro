@@ -455,3 +455,11 @@ button.sched-dot:hover {
   display: block;
   margin: 0 0 var(--sp-8);
 }
+/* A trigger proposal's whole task: scrolls inside the card past a few lines. */
+.trig-ptask {
+  max-height: calc(var(--fs-12) * 10);
+  margin: 0 0 var(--sp-4);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

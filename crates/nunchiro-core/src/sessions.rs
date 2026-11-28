@@ -1201,13 +1201,13 @@ impl Sessions {
             Request::ScheduleRunNow { .. } => Err("run now runs off the registry lock".into()),
             // A proposal is a lead's ask for the owner's card; the owner needs none.
             Request::SchedulePropose { .. } | Request::ScheduleChange { .. } => {
-                Err(schedules::SCHEDULE_FROM_A_LEAD.into())
+                schedules::schedule_from_a_lead()
             }
             // An offer is a bot's ask for the owner's card; the owner needs none.
             Request::BotOffer { .. } => {
                 Err("a bot is offered from a bot's session; the user makes one in the Bots view".into())
             }
-            Request::TriggerPropose { .. } => Err(schedules::TRIGGER_FROM_A_LEAD.into()),
+            Request::TriggerPropose { .. } => schedules::trigger_from_a_lead(),
             // Ticket 1002 lane 2: the user writes their own mail; a card is the Home lead's ask, spent by its seat.
             Request::OutboxStage { .. } | Request::OutboxSpend { .. } => {
                 Err("an Outbox card is staged and sent from the Home lead's session".into())

@@ -1,9 +1,25 @@
 //! Schedules as sessions see them: who may read or propose one, their cards and failed runs.
 use super::*;
 /// A schedule proposal's or change's refusal for the owner, who adds and changes one in the window.
-pub(super) const SCHEDULE_FROM_A_LEAD: &str = "a schedule is proposed from a lead's session; the user adds and changes one in the Schedules widget";
+pub(super) fn schedule_from_a_lead() -> Response {
+    Err("a schedule is proposed from a lead's session; the user adds and changes one in the Schedules widget".into())
+}
 /// A trigger proposal's refusal for every caller but a project's lead.
-pub(super) const TRIGGER_FROM_A_LEAD: &str = "a trigger is proposed from a project lead's session; the user adds one with `nunchiro trigger add`";
+pub(super) fn trigger_from_a_lead() -> Response {
+    Err("a trigger is proposed from a project lead's session; the user adds one with `nunchiro trigger add`".into())
+}
+/// A proposed task is stored as the card shows it: hidden characters (they hide or reorder what the user reads, or
+/// carry text a model reads) are refused, not dropped.
+fn shown_as_stored(task: &str) -> Result<(), String> {
+    if task.chars().any(crate::board::rights::hidden) {
+        return Err(
+            "the task has hidden characters the card would not show; write it in plain text".into(),
+        );
+    }
+    Ok(())
+}
+/// Trigger proposals a place's lead keeps waiting at once, so they never fill the owner's cards.
+const TRIGGER_PROPOSALS: usize = 3;
 impl Sessions {
     /// Ticket 993: whose schedules a session reads. Only the live seat of a place's lead reads any: `Some(place)`
     /// for a project's lead, `None` (every place) for the Home lead. A token, a session on another machine and every
@@ -114,6 +130,7 @@ impl Sessions {
         level: Option<crate::team::Level>,
     ) -> Response {
         let (reach, place) = self.schedule_proposer(caller)?;
+        shown_as_stored(&task)?;
         let name = who.trim().to_lowercase();
         let mate = crate::team::Team::open(&self.home)
             .list()?
@@ -180,11 +197,26 @@ impl Sessions {
                 "a webhook trigger needs its secret from the user: ask them to add it".into(),
             );
         }
-        let (reach, place) = self
-            .schedule_proposer(caller)
-            .map_err(|_| TRIGGER_FROM_A_LEAD.to_string())?;
+        let Ok((reach, place)) = self.schedule_proposer(caller) else {
+            return trigger_from_a_lead();
+        };
         if reach.is_none() {
             return Err("a trigger runs in a project: propose it from that project's lead".into());
+        }
+        shown_as_stored(task)?;
+        if github.as_ref().is_some_and(|g| g.any_author) {
+            return Err("anyone's pull requests are the user's choice: they add such a trigger with `nunchiro trigger add --any-author`".into());
+        }
+        let waiting = self
+            .queue
+            .owner_items()
+            .into_iter()
+            .filter(|d| matches!(&d.owner, Some(queue::OwnerAsk::Trigger { name: n, place: p, .. }) if *p == place && n != name))
+            .count();
+        if waiting >= TRIGGER_PROPOSALS {
+            return Err(format!(
+                "at most {TRIGGER_PROPOSALS} trigger proposals wait in a project; the user answers those first"
+            ));
         }
         let new = New {
             name: name.clone(),

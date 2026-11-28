@@ -1887,7 +1887,8 @@ fn a_leads_proposal_has_no_hidden_text_no_any_author_and_at_most_three_waiting()
                 .map(|c| char::from_u32(0xE0000 + c as u32).unwrap()),
         )
         .collect();
-    assert!(err(propose("tagged", &tagged, false)).contains("hidden"));
+    let e = err(propose("tagged", &tagged, false));
+    assert!(e.contains("hidden"), "{e}");
     assert!(err(propose("rtl", "Fix \u{202E}it", false)).contains("hidden"));
     let sched = raw(
         home,
@@ -2068,12 +2069,23 @@ fn a_leads_proposal_is_the_users_card_and_a_scheduled_run_proposes_nothing() {
         Some("light"),
     );
     assert_eq!(cards()[0]["id"], card["id"]);
+    // A hidden character (here a right-to-left override) would hide what the card shows: refused, the card stays.
+    let hidden = propose(
+        &l.chief,
+        "Inbox",
+        "daily 21:00",
+        "Sort the mail\u{202E} and flag bills.",
+        None,
+    );
+    assert!(
+        hidden["Err"].as_str().is_some_and(|e| e.contains("hidden")),
+        "{hidden}"
+    );
     propose(
         &l.chief,
         "Inbox",
         "daily 21:00",
-        // A hidden character (here a right-to-left override) never reaches the card's sentence.
-        "Sort the mail\u{202E} and flag bills.",
+        "Sort the mail and flag bills.",
         None,
     );
     let all = cards();

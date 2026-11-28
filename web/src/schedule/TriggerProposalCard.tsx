@@ -9,6 +9,7 @@ import { basename } from '../tree';
 import type { OnAnswer, T } from '../tree/DecisionLine';
 import type { Decision } from '../types';
 import '../lead/lead.css';
+import './schedule.css';
 
 export function TriggerProposalCard({ d, onAnswer, t }: { d: Decision; onAnswer: OnAnswer; t: T }) {
   const ask = d.owner?.type === 'trigger' ? d.owner : null;
@@ -33,8 +34,12 @@ export function TriggerProposalCard({ d, onAnswer, t }: { d: Decision; onAnswer:
       </div>
       <div className="rc-words" data-trigger-line>
         <p>{plain(ask.line)}</p>
-        <small>{t('trigger.proposal.asks', { project: basename(ask.run.project) })}</small>
+        <small title={ask.run.project}>{t('trigger.proposal.asks', { project: basename(ask.run.project) })}</small>
       </div>
+      {/* The whole task the yes stores (the line above is cut); the core refuses a task with hidden characters. */}
+      <p className="trig-ptask" data-trigger-task tabIndex={0} aria-label={t('schedule.what')}>
+        {ask.run.task}
+      </p>
       <ErrorLine t={t} error={err} className="dc-hint err" />
       <div className="dc-btns mc-btns">
         <button type="button" className="b y" data-act="add-trigger" disabled={busy} onClick={() => void send({ type: 'allow_once' })}>
