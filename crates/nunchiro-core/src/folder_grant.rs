@@ -245,13 +245,204 @@ fn file_line(command: &str, grants: &Grants) -> bool {
         })
 }
 
+/// The programs a plain read line may run unasked inside a granted folder (the owner's list, nothing else).
+const READERS: [&str; 5] = ["ls", "cat", "grep", "head", "wc"];
+
+/// The words of one simple shell command, each with whether it holds an unquoted `*` or `?`; `None` for anything the
+/// shell would read as more than words: a pipe, `;`, `&`, a redirect, `$`, a backquote, a subshell, `~`, a brace, a
+/// line break or a comment. Single quotes keep anything; double quotes keep text with no `$`, backquote or `\`.
+fn words(line: &str) -> Option<Vec<(String, bool)>> {
+    let (mut out, mut word, mut chars) = (vec![], None::<(String, bool)>, line.chars());
+    while let Some(c) = chars.next() {
+        match c {
+            ' ' => out.extend(word.take()),
+            '\'' => {
+                let w = word.get_or_insert_default();
+                loop {
+                    match chars.next()? {
+                        '\'' => break,
+                        ch => w.0.push(ch),
+                    }
+                }
+            }
+            '"' => {
+                let w = word.get_or_insert_default();
+                loop {
+                    match chars.next()? {
+                        '"' => break,
+                        '$' | '`' | '\\' | '!' => return None,
+                        ch => w.0.push(ch),
+                    }
+                }
+            }
+            '*' | '?' => {
+                let w = word.get_or_insert_default();
+                w.0.push(c);
+                w.1 = true;
+            }
+            c if c.is_ascii_alphanumeric() || "._/-+,:@%=".contains(c) => {
+                word.get_or_insert_default().0.push(c)
+            }
+            _ => return None,
+        }
+    }
+    out.extend(word);
+    Some(out)
+}
+
+/// `*` and `?` as the shell matches one name (a leading dot is never matched: such names are refused anyway).
+fn wild(pattern: &[char], name: &[char]) -> bool {
+    match (pattern.split_first(), name.split_first()) {
+        (None, None) => true,
+        (Some(('*', rest)), _) => wild(rest, name) || !name.is_empty() && wild(pattern, &name[1..]),
+        (Some(('?', rest)), Some((_, more))) => wild(rest, more),
+        (Some((p, rest)), Some((n, more))) => p == n && wild(rest, more),
+        _ => false,
+    }
+}
+
+/// A path a read may touch: it exists, and resolved it is inside a granted folder, in no dot folder or Claude file
+/// there (any letter case), and no file with a second hard link.
+fn readable(path: &Path, grants: &Grants) -> bool {
+    if !path.is_absolute() || path.components().any(|c| c == Component::ParentDir) {
+        return false;
+    }
+    let Ok(real) = std::fs::canonicalize(path) else {
+        return false;
+    };
+    grants.granted.iter().any(|g| {
+        real.strip_prefix(g).is_ok_and(|rest| {
+            !rest.components().any(|c| {
+                c.as_os_str().to_str().is_none_or(|n| {
+                    n.starts_with('.')
+                        || n.eq_ignore_ascii_case("CLAUDE.md")
+                        || n.eq_ignore_ascii_case("CLAUDE.local.md")
+                })
+            })
+        })
+    }) && std::fs::metadata(&real).is_ok_and(|m| m.is_dir() || m.nlink() == 1)
+}
+
+/// One plain `ls`, `cat`, `grep`, `head` or `wc` whose every path (a relative one, or none, from `cwd`) is `readable`.
+/// A glob only in the last name, matched here against that folder's entries, each of which must be readable. grep may
+/// not read patterns from a file, follow links when recursive, or take `-d`/`-D`; ls may not follow links.
+fn read_line(command: &str, cwd: Option<&Path>, grants: &Grants) -> bool {
+    let Some(words) = words(command) else {
+        return false;
+    };
+    let Some(((program, _), args)) = words.split_first() else {
+        return false;
+    };
+    if !READERS.contains(&program.as_str()) {
+        return false;
+    }
+    // grep's first plain word is its pattern unless one comes with -e or --regexp (anywhere: GNU grep reorders).
+    let given = args.iter().any(|(w, _)| {
+        w.starts_with("--reg") || w.starts_with('-') && !w.starts_with("--") && w.contains('e')
+    });
+    let (mut paths, mut pattern, mut ended, mut args) =
+        (vec![], program != "grep" || given, false, args.iter());
+    while let Some(arg) = args.next() {
+        let w = arg.0.as_str();
+        if !ended && w == "--" {
+            ended = true;
+        } else if !ended && w.len() > 1 && w.starts_with('-') && !arg.1 {
+            if let Some(long) = w.strip_prefix("--") {
+                let (name, inline) = long
+                    .split_once('=')
+                    .map_or((long, false), |(n, _)| (n, true));
+                let valued = [
+                    "regexp",
+                    "max-count",
+                    "context",
+                    "after-context",
+                    "before-context",
+                    "lines",
+                    "bytes",
+                ];
+                if [
+                    "file",
+                    "exclude-from",
+                    "files0-from",
+                    "dereference-recursive",
+                    "dereference",
+                    "directories",
+                    "devices",
+                ]
+                .iter()
+                .any(|f| f.starts_with(name))
+                // getopt takes any unique start of a long name
+                {
+                    return false;
+                }
+                pattern |= name == "regexp";
+                if valued.contains(&name) && !inline && args.next().is_none() {
+                    return false;
+                }
+                continue;
+            }
+            let flags = &w[1..];
+            let value_next = match program.as_str() {
+                "grep" if flags.contains(['f', 'R', 'd', 'D']) => return false,
+                "grep" => {
+                    flags.find(['e', 'm', 'A', 'B', 'C']).map(|at| {
+                        pattern |= flags.as_bytes()[at] == b'e';
+                        at + 1 == flags.len()
+                    }) == Some(true)
+                }
+                "ls" if flags.contains('L') => return false,
+                "head" => flags == "n" || flags == "c",
+                _ => false,
+            };
+            if value_next && args.next().is_none() {
+                return false;
+            }
+        } else if !pattern {
+            pattern = true;
+        } else {
+            paths.push(arg);
+        }
+    }
+    let place = |p: &str| match Path::new(p) {
+        p if p.is_absolute() => Some(p.to_path_buf()),
+        p => cwd.filter(|c| readable(c, grants)).map(|c| c.join(p)),
+    };
+    if paths.is_empty() {
+        return cwd.is_some_and(|c| readable(c, grants));
+    }
+    paths.iter().all(|(w, glob)| {
+        if !glob {
+            return place(w).is_some_and(|p| readable(&p, grants));
+        }
+        let (dir, name) = w.rsplit_once('/').map_or((".", w.as_str()), |(d, n)| {
+            (if d.is_empty() { "/" } else { d }, n)
+        });
+        if dir.contains(['*', '?']) || name.starts_with('.') || w.contains("..") {
+            return false;
+        }
+        let Some(dir) = place(dir).filter(|d| readable(d, grants)) else {
+            return false;
+        };
+        let pattern: Vec<char> = name.chars().collect();
+        std::fs::read_dir(&dir).is_ok_and(|entries| {
+            entries.flatten().all(|e| {
+                let n: Vec<char> = e.file_name().to_string_lossy().chars().collect();
+                n.first() == Some(&'.')
+                    || !wild(&pattern, &n)
+                    || readable(&dir.join(e.file_name()), grants)
+            })
+        })
+    })
+}
+
 /// Why the hook lets a call run, or refuses it; `None` leaves the call to the lock's own rules.
 pub enum Verdict {
     Allow(&'static str),
     Deny(&'static str),
 }
 
-/// The hook's grant rules for one call: Write, Edit and the plain file line run unasked inside a granted folder; the
+/// The hook's grant rules for one call: Write, Edit, the plain file line and a plain read line (`read_line`, from the
+/// call's working folder `cwd`) run unasked inside a granted folder; the
 /// file tools are refused in a folder the owner removed (it stays one of Claude's working folders).
 pub fn decide(tool: &str, input: &Value, cwd: Option<&Path>, grants: &Grants) -> Option<Verdict> {
     let path = |key: &str| input.get(key).and_then(Value::as_str).map(Path::new);
@@ -287,7 +478,7 @@ pub fn decide(tool: &str, input: &Value, cwd: Option<&Path>, grants: &Grants) ->
             if input
                 .get("command")
                 .and_then(Value::as_str)
-                .is_some_and(|c| file_line(c, grants)) =>
+                .is_some_and(|c| file_line(c, grants) || read_line(c, cwd, grants)) =>
         {
             Some(Verdict::Allow(GIVEN))
         }
@@ -655,6 +846,10 @@ mod tests {
             format!("grep -f {o}/secret.txt {i}/inbox/a.eml"),
             format!("grep --file={o}/secret.txt {i}/inbox/a.eml"),
             format!("grep -r Subject {o}"),
+            format!("grep {o}/secret.txt -e x {i}/inbox/a.eml"),
+            format!("grep --fil={o}/secret.txt {i}/inbox/a.eml"),
+            format!("grep -R Subject {i}/inbox"),
+            format!("ls -L {i}/inbox"),
             format!("find {i}/inbox"),
             format!("sed -n 1p {i}/inbox/a.eml"),
             format!("tail -f {i}/inbox/a.eml"),
