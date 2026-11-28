@@ -117,6 +117,8 @@ test('team_home_edit_refusals_and_remove: a Home teammate works in the team fold
   await expect(body.locator(`[data-row="team:${mate.id}"] .team-where`)).toHaveText('Assistants · Claude');
   await body.getByRole('button', { name: 'Open Mail', exact: true }).click();
   await expect.poll(() => sessions(core).find((s) => s.label === 'Mail')?.project).toBe(fs.realpathSync(path.join(core.home, 'team', 'home')));
+  // Settings closes once the window has the open's reply, after the core already lists the session: reopen after that.
+  await expect(app.getByRole('dialog', { name: 'Settings' })).toBeHidden();
 
   // Remove (in the row's menu) asks first, in the opened row, with the focus on Cancel; then the row and the entry go;
   // the memory file stays on disk.
