@@ -52,9 +52,10 @@ A new worktree of this repository needs its own packages and `web/dist` before `
 
 ## CI
 
-[.github/workflows/ci.yml](.github/workflows/ci.yml) runs on GitHub-hosted runners for every pull request and again in
-the merge queue on the merged tree; the queue is the only way into `main`, and its one required check is the `gate`
-job, which passes only when every other job passed.
+[.github/workflows/ci.yml](.github/workflows/ci.yml) runs on GitHub-hosted runners for every pull request and every
+push to `main`. A pull request is the only way into `main`. It needs two checks: the `gate` job, which passes only when
+every other job passed, and `ci-guard` ([ci-guard.yml](.github/workflows/ci-guard.yml)), which holds a pull request
+that changes `.github/` or the ratchet scripts until a maintainer has reviewed it.
 
 - `lint` (Linux): `cargo fmt --check`, `sh -n` of the scenario scripts, `pnpm typecheck` in `web/`.
 - `rust-build` (macOS): clippy with warnings as errors, doctests, and one nextest archive of every Rust test.
@@ -80,7 +81,7 @@ Nunchiro has no telemetry. [PRIVACY.md](PRIVACY.md) lists every host it connects
 
 ## Contributing
 
-Outside pull requests are not accepted yet.
+Bug fixes and small, focused changes are welcome. Open an issue first; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 
