@@ -289,3 +289,67 @@ fn a_link_where_the_plugin_goes_is_refused_and_leaves_nothing() {
     assert!(catalog.install("hello").unwrap_err().contains("symlink"));
     assert_eq!(fs::read_dir(&elsewhere).unwrap().count(), 0);
 }
+
+/// The kill list the origin serves: `entries` as given (an entry may be anything, to check one bad entry is skipped).
+fn kill(files: &Files, entries: Value) {
+    files.lock().unwrap().insert(
+        "main/plugins/kill-list.json".into(),
+        json!({"version": 1, "plugins": entries})
+            .to_string()
+            .into_bytes(),
+    );
+}
+
+#[test]
+fn a_plugin_on_the_kill_list_is_not_installed() {
+    let (home, files, catalog) = setup("pkl");
+    kill(
+        &files,
+        json!([{"id": "hello", "reason": "It sent files to a stranger."}]),
+    );
+    let e = catalog.install("hello").unwrap_err();
+    assert!(
+        e.contains("kill list") && e.contains("It sent files to a stranger."),
+        "{e}"
+    );
+    assert!(!home.join("plugins/hello").exists());
+}
+
+#[test]
+fn an_installed_plugin_put_on_the_kill_list_is_turned_off_and_blocked() {
+    let (home, files, catalog) = setup("pkb");
+    kill(&files, json!([]));
+    catalog.install("hello").unwrap();
+    approve_and_turn_on(&home);
+    // Another commit of it on the list: this copy is not blocked.
+    kill(
+        &files,
+        json!([{"id": "hello", "commits": ["ffffffffffffffffffffffffffffffffffffffff"], "reason": "old"}]),
+    );
+    catalog.refresh_kill_list().unwrap();
+    assert!(hello(&home).on && hello(&home).blocked.is_none());
+    // Its own commit, next to an entry this Nunchiro cannot read: it is turned off and says why.
+    kill(
+        &files,
+        json!([{"id": 7}, {"id": "hello", "commits": [COMMIT], "reason": "It sent files to a stranger."}]),
+    );
+    catalog.refresh_kill_list().unwrap();
+    let after = hello(&home);
+    assert!(!after.on);
+    assert_eq!(
+        after.blocked.as_deref(),
+        Some("It sent files to a stranger.")
+    );
+}
+
+#[test]
+fn a_kill_list_of_another_version_is_refused() {
+    let (_home, files, catalog) = setup("pkv");
+    files.lock().unwrap().insert(
+        "main/plugins/kill-list.json".into(),
+        json!({"version": 2, "plugins": []})
+            .to_string()
+            .into_bytes(),
+    );
+    assert!(catalog.refresh_kill_list().is_err());
+}
