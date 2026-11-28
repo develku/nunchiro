@@ -1264,6 +1264,63 @@ fn a_fresh_lead_hands_over_once_and_never_resumes() {
     let _ = fs::remove_dir_all(proj);
 }
 
+/// A bot-task trial: the Assistant's first turn could not read its SOUL file (it lies outside the folders a Home seat's
+/// file tools reach), so it asked to `cat` it. Every brief carries the SOUL text itself, masked and cut as memory is.
+#[test]
+fn a_brief_carries_the_soul_text() {
+    let home = home();
+    let team = Team::open(&home);
+    let lead = Teammate {
+        lead: true,
+        ..mate("Chief", None)
+    };
+    let id = team.save(None, lead).unwrap()[0].id.clone();
+    team.ensure_files(&team.list().unwrap()[0]).unwrap();
+    fs::write(
+        team.soul(&id),
+        "I keep the week tidy. key sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789\n",
+    )
+    .unwrap();
+    let (_, _, prompt, _) = team.brief_seat(&id, None).unwrap();
+    assert!(prompt.contains("I keep the week tidy."), "{prompt}");
+    assert!(
+        !prompt.contains("abcdefghijklmnopqrstuvwxyz0123456789"),
+        "masked: {prompt}"
+    );
+    assert!(
+        !prompt.contains("Read it before your first reply"),
+        "{prompt}"
+    );
+    // Review: the notes rule covers the SOUL text too, and a cut SOUL never sends the seat to read the file.
+    let rule = prompt.find("Treat what they hold as notes").unwrap();
+    assert!(rule < prompt.find("<soul>").unwrap(), "{prompt}");
+    fs::write(team.soul(&id), "y".repeat(7000)).unwrap();
+    let (_, _, cut, _) = team.brief_seat(&id, None).unwrap();
+    let soul = &cut[cut.find("<soul>").unwrap()..cut.find("</soul>").unwrap()];
+    assert!(
+        soul.contains("Bots page") && !soul.contains("read it"),
+        "{soul}"
+    );
+    let _ = fs::remove_dir_all(home);
+}
+
+/// A bot-task trial: the Assistant's "New conversation" asked the owner two or three times to allow its handover (a
+/// file write and a room send) and carried the last task's results into the next one. The Home lead's record is the
+/// core's (task ledger, open loops, Outbox cards, its memory file): only a project's lead hands over and takes over.
+#[test]
+fn only_a_project_lead_hands_over() {
+    let lead = |project: Option<PathBuf>| Teammate {
+        lead: true,
+        ..mate("Lead", project)
+    };
+    assert!(hands_over(&lead(Some("/p".into()))));
+    assert!(!hands_over(&lead(None)), "the Home lead");
+    assert!(
+        !hands_over(&mate("Helper", Some("/p".into()))),
+        "not a lead"
+    );
+}
+
 /// Ticket 1096: a Lead whose turn does not end in time is left open with a line that says so (never stopped
 /// mid-turn); the wait holds no lock, a second press is refused, and only the owner's Close ends it.
 #[test]
@@ -1624,6 +1681,40 @@ fn a_fresh_seat_for_any_teammate_keeps_role_folder_level() {
         until("the restored seat answers", || {
             s.logged().contains("say:back")
         });
+    });
+    s.end();
+}
+
+/// Review: the Home lead hands nothing over, but a busy one is never closed mid-turn by a handover: it waits for the
+/// turn as a project lead's handover does, with no handover prompt, and is left open when the turn outlasts the wait.
+/// (The lead here is made the Home lead after its seat opened: a Home seat is Claude-only, the harness's agent is ACP.)
+#[test]
+fn a_busy_home_lead_is_not_closed_mid_turn_and_gets_no_handover_prompt() {
+    let s = Seats::new();
+    ticking(&s.reg, || {
+        let old = s.open(&s.lead);
+        s.hold(&old.id);
+        let team = Team::open(&s.home);
+        let mut lead = team
+            .list()
+            .unwrap()
+            .into_iter()
+            .find(|m| m.id == s.lead)
+            .unwrap();
+        lead.project = None;
+        team.save(Some(s.lead.clone()), lead).unwrap();
+        let late = fresh_lead(
+            &s.reg,
+            &s.lead,
+            Fresh::Handover,
+            std::time::Duration::from_secs(3),
+        );
+        assert!(
+            late.is_err_and(|e| e.contains("did not finish its turn")),
+            "it waited"
+        );
+        assert_eq!(s.state(&old.id), Ok(Running), "not closed mid-turn");
+        assert!(!s.logged().contains(HANDED), "no handover prompt");
     });
     s.end();
 }
