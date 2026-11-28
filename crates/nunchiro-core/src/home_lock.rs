@@ -18,6 +18,8 @@ pub(crate) const MODE_KEY: &str = "home.chief_mode";
 /// calendar) never load (probe 2026-11-28: `--strict-mcp-config` with an empty `--mcp-config` lists no `mcp__` tool).
 /// Absent, null or false = the connectors load as before.
 pub(crate) const CONNECTORS_OFF_KEY: &str = "home.connectors_off";
+/// A command card's tool and how the hook binds its line (`outbox::bound`).
+pub use crate::outbox::{COMMAND, bound};
 /// The two connectors (the Google Calendar one did not load in the CLI on 2026-11-20); one list with the outward hook's.
 pub use crate::outward::{CALENDAR, MAIL};
 /// The tools the seat may call as the mode allows. No draft tools: a draft is an Outbox card's own hashed copy.
@@ -301,6 +303,17 @@ pub fn nunchiro_line(command: &str) -> bool {
         ])
 }
 
+/// One plain-ASCII `nunchiro outbox stage` line (`nunchiro_line`'s checks).
+fn stage_line(command: &str) -> bool {
+    command.is_ascii()
+        && nunchiro_line(command)
+        && command.split_whitespace().nth(1) == Some("outbox")
+        && command.split_whitespace().nth(2) == Some("stage")
+}
+
+/// Why a shell command asks.
+pub const ASK_SHELL: &str = "Home seat: shell commands always ask (ticket 1002)";
+
 const SETUP: &str = "Home seat: a setup step of its brief";
 
 /// The two setup steps a seat's brief names, unasked in every mode (they asked before the seat was ready):
@@ -368,8 +381,30 @@ pub fn decide(tool: &str, input: &Value, mode: Mode, home: &Path) -> Decision {
             {
                 Decision::Allow(FULL)
             }
+            // Staging a card sends nothing (the card is the owner's ask), so it never asks first, in any mode.
+            "Bash"
+                if input
+                    .get("command")
+                    .and_then(Value::as_str)
+                    .is_some_and(stage_line) =>
+            {
+                Decision::Allow("Home seat: staging an Outbox card sends nothing")
+            }
+            // A line a command card could hold runs only as that card's spent yes (`spend`); otherwise it asks.
+            "Bash"
+                if input
+                    .get("command")
+                    .and_then(Value::as_str)
+                    .is_some_and(|c| crate::outbox::command_words(c).is_ok())
+                    // A call that asks to run outside Claude's sandbox never spends a card: it asks.
+                    && input
+                        .get("dangerouslyDisableSandbox")
+                        .is_none_or(|v| v == &Value::Bool(false)) =>
+            {
+                Decision::Spend
+            }
             // E2: shell commands ask in every other case, over any allow rule (probe: a hook ask beats one).
-            "Bash" => Decision::Ask("Home seat: shell commands always ask (ticket 1002)"),
+            "Bash" => Decision::Ask(ASK_SHELL),
             t if BUILTIN.contains(&t) => Decision::Mode,
             _ => Decision::Deny(
                 "Home seat: this tool is not on the chief of staff's list (ticket 1002)",

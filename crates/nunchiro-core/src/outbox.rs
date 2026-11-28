@@ -104,6 +104,9 @@ fn addresses(key: &str, v: &Value) -> Result<Vec<String>, String> {
 /// card shows (an allow list: anything else is refused, so no recipient or content can ride in unseen); each value is
 /// well formed. Returns what the card shows.
 pub fn check(tool: &str, args: &Value) -> Result<Shown, String> {
+    if tool == COMMAND {
+        return check_command(args);
+    }
     // The full name with its server (`mcp__<server>__<tool>`): the hash and the hook's gate are about that exact tool.
     let server = tool
         .strip_prefix("mcp__")
@@ -211,6 +214,139 @@ pub fn check(tool: &str, args: &Value) -> Result<Shown, String> {
         ));
     }
     Ok(shown)
+}
+
+/// A command card's tool: the seat runs its line with Claude's Bash tool, once, after the owner's yes.
+pub const COMMAND: &str = "Bash";
+/// The longest line, and the most words, a command card takes.
+const LINE_MAX: usize = 2000;
+const WORDS_MAX: usize = 32;
+
+/// The largest file a command card reads (the program and each file it names), checked before any read.
+pub const FILE_MAX: u64 = 32 * 1024;
+
+/// A command card's line: one space between plain words (letters, digits and `._/-+,:@%=`), so the shell runs exactly
+/// the words the card shows: no quote, glob, `~`, `$`, redirect, separator or line break. Every word is a full path
+/// (`bound` then requires a regular file): a bare word could name more code the card does not bind (a launcher's
+/// `python3 -m mod`, `sh -c name`, `make target`), and zsh reads a word that starts with `=` as a PATH lookup.
+pub fn command_words(line: &str) -> Result<Vec<&str>, String> {
+    let words: Vec<&str> = line.split(' ').collect();
+    if line.len() > LINE_MAX || words.len() > WORDS_MAX {
+        return Err(format!(
+            "a command card takes one line of at most {WORDS_MAX} words and {LINE_MAX} characters"
+        ));
+    }
+    if words.iter().any(|w| {
+        w.is_empty()
+            || !w
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"._/-+,:@%=".contains(&b))
+    }) {
+        return Err("a command card's line is plain words with one space between: letters, digits and ._/-+,:@%= only (no quotes, globs, ~, $, redirects or separators); put text in a file the command reads".into());
+    }
+    if words.iter().any(|w| !w.starts_with('/')) {
+        return Err("a command card is a program and the files it uses, each named by its full path (/...): no other word, so put recipients and text in a file".into());
+    }
+    Ok(words)
+}
+
+/// The call a card binds and the seat's hook checks: an MCP call's arguments as they are; a command's line with every
+/// file it names (`command_words`), read now. Each is a regular file of at most `FILE_MAX` bytes (the size is checked
+/// before the read), bound by its hash and its whole text, which must be UTF-8: the program too, so a binary program
+/// (code the card cannot show) is refused. The card shows every text. A file that changes after the owner's yes makes
+/// another call, which the card does not allow.
+pub fn bound(tool: &str, args: &Value) -> Result<Value, String> {
+    use sha2::{Digest, Sha256};
+    if tool != COMMAND {
+        return Ok(args.clone());
+    }
+    let line = args
+        .get("command")
+        .and_then(Value::as_str)
+        .ok_or("a command card needs `command`")?;
+    let words = command_words(line)?;
+    let mut files = vec![];
+    for word in &words {
+        let meta = std::fs::metadata(word).map_err(|e| format!("{word}: {e}"))?;
+        if !meta.is_file() {
+            return Err(format!(
+                "{word} is not a regular file: a command card names the program and the files it uses"
+            ));
+        }
+        if meta.len() > FILE_MAX {
+            return Err(format!(
+                "{word} is larger than {} KB, more than a card shows",
+                FILE_MAX / 1024
+            ));
+        }
+        let mut bytes = vec![];
+        std::io::Read::read_to_end(
+            &mut std::io::Read::take(
+                std::fs::File::open(word).map_err(|e| format!("{word}: {e}"))?,
+                FILE_MAX + 1,
+            ),
+            &mut bytes,
+        )
+        .map_err(|e| format!("{word}: {e}"))?;
+        if bytes.len() as u64 > FILE_MAX {
+            return Err(format!("{word} grew while it was read"));
+        }
+        let mut file = serde_json::json!({"path": word, "sha256": hex(&Sha256::digest(&bytes))});
+        let text = String::from_utf8(bytes)
+            .map_err(|_| format!("{word} is not text, so the card cannot show it"))?;
+        file["text"] = file_text(word, text)?.into();
+        files.push(file);
+    }
+    Ok(serde_json::json!({"command": line, "files": files}))
+}
+
+/// A file's text as a card shows it: newlines and tabs, no other control or hidden character (refused, never cleaned).
+fn file_text(word: &str, text: String) -> Result<String, String> {
+    if text.chars().any(|c| {
+        (c.is_control() && !matches!(c, '\n' | '\t' | '\r')) || crate::board::rights::hidden(c)
+    }) {
+        return Err(format!("{word} has control or hidden characters"));
+    }
+    Ok(text)
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// `check` for a command card (`bound`'s form; `files` is the core's own reading).
+fn check_command(args: &Value) -> Result<Shown, String> {
+    let map = args
+        .as_object()
+        .ok_or("the arguments must be one JSON object")?;
+    if let Some(key) = map
+        .keys()
+        .find(|k| !["command", "files"].contains(&k.as_str()))
+    {
+        return Err(format!(
+            "`{key}` is not shown on an Outbox card (a command card takes `command`)"
+        ));
+    }
+    let line = map
+        .get("command")
+        .and_then(Value::as_str)
+        .ok_or("a command card needs `command`")?;
+    command_words(line)?;
+    let body = map
+        .get("files")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|f| Some(format!("{}\n{}", f["path"].as_str()?, f["text"].as_str()?)))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    Ok(Shown {
+        kind: "command",
+        op: "command".into(),
+        subject: line.into(),
+        body,
+        ..Shown::default()
+    })
 }
 
 pub fn address(to: &str) -> Result<String, String> {
@@ -368,6 +504,7 @@ pub fn ics(uid: &str, s: &Shown, now_ms: u64) -> Result<String, String> {
 pub fn words(s: &Shown) -> String {
     match s.kind {
         "event" => format!("the new event \"{}\"", s.subject),
+        "command" => format!("the command `{}`", s.subject),
         _ => format!(
             "the {} to {} (\"{}\")",
             s.op.replace('_', " "),

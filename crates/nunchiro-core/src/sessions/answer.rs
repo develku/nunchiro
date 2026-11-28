@@ -680,6 +680,9 @@ impl Sessions {
                         );
                         Ok(Reply::Ack)
                     }
+                    queue::Answer::Choose { index: 1 } if shown.kind == "command" => Err(
+                        "a command card has no Open by hand: Send runs it, Discard drops it".into(),
+                    ),
                     queue::Answer::Choose { index: 1 } => {
                         let target = match shown.kind {
                             "event" => {

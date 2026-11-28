@@ -23,6 +23,11 @@ const FIELDS = ['to', 'cc', 'bcc', 'subject', 'summary', 'startTime', 'endTime',
 const BODIES = ['body', 'description'];
 const opOf = (tool: string) => tool.split('__').pop() ?? tool;
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
+type File = { path: string; text?: string };
+// A command card (outbox.rs `COMMAND`): the exact line Send runs once, and the text of each file it names as the core
+// read it, the program's too (it must be text). Files the program opens by itself are not on it, and the card says so.
+// No Open by hand.
+const files = (v: unknown): File[] => (Array.isArray(v) ? v.filter((f): f is File => typeof f?.path === 'string' && typeof f.text === 'string') : []);
 
 export function OutboxCard({ d, onAnswer, t }: { d: Decision; onAnswer: OnAnswer; t: T }) {
   const ask = d.owner?.type === 'outward' ? d.owner : null;
@@ -38,11 +43,12 @@ export function OutboxCard({ d, onAnswer, t }: { d: Decision; onAnswer: OnAnswer
   if (!ask) return null;
   const op = opOf(ask.tool);
   const event = op === 'create_event';
+  const command = ask.tool === 'Bash';
   const a = ask.args;
   const to = list(a.to);
   const subject = plain(String(a.subject ?? a.summary ?? ''));
   const name = plain(to.join(', '));
-  const title = event ? t('outbox.card.titleEvent', { subject }) : t(a.replyThreadId || /^re:/i.test(subject) ? 'outbox.card.titleReply' : 'outbox.card.titleMail', { name });
+  const title = command ? t('outbox.card.titleCommand') : event ? t('outbox.card.titleEvent', { subject }) : t(a.replyThreadId || /^re:/i.test(subject) ? 'outbox.card.titleReply' : 'outbox.card.titleMail', { name });
   const left = Math.max(1, Math.ceil((DAY_MS - (Date.now() - d.observed_at)) / 3_600_000));
   const undoLeft = yes ? Math.max(0, Math.ceil((UNDO_MS - (now - yes)) / 1000)) : 0;
   const isNew = (addr: string) => !!ask.new_domains?.includes(addr.split('@').pop()?.toLowerCase() ?? '');
@@ -73,8 +79,30 @@ export function OutboxCard({ d, onAnswer, t }: { d: Decision; onAnswer: OnAnswer
       <div className="mc-head">
         <Avatar letter={ask.from} label={ask.from} c={hue(ask.from)} face={null} small />
         <b>{title}</b>
-        <span className="obx-kind">{t(event ? 'outbox.card.kindEvent' : 'outbox.card.kindMail')}</span>
+        <span className="obx-kind">{t(command ? 'outbox.card.kindCommand' : event ? 'outbox.card.kindEvent' : 'outbox.card.kindMail')}</span>
       </div>
+      {command && (
+        <>
+          <dl className="obx-fields">
+            <div className="obx-row">
+              <dt>{t('outbox.field.command')}</dt>
+              <dd>
+                <code>{plain(String(a.command ?? ''))}</code>
+              </dd>
+            </div>
+          </dl>
+          {files(a.files).map((f, i) => (
+            <div key={`${i}:${f.path}`}>
+              <p className="obx-why">{t('outbox.card.file', { path: plain(f.path) })}</p>
+              <div className="obx-body" tabIndex={0}>
+                {plain(f.text ?? '')}
+              </div>
+              <p className="obx-why">{t('outbox.card.lines', { n: plain(f.text ?? '').split('\n').length })}</p>
+            </div>
+          ))}
+          <p className="obx-why">{t('outbox.card.filesOnly')}</p>
+        </>
+      )}
       <dl className="obx-fields">
         {FIELDS.filter((k) => k in a).map((k) => (
           <div key={k} className="obx-row">
@@ -83,7 +111,7 @@ export function OutboxCard({ d, onAnswer, t }: { d: Decision; onAnswer: OnAnswer
           </div>
         ))}
       </dl>
-      {body && (
+      {!command && body && (
         <>
           {/* Fable lane 2 review S3: the box shows its scrollbar and how long the text is, so a short first screen never
               reads as the whole mail. */}
@@ -109,12 +137,14 @@ export function OutboxCard({ d, onAnswer, t }: { d: Decision; onAnswer: OnAnswer
           </>
         ) : (
           <>
-            <button type="button" className="b y" data-act="send-outbox" aria-label={`${t(event ? 'outbox.card.create' : 'outbox.card.send')} · ${title}`} disabled={busy} onClick={() => void send({ type: 'allow_once' })}>
-              {t(event ? 'outbox.card.create' : 'outbox.card.send')}
+            <button type="button" className="b y" data-act="send-outbox" aria-label={`${t(command ? 'outbox.card.run' : event ? 'outbox.card.create' : 'outbox.card.send')} · ${title}`} disabled={busy} onClick={() => void send({ type: 'allow_once' })}>
+              {t(command ? 'outbox.card.run' : event ? 'outbox.card.create' : 'outbox.card.send')}
             </button>
-            <button type="button" className="b" data-act="open-outbox" disabled={busy} onClick={() => void send({ type: 'choose', index: 1 })}>
-              {t(event ? 'outbox.card.openCalendar' : 'outbox.card.open')}
-            </button>
+            {!command && (
+              <button type="button" className="b" data-act="open-outbox" disabled={busy} onClick={() => void send({ type: 'choose', index: 1 })}>
+                {t(event ? 'outbox.card.openCalendar' : 'outbox.card.open')}
+              </button>
+            )}
             <button type="button" className="b" data-act="discard" disabled={busy} onClick={() => void send({ type: 'deny' })}>
               {t('outbox.card.discard')}
             </button>
