@@ -277,6 +277,8 @@ const FULL: &str = "Home seat: Full access (Settings > Assistants)";
 /// the CLI before the core sees them (`serve restart` starts a helper outside every session), so they ask.
 const UNASKED_VERBS: &[&str] = &[
     "agent", "task", "schedule", "role", "note", "team", "outbox", "events", "skill",
+    // The core finds the bot by the seat and turns a write after a mail read into a proposal (`team::memory`).
+    "memory",
 ];
 
 /// Only ASCII letters, digits, marks and the plain space: the shell splits words on its own whitespace only, so a
@@ -602,6 +604,7 @@ mod tests {
         for line in [
             "nunchiro task list",
             "nunchiro outbox stage --tool t --args '{}'",
+            "nunchiro memory add x",
             "nunchiro agent list",
         ] {
             assert!(matches!(b(line, Mode::Full), Decision::Allow(_)), "{line}");

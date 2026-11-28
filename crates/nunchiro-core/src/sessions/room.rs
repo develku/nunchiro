@@ -346,6 +346,9 @@ impl Sessions {
             }
             _ => return Err("not a room request".into()),
         };
+        if let Some(c) = caller {
+            self.hear(&c.id, &messages);
+        }
         Ok(Reply::Room { messages })
     }
     /// Look 1117 v12 B N11-S2-3: the seat blocks in `agent ask --wait` on its open ask now (it polled within

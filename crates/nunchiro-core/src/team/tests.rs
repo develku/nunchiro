@@ -959,7 +959,11 @@ fn control_characters_in_a_memory_file_leave_the_brief_sendable() {
     )
     .unwrap();
     let (_, _, prompt) = team.brief(&id, None).unwrap();
-    assert!(prompt.contains("line one\nline two [1mbold[0m"));
+    assert!(
+        prompt.contains("line one (from: a conversation)\n"),
+        "{prompt}"
+    );
+    assert!(prompt.contains("line two [1mbold[0m"), "{prompt}");
     crate::delivery::check_text(crate::api::AgentKind::Claude, &prompt).unwrap();
     let _ = fs::remove_dir_all(home);
 }
@@ -971,7 +975,8 @@ fn a_long_memory_is_cut_in_the_brief_and_a_bad_file_is_refused() {
     let id = team.save(None, mate("Reviewer", None)).unwrap()[0]
         .id
         .clone();
-    fs::write(team.memory(&id), "한".repeat(MEMORY_QUOTE_MAX)).unwrap();
+    // The memory index is quoted by lines (`memory::tests`); USER.md is still cut at 6 KB.
+    fs::write(team.user(), "한".repeat(MEMORY_QUOTE_MAX)).unwrap();
     let (_, _, prompt) = team.brief(&id, None).unwrap();
     assert!(prompt.contains("[cut here: the file is longer"));
     assert!(prompt.len() < MEMORY_QUOTE_MAX + 4096);
@@ -1052,8 +1057,9 @@ fn a_secret_in_memory_is_masked_in_the_brief_and_on_disk() {
     fs::remove_dir_all(home).unwrap();
 }
 
-/// Ticket 1005: a memory file over the 6 KB a brief quotes raises one tidy card however often its seat starts; a
-/// masked secret is one room line with the count; the card's yes asks the seat to tidy it.
+/// Ticket 1005: USER.md over the 6 KB a brief quotes raises one tidy card however often its seat starts; a masked
+/// secret is one room line with the count; the card's yes asks the seat to tidy it. The memory index is quoted by
+/// lines instead, and raises no card.
 #[test]
 fn an_oversize_memory_raises_one_tidy_card() {
     let home = home();
@@ -1065,10 +1071,11 @@ fn an_oversize_memory_raises_one_tidy_card() {
         format!("{key}\n{}", "a lasting fact\n".repeat(500)),
     )
     .unwrap();
+    fs::write(team.user(), "a lasting fact about the user\n".repeat(500)).unwrap();
     let reg = std::sync::Mutex::new(crate::sessions::Sessions::open(&home).unwrap());
     for _ in 0..3 {
         let check = team.check_memory(&mate.id);
-        assert_eq!(check.over, ["MEMORY.md"]);
+        assert_eq!(check.over, ["USER.md"]);
         memory_found(&mut reg.lock().unwrap(), &mate, &team.home(), &check);
     }
     let (_, _, prompt) = team.brief(&mate.id, None).unwrap();
@@ -1083,7 +1090,7 @@ fn an_oversize_memory_raises_one_tidy_card() {
         .collect();
     assert_eq!(cards.len(), 1, "one card, not one per start");
     assert!(
-        cards[0].text.contains("Scout's MEMORY.md"),
+        cards[0].text.contains("Scout's USER.md"),
         "{}",
         cards[0].text
     );
@@ -1107,7 +1114,7 @@ fn an_oversize_memory_raises_one_tidy_card() {
     assert!(sessions.queue.owner_items().is_empty());
     let wakes = std::mem::take(&mut sessions.goal_wakes);
     assert_eq!(wakes.len(), 1);
-    assert!(wakes[0].0 == mate.id && wakes[0].1.contains("tidy MEMORY.md"));
+    assert!(wakes[0].0 == mate.id && wakes[0].1.contains("tidy USER.md"));
     drop(sessions);
     drop(reg);
     fs::remove_dir_all(home).unwrap();

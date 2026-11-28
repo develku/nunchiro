@@ -290,6 +290,9 @@ impl Sessions {
             settings.insert("permissions".into(), rules);
         }
         // end v1b-07
+        if start.kind == AgentKind::Claude {
+            memory::deny_memory(&mut settings, &self.home);
+        }
         // Round 4 (security MUST 1): a run that continues a token session (a resume by anyone, a problem restart) or a
         // side chat of one is a token session too.
         // Round 6 (security r5 MUST 1): the origin is stored on the record, so a later close or resume of a parent
@@ -590,9 +593,11 @@ impl Sessions {
             conversation: prior_ids
                 .iter()
                 .find_map(|id| self.entries[id].meta.conversation.clone()),
-            problem: None,                                                  // v2-5b
-            without_hooks: without_hooks && start.kind != AgentKind::Shell, // v2-5b
-            home_lock: home_mode.is_some(),                                 // ticket 1002
+            problem: None, // v2-5b
+            // v2-5b; a start with hook injection off has no hooks either (bot memory reads this to fail closed).
+            without_hooks: (without_hooks || self.settings.disable_hook_injection)
+                && start.kind != AgentKind::Shell,
+            home_lock: home_mode.is_some(), // ticket 1002
             home_mode: home_mode.map(|m| crate::home_lock::name(m).to_string()),
             no_history,
             account_tab,
@@ -658,6 +663,12 @@ impl Sessions {
         // Ticket 990 slice g: a seat is its session; the resumed run takes the seat of the run it continues.
         if let Err(e) = crate::ledger::Ledger::open(&self.home).reseat(&prior_ids, id) {
             eprintln!("ledger seat not moved: {e}");
+        }
+        // The resumed run keeps the outside-read mark of the runs it continues, whatever row ids are later dropped.
+        if let Some(source) = crate::team::outside(&self.home, &meta.resumed_from)
+            && let Err(e) = crate::team::mark_outside(&self.home, id, source)
+        {
+            eprintln!("session {id}: outside read not carried over: {e}");
         }
         // Ticket 621: the resumed run replaces its prior rows; a token row's origin is on the new row (`origin` above).
         let prior: Vec<_> = prior_ids

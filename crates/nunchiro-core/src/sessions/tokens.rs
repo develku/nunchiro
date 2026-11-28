@@ -75,6 +75,7 @@ fn never(request: &Request) -> bool {
             | Request::SchedulePropose { .. }
             | Request::ScheduleChange { .. }
             | Request::BotOffer { .. } // a bot's seat offers a bot, never a token
+            | Request::BotMemory { .. } // a bot's seat writes its memory, never a token
             | Request::OutboxStage { .. } // ticket 1002: a token never stages or spends an outward action
             | Request::OutboxSpend { .. }
     )
