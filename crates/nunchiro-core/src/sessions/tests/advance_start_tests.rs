@@ -1260,3 +1260,72 @@ fn with_auto_advance_off_the_lead_hears_a_landing_in_the_room() {
     drop(said);
     end_handoff(registry, home);
 }
+
+// A stalled seat's card went to the user only: the lead stayed idle until the user relayed it. The lead now gets the
+// seat, why and the step to take as a line it acts on; the card stays for the user.
+#[test]
+fn a_stall_card_also_tells_the_lead_what_to_do() {
+    let (registry, home, lead, task, builder, _) = two_seats("advance-card-lead");
+    let mut core = registry.lock().unwrap();
+    let act = crate::advance::Act::Card {
+        seat: builder.clone(),
+        name: "Builder · tax".into(),
+        why: "quiet for 25 min".into(),
+    };
+    let was = core.seat_facts(&builder);
+    crate::advance::act(&mut core, &task, &lead, &act, &was, None, &mut vec![]).unwrap();
+    let meta = &core.entries[&lead].meta;
+    let told: Vec<_> = meta.send_queue.iter().chain(&meta.send_log).collect();
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert_eq!(told[0].sender, "core");
+    assert_eq!(
+        told[0].content,
+        crate::advance::stall_line(
+            "Builder · tax",
+            &builder,
+            &task.id,
+            "builder",
+            "quiet for 25 min"
+        )
+    );
+    assert!(
+        told[0]
+            .content
+            .contains(&format!("nunchiro session close {builder}"))
+    );
+    let cards = core.queue.owner_items();
+    assert!(
+        cards.iter().any(|i| i.session_id == builder
+            && matches!(i.owner, Some(crate::queue::OwnerAsk::Stall { .. }))),
+        "the user's card stays"
+    );
+    drop(core);
+    end_handoff(registry, home);
+}
+
+// Acceptance review: while the lead works, its queued stall line is not replaced by a later heartbeat.
+#[test]
+fn a_queued_stall_line_outlives_a_later_heartbeat() {
+    let (registry, home, lead, task, builder, _) = two_seats("advance-card-queued");
+    let mut core = registry.lock().unwrap();
+    core.delivery_inflight.insert(lead.clone(), u64::MAX); // the lead is busy: core lines queue
+    let act = crate::advance::Act::Card {
+        seat: builder.clone(),
+        name: "Builder · tax".into(),
+        why: "quiet for 25 min".into(),
+    };
+    let was = core.seat_facts(&builder);
+    crate::advance::act(&mut core, &task, &lead, &act, &was, None, &mut vec![]).unwrap();
+    core.core_line(&lead, crate::advance::beat_line(0, 0, 1).unwrap())
+        .unwrap();
+    let meta = &core.entries[&lead].meta;
+    let stall = meta
+        .send_queue
+        .iter()
+        .chain(&meta.send_log)
+        .find(|s| s.content.starts_with("Stalled: "))
+        .unwrap();
+    assert_eq!(stall.status, "queued", "{stall:?}");
+    drop(core);
+    end_handoff(registry, home);
+}

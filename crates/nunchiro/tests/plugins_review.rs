@@ -338,8 +338,17 @@ fn tokens_and_agents_get_no_plugin_request_and_a_change_stops_the_runner() {
             .contains("not granted")
     );
     assert_eq!(finished(&c)["Ok"]["run"]["output"]["text"], "hi\n");
-    // A file added after approval: nothing runs.
+    // A file added after approval asks for nothing new: it still runs.
     std::fs::write(dir.join("extra.sh"), "#!/bin/sh\n").unwrap();
+    assert_eq!(finished(&c)["Ok"]["run"]["output"]["text"], "hi\n");
+    // A part added after approval is new access: nothing runs until it is approved again.
+    let toml = dir.join("plugin.toml");
+    let text = std::fs::read_to_string(&toml).unwrap();
+    std::fs::write(
+        &toml,
+        format!("{text}\n[[command]]\nname = \"more\"\ncommand = [\"/bin/sh\", \"extra.sh\"]\nshow = \"note\"\n"),
+    )
+    .unwrap();
     assert!(
         finished(&c)["Ok"]["run"]["error"]
             .as_str()

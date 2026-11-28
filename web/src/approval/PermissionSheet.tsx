@@ -203,7 +203,7 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
                 </span>
               </>
             )}{' '}
-            · {t('approval.asked')}
+            · {t(plugin ? 'plugins.sheet.asked' : 'approval.asked')}
           </div>
         </div>
         <ErrorLine t={t} error={error} className="ps-error" />
@@ -211,6 +211,16 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
           <p role="status" className="ps-changed">
             {t('approval.changed')}
           </p>
+        )}
+        {!!view?.added?.length && (
+          <div className="ps-changed" data-field="added">
+            <b>{t('plugins.sheet.added')}</b>
+            <ul>
+              {view.added.map((a) => (
+                <li key={a}>{a}</li>
+              ))}
+            </ul>
+          </div>
         )}
         {view && m && plugin && (
           <div data-field="parts">

@@ -923,8 +923,22 @@ fn one_job_with_a_correction_a_second_writer_a_review_an_edit_and_a_restart() {
         json!({"operation":"keep","task":"t1","lesson":0,"scope":{"kind":"me"}}),
     );
     assert!(early["Err"].is_string(), "{early}");
+    // The lead works on its own branch; the user turned on "Ask me before merging task work", so the card comes back.
+    git(&proj, &["checkout", "-q", "-b", "lead-work"]);
+    assert!(
+        task(&lead, json!({"operation":"merge-ask","text":"off"}))["Err"].is_string(),
+        "only the user sets it"
+    );
+    let on = task(
+        owner,
+        json!({"operation":"merge-ask","text":"on","project":proj}),
+    );
+    assert!(on["Ok"].is_object(), "{on}");
     let asked = task(&lead, json!({"operation":"merge","id":"t1"}));
-    assert!(asked["Ok"].is_object(), "{asked}");
+    assert!(
+        asked["Ok"]["tasks"].is_array(),
+        "a card, not the no-card line: {asked}"
+    );
     let card = raw(&home, owner, json!({"op":"snapshot"}))["Ok"]["owner_decisions"]
         .as_array()
         .and_then(|cards| cards.iter().find(|c| c["owner"]["change"] != "failed"))
@@ -1014,6 +1028,59 @@ fn one_job_with_a_correction_a_second_writer_a_review_an_edit_and_a_restart() {
             .is_some_and(|e| e.contains("changed after the review")),
         "{again}"
     );
+    // With the card off, work that is not approved for the files as they are is still never merged.
+    let off = task(
+        owner,
+        json!({"operation":"merge-ask","text":"off","project":proj}),
+    );
+    assert!(off["Ok"].is_object(), "{off}");
+    let again = task(&lead, json!({"operation":"merge","id":"t1"}));
+    assert!(again["Err"].is_string(), "{again}");
+    let t = tasks(&task(&lead, json!({"operation":"show","id":"t1"}))).remove(0);
+    assert_eq!(t["state"], "review", "{t}");
+    // Reviewed again at a commit, it merges into the lead's working branch with no card.
+    git(Path::new(&wt), &["commit", "-q", "-am", "round"]);
+    let passed = task(
+        &reviewer_token,
+        json!({"operation":"pass","text":"rounds now"}),
+    );
+    assert_eq!(tasks(&passed)[0]["state"], "approved", "{passed}");
+    let cards = |home: &Path| {
+        raw(home, owner, json!({"op":"snapshot"}))["Ok"]["owner_decisions"]
+            .as_array()
+            .map(|c| c.len())
+            .unwrap_or_default()
+    };
+    let before = cards(&home);
+    let merged = task(&lead, json!({"operation":"merge","id":"t1"}));
+    let line = merged["Ok"]["text"].as_str().unwrap_or_default();
+    assert!(
+        line.contains("No card needed") && line.contains("into lead-work"),
+        "{merged}"
+    );
+    assert_eq!(cards(&home), before, "no new card");
+    let t = tasks(&task(&lead, json!({"operation":"show","id":"t1"}))).remove(0);
+    assert_eq!(t["state"], "merge", "{t}");
+    // On the default branch it asks the user again, setting off or not.
+    git(&proj, &["checkout", "-q", "main"]);
+    fs::write(
+        Path::new(&wt).join("tax.py"),
+        "def tax(x):\n    return round(x * 1.1, 0)\n",
+    )
+    .unwrap();
+    git(Path::new(&wt), &["commit", "-q", "-am", "round 0"]);
+    task(&reviewer_token, json!({"operation":"pass","text":"same"}));
+    let asked = task(&lead, json!({"operation":"merge","id":"t1"}));
+    assert!(
+        asked["Ok"]["tasks"].is_array(),
+        "the default branch takes the card: {asked}"
+    );
+    // The files change again, so what follows sees work not approved for the files as they are.
+    fs::write(
+        Path::new(&wt).join("tax.py"),
+        "def tax(x):\n    return round(x * 1.1)\n",
+    )
+    .unwrap();
 
     // The lead's seat is closed, as when its conversation ended; the user corrects the builder once more with no
     // lead running. Then the core restarts (this fixture's stop ends the agents too).

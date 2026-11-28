@@ -88,6 +88,10 @@ export const KNOWN: [RegExp, Key, Key?][] = [
   // pressure/wait.rs `answer`: Start anyway or Cancel on a start that left the list meanwhile (it started or was dropped).
   [/^this start is no longer waiting for memory$/, 'err.memWait.gone'],
   // plugins.rs check_send: a message a plugin's check refused; its reason stays under Details.
+  // plugins_online.rs get: Browse plugins could not read the online list (curl, HTTP or time limit); the cause stays under Details.
+  [/^the plugin list could not be read: /, 'err.pluginNet', 'err.pluginNet.todo'],
+  // plugins_online.rs: Browse plugins > Install met a catalogue this Nunchiro cannot use; nothing was installed.
+  [/^(the catalogue entry .+ is not valid|the catalogue is not valid: |the catalogue's version \d+ is newer than this Nunchiro reads|.+ of .+ does not match the catalogue \(it changed after the catalogue was made\); nothing was installed)/, 'err.pluginCatalogBad', 'err.pluginCatalogBad.todo'],
   [/^Not sent\. The plugin "(?<name>[^"]+)" refused it: /, 'err.pluginRefusedSend', 'err.pluginRefusedSend.todo'],
   [/^answer the waiting decision first$/, 'err.decisionWaiting', 'err.decisionWaiting.todo'], // sessions.rs:6284
   [/^approve the agent first$/, 'err.agentNotApproved', 'err.agentNotApproved.todo'], // acp/add.rs:187,224

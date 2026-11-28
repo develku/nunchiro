@@ -16,6 +16,10 @@ pub struct Approval {
     pub level: Level,
     pub hash: String,
     pub granted_at_ms: u64,
+    /// A plugin's access when it was approved (`plugins::access`): a later change that asks for nothing beyond it
+    /// stays approved. Empty for every other subject and for a grant older than this field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub access: Vec<String>,
 }
 
 // v1b-17

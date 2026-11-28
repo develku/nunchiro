@@ -70,6 +70,7 @@ export const GROUPS: Record<string, string[]> = {
     'invalid {} name', '{} folder must not be a symlink',
     'sessions.json: {}', 'invalid outbox domains', 'queue store is not an object', 'the Home seat lock hook could not be written', // ticket 1002 (Home chief of staff, Outbox), worktree sharing; nightly 11-21
     "plugin {}: {}", "missing plugin.toml", "plugin.toml is not UTF-8", "plugin.toml is too large", "plugin.toml id \"{}\" is not its folder's name \"{}\"", "plugin.toml needs a {}", "plugin.toml text has a hidden, control or bidi character", "a plugin has at most {} panels and commands", "two panels or commands are named \"{}\"", "setting key \"{}\" is invalid or repeated", "choice setting {} needs choices", "setting {} default: {}", // plugins.rs, approval/mod.rs: a plugin folder Settings > Plugins lists with its fault
+    "a link or a file is in the way at plugins/{}: move it away first", // plugins_online.rs: Browse plugins > Install
   ],
   'err.h.limit': [
     'this command is too large to ask the user about', // acp/client.rs: an ACP agent's terminal command too large for the ask card
@@ -106,6 +107,7 @@ export const GROUPS: Record<string, string[]> = {
     "fast mode runs on Opus 5.5 or Fable 5.2; pick one of them first", // sessions/claude_modes.rs (fast mode, ultracode, restart); nightly 11-21
     'project: a full folder path', 'a server named {} is already added for {}; remove it first or pick another name', // extensions.rs: an MCP server added for one project
     "not a \"{}\" value", // plugins.rs: a plugin setting's value
+    "the repository is owner/name", "a labeled trigger needs the label", // schedule/triggers.rs: Add trigger, if the core's check is stricter than the form's
   ],
   'err.h.notFor': [
     'not a repository of a PR an agent created or you watch', "no config folder for the agent's own account", 'only Claude and Codex have a command to approve', 'this service has no sign-in command', 'this service has no sign-out command', 'merge is only for a PR an agent made or you pinned', 'a shell session has no model picker', "an ACP agent has no model picker here", "an ACP agent's effort is set in the agent",
@@ -122,15 +124,16 @@ export const GROUPS: Record<string, string[]> = {
   'err.h.noLimit': ["no usage limit with a reset time ahead is on this session's screen"],
   'err.h.nothingInterrupt': ['nothing to send now'],
   'err.h.signIn': ['glab reports no signed-in host'],
-  'err.h.ghAnswer': ['gh gave no squash message for this PR', 'gh output too large', 'gh output is not a PR', 'gh answered for another PR', 'gh gave no head commit', 'gh output is not a PR list', 'gh output is not JSON', 'gh output has no repository', 'gh failed: {}'],
+  'err.h.ghAnswer': ['gh gave no squash message for this PR', 'gh output too large', 'gh output is not a PR', 'gh answered for another PR', 'gh gave no head commit', 'gh output is not a PR list', 'gh output is not JSON', 'gh output has no repository', 'gh failed: {}', 'gh answered something else: {}', 'gh answered something else'], // schedule/github.rs: a GitHub trigger's last fire
   'err.h.checkFirst': [
     'this entry is identical to one in agents.toml and is not approved: press Run check on its row in Settings > Agents (an entry you typed here that matches the file counts as that entry)', 'check the command first', 'the command changed since it was checked; check it again', 'merge needs the confirmed head commit',
   ],
   'err.h.agentStart': [
     '{} was ended by signal {}{}', 'acp agent {}: {}', 'no agent stdin', 'no agent stdout', 'initialize: {}', 'the agent speaks ACP version {}; Nunchiro speaks version {}', 'the agent cannot load a session', 'session start: {}', 'session/new answered no session id', 'the agent closed its output before answering ACP',
-    'check folder: {}', 'the agent is not reading its input: {}', 'the agent did not answer {} within {} s', 'the agent closed its output before answering {}', 'a check failed', '--version did not finish: {}', '--version failed ({})', '--version printed nothing',
+    'check folder: {}', 'the agent did not answer {} within {} s', 'the agent closed its output before answering {}', 'a check failed', '--version did not finish: {}', '--version failed ({})', '--version printed nothing',
     '{} --version: probe ended without an answer', '{} --version: {}', 'version probe ended without an answer',
     "the agent's input could not be set up", "session/new answered no session id.", // acp/probe.rs, acp/turn.rs: an ACP agent's check and its test message
+    "the agent is not reading its input", // acp/probe.rs: an ACP agent's check, the OS words left out
   ],
   'err.h.inside': [
     "ledger unavailable", "notes unavailable", "roles unavailable", "open loops unavailable", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
@@ -141,6 +144,7 @@ export const GROUPS: Record<string, string[]> = {
     'sessions unavailable', 'cache unavailable', 'browser broker unavailable', 'integration source state unavailable', 'clone list unavailable', 'room cache unavailable', 'room pins unavailable', 'token store unavailable', 'widget state unavailable', 'widget act state unavailable', 'version probe thread: {}',
     "test results unavailable", "plugin runs unavailable", // acp/turn.rs, plugins.rs
     "triggers unavailable", // schedule/triggers.rs
+    "plugin installs unavailable", // plugins_online.rs: Browse plugins > Install
   ],
   'err.h.io': [
     'room: {}', // sessions/locate.rs: Locate could not move the project's room folder (ticket 1040)

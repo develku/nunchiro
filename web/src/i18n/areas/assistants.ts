@@ -61,7 +61,7 @@ export const en = {
   "assistants.editJob": "Edit job…",
   "assistants.claudeOnly": "Mail and calendar locks are for Claude seats in v1",
   "assistants.mode": "Mode",
-  "assistants.modeDesc": "Outward actions always need an Outbox card, in every mode. Shell commands ask, except in Full access, shell included.",
+  "assistants.modeDesc": "Outward actions always need an Outbox card, in every mode. Shell commands ask, except the two setup steps of its brief (its task list and its SOUL file), and in Full access, shell included.",
   "assistants.applies": "Applies the next time the seat starts.",
   "assistants.recommended": "Recommended",
   "assistants.briefs": "Brief schedules",

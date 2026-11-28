@@ -61,7 +61,7 @@ overlap-check.spec.ts
 hint-labels.spec.ts | no two default bindings share a chord
 home-guard.spec.ts | spec-home-guard: no spec runs the nunchiro binary
 i18n-glossary-terms.spec.ts
-i18n-translations.spec.ts | cjk_punctuation
+i18n-translations.spec.ts | cjk_punctuation|all_keys_all_languages
 
 # ticket 377 / records-1114b: a lane landed an i18n key without its catalogue row and main went red on the remaining-catalogue spec,
 # because the gate's web set held no catalogue spec. Pure checks over the source and the tables (no page); the three take 7.5 s of test time together (chromium, 11 tests, 2026-11-14).
@@ -70,6 +70,11 @@ i18n-translations.spec.ts | cjk_punctuation
 i18n-remaining-catalogue.spec.ts
 i18n-chat-catalogue.spec.ts
 i18n-key-sets.spec.ts
+
+# Core-only lanes (plugins, triggers, ACP) added refusal reasons with no window line and main went red after the merge twice
+# (#153, then 16 more on 11-28). A pure check over the core source and the tables (no page), 4 tests, under 1 s of test time.
+# all_keys_all_languages (above, beside cjk_punctuation) for the same reason: #121's keys reached main with no pending row.
+errors-core-reasons.spec.ts
 
 # onboarding adds the picked folder without starting; Skills & hooks opens at its top
 onboarding-folder-skills-top.spec.ts
@@ -82,6 +87,10 @@ shell-beside-agent.spec.ts
 
 # a registered Settings page keeps the focus on its title after a nav click
 settings-registered-title-focus.spec.ts
+
+# words typed right after Continue stay in the composer
+composer-agent-ended.spec.ts | composer_resume_typed_at_once_is_kept
+
 # a turn's changed-files card shows once the turn ends and stays where it is; the tab strip's "+" stays at the end
 chat-turn-files.spec.ts | chat_turn_card_does_not_move_while_the_turn_ends
 

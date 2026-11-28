@@ -83,6 +83,19 @@ class Tasks(unittest.TestCase):
         self.assertNotEqual(r, d)
         self.assertEqual(subprocess.run(["git", "status", "--porcelain"], cwd=r / "repo", capture_output=True, text=True).stdout, "")
 
+    def test_run_folder_is_a_real_path(self):
+        # The core refuses a project through a symlink; macOS $TMPDIR (/var/folders) is one, so the default root is resolved.
+        real = self.root / "real"
+        real.mkdir()
+        (self.root / "link").symlink_to(real)
+        from unittest import mock
+        with mock.patch.object(b.tempfile, "gettempdir", return_value=str(self.root / "link")):
+            d, _, _ = b.setup(1, 1)
+        self.assertEqual(d, d.resolve())
+        d, _, first = b.setup(8, 1, self.root / "link")
+        self.assertEqual(d, d.resolve())
+        self.assertIn(str(d), first)
+
     def test_calendar_key_matches_the_ics(self):
         key = json.loads((b.FIX / "calendar/key.json").read_text())
         ics = (b.FIX / "calendar/week.ics").read_text()
@@ -176,14 +189,28 @@ class Tasks(unittest.TestCase):
         d = self.run_of(6)
         repo = d / "repo"
         add_op(repo, "pow", "lambda a, b: a ** b", "self.assertEqual(core.apply('pow', '2', '10'), 1024)")
-        lead, stalled, fresh = (dict(id=i, kind="claude") for i in ("lead", "w1", "w2"))
-        before, after, same = (self.root / n for n in ("before.json", "after.json", "same.json"))
-        before.write_text(json.dumps([lead, stalled]))
-        same.write_text(json.dumps([lead, stalled, dict(id="sh", kind="shell")]))
-        after.write_text(json.dumps([lead, fresh]))
+        before, at = self.root / "before.json", 1_800_000_000
+        before.write_text(json.dumps([dict(id=i, kind="claude") for i in ("lead", "w1")]))
+        os.utime(before, (at, at))  # the stall: before.json is saved right before it
+
+        def journal(*lines, project=repo.resolve()):
+            f = self.root / "events.ndjson"
+            f.write_text("".join(json.dumps(dict(dict(zip(("type", "session", "at", "state"), l)), project=str(project))) + "\n" for l in lines))
+            return dict(stalled="w1", agents_before=str(before), events=str(f))
+
+        ms = at * 1000
         self.assertFail(d, "needs --stalled")
-        self.assertFail(d, "no fresh agent", stalled="w1", agents_before=str(before), agents_after=str(same))
-        self.assertPass(d, stalled="w1", agents_before=str(before), agents_after=str(after))
+        # The lead went on with w1's seat only, or opened a shell: no fresh agent conversation.
+        self.assertFail(d, "no fresh agent", **journal(("state", "w1", ms + 9000, "working"), ("session_started", "sh", ms + 5000, "waiting")))
+        # A worker the lead started and dropped before the stall is not fresh.
+        self.assertFail(d, "no fresh agent", **journal(("session_started", "w0", ms - 60000, "working"), ("session_ended", "w0", ms - 30000)))
+        # A fresh seat that never took a turn is no conversation; another run's sessions are not this run's.
+        self.assertFail(d, "no fresh agent", **journal(("session_started", "w2", ms + 5000, "waiting")))
+        self.assertFail(d, "no fresh agent", **journal(("session_started", "w2", ms + 5000, "working"), project=self.root / "other" / "repo"))
+        self.assertFail(d, "journal is full", **journal(("journal_full", None, ms + 1)))
+        # The fresh worker did the work and was closed before the task ended: it is in no list of the end, and it counts.
+        self.assertPass(d, **journal(("session_started", "w2", ms + 5000, "waiting"), ("state", "w2", ms + 6000, "working"),
+                                     ("session_ended", "w2", ms + 90000)))
 
     def test_7_pull_request_on_the_bare_remote(self):
         d = self.run_of(7)

@@ -157,7 +157,7 @@ pub fn home_lock(home: &Path, args: &[String]) -> ! {
         eprintln!("Home seat lock: this tool call could not be read, so it is refused");
         std::process::exit(2);
     };
-    let out = match decide_locked(&tool, &input, mode, no_mcp) {
+    let out = match decide_locked(&tool, &input, mode, home, no_mcp) {
         Decision::Mode => None,
         Decision::Allow(why) => Some(hook_output("allow", why)),
         Decision::Ask(why) => Some(hook_output("ask", why)),

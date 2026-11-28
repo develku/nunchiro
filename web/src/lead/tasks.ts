@@ -49,7 +49,7 @@ export type TaskView = {
 /** `auto` (ticket 1081): the core leaves it out while on. */
 /** `cap` (ticket 1081 part B): the seats at once the core may start up to; left out at 4. */
 // Ticket 1120: `account` is the label of the agent account the place's seats start on; absent: the lead's own.
-export type Place = { way: 'solo' | 'team' | 'strict'; seats: 'ask' | 'edits'; auto?: boolean; cap?: number; account?: string };
+export type Place = { way: 'solo' | 'team' | 'strict'; seats: 'ask' | 'edits'; auto?: boolean; cap?: number; account?: string; ask_merge?: boolean };
 export type Role = { name: string; job: string; kind: string; model?: string; effort?: string; writes: boolean };
 
 // A change made in this window (the way menu) reads every list again at once.
@@ -135,7 +135,7 @@ export function useRoles(core: CoreClient, on: boolean): Role[] {
 }
 
 /** The user sets the place's way or what its seats may do; every list is read again after. */
-export async function setPlace(core: CoreClient, project: string, operation: 'way' | 'grant' | 'auto' | 'cap' | 'account', text: string) {
+export async function setPlace(core: CoreClient, project: string, operation: 'way' | 'grant' | 'auto' | 'cap' | 'account' | 'merge-ask', text: string) {
   await core.request({ op: 'task', operation, project, text });
   tasksChanged();
 }

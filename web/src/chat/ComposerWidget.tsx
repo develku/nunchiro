@@ -1,4 +1,5 @@
 // Chat: the composer widget (split out of App.tsx, needs 183).
+import { flushSync } from 'react-dom';
 import { PLAIN } from '../plainText';
 import { errorNote, notePlain, rawError, type Note } from '../errors';
 import { CoreClient } from '../api';
@@ -415,7 +416,8 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
           }}
           aria-label={first ? undefined : t('composer.label', { name: name ?? t('composer.sessionFallback') })}
           aria-describedby={first && target && agentState(target) !== 'running' ? 'composer-why' : undefined}
-          disabled={!connected || !target || agentState(target) !== 'running'}
+          // While Continue starts the session the box takes words (they follow the new id as its draft); Enter waits below.
+          disabled={!connected || !target || (agentState(target) !== 'running' && !resuming)}
           placeholder={target ? (agentState(target) === 'running' ? (target.kind !== 'shell' && asks(target) ? (answersText || t('composer.waitsHint')) + (asked?.kind === 'question' ? ` ${t('composer.digitsCard')}` : '') + (dockAsks.length ? ` ${t('composer.toCard')}` : '') : t('composer.placeholder', { name: sessionName(target).replace(/(\.\.\.|…)$/, '') }) /* N8: a name cut to "..." gets the placeholder's one "…" */) : '') : pin ? t('composer.notRunning', { pin }) : t('composer.open')}
           onPaste={(e) => {
             const o = offers && target ? composerOffer(e.clipboardData.getData('text/plain')) : null;
@@ -471,6 +473,7 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
             // On swap the chord falls to send, which queues. An empty box must not steer the top queued row.
             const steer = swap && target ? !steerKey && !background && plain && !!e.currentTarget.value.trim() : steerKey;
             e.preventDefault();
+            if (target && agentState(target) !== 'running') return; // still starting after Continue: the words stay in the box
             if (steer) return void steerNow(e.currentTarget, target);
             if (background) return void backgroundSend(e.currentTarget, target);
             if (answerCard(e.currentTarget)) return;
@@ -482,7 +485,11 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
             <span className="why" id={first ? 'composer-why' : undefined}>{target.state === 'running' ? t('composer.agentEnded') : target.folder_gone ? t('walk5.composer.folderGone', { name: sessionName(target) }) : target.ended_ask ? t('walk5.composer.endedAsk', { name: sessionName(target), ask: target.ended_ask }) : target.state === 'exited' ? t('composer.exited', { name: sessionName(target) }) : target.state === 'failed' ? t('composer.failed', { name: sessionName(target) }) : target.state === 'resumable' ? t('walk5.composer.resumable', { name: sessionName(target) }) : target.state === 'closed' ? t('walk5.composer.closed', { name: sessionName(target) }) : t('composer.state', { name: sessionName(target), state: target.state })}</span>
             {/* Ticket 371 item 17: an agent that ended inside an open terminal is not restartable (its state is still running). */}
             {restartable(target) && !sideChats.includes(target.id) && (
-              <button type="button" className="btn" disabled={!connected || resuming} title={t(target.agent_session_id ? 'composer.resumeTitle' : 'composer.restartTitle')} onClick={() => resume(target)}>
+              <button type="button" className="btn" disabled={!connected || resuming} title={t(target.agent_session_id ? 'composer.resumeTitle' : 'composer.restartTitle')} onClick={(e) => {
+                const box = e.currentTarget.closest('.composer')?.querySelector<HTMLTextAreaElement>('textarea:not(.hoff-edit)');
+                flushSync(() => void resume(target)); // the box unlocks now, so typing straight after Continue lands in it
+                box?.focus();
+              }}>
                 {t(target.agent_session_id ? 'history.continue' : 'composer.restart') /* ticket 1025: one word with History's row */}
               </button>
             )}

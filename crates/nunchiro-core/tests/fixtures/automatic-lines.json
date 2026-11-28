@@ -97,6 +97,10 @@
       "text": "Lead: you have been quiet for 15 minutes with the task open; finish it or say what blocks you."
     },
     {
+      "kind": "stall",
+      "text": "Stalled: Builder · Add a pow (x) (0a1b2c3d): quiet for 25 min, still after one nudge. If `nunchiro task show t2` still lists it as stalled, replace it now without asking the user: nunchiro session close 0a1b2c3d, then nunchiro task staff t2 builder with its brief. Ask the user instead only if your brief or the user says so, or it is a teammate you did not open."
+    },
+    {
       "kind": "forward",
       "text": "Review round 1 of 3 asked for changes at 012345678 fedcba987: two MUSTs. See sessions.rs. Reviewer · tax sends you the full findings as a room message (agent send): read them with `nunchiro agent check`, fix them, commit, and write REPORT.md again."
     },
