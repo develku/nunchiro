@@ -1,14 +1,15 @@
 // A bot's memory (approved design: three layers; mockup round 1, frames 1 and 3): the bot page's Memory tab, and the
 // Bots view's Memory group for every bot. The core keeps the files (crates/nunchiro-core/src/team/memory.rs); the
 // window reads them through `bot_memory` and changes them with its `change`: Forget, Edit and Undo of a saved copy.
-import { useEffect, useState, type FormEvent } from 'react';
+import { useContext, useEffect, useState, type FormEvent } from 'react';
 import type { CoreClient } from '../api';
 import { ErrorLine, rawError } from '../errors';
 import type { Key, T } from '../i18n';
 import { Icon } from '../icons/Icon';
 import { PLAIN } from '../plainText';
-import { Row, Sec, Seg } from '../settings/shell/Row';
-import { useCoreFeature } from '../settings/useFeatureSetting';
+import { ago } from '../board/WatchGrid';
+import { Row, Sec, Seg, Switch } from '../settings/shell/Row';
+import { CoreFeatureClient, useCoreFeature } from '../settings/useFeatureSetting';
 import type { Bot } from './bots';
 
 export type Source = 'you' | 'conversation' | 'unknown' | 'mail' | 'web' | 'tool';
@@ -19,7 +20,9 @@ type Change = { do: 'forget'; text: string } | { do: 'edit'; text: string } | { 
 
 /** The Memory settings' key in the core's settings (`team::MEMORY_KEY`). */
 export const MEMORY_KEY = 'team.memory';
-export type MemorySettings = { keep_days: number };
+export type MemorySettings = { keep_days: number; search?: boolean };
+/** `memory_search`: the index of past conversations (`chat::recall::Status`). */
+export type SearchStatus = { on: boolean; conversations: number; bytes: number; updated_ms: number };
 /** Index lines shown before "N more lines". */
 const SHOWN = 5;
 
@@ -199,8 +202,15 @@ export function MemoryTab({ core, t, bot }: { core: CoreClient; t: T; bot: Bot }
 export function MemoryRows({ t }: { t: T }) {
   const [settings, set, error] = useCoreFeature<MemorySettings>(MEMORY_KEY, { keep_days: 30 });
   const days = ['7', '30', '90'] as const;
+  const on = settings.search !== false;
   return (
     <Sec label={t('memory.settings')}>
+      <Row
+        label={t('memory.search')}
+        desc={<SearchLine t={t} on={on} />}
+        setting={MEMORY_KEY}
+        control={<Switch setting="memorySearch" label={t('memory.search')} checked={on} onChange={(v) => void set({ ...settings, search: v })} />}
+      />
       <Row
         label={t('memory.keep')}
         desc={t('memory.keep.desc')}
@@ -209,5 +219,37 @@ export function MemoryRows({ t }: { t: T }) {
       />
       <ErrorLine t={t} error={error} />
     </Sec>
+  );
+}
+
+/** Search past conversations: how big the index is, then what it holds and what off does. The core brings the index up
+ *  to date before it answers, so the line asks again whenever search is turned on. */
+function SearchLine({ t, on }: { t: T; on: boolean }) {
+  const core = useContext(CoreFeatureClient);
+  const [status, setStatus] = useState<SearchStatus | null>(null);
+  useEffect(() => {
+    let live = true;
+    setStatus(null);
+    void core?.request({ op: 'memory_search' }).then(
+      (r) => live && setStatus((r as { status: SearchStatus }).status),
+      () => live && setStatus(null),
+    );
+    return () => void (live = false);
+  }, [core, on]);
+  const mb = (status?.bytes ?? 0) / 1e6;
+  return (
+    <span className="mem-search-desc">
+      {on && (
+        <span className="mem-search-stats" data-memory-search-stats>
+          {!status
+            ? t('memory.search.reading')
+            : status.updated_ms === 0
+              ? t('memory.search.none')
+              : t(status.conversations === 1 ? 'memory.search.stats.one' : 'memory.search.stats', { n: status.conversations.toLocaleString(), size: mb < 10 ? mb.toFixed(1) : Math.round(mb).toLocaleString(), when: ago(t, Date.now() - status.updated_ms) })}
+        </span>
+      )}
+      <span>{t('memory.search.desc')}</span>
+      <span className="dim">{t('memory.search.limit')}</span>
+    </span>
   );
 }

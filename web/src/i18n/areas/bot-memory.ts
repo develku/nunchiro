@@ -50,6 +50,18 @@ declare module '../index' {
     'memory.settings': true;
     'memory.settings.note': true;
     'memory.keep': true;
+    'memory.search': true;
+    'memory.hits': true;
+    'memory.hits.one': true;
+    'memory.hits.open': true;
+    'memory.hits.more': true;
+    'memory.hits.more.one': true;
+    'memory.search.stats': true;
+    'memory.search.stats.one': true;
+    'memory.search.none': true;
+    'memory.search.reading': true;
+    'memory.search.desc': true;
+    'memory.search.limit': true;
     'memory.keep.desc': true;
     'memory.keep.days': true;
   }
@@ -102,6 +114,18 @@ export const en = {
   'memory.undo': 'Undo',
   'memory.settings': 'Memory',
   'memory.settings.note': 'For every bot.',
+  'memory.search': 'Search past conversations',
+  'memory.hits': 'Searched past conversations · {n} hits',
+  'memory.hits.one': 'Searched past conversations · 1 hit',
+  'memory.hits.open': 'Open',
+  'memory.hits.more': '{n} more hits',
+  'memory.hits.more.one': '1 more hit',
+  'memory.search.stats': '{n} conversations · {size} MB · updated {when}',
+  'memory.search.stats.one': '1 conversation · {size} MB · updated {when}',
+  'memory.search.none': 'No index yet.',
+  'memory.search.reading': 'Bringing the index up to date…',
+  'memory.search.desc': 'Claude Code, Codex and ACP agents. The index stays on this Mac and masks secrets. Turning it off deletes the index.',
+  'memory.search.limit': "Forget deletes a line from the index too. The agents' own conversation files stay theirs: Nunchiro never changes them.",
   'memory.keep': 'Keep saved copies',
   'memory.keep.desc': 'Undo works on a copy while it is kept. Forget also deletes the line from every copy.',
   'memory.keep.days': '{n} days',

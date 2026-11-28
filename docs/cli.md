@@ -633,7 +633,7 @@ comes.
 A stdio MCP (Model Context Protocol) server, one JSON-RPC message per line. Its tools are the CLI verbs: `agent_start`,
 `agent_prompt`, `agent_send`, `agent_wait`, `agent_read`, `agent_get`, `agent_list`, `agent_stop` (`session close`),
 `worktree_create`, `worktree_list`, `room_send`, `room_ask`, `room_reply`, `room_check`, `room_thread_read`,
-`memory_add`, `memory_forget`, `memory_read`. Each call
+`memory_add`, `memory_forget`, `memory_read`, `memory_search` (with `--json`). Each call
 runs on its own thread, so a long wait holds up no other request, and runs this binary with the CLI's arguments and the server's environment (`NUNCHIRO_HOME`, `NUNCHIRO_TOKEN`), so results
 and refusals are the CLI's. A result's `structuredContent` is `{"result": ...}` with the CLI's JSON output (text output
 as `{"text": ...}`); exit 2, such as an ask that timed out, is `{"needs_answer": true, "message": ...}` and not an
@@ -788,6 +788,24 @@ claim.
 An index from before this format is rewritten once into it, newest first, each line a fact from a conversation dated by
 the file (a line that starts with a date keeps it); the old file is kept as a saved copy for good. The user's own
 changes keep the version before them as a saved copy, kept 30 days, which Undo puts back.
+
+### `nunchiro memory search`
+`nunchiro memory search "<words>" [--json]`: the lines of past conversations that hold the words (ASCII case-insensitive,
+1 to 256 bytes), newest first, at most 20, with how many matched. Any agent session may ask, and the user's own shell;
+a token is refused. Before each search the core brings its index up to date: the user's and the agents' words of every
+Claude Code, Codex and ACP conversation the registry lists, secrets masked as the log redaction masks them, one file per
+conversation in `$NUNCHIRO_HOME/memory-search/`. A transcript is read from where the last refresh stopped (its size and
+time say whether it changed); a conversation the registry no longer lists leaves the index. A hit from a conversation
+that read outside content (or that the core cannot see, as above) marks the asking session as reading it would, so a
+proposal stays a proposal. `--json` prints `{"type":"memory_hits","hits":[{"session","label","kind","at","role","text"}],
+"total"}`; the chat shows that reply as a hit card.
+
+It is on unless the Bots view's Memory group turns "Search past conversations" off (`team.memory.search`); off deletes
+the folder and refuses a search. A memory line's `forget` also deletes every index line that holds it and keeps those
+lines out when their transcript is read again (only their hashes are kept). A Claude seat's settings deny reads and edits
+of the folder, so the search, which passes the mark on, is the way in. Known limit: the agents' own transcripts (for
+example under `~/.claude` and `~/.codex`) stay theirs; Nunchiro never changes or deletes them, so a forgotten line can
+still be in those files.
 
 ### `nunchiro task loops [--json]`
 Ticket 1003: open loops, the user's promises and what the user waits for. The core keeps them as rows in

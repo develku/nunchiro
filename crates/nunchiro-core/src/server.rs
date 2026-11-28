@@ -20,7 +20,9 @@ use std::{
     time::{Duration, Instant},
 };
 // Ticket 1162: two parts with their own job moved out; each child says its own in one `//!` line.
+mod peer;
 mod start_record;
+use peer::{peer_gone, started_ms};
 mod worktree_op;
 use start_record::record_start;
 pub(crate) use worktree_op::{record_started_worktree, started_reply, worktree};
@@ -1047,6 +1049,18 @@ fn connection(
             }
             return reply;
         }
+        // Bot memory layer 3: searched off the lock; a hit from a marked conversation marks the reader.
+        if crate::chat::recall::asked(&env.request) {
+            let owner = token_equal(env.token.as_bytes(), token.as_bytes());
+            return crate::chat::recall::serve(
+                registry,
+                sessions,
+                owner,
+                &env.token,
+                &env.request,
+                home,
+            );
+        }
         // Ticket 573 slice 2: a session's token (or the owner token from inside a session, swapped above) reads its own
         // project's events only.
         if let Request::Events { project, since } = &env.request {
@@ -1832,31 +1846,6 @@ fn connection(
         let _ = sessions.handle(hook);
     }
     written.map_err(|e| e.to_string())
-}
-/// V2.5-48: the hook bridge's start (`started_ms`, beside `token` and `request`); the core clamps it
-/// (`nudge::counted_from`).
-/// Whether the peer closed its end: a held hook's client the agent ended (its timeout, or the person's interrupt).
-fn peer_gone(fd: i32) -> bool {
-    let mut byte = 0u8;
-    // SAFETY: a one-byte, non-blocking peek on the descriptor this connection owns for the whole call.
-    let n = unsafe {
-        libc::recv(
-            fd,
-            (&mut byte as *mut u8).cast(),
-            1,
-            libc::MSG_PEEK | libc::MSG_DONTWAIT,
-        )
-    };
-    n == 0
-}
-fn started_ms(line: &str) -> Option<u64> {
-    #[derive(serde::Deserialize)]
-    struct Started {
-        started_ms: Option<u64>,
-    }
-    serde_json::from_str::<Started>(line)
-        .ok()
-        .and_then(|s| s.started_ms)
 }
 // v1a-13, v1a-23: for a peer inside a live session of this core, that session's token; `None` outside. A peer of
 // another uid, or one the check cannot place, is refused (fail closed).

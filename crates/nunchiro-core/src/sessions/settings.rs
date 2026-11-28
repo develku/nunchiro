@@ -191,6 +191,14 @@ impl Sessions {
         store::write_capped(&path, &bytes, store::SETTINGS_READ_MAX)?;
         let masked = self.settings.history() == Some(true);
         self.settings = next;
+        // Search past conversations turned off: its index goes once that is stored.
+        if !crate::chat::recall::on(
+            self.settings
+                .feature::<crate::team::MemorySettings>(crate::team::MEMORY_KEY)
+                .as_ref(),
+        ) {
+            crate::chat::recall::clear(&self.home)?;
+        }
         // v1a-74: off takes effect once stored: every file under scrollback/ goes, never through a link.
         if self.settings.history().is_none() {
             self.writes.queued.clear();

@@ -282,6 +282,8 @@ pub enum Op {
         #[serde(default)]
         change: Option<memory::Change>,
     },
+    /// The Memory group's Search past conversations line: the index brought up to date first while it is on.
+    MemorySearch {},
     /// A new bot in one step (`bots::first`): a name and one sentence. The rest has a default the owner may change:
     /// Claude on its newest model, in Home, a free face, no seat. `seat`: the seat its template asks for.
     BotNew {
@@ -1850,6 +1852,20 @@ pub fn window(
                 .bot_memory(&id)?
                 .view(&team.soul(&id), change, &settings)?;
             Ok(Reply::BotMemory { id, view })
+        }
+        Op::MemorySearch {} => {
+            let settings = registry
+                .lock()
+                .map_err(|_| "session registry unavailable".to_string())?
+                .feature::<memory::Settings>(memory::MEMORY_KEY);
+            let on = crate::chat::recall::on(settings.as_ref());
+            if on {
+                let sources = crate::chat::recall::sources(registry)?;
+                crate::chat::recall::refresh(home, &sources, crate::queue::now_ms())?;
+            }
+            Ok(Reply::MemorySearch {
+                status: crate::chat::recall::status(home, on),
+            })
         }
         Op::BotNew {
             name,

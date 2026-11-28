@@ -4997,6 +4997,40 @@
       ],
       "type": "object"
     },
+    "MemoryHit": {
+      "description": "A line that holds the search words.",
+      "properties": {
+        "at": {
+          "description": "The transcript record's time, as the agent wrote it.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/AgentKind"
+        },
+        "label": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "text": {
+          "description": "The masked text around the first match, on one line.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "label",
+        "kind",
+        "at",
+        "role",
+        "text"
+      ],
+      "type": "object"
+    },
     "MergeOk": {
       "properties": {
         "at": {
@@ -9247,6 +9281,49 @@
             "type",
             "id",
             "text"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "`nunchiro memory search`: the past conversations' lines that hold the words, newest first, and how many matched.",
+          "properties": {
+            "hits": {
+              "items": {
+                "$ref": "#/$defs/MemoryHit"
+              },
+              "type": "array"
+            },
+            "total": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": {
+              "const": "memory_hits",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "hits",
+            "total"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The Memory group's Search past conversations line (`team::Op::MemorySearch`).",
+          "properties": {
+            "status": {
+              "$ref": "#/$defs/Status"
+            },
+            "type": {
+              "const": "memory_search",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "status"
           ],
           "type": "object"
         },
@@ -16250,6 +16327,37 @@
       "required": [
         "kind",
         "project"
+      ],
+      "type": "object"
+    },
+    "Status": {
+      "description": "The Memory group's line: on, how many conversations, how big, when.",
+      "properties": {
+        "bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "conversations": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "on": {
+          "type": "boolean"
+        },
+        "updated_ms": {
+          "description": "0: not built yet.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "on",
+        "conversations",
+        "bytes",
+        "updated_ms"
       ],
       "type": "object"
     },

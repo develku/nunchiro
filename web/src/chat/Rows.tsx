@@ -23,7 +23,7 @@ import { docPath, slug } from '../files/docLinks'; // ticket 375
 import { pathRef, toolPath } from './paths'; // needs 171
 import type { Act } from '../queue/answer'; // v1b-12
 import { answer, cardPlan, Pending, sessionPath } from './pending'; // v1b-12
-import { groupLine, inputText, outputText, plain, shownOutput, summaryLabel, taskLine, toolLine, type Image, type Row, type Tool } from './model';
+import { groupLine, inputText, isMemorySearch, outputText, plain, shownOutput, summaryLabel, taskLine, toolLine, type Image, type Row, type Tool } from './model';
 import { fileOf, mdSource, nameOf, PathChip, savedPaths, Thumbnail } from '../images/Thumbnail'; // v1b-05, V2-10a: fileOf, mdSource, PathChip; V2-10b: nameOf
 
 export const CAP = 200;
@@ -38,6 +38,7 @@ import { SenderFace, useChangedBy, useSentBy } from '../queue/Knock';
 import { useTeamNow } from '../lead/lead';
 import { agentState, status } from '../types';
 import { TurnFiles } from './TurnFiles'; // ticket 222
+import { MemoryHits, memoryHits } from './MemoryHits';
 
 /** Ticket 1072: what the lead's "View in Team" line calls (CentreView's openTeam); null where no Team view exists (a peek). */
 export const TeamOpen = createContext<(() => void) | null>(null);
@@ -810,7 +811,7 @@ function RowBody({ row, session, control = false }: { row: Row; session: string;
         </Disclose>
       );
     case 'tool':
-      return <ToolRow tool={row.tool} />;
+      return isMemorySearch(row.tool) && memoryHits(row.tool) ? <MemoryHits tool={row.tool} /> : <ToolRow tool={row.tool} />;
     case 'group': {
       const [label, detail] = groupLine(row.tools);
       return (

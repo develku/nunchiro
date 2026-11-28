@@ -171,10 +171,10 @@ impl Sessions {
 }
 
 /// A Claude seat's deny rules for the files only the core writes: every bot's memory index and topic files, USER.md,
-/// the core's memory records, and the SOUL.md of every bot whose first chat is over (the owner edits it on the Bots
-/// page). Each rule has a twin that matches any case, as `folder_permissions`. A character of the home's path that the
-/// rule syntax could read as a pattern is matched by `?`, so the rules still cover the files (and at most a look-alike
-/// path beside them), never drop.
+/// the core's memory records, the search index of past conversations (not read either), and the SOUL.md of every
+/// bot whose first chat is over (the owner edits it on the Bots page). Each rule has a twin that matches any case, as
+/// `folder_permissions`. A character of the home's path that the rule syntax could read as a pattern is matched by
+/// `?`, so the rules still cover the files (and at most a look-alike path beside them), never drop.
 pub(super) fn deny_memory(settings: &mut serde_json::Map<String, serde_json::Value>, home: &Path) {
     let path: String = home
         .to_string_lossy()
@@ -197,12 +197,22 @@ pub(super) fn deny_memory(settings: &mut serde_json::Map<String, serde_json::Val
         "team/*/memory/**",
         "team/USER.md",
         "memory-state/**",
+        crate::chat::recall::RULE,
     ]
     .map(String::from)
     .into_iter()
     .chain(souls)
     .flat_map(|p| [any_case(&p), p])
-    .map(|p| serde_json::Value::String(format!("Edit(/{path}/{p})")))
+    .map(|p| format!("Edit(/{path}/{p})"))
+    // The search index is read only through `nunchiro memory search`, which passes an outside mark on to the reader.
+    .chain(
+        [
+            any_case(crate::chat::recall::RULE),
+            crate::chat::recall::RULE.into(),
+        ]
+        .map(|p| format!("Read(/{path}/{p})")),
+    )
+    .map(serde_json::Value::String)
     .collect();
     let permissions = settings
         .entry("permissions")
