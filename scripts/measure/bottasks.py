@@ -4,7 +4,7 @@ files under fixtures/p35; nothing here talks to a mail or calendar account or to
 
 Usage:
   bottasks.py setup TASK RUN [--root DIR]
-      A fresh copy of the task's fixture in a new folder under DIR (default $TMPDIR/nunchiro-p35); prints the folder
+      A fresh copy of the task's fixture in a new folder under DIR (default $TMPDIR/nunchiro-p35, its real path); prints the folder
       and the exact first message to send. Answer keys (mail labels, free hours, the planted line) stay here.
   bottasks.py check DIR --touches N [--stalled ID --agents-before FILE --events FILE] [--card-shown] [--out FILE]
       Checks the run in DIR against its task's acceptance and appends one JSON line to
@@ -82,6 +82,7 @@ def setup(task, run, root=None):
         raise SystemExit(f"task 1-10 and run 1-3, not {task} {run}")
     root = Path(root or Path(tempfile.gettempdir()) / "nunchiro-p35")
     root.mkdir(parents=True, exist_ok=True)
+    root = root.resolve()  # the core refuses a project through a symlink, and macOS $TMPDIR (/var/folders) is one
     d = Path(tempfile.mkdtemp(prefix=f"p35-t{task:02d}-r{run}-{time.strftime('%Y%m%d-%H%M%S')}-", dir=root))  # always new
     meta = dict(task=task, run=run, fixture=fixture_version(), created=time.strftime("%Y-%m-%dT%H:%M:%S"))
     if task <= 7:

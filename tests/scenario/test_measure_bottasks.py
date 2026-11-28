@@ -83,6 +83,19 @@ class Tasks(unittest.TestCase):
         self.assertNotEqual(r, d)
         self.assertEqual(subprocess.run(["git", "status", "--porcelain"], cwd=r / "repo", capture_output=True, text=True).stdout, "")
 
+    def test_run_folder_is_a_real_path(self):
+        # The core refuses a project through a symlink; macOS $TMPDIR (/var/folders) is one, so the default root is resolved.
+        real = self.root / "real"
+        real.mkdir()
+        (self.root / "link").symlink_to(real)
+        from unittest import mock
+        with mock.patch.object(b.tempfile, "gettempdir", return_value=str(self.root / "link")):
+            d, _, _ = b.setup(1, 1)
+        self.assertEqual(d, d.resolve())
+        d, _, first = b.setup(8, 1, self.root / "link")
+        self.assertEqual(d, d.resolve())
+        self.assertIn(str(d), first)
+
     def test_calendar_key_matches_the_ics(self):
         key = json.loads((b.FIX / "calendar/key.json").read_text())
         ics = (b.FIX / "calendar/week.ics").read_text()
