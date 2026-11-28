@@ -516,12 +516,13 @@ pub(crate) fn output_with_input(
     run_capped(command, timeout, OUTPUT_CAP, false, Some(input), None)
 }
 /// `output_with_input` that hands the child's PID (its process group) to `spawned` once it runs, so a caller can stop
-/// that run alone (the Diff panel's Write with AI Cancel).
+/// that run alone (the Diff panel's Write with AI Cancel), and `None` just before the child is reaped, so that PID is
+/// forgotten before it can be reused.
 pub(crate) fn output_watched(
     command: Command,
     timeout: Duration,
     input: Vec<u8>,
-    spawned: &dyn Fn(u32),
+    spawned: &dyn Fn(Option<u32>),
 ) -> Result<Output, String> {
     run_capped(
         command,
@@ -538,7 +539,7 @@ fn run_capped(
     cap: usize,
     detached: bool,
     input: Option<Vec<u8>>,
-    spawned: Option<&dyn Fn(u32)>,
+    spawned: Option<&dyn Fn(Option<u32>)>,
 ) -> Result<Output, String> {
     // Round 2: the file name only, never a full path, arguments or environment (the error can reach a reply).
     let program = std::path::Path::new(command.get_program())
@@ -558,8 +559,13 @@ fn run_capped(
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| e.to_string())?;
+    let forget = || {
+        if let Some(spawned) = spawned {
+            spawned(None);
+        }
+    };
     if let Some(spawned) = spawned {
-        spawned(child.id());
+        spawned(Some(child.id()));
     }
     // A writer thread, so a child that reads slowly (or not at all) never blocks the output loop; it ends at EOF or EPIPE.
     if let (Some(bytes), Some(mut stdin)) = (input, child.stdin.take()) {
@@ -616,6 +622,7 @@ fn run_capped(
                     .contains(&e.kind()) => {}
                 Err(e) => {
                     if status.is_none() {
+                        forget();
                         stop_command(&mut child);
                     }
                     return Err(e.to_string());
@@ -625,6 +632,7 @@ fn run_capped(
         if status.is_none() {
             match ended(child.id()) {
                 Ok(true) => {
+                    forget();
                     // Retire the group before wait() releases the leader's PID for reuse.
                     unsafe {
                         libc::killpg(child.id() as i32, libc::SIGKILL);
@@ -653,6 +661,7 @@ fn run_capped(
         }
     };
     if result.is_err() && status.is_none() {
+        forget();
         if detached {
             unsafe {
                 libc::killpg(child.id() as i32, libc::SIGKILL);
