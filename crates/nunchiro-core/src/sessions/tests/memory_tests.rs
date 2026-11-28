@@ -57,9 +57,31 @@ fn a_resumed_seat_keeps_its_mark_and_an_unseen_seat_only_proposes() {
 
 #[test]
 fn a_marked_seat_marks_who_hears_it() {
-    let (mut core, launches, [seat, worker, _, other]) = family("memory-room");
+    let (mut core, launches, [seat, worker, sub, other]) = family("memory-room");
     let home = core.home.clone();
     bot_seat(&mut core, &seat, "bot-a");
+    let marked = |id: &str| crate::team::outside(&home, &[id.to_string()]);
+    // A message from a session whose tool calls the core cannot see (a plain terminal here) marks its reader too.
+    let Ok(Reply::Room { messages }) = core.handle_agent(
+        &other,
+        Request::RoomSend {
+            to: Some(sub.id.clone()),
+            thread: None,
+            body: "hello".into(),
+            ask: false,
+            project: None,
+        },
+    ) else {
+        panic!("room send")
+    };
+    let _ = core.handle_agent(
+        &sub,
+        Request::RoomThread {
+            thread: messages[0].thread.clone(),
+            project: None,
+        },
+    );
+    assert_eq!(marked(&sub.id), Some(Source::Tool));
     // Not marked: its words mark nobody.
     let _ = core.handle_agent(
         &seat,
@@ -84,21 +106,30 @@ fn a_marked_seat_marks_who_hears_it() {
         crate::team::outside(&home, std::slice::from_ref(&other.id)),
         Some(Source::Web)
     );
-    // A room message: every session of the room hears it.
-    let _ = core.handle_agent(
+    // A room message marks the seat that reads it, when it reads it.
+    let Ok(Reply::Room { messages }) = core.handle_agent(
         &seat,
         Request::RoomSend {
-            to: None,
+            to: Some(worker.id.clone()),
             thread: None,
             body: "from the page".into(),
             ask: false,
             project: None,
         },
+    ) else {
+        panic!("room send")
+    };
+    let thread = messages[0].thread.clone();
+    assert_eq!(marked(&worker.id), None, "not read yet");
+    let read = core.handle_agent(
+        &worker,
+        Request::RoomThread {
+            thread,
+            project: None,
+        },
     );
-    assert_eq!(
-        crate::team::outside(&home, std::slice::from_ref(&worker.id)),
-        Some(Source::Web)
-    );
+    assert!(matches!(read, Ok(Reply::Room { .. })), "{read:?}");
+    assert_eq!(marked(&worker.id), Some(Source::Web));
     end_family(core, launches);
 }
 

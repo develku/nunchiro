@@ -539,3 +539,19 @@ fn a_full_index_and_a_long_task_stay_within_one_send() {
     );
     let _ = fs::remove_dir_all(home);
 }
+
+#[test]
+fn a_mark_the_disk_refuses_still_holds() {
+    let home = std::env::temp_dir().join(format!("nunchiro-mark-{}", store::new_id().unwrap()));
+    // `memory-state` is a file: no mark can be written under it.
+    fs::create_dir_all(&home).unwrap();
+    fs::write(home.join(STATE), "not a folder").unwrap();
+    assert!(mark_outside(&home, "seat-1", Source::Mail).is_err());
+    assert_eq!(
+        outside(&home, &["seat-1".to_string()]),
+        Some(Source::Mail),
+        "a failed mark counts as marked"
+    );
+    assert_eq!(outside(&home, &["seat-2".to_string()]), None);
+    let _ = fs::remove_dir_all(home);
+}

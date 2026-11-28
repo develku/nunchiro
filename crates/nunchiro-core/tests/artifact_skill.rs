@@ -200,6 +200,22 @@ fn permissions(folder: &Path) -> Value {
     ]
     .iter()
     .map(|p| format!("Edit(/{f}/{p})"))
+    // Every Claude seat is also denied the files only the core writes: the bots' memory (`<home>/artifacts/<id>`).
+    .chain(
+        [
+            "team/*/MEMORY.md",
+            "team/*/memory/**",
+            "team/USER.md",
+            "memory-state/**",
+        ]
+        .iter()
+        .map(|p| {
+            format!(
+                "Edit(/{}/{p})",
+                folder.parent().unwrap().parent().unwrap().display()
+            )
+        }),
+    )
     .collect();
     json!({"allow": [format!("Edit(/{f}/**)")], "deny": deny})
 }
@@ -782,7 +798,15 @@ fn no_never_matches_warning_at_start() {
     let core = Core::new("nowarn", None, None);
     let (s, argv, _) = core.start(AgentKind::Claude, None, &[]);
     let permissions = claude_settings(&argv)["permissions"].clone();
-    let folder = core.folder(&s.id).display().to_string();
+    // Under the home: the session's folder, and the bots' memory files every Claude seat is denied.
+    let folder = core
+        .folder(&s.id)
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .display()
+        .to_string();
     for key in ["allow", "deny"] {
         let rules = permissions[key].as_array().unwrap();
         assert!(!rules.is_empty(), "{key}");

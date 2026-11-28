@@ -1012,17 +1012,28 @@ pub fn mark_outside(home: &Path, session: &str, source: Source) -> Result<(), St
     if outside(home, &[session.to_string()]).is_some_and(|s| s >= source) {
         return Ok(());
     }
-    store::private_dir(&state_root(home))?;
-    store::private_dir(&state_root(home).join("outside"))?;
-    store::atomic_write(&path, source.words().as_bytes())
+    let written = store::private_dir(&state_root(home))
+        .and_then(|()| store::private_dir(&state_root(home).join("outside")))
+        .and_then(|()| store::atomic_write(&path, source.words().as_bytes()));
+    if written.is_err()
+        && let Ok(mut unwritten) = UNWRITTEN.lock()
+    {
+        // Fail closed: a mark the disk refused still holds for as long as this core runs.
+        unwritten.insert(path, source);
+    }
+    written
 }
+/// Marks a write failed on (`mark_outside`), by their file.
+static UNWRITTEN: std::sync::Mutex<std::collections::BTreeMap<PathBuf, Source>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
 /// What outside content any of `sessions` (a seat and the runs it continues) read, the most telling first.
 pub fn outside(home: &Path, sessions: &[String]) -> Option<Source> {
     sessions
         .iter()
         .filter_map(|s| {
             let path = mark_file(home, s).ok()?;
-            Source::parse(Memory::read_text(&path).trim())
+            let unwritten = UNWRITTEN.lock().ok().and_then(|u| u.get(&path).copied());
+            Source::parse(Memory::read_text(&path).trim()).max(unwritten)
         })
         .max()
 }

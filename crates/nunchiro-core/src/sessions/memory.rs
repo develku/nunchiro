@@ -104,31 +104,34 @@ impl Sessions {
         }
     }
 
-    /// A marked session's words carry its mark: what it types into another session, or says in its room, marks every
-    /// session that hears it (the whole room: a message to one may be read by any).
+    /// A marked session's words carry its mark: what it types into another session marks that session.
     pub(super) fn pass_outside(&self, caller: &str, request: &Request) {
-        let Some(source) = self.read_outside(caller) else {
-            return;
-        };
-        let heard: Vec<String> = match request {
+        let id = match request {
             Request::AgentSend { id, .. }
             | Request::AgentPrompt { id, .. }
             | Request::SendText { id, .. }
-            | Request::SteerNow { id, .. } => vec![id.clone()],
-            Request::RoomSend { .. } | Request::RoomReply { .. } => {
-                let room = self.entries.get(caller).map(|e| e.meta.project.clone());
-                self.entries
-                    .values()
-                    .filter(|e| e.meta.id != caller && Some(&e.meta.project) == room.as_ref())
-                    .map(|e| e.meta.id.clone())
-                    .collect()
-            }
+            | Request::SteerNow { id, .. } => id,
             _ => return,
         };
-        for id in heard {
-            if let Err(e) = crate::team::mark_outside(&self.home, &id, source) {
-                eprintln!("session {id}: outside read not passed on: {e}");
-            }
+        if let Some(source) = self.read_outside(caller)
+            && let Err(e) = crate::team::mark_outside(&self.home, id, source)
+        {
+            eprintln!("session {id}: outside read not passed on: {e}");
+        }
+    }
+
+    /// A seat read room messages (`agent check`, a thread, an answer): one from a marked seat marks it, and so does one
+    /// from a seat the core cannot see.
+    pub(super) fn hear(&self, seat: &str, messages: &[crate::room::Message]) {
+        let source = messages
+            .iter()
+            .filter(|m| m.from != seat && m.created_by == crate::room::By::Agent)
+            .filter_map(|m| self.read_outside(&m.from))
+            .max();
+        if let Some(source) = source
+            && let Err(e) = crate::team::mark_outside(&self.home, seat, source)
+        {
+            eprintln!("session {seat}: room read not marked: {e}");
         }
     }
 }
