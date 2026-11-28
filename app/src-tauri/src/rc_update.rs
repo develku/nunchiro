@@ -9,7 +9,7 @@
 //! (crates/nunchiro/src/update.rs). The app then relaunches.
 //!
 //! The official release (owner 11-21, `scripts/build-release.sh`: Developer ID signed, notarized, with the release update
-//! key) also reads `latest.json` from GitHub Releases of develku/nunchiro, then the local feed `<core home>/update`
+//! key) also reads `latest.json` from GitHub Releases of nunchiro/nunchiro, then the local feed `<core home>/update`
 //! served on loopback (the updater plugin fetches only over HTTP). The repository is private for now and a private
 //! release asset needs a token; no token is put in an app (Orca and T3 Code both read public release URLs only). So
 //! GitHub answers 404 and the local feed is the one in use, filled by `build-release.sh --local`. All of it runs here in
@@ -38,7 +38,7 @@ const MANIFEST: &str = "latest.json";
 const ARCHIVE: &str = "Nunchiro.app.tar.gz";
 const EVERY: Duration = Duration::from_secs(10 * 60);
 /// Where `scripts/build-release.sh --publish` puts the official app's releases.
-const RELEASES: &str = "https://github.com/develku/nunchiro/releases";
+const RELEASES: &str = "https://github.com/nunchiro/nunchiro/releases";
 /// Ticket 1082: the update folder, one line in the core home (the CLI reads the same file).
 const SOURCE: &str = "update-source";
 /// Ticket 1107 (plan section 4): the highest version this home has run, in the core home; a feed build older than it is
@@ -960,7 +960,7 @@ mod tests {
         assert_eq!(
             endpoints(4000),
             [
-                "https://github.com/develku/nunchiro/releases/latest/download/latest.json",
+                "https://github.com/nunchiro/nunchiro/releases/latest/download/latest.json",
                 local
             ]
         );
@@ -1000,7 +1000,7 @@ mod tests {
         assert!(trusted_archive(&url(&good), 4000));
         assert!(!trusted_archive(&url(&good), 4001));
         let github =
-            "https://github.com/develku/nunchiro/releases/download/v0.1.0/Nunchiro.app.tar.gz";
+            "https://github.com/nunchiro/nunchiro/releases/download/v0.1.0/Nunchiro.app.tar.gz";
         assert!(trusted_archive(&url(github), 4000));
         for bad in [
             format!("https://127.0.0.1:4000/{ARCHIVE}"),
@@ -1008,17 +1008,17 @@ mod tests {
             format!("http://example.com:4000/{ARCHIVE}"),
             "http://127.0.0.1:4000/other.tar.gz".to_string(),
             "http://127.0.0.1:4000/Nunchiro-RC.app.tar.gz".to_string(),
-            "http://github.com/develku/nunchiro/releases/download/v0.1.0/Nunchiro.app.tar.gz"
+            "http://github.com/nunchiro/nunchiro/releases/download/v0.1.0/Nunchiro.app.tar.gz"
                 .into(),
             "https://github.com/someone/nunchiro/releases/download/v0.1.0/Nunchiro.app.tar.gz"
                 .into(),
-            "https://github.com/develku/nunchiro/releases/download/../../../../someone/x/a.tar.gz"
+            "https://github.com/nunchiro/nunchiro/releases/download/../../../../someone/x/a.tar.gz"
                 .into(),
-            "https://github.com@example.com/develku/nunchiro/releases/download/v0.1.0/a.tar.gz"
+            "https://github.com@example.com/nunchiro/nunchiro/releases/download/v0.1.0/a.tar.gz"
                 .into(),
-            "https://github.com.example.com/develku/nunchiro/releases/download/v0.1.0/a.tar.gz"
+            "https://github.com.example.com/nunchiro/nunchiro/releases/download/v0.1.0/a.tar.gz"
                 .into(),
-            "https://example.com/develku/nunchiro/releases/download/v0.1.0/Nunchiro.app.tar.gz"
+            "https://example.com/nunchiro/nunchiro/releases/download/v0.1.0/Nunchiro.app.tar.gz"
                 .into(),
         ] {
             assert!(!trusted_archive(&url(&bad), 4000), "{bad}");

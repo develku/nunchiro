@@ -28,7 +28,7 @@ when that identity is missing; no Apple Developer ID). There is no download and 
 ## Install from source
 
 ```sh
-git clone https://github.com/develku/nunchiro.git && cd nunchiro
+git clone https://github.com/nunchiro/nunchiro.git && cd nunchiro
 pnpm install --frozen-lockfile
 pnpm --filter nunchiro-web build
 (cd app && pnpm exec tauri build --bundles app --config '{"bundle":{"active":true}}')

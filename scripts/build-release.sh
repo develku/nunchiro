@@ -7,7 +7,7 @@
 #   build-release.sh prerelease|release --local    then also put the archive and latest.json in the local feed
 #                                                  (${NUNCHIRO_HOME:-~/.nunchiro}/update), which the installed app reads
 #                                                  while the repository is private
-#   build-release.sh prerelease|release --publish  then also upload them, the DMG and the SBOMs to GitHub Releases of develku/nunchiro (gh)
+#   build-release.sh prerelease|release --publish  then also upload them, the DMG and the SBOMs to GitHub Releases of nunchiro/nunchiro (gh)
 #   build-release.sh <channel> --finish [--local|--publish]
 #                                                  no build: waits for the notarization already sent for the app in
 #                                                  .scratch/release/<channel>/ and goes on from there. For a run that
@@ -21,7 +21,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 root=$(pwd -P)
-REPO=develku/nunchiro
+REPO=nunchiro/nunchiro
 APP_ID=dev.nunchiro.app
 IDENTITY="Developer ID Application"
 PROFILE=nunchiro-notary

@@ -23,7 +23,7 @@ pub const FOLDER: &str = "plugins";
 pub const MANIFEST: &str = "plugin.toml";
 /// Where `plugin.toml` points editors for completion and checks (taplo's `#:schema` line).
 pub const SCHEMA_URL: &str =
-    "https://raw.githubusercontent.com/develku/nunchiro/main/docs/api/plugin.schema.json";
+    "https://raw.githubusercontent.com/nunchiro/nunchiro/main/docs/api/plugin.schema.json";
 const STORE: &str = "plugins.json";
 const MAX_BYTES: usize = 64 * 1024;
 const MAX_PARTS: usize = 32;

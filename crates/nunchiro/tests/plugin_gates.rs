@@ -732,7 +732,7 @@ fn killed_by_catalogue(home: &Path, reason: &str) {
 }
 /// As `killed_by_catalogue`; `was_on`: it was on when the list blocked it.
 fn killed(home: &Path, reason: &str, was_on: bool) {
-    let origin = "https://raw.githubusercontent.com/develku/nunchiro/";
+    let origin = "https://raw.githubusercontent.com/nunchiro/nunchiro/";
     let file = home.join("plugins.json");
     let mut store: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
