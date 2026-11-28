@@ -75,12 +75,16 @@ jobs:
       - run: pnpm typecheck
         working-directory: web
 
-  # clippy, doctests and one build of every test binary; the partitions below run the archive.
+  # clippy, doctests and one build of every test binary; on pull requests the partitions below run the archive. A push
+  # to main runs the archive here instead: main runs fill most of the 5-job macOS queue and are never cancelled, so one
+  # job instead of three per main tip, and the `tests` output tells `gate` the tests ran.
   rust-build:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.web_only != 'true'
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
+    outputs:
+      tests: ${{ steps.tests.outputs.ran }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install
@@ -101,7 +105,17 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo nextest archive --workspace --config-file scripts/nextest.toml --archive-file nextest-archive.tar.zst
       - run: cargo test --workspace --doc
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - if: github.event_name == 'push'
+        run: git config --global user.name ci && git config --global user.email ci@localhost
+      # The same archive and flags as rust-test, unpartitioned; `ran` is only set when every test passed.
+      - id: tests
+        if: github.event_name == 'push'
+        run: |
+          cargo nextest run --archive-file nextest-archive.tar.zst --workspace-remap . --extract-to . --extract-overwrite \
+            --config-file scripts/nextest.toml --no-tests fail --test-threads 4
+          echo "ran=true" >> "$GITHUB_OUTPUT"
+      - if: github.event_name != 'push'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nextest-archive
           path: nextest-archive.tar.zst
@@ -110,6 +124,7 @@ jobs:
 
   rust-test:
     needs: rust-build
+    if: github.event_name != 'push' # a push runs the tests in rust-build
     runs-on: macos-latest
     timeout-minutes: 45
     # Two partitions at 4 test threads each, not three at the runner's 3: most tests wait on a spawned core or a timeout,
@@ -249,7 +264,8 @@ jobs:
   # The one required check of the merge queue. `always()`: a skipped or cancelled job must still fail it (T3 Code
   # ci.yml:660-696; Orca pr.yml:1279). Add every new job to `needs`. The allowed skips: `app` when `changes` said no app
   # input changed, `rust-build`, `rust-test` and `web` when `changes` said only safe docs changed, and `rust-build` and
-  # `rust-test` when it said only window code and tests no Rust file reads changed.
+  # `rust-test` when it said only window code and tests no Rust file reads changed, and `rust-test` when rust-build ran
+  # the tests itself (a push to main) and says so in its `tests` output.
   gate:
     if: always()
     needs: [lint, changes, rust-build, rust-test, app, web]
@@ -261,7 +277,8 @@ jobs:
         run: |
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           echo "$RESULTS" | jq -e '.changes.outputs.app as $app | .changes.outputs.docs_only as $docs
-            | .changes.outputs.web_only as $webonly | all(to_entries[];
+            | .changes.outputs.web_only as $webonly | .["rust-build"].outputs.tests as $tests | all(to_entries[];
             .value.result == "success" or (.key == "app" and .value.result == "skipped" and $app == "false")
             or ((.key == "rust-build" or .key == "rust-test" or .key == "web") and .value.result == "skipped" and $docs == "true")
-            or ((.key == "rust-build" or .key == "rust-test") and .value.result == "skipped" and $webonly == "true"))' > /dev/null
+            or ((.key == "rust-build" or .key == "rust-test") and .value.result == "skipped" and $webonly == "true")
+            or (.key == "rust-test" and .value.result == "skipped" and $tests == "true"))' > /dev/null

@@ -17,6 +17,7 @@ import { openRow } from './accounts-rows';
 import { expect, openWindow, test } from './fixtures';
 import { openAt, setup, view } from './fixtures/files/harness';
 import { openQuiet } from './tree-seed';
+import { startOf } from './start-op';
 
 const TABLES = mergeAreas({ en: {}, ko: {}, ja: {}, 'zh-Hans': {}, 'zh-Hant': {}, es: {}, fr: {}, pt: {} }, { core578, errors, kit, dialog, exitWidgets, accounts, accountAdd });
 const words = (lang: Lang) => makeT<string>(lang, lang, TABLES as never);
@@ -70,7 +71,7 @@ for (const lang of LANGS) {
       ['continuing on another account is for Claude sessions for now', 'err.c.accountCarry'],
     ];
     for (const [raw, key] of cases) {
-      arm((r) => r.op === 'start', raw);
+      arm((r) => !!startOf(r), raw);
       await app.locator('[data-icon="terminal"] button.ai').click();
       const line = t('exitWidgets.notStarted', { error: t(key as never) });
       const toast = app.locator('.toast').filter({ hasText: line });

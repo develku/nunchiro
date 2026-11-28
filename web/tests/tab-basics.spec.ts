@@ -150,3 +150,18 @@ test('tab_arrows_do_nothing_in_the_rename_field', async ({ app, core }) => {
   await expect(field).toHaveValue('abc');
   await expect(tab(app, b)).toHaveAttribute('aria-selected', 'false');
 });
+
+// A real drive: the tab strip's New session "+" followed the last tab, so it moved with every new tab. It stays at the end.
+test('new_session_plus_stays_put_as_tabs_are_added', async ({ app, core }) => {
+  const p = core.project('demo');
+  const a = core.shell(p, 'one').id;
+  await openWindow(app);
+  await expect(tab(app, a)).toHaveCount(1);
+  const plus = app.locator('.zh > .tadd');
+  const x = async () => Math.round((await plus.boundingBox())!.x);
+  const before = await x();
+  const file = await openFile(app, a);
+  await expect(tab(app, file)).toBeVisible();
+  await openFile(app, a, 'other.txt');
+  expect(await x()).toBe(before);
+});
