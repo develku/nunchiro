@@ -6,11 +6,12 @@ Usage:
   bottasks.py setup TASK RUN [--root DIR]
       A fresh copy of the task's fixture in a new folder under DIR (default $TMPDIR/nunchiro-p35); prints the folder
       and the exact first message to send. Answer keys (mail labels, free hours, the planted line) stay here.
-  bottasks.py check DIR --touches N [--stalled ID --agents-before FILE --agents-after FILE] [--card-shown] [--out FILE]
+  bottasks.py check DIR --touches N [--stalled ID --agents-before FILE --events FILE] [--card-shown] [--out FILE]
       Checks the run in DIR against its task's acceptance and appends one JSON line to
       docs/measure/bottasks-<date>.jsonl (or --out). A run passes when the acceptance holds and N, the owner's inputs
-      after the first message, is 0. Task 6 takes the stalled worker's session id and `nunchiro agent list --json`
-      saved before the stall and after the end; task 9 takes --card-shown when the approval card was seen.
+      after the first message, is 0. Task 6 takes the stalled worker's session id, `nunchiro agent list --json` saved
+      right before the stall and `nunchiro events --history 2` saved after the end; task 9 takes --card-shown when the
+      approval card was seen.
   bottasks.py report [FILE...]
       The figures from the JSON lines (the newest line per task and run): written by `scorecard.py bottasks` only when
       all ten tasks have their three runs on one fixture version.
@@ -227,14 +228,23 @@ def agents(path):
 def check_6(d, meta, obs, tmp):
     repo = d / "repo"
     why = suite(repo, BASE_TESTS + 1) + expect(repo, ["pow", "2", "10"], "1024")
-    if not (obs.get("stalled") and obs.get("agents_before") and obs.get("agents_after")):
-        return why + ["task 6 needs --stalled, --agents-before and --agents-after"]
-    before, after = agents(obs["agents_before"]), agents(obs["agents_after"])
+    if not (obs.get("stalled") and obs.get("agents_before") and obs.get("events")):
+        return why + ["task 6 needs --stalled, --agents-before and --events"]
+    before = agents(obs["agents_before"])
     if obs["stalled"] not in before:
         why.append("the stalled worker is not in the list saved before the stall")
-    fresh = [k for k, r in after.items() if k not in before and r.get("kind") != "shell"]
-    if not fresh:
-        why.append("no fresh agent conversation was started after the stall")
+    # "A fresh conversation was started": the core's own journal of starts, not the list at the end, which no longer
+    # shows a worker the lead closed. A session of this run's project that the list before the stall does not hold,
+    # started after that list was saved, and that went to work: a shell never works, a seat nobody prompted is no
+    # conversation.
+    stalled_at = Path(obs["agents_before"]).stat().st_mtime * 1000
+    events = [json.loads(line) for line in Path(obs["events"]).read_text().splitlines() if line.strip()]
+    mine = [e for e in events if e.get("session") and e["session"] not in before
+            and repo.resolve() in [(q := Path(e.get("project") or "/").resolve()), *q.parents]]
+    started = {e["session"] for e in mine if e.get("type") == "session_started" and e.get("at", 0) > stalled_at}
+    if not started & {e["session"] for e in mine if e.get("state") == "working"}:
+        full = any(e.get("type") == "journal_full" for e in events)
+        why.append("no fresh agent conversation was started after the stall" + (" (the journal is full: its day file stopped)" if full else ""))
     return why
 
 
@@ -372,8 +382,8 @@ def main(argv=None):
     c.add_argument("dir")
     c.add_argument("--touches", type=int, required=True, help="the owner's inputs after the first message")
     c.add_argument("--stalled", help="task 6: the stalled worker's session id")
-    c.add_argument("--agents-before", help="task 6: `nunchiro agent list --json` saved before the stall")
-    c.add_argument("--agents-after", help="task 6: the same, saved after the task ended")
+    c.add_argument("--agents-before", help="task 6: `nunchiro agent list --json` saved right before the stall (its saved time is read)")
+    c.add_argument("--events", help="task 6: `nunchiro events --history 2` saved after the task ended")
     c.add_argument("--card-shown", action="store_true", help="task 9: the approval card was seen in the window")
     c.add_argument("--out")
     r = sub.add_parser("report")
@@ -384,7 +394,7 @@ def main(argv=None):
         print(f"run folder: {d}\n{where}. The first message (send it unchanged):\n\n{first}")
         return None
     if a.cmd == "check":
-        rec = check(a.dir, a.touches, dict(stalled=a.stalled, agents_before=a.agents_before, agents_after=a.agents_after,
+        rec = check(a.dir, a.touches, dict(stalled=a.stalled, agents_before=a.agents_before, events=a.events,
                                            card_shown=a.card_shown))
         out = Path(a.out) if a.out else OUT_DIR / f"bottasks-{time.strftime('%Y-%m-%d')}.jsonl"
         with out.open("a") as f:
