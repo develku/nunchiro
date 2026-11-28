@@ -150,6 +150,9 @@ pub fn home_lock(home: &Path, args: &[String]) -> ! {
         .ok()
         .filter(|n| *n as u64 <= PAYLOAD_MAX)
         .and_then(|_| serde_json::from_slice::<serde_json::Value>(&payload).ok());
+    let cwd = call
+        .as_ref()
+        .and_then(|v| v.get("cwd")?.as_str().map(std::path::PathBuf::from));
     let Some((tool, input)) = call.and_then(|v| {
         let tool = v.get("tool_name")?.as_str()?.to_string();
         Some((tool, v.get("tool_input").cloned().unwrap_or_default()))
@@ -162,7 +165,9 @@ pub fn home_lock(home: &Path, args: &[String]) -> ! {
     let grants = env::var("NUNCHIRO_SESSION")
         .map(|id| nunchiro_core::folder_grant::load(home, &id))
         .unwrap_or_default();
-    if let Some(verdict) = nunchiro_core::folder_grant::decide(&tool, &input, &grants) {
+    if let Some(verdict) =
+        nunchiro_core::folder_grant::decide(&tool, &input, cwd.as_deref(), &grants)
+    {
         let out = match verdict {
             nunchiro_core::folder_grant::Verdict::Allow(why) => hook_output("allow", why),
             nunchiro_core::folder_grant::Verdict::Deny(why) => hook_output("deny", why),

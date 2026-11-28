@@ -253,7 +253,7 @@ pub enum Verdict {
 
 /// The hook's grant rules for one call: Write, Edit and the plain file line run unasked inside a granted folder; the
 /// file tools are refused in a folder the owner removed (it stays one of Claude's working folders).
-pub fn decide(tool: &str, input: &Value, grants: &Grants) -> Option<Verdict> {
+pub fn decide(tool: &str, input: &Value, cwd: Option<&Path>, grants: &Grants) -> Option<Verdict> {
     let path = |key: &str| input.get(key).and_then(Value::as_str).map(Path::new);
     let target = match tool {
         "Read" | "Write" | "Edit" => path("file_path"),
@@ -476,7 +476,7 @@ mod tests {
             removed: vec![],
         };
         let allow = |tool: &str, input: Value, g: &Grants| {
-            matches!(decide(tool, &input, g), Some(Verdict::Allow(_)))
+            matches!(decide(tool, &input, None, g), Some(Verdict::Allow(_)))
         };
         let w = |p: PathBuf| json!({"file_path": p});
         let sh = |c: String| json!({"command": c});
@@ -545,20 +545,20 @@ mod tests {
         for tool in ["Read", "Write", "Edit"] {
             assert!(
                 matches!(
-                    decide(tool, &w(inside.join("inbox/a.eml")), &gone),
+                    decide(tool, &w(inside.join("inbox/a.eml")), None, &gone),
                     Some(Verdict::Deny(_))
                 ),
                 "{tool}"
             );
         }
         assert!(matches!(
-            decide("Glob", &json!({"path": inside}), &gone),
+            decide("Glob", &json!({"path": inside}), None, &gone),
             Some(Verdict::Deny(_))
         ));
-        assert!(decide("Read", &w(outside.join("x")), &gone).is_none());
+        assert!(decide("Read", &w(outside.join("x")), None, &gone).is_none());
         // Ways around Remove: `..`, a relative path, and Glob's own pattern.
         let deny = |tool: &str, input: Value| {
-            matches!(decide(tool, &input, &gone), Some(Verdict::Deny(_)))
+            matches!(decide(tool, &input, None, &gone), Some(Verdict::Deny(_)))
         };
         assert!(deny(
             "Read",
@@ -572,17 +572,111 @@ mod tests {
         ));
         assert!(deny("Glob", json!({"pattern": "../run/**"})));
         assert!(
-            decide("Glob", &json!({"pattern": "**/*.eml"}), &gone).is_none(),
+            decide("Glob", &json!({"pattern": "**/*.eml"}), None, &gone).is_none(),
             "the seat's own folder"
         );
         assert!(
             decide(
                 "Glob",
                 &json!({"pattern": format!("{}/*", outside.display())}),
+                None,
                 &gone
             )
             .is_none()
         );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    // The owner's rule: inside a granted folder one plain ls, cat, grep, head or wc runs unasked; anything compound,
+    // any other program, and any path that resolves outside the folder or into its never list asks as before.
+    #[test]
+    fn plain_reads_inside_a_granted_folder_run_and_the_rest_asks() {
+        let root = scratch("reads");
+        let (inside, outside) = (root.join("run"), root.join("other"));
+        std::fs::create_dir_all(inside.join("inbox")).unwrap();
+        std::fs::create_dir_all(inside.join("sub/.git")).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        for f in ["inbox/a.eml", "inbox/b.eml", "sub/.git/config", "CLAUDE.md"] {
+            std::fs::write(inside.join(f), "Subject: x\n").unwrap();
+        }
+        std::fs::write(outside.join("secret.txt"), "x").unwrap();
+        std::os::unix::fs::symlink(outside.join("secret.txt"), inside.join("inbox/link.eml"))
+            .unwrap();
+        let grants = Grants {
+            granted: vec![inside.clone()],
+            removed: vec![],
+        };
+        let (i, o) = (inside.display().to_string(), outside.display().to_string());
+        let run = |line: &str, cwd: &Path, g: &Grants| {
+            matches!(
+                decide("Bash", &json!({"command": line}), Some(cwd), g),
+                Some(Verdict::Allow(_))
+            )
+        };
+        for line in [
+            format!("ls -la {i}/inbox"),
+            format!("cat {i}/inbox/a.eml"),
+            format!("grep -l Subject {i}/inbox/a.eml {i}/inbox/b.eml"),
+            format!("grep -il 'invoice due' {i}/inbox/a.eml"),
+            format!("grep -m3 -iE '^(From|Subject):' {i}/inbox/a.eml"),
+            format!("grep -rl Subject {i}/inbox"),
+            format!("head -n 20 {i}/inbox/a.eml"),
+            format!("wc -l {i}/inbox/a.eml"),
+            format!("grep -l Subject {i}/inbox/?.eml"),
+            "ls".to_string(),
+            "grep -l Subject a.eml b.eml".to_string(),
+        ] {
+            let cwd = if line.contains('/') {
+                &root
+            } else {
+                &inside.join("inbox")
+            };
+            assert!(run(&line, cwd, &grants), "{line}");
+        }
+        for line in [
+            format!("ls {i}/inbox | head"),
+            format!("ls {i}/inbox; rm -rf {i}"),
+            format!("ls {i}/inbox && cat {i}/inbox/a.eml"),
+            format!("ls {i}/inbox || true"),
+            format!("cat $(ls {i}/inbox)"),
+            format!("cat `ls {i}/inbox`"),
+            format!("cat {i}/inbox/a.eml > {i}/x"),
+            format!("cat < {i}/inbox/a.eml"),
+            format!("X=1 cat {i}/inbox/a.eml"),
+            format!("(cat {i}/inbox/a.eml)"),
+            format!("for f in {i}/inbox/*.eml; do cat $f; done"),
+            format!("cat {o}/secret.txt"),
+            format!("cat {i}/inbox/link.eml"),
+            format!("grep -l x {i}/inbox/*"),
+            format!("cat {i}/../other/secret.txt"),
+            format!("cat {i}/sub/.git/config"),
+            format!("cat {i}/claude.md"),
+            "cat ~/.ssh/id_ed25519".to_string(),
+            format!("grep -f {o}/secret.txt {i}/inbox/a.eml"),
+            format!("grep --file={o}/secret.txt {i}/inbox/a.eml"),
+            format!("grep -r Subject {o}"),
+            format!("find {i}/inbox"),
+            format!("sed -n 1p {i}/inbox/a.eml"),
+            format!("tail -f {i}/inbox/a.eml"),
+            format!("rm {i}/inbox/a.eml"),
+            format!("/bin/cat {i}/inbox/a.eml"),
+        ] {
+            assert!(!run(&line, &root, &grants), "{line}");
+        }
+        // A relative path, or none, counts only with the working folder inside.
+        assert!(!run("cat inbox/a.eml", &root, &grants), "cwd outside");
+        assert!(
+            !run("grep -r Subject", &outside, &grants),
+            "no path: the cwd, outside"
+        );
+        assert!(!run("ls", &outside, &grants));
+        // After Remove nothing here runs unasked.
+        let gone = Grants {
+            granted: vec![],
+            removed: vec![inside.clone()],
+        };
+        assert!(!run(&format!("cat {i}/inbox/a.eml"), &root, &gone));
+        assert!(!run("ls", &inside, &gone));
         let _ = std::fs::remove_dir_all(root);
     }
 
