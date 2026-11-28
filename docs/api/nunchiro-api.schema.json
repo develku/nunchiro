@@ -6329,6 +6329,13 @@
             "null"
           ]
         },
+        "linked": {
+          "description": "The agent whose terminal output the app linked it from (pr_live.rs `link_later`); absent for a chat or app PR.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "state": {
           "$ref": "#/$defs/PrState"
         },
