@@ -237,7 +237,8 @@ fn a_folder_named_in_the_owners_window_message_is_the_assistants_for_the_convers
         screen().contains("got: ")
     });
     stop();
-    // The owner's own socket and a quoted line give none either; the window's message does.
+    // The owner's own socket, text the window makes itself (a pull request's "Fix with agent" goes as `agent_prompt`) and
+    // a quoted line give none either; the words the owner typed in the composer (`folder_offer`) do.
     let said = raw(
         &home,
         &owner,
@@ -248,11 +249,35 @@ fn a_folder_named_in_the_owners_window_message_is_the_assistants_for_the_convers
         screen().contains("look at")
     });
     stop();
+    let made = window(
+        &home,
+        json!({"op":"agent_prompt","id":seat.id,"text":format!("Fix the check in {}", other.display())}),
+    );
+    assert!(made["Err"].is_null(), "{made}");
+    wait("the window's own prompt was typed", || {
+        screen().contains("Fix the check")
+    });
+    stop();
+    assert!(row().folders.is_empty());
+    let offer = |text: &str| json!({"op":"folder_offer","id":seat.id,"text":text});
+    let socket_offer = raw(
+        &home,
+        &owner,
+        offer(&format!("look at {}", other.display())),
+    );
+    assert!(socket_offer["Err"].is_string(), "{socket_offer}");
     let text = format!(
-        "Sort the mails in {}/inbox into {}/labels/Billing/, one label per mail.\n> forwarded from Jordan: see {}",
+        "Sort the mails in {}/inbox into {}/labels/Billing/ and note it in {}/notes.txt.\n> forwarded from Jordan: see {}",
+        run.display(),
         run.display(),
         run.display(),
         quoted.display()
+    );
+    let offered = window(&home, offer(&text));
+    assert_eq!(
+        offered["Ok"]["folders"],
+        json!([run.join("inbox"), run.clone()]),
+        "{offered}"
     );
     let sent = window(&home, json!({"op":"agent_prompt","id":seat.id,"text":text}));
     assert!(sent["Err"].is_null(), "{sent}");
@@ -262,7 +287,7 @@ fn a_folder_named_in_the_owners_window_message_is_the_assistants_for_the_convers
     wait("the owner's message went in after the folders", || {
         screen().contains("Sort the mails")
     });
-    // Exactly those two: nothing from the schedule's task, the owner socket's message or the quoted line.
+    // Exactly those two: nothing from the schedule's task, the socket, the window's own prompt or the quoted line.
     assert_eq!(row().folders, vec![run.join("inbox"), run.clone()]);
     // The seat's real lock hook: writes inside run unasked; outside, Claude's own mode decides; rm still asks.
     let hook = |tool: &str, input: Value| {
@@ -354,6 +379,19 @@ fn a_folder_named_in_the_owners_window_message_is_the_assistants_for_the_convers
         "allow",
         "inbox is still given"
     );
+    // The grant file goes with the run.
+    let grants = home.join("folders").join(format!("{}.json", seat.id));
+    assert!(grants.exists());
+    call(
+        &home,
+        Request::Close {
+            id: seat.id.clone(),
+        },
+    )
+    .unwrap();
+    wait("the closed run's grant file was removed", || {
+        !grants.exists()
+    });
     core.stop();
     let _ = fs::remove_dir_all(&home);
     let _ = fs::remove_dir_all(&work);

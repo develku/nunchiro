@@ -32,3 +32,41 @@ test('folder_line_remove: a given folder shows its quiet line, and Remove asks t
   await line.getByRole('button', { name: 'Remove' }).click();
   await expect.poll(() => sent).toEqual([{ op: 'folder_remove', id: a.id, folder: FOLDER }]);
 });
+
+/** Every request the window sends, in order. */
+function record(page: import('@playwright/test').Page) {
+  const sent: { op: string; [k: string]: unknown }[] = [];
+  page.on('websocket', (ws) =>
+    ws.on('framesent', (f) => {
+      const r = typeof f.payload === 'string' ? JSON.parse(f.payload).request : null;
+      if (r) sent.push(r);
+    }),
+  );
+  return { sent, ops: (op: string) => sent.filter((r) => r.op === op) };
+}
+
+test('folder_offer_typed_words: Enter offers only the words typed in the box, before the message goes; a paste offers none', async ({ page, chatCore }) => {
+  const a = chatCore.chat('a', true, false, 'p');
+  const w = record(page);
+  await openChat(page, a.id);
+  const box = page.locator('#composer');
+  await box.fill('file the PDFs in /Users/someone/Documents/Orders please');
+  await box.press('Enter');
+  await expect.poll(() => w.ops('send_text').length).toBe(1);
+  expect(w.ops('folder_offer')).toEqual([{ op: 'folder_offer', id: a.id, text: 'file the PDFs in /Users/someone/Documents/Orders please' }]);
+  expect(w.sent.findIndex((r) => r.op === 'folder_offer')).toBeLessThan(w.sent.findIndex((r) => r.op === 'send_text'));
+  // A pasted path is no typed word: nothing is offered for it.
+  await box.fill('file the PDFs in ');
+  await box.evaluate((el, text) => {
+    const data = new DataTransfer();
+    data.setData('text/plain', text);
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    const box = el as HTMLTextAreaElement;
+    box.setRangeText(text, box.value.length, box.value.length, 'end');
+    el.dispatchEvent(new InputEvent('input', { inputType: 'insertFromPaste', data: text, bubbles: true }));
+  }, '/Users/someone/Documents/Pasted');
+  await expect(box).toHaveValue('file the PDFs in /Users/someone/Documents/Pasted');
+  await box.press('Enter');
+  await expect.poll(() => w.ops('send_text').length).toBe(2);
+  expect(w.ops('folder_offer')).toHaveLength(1);
+});
