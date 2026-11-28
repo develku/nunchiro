@@ -606,7 +606,6 @@ impl Team {
             &self.user(),
             &quote(&self.memory(&mate.id)),
             &quote(&self.user()),
-            &quote(&self.soul(&mate.id)),
             &others,
             &brief_end(task, first.as_ref(), &self.soul(&mate.id)),
         );
@@ -842,7 +841,6 @@ fn brief_text(
     user: &Path,
     mem: &str,
     user_facts: &str,
-    soul_text: &str,
     others: &[&Teammate],
     last: &str,
 ) -> String {
@@ -913,7 +911,7 @@ fn brief_text(
          \n\
          ## Your job\n\
          {job}\n\
-         Who you are, in a few lines (your SOUL file, {soul}; quoted here, so there is nothing to read first):\n\
+         Who you are, in a few lines (your SOUL file: {soul}, quoted here, so there is nothing to read first):\n\
          <soul>\n{soul_text}\n</soul>\n\
          \n\
          ## Your memory\n\
@@ -937,6 +935,7 @@ fn brief_text(
         job = t.job,
         // Ticket 1168: beside the memory file (`Team::soul`).
         soul = memory.with_file_name("SOUL.md").display(),
+        soul_text = quote(&memory.with_file_name("SOUL.md")),
         memory = memory.display(),
         user = user.display(),
     )
