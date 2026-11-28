@@ -1102,3 +1102,16 @@ pub(super) struct PendingEnter {
     /// The composer showed this paste at some pass: a composer that stops showing it took something else in.
     pub(super) held: bool,
 }
+/// A send that reached a final status, taken out of `meta`'s queue by the caller, goes to the same session's log and
+/// its widget hash is dropped (v1b-20). The one retire step of `mark_send` and the exit cancel (ticket 300).
+pub(super) fn retire_send(
+    meta: &mut Session,
+    widget_hashes: &mut BTreeMap<String, String>,
+    mut send: crate::delivery::Send,
+    status: &str,
+) {
+    send.status = status.into();
+    widget_hashes.remove(&send.id);
+    meta.send_log.push(send);
+    cap_log(&mut meta.send_log);
+}

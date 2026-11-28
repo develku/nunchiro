@@ -11151,6 +11151,28 @@
           "x-stability": "stable"
         },
         {
+          "description": "The window's Remove on the Assistant's \"Access given\" line: the run's grant to `folder` ends (window only).",
+          "properties": {
+            "folder": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "op": {
+              "const": "folder_remove",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "id",
+            "folder"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
           "description": "v25-sendkeys: the composer's Ctrl+Enter. Claude Code's send-now breaks the running turn (Esc, through Stop's\ngate) and this text then goes in where the ordinary send would put it: at once when the agent is idle, after\nthe broken turn unwinds when it was working. Nothing is written twice: a kind with no turn to interrupt, or an\nEsc that fails, refuses with the reason and leaves the queue as it was.",
           "properties": {
             "id": {
@@ -15344,6 +15366,13 @@
         },
         "folder_gone": {
           "type": "boolean"
+        },
+        "folders": {
+          "description": "The folders the owner gave this run of the Assistant's seat by naming them in a window message (canonical;\n`folder_grant`): read and write for this conversation, each shown with a Remove action. A new run has none.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "holder_status": {
           "anyOf": [
