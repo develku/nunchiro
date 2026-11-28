@@ -160,7 +160,9 @@ fn a_folder_named_in_the_owners_window_message_is_the_assistants_for_the_convers
     fs::set_permissions(&claude, fs::Permissions::from_mode(0o700)).unwrap();
     let path = format!("{}:/usr/bin:/bin", home.join("bin").display());
     // The task folders live outside the core's home, as an owner's would.
-    let work = fs::canonicalize(std::env::temp_dir()).unwrap().join(format!("nunchiro-folders-run-{}", std::process::id()));
+    let work = fs::canonicalize(std::env::temp_dir())
+        .unwrap()
+        .join(format!("nunchiro-folders-run-{}", std::process::id()));
     let _ = fs::remove_dir_all(&work);
     let (run, other, quoted) = (work.join("run"), work.join("other"), work.join("quoted"));
     for d in [run.join("inbox"), other.clone(), quoted.clone()] {
@@ -196,31 +198,75 @@ fn a_folder_named_in_the_owners_window_message_is_the_assistants_for_the_convers
         &home,
         &[
             ("PATH", path.as_str()),
-            ("CLAUDE_CONFIG_DIR", &home.join("claude-home").to_string_lossy()),
+            (
+                "CLAUDE_CONFIG_DIR",
+                &home.join("claude-home").to_string_lossy(),
+            ),
         ],
     );
-    wait("the seat did not open", || rows(&home).iter().any(|s| s.label == "Chief"));
-    let seat = rows(&home).into_iter().find(|r| r.label == "Chief").unwrap();
+    wait("the seat did not open", || {
+        rows(&home).iter().any(|s| s.label == "Chief")
+    });
+    let seat = rows(&home)
+        .into_iter()
+        .find(|r| r.label == "Chief")
+        .unwrap();
     let row = || rows(&home).into_iter().find(|r| r.id == seat.id).unwrap();
-    let screen = || match call(&home, Request::Read { id: seat.id.clone(), after: 0 }) {
+    let screen = || match call(
+        &home,
+        Request::Read {
+            id: seat.id.clone(),
+            after: 0,
+        },
+    ) {
         Ok(Reply::Output { data, .. }) => String::from_utf8_lossy(&data).into_owned(),
         _ => String::new(),
     };
-    let owner = fs::read_to_string(home.join("core.token")).unwrap().trim().to_string();
+    let owner = fs::read_to_string(home.join("core.token"))
+        .unwrap()
+        .trim()
+        .to_string();
     // Its turn ends (the fake sends no hook of its own).
     let stop = || {
-        let r = raw(&home, &owner, json!({"op":"hook","id":seat.id,"event":"Stop","payload":{}}));
+        let r = raw(
+            &home,
+            &owner,
+            json!({"op":"hook","id":seat.id,"event":"Stop","payload":{}}),
+        );
         eprintln!("stop: {r}");
     };
-    wait("the brief with the schedule's task was typed", || screen().contains("got: "));
+    wait("the brief with the schedule's task was typed", || {
+        screen().contains("got: ")
+    });
     stop();
     // The owner's own socket and a quoted line give none either; the window's message does.
-    let said = raw(&home, &owner, json!({"op":"agent_prompt","id":seat.id,"text":format!("look at {}", other.display())}));
+    let said = raw(
+        &home,
+        &owner,
+        json!({"op":"agent_prompt","id":seat.id,"text":format!("look at {}", other.display())}),
+    );
     assert!(said["Err"].is_null(), "{said}");
-    wait_for("the socket's message was typed", 20, || screen().contains("look at") || {
-        eprintln!("queue: {:?}\nscreen: {:?}", row().send_queue.iter().map(|q| q.status.clone()).collect::<Vec<_>>(), screen().chars().rev().take(300).collect::<String>().chars().rev().collect::<String>());
-        thread::sleep(Duration::from_secs(2));
-        false
+    wait_for("the socket's message was typed", 20, || {
+        screen().contains("look at") || {
+            eprintln!(
+                "queue: {:?}\nscreen: {:?}",
+                row()
+                    .send_queue
+                    .iter()
+                    .map(|q| q.status.clone())
+                    .collect::<Vec<_>>(),
+                screen()
+                    .chars()
+                    .rev()
+                    .take(300)
+                    .collect::<String>()
+                    .chars()
+                    .rev()
+                    .collect::<String>()
+            );
+            thread::sleep(Duration::from_secs(2));
+            false
+        }
     });
     stop();
     let text = format!(
@@ -231,8 +277,12 @@ fn a_folder_named_in_the_owners_window_message_is_the_assistants_for_the_convers
     );
     let sent = window(&home, json!({"op":"agent_prompt","id":seat.id,"text":text}));
     assert!(sent["Err"].is_null(), "{sent}");
-    wait_for("both folders were added", 30, || row().folders == vec![run.join("inbox"), run.clone()]);
-    wait("the owner's message went in after the folders", || screen().contains("Sort the mails"));
+    wait_for("both folders were added", 30, || {
+        row().folders == vec![run.join("inbox"), run.clone()]
+    });
+    wait("the owner's message went in after the folders", || {
+        screen().contains("Sort the mails")
+    });
     // Exactly those two: nothing from the schedule's task, the owner socket's message or the quoted line.
     assert_eq!(row().folders, vec![run.join("inbox"), run.clone()]);
     // The seat's real lock hook: writes inside run unasked; outside, Claude's own mode decides; rm still asks.
@@ -246,33 +296,85 @@ fn a_folder_named_in_the_owners_window_message_is_the_assistants_for_the_convers
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null());
         let mut child = cmd.spawn().unwrap();
-        child.stdin.take().unwrap().write_all(json!({"tool_name": tool, "tool_input": input}).to_string().as_bytes()).unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(
+                json!({"tool_name": tool, "tool_input": input})
+                    .to_string()
+                    .as_bytes(),
+            )
+            .unwrap();
         let out = child.wait_with_output().unwrap();
         assert!(out.status.success(), "{out:?}");
         serde_json::from_slice::<Value>(&out.stdout)
             .ok()
-            .and_then(|v| v["hookSpecificOutput"]["permissionDecision"].as_str().map(String::from))
+            .and_then(|v| {
+                v["hookSpecificOutput"]["permissionDecision"]
+                    .as_str()
+                    .map(String::from)
+            })
             .unwrap_or_else(|| "mode".into())
     };
     let r = run.display();
-    assert_eq!(hook("Write", json!({"file_path": run.join("drafts/reply.eml")})), "allow");
-    assert_eq!(hook("Edit", json!({"file_path": run.join("notes.txt")})), "allow");
-    assert_eq!(hook("Write", json!({"file_path": other.join("x.txt")})), "mode", "outside: the mode asks");
     assert_eq!(
-        hook("Bash", json!({"command": format!("mkdir -p {r}/labels/Billing && mv -n {r}/inbox/a.eml {r}/labels/Billing/")})),
+        hook("Write", json!({"file_path": run.join("drafts/reply.eml")})),
         "allow"
     );
-    assert_eq!(hook("Bash", json!({"command": format!("rm {r}/inbox/a.eml")})), "ask");
-    assert_eq!(hook("Bash", json!({"command": format!("mv {r}/inbox/a.eml {r}/x")})), "ask");
+    assert_eq!(
+        hook("Edit", json!({"file_path": run.join("notes.txt")})),
+        "allow"
+    );
+    assert_eq!(
+        hook("Write", json!({"file_path": other.join("x.txt")})),
+        "mode",
+        "outside: the mode asks"
+    );
+    assert_eq!(
+        hook(
+            "Bash",
+            json!({"command": format!("mkdir -p {r}/labels/Billing && mv -n {r}/inbox/a.eml {r}/labels/Billing/")})
+        ),
+        "allow"
+    );
+    assert_eq!(
+        hook("Bash", json!({"command": format!("rm {r}/inbox/a.eml")})),
+        "ask"
+    );
+    assert_eq!(
+        hook(
+            "Bash",
+            json!({"command": format!("mv {r}/inbox/a.eml {r}/x")})
+        ),
+        "ask"
+    );
     // Remove ends the grant: the hook refuses the file tools there; the socket cannot remove one.
-    let refused = raw(&home, &owner, json!({"op":"folder_remove","id":seat.id,"folder":run}));
+    let refused = raw(
+        &home,
+        &owner,
+        json!({"op":"folder_remove","id":seat.id,"folder":run}),
+    );
     assert!(refused["Err"].is_string(), "{refused}");
-    let removed = window(&home, json!({"op":"folder_remove","id":seat.id,"folder":run}));
+    let removed = window(
+        &home,
+        json!({"op":"folder_remove","id":seat.id,"folder":run}),
+    );
     assert!(removed["Err"].is_null(), "{removed}");
     assert_eq!(row().folders, vec![run.join("inbox")]);
-    assert_eq!(hook("Write", json!({"file_path": run.join("drafts/reply.eml")})), "deny");
-    assert_eq!(hook("Read", json!({"file_path": run.join("notes.txt")})), "deny");
-    assert_eq!(hook("Edit", json!({"file_path": run.join("inbox/a.eml")})), "allow", "inbox is still given");
+    assert_eq!(
+        hook("Write", json!({"file_path": run.join("drafts/reply.eml")})),
+        "deny"
+    );
+    assert_eq!(
+        hook("Read", json!({"file_path": run.join("notes.txt")})),
+        "deny"
+    );
+    assert_eq!(
+        hook("Edit", json!({"file_path": run.join("inbox/a.eml")})),
+        "allow",
+        "inbox is still given"
+    );
     core.stop();
     let _ = fs::remove_dir_all(&home);
     let _ = fs::remove_dir_all(&work);

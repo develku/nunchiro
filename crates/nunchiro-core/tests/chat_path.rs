@@ -12,6 +12,7 @@ fn chat_codex_cannot_alias_another_rollout_through_a_symlink() {
             teammate: None,
             resumed_from: vec![],
             owned_from: vec![],
+            folders: vec![],
             level: None,
             side_split: None,
             machine: None, // v1a-06: existing fixture is local.

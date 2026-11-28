@@ -98,6 +98,8 @@ declare module '../index' {
     "composer.cmd.codex.undo": true;
     // Ticket 1130 B-L4 (C6): the offer row for a pasted `claude mcp add` line (English only until ticket 1035).
     "composer.mcp.offer": true;
+    "composer.folder.given": true;
+    "composer.folder.remove": true;
     "composer.mcp.restart": true;
     "composer.mcp.forNew": true;
     "composer.mcp.runs": true;
@@ -206,6 +208,8 @@ export const en = {
   "composer.cmd.codex.undo": "Undo the last turn",
   // Ticket 1130 B-L4 (C6).
   "composer.mcp.offer": "Add MCP server \"{name}\"",
+  "composer.folder.given": "{folder} · read and write for this conversation",
+  "composer.folder.remove": "Remove",
   "composer.mcp.restart": "Add and restart session",
   "composer.mcp.forNew": "Add for new sessions",
   "composer.mcp.runs": "This command will run in every Nunchiro session from now on.",

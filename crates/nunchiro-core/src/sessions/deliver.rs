@@ -343,18 +343,20 @@ impl Sessions {
     /// agent that took no turn from it (a dropped or refused submit) never holds every later send for ever.
     pub(super) fn delivery_open(&self, id: &str, snapshot: &Session) -> bool {
         let now = std::time::Instant::now();
-        self.delivery_inflight
-            .get(id)
-            .is_none_or(|seq| snapshot.completion_seq > *seq)
-            || !snapshot.attention.working
-                && self
-                    .inflight_at
-                    .get(id)
-                    .is_some_and(|t| now.duration_since(*t) >= INFLIGHT_IDLE)
-                && self
-                    .entries
-                    .get(id)
-                    .is_some_and(|e| composer(&e.observer.screen.text(), e.meta.kind).is_some())
+        // A folder the owner named is being added: its message waits until the seat can reach it.
+        !self.granting(id)
+            && (self
+                .delivery_inflight
+                .get(id)
+                .is_none_or(|seq| snapshot.completion_seq > *seq)
+                || !snapshot.attention.working
+                    && self
+                        .inflight_at
+                        .get(id)
+                        .is_some_and(|t| now.duration_since(*t) >= INFLIGHT_IDLE)
+                    && self.entries.get(id).is_some_and(|e| {
+                        composer(&e.observer.screen.text(), e.meta.kind).is_some()
+                    }))
     }
     /// N1: the core wrote `text` and its Enter into session `id`'s input box; `verify_submits` looks once more.
     pub(super) fn submitted(&mut self, id: &str, text: &str) {

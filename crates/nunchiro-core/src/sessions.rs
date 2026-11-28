@@ -37,6 +37,7 @@ mod answer;
 mod close;
 mod codex_config;
 mod deliver;
+mod folders; // the Assistant's folders, given in the owner's message
 mod handoff;
 mod home;
 mod launch;
@@ -293,6 +294,8 @@ pub struct Sessions {
     room: room::State, // ticket 571
     // v1a-15: per session, the submit send whose pasted text is written and whose Enter a later tick writes.
     pending_enter: BTreeMap<String, PendingEnter>,
+    /// The Assistant's folders on their way in (`folders`), by run.
+    folder_grants: BTreeMap<String, folders::Granting>,
     /// Ticket 1137: per plain shell still waiting for a window's size, the file that ends the wait (`spawn`).
     size_waits: BTreeMap<String, PathBuf>,
     /// Look 11-17 v8 N1: per session, the last submit whose Enter the core wrote and has not seen taken (`verify_submits`).
@@ -691,6 +694,7 @@ impl Sessions {
                 Err("setup requests run off the registry lock".into()) // ticket 259: `worktree_setup::serve`
             }
             Request::AgentSend { id, text } => self.send("user", &id, text, vec![], false),
+            Request::FolderRemove { .. } => Err("folder access is removed in the Nunchiro window only".into()),
             Request::AgentPrompt { id, text } => {
                 let reply = match self.send("user", &id, text.clone(), vec![], true) {
                     // The owner's words to a session that waits at a question in its terminal (a start question such
@@ -1533,6 +1537,7 @@ impl Sessions {
         self.room_notices(); // ticket 571
         self.advance_walks(); // CHAT-MODELIST
         self.advance_typed();
+        self.advance_grants();
         self.advance_switches() // v1a-10
     }
     /// `finish_send` without its save, for a caller that saves once after many rows (ticket 300).

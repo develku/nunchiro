@@ -537,6 +537,7 @@ fn chat_recovery_keeps_distinct_journal_stop_texts_without_turn_ids() {
             teammate: None,
             resumed_from: vec![],
             owned_from: vec![],
+            folders: vec![],
             level: None,
             side_split: None,
             machine: None, // v1a-06: existing fixture is local.

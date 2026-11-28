@@ -157,6 +157,19 @@ pub fn home_lock(home: &Path, args: &[String]) -> ! {
         eprintln!("Home seat lock: this tool call could not be read, so it is refused");
         std::process::exit(2);
     };
+    // The folders the owner gave this run (`folder_grant`): its file writes there run unasked, and a removed one is
+    // refused. No session or no file: no grant, the lock's own rules decide.
+    let grants = env::var("NUNCHIRO_SESSION")
+        .map(|id| nunchiro_core::folder_grant::load(home, &id))
+        .unwrap_or_default();
+    if let Some(verdict) = nunchiro_core::folder_grant::decide(&tool, &input, &grants) {
+        let out = match verdict {
+            nunchiro_core::folder_grant::Verdict::Allow(why) => hook_output("allow", why),
+            nunchiro_core::folder_grant::Verdict::Deny(why) => hook_output("deny", why),
+        };
+        println!("{out}");
+        std::process::exit(0);
+    }
     let out = match decide_locked(&tool, &input, mode, home, no_mcp) {
         Decision::Mode => None,
         Decision::Allow(why) => Some(hook_output("allow", why)),

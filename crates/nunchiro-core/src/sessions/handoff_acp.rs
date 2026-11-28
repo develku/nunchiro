@@ -256,6 +256,7 @@ impl Sessions {
             teammate: None,
             resumed_from: vec![],
             owned_from: vec![],
+            folders: vec![],
             level: None,
             schedule: None,
             token_origin: None, // ticket 573: an ACP agent or a failed start; `spawn_acp` refuses a token's
@@ -436,6 +437,7 @@ impl Sessions {
             teammate: None,
             resumed_from: vec![],
             owned_from: vec![],
+            folders: vec![],
             level: None,
             schedule: None,
             token_origin: None, // ticket 573: an ACP agent or a failed start; `spawn_acp` refuses a token's

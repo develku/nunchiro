@@ -30,6 +30,7 @@ mod no_transcript {
             teammate: None,
             resumed_from: vec![],
             owned_from: vec![],
+            folders: vec![],
             level: None,
             side_split: None,
             machine: None,

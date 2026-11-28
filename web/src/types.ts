@@ -186,6 +186,8 @@ export interface Session {
   teammate?: string;
   /** Look 1117 v10 N10-S2-3: the ids of the runs a resumed run continues (their rows are gone; the room still names them). */
   resumed_from?: string[];
+  /** The folders the owner gave the Assistant's run in a window message (read and write for this conversation). */
+  folders?: string[];
   /** Ticket 992: the level the seat was started at; absent on a seat with a custom model and on any other session. */
   level?: 'light' | 'standard' | 'deep';
   /** Look 1117 v13 Home S3-5: an ended local session whose folder is no longer on disk (api.rs `folder_gone`). */

@@ -224,7 +224,13 @@ impl Sessions {
                         entry.observer.own_folder_key = Some(at);
                     }
                     self.queue.clear_screen(id)?;
-                } else if mine || picker {
+                } else if mine
+                    || picker
+                    || self
+                        .folder_grants
+                        .get(id.as_str())
+                        .is_some_and(|g| g.adding())
+                {
                     self.queue.clear_screen(id)?;
                 } else if let Some(item) = entry.observer.screen.detect_in(entry.meta.kind, &text) {
                     asking = true;

@@ -751,6 +751,7 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | OutboxStage { .. } // ticket 1002
         | OutboxSpend { .. }
         | SessionTidy { .. } => false, // ticket 1113: local lead CLI only
+        FolderRemove { .. } => false, // the app's window only
     }
 }
 

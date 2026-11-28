@@ -284,6 +284,7 @@ impl Sessions {
             delivery_inflight: BTreeMap::new(),
             wakes: BTreeMap::new(),
             room: room::State::default(),
+            folder_grants: BTreeMap::new(),
             pending_enter: BTreeMap::new(),                // v1a-15
             size_waits: BTreeMap::new(),                   // ticket 1137
             widget_hashes: BTreeMap::new(),                // v1b-20
