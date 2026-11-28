@@ -253,7 +253,8 @@ impl Run {
         self.stdin
             .write_all((message.to_string() + "\n").as_bytes())
             .and_then(|()| self.stdin.flush())
-            .map_err(|e| format!("the agent is not reading its input: {e}"))
+            // The OS words ("Resource temporarily unavailable") say nothing more to the owner.
+            .map_err(|_| "the agent is not reading its input".to_string())
     }
 }
 

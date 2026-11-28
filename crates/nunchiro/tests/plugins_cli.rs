@@ -216,7 +216,7 @@ fn the_example_runs_only_when_on_and_approved() {
     );
     assert!(bad["Err"].as_str().unwrap().contains("time"), "{bad}");
 
-    // A change to a script alone asks for nothing new; one that adds a part asks again and stops every part.
+    // It has a check, so a change to a script alone asks again and stops every part; so does a new part.
     std::fs::write(
         home.join("plugins/quiet-hours/status.sh"),
         "#!/bin/sh\necho changed\n",
@@ -224,7 +224,7 @@ fn the_example_runs_only_when_on_and_approved() {
     .unwrap();
     assert_eq!(
         ok(&home, &["plugin", "list"]).trim(),
-        "quiet-hours\ton\tapproved"
+        "quiet-hours\ton\tchanged since approval"
     );
     let toml = home.join("plugins/quiet-hours/plugin.toml");
     let text = std::fs::read_to_string(&toml).unwrap();

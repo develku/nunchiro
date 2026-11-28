@@ -53,7 +53,11 @@ fn a_change_that_adds_access_asks_again_and_says_what_is_new() {
     assert_eq!(view.state, State::Changed);
     assert_eq!(
         view.added,
-        ["command bye", "command hi reaches example.com"],
+        [
+            "command bye",
+            "command bye runs [\"/bin/sh\", \"hi.sh\"]",
+            "command hi reaches example.com"
+        ],
         "{:?}",
         view.added
     );
@@ -117,4 +121,75 @@ fn shortcuts_and_status_items_are_checked() {
         assert!(with(bad).is_err(), "{bad}");
     }
     assert!(with("[[keybinding]]\ncommand = \"hi\"\nkey = \"Control+Alt+Digit1\"\n").is_ok());
+}
+
+/// Approves `manifest` with `hi.sh`, then writes `changed` (and `script`): the view after.
+fn after(tag: &str, manifest: &str, changed: &str, script: &str) -> approval::View {
+    let home = home::short(tag);
+    plugin(&home, manifest, "echo hello\n");
+    approve(&home);
+    plugin(&home, changed, script);
+    approval::status(&home, NAME).unwrap()
+}
+const PANEL: &str = "\n[[panel]]\nname = \"p\"\nkind = \"script\"\ncommand = [\"/bin/sh\", \"hi.sh\"]\ninterval_secs = 3600\n";
+const GATE: &str = "\n[[gate]]\nname = \"g\"\non = \"prompt.send.before\"\ncommand = [\"/bin/sh\", \"hi.sh\"]\non_error = \"refuse\"\n";
+
+#[test]
+fn a_new_command_line_asks_again() {
+    let v = after(
+        "pa5",
+        MANIFEST,
+        &MANIFEST.replace("[\"/bin/sh\", \"hi.sh\"]", "[\"/bin/bash\", \"hi.sh\"]"),
+        "echo hello\n",
+    );
+    assert_eq!(v.state, State::Changed);
+    assert!(
+        v.added.iter().any(|a| a.contains("/bin/bash")),
+        "{:?}",
+        v.added
+    );
+}
+
+#[test]
+fn a_panel_that_runs_more_often_asks_again() {
+    let m = format!("{MANIFEST}{PANEL}");
+    let v = after(
+        "pa6",
+        &m,
+        &m.replace("interval_secs = 3600", "interval_secs = 60"),
+        "echo hello\n",
+    );
+    assert_eq!(v.state, State::Changed);
+    assert_eq!(v.added, ["panel p runs every 60 s"]);
+}
+
+#[test]
+fn another_author_asks_again() {
+    let m = MANIFEST.replace("about =", "author = \"me\"\nabout =");
+    let v = after(
+        "pa7",
+        &m,
+        &m.replace("\"me\"", "\"someone else\""),
+        "echo hello\n",
+    );
+    assert_eq!(v.state, State::Changed);
+    assert_eq!(v.added, ["author someone else"]);
+}
+
+#[test]
+fn a_plugin_with_a_check_asks_again_after_any_change() {
+    let m = format!("{MANIFEST}{GATE}");
+    // Its script alone changes: a check reads every message, so it asks again (the rule before access).
+    let v = after("pa8", &m, &m, "echo HELLO\n");
+    assert_eq!(v.state, State::Changed);
+    assert!(!v.updated);
+    // A check that now lets an action through when it fails: named as what is new.
+    let v = after(
+        "pa9",
+        &m,
+        &m.replace("on_error = \"refuse\"", "on_error = \"allow\""),
+        "echo hello\n",
+    );
+    assert_eq!(v.state, State::Changed);
+    assert_eq!(v.added, ["check g when it fails allow"]);
 }
