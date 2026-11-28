@@ -1,5 +1,9 @@
 //! Schedules as sessions see them: who may read or propose one, their cards and failed runs.
 use super::*;
+/// A schedule proposal's or change's refusal for the owner, who adds and changes one in the window.
+pub(super) const SCHEDULE_FROM_A_LEAD: &str = "a schedule is proposed from a lead's session; the user adds and changes one in the Schedules widget";
+/// A trigger proposal's refusal for every caller but a project's lead.
+pub(super) const TRIGGER_FROM_A_LEAD: &str = "a trigger is proposed from a project lead's session; the user adds one with `nunchiro trigger add`";
 impl Sessions {
     /// Ticket 993: whose schedules a session reads. Only the live seat of a place's lead reads any: `Some(place)`
     /// for a project's lead, `None` (every place) for the Home lead. A token, a session on another machine and every
@@ -178,7 +182,7 @@ impl Sessions {
         }
         let (reach, place) = self
             .schedule_proposer(caller)
-            .map_err(|_| super::TRIGGER_FROM_A_LEAD.to_string())?;
+            .map_err(|_| TRIGGER_FROM_A_LEAD.to_string())?;
         if reach.is_none() {
             return Err("a trigger runs in a project: propose it from that project's lead".into());
         }
