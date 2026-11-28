@@ -120,7 +120,14 @@ fn shortcuts_and_status_items_are_checked() {
     ] {
         assert!(with(bad).is_err(), "{bad}");
     }
-    assert!(with("[[keybinding]]\ncommand = \"hi\"\nkey = \"Control+Alt+Digit1\"\n").is_ok());
+    // Without Meta it could take Ctrl+C, Ctrl+D or Ctrl+Z from every terminal, or a typed character with Alt.
+    for taken in ["Control+KeyC", "Control+Alt+Digit1", "Alt+KeyE", "Control+Shift+KeyZ"] {
+        assert!(
+            with(&format!("[[keybinding]]\ncommand = \"hi\"\nkey = \"{taken}\"\n")).is_err(),
+            "{taken}"
+        );
+    }
+    assert!(with("[[keybinding]]\ncommand = \"hi\"\nkey = \"Meta+Alt+Digit1\"\n").is_ok());
 }
 
 /// Approves `manifest` with `hi.sh`, then writes `changed` (and `script`): the view after.
@@ -192,4 +199,16 @@ fn a_plugin_with_a_check_asks_again_after_any_change() {
     );
     assert_eq!(v.state, State::Changed);
     assert_eq!(v.added, ["check g when it fails allow"]);
+}
+
+#[test]
+fn a_status_item_whose_text_changes_asks_again() {
+    let home = home::short("pa10");
+    let m = format!("{MANIFEST}\n{KEYED}");
+    plugin(&home, &m, "echo hello\n");
+    approve(&home);
+    plugin(&home, &m.replace("text = \"Hello\"", "text = \"Update now\""), "echo hello\n");
+    let view = approval::status(&home, NAME).unwrap();
+    assert_eq!(view.state, State::Changed);
+    assert_eq!(view.added, ["status item greet shows \"Update now\""]);
 }
