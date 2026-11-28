@@ -104,6 +104,7 @@ const FEATURE_FIELDS: { file: string; keys: string[]; tail: (k: string) => strin
   { file: 'features/wt-files.tsx', keys: ['sharedFiles', 'sparsePreset'], tail: (k) => `field.${k}` }, // ticket 253 (5527d53b6)
   { file: 'features/builtin.ts', keys: ['barsAutohide'], tail: (k) => k }, // ticket 1047: the Layout page's auto-hide row
   { file: 'lead/place.tsx', keys: ['place'], tail: (k) => k }, // ticket 1099 A: PLACE_FIELD, registered by features/team.tsx
+  { file: 'features/plugins.tsx', keys: ['plugins'], tail: (k) => k }, // #86: the Settings > Plugins page
 ];
 const featureKeys = FEATURE_FIELDS.flatMap((f) => f.keys);
 

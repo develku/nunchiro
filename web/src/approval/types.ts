@@ -31,6 +31,8 @@ export interface ApprovalView {
   updated?: boolean;
   /** A plugin's access beyond its approval, one line each (`plugins::access`): why it asks again. */
   added?: string[];
+  /** A plugin's shortcuts and status items, one line each. */
+  extras?: string[];
   parts?: { name: string; title: string; kind: 'panel' | 'command' | 'check'; runs: string[]; network?: string[]; read?: string[]; interval_secs?: number; writes_draft?: boolean; check_on?: 'session.start.before' | 'prompt.send.before'; on_error?: 'refuse' | 'allow' }[];
 }
 

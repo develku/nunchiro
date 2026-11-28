@@ -907,6 +907,29 @@ fn a_worker_whose_shell_ends_before_the_card_is_finished() {
     assert_eq!(core.entries[&id].meta.state, SessionState::Closed);
     end(core, launch);
 }
+/// An agent that quit is shown as ended only with its card judged: until then the window would read a crash as a
+/// finished turn (a done row, a "Just finished" line) for up to `ENDED_MARK_WAIT`, then as failed.
+#[test]
+fn an_ended_agent_is_shown_ended_only_with_its_card() {
+    let (_, _, mut core, launch, id) =
+        wrapper_session_with("wrapshown", "/bin/sh", "/bin/sh", 3, true);
+    core.entries.get_mut(&id).unwrap().meta.kind = AgentKind::Claude;
+    core.refresh().unwrap();
+    assert!(core.entries[&id].agent_ended);
+    // The card still waits for the agent's last output (held here: the snapshot would judge it).
+    let entry = core.entries.get_mut(&id).unwrap();
+    entry.meta.problem = None;
+    entry.card_due = Some((
+        std::time::Instant::now() + std::time::Duration::from_secs(60),
+        Some(3),
+    ));
+    let shown = core.snapshot_session(&core.entries[&id].meta);
+    assert!(!shown.agent_ended && shown.problem.is_none(), "{shown:?}");
+    assert!(card_judged(core.entries.get_mut(&id).unwrap(), true));
+    let shown = core.snapshot_session(&core.entries[&id].meta);
+    assert!(shown.agent_ended && shown.problem.is_some(), "{shown:?}");
+    end(core, launch);
+}
 /// Ticket 512 r2: a Ctrl-C during the drain kills its `dd`, `wc` and `date` (the wrapper's INT trap does not
 /// reach its children); their empty output prints no test error onto the shell's screen, under sh and dash.
 #[test]

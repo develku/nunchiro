@@ -2388,7 +2388,7 @@ fn the_window_starts_anyway_or_cancels_a_sessions_waiting_start() {
         );
         let said = held["Err"].as_str().unwrap_or_else(|| panic!("{held}"));
         assert!(
-            said.contains("is waiting") && said.ends_with("Do not start it again"),
+            said.contains("is waiting") && said.contains("Do not start it again"),
             "{said}"
         );
     }

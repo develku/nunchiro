@@ -14,6 +14,8 @@ export interface PrChipData {
   state: PrState;
   url: string;
   at: string | null;
+  /** The agent whose terminal output the app linked this PR from (core pr_live.rs `link_later`); absent otherwise. */
+  linked?: string;
 }
 
 const WORD: Record<PrState, Key> = {
@@ -70,6 +72,7 @@ export function PrChipView({ chip, now, pr, onWatch, onOffer, onOpen, t = tEn }:
       ) : (
         <span title={chip.url}>{t('chat.pr.prefix')} {label}</span>
       )}
+      {chip.linked && <span className="linked">{t('gitActions.linked', { agent: chip.linked })}</span>}
       {pr?.on && link && (
         <button className="btn watch" aria-pressed={pr.watched} title={t('chat.pr.watchTitle')} onClick={() => onWatch(!pr.watched)}>
           {pr.watched ? t('chat.pr.watching') : t('chat.pr.watch')}

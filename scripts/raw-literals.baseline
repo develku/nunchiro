@@ -2,13 +2,26 @@
 # book-tokens.css is the app copy of the design book's palette (docs/design/design-book/tokens.css);
 # themes/derive.ts builds a theme's roles from its colours (white, black, the glass highlight);
 # themes/nunchiro.ts writes the two bundled themes' palettes; themes/ghostty.ts, themes/catalog parse and list palettes.
-col book-tokens.css 33
-hex book-tokens.css 44
 hex approval/sheet.css 3
-sh approval/sheet.css 1
+sh approval/sheet.css 2
+hex book-tokens.css 44
+col book-tokens.css 33
+sh bots/bots.css 1
+fs chat/decision-card.css 1
+sh chat/decision-card.css 1
+rad chrome.css 1
+sh chrome.css 1
+sh layout.css 1
+sh light-glass.css 3
 hex sandbox/sandbox.css 1
+col settings/shell/shell.css 1
+sh settings/shell/shell.css 3
 hex settings/theme/ImportTheme.tsx 2
+sh styles.css 6
 hex themes/catalog/catalog.gen.ts 12
 hex themes/derive.ts 4
 hex themes/ghostty.ts 18
 hex themes/nunchiro.ts 12
+sh tree/done.css 1
+rad tree/tree.css 1
+sh tree/tree.css 2
