@@ -990,3 +990,76 @@ fn a_start_that_fails_is_not_tried_again_until_a_new_head_commit() {
     std::thread::sleep(Duration::from_secs(4));
     assert_eq!(last()["at"], at, "tried again: {}", last());
 }
+
+/// Slack's `v0=` signature over `v0:<timestamp>:<body>`, computed with openssl as Slack does.
+fn slack_sig(secret: &str, ts: u64, body: &[u8]) -> String {
+    let mut msg = format!("v0:{ts}:").into_bytes();
+    msg.extend_from_slice(body);
+    format!(
+        "v0={}",
+        nunchiro_sig(secret, &msg).trim_start_matches("sha256=")
+    )
+}
+/// The whole answer of a POST: status line, headers and body.
+fn post_whole(port: u16, name: &str, headers: &[(&str, &str)], body: &[u8]) -> String {
+    let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
+    let mut req = format!(
+        "POST /hooks/{name} HTTP/1.1\r\nHost: localhost\r\nContent-Length: {}\r\n",
+        body.len()
+    );
+    for (k, v) in headers {
+        req.push_str(&format!("{k}: {v}\r\n"));
+    }
+    req.push_str("\r\n");
+    s.write_all(req.as_bytes()).unwrap();
+    s.write_all(body).unwrap();
+    let mut out = String::new();
+    let _ = s.read_to_string(&mut out);
+    out
+}
+
+#[test]
+fn a_webhook_takes_slacks_signature_within_five_minutes_and_answers_its_url_check() {
+    let c = core("tgs");
+    // The trigger's secret is the Slack app's signing secret.
+    let secret = "slack-signing-secret-fixture-0001";
+    add(&c, "slack", "webhook", true, secret);
+    let until = Instant::now() + Duration::from_secs(5);
+    while TcpStream::connect(("127.0.0.1", c.port)).is_err() {
+        assert!(Instant::now() < until, "the webhook port never opened");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let send = |ts: u64, sig: &str, body: &[u8]| {
+        post_whole(
+            c.port,
+            "slack",
+            &[
+                ("X-Slack-Request-Timestamp", &ts.to_string()),
+                ("X-Slack-Signature", sig),
+            ],
+            body,
+        )
+    };
+    let body =
+        br#"{"type":"event_callback","event":{"type":"app_mention","text":"fix the build"}}"#;
+    // A replay from ten minutes ago and a wrong signature are refused; nothing starts.
+    assert!(send(now - 600, &slack_sig(secret, now - 600, body), body).starts_with("HTTP/1.1 401"));
+    assert!(send(now, "v0=00", body).starts_with("HTTP/1.1 401"));
+    assert!(started(&c).is_empty());
+    // Slack's URL check when the address is set in the app: the challenge back, and no run.
+    let check = br#"{"token":"x","challenge":"3eZbrw1aBm2rZgRNFdxV2595E9CY3gmdALWMmHkvFXO7tYXAYM8P","type":"url_verification"}"#;
+    let answer = send(now, &slack_sig(secret, now, check), check);
+    assert!(answer.starts_with("HTTP/1.1 200"), "{answer}");
+    assert!(
+        answer.ends_with("\r\n\r\n3eZbrw1aBm2rZgRNFdxV2595E9CY3gmdALWMmHkvFXO7tYXAYM8P"),
+        "{answer}"
+    );
+    // A signed event: taken, and the run starts with it as data.
+    assert!(send(now, &slack_sig(secret, now, body), body).starts_with("HTTP/1.1 202"));
+    let first = wait_started(&c, 1).remove(0);
+    assert!(first.contains("app_mention"), "{first}");
+}

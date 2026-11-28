@@ -225,4 +225,35 @@ mod tests {
         assert!(!signed(secret, body, None, Some("wrong".into())));
         assert!(!signed(secret, body, None, None));
     }
+
+    /// Slack's signature (docs.slack.dev, verifying requests): `v0=` and the hex HMAC-SHA256 of
+    /// `v0:<X-Slack-Request-Timestamp>:<raw body>`, refused more than five minutes from now. The fixture was signed
+    /// with openssl, as Slack signs.
+    #[test]
+    fn a_slack_signature_is_checked_with_its_timestamp() {
+        let secret = "slack-signing-secret-fixture-0001";
+        let body =
+            br#"{"type":"event_callback","event":{"type":"app_mention","text":"fix the build"}}"#;
+        let sig = "v0=a28da3d2d2822da39613072583f9a3172620fe7e966c859ed4a33c86431cc380";
+        let ts = 1_531_420_618;
+        let headers = |sig: &'static str, ts: &'static str| {
+            move |h: &str| match h {
+                "x-slack-signature" => Some(sig.to_string()),
+                "x-slack-request-timestamp" => Some(ts.to_string()),
+                _ => None,
+            }
+        };
+        let good = headers(sig, "1531420618");
+        assert!(slack_signed(secret, body, &good, ts));
+        assert!(slack_signed(secret, body, &good, ts + 300));
+        // Older or newer than five minutes: a replay.
+        assert!(!slack_signed(secret, body, &good, ts + 301));
+        assert!(!slack_signed(secret, body, &good, ts - 301));
+        // Another body, another secret, a timestamp that is not the signed one, or none.
+        assert!(!slack_signed(secret, b"{}", &good, ts));
+        assert!(!slack_signed("another-secret-of-length", body, &good, ts));
+        assert!(!slack_signed(secret, body, &headers(sig, "1531420619"), ts));
+        assert!(!slack_signed(secret, body, &headers(sig, "soon"), ts));
+        assert!(!slack_signed(secret, body, &|_: &str| None, ts));
+    }
 }
