@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { ErrorLine, rawError } from '../errors';
 import { PermissionSheet } from '../approval/PermissionSheet';
 import { TABLES, type Key } from '../i18n';
-import { approvalName, pluginOp, type Listed, type PluginSetting } from '../plugins/api';
+import { approvalName, catalogOp, pluginOp, type CatalogEntry, type Listed, type PluginSetting } from '../plugins/api';
 import '../plugins/plugins.css';
 import { Row, Sec, Select, Switch, Why } from '../settings/shell/Row';
 import { PageSummary } from '../settings/shell/PageActions';
@@ -53,6 +53,61 @@ function SettingControl({ s, value, label, save }: { s: PluginSetting; value: un
   );
 }
 
+/** Browse plugins: the catalogue's plugins with Install, Installed or Update. Installed is off and not approved. */
+function Browse({ core, t, list, install }: Pick<PageContext, 'core' | 't'> & { list: Listed[] | null; install: (id: string) => Promise<void> }) {
+  const [catalog, setCatalog] = useState<CatalogEntry[] | null>(null);
+  const [error, setError] = useState<unknown>('');
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => void catalogOp(core).then(setCatalog, setError), [core]);
+  const adds = (e: CatalogEntry) =>
+    (['panel', 'command', 'setting', 'check'] as const)
+      .filter((k) => e.adds[k])
+      .map((k) => t(`plugins.${k}s.${e.adds[k] === 1 ? 'one' : 'other'}` as Key, { n: e.adds[k] }))
+      .join(' · ');
+  return (
+    <Sec id="h-plugins-browse" className="plg-browse" title={t('plugins.browse.title')} lede={t('plugins.browse.lede')}>
+      <ErrorLine t={t} error={error ? rawError(error) : ''} />
+      {!catalog && !error && <p className="sds">{t('plugins.browse.loading')}</p>}
+      {catalog?.map((e) => {
+        const have = list?.find((p) => p.id === e.id);
+        const installed = !!have && have.plugin?.version === e.version;
+        return (
+          <Row
+            key={e.id}
+            setting={`plugin-catalog:${e.id}`}
+            label={e.name}
+            desc={
+              <>
+                <span className="plg-about">{e.about}</span>
+                {[adds(e), e.version, e.author, e.network.length ? t('plugins.browse.network', { hosts: e.network.join(', ') }) : t('plugins.browse.noNetwork')].filter(Boolean).join(' · ')}
+              </>
+            }
+            control={
+              installed ? (
+                <span className="chip">{t('plugins.browse.installed')}</span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn"
+                  aria-busy={busy === e.id || undefined}
+                  aria-label={t(have ? 'plugins.browse.updateOf' : 'plugins.browse.installOf', { name: e.name })}
+                  onClick={() => {
+                    if (busy) return;
+                    setBusy(e.id);
+                    void install(e.id).finally(() => setBusy(null));
+                  }}
+                >
+                  {t(have ? 'plugins.browse.update' : 'plugins.browse.install')}
+                </button>
+              )
+            }
+          />
+        );
+      })}
+    </Sec>
+  );
+}
+
 function PluginsPage({ core, t }: Pick<PageContext, 'core' | 't'>) {
   const [list, setList] = useState<Listed[] | null>(null);
   const [error, setError] = useState<unknown>('');
@@ -67,6 +122,7 @@ function PluginsPage({ core, t }: Pick<PageContext, 'core' | 't'>) {
     }
   };
   useEffect(() => void act({ do: 'list' }), [core]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [browse, setBrowse] = useState(false);
   const state = (p: Listed) =>
     p.error ? t('plugins.state.broken') : p.state === 'approved' ? t('plugins.state.approved') : p.state === 'changed' ? t('plugins.state.changed') : t('plugins.state.unapproved');
 
@@ -74,7 +130,16 @@ function PluginsPage({ core, t }: Pick<PageContext, 'core' | 't'>) {
     <div className="ssec-group">
       <PageSummary parts={[[t('plugins.summary'), list?.length]]} />
       <ErrorLine t={t} error={error ? rawError(error) : ''} />
-      <Sec id="h-plugins" className="plg-list" title={t('plugins.section')}>
+      <Sec
+        id="h-plugins"
+        className="plg-list"
+        title={t('plugins.section')}
+        right={
+          <button type="button" className="btn" aria-expanded={browse} onClick={() => setBrowse(!browse)}>
+            {t('plugins.browse.open')}
+          </button>
+        }
+      >
         {list && list.length === 0 && (
           <p className="sds" data-setting="plugins">
             {t('plugins.none')} <code>nunchiro plugin new &lt;id&gt;</code>
@@ -151,6 +216,7 @@ function PluginsPage({ core, t }: Pick<PageContext, 'core' | 't'>) {
           );
         })}
       </Sec>
+      {browse && <Browse core={core} t={t} list={list} install={(id) => act({ do: 'install', id })} />}
       {review && (
         <PermissionSheet
           core={core}

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "id": "quiet-hours",
+      "name": "Quiet hours",
+      "about": "Shows whether it is quiet time and which agents are still working.",
+      "version": "0.1.0",
+      "adds": {
+        "panel": 1,
+        "command": 1,
+        "setting": 2,
+        "check": 1
+      },
+      "network": [],
+      "commit": "534940ad7e016d5b40c26e648d401ace64a75981",
+      "dir": "docs/api/examples/plugins/quiet-hours",
+      "files": [
+        {
+          "path": "gate.sh",
+          "sha256": "06f501b8f91bed1870de1a310453365f39899cb13dc52e1429479184adddd1e2"
+        },
+        {
+          "path": "panel.sh",
+          "sha256": "a456de4ce85acbbdd6f797def978ac40f07e3a600fde91e5cae39d30339bfd11"
+        },
+        {
+          "path": "plugin.toml",
+          "sha256": "4a963c92ccf8667d5bb7e5fd99e900b40eb3803646be1fab8c8e18e3ff39d167"
+        },
+        {
+          "path": "quiet.sh",
+          "sha256": "d32aac1645d01739c3b3fe28c6e479eee78de88073e82f48a6a44abde99847a8"
+        },
+        {
+          "path": "status.sh",
+          "sha256": "e0a72bd604be224a513af0947bdd0d3956b2ee2c66a6f802115017d905ed3702"
+        }
+      ],
+      "author": "Nunchiro examples"
+    }
+  ]
+}
