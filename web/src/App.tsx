@@ -1,7 +1,7 @@
 // Window shell (spec Window (v1a), R8 final): left icon bar | left sidebar | centre | right icon bar.
 import { lineError, OwnWords, rawError, type Note } from './errors';
 import { PermissionSheet } from './approval/PermissionSheet';
-import { usePluginCommands } from './plugins/commands';
+import { usePluginCommands, withPluginKeys } from './plugins/commands';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { CoreClient, type Boot } from './api';
 import { hasTranscript } from './chat/ChatView'; // v1b-03
@@ -543,14 +543,15 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [ordered, board, ownerList, tabs, pj.visible, pj.selected, projectPaths, canReopen, active, open, onAction, editing, layout, finish, runOp, store, current /* v1b-03 */, bars /* v1a-48 */, fold.folded.join('\n') /* v1a-60 */, diff, pt.tree, pt.menuProject, pt.edit, pt.setAsk, pt.setPicking, wt.list, wt.selected, sideChats, t, registryVersion /* ticket 170 */, overlay /* v25f */, team /* ticket 990 */],
   );
-  const pluginCommands = usePluginCommands({ core, t, open: palette, current, composer, note: setPaneNote });
+  const plugins = usePluginCommands({ core, t, open: palette, current, composer, note: setPaneNote });
+  const pluginCommands = plugins.commands;
   const run = (id: string) => {
-    const c = commands.find((c) => c.id === id);
+    const c = commands.find((c) => c.id === id) ?? pluginCommands.find((c) => c.id === id); // a plugin's shortcut or status item
     if (c && c.enabled !== false) c.run();
   };
   useWaitingFlag(ordered.reduce((n, s) => n + s.pending.length, 0) + board.length + ownerList.length, run); // ticket 197
 
-  useGlobalKeys({ editing, palette, finish, arrange, setMessage, drag, settings, update, setPaneNote, hints, copyId, bindings, pane, paneApi, armed, setArmed, run, current, core, toSink, fromSink, inSettings: overlay === 'settings' });
+  useGlobalKeys({ editing, palette, finish, arrange, setMessage, drag, settings, update, setPaneNote, hints, copyId, bindings: withPluginKeys(bindings, plugins.keys), pane, paneApi, armed, setArmed, run, current, core, toSink, fromSink, inSettings: overlay === 'settings' });
 
   const strip = settings.strip;
   const showInputSourceBanner = boot.ctrlSpaceTaken && !settings.inputSourceChecked && (bindings.prefix ?? []).includes('Control+Space');
@@ -653,7 +654,7 @@ function Shell({ core, boot }: { core: CoreClient; boot: Boot }) {
           />
         )}
       </div>
-      <StatusBar {...{ current, t, core, sessions, ordered, open, store, editing, moved1, pane, paneNote, setPaneNote, fold, foldName, connected, manageAccounts, addTab }} />
+      <StatusBar {...{ current, t, core, sessions, ordered, open, store, editing, moved1, pane, paneNote, setPaneNote, fold, foldName, connected, manageAccounts, addTab }} plugins={plugins.status} run={run} />
       {arrange.toast && (
         <div className="toast" role="status" key={arrange.toast.n}>
           <span>{arrange.toast.text}</span>
