@@ -330,6 +330,52 @@ fn an_approved_skill_reaches_claude_as_its_skill_md_alone() {
         fs::read_to_string(folder.join("skills/review/SKILL.md")).unwrap(),
         SKILL
     );
+    // The copy is named by the whole approved hash, and rebuilt from the approved bytes at every start: a file planted
+    // in it, or the folder swapped for a link, never reaches Claude.
+    let hash = approval::status(&h, "plugin:sk").unwrap().hash;
+    assert_eq!(
+        folder.file_name().unwrap().to_string_lossy(),
+        format!("sk-{hash}")
+    );
+    fs::create_dir_all(folder.join("hooks")).unwrap();
+    fs::write(folder.join("hooks/hooks.json"), "{}").unwrap();
+    fs::write(folder.join(".mcp.json"), "{}").unwrap();
+    fs::write(
+        folder.join("skills/review/SKILL.md"),
+        "---\nname: review\nhooks: x\n---\n",
+    )
+    .unwrap();
+    assert_eq!(skills::claude_skill_flags(&h).len(), 2);
+    assert_eq!(
+        tree(&folder),
+        [".claude-plugin/plugin.json", "skills/review/SKILL.md"]
+    );
+    assert_eq!(
+        fs::read_to_string(folder.join("skills/review/SKILL.md")).unwrap(),
+        SKILL
+    );
+    let elsewhere = h.join("elsewhere");
+    fs::create_dir_all(elsewhere.join("hooks")).unwrap();
+    fs::write(elsewhere.join("hooks/hooks.json"), "{}").unwrap();
+    fs::remove_dir_all(&folder).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, &folder).unwrap();
+    assert_eq!(skills::claude_skill_flags(&h).len(), 2);
+    assert!(!folder.symlink_metadata().unwrap().file_type().is_symlink());
+    assert_eq!(
+        tree(&folder),
+        [".claude-plugin/plugin.json", "skills/review/SKILL.md"]
+    );
+    assert!(
+        elsewhere.join("hooks/hooks.json").exists(),
+        "the link's target is left alone"
+    );
+    // The review sheet shows the text that will instruct Claude.
+    let view = approval::status(&h, "plugin:sk").unwrap();
+    assert_eq!(view.skills.len(), 1);
+    assert_eq!(
+        (view.skills[0].name.as_str(), view.skills[0].text.as_str()),
+        ("review", SKILL)
+    );
     // Edited: nothing until it is approved again.
     fs::write(
         dir.join("skills/review/SKILL.md"),
@@ -362,6 +408,37 @@ fn a_skill_that_could_run_a_command_is_refused() {
             "---\nname: review\ndescription: x\n---\nThe log: !`git log -1`\n",
             "!`",
         ),
+        // Claude also runs a fenced block that opens with ```!, and its own escape helper treats `! the same way.
+        (
+            "---\nname: review\ndescription: x\n---\n```!\ngit log -1\n```\n",
+            "!`",
+        ),
+        (
+            "---\nname: review\ndescription: x\n---\nSee `!git log`.\n",
+            "!`",
+        ),
+        // A line break YAML reads but `lines()` does not, or a tab Claude turns into spaces, hides a key.
+        (
+            "---\nname: review\ndescription: x\rhooks:\r  PreToolUse: []\n---\nbody\n",
+            "control",
+        ),
+        (
+            "---\nname: review\ndescription: x\u{85}hooks: []\n---\nbody\n",
+            "control",
+        ),
+        (
+            "---\nname: review\ndescription: x\u{2028}hooks: []\n---\nbody\n",
+            "hidden",
+        ),
+        (
+            "---\nname: review\ndescription: x\u{2029}hooks: []\n---\nbody\n",
+            "hidden",
+        ),
+        (
+            "---\nname: review\ndescription: x\n\thooks: []\n---\nbody\n",
+            "control",
+        ),
+        ("---\nname: \"review'\ndescription: x\n---\nbody\n", "name"),
         ("---\nname: other\ndescription: x\n---\nbody\n", "name"),
         ("# no frontmatter\n", "frontmatter"),
         (

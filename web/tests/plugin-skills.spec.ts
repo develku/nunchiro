@@ -21,4 +21,7 @@ test('plugin_skill_sheet: the review sheet lists a skill; one that runs a comman
   await expect(app.locator('.plg[data-plugin="runner"]')).toContainText('Claude runs when the skill loads');
   await app.locator('.plg[data-plugin="notes"]').getByRole('button', { name: 'Review notes' }).click();
   await expect(app.locator('.ps [data-field="extras"] li')).toHaveText(['skill review instructs Claude sessions']);
+  // What will instruct Claude, in full, before the yes.
+  await expect(app.locator('.ps [data-field="skill-text"]')).toBeVisible();
+  await expect(app.locator('.ps [data-field="skill-text"]')).toHaveText(/^---\nname: review\n[\s\S]*Read the diff and list what is missing\.\n$/);
 });
