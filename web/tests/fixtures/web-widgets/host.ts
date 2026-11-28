@@ -129,7 +129,9 @@ export async function installWidgetHost(page: Page, home: string, pins: PinnedLi
     const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop()!);
     const m = /^w-(.+)-([0-9a-f]{16})(-act)?$/.exec(id);
     const request = { op: 'widget_page', name: m?.[1] ?? '' };
-    const reply = m ? (requests.push(request), await coreCall(home, request)) : {};
+    // A frame still loading as the test ends meets a stopped core: as the app's core_call, a refused call is an error
+    // reply (the page is not served), not a throw out of the route.
+    const reply = m ? (requests.push(request), await coreCall(home, request).catch((e: Error) => ({ Err: e.message }))) : {};
     const p = reply.Ok?.page;
     // review-34: an id is served only under the grant it was framed with.
     const csp = p && p.name === m![1] && p.hash.startsWith(m![2]) && p.act === (m![3] === '-act') ? webCsp(p.network, p.act ? p.entry : undefined) : null;
