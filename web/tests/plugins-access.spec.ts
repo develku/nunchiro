@@ -1,6 +1,6 @@
 // A plugin is approved for its access (docs/plugins.md, Approval and the switch): after a change to its scripts alone
 // the Plugins page keeps it approved and says it changed; after a change that adds access it asks again, and Review
-// lists what is new. A real core, the example plugin from docs/api/examples.
+// lists what is new. A real core, the example plugin from docs/api/examples without its check.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
@@ -13,6 +13,9 @@ function installApproved(core: Core) {
   const to = path.join(core.home, 'plugins/quiet-hours');
   fs.mkdirSync(to, { recursive: true });
   for (const f of fs.readdirSync(EXAMPLE)) fs.copyFileSync(path.join(EXAMPLE, f), path.join(to, f));
+  // Without its check: a plugin with a check asks again after any change (docs/plugins.md).
+  const toml = path.join(to, 'plugin.toml');
+  fs.writeFileSync(toml, fs.readFileSync(toml, 'utf8').split('[[gate]]')[0]);
   core.run(['plugin', 'allow', 'quiet-hours']);
   return to;
 }
@@ -50,3 +53,15 @@ for (const scheme of ['light', 'dark'] as const) {
     await app.screenshot({ path: `../.scratch/shots/plugins-access-${scheme}.png` });
   });
 }
+
+test('plugin_with_a_check_asks_again_after_a_script_change', async ({ app, core }) => {
+  const to = path.join(core.home, 'plugins/quiet-hours');
+  fs.mkdirSync(to, { recursive: true });
+  for (const f of fs.readdirSync(EXAMPLE)) fs.copyFileSync(path.join(EXAMPLE, f), path.join(to, f));
+  core.run(['plugin', 'allow', 'quiet-hours']);
+  fs.appendFileSync(path.join(to, 'status.sh'), '# a comment\n');
+  await openWindow(app);
+  const r = await row(app);
+  await expect(r.locator('.chip').first()).toHaveText('Changed since approval');
+  await expect(r).not.toContainText('it asks for nothing new');
+});

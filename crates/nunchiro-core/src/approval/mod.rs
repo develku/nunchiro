@@ -291,13 +291,20 @@ fn access_of(name: &str, s: &Subject) -> Option<std::collections::BTreeSet<Strin
         .map(|p| crate::plugins::access(&p))
 }
 /// What a plugin asks for beyond its approval: `None` when the stored grant holds no access (anything but a
-/// plugin, or a grant from before access was recorded), so only the hash decides.
+/// plugin, or a grant from before access was recorded).
 fn added(name: &str, s: &Subject, a: &store::Approval) -> Option<Vec<String>> {
     if a.access.is_empty() {
         return None;
     }
     let now = access_of(name, s)?;
     Some(now.into_iter().filter(|x| !a.access.contains(x)).collect())
+}
+/// A changed plugin still approved: it asks for nothing beyond its approval and has no check (`plugins::hash_only`).
+fn carried(name: &str, s: &Subject, a: &store::Approval) -> bool {
+    let check = crate::plugins::split(name)
+        .and_then(|(id, _)| crate::plugins::parse(&s.text, id).ok())
+        .is_none_or(|p| crate::plugins::hash_only(&p));
+    !check && added(name, s, a).is_some_and(|n| n.is_empty())
 }
 
 fn view(name: &str, s: Subject, stored: Option<&store::Approval>) -> View {
@@ -310,9 +317,7 @@ fn view(name: &str, s: Subject, stored: Option<&store::Approval>) -> View {
         }
         Some(a) if a.hash == s.hash => (State::Approved, Some(a.level)),
         // Changed, but asking for nothing it was not approved for: still approved (Orca's rule for updates).
-        Some(a) if added(name, &s, a).is_some_and(|n| n.is_empty()) => {
-            (State::Approved, Some(a.level))
-        }
+        Some(a) if carried(name, &s, a) => (State::Approved, Some(a.level)),
         Some(a) => (State::Changed, Some(a.level)),
     };
     let updated = stored.is_some_and(|a| a.hash != s.hash) && state == State::Approved;
@@ -466,11 +471,7 @@ fn check_kind(home: &Path, name: &str, kind: SubjectKind) -> Result<Proof, Strin
         .map(|(id, _)| format!("{}{id}", crate::plugins::PREFIX))
         .unwrap_or_default();
     match stored.find(at, &key) {
-        Some(a)
-            if a.hash == s.hash
-                || (at == SubjectKind::Plugin
-                    && added(&whole, &s, a).is_some_and(|n| n.is_empty())) =>
-        {
+        Some(a) if a.hash == s.hash || (at == SubjectKind::Plugin && carried(&whole, &s, a)) => {
             // v1b-34: an act grant stored before the rule (or by hand) is no proof.
             if let Some(reason) = crate::widgets::web::act_refused(&s.manifest)
                 && a.level == Level::Act

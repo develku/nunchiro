@@ -53,7 +53,11 @@ fn a_change_that_adds_access_asks_again_and_says_what_is_new() {
     assert_eq!(view.state, State::Changed);
     assert_eq!(
         view.added,
-        ["command bye", "command hi reaches example.com"],
+        [
+            "command bye",
+            "command bye runs [\"/bin/sh\", \"hi.sh\"]",
+            "command hi reaches example.com"
+        ],
         "{:?}",
         view.added
     );
@@ -98,10 +102,7 @@ fn a_new_command_line_asks_again() {
     let v = after(
         "pa5",
         MANIFEST,
-        &MANIFEST.replace(
-            "[\"/bin/sh\", \"hi.sh\"]",
-            "[\"/bin/bash\", \"hi.sh\"]",
-        ),
+        &MANIFEST.replace("[\"/bin/sh\", \"hi.sh\"]", "[\"/bin/bash\", \"hi.sh\"]"),
         "echo hello\n",
     );
     assert_eq!(v.state, State::Changed);
