@@ -85,6 +85,8 @@ export const KNOWN: [RegExp, Key, Key?][] = [
   // Ticket 536: the rest of 534's list that the window can show (the ticket's table names each place).
   // pressure/wait.rs `answer`: Start anyway or Cancel on a start that left the list meanwhile (it started or was dropped).
   [/^this start is no longer waiting for memory$/, 'err.memWait.gone'],
+  // plugins.rs check_send: a message a plugin's check refused; its reason stays under Details.
+  [/^Not sent\. The plugin "(?<name>[^"]+)" refused it: /, 'err.pluginRefusedSend', 'err.pluginRefusedSend.todo'],
   [/^answer the waiting decision first$/, 'err.decisionWaiting', 'err.decisionWaiting.todo'], // sessions.rs:6284
   [/^approve the agent first$/, 'err.agentNotApproved', 'err.agentNotApproved.todo'], // acp/add.rs:187,224
   [/^start a session in a project folder first$/, 'agents.sheet.startFirst'], // acp/add.rs:318

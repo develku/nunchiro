@@ -3,6 +3,7 @@
 // The window keeps the text in the box, sends no Enter and says why.
 import { expect, openWindow, test, showComposer } from './fixtures';
 import { append, chat, openChat, rec, test as chatTest, type ChatCore } from './fixtures/chat/harness';
+import { startOf } from './start-op';
 
 const AGENT_ENDED = 'agent_ended: the agent has ended; type in the terminal'; // nunchiro_core::delivery::AGENT_ENDED
 
@@ -67,7 +68,7 @@ chatTest('composer_resume_failure_keeps_the_draft_and_starts_once: a double pres
     const server = ws.connectToServer();
     ws.onMessage((message) => {
       const msg = typeof message === 'string' ? JSON.parse(message) : null;
-      if (msg?.request?.op === 'start') {
+      if (startOf(msg?.request)) {
         starts++;
         return void setTimeout(() => ws.send(JSON.stringify({ id: msg.id, response: { Err: 'no such folder' } })), 300);
       }
@@ -100,7 +101,7 @@ chatTest('composer_resume_failure_note_stays_with_its_session_and_fades', async 
     const server = ws.connectToServer();
     ws.onMessage((message) => {
       const msg = typeof message === 'string' ? JSON.parse(message) : null;
-      if (msg?.request?.op === 'start') return void ws.send(JSON.stringify({ id: msg.id, response: { Err: 'no such folder' } }));
+      if (startOf(msg?.request)) return void ws.send(JSON.stringify({ id: msg.id, response: { Err: 'no such folder' } }));
       server.send(message);
     });
     server.onMessage((message) => ws.send(message));

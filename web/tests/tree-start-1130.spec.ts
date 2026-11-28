@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import type { Page } from '@playwright/test';
 import { expect, openWindow, test, type Core } from './fixtures';
 import { openQuiet } from './tree-seed';
+import { startOf } from './start-op';
 
 const repo = (core: Core, name = 'repo') => {
   const p = core.project(name);
@@ -46,7 +47,7 @@ test('t2_row_plus_one_step: one click on the project row\'s + starts the default
   await plus.click();
   await expect.poll(() => sessions(core).filter((s) => s.kind === 'claude' && s.state === 'running').map((s) => s.project), { timeout: 15_000 }).toEqual([p]);
   // Since #57 the tree's + sends its start as `start_or_wait` (a held start waits for memory), the start inside it.
-  const starts = sent.map((r) => (r.op === 'start_or_wait' ? (r.start as typeof r) : r)).filter((r) => r.op === 'start');
+  const starts = sent.map(startOf).filter((r) => r) as typeof sent;
   expect(starts).toHaveLength(1);
   expect((starts[0].session as { project: string; kind: string })).toMatchObject({ project: p, kind: 'claude' });
   await expect(app.locator('.newtab')).toHaveCount(0);

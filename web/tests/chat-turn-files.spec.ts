@@ -95,9 +95,10 @@ test('chat_turn_row_hidden_without_file_writes', async ({ page, chatCore }) => {
   c.write(c.at(rec.user('now edit')), ...c.edit('e1', 'a.txt'));
   await openChat(page, c.s.id);
   await expect(chat(page, c.s.id).getByText('read it')).toBeVisible();
-  // The read-only turn has no row; the writing turn has only its changes card (B19), before and after it ends.
+  // The read-only turn has no row; the writing turn shows its changes card (B19) once it ends, not while it runs (the card
+  // would move with each line of the reply: chat_turn_card_does_not_move_while_the_turn_ends).
   await expect(chat(page, c.s.id).locator('.turnfiles')).toHaveCount(0);
-  await expect(row(page, c.s.id)).toHaveCount(1);
+  await expect(row(page, c.s.id)).toHaveCount(0);
   c.write(c.end());
   await expect(row(page, c.s.id)).toHaveCount(1);
   await expect(row(page, c.s.id)).toHaveAttribute('aria-label', /^1 file changed, \d+ added, \d+ removed, this turn$/);
@@ -124,4 +125,32 @@ test('chat_turn_one_file_is_one_line', async ({ page, chatCore }) => {
   await line();
   await btn.click();
   await expect(page.getByRole('complementary', { name: 'Diff' }).getByRole('radio', { name: 'Turn files' })).toHaveAttribute('aria-checked', 'true');
+});
+
+// A real drive missed View in Diff: the card sat at the turn's end while the agent still wrote its reply, so each new line
+// moved it down. While the agent works on the last turn the card waits; it shows once, where it stays.
+test('chat_turn_card_does_not_move_while_the_turn_ends', async ({ page, chatCore }) => {
+  const c = session(chatCore);
+  c.write(c.at(rec.user('go')), ...c.edit('e1', 'a.txt'));
+  chatCore.hook(c.s.id, 'UserPromptSubmit');
+  await openChat(page, c.s.id);
+  const card = row(page, c.s.id);
+  const seen = new Set<number>();
+  const at = async () => {
+    if (await card.count()) seen.add(Math.round((await card.getByRole('button', { name: 'View in Diff' }).boundingBox())!.y));
+  };
+  await expect(chat(page, c.s.id).locator('button.sum')).toBeVisible();
+  await at();
+  for (const line of ['First line of the reply.', 'A second, longer line of the reply that takes some room.', 'And a third.']) {
+    c.write(c.at(rec.assistant(line)));
+    await expect(chat(page, c.s.id).getByText(line)).toBeVisible();
+    await at();
+  }
+  c.write(c.end());
+  chatCore.hook(c.s.id, 'Stop');
+  await expect(card).toHaveCount(1);
+  await at();
+  await page.waitForTimeout(300); // anything still settling after the turn ended
+  await at();
+  expect([...seen]).toHaveLength(1);
 });
