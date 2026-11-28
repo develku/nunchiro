@@ -552,6 +552,58 @@ fn a_mark_the_disk_refuses_still_holds() {
         Some(Source::Mail),
         "a failed mark counts as marked"
     );
-    assert_eq!(outside(&home, &["seat-2".to_string()]), None);
+    // A mark that cannot be read, as no folder holds it, fails closed too.
+    assert_eq!(outside(&home, &["seat-2".to_string()]), Some(Source::Tool));
     let _ = fs::remove_dir_all(home);
+}
+
+#[test]
+fn a_mark_on_disk_only_raises_and_a_deleted_one_holds() {
+    let home = std::env::temp_dir().join(format!("nunchiro-mark-{}", store::new_id().unwrap()));
+    fs::create_dir_all(home.join(STATE).join("outside")).unwrap();
+    // A planted "you" lowers nothing: any mark file counts as outside.
+    fs::write(home.join(STATE).join("outside").join("planted"), "you").unwrap();
+    assert_eq!(outside(&home, &["planted".to_string()]), Some(Source::Tool));
+    // One that cannot be read (a folder here) fails closed.
+    fs::create_dir_all(home.join(STATE).join("outside").join("folder")).unwrap();
+    assert_eq!(outside(&home, &["folder".to_string()]), Some(Source::Tool));
+    // A mark deleted from the disk still holds while the core runs.
+    mark_outside(&home, "seat-3", Source::Mail).unwrap();
+    fs::remove_file(home.join(STATE).join("outside").join("seat-3")).unwrap();
+    assert_eq!(outside(&home, &["seat-3".to_string()]), Some(Source::Mail));
+    let _ = fs::remove_dir_all(home);
+}
+
+#[test]
+fn a_kept_topic_proposal_goes_to_its_topic_file() {
+    let (home, team, id) = bot();
+    let m = team.bot_memory(&id).unwrap();
+    assert_eq!(
+        m.add("Reply within a day.", Source::Mail, Some("mail-rules"), NOW)
+            .unwrap(),
+        Added::Proposed
+    );
+    let p = m.proposals().0.remove(0);
+    m.settle(&p.id, true).unwrap();
+    assert!(
+        m.read(Some("mail-rules"))
+            .unwrap()
+            .contains("Reply within a day. (from: mail)")
+    );
+    assert_eq!(texts(&m), vec!["Mail rules: see mail-rules.md"]);
+    let _ = fs::remove_dir_all(home);
+}
+
+#[test]
+fn a_fetch_by_its_full_path_or_in_quotes_is_outside() {
+    let input = |c: &str| serde_json::json!({ "command": c });
+    assert_eq!(
+        outside_of("Bash", &input("/opt/bin/wget -q https://x")),
+        Some(Source::Web)
+    );
+    assert_eq!(
+        outside_of("Bash", &input("\"curl\" https://x")),
+        Some(Source::Web)
+    );
+    assert_eq!(outside_of("Bash", &input("echo curling")), None);
 }

@@ -768,9 +768,10 @@ otherwise `a conversation`. A line that looks like a secret is refused. `--topic
 topic file and, once, an index line that points to it; `--user` writes to USER.md. An add waits as a proposal for the
 user's look, with the source `mail`, `web` or `a tool`, once the seat's conversation read outside content: a mail
 connector, a web fetch or search, another MCP server's tool (Nunchiro's own server, `nunchiro`, excepted), or a shell
-`curl`, `wget`, `gh`, `git clone|pull|fetch` or `nunchiro browser`; or heard from a session that did (a room message,
-`agent send|prompt`); or continues a run that did. A seat whose tool calls the core cannot see (an ACP agent, Codex, a
-seat started without hooks, or hooks turned off) only proposes. A line that reads like an instruction is not kept at all
+`curl`, `wget`, `gh`, `git clone|pull|fetch` or `nunchiro browser`; or heard from a session that did (a room message it
+read, `agent send|prompt|keys`, an answer to its dialog), or read one (`agent read|get`); or continues a run that did, a
+fresh Lead taking over from one included. A seat whose tool calls the core cannot see (an ACP agent, Codex, a seat
+started without hooks, or with hooks turned off) only proposes, and a marked seat cannot `forget`. A line that reads like an instruction is not kept at all
 (only its first words are counted for the user). `forget` deletes the one line that holds the words (its exact text wins
 over a part) from the index, every saved copy (lines of an old-format file too), the topic files, USER.md and the
 waiting proposals; words that match several lines are refused with the lines, and a forget a crash cut short finishes
@@ -778,7 +779,10 @@ on the next one. `read` prints the index and the topic files, or one topic file.
 
 The core keeps its own records in `$NUNCHIRO_HOME/memory-state/` (out of the memory folder): a hash of every line it
 wrote, the outside-read marks and the proposals. A line it did not write reads as `(from: unknown)` whatever it claims,
-on the Memory tab and in the brief. A Claude seat's settings deny edits to the memory files and that folder.
+on the Memory tab and in the brief. A Claude seat's settings deny edits to the memory files, that folder and the
+SOUL.md of a bot whose first chat is over. Known limit: this stops a seat's file tools, not its shell; a seat in full
+mode runs as the same user and can rewrite the records, as it can `sessions.json`. `--from-user` is the seat's own
+claim.
 
 An index from before this format is rewritten once into it, newest first, each line a fact from a conversation dated by
 the file (a line that starts with a date keeps it); the old file is kept as a saved copy for good. The user's own

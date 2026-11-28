@@ -4,6 +4,8 @@ use super::*;
 use crate::team::{Added, Source};
 
 /// The owner's socket asks: memory is a bot seat's verb; the user changes it on the bot's Memory tab.
+/// A marked seat's forget.
+pub(super) const FORGET_MARKED: &str = "this conversation read outside content, so it cannot forget a memory line: ask the user to remove it on the Memory tab";
 pub(super) const OWNER: &str =
     "memory is written from a bot's session; the user changes it on the bot's Memory tab";
 
@@ -64,6 +66,10 @@ impl Sessions {
         let now = queue::now_ms();
         let said = match operation.as_str() {
             "read" => memory.read(topic.as_deref())?,
+            // Outside content could have asked for it: what the user's memory holds is the user's to remove then.
+            "forget" if self.read_outside(&caller.id).is_some() => {
+                return Err(FORGET_MARKED.into());
+            }
             "forget" => format!("Forgotten everywhere: {}", memory.forget(text)?),
             "add" => {
                 let from = self.read_outside(&caller.id).unwrap_or(if *from_user {
@@ -90,34 +96,62 @@ impl Sessions {
         Ok(Reply::Text { text: said })
     }
 
-    /// A tool call that reads outside content marks its session's conversation.
-    pub(super) fn note_outside(&self, session: &str, event: &str, payload: &serde_json::Value) {
+    /// A tool call that reads outside content marks its session's conversation. A mark not written is an error, so the
+    /// hook keeps its journal copy and the next core start marks it again (`persist`).
+    pub(super) fn note_outside(
+        &self,
+        session: &str,
+        event: &str,
+        payload: &serde_json::Value,
+    ) -> Result<(), String> {
         if !matches!(event, "PreToolUse" | "PostToolUse") {
-            return;
+            return Ok(());
         }
-        if let Some(source) = crate::team::outside_of(
+        match crate::team::outside_of(
             payload["tool_name"].as_str().unwrap_or_default(),
             &payload["tool_input"],
-        ) && let Err(e) = crate::team::mark_outside(&self.home, session, source)
-        {
-            eprintln!("session {session}: outside read not marked: {e}");
+        ) {
+            Some(source) => crate::team::mark_outside(&self.home, session, source)
+                .map_err(|e| format!("outside read not marked: {e}")),
+            None => Ok(()),
         }
     }
 
-    /// A marked session's words carry its mark: what it types into another session marks that session.
-    pub(super) fn pass_outside(&self, caller: &str, request: &Request) {
-        let id = match request {
+    /// A marked session's words carry its mark, both ways: what it types into another session (or answers there) marks
+    /// that session, and reading it (its screen, transcript or row) marks the reader.
+    pub(crate) fn pass_outside(&self, caller: &str, request: &Request) {
+        let (from, to) = match request {
             Request::AgentSend { id, .. }
             | Request::AgentPrompt { id, .. }
             | Request::SendText { id, .. }
-            | Request::SteerNow { id, .. } => id,
+            | Request::SteerNow { id, .. }
+            | Request::SendKeys { id, .. }
+            | Request::AgentKeys { id, .. } => (caller.to_string(), id.clone()),
+            Request::Answer { item, .. } => match self.queue.decision(item) {
+                Ok(d) => (caller.to_string(), d.session_id),
+                Err(_) => return,
+            },
+            Request::AgentRead { id, .. } | Request::AgentGet { id } => {
+                (id.clone(), caller.to_string())
+            }
             _ => return,
         };
-        if let Some(source) = self.read_outside(caller)
-            && let Err(e) = crate::team::mark_outside(&self.home, id, source)
+        if let Some(source) = self.read_outside(&from)
+            && let Err(e) = crate::team::mark_outside(&self.home, &to, source)
         {
-            eprintln!("session {id}: outside read not passed on: {e}");
+            eprintln!("session {to}: outside read not passed on: {e}");
         }
+    }
+
+    /// `check_agent` for a read the core serves off its lock (a transcript): a marked seat's transcript marks its reader.
+    pub(crate) fn check_reader(
+        &self,
+        caller: &crate::grants::Caller,
+        request: &Request,
+    ) -> Result<(), String> {
+        self.check_agent(caller, request)?;
+        self.pass_outside(&caller.id, request);
+        Ok(())
     }
 
     /// A seat read room messages (`agent check`, a thread, an answer): one from a marked seat marks it, and so does one
@@ -136,23 +170,36 @@ impl Sessions {
     }
 }
 
-/// A Claude seat's deny rules for the files only the core writes: every bot's memory index and topic files, USER.md
-/// and the core's memory records. SOUL.md stays the bot's own to write. None when the home's path holds a character the
-/// rule syntax could read as a pattern (as `folder_permissions`).
+/// A Claude seat's deny rules for the files only the core writes: every bot's memory index and topic files, USER.md,
+/// the core's memory records, and the SOUL.md of every bot whose first chat is over (the owner edits it on the Bots
+/// page). Each rule has a twin that matches any case, as `folder_permissions`. None when the home's path holds a
+/// character the rule syntax could read as a pattern.
 pub(super) fn deny_memory(settings: &mut serde_json::Map<String, serde_json::Value>, home: &Path) {
-    let Some(home) = home.to_str().filter(|h| {
+    let Some(path) = home.to_str().filter(|h| {
         !h.chars()
             .any(|c| "*?[]{}()\\!".contains(c) || c.is_control())
     }) else {
         return;
     };
-    let rules = [
+    let team = crate::team::Team::open(home);
+    let souls = team
+        .list()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|t| store::valid_id(&t.id) && team.first(&t.id).is_none())
+        .map(|t| format!("team/{}/SOUL.md", t.id));
+    let rules: Vec<serde_json::Value> = [
         "team/*/MEMORY.md",
         "team/*/memory/**",
         "team/USER.md",
         "memory-state/**",
     ]
-    .map(|p| serde_json::Value::String(format!("Edit(/{home}/{p})")));
+    .map(String::from)
+    .into_iter()
+    .chain(souls)
+    .flat_map(|p| [any_case(&p), p])
+    .map(|p| serde_json::Value::String(format!("Edit(/{path}/{p})")))
+    .collect();
     let permissions = settings
         .entry("permissions")
         .or_insert_with(|| serde_json::json!({}));
@@ -162,4 +209,14 @@ pub(super) fn deny_memory(settings: &mut serde_json::Map<String, serde_json::Val
             list.extend(rules);
         }
     }
+}
+/// `team/x` as `[tT][eE][aA][mM]/[xX]`: a rule that matches the name in any case (a case-insensitive disk).
+fn any_case(pattern: &str) -> String {
+    pattern
+        .chars()
+        .map(|c| match c.is_ascii_alphabetic() {
+            true => format!("[{}{}]", c.to_ascii_lowercase(), c.to_ascii_uppercase()),
+            false => c.to_string(),
+        })
+        .collect()
 }

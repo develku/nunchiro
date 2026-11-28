@@ -11,6 +11,10 @@
 //! Trust: the memory files sit where a seat's own file tools reach. The core keeps, in its own `memory-state/` folder, a
 //! hash of every line it wrote; a line it did not write reads as `(from: unknown)`, whatever source it claims. The
 //! outside-read marks and the proposals live in that folder too.
+//!
+//! shortcut: the hash record stops a seat's file tools (denied there), not its shell: a seat in full mode runs as the
+//! same user and can rewrite the record and the marks, the same trust as sessions.json. `--from-user` is the seat's own
+//! claim. Upgrade to a signed record kept outside the seat's reach if a seat is seen forging one.
 use super::{Team, mask_secrets};
 use crate::store;
 use serde::{Deserialize, Serialize};
@@ -510,11 +514,17 @@ impl Memory {
         if from.outside() {
             return self.propose(text, from, topic.map(String::from), date, now_ms);
         }
-        let fact = Fact {
-            date: Some(date),
-            text,
-            from: Some(from),
-        };
+        self.put(
+            Fact {
+                date: Some(date),
+                text,
+                from: Some(from),
+            },
+            topic_path,
+        )
+    }
+    /// Keeps `fact` in the index, or in the topic file at `topic_path` with an index line that points to it.
+    fn put(&self, fact: Fact, topic_path: Option<PathBuf>) -> Result<Added, String> {
         let mut facts = self.facts_now()?;
         match topic_path {
             None => {
@@ -661,13 +671,10 @@ impl Memory {
                 text: p.text,
                 from: Some(p.from),
             };
-            if p.topic.as_deref() == Some(USER_TOPIC) {
-                self.append_user(&fact)?;
-            } else {
-                let mut facts = self.facts_now()?;
-                if !facts.iter().any(|f| f.text == fact.text) {
-                    facts.insert(0, fact);
-                    self.write_facts(&facts)?;
+            match p.topic.as_deref() {
+                Some(USER_TOPIC) => self.append_user(&fact)?,
+                topic => {
+                    self.put(fact, topic.map(|t| self.topic(t)).transpose()?)?;
                 }
             }
         }
@@ -1005,35 +1012,44 @@ fn mark_file(home: &Path, session: &str) -> Result<PathBuf, String> {
     }
     Ok(state_root(home).join("outside").join(session))
 }
+/// Every mark this core made, by its file: a mark deleted from the disk, or one the disk refused, still holds while
+/// the core runs.
+static MARKS: std::sync::Mutex<std::collections::BTreeMap<PathBuf, Source>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
 /// This session's conversation read outside content (`outside_of`), or heard from one that did. Kept in the core's own
 /// folder, out of the seats' file tools' way, so a core restart does not clear it.
 pub fn mark_outside(home: &Path, session: &str, source: Source) -> Result<(), String> {
     let path = mark_file(home, session)?;
-    if outside(home, &[session.to_string()]).is_some_and(|s| s >= source) {
+    if let Ok(mut marks) = MARKS.lock() {
+        let held = marks.entry(path.clone()).or_insert(source);
+        *held = (*held).max(source);
+    }
+    if on_disk(&path) >= Some(source) {
         return Ok(());
     }
-    let written = store::private_dir(&state_root(home))
-        .and_then(|()| store::private_dir(&state_root(home).join("outside")))
-        .and_then(|()| store::atomic_write(&path, source.words().as_bytes()));
-    if written.is_err()
-        && let Ok(mut unwritten) = UNWRITTEN.lock()
-    {
-        // Fail closed: a mark the disk refused still holds for as long as this core runs.
-        unwritten.insert(path, source);
-    }
-    written
+    store::private_dir(&state_root(home))?;
+    store::private_dir(&state_root(home).join("outside"))?;
+    store::atomic_write(&path, source.words().as_bytes())
 }
-/// Marks a write failed on (`mark_outside`), by their file.
-static UNWRITTEN: std::sync::Mutex<std::collections::BTreeMap<PathBuf, Source>> =
-    std::sync::Mutex::new(std::collections::BTreeMap::new());
+/// A mark file's source: only an outside one counts (a planted "you" lowers nothing), and one that cannot be read
+/// fails closed.
+fn on_disk(path: &Path) -> Option<Source> {
+    match store::read_regular(path) {
+        Ok(b) => Source::parse(String::from_utf8_lossy(&b).trim())
+            .filter(|s| s.outside())
+            .or(Some(Source::Tool)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(_) => Some(Source::Tool),
+    }
+}
 /// What outside content any of `sessions` (a seat and the runs it continues) read, the most telling first.
 pub fn outside(home: &Path, sessions: &[String]) -> Option<Source> {
     sessions
         .iter()
         .filter_map(|s| {
             let path = mark_file(home, s).ok()?;
-            let unwritten = UNWRITTEN.lock().ok().and_then(|u| u.get(&path).copied());
-            Source::parse(Memory::read_text(&path).trim()).max(unwritten)
+            let held = MARKS.lock().ok().and_then(|m| m.get(&path).copied());
+            on_disk(&path).max(held)
         })
         .max()
 }
@@ -1042,7 +1058,8 @@ pub fn outside(home: &Path, sessions: &[String]) -> Option<Source> {
 /// (Claude and Codex): a mail connector, a web fetch or search, another MCP server's results, or a shell command that
 /// fetches a page, an issue or a repository. Nunchiro's own MCP server is not outside.
 /// shortcut: a shell command is judged by its words (`curl`, `wget`, `nunchiro browser`, `gh`, `git clone|pull|fetch`), so
-/// a script that fetches passes; upgrade to marking every shell call if a fetched page is seen reaching memory that way.
+/// a script that fetches passes (`bash -c "$x"`, `python3 -c ...`, a script file); upgrade to marking every shell call
+/// if a fetched page is seen reaching memory that way.
 pub fn outside_of(tool: &str, input: &serde_json::Value) -> Option<Source> {
     let lower = tool.to_lowercase();
     if let Some(rest) = tool.strip_prefix("mcp__") {
@@ -1076,9 +1093,11 @@ pub fn outside_of(tool: &str, input: &serde_json::Value) -> Option<Source> {
             })
         })
         .unwrap_or_default();
+    // A word in quotes, or a program named by its full path, reads as its bare name.
     let words: Vec<&str> = command
-        .split(|c: char| c.is_whitespace() || ";|&()".contains(c))
+        .split(|c: char| c.is_whitespace() || ";|&()\"'`".contains(c))
         .filter(|w| !w.is_empty())
+        .map(|w| w.rsplit('/').next().unwrap_or(w))
         .collect();
     let fetches = words.iter().enumerate().any(|(i, w)| {
         let next = words.get(i + 1).copied().unwrap_or_default();

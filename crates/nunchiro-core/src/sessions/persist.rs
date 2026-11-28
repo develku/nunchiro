@@ -218,6 +218,17 @@ impl Sessions {
         let mut chat = crate::chat::Cache::new(home);
         let replayed = !events.is_empty();
         for (path, event) in events {
+            // A tool call that read outside content while the core was down, or whose mark was not written, marks now.
+            if matches!(event.event.as_str(), "PreToolUse" | "PostToolUse")
+                && let Some(source) = crate::team::outside_of(
+                    event.payload["tool_name"].as_str().unwrap_or_default(),
+                    &event.payload["tool_input"],
+                )
+                && let Err(e) = crate::team::mark_outside(home, &event.session_id, source)
+            {
+                eprintln!("session {}: outside read not marked: {e}", event.session_id);
+                recovery_warnings += 1;
+            }
             if let Err(error) = queue.replay(&event) {
                 recovery_warnings += 1;
                 match queue::journal::quarantine(home, &path, &error) {

@@ -591,5 +591,7 @@
  "the index is plain text": "agent: only a bot's seat sends `nunchiro memory` (its own memory); no window request reads or changes memory yet",
  "no such saved copy": "agent: only a bot's seat sends `nunchiro memory` (its own memory); no window request reads or changes memory yet",
  "that saved copy is gone": "agent: only a bot's seat sends `nunchiro memory` (its own memory); no window request reads or changes memory yet",
- "not a session id": "agent: only a bot's seat sends `nunchiro memory` (its own memory); no window request reads or changes memory yet"
+ "not a session id": "agent: only a bot's seat sends `nunchiro memory` (its own memory); no window request reads or changes memory yet",
+ "this conversation read outside content, so it cannot forget a memory line: ask the user to remove it on the Memory tab": "agent: only a bot's seat sends `nunchiro memory` (its own memory); no window request reads or changes memory yet",
+ "outside read not marked: {}": "internal: the hook's reply when a mark was not written; the hook keeps its journal copy and the next core start marks it"
 }

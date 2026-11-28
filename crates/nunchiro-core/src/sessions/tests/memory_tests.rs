@@ -134,21 +134,157 @@ fn a_marked_seat_marks_who_hears_it() {
 }
 
 #[test]
-fn a_claude_seat_may_not_edit_the_memory_files() {
-    let home = Path::new("/h/home");
+fn a_claude_seat_may_not_edit_the_memory_files_or_a_settled_soul() {
+    let home = scratch("memory-deny");
+    let team = crate::team::Team::open(&home);
+    let bot = team
+        .save(
+            None,
+            crate::team::Teammate {
+                id: String::new(),
+                name: "Bom".into(),
+                job: "Keeps the mail in order.".into(),
+                kind: AgentKind::Claude,
+                model: None,
+                effort: None,
+                project: None,
+                lead: false,
+                level: None,
+                level_max: None,
+                next_level: None,
+                agent: None,
+            },
+        )
+        .unwrap()[0]
+        .id
+        .clone();
     let mut settings = serde_json::Map::new();
-    super::super::memory::deny_memory(&mut settings, home);
+    super::super::memory::deny_memory(&mut settings, &home);
     let deny = settings["permissions"]["deny"].as_array().unwrap();
+    let h = home.display();
     for rule in [
-        "Edit(//h/home/team/*/MEMORY.md)",
-        "Edit(//h/home/team/*/memory/**)",
-        "Edit(//h/home/team/USER.md)",
-        "Edit(//h/home/memory-state/**)",
+        format!("Edit(/{h}/team/*/MEMORY.md)"),
+        format!("Edit(/{h}/[tT][eE][aA][mM]/*/[mM][eE][mM][oO][rR][yY].[mM][dD])"),
+        format!("Edit(/{h}/team/*/memory/**)"),
+        format!("Edit(/{h}/team/USER.md)"),
+        format!("Edit(/{h}/[tT][eE][aA][mM]/[uU][sS][eE][rR].[mM][dD])"),
+        format!("Edit(/{h}/memory-state/**)"),
+        format!("Edit(/{h}/[mM][eE][mM][oO][rR][yY]-[sS][tT][aA][tT][eE]/**)"),
+        // A bot with no first chat: its SOUL is the owner's to edit, on the Bots page.
+        format!("Edit(/{h}/team/{bot}/SOUL.md)"),
     ] {
-        assert!(deny.iter().any(|r| r == rule), "{rule}: {deny:?}");
+        assert!(deny.iter().any(|r| r == &rule), "{rule}: {deny:?}");
     }
-    assert!(
-        !deny.iter().any(|r| r.as_str().unwrap().contains("SOUL")),
-        "SOUL.md stays the bot's"
+    let _ = fs::remove_dir_all(home);
+}
+
+#[test]
+fn a_marked_seat_cannot_forget_and_reading_a_marked_seat_marks_the_reader() {
+    let (mut core, launches, [seat, worker, _, other]) = family("memory-forget");
+    let home = core.home.clone();
+    bot_seat(&mut core, &seat, "bot-a");
+    add(&mut core, &seat, "Weekly review is on Friday.");
+    crate::team::mark_outside(&home, &seat.id, Source::Mail).unwrap();
+    let forget = core.handle_agent(
+        &seat,
+        Request::BotMemory {
+            operation: "forget".into(),
+            text: "Weekly review".into(),
+            topic: None,
+            user: false,
+            from_user: false,
+        },
     );
+    assert!(
+        matches!(&forget, Err(e) if e.contains("Memory tab")),
+        "{forget:?}"
+    );
+    let marked = |id: &str| crate::team::outside(&home, &[id.to_string()]);
+    // Reading a marked seat's row or screen marks the reader.
+    let _ = core.handle_agent(
+        &worker,
+        Request::AgentGet {
+            id: seat.id.clone(),
+        },
+    );
+    assert_eq!(marked(&worker.id), Some(Source::Mail));
+    assert_eq!(marked(&other.id), None);
+    end_family(core, launches);
+}
+
+#[test]
+fn a_resume_of_a_resume_keeps_the_mark_and_a_journaled_read_marks_at_start() {
+    let (mut core, mut launches, [_, worker, _, _]) = family("memory-resume");
+    let home = core.home.clone();
+    crate::team::mark_outside(&home, &worker.id, Source::Web).unwrap();
+    let mut id = worker.id.clone();
+    for _ in 0..2 {
+        core.handle(Request::Close { id: id.clone() }).unwrap();
+        let conversation = store::new_id().unwrap();
+        core.entries.get_mut(&id).unwrap().meta.agent_session_id = Some(conversation.clone());
+        let mut launch = core
+            .launch(StartSession {
+                account: None,
+                kind: AgentKind::Shell,
+                project: home.clone(),
+                worktree: false,
+                label: String::new(),
+                args: vec!["/bin/cat".into()],
+                model: None,
+                effort: None,
+                resume: Some(conversation),
+            })
+            .prepare()
+            .unwrap();
+        let resumed = core.start(&launch).unwrap();
+        launch.committed = true;
+        launches.push(launch);
+        // Its own row carries the mark: the chain's ids may be dropped.
+        assert_eq!(
+            crate::team::outside(&home, std::slice::from_ref(&resumed.id)),
+            Some(Source::Web)
+        );
+        id = resumed.id;
+    }
+    // A web read the hook journaled while no core ran marks its session when the next core starts.
+    let event = crate::queue::journal::Event::new(
+        "seat-journaled".into(),
+        "PostToolUse".into(),
+        serde_json::json!({"tool_name": "WebFetch", "tool_input": {"url": "https://example.com"}}),
+    )
+    .unwrap();
+    crate::queue::journal::write(&home, &event).unwrap();
+    end_family_keep(core, launches);
+    let core = Sessions::open(&home).unwrap();
+    assert_eq!(
+        crate::team::outside(&home, &["seat-journaled".to_string()]),
+        Some(Source::Web)
+    );
+    end_family(core, vec![]);
+}
+
+#[test]
+fn hooks_off_at_the_start_stay_off_for_memory() {
+    let home = scratch("memory-hooks-off");
+    let mut core = Sessions::open(&home).unwrap();
+    approve_fake_claude(&home, &[]);
+    core.settings.disable_hook_injection = true;
+    let mut launch = core
+        .launch(claude_start(&home, &[]))
+        .owner_start()
+        .prepare()
+        .unwrap();
+    let id = core.start(&launch).unwrap().id;
+    launch.committed = true;
+    // The setting changed after the start: the seat still has no hooks, so it only proposes.
+    core.settings.disable_hook_injection = false;
+    assert!(core.entries[&id].meta.without_hooks);
+    assert_eq!(core.read_outside(&id), Some(Source::Tool));
+    end_family(core, vec![launch]);
+}
+
+/// `end_family` that keeps the home, for a next core to open.
+fn end_family_keep(mut core: Sessions, launches: Vec<Launch>) {
+    core.handle(Request::Stop).unwrap();
+    drop((core, launches));
 }

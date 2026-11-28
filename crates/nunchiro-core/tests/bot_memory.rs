@@ -1,6 +1,6 @@
 //! A bot's memory through a real `serve` and the real CLI: the seat's `nunchiro memory` adds a dated, sourced line;
-//! once its conversation read a mail (its tool hook), an add waits as a proposal; forget deletes it; only a bot's seat
-//! may call it.
+//! forget deletes a line; once its conversation read a mail (its tool hook), an add waits as a proposal and a forget is
+//! refused; only a bot's seat may call it.
 #[path = "fixtures/home.rs"]
 mod home;
 use nunchiro_core::{
@@ -189,6 +189,17 @@ fn a_seat_writes_its_memory_and_outside_content_makes_a_proposal() {
         "{said}"
     );
 
+    // An unmarked seat forgets a line everywhere.
+    let (ok, said) = cli(&home, Some(&token), &["add", "Lunch is at noon."]);
+    assert!(ok, "{said}");
+    let (ok, said) = cli(&home, Some(&token), &["forget", "lunch"]);
+    assert!(ok && said.contains("Forgotten"), "{said}");
+    assert!(
+        !fs::read_to_string(memory.index())
+            .unwrap()
+            .contains("Lunch")
+    );
+
     // The user's own shell (no seat) and the owner's socket are no bot.
     let (ok, said) = cli(&home, None, &["add", "Something."]);
     assert!(!ok, "{said}");
@@ -231,10 +242,11 @@ fn a_seat_writes_its_memory_and_outside_content_makes_a_proposal() {
     assert_eq!(waiting[0].from, Source::Mail);
     assert_eq!(memory.facts().unwrap().len(), 2, "the index did not change");
 
+    // Outside content could have asked for a forget: a marked seat leaves that to the user's Memory tab.
     let (ok, said) = cli(&home, Some(&token), &["forget", "weekly review"]);
-    assert!(ok && said.contains("Forgotten"), "{said}");
+    assert!(!ok && said.contains("Memory tab"), "{said}");
     assert!(
-        !fs::read_to_string(memory.index())
+        fs::read_to_string(memory.index())
             .unwrap()
             .contains("Weekly")
     );

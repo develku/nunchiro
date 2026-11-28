@@ -1027,7 +1027,7 @@ fn connection(
             let owner = token_equal(env.token.as_bytes(), token.as_bytes());
             if !owner {
                 let caller = sessions.agent_caller(&env.token)?;
-                sessions.check_agent(&caller, &env.request)?;
+                sessions.check_reader(&caller, &env.request)?;
             }
             let plan = sessions.transcript_read(id, *lines)?;
             drop(sessions);

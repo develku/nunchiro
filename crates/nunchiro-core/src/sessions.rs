@@ -1315,7 +1315,7 @@ impl Sessions {
                     )?);
                 }
                 self.outbox_sent(&id, &event, &payload);
-                self.note_outside(&id, &event, &payload);
+                self.note_outside(&id, &event, &payload)?;
                 // Ticket 571: unread room messages reach a long Claude turn as one context line; a subagent's tool
                 // call (non-empty `agent_id`) neither gets it nor uses up the batch.
                 match (event == "PostToolUse" && payload["agent_id"].as_str().is_none_or(str::is_empty))
