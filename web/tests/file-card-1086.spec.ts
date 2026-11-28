@@ -45,7 +45,7 @@ const row = (page: Page, id: string, rel: string) => card(page, id).locator('li'
 
 test('file_card_one_document_is_one_row', async ({ page, chatCore }) => {
   const s = chatCore.chat();
-  append(s.file, rec.user('go'), written(s, 'w1', 'docs/review.md', MD), rec.assistant('done'));
+  append(s.file, rec.user('go'), written(s, 'w1', 'docs/review.md', MD), rec.assistant('done'), rec.end());
   await openChat(page, s.id);
   await expect(card(page, s.id)).toHaveCount(1);
   await expect(chat(page, s.id).locator('.acard')).toHaveCount(0);
@@ -66,7 +66,7 @@ test('file_card_one_document_is_one_row', async ({ page, chatCore }) => {
 
 test('file_card_open_opens_preview_and_tab_order', async ({ page, chatCore }) => {
   const s = chatCore.chat();
-  append(s.file, rec.user('go'), written(s, 'w1', 'docs/review.md', MD), rec.assistant('done'));
+  append(s.file, rec.user('go'), written(s, 'w1', 'docs/review.md', MD), rec.assistant('done'), rec.end());
   await openChat(page, s.id);
   const r = row(page, s.id, 'docs/review.md');
   const open = r.getByRole('button', { name: 'Open' });
@@ -85,7 +85,7 @@ test('file_card_open_opens_preview_and_tab_order', async ({ page, chatCore }) =>
 
 test('file_card_several_files_one_document_has_open', async ({ page, chatCore }) => {
   const s = chatCore.chat();
-  append(s.file, rec.user('go'), written(s, 'a', 'a.txt', 'a\n'), written(s, 'b', 'notes.md', MD), written(s, 'c', 'c.txt', 'c\n'), rec.assistant('done'));
+  append(s.file, rec.user('go'), written(s, 'a', 'a.txt', 'a\n'), written(s, 'b', 'notes.md', MD), written(s, 'c', 'c.txt', 'c\n'), rec.assistant('done'), rec.end());
   await openChat(page, s.id);
   await expect(card(page, s.id)).toHaveCount(1);
   await expect(card(page, s.id).locator('.frow')).toHaveCount(3);
@@ -96,7 +96,7 @@ test('file_card_several_files_one_document_has_open', async ({ page, chatCore })
 
 test('file_card_written_twice_is_one_row', async ({ page, chatCore }) => {
   const s = chatCore.chat();
-  append(s.file, rec.user('go'), written(s, 'w1', 'notes.md', '# One\n'), written(s, 'w2', 'notes.md', MD), rec.assistant('done'));
+  append(s.file, rec.user('go'), written(s, 'w1', 'notes.md', '# One\n'), written(s, 'w2', 'notes.md', MD), rec.assistant('done'), rec.end());
   await openChat(page, s.id);
   await expect(card(page, s.id).locator('.frow')).toHaveCount(1);
   await expect(card(page, s.id).getByRole('button', { name: 'Open' })).toHaveCount(1);
