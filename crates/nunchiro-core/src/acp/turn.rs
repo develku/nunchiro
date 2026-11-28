@@ -33,6 +33,7 @@ const TICK: Duration = Duration::from_millis(100);
 
 /// The three flags are the scorecard's words: a prompt sent, an answer read, the turn's end seen.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Turn {
     pub sent: bool,
     pub answer_read: bool,

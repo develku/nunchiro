@@ -11,6 +11,7 @@ import { expect, openWindow, REPO, test } from './fixtures';
 import { closeModal, openSettings } from './settings-modal';
 import { BASE, buildSheetHarness, widget } from './sheet-harness-build';
 import { layoutButton, lib } from './d5b';
+import { startOf } from './start-op';
 
 // Internal words a user never needs to read, each matched as a whole word.
 const DENY: [RegExp, string][] = [
@@ -112,7 +113,7 @@ test('raw_words_none_on_work_surfaces: chat, tabs, tree, palette, new session, s
     const server = ws.connectToServer();
     ws.onMessage((msg) => {
       const r = typeof msg === 'string' ? JSON.parse(msg) : null;
-      if (refuseStart && r?.request?.op === 'start') return ws.send(JSON.stringify({ id: r.id, response: { Err: 'sessions.toml: No space left on device (os error 28)' } }));
+      if (refuseStart && startOf(r?.request)) return ws.send(JSON.stringify({ id: r.id, response: { Err: 'sessions.toml: No space left on device (os error 28)' } }));
       server.send(msg);
     });
     server.onMessage((msg) => ws.send(msg));

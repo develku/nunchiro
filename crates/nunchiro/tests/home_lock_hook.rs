@@ -11,8 +11,13 @@ use std::{
 const SEND: &str = "mcp__claude_ai_Gmail__send_message";
 
 fn hook(home: &Path, token: Option<&str>, payload: &[u8]) -> Output {
+    hook_with(home, token, payload, &[])
+}
+
+fn hook_with(home: &Path, token: Option<&str>, payload: &[u8], extra: &[&str]) -> Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_nunchiro"));
     cmd.args(["hook", "home-lock", "--mode", "full-access"])
+        .args(extra)
         .env("NUNCHIRO_HOME", home)
         .env_remove("NUNCHIRO_TOKEN")
         .stdin(Stdio::piped())
@@ -88,5 +93,19 @@ fn the_lock_hook_fails_closed() {
         )),
         "allow"
     );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+// Account connectors off: with `--no-mcp` even a read on the allow list is denied, without asking the core.
+#[test]
+fn no_mcp_denies_every_mcp_tool() {
+    let home = std::env::temp_dir().join(format!("nlh-nomcp-{}", std::process::id()));
+    std::fs::create_dir_all(&home).unwrap();
+    let read = "mcp__claude_ai_Gmail__get_thread";
+    assert_eq!(decision(&hook(&home, None, &call(read))), "allow");
+    for tool in [read, SEND, "mcp__own__list"] {
+        let out = hook_with(&home, Some("t"), &call(tool), &["--no-mcp"]);
+        assert_eq!(decision(&out), "deny", "{tool}");
+    }
     std::fs::remove_dir_all(home).unwrap();
 }

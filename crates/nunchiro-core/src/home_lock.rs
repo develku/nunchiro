@@ -14,6 +14,10 @@ use std::path::Path;
 
 /// Settings > Assistants: the Home seat's mode (`Mode`'s names; absent or unreadable = Ask).
 pub(crate) const MODE_KEY: &str = "home.chief_mode";
+/// Settings > Assistants: `true` starts the seat with no MCP server at all, so the claude.ai account connectors (mail,
+/// calendar) never load (probe 2026-11-28: `--strict-mcp-config` with an empty `--mcp-config` lists no `mcp__` tool).
+/// Absent, null or false = the connectors load as before.
+pub(crate) const CONNECTORS_OFF_KEY: &str = "home.connectors_off";
 /// The two connectors (the Google Calendar one did not load in the CLI on 2026-11-20); one list with the outward hook's.
 pub use crate::outward::{CALENDAR, MAIL};
 /// The tools the seat may call as the mode allows. No draft tools: a draft is an Outbox card's own hashed copy.
@@ -158,19 +162,35 @@ pub(crate) fn deny_arg(servers: &[String]) -> String {
 /// The lock's launch arguments (`mode` already `effective`). Fable check M3: `--restricted` keeps the claude.ai
 /// connectors, `--settings` hooks and `--plugin-dir` (probe 2026-11-20), ignores user, project and local settings,
 /// confines the file tools to the working folders and refuses Skip permissions; `--tools` names the built-ins.
-pub(crate) fn args(mode: Mode, servers: &[String]) -> Vec<String> {
+/// `connectors_off` (`CONNECTORS_OFF_KEY`) adds the strict empty MCP config, after the first two words (a side chat
+/// drops those).
+pub(crate) fn args(mode: Mode, servers: &[String], connectors_off: bool) -> Vec<String> {
     let claude_mode = if mode == Mode::Ask {
         "manual"
     } else {
         "acceptEdits"
     };
-    vec![
+    let mut out = vec![
         "--permission-mode".into(),
         claude_mode.into(),
         "--restricted".into(),
         format!("--tools={}", BUILTIN.join(",")),
         deny_arg(servers),
-    ]
+    ];
+    if connectors_off {
+        // The `=` form: `--mcp-config` is variadic, so a bare value list could swallow a later word.
+        out.push("--strict-mcp-config".into());
+        out.push(r#"--mcp-config={"mcpServers":{}}"#.into());
+    }
+    out
+}
+
+/// Settings save for `CONNECTORS_OFF_KEY`: null or a boolean.
+pub(crate) fn check_connectors_off(value: &Value) -> Result<(), String> {
+    match value {
+        Value::Null | Value::Bool(_) => Ok(()),
+        _ => Err(format!("{CONNECTORS_OFF_KEY}: expected true or false")),
+    }
 }
 
 /// The arguments carry the lock (`args` or `deny_arg`).
@@ -320,6 +340,17 @@ pub fn decide(tool: &str, input: &Value, mode: Mode) -> Decision {
     }
 }
 
+/// The hook flag `spawn` adds when the seat started with connectors off (its arguments hold `--strict-mcp-config`).
+pub const NO_MCP_FLAG: &str = "--no-mcp";
+
+/// Layer 2 of connectors off: with `no_mcp`, every MCP tool is refused, whatever server it came from; otherwise `decide`.
+pub fn decide_locked(tool: &str, input: &Value, mode: Mode, no_mcp: bool) -> Decision {
+    if no_mcp && tool.starts_with("mcp__") {
+        return Decision::Deny("Home seat: account connectors are off (Settings > Assistants)");
+    }
+    decide(tool, input, mode)
+}
+
 /// Asks the core over `sock` to spend the owner's yes for this exact call (`Request::OutboxSpend`, lane 2: the card's
 /// id once as `Reply::Text`, else an error), hashed as the card was (`approval::outward_call_hash`). Ok only on that
 /// reply; a core that is down, slow, older or refusing, or any other reply, is an Err (fail closed).
@@ -377,15 +408,56 @@ mod tests {
     }
 
     #[test]
+    fn connectors_off_adds_the_strict_empty_mcp_config_only_when_set() {
+        let strict = |a: &[String]| a.iter().any(|w| w == "--strict-mcp-config");
+        for m in [Mode::Ask, Mode::FullShell] {
+            assert!(!strict(&args(m, &[], false)));
+            let on = args(m, &[], true);
+            assert!(strict(&on) && locked(&on), "{on:?}");
+            assert!(on.ends_with(&s(&[
+                "--strict-mcp-config",
+                r#"--mcp-config={"mcpServers":{}}"#
+            ])));
+        }
+        assert!(
+            check_connectors_off(&json!(true)).is_ok()
+                && check_connectors_off(&json!(null)).is_ok()
+        );
+        assert!(check_connectors_off(&json!("yes")).is_err());
+        // Layer 2: with the flag every MCP tool is refused, a read and a gated send too; built-ins are unchanged.
+        let (read, send) = (
+            format!("mcp__{MAIL}__get_thread"),
+            format!("mcp__{MAIL}__send_message"),
+        );
+        for tool in [read.as_str(), send.as_str(), "mcp__fake__list"] {
+            assert!(
+                matches!(
+                    decide_locked(tool, &json!({}), Mode::Full, true),
+                    Decision::Deny(_)
+                ),
+                "{tool}"
+            );
+        }
+        assert_eq!(
+            decide_locked(&read, &json!({}), Mode::Full, false),
+            decide(&read, &json!({}), Mode::Full)
+        );
+        assert_eq!(
+            decide_locked("Read", &json!({}), Mode::Ask, true),
+            Decision::Mode
+        );
+    }
+
+    #[test]
     fn argv_per_mode_and_rule_six() {
         let servers = s(&["memo", "claude_ai_Claude_Docs"]);
         assert_eq!(
-            args(Mode::Ask, &servers)[..2],
+            args(Mode::Ask, &servers, false)[..2],
             s(&["--permission-mode", "manual"])
         );
         for m in [Mode::AcceptEdits, Mode::Full, Mode::FullShell] {
             assert_eq!(
-                args(m, &servers)[..2],
+                args(m, &servers, false)[..2],
                 s(&["--permission-mode", "acceptEdits"])
             );
         }
@@ -395,7 +467,7 @@ mod tests {
         assert_eq!(effective(Mode::Ask, false), Mode::Ask);
         assert_eq!(effective(Mode::FullShell, true), Mode::FullShell);
         for m in [Mode::Ask, Mode::AcceptEdits, Mode::Full, Mode::FullShell] {
-            let a = args(m, &servers);
+            let a = args(m, &servers, false);
             assert!(locked(&a) && a.contains(&"--restricted".to_string()));
             assert!(a.contains(&"--tools=Read,Grep,Glob,Edit,Write,Bash".to_string()));
             // No mode is Skip permissions (M3).

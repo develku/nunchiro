@@ -327,6 +327,8 @@ const BEFORE: [Key, Record<string, string | number> | undefined, string][] = [
   ['tree.workers.badge', { n: 3 }, '3 working'], // ticket 1115 (new words, no source on main)
   ['tree.workers.more', { n: 2 }, '▸ 2 more working'], // ticket 1115
   ['tree.workers.moreIdle', { n: 3 }, '▸ 3 more'], // ticket 1115 review r1
+  ['tree.project.blockedElsewhere', undefined, 'Sessions in a folder of their own'], // new words, no source on main
+  ['tree.project.blockedElsewhereFix', undefined, 'These run outside the project folder, such as in a worktree. Deal with them first: Remove would end them and delete their history.'],
 ];
 
 test('english_text_unchanged: every new EN key holds the string the source had on main', () => {
