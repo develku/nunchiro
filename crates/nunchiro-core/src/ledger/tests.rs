@@ -839,6 +839,17 @@ fn task_work_merges_without_a_card_only_into_a_working_branch() {
     assert_eq!(ops::working_branch(&repo), None, "no branch checked out");
     git(&["checkout", "-q", "-b", "master"]);
     assert_eq!(ops::working_branch(&repo), None);
+    // Origin's default branch, whatever its name, is never one either.
+    git(&["checkout", "-q", "-b", "trunk"]);
+    git(&["update-ref", "refs/remotes/origin/trunk", "HEAD"]);
+    git(&[
+        "symbolic-ref",
+        "refs/remotes/origin/HEAD",
+        "refs/remotes/origin/trunk",
+    ]);
+    assert_eq!(ops::working_branch(&repo), None, "origin's default");
+    git(&["checkout", "-q", "lead-work"]);
+    assert_eq!(ops::working_branch(&repo).as_deref(), Some("lead-work"));
     // The setting: off by default, the user's alone.
     let l = Ledger::open(&home);
     assert!(!l.place(&repo).ask_merge);

@@ -6166,6 +6166,10 @@
             "null"
           ]
         },
+        "ask_merge": {
+          "description": "The user's \"Ask me before merging task work\" (`task merge-ask on|off`). Off (the default): a lead merges reviewed\ntask work into its working branch with no merge card (`ops::working_branch`); the default branch always asks.",
+          "type": "boolean"
+        },
         "auto": {
           "description": "Ticket 1081: the core nudges stalled seats, raises their card and wakes the lead (advance.rs). Off: it does nothing.\nLeft out while on, so a place reads as before the setting (tests/ledger.rs).",
           "type": "boolean"
