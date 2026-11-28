@@ -54,7 +54,7 @@ export function SessionFacts({ core, boot, session, t }: { t: T; core: CoreClien
     // one too; live PR status on, cached per branch in the core).
     // Ticket 419: the folder is matched on its machine as well as its path. `pr_branch` runs gh on this Mac only (window
     // only, never over Remote), so an SSH session's folder has no branch PR here: the same path on this Mac is another folder.
-    const branch = () => (machine ? Promise.resolve(null) : core.prBranch(cwd).then((p) => (p ? { state: p.state, url: p.url, at: null } : null), () => null));
+    const branch = (): Promise<PrChipData | null> => (machine ? Promise.resolve(null) : core.prBranch(cwd).then((p) => (p ? { state: p.state, url: p.url, at: null } : null), () => null));
     const read = () =>
       (agent ? chatFeed(boot).prChip(id).catch(() => null) : Promise.resolve(null))
         .then((c) => c ?? branch())
