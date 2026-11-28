@@ -431,7 +431,7 @@ function summarize(work: Row[], stopped = false, asking = 0): { parts: SummaryPa
   return { parts, tests, seconds };
 }
 
-function foldTurn(turn: Row[], view: View, asking = 0): Row[] {
+function foldTurn(turn: Row[], view: View, asking = 0, working = false): Row[] {
   const work = turn.filter((r) => WORK.has(r.kind) || (r.kind === 'diff' && !!r.tool));
   // Only confirmed edits become a changes card; unknown outcomes keep the neutral patch view.
   const done = (r: Row): r is Extract<Row, { kind: 'diff' }> => r.kind === 'diff' && editSucceeded(r);
@@ -464,7 +464,9 @@ function foldTurn(turn: Row[], view: View, asking = 0): Row[] {
       }
     } else out.push(r);
   });
-  if (!changes) return out;
+  // A real drive missed View in Diff: the card at the turn's end moved down with each line of the reply. While the agent
+  // still works on this turn the card waits (as T3 Code's changed-files card, drawn once the turn's checkpoint is taken).
+  if (!changes || working) return out;
   // Ticket 1086: a Markdown or image card of a write that is also in this card becomes Open on that file's row. Matched by
   // the tool call and the path's end: the card's path is relative to the session, the edit's absolute, and one patch call
   // can write several files. The newest card of a file wins.
@@ -486,14 +488,14 @@ function foldTurn(turn: Row[], view: View, asking = 0): Row[] {
 
 /** The rows a view shows. Verbose is every row as built; the others fold each turn (rows from one user message to the next).
  *  `asking`: how many permission requests of the session wait for the user's answer; they are the last turn's. */
-export function viewRows(rows: Row[], view: View, asking = 0): Row[] {
+export function viewRows(rows: Row[], view: View, asking = 0, working = false): Row[] {
   if (view === 'verbose') return rows;
   const out: Row[] = [];
   let i = 0;
   while (i < rows.length) {
     let j = i + 1;
     while (j < rows.length && rows[j].kind !== 'user' && rows[j].kind !== 'wakes') j++; // a wake starts the lead's next turn
-    out.push(...foldTurn(rows.slice(i, j), view, j === rows.length ? asking : 0));
+    out.push(...foldTurn(rows.slice(i, j), view, j === rows.length ? asking : 0, j === rows.length && working));
     i = j;
   }
   return out;

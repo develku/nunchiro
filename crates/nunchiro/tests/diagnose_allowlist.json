@@ -12,7 +12,7 @@
     "settings.json": [
       "auto_clean_worktrees", "disable_hook_injection", "dropped", "features", "keep_awake", "keep_history", "live_pr_offered", "live_pr_status", "machines", "orchestration",
       "mask_history", "permission_answers", "pr_watch", "script_widgets", "session_lifetime", "stale_after_ms",
-      "start_at_login", "usage_link_roots", "web_widgets", "worktrees_dir"
+      "start_at_login", "triggers_poll_secs", "triggers_port", "usage_link_roots", "web_widgets", "worktrees_dir"
     ]
   }
 }
