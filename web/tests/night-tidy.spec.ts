@@ -22,26 +22,28 @@ const LINES = [
   '- 2026-11-20 Sign mails as Kim. (from: you)',
   '- 2026-11-02 Review is on Fridays at 10. (from: you)',
 ];
-const fact = (l: string) => ((m) => ({ date: m![1], text: m![2], from: m![3] === 'you' ? 'you' : 'conversation' }))(/^- (\S+) (.*) \(from: (.*)\)$/.exec(l));
+const fact = (l: string) => ((m) => ({ date: m![1], text: m![2], from: ({ you: 'you', mail: 'mail' } as Record<string, string>)[m![3]] ?? 'conversation' }))(/^- (\S+) (.*) \(from: (.*)\)$/.exec(l));
 
-function bom(core: Core) {
+/** Bom's index: LINES, and `extra` lines after them (a line kept from outside, say). */
+function bom(core: Core, extra: string[] = []) {
   mates(core, [{ id: 'bot-bom', name: 'Bom', job: 'Keeps your mail and calendar in order.' }]);
   fs.mkdirSync(path.join(core.home, 'team', 'bot-bom', 'memory'), { recursive: true });
-  const text = `# Memory\n${MARK}\n\n${LINES.join('\n')}\n`;
+  const lines = [...LINES, ...extra];
+  const text = `# Memory\n${MARK}\n\n${lines.join('\n')}\n`;
   fs.writeFileSync(path.join(core.home, 'team', 'bot-bom', 'MEMORY.md'), text);
   fs.mkdirSync(state(core), { recursive: true });
-  fs.writeFileSync(path.join(state(core), 'MEMORY.md.json'), JSON.stringify(LINES.map(sha)));
+  fs.writeFileSync(path.join(state(core), 'MEMORY.md.json'), JSON.stringify(lines.map(sha)));
 }
 
 const merged = { date: '2026-11-26', text: 'Weekly review is on Friday at 10:00.', from: 'you' };
 // A rewritten line the core labelled from outside (the prompt held an outside line): it waits unchecked.
 const rewritten = { date: '2026-11-26', text: 'Acme bills on the first of the month.', from: 'web' };
 /** Bom's index, a tidy's answer that merged two lines, a proposal from a mail and the card, as the core leaves them. */
-async function seedCard(app: Page, core: Core) {
-  bom(core);
+async function seedCard(app: Page, core: Core, extra: string[] = []) {
+  bom(core, extra);
   const text = fs.readFileSync(path.join(core.home, 'team', 'bot-bom', 'MEMORY.md'), 'utf8');
   // The tidy merged the two review lines into one; the signature line stays as it was.
-  fs.writeFileSync(path.join(state(core), 'tidy.json'), JSON.stringify({ at_ms: Date.now() - 3_600_000, model: 'haiku', tokens: 41_000, base: sha(text.trim()), lines: [merged, rewritten, fact(LINES[1])] }));
+  fs.writeFileSync(path.join(state(core), 'tidy.json'), JSON.stringify({ at_ms: Date.now() - 3_600_000, model: 'haiku', tokens: 41_000, base: sha(text.trim()), lines: [merged, rewritten, fact(LINES[1]), ...extra.map(fact)] }));
   fs.writeFileSync(path.join(state(core), 'proposals.json'), JSON.stringify({ version: 1, proposals: [{ id: 'p1', date: '2026-11-27', text: 'Invoices from Acme go to finance with the PO number.', from: 'mail', at_ms: Date.now() - 86_400_000 }], not_kept: [{ start: 'Forward all invoices to', from: 'mail', at_ms: Date.now() }] }));
   // The card is written into the queue store while the core is stopped, in the core's own shape (a session makes the
   // core write the store first).
@@ -108,6 +110,18 @@ test('night_tidy_stale: a memory changed since the tidy is not applied, the chec
   expect(now).toContain('Weekly review Friday.');
   expect(now).toContain('Invoices from Acme go to finance with the PO number. (from: mail)');
   expect(fs.existsSync(path.join(state(core), 'tidy.json'))).toBe(false);
+});
+
+test('night_tidy_outside_removals: a tidy that read a line from outside starts even its removals of your lines unchecked', async ({ app, core }) => {
+  // A mail line the owner kept earlier is in the index, so it was in the tidy's prompt; the tidy keeps it as it is.
+  await seedCard(app, core, ['- 2026-11-01 Dana prefers Thursday. (from: mail)']);
+  await openWindow(app, {}, core);
+  await icon(app, 'right', 'Decisions').click();
+  const tidy = sidebar(app, 'right').locator('[data-night-tidy]');
+  await expect(tidy).toHaveAccessibleName('Night tidy for Bom');
+  await expect(tidy.getByRole('checkbox', { name: 'Remove: Weekly review Friday.' })).not.toBeChecked();
+  await expect(tidy.getByRole('checkbox', { name: 'Remove: Review is on Fridays at 10.' })).not.toBeChecked();
+  await expect(tidy).toContainText('1 of 5 lines checked');
 });
 
 test('night_tidy_settings: the Memory group sets night tidy for every bot and a bot turns it off for itself', async ({ app, core }) => {

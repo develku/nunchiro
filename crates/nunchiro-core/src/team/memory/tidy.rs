@@ -44,6 +44,9 @@ pub struct Part {
     pub added: Vec<Fact>,
     pub proposals: Vec<Proposal>,
     pub not_kept: Vec<NotKept>,
+    /// The tidy read a line from outside, so even its removals of the owner's lines start unchecked on the card.
+    #[serde(default)]
+    pub outside: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub at_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -190,9 +193,11 @@ impl Memory {
             let _ = fs::remove_file(self.tidy_file());
             pending = None;
         }
-        let (removed, added) = match &pending {
+        let (removed, added, outside) = match &pending {
             Some(p) => {
                 let old = self.facts_now()?;
+                // The tidy read this index (the hash matches), so its outside lines were in the prompt.
+                let outside = old.iter().any(|f| f.from.is_some_and(Source::outside));
                 (
                     old.iter()
                         .filter(|f| !p.lines.contains(f))
@@ -203,9 +208,10 @@ impl Memory {
                         .filter(|f| !old.contains(f))
                         .cloned()
                         .collect(),
+                    outside,
                 )
             }
-            None => (vec![], vec![]),
+            None => (vec![], vec![], false),
         };
         let (proposals, not_kept) = self.proposals();
         if removed.is_empty() && added.is_empty() && proposals.is_empty() && not_kept.is_empty() {
@@ -218,6 +224,7 @@ impl Memory {
             added,
             proposals,
             not_kept,
+            outside,
             at_ms: pending.as_ref().map(|p| p.at_ms),
             model: pending.as_ref().map(|p| p.model.clone()),
             tokens: pending.map_or(0, |p| p.tokens),
@@ -531,7 +538,6 @@ pub(crate) fn window(
     let mates = team.list()?;
     // Each bot on its own: one bot's refusal never stops the others; it is reported by bot id.
     let (mut not_applied, mut stale) = (std::collections::BTreeMap::new(), vec![]);
-    let mut settled = std::collections::BTreeSet::new();
     if let Some(apply) = &apply {
         for (id, checked) in apply {
             let applied = mates
@@ -540,11 +546,8 @@ pub(crate) fn window(
                 .ok_or_else(|| format!("no bot {id}"))
                 .and_then(|_| team.bot_memory(id))
                 .and_then(|m| m.apply_tidy(checked, now));
-            // A bot not applied keeps the card while it has something to show, so the owner reads why.
             match applied {
-                Ok(true) => {
-                    settled.insert(id.clone());
-                }
+                Ok(true) => {}
                 Ok(false) => stale.push(id.clone()),
                 Err(e) => {
                     not_applied.insert(id.clone(), e);
@@ -562,10 +565,11 @@ pub(crate) fn window(
         })
         .collect();
     if apply.is_some() {
-        // A card goes once each of its bots was applied or has nothing left to look at (a stale tidy with no proposal).
+        // A card goes once none of its bots has anything left to look at: a bot that failed, a stale tidy with a
+        // proposal, or a proposal that arrived after the card was drawn keeps it.
         let done = |i: &crate::queue::Decision| {
             matches!(&i.owner, Some(crate::queue::OwnerAsk::NightTidy { bots, .. })
-                if bots.iter().all(|b| settled.contains(b) || !parts.iter().any(|p| &p.id == b)))
+                if bots.iter().all(|b| !parts.iter().any(|p| &p.id == b)))
         };
         let _ = registry
             .lock()

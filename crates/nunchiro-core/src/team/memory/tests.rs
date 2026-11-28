@@ -910,6 +910,27 @@ fn a_stale_tidy_is_dropped_and_only_the_seen_proposals_settle() {
     let _ = fs::remove_dir_all(home);
 }
 
+/// A tidy that read an outside line says so, so the card starts even its removals of the owner's lines unchecked.
+#[test]
+fn a_tidy_part_says_when_its_prompt_held_an_outside_line() {
+    let (home, team, id) = bot();
+    let m = team.bot_memory(&id).unwrap();
+    m.add("Review is on Fridays.", Source::You, None, NOW)
+        .unwrap();
+    let tidied = |m: &Memory| {
+        let (_, base) = m.tidy_input().unwrap();
+        assert!(m.keep_tidy(vec![], &base, "haiku", 1, NOW).unwrap());
+        m.tidy_part(&id, "Bom").unwrap().unwrap().outside
+    };
+    assert!(!tidied(&m), "only the owner's lines");
+    m.add("Dana prefers Thursday.", Source::Mail, None, NOW)
+        .unwrap();
+    let p = m.proposals().0[0].id.clone();
+    m.settle(&p, true).unwrap();
+    assert!(tidied(&m), "a kept mail line was in the prompt");
+    let _ = fs::remove_dir_all(home);
+}
+
 /// S1: a stale answer is not drawn on the card.
 #[test]
 fn a_stale_tidy_is_not_drawn() {

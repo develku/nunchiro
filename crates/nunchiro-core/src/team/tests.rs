@@ -2227,6 +2227,10 @@ fn a_tidy_apply_reports_each_bot_and_one_refusal_stops_none() {
         .unwrap()
         .add("A new line.", Source::You, None, 2)
         .unwrap();
+    team.bot_memory(&b)
+        .unwrap()
+        .add("Acme bills monthly.", Source::Mail, None, 3)
+        .unwrap();
     let json = format!(
         r#"{{"op":"memory_tidy","apply":{{"bot-nope":{{}},"{a}":{{"drop":["Review is on Fridays."]}},"{b}":{{"drop":["Review is on Fridays."]}}}}}}"#
     );
@@ -2238,7 +2242,12 @@ fn a_tidy_apply_reports_each_bot_and_one_refusal_stops_none() {
     };
     assert_eq!(not_applied.keys().collect::<Vec<_>>(), vec!["bot-nope"]);
     assert_eq!(stale, vec![a.clone()]);
-    // Bom applied and Ana's stale tidy left nothing to look at: the card goes (never a card for 0 bots).
+    // A proposal for Bom that arrived after the card was drawn (not seen): the card stays for it.
+    assert_eq!(tidy_cards(&reg), 1);
+    let new = team.bot_memory(&b).unwrap().proposals().0[0].id.clone();
+    let json = format!(r#"{{"op":"memory_tidy","apply":{{"{b}":{{"seen":["{new}"]}}}}}}"#);
+    window(&reg, &home, serde_json::from_str(&json).unwrap()).unwrap();
+    // Now nothing of Ana's or Bom's is left to look at: the card goes (never a card for 0 bots).
     assert_eq!(tidy_cards(&reg), 0);
     let texts = |id: &str| -> Vec<String> {
         team.bot_memory(id)

@@ -579,11 +579,14 @@ fn run_capped(
         let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
         if flags == -1 || unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } == -1
         {
+            let e = std::io::Error::last_os_error();
+            // Like every other path: the watcher lets go of the PID before the reap frees it for reuse.
+            forget();
             unsafe {
                 libc::killpg(child.id() as i32, libc::SIGKILL);
             }
             let _ = child.wait();
-            return Err(std::io::Error::last_os_error().to_string());
+            return Err(e.to_string());
         }
     }
     let deadline = Instant::now() + timeout;

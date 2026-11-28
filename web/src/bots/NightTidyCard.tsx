@@ -15,7 +15,7 @@ import { useTeamNow } from '../lead/lead';
 import './night-tidy.css';
 
 type Proposal = { id: string; date: string; text: string; from: Source; topic?: string; at_ms: number };
-export type TidyPart = { id: string; name: string; removed: Fact[]; added: Fact[]; proposals: Proposal[]; not_kept: unknown[]; at_ms?: number; model?: string; tokens: number };
+export type TidyPart = { id: string; name: string; removed: Fact[]; added: Fact[]; proposals: Proposal[]; not_kept: unknown[]; outside?: boolean; at_ms?: number; model?: string; tokens: number };
 export type TidyStats = { runs: number; tokens: number; off: number };
 type Checked = Record<string, { drop: string[]; add: string[]; keep: string[]; seen: string[] }>;
 // An added line from the owner or a conversation starts checked; one from outside, or of unknown source, waits like a proposal.
@@ -47,7 +47,8 @@ export function NightTidyCard({ d, core, onAnswer, t }: { d: Decision; core: Cor
   const all = useMemo(
     () =>
       (parts ?? []).flatMap((p) => [
-        ...p.removed.map((f) => ({ k: key(p.id, 'drop', f.text), on: true })),
+        // A tidy that read outside content may not take the owner's lines away on its own word: those removals wait.
+        ...p.removed.map((f) => ({ k: key(p.id, 'drop', f.text), on: !(p.outside && trusted(f)) })),
         ...p.added.map((f) => ({ k: key(p.id, 'add', f.text), on: trusted(f) })),
         ...p.proposals.map((x) => ({ k: key(p.id, 'keep', x.id), on: false })),
       ]),

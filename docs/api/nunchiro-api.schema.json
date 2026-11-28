@@ -6266,6 +6266,11 @@
           },
           "type": "array"
         },
+        "outside": {
+          "default": false,
+          "description": "The tidy read a line from outside, so even its removals of the owner's lines start unchecked on the card.",
+          "type": "boolean"
+        },
         "proposals": {
           "items": {
             "$ref": "#/$defs/Proposal"
