@@ -304,6 +304,19 @@ fn list_includes_sessionless_worktrees() {
     );
 }
 
+/// The row names the branch the folder is on now: an agent's own `git checkout -b` in it shows on the next list, as its
+/// counts do. A detached folder keeps the branch it was made with.
+#[test]
+fn list_reads_the_branch_the_folder_is_on() {
+    let core = Core::new();
+    let w = core.create("made");
+    let p = path_of(&w);
+    git(&p, &["checkout", "-q", "-b", "fix-login"]);
+    assert_eq!(core.row(&w["path"]).unwrap()["branch"], "fix-login");
+    git(&p, &["checkout", "-q", "--detach"]);
+    assert_eq!(core.row(&w["path"]).unwrap()["branch"], "made");
+}
+
 /// A `session start --worktree` folder is in the list when the start answers, with no window to adopt it: the project's
 /// Remove reads this list, and a worktree missing from it was stopped and its session history deleted as a plain session.
 #[test]

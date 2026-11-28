@@ -982,9 +982,17 @@ impl WorktreePlan {
         }
         Ok((disk, paths, stamped))
     }
-    /// V2-8a: counts for present folders; a count that cannot be read leaves that worktree without facts.
+    /// V2-8a: counts for present folders; a count that cannot be read leaves that worktree without facts. The branch is
+    /// the one the folder is on now (an agent's own checkout), for the reply only; a detached folder keeps its record's.
     fn with_facts(mut worktrees: Vec<Worktree>) -> Vec<Worktree> {
         for w in worktrees.iter_mut().filter(|w| !w.missing) {
+            if let Ok(out) = crate::process::git_read(
+                &w.path,
+                &["symbolic-ref", "--quiet", "--short", "HEAD"],
+                GIT_WORKTREE,
+            ) {
+                w.branch = String::from_utf8_lossy(&out).trim().to_string();
+            }
             w.facts = crate::worktree_clean::facts(&w.path, &w.project).ok();
         }
         worktrees
