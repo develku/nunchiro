@@ -264,3 +264,119 @@ fn a_replacement_is_found_behind_a_task_header() {
         "taken once"
     );
 }
+
+const SKILL: &str = "---\nname: review\ndescription: Review a change before it is pushed.\n---\n\n# Review\n\nRead the diff and list what is missing.\n";
+/// Every file under `dir`, relative and sorted.
+fn tree(dir: &Path) -> Vec<String> {
+    let mut out = vec![];
+    let mut todo = vec![dir.to_path_buf()];
+    while let Some(d) = todo.pop() {
+        for e in fs::read_dir(&d).unwrap().flatten() {
+            if e.file_type().unwrap().is_dir() {
+                todo.push(e.path());
+            } else {
+                out.push(
+                    e.path()
+                        .strip_prefix(dir)
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+#[test]
+fn an_approved_skill_reaches_claude_as_its_skill_md_alone() {
+    let h = home("skl");
+    let dir = skills::test_plugin(&h, SKILL, false);
+    // Not approved yet: nothing reaches a session.
+    assert!(skills::claude_skill_flags(&h).is_empty());
+    let p = read(&h, "sk").unwrap();
+    assert!(access(&p).contains("skill review instructs Claude sessions"));
+    assert!(
+        hash_only(&p),
+        "a skill instructs every new session: any change asks again"
+    );
+    let view = approval::status(&h, "plugin:sk").unwrap();
+    assert!(
+        view.extras
+            .contains(&"skill review instructs Claude sessions".to_string()),
+        "{:?}",
+        view.extras
+    );
+    approval::grant(&h, "plugin:sk", approval::Level::Read, &view.hash).unwrap();
+    let flags: Vec<String> = skills::claude_skill_flags(&h)
+        .into_iter()
+        .map(|o| o.into_string().unwrap())
+        .collect();
+    assert_eq!(flags.len(), 2, "{flags:?}");
+    assert_eq!(flags[0], "--plugin-dir");
+    let folder = PathBuf::from(&flags[1]);
+    assert!(
+        folder.starts_with(&h) && !folder.starts_with(&dir),
+        "{}",
+        folder.display()
+    );
+    // Only SKILL.md and the core's own plugin.json: not the plugin's script, hooks, MCP file or plugin.json.
+    assert_eq!(
+        tree(&folder),
+        [".claude-plugin/plugin.json", "skills/review/SKILL.md"]
+    );
+    assert_eq!(
+        fs::read_to_string(folder.join("skills/review/SKILL.md")).unwrap(),
+        SKILL
+    );
+    // Edited: nothing until it is approved again.
+    fs::write(
+        dir.join("skills/review/SKILL.md"),
+        SKILL.replace("missing", "risky"),
+    )
+    .unwrap();
+    assert!(skills::claude_skill_flags(&h).is_empty());
+    let view = approval::status(&h, "plugin:sk").unwrap();
+    approval::grant(&h, "plugin:sk", approval::Level::Read, &view.hash).unwrap();
+    assert_eq!(skills::claude_skill_flags(&h).len(), 2);
+    // Off: the next start has none.
+    turn_off(&h, "sk").unwrap();
+    assert!(skills::claude_skill_flags(&h).is_empty());
+    fs::remove_dir_all(&h).unwrap();
+}
+
+#[test]
+fn a_skill_that_could_run_a_command_is_refused() {
+    for (n, (md, why)) in [
+        // Claude runs a skill's frontmatter hooks while it is active, and a `!` line's command when it loads.
+        (
+            "---\nname: review\ndescription: x\nhooks:\n  PreToolUse: []\n---\nbody\n",
+            "hooks",
+        ),
+        (
+            "---\nname: review\ndescription: x\nallowed-tools: Bash\n---\nbody\n",
+            "allowed-tools",
+        ),
+        (
+            "---\nname: review\ndescription: x\n---\nThe log: !`git log -1`\n",
+            "!`",
+        ),
+        ("---\nname: other\ndescription: x\n---\nbody\n", "name"),
+        ("# no frontmatter\n", "frontmatter"),
+        (
+            "---\nname: review\ndescription: x\n---\nhidden\u{E0041}\n",
+            "hidden",
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let h = home(&format!("skx{n}"));
+        skills::test_plugin(&h, md, false);
+        let e = approval::status(&h, "plugin:sk").unwrap_err();
+        assert!(e.contains(why), "{why}: {e}");
+        assert!(skills::claude_skill_flags(&h).is_empty());
+        fs::remove_dir_all(&h).unwrap();
+    }
+}

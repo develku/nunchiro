@@ -8088,6 +8088,35 @@ fn flag_strings(home: &Path, s: &Settings, kind: AgentKind) -> Vec<String> {
         .collect()
 }
 
+/// A plugin's approved skill reaches a Claude start, and never a locked Home seat (its hooks-free lock keeps the
+/// shipped skill alone).
+#[test]
+fn a_plugin_skill_reaches_an_unlocked_claude_start_only() {
+    let home = scratch("plugin-skill-lock");
+    crate::plugins::skills::test_plugin(
+        &home,
+        "---\nname: review\ndescription: Review a change.\n---\nRead the diff.\n",
+        true,
+    );
+    let s = ext_settings(None);
+    let dirs = |locked: bool| {
+        extension_flags(&home, &s, AgentKind::Claude, locked, Path::new("/p"))
+            .unwrap()
+            .into_iter()
+            .map(|o| o.into_string().unwrap())
+            .filter(|f| f.contains("plugin-skills"))
+            .count()
+    };
+    assert_eq!(dirs(false), 1);
+    assert_eq!(dirs(true), 0);
+    let codex = extension_flags(&home, &s, AgentKind::Codex, false, Path::new("/p")).unwrap();
+    assert!(
+        !codex
+            .iter()
+            .any(|f| f.to_string_lossy().contains("plugin-skills"))
+    );
+}
+
 #[test]
 fn default_and_custom_skill_toggle_reaches_next_session_launch() {
     let home = scratch("ext-toggle");
