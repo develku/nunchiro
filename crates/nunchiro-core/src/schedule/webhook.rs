@@ -1,7 +1,8 @@
 //! The triggers' webhook address (docs/triggers.md): `POST http://127.0.0.1:<port>/hooks/<name>`, bound to loopback
 //! only and open only while a webhook trigger is on (the listener is checked every second and dropped when none is).
-//! A request is taken only with the trigger's secret: GitHub's `X-Hub-Signature-256` (HMAC-SHA256 of the raw body) or
-//! `X-Nunchiro-Secret`. Answers: 202 and no body; 401 for a wrong or missing secret (one log line); 404 for no such
+//! A request is taken only with the trigger's secret: GitHub's `X-Hub-Signature-256` (HMAC-SHA256 of the raw body),
+//! Slack's `X-Slack-Signature` (of `v0:<timestamp>:<body>`, within `SLACK_WINDOW_SECS`) or `X-Nunchiro-Secret`. A
+//! signed Slack URL check (`"type": "url_verification"`) is answered 200 with its challenge and starts nothing. Answers: 202 and no body; 401 for a wrong or missing secret (one log line); 404 for no such
 //! trigger; 405 for anything but POST; 413 past `BODY_MAX`. A service on the internet reaches it only through the
 //! user's own tunnel; Nunchiro runs no server elsewhere.
 use crate::sessions::Sessions;
@@ -20,6 +21,8 @@ const HEAD_MAX: usize = 16 * 1024;
 const LIVE_MAX: usize = 8;
 /// One request, head and body, is read within this or dropped.
 const REQUEST_DEADLINE: Duration = Duration::from_secs(10);
+/// Slack's replay window: a request whose signed timestamp is further from now is refused (docs.slack.dev).
+const SLACK_WINDOW_SECS: u64 = 300;
 static LIVE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 fn port(home: &Path) -> u16 {
@@ -99,10 +102,19 @@ impl Read for Deadline<'_> {
     }
 }
 
-fn answer(mut s: &TcpStream, status: &str) {
+fn answer(s: &TcpStream, status: &str) {
+    answer_text(s, status, "");
+}
+fn answer_text(mut s: &TcpStream, status: &str, text: &str) {
+    let kind = if text.is_empty() {
+        ""
+    } else {
+        "Content-Type: text/plain\r\n"
+    };
     let _ = write!(
         s,
-        "HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        "HTTP/1.1 {status}\r\n{kind}Content-Length: {}\r\nConnection: close\r\n\r\n{text}",
+        text.len()
     );
 }
 
@@ -160,14 +172,34 @@ fn serve(stream: TcpStream, registry: &Mutex<Sessions>, stopping: &AtomicBool, h
     if reader.read_exact(&mut body).is_err() {
         return answer(&stream, "400 Bad Request");
     }
-    if !signed(
-        &secret,
-        &body,
-        header("x-hub-signature-256"),
-        header("x-nunchiro-secret"),
-    ) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let slack = header("x-slack-signature").is_some();
+    let ok = if slack {
+        slack_signed(&secret, &body, &header, now)
+    } else {
+        signed(
+            &secret,
+            &body,
+            header("x-hub-signature-256"),
+            header("x-nunchiro-secret"),
+        )
+    };
+    if !ok {
         eprintln!("webhook: trigger {name}: a request without its secret was refused");
         return answer(&stream, "401 Unauthorized");
+    }
+    // Slack checks the address once, when it is set in the app, and wants its challenge back.
+    if slack
+        && let Ok(v) = serde_json::from_slice::<serde_json::Value>(&body)
+        && v["type"] == "url_verification"
+    {
+        return answer_text(
+            &stream,
+            "200 OK",
+            v["challenge"].as_str().unwrap_or_default(),
+        );
     }
     // The caller learns only that it was taken; the start or the card follows off this request.
     answer(&stream, "202 Accepted");
@@ -201,6 +233,32 @@ pub(crate) fn signed(
     plain.is_some_and(|p| super::same(&p, secret))
 }
 
+/// Slack's signature: `v0=` and the hex HMAC-SHA256 of `v0:<X-Slack-Request-Timestamp>:<raw body>`, its timestamp
+/// within `SLACK_WINDOW_SECS` of `now`, so a captured request cannot be sent again later.
+fn slack_signed(
+    secret: &str,
+    body: &[u8],
+    header: &dyn Fn(&str) -> Option<String>,
+    now: u64,
+) -> bool {
+    let (Some(sig), Some(ts)) = (
+        header("x-slack-signature"),
+        header("x-slack-request-timestamp").and_then(|t| t.parse::<u64>().ok()),
+    ) else {
+        return false;
+    };
+    if now.abs_diff(ts) > SLACK_WINDOW_SECS {
+        return false;
+    }
+    let mut signed = format!("v0:{ts}:").into_bytes();
+    signed.extend_from_slice(body);
+    let mac: String = super::hmac(secret.as_bytes(), &signed)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    super::same(&sig, &format!("v0={mac}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,5 +282,36 @@ mod tests {
         assert!(signed(secret, body, None, Some(secret.into())));
         assert!(!signed(secret, body, None, Some("wrong".into())));
         assert!(!signed(secret, body, None, None));
+    }
+
+    /// Slack's signature (docs.slack.dev, verifying requests): `v0=` and the hex HMAC-SHA256 of
+    /// `v0:<X-Slack-Request-Timestamp>:<raw body>`, refused more than five minutes from now. The fixture was signed
+    /// with openssl, as Slack signs.
+    #[test]
+    fn a_slack_signature_is_checked_with_its_timestamp() {
+        let secret = "slack-signing-secret-fixture-0001";
+        let body =
+            br#"{"type":"event_callback","event":{"type":"app_mention","text":"fix the build"}}"#;
+        let sig = "v0=a28da3d2d2822da39613072583f9a3172620fe7e966c859ed4a33c86431cc380";
+        let ts = 1_531_420_618;
+        let headers = |sig: &'static str, ts: &'static str| {
+            move |h: &str| match h {
+                "x-slack-signature" => Some(sig.to_string()),
+                "x-slack-request-timestamp" => Some(ts.to_string()),
+                _ => None,
+            }
+        };
+        let good = headers(sig, "1531420618");
+        assert!(slack_signed(secret, body, &good, ts));
+        assert!(slack_signed(secret, body, &good, ts + 300));
+        // Older or newer than five minutes: a replay.
+        assert!(!slack_signed(secret, body, &good, ts + 301));
+        assert!(!slack_signed(secret, body, &good, ts - 301));
+        // Another body, another secret, a timestamp that is not the signed one, or none.
+        assert!(!slack_signed(secret, b"{}", &good, ts));
+        assert!(!slack_signed("another-secret-of-length", body, &good, ts));
+        assert!(!slack_signed(secret, body, &headers(sig, "1531420619"), ts));
+        assert!(!slack_signed(secret, body, &headers(sig, "soon"), ts));
+        assert!(!slack_signed(secret, body, &|_: &str| None, ts));
     }
 }
