@@ -3215,3 +3215,95 @@ fn run_now_held_keeps_a_waiting_once_run() {
     thread::sleep(Duration::from_millis(2500));
     assert_eq!(seats(&home, "once"), 1);
 }
+
+/// A project's lead proposes a trigger (docs/triggers.md): a card for the user, nothing stored; only its yes adds the
+/// trigger, asking first. A webhook trigger (its secret is the user's) and the Home lead (no project) are refused.
+#[test]
+fn a_leads_trigger_proposal_is_the_users_card() {
+    let l = leads("trg-prop");
+    let (home, proj) = (&l.home, &l.proj);
+    let owner = fs::read_to_string(home.join("core.token")).unwrap();
+    let owner = owner.trim();
+    // The user speaks to each lead first: a seat a schedule opened proposes nothing.
+    for label in ["Chief", "Main"] {
+        let id = rows(home)
+            .into_iter()
+            .find(|r| r.label == label)
+            .unwrap()
+            .id;
+        let told = raw(
+            home,
+            owner,
+            json!({"op":"agent_prompt","id":id,"text":"good morning"}),
+        );
+        assert!(told["Ok"].is_object(), "{told}");
+    }
+    let propose = |token: &str, on: &str| {
+        let mut request = json!({"op":"trigger_propose","name":"ci-fix","on":on,"kind":"claude","task":"Find why the checks failed and fix it."});
+        if on == "github" {
+            request["github"] = json!({"repo":"o/r","event":"checks_failed"});
+        }
+        raw(home, token, request)
+    };
+    let cards = || {
+        raw(home, owner, json!({"op":"snapshot"}))["Ok"]["owner_decisions"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|d| d["owner"]["type"] == "trigger")
+            .collect::<Vec<_>>()
+    };
+    let triggers = || {
+        raw(home, owner, json!({"op":"trigger","action":{"do":"list"}}))["Ok"]["triggers"].clone()
+    };
+    // Refused: a webhook (its secret is the user's to set), the Home lead (a trigger runs in a project), the owner.
+    assert!(
+        propose(&l.main, "webhook")["Err"]
+            .as_str()
+            .is_some_and(|e| e.contains("webhook"))
+    );
+    assert!(
+        propose(&l.chief, "github")["Err"]
+            .as_str()
+            .is_some_and(|e| e.contains("project"))
+    );
+    assert!(propose(owner, "github")["Err"].is_string());
+    assert!(cards().is_empty());
+    // The project's lead: one line, a card, nothing stored.
+    let asked = propose(&l.main, "github");
+    assert_eq!(
+        asked["Ok"]["text"],
+        "ci-fix · GitHub o/r: checks fail · Claude: Find why the checks failed and fix it.",
+        "{asked}"
+    );
+    assert_eq!(triggers(), json!([]));
+    let card = cards().remove(0);
+    assert_eq!(card["owner"]["place"], json!(proj), "{card}");
+    // Not now stores nothing; a yes adds it, asking first.
+    raw(
+        home,
+        owner,
+        json!({"op":"answer","item":card["id"],"answer":{"type":"deny"},"confirmed":true}),
+    );
+    assert!(cards().is_empty() && triggers() == json!([]));
+    propose(&l.main, "github");
+    let card = cards().remove(0);
+    let yes = raw(
+        home,
+        owner,
+        json!({"op":"answer","item":card["id"],"answer":{"type":"allow_once"},"confirmed":true}),
+    );
+    assert!(yes["Ok"].is_object(), "{yes}");
+    let added = triggers();
+    assert_eq!(added[0]["name"], "ci-fix");
+    assert_eq!(added[0]["mode"], "ask");
+    assert_eq!(added[0]["github"]["repo"], "o/r");
+    assert_eq!(added[0]["run"]["project"], json!(proj));
+    // The same name again: refused at once.
+    assert!(
+        propose(&l.main, "github")["Err"]
+            .as_str()
+            .is_some_and(|e| e.contains("exists"))
+    );
+}
