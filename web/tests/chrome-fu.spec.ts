@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, openWindow, stripOnTop, test, type Core } from './fixtures';
 import { bar } from './d5b';
+import { startOf } from './start-op';
 
 type Snap = { id: string; [k: string]: unknown };
 // The set of tabs, not their order: the order follows the sessions' spawn order, which is not what these tests are about.
@@ -117,8 +118,8 @@ test('restart_agent_session_sends_resume_id: Restart session on an ended Claude 
   link.show();
   await tab.click({ button: 'right' });
   await app.getByRole('menu', { name: 'Actions' }).getByRole('menuitem', { name: 'Resume session' }).click();
-  await expect.poll(() => link.st.sent.filter((r) => r.op === 'start').length).toBe(1);
-  expect(link.st.sent.find((r) => r.op === 'start')).toMatchObject({ op: 'start', session: { kind: 'claude', project: p, label: 'x', resume: 'conv-from-snapshot' } });
+  await expect.poll(() => link.st.sent.filter((r) => startOf(r)).length).toBe(1);
+  expect(link.st.sent.map(startOf).find((r) => r)).toMatchObject({ op: 'start', session: { kind: 'claude', project: p, label: 'x', resume: 'conv-from-snapshot' } });
 });
 
 test('board_waiting_dot_follows_decision: a board decision dots the Board icon; answering it removes the dot', async ({ app, core }) => {

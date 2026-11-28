@@ -64,6 +64,9 @@ impl Sessions {
             if k == crate::home_lock::MODE_KEY {
                 crate::home_lock::check(v)?; // ticket 1002 lane 1
             }
+            if k == crate::home_lock::CONNECTORS_OFF_KEY {
+                crate::home_lock::check_connectors_off(v)?;
+            }
             // Ticket 456: an item that can run commands goes on only once the owner has read them.
             if k == crate::extensions::ENABLED_KEY {
                 crate::extensions::check_enabled(
