@@ -1,7 +1,7 @@
 //! GitHub triggers (docs/triggers.md): while one is on, the core reads its repository with the user's own `gh` every
 //! `EVERY` (settings.json `triggers_poll_secs` moves it), and fires the trigger once for each new event: an open pull
 //! request whose checks failed or whose review asked for changes (once per head commit), or an open issue or pull
-//! request that has the label. What is there when the core first reads a trigger is the starting point and fires
+//! request that has the label or mentions the owner. What is there when the core first reads a trigger is the starting point and fires
 //! nothing; a core restart starts from what is there again. `gh` owns the login; Nunchiro reads no token. The argument
 //! vector is constants plus the checked repository and label (`Github::check`).
 use super::triggers::{Github, GithubEvent, Source};
@@ -49,6 +49,26 @@ fn events(g: &Github, run: Gh) -> Result<Vec<(String, Value)>, String> {
     let out = match g.event {
         GithubEvent::ChecksFailed => pulls("url,headRefOid,statusCheckRollup", FAILED_JQ)?,
         GithubEvent::ChangesRequested => pulls("url,headRefOid,reviewDecision", CHANGES_JQ)?,
+        GithubEvent::Mentioned => {
+            let a = [
+                "search",
+                "issues",
+                "--repo",
+                &g.repo,
+                "--mentions",
+                "@me",
+                "--state",
+                "open",
+                "--include-prs",
+                "--limit",
+                "50",
+                "--json",
+                "url",
+                "--jq",
+                URL_JQ,
+            ];
+            run(&a.iter().map(|s| s.to_string()).collect::<Vec<_>>())?
+        }
         GithubEvent::Labeled => {
             let label = g.label.clone().unwrap_or_default();
             let a = [
@@ -67,6 +87,7 @@ fn events(g: &Github, run: Gh) -> Result<Vec<(String, Value)>, String> {
         GithubEvent::ChecksFailed => "checks_failed",
         GithubEvent::ChangesRequested => "changes_requested",
         GithubEvent::Labeled => "labeled",
+        GithubEvent::Mentioned => "mentioned",
     };
     Ok(rows
         .iter()
@@ -76,6 +97,10 @@ fn events(g: &Github, run: Gh) -> Result<Vec<(String, Value)>, String> {
                 GithubEvent::Labeled => (
                     url.clone(),
                     json!({"source": "github", "event": what, "label": g.label, "repo": g.repo, "issue": {"html_url": url}}),
+                ),
+                GithubEvent::Mentioned => (
+                    url.clone(),
+                    json!({"source": "github", "event": what, "repo": g.repo, "issue": {"html_url": url}}),
                 ),
                 _ => (
                     format!("{url}@{}", r["headRefOid"].as_str().unwrap_or_default()),
@@ -248,6 +273,29 @@ mod tests {
         );
         assert!(
             asked.contains("--author @me") && asked.contains("--jq"),
+            "{asked}"
+        );
+    }
+
+    #[test]
+    fn a_mention_is_one_event_per_open_issue_or_pull_that_mentions_the_owner() {
+        let answer = r#"[{"url": "https://github.com/o/r/issues/3"}]"#;
+        let asked = Mutex::new(vec![]);
+        let run = |a: &[String]| {
+            asked.lock().unwrap().push(a.to_vec());
+            Ok(answer.as_bytes().to_vec())
+        };
+        let found = events(&watch(GithubEvent::Mentioned), &run).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].0, "https://github.com/o/r/issues/3");
+        assert_eq!(found[0].1["event"], "mentioned");
+        assert_eq!(
+            found[0].1["issue"]["html_url"],
+            "https://github.com/o/r/issues/3"
+        );
+        let asked = asked.lock().unwrap()[0].join(" ");
+        assert!(
+            asked.starts_with("search issues --repo o/r --mentions @me --state open --include-prs"),
             "{asked}"
         );
     }

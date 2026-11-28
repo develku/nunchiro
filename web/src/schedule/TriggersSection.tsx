@@ -13,7 +13,7 @@ import type { Session } from '../types';
 import { dayWords } from './schedules';
 import './triggers.css';
 
-type Event = 'checks_failed' | 'changes_requested' | 'labeled';
+type Event = 'checks_failed' | 'changes_requested' | 'labeled' | 'mentioned';
 interface Trigger {
   name: string;
   on: 'cli' | 'webhook' | 'github';
@@ -25,7 +25,7 @@ interface Trigger {
 }
 /** The form's When: a GitHub event, a webhook or a command. */
 type When = `github:${Event}` | 'webhook' | 'cli';
-const WHENS: When[] = ['github:checks_failed', 'github:changes_requested', 'github:labeled', 'webhook', 'cli'];
+const WHENS: When[] = ['github:checks_failed', 'github:changes_requested', 'github:labeled', 'github:mentioned', 'webhook', 'cli'];
 // shortcut: the address shows the default port; settings.json `triggers_port` moves it, read it here when that is set.
 const PORT = 47800;
 
@@ -58,9 +58,9 @@ function TriggerForm({ core, t, projects, onDone, onCancel }: { core: CoreClient
         name,
         on: event ? 'github' : when,
         run: { kind, project, label: name, task: task.trim() },
-        mode,
+        mode: event === 'mentioned' ? 'ask' : mode, // anyone can mention the owner: the core refuses auto
         ...(secret ? { secret } : {}),
-        ...(event ? { github: { repo, event, ...(event === 'labeled' ? { label: label.trim() } : { any_author: anyAuthor }) } } : {}),
+        ...(event ? { github: { repo, event, ...(event === 'labeled' ? { label: label.trim() } : event === 'mentioned' ? {} : { any_author: anyAuthor }) } } : {}),
       });
       onDone(list, secret ? { name, secret } : undefined);
     } catch (e) {
@@ -91,7 +91,7 @@ function TriggerForm({ core, t, projects, onDone, onCancel }: { core: CoreClient
         </Select>,
       )}
       {event && field(t('trigger.repo'), <input {...PLAIN} aria-label={t('trigger.repo')} placeholder="owner/name" value={repo} onChange={(e) => setRepo(e.target.value.trim())} />, t('trigger.githubNote'))}
-      {event && event !== 'labeled' &&
+      {event && event !== 'labeled' && event !== 'mentioned' &&
         field(
           t('trigger.authors'),
           <label className="trig-check">
@@ -125,10 +125,11 @@ function TriggerForm({ core, t, projects, onDone, onCancel }: { core: CoreClient
       {field(t('schedule.what'), <textarea {...PLAIN} rows={2} maxLength={4000} aria-label={t('schedule.what')} value={task} onChange={(e) => setTask(e.target.value)} />, t('trigger.taskNote'))}
       {field(
         t('trigger.before'),
-        <Select label={t('trigger.before')} value={mode} onChange={(v) => setMode(v as 'ask' | 'auto')}>
+        <Select label={t('trigger.before')} value={event === 'mentioned' ? 'ask' : mode} onChange={(v) => setMode(v as 'ask' | 'auto')}>
           <option value="ask">{t('trigger.ask')}</option>
-          <option value="auto">{t('trigger.autoLong')}</option>
+          {event !== 'mentioned' && <option value="auto">{t('trigger.autoLong')}</option>}
         </Select>,
+        event === 'mentioned' && t('trigger.mentionAsks'),
       )}
       {when === 'webhook' && field(t('trigger.address'), <code className="trig-code">{`http://127.0.0.1:${PORT}/hooks/${name || '<name>'}`}</code>, t('trigger.addressNote'))}
       {when === 'cli' && field(t('trigger.command'), <code className="trig-code">{`nunchiro trigger fire ${name || '<name>'} --data @file`}</code>)}

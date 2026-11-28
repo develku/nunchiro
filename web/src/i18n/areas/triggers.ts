@@ -9,6 +9,8 @@ declare module '../index' {
     'trigger.when.github.checks_failed': true;
     'trigger.when.github.changes_requested': true;
     'trigger.when.github.labeled': true;
+    'trigger.when.github.mentioned': true;
+    'trigger.mentionAsks': true;
     'trigger.when.webhook': true;
     'trigger.when.cli': true;
     'trigger.repo': true;
@@ -49,6 +51,8 @@ export const en = {
   "trigger.when.github.checks_failed": "GitHub: checks fail on my pull request",
   "trigger.when.github.changes_requested": "GitHub: a review asks for changes",
   "trigger.when.github.labeled": "GitHub: an issue gets a label",
+  "trigger.when.github.mentioned": "GitHub: someone mentions me",
+  "trigger.mentionAsks": "Anyone can mention you, so this trigger always asks first.",
   "trigger.when.webhook": "A webhook is called",
   "trigger.when.cli": "A command runs",
   "trigger.repo": "Repository",
