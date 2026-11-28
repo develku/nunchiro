@@ -234,6 +234,10 @@ pub(super) fn answer(
             Request::MemoryWaitCancel { id } => {
                 crate::pressure::answer(registry, stopping, &id, false)
             }
+            // The window is the owner: a trigger card's "Turn this trigger off", and the list.
+            Request::Trigger { action } => {
+                crate::schedule::triggers::handle(registry, stopping, home, action)
+            }
             Request::MemoryWaitList => Ok(Reply::MemoryWait {
                 entries: crate::pressure::shown()
                     .iter()
@@ -266,9 +270,6 @@ pub(super) fn answer(
                     Request::WidgetList | Request::WidgetRun { .. } | Request::WidgetPage { .. } // v1b-22
                 ) {
                     return crate::widgets::handle(home, sessions, request);
-                }
-                if matches!(request, Request::Plugin { .. }) {
-                    return crate::plugins::handle(home, sessions, request);
                 }
                 // v1b-08: file and git work runs after the registry lock is released.
                 if let Some(root) = sessions.file_root(&request) {
@@ -344,4 +345,33 @@ fn window_start(
             .start_failed_at(session, folder.as_deref(), e.clone());
     }
     result.map(|session| Reply::Started { session })
+}
+
+/// The requests the frame loop hands to a job: a plugin request (the catalogue and an install fetch,
+/// `plugins_online.rs`) and the PR view's `gh` runs.
+pub(super) fn off_loop(request: &Request) -> bool {
+    matches!(
+        request,
+        Request::Plugin { .. }
+            | Request::PrView { .. }
+            | Request::PrList
+            | Request::PrMerge { .. }
+            | Request::PrBranch { .. }
+    )
+}
+pub(super) fn job(
+    registry: &Arc<Mutex<Sessions>>,
+    home: &Path,
+    request: Request,
+) -> impl FnOnce() -> Response + Send + 'static {
+    let (registry, home) = (registry.clone(), home.to_path_buf());
+    move || match request {
+        Request::Plugin { .. } => {
+            let sessions = registry
+                .lock()
+                .map_err(|_| "session registry unavailable")?;
+            crate::plugins::handle(&home, sessions, request)
+        }
+        _ => crate::pr::answer(&registry, request),
+    }
 }

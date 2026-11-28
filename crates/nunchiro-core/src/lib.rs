@@ -70,6 +70,7 @@ mod scrollback;
 pub mod scrollback_edit;
 // v1b-19
 pub mod plugins; // panels, commands and settings from one approved folder
+pub mod plugins_online; // the plugin catalogue
 pub mod widgets;
 // v1a-47
 pub mod themes_online;

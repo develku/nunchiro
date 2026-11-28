@@ -37,6 +37,18 @@ export interface Listed {
 interface Core {
   request(request: { op: string; [k: string]: unknown }): Promise<unknown>;
 }
+/** One plugin of the catalogue (crates/nunchiro-core/src/plugins_online.rs): what Browse plugins shows. */
+export interface CatalogEntry {
+  id: string;
+  name: string;
+  about: string;
+  author?: string;
+  version: string;
+  adds: Record<string, number>;
+  network: string[];
+  commit: string;
+}
+export const catalogOp = async (core: Core) => ((await core.request({ op: 'plugin', action: { do: 'catalog' } })) as { catalog: CatalogEntry[] }).catalog;
 export const pluginOp = async (core: Core, action: Record<string, unknown>) => ((await core.request({ op: 'plugin', action })) as { plugins: Listed[] }).plugins;
 
 export interface Ran {

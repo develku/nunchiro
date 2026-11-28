@@ -184,7 +184,7 @@ export function AlertSheet({ label, wide, gone, className, onClose, children }: 
 }
 
 /** What stands between a project and Remove, read from the core (never this window's copy), at open and again on confirm. */
-type Removal = { sessions: Session[]; running: Session[]; worktrees: ListedWorktree[]; /** Worktree path to the title of its open task whose review passed (waits for a merge). */ merging: Record<string, string> };
+type Removal = { sessions: Session[]; running: Session[]; worktrees: ListedWorktree[]; /** Worktree path to the title of its open task whose review passed (waits for a merge). */ merging: Record<string, string>; /** A session in a folder of its own that no listed worktree holds (a worktree not recorded yet): Remove would stop it and delete its history as a plain session's. */ elsewhere: Session[] };
 type Task = { title: string; worktrees?: string[]; seats?: { worktree?: string }[]; closed?: unknown; review?: { pass: boolean } };
 const rowsOf = async (core: ProjectTree['core'], project: string) => ((await core.request({ op: 'snapshot' })) as { sessions: Session[] }).sessions.filter((s) => s.project === project);
 async function readRemoval(core: ProjectTree['core'], project: string): Promise<Removal> {
@@ -199,7 +199,9 @@ async function readRemoval(core: ProjectTree['core'], project: string): Promise<
   const sessions = rows.filter((s) => !isAccountTab(s) && !s.machine && s.state !== 'closed');
   // `state`, not agentState: an agent that quit left the user's shell running, and Close would end it.
   // A listed worktree counts even when its folder is gone: withListed brings the head back for it all the same.
-  return { sessions, running: sessions.filter((s) => s.state === 'running'), worktrees: (listed.worktrees ?? []).filter((w) => w.project === project), merging };
+  const worktrees = (listed.worktrees ?? []).filter((w) => w.project === project);
+  const elsewhere = sessions.filter((s) => s.cwd !== project && !worktrees.some((w) => s.cwd === w.path || s.cwd.startsWith(`${w.path}/`)));
+  return { sessions, running: sessions.filter((s) => s.state === 'running'), worktrees, merging, elsewhere };
 }
 const COUNTS: [Session['state'], Key][] = [['resumable', 'tree.project.count.resumable'], ['exited', 'tree.project.count.exited'], ['failed', 'tree.project.count.failed']];
 const fingerprint = (r: Removal) => r.sessions.map((s) => `${s.id}:${s.state}`).join();
@@ -244,7 +246,7 @@ function RemoveDialog({ t, pt, wt, project, onClose }: { t: T; pt: ProjectTree; 
     }
   };
   // Look 1117 v10 (A): running sessions alone no longer block; the confirm lists them and its action stops them (Close stops a running session).
-  if (!live || live.worktrees.length)
+  if (!live || live.worktrees.length || live.elsewhere.length)
     return (
       <AlertSheet key="blocked" label={t('tree.project.blockedTitle', { name })} onClose={onClose}>
         {path}
@@ -269,6 +271,18 @@ function RemoveDialog({ t, pt, wt, project, onClose }: { t: T; pt: ProjectTree; 
               </div>
             ))}
             <p className="rmmuted">{t('tree.project.blockedWorktreeFix')}</p>
+          </section>
+        )}
+        {!!live?.elsewhere.length && (
+          <section className="rmwhy" data-elsewhere>
+            <h3>{t('tree.project.blockedElsewhere')}</h3>
+            {live.elsewhere.map((s) => (
+              <div className="rmit" key={s.id}>
+                <span>{sessionName(s)}</span>
+                <span className="rmmuted">{basename(s.cwd)}</span>
+              </div>
+            ))}
+            <p className="rmmuted">{t('tree.project.blockedElsewhereFix')}</p>
           </section>
         )}
         {err && (
@@ -298,8 +312,8 @@ function RemoveDialog({ t, pt, wt, project, onClose }: { t: T; pt: ProjectTree; 
     try {
       const now = await readRemoval(core, project);
       // Anything but the list the user read goes back to them: a worktree refuses, any other change is counted again.
-      if (now.worktrees.length || fingerprint(now) !== fingerprint(live)) {
-        if (!now.worktrees.length) setNote(t('tree.project.removeChanged'));
+      if (now.worktrees.length || now.elsewhere.length || fingerprint(now) !== fingerprint(live)) {
+        if (!now.worktrees.length && !now.elsewhere.length) setNote(t('tree.project.removeChanged'));
         return setLive(now);
       }
       total = now.sessions.length;

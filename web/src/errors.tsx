@@ -37,6 +37,14 @@ export const KNOWN: [RegExp, Key, Key?][] = [
   [/^not pushed: this is the default branch$/, 'gitActions.err.default'],
   [/^not pushed: there are no new commits to push$/, 'gitActions.err.nothing'],
   [/^not pushed: /, 'gitActions.err.failed', 'gitActions.err.failed.todo'],
+  [/^a pull request for this branch already exists: #(?<pr>\d+)/, 'gitActions.err.exists'],
+  [/^pushed, but the pull request was not created: gh (is not logged in|was not found)/, 'gitActions.err.pushedNoGh'],
+  [/^pushed, but the pull request was not created/, 'gitActions.err.pushedNoPr', 'gitActions.err.failed.todo'],
+  [/^no pull request: the title/, 'gitActions.err.title'],
+  [/^no pull request: the description/, 'gitActions.err.body'],
+  [/^no pull request: (?<remote>\S+) is not a GitHub repository/, 'gitActions.err.notGithub'],
+  [/^no pull request: /, 'gitActions.err.noPr', 'gitActions.err.failed.todo'],
+  [/^the pull request was created, but gh printed no link/, 'gitActions.err.noLink'],
   [/core disconnected|core is stopping/i, 'settings.err.core'],
   // The core's own wording only: SSH and agent output also says "timed out" or "Permission denied (publickey)".
   [/too many requests in flight/, 'settings.err.busy'],
@@ -77,6 +85,8 @@ export const KNOWN: [RegExp, Key, Key?][] = [
   // Ticket 536: the rest of 534's list that the window can show (the ticket's table names each place).
   // pressure/wait.rs `answer`: Start anyway or Cancel on a start that left the list meanwhile (it started or was dropped).
   [/^this start is no longer waiting for memory$/, 'err.memWait.gone'],
+  // plugins.rs check_send: a message a plugin's check refused; its reason stays under Details.
+  [/^Not sent\. The plugin "(?<name>[^"]+)" refused it: /, 'err.pluginRefusedSend', 'err.pluginRefusedSend.todo'],
   [/^answer the waiting decision first$/, 'err.decisionWaiting', 'err.decisionWaiting.todo'], // sessions.rs:6284
   [/^approve the agent first$/, 'err.agentNotApproved', 'err.agentNotApproved.todo'], // acp/add.rs:187,224
   [/^start a session in a project folder first$/, 'agents.sheet.startFirst'], // acp/add.rs:318
