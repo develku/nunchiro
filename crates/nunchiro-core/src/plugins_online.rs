@@ -234,7 +234,14 @@ impl Catalog {
             let _ = fs::remove_dir_all(&fresh);
         }
         written?;
-        // Installed is off: an update (or the same files approved before) never runs before the owner says so.
+        // An update that asks for nothing beyond its approval stays as it was (Orca's rule); anything else is off
+        // until the owner reviews it and turns it on.
+        let approved =
+            crate::approval::status(&self.home, &format!("{}{id}", crate::plugins::PREFIX))
+                .is_ok_and(|v| v.state == crate::approval::State::Approved);
+        if approved {
+            return Ok(());
+        }
         crate::plugins::turn_off(&self.home, id)
     }
 }
