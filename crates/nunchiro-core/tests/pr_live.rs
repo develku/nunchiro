@@ -1605,6 +1605,99 @@ fn pr_write_cancel_stops_its_own_run() {
     assert!(!alive.success(), "the agent's process is still running");
 }
 
+/// Auto-link: a PR link an agent printed in its terminal becomes the session's chip once the branch's own PR (gh, by
+/// branch) is that very PR; a link to another PR is not linked, and with live PR status off gh never runs.
+#[test]
+fn pr_link_from_terminal_output_needs_the_branch_check() {
+    let core = Core::new();
+    let dir = pr_repo(&core, 1);
+    pr_git(&dir, &["push", "-q", "-u", "origin", "fix-lexer"]);
+    let h = core.home.display();
+    let pr = json!({"number":12,"url":A12,"state":"OPEN","isDraft":false,"reviewDecision":"","headRefName":"fix-lexer",
+        "headOwner":"develku","headRepo":"nunchiro","checks":[]});
+    fs::write(core.home.join("gh-branch"), pr.to_string()).unwrap();
+    install_gh(
+        &core,
+        &format!(
+            "#!/bin/sh\nprintf '%s|' \"$@\" >> '{h}/gh-runs'\nprintf '\\n' >> '{h}/gh-runs'\n/bin/cat '{h}/gh-branch'\n"
+        ),
+    );
+    let printed = |url: &str| {
+        core.start_kind(
+            AgentKind::Shell,
+            vec![
+                "/bin/sh".into(),
+                "-c".into(),
+                format!("printf 'Opened {url}\\n'; exec /bin/cat"),
+            ],
+        )
+    };
+    let chip = |id: &str| core.window(json!({"op":"pr_chip","id":id}))["Ok"]["chip"].clone();
+    let wait_for = |id: &str, want: &str| {
+        let until = Instant::now() + Duration::from_secs(10);
+        loop {
+            if chip(id)["url"] == want {
+                return true;
+            }
+            if Instant::now() > until {
+                return false;
+            }
+            thread::sleep(Duration::from_millis(200));
+        }
+    };
+    // Live status off: no gh run, no link.
+    let off = printed(A12);
+    thread::sleep(Duration::from_millis(500));
+    assert!(chip(&off.id).is_null());
+    thread::sleep(Duration::from_millis(500));
+    assert!(chip(&off.id).is_null());
+    assert!(gh_runs(&core).is_empty(), "{:?}", gh_runs(&core));
+    // On: the printed link that is the branch's PR is linked.
+    core.window(json!({"op":"pr_live_set","on":true}));
+    let on = printed(A12);
+    assert!(
+        wait_for(&on.id, A12),
+        "the printed PR was not linked: {}",
+        chip(&on.id)
+    );
+    assert!(
+        gh_runs(&core)
+            .iter()
+            .any(|r| r.contains("headRepositoryOwner")),
+        "{:?}",
+        gh_runs(&core)
+    );
+    assert_eq!(
+        chip(&on.id)["linked"],
+        "Shell",
+        "the chip says it was linked from the output"
+    );
+    // A link to another PR than the branch's: never linked.
+    let other = printed(A13);
+    assert!(
+        !wait_for(&other.id, A13),
+        "a PR of another branch was linked"
+    );
+    assert!(chip(&other.id).is_null());
+    // The agent opens a new PR on another branch: the branch's own PR changes, the chip follows it.
+    pr_git(&dir, &["checkout", "-q", "-b", "fix-parser"]);
+    pr_git(&dir, &["commit", "-q", "--allow-empty", "-m", "parser"]);
+    pr_git(&dir, &["push", "-q", "-u", "origin", "fix-parser"]);
+    let pr13 = json!({"number":13,"url":A13,"state":"OPEN","isDraft":false,"reviewDecision":"","headRefName":"fix-parser",
+        "headOwner":"develku","headRepo":"nunchiro","checks":[]});
+    fs::write(core.home.join("gh-branch"), pr13.to_string()).unwrap();
+    core.window(json!({"op":"send_text","id":on.id,"text":format!("Opened {A13}\n")}));
+    let until = Instant::now() + Duration::from_secs(45);
+    while chip(&on.id)["url"] != A13 {
+        assert!(
+            Instant::now() < until,
+            "the chip never moved to the new PR: {}",
+            chip(&on.id)
+        );
+        thread::sleep(Duration::from_millis(500));
+    }
+}
+
 /// "Agent made" opens Merge for that PR, so only a real `gh pr create` run that prints one PR link on its own line counts.
 #[test]
 fn created_needs_a_real_gh_run_and_its_own_link_line() {
