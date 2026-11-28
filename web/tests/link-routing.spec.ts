@@ -69,7 +69,8 @@ async function agentTerminal(page: Page, chatCore: ChatCore, features: Record<st
   await record(page, features);
   const s = chatCore.chat('links');
   await openChat(page, s.id);
-  await icon(page, 'right', 'Terminal').click();
+  await icon(page, 'right', 'Terminal').click(); // #78: a shell beside the agent; its PTY is the row's first tab
+  await page.getByRole('tab', { name: /PTY/ }).click();
   chatCore.cli('session', 'send-text', s.id, 'see https://example.com/docs\r'); // the PTY echoes the line
   await expect(page.locator(`[data-side-pane] .term[data-session="${s.id}"] .xterm-rows`)).toContainText('example.com/docs');
   return s;
@@ -110,7 +111,7 @@ chatTest('terminal_link_opens_in_inapp_browser_when_set: journey through Setting
   await expect(app.getByRole('switch', { name: 'Shift+click opens the other browser' })).toBeChecked();
   await expect(app.getByRole('switch', { name: 'Open in the background' })).not.toBeChecked();
   await app.getByRole('button', { name: 'Close Settings' }).click(); // Settings is a modal: the tab behind it cannot be clicked
-  await app.getByRole('tab', { name: /links/ }).click();
+  await app.locator(`.tab[data-tab="${s.id}"]`).click(); // the session's tab (the pane's PTY tab also names it since #78)
   await expect(app.locator(`[data-side-pane] .term[data-session="${s.id}"] .xterm-rows`)).toContainText('example.com/docs');
   await cmdClick(app, s.id, 'example.com');
   await expect.poll(() => got(app)).toEqual({ opened: [], go: [s.id] });

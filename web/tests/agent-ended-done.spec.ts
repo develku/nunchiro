@@ -29,6 +29,7 @@ test('agent_ended_reads_done: dot, done sound, board Done and the composer follo
   // The shell is the user's: still Running, and keys typed in the terminal reach it.
   expect((chatCore.cli('snapshot', '--json').sessions as { id: string; state: string }[]).find((x) => x.id === s.id)?.state).toBe('running');
   await page.getByRole('button', { name: 'Terminal', exact: true }).click(); // the Right bar's Terminal icon: the side pane
+  await page.getByRole('tab', { name: /PTY/ }).click(); // #78: the icon shows a shell beside the agent; its PTY is the first tab
   const term = page.locator(`[data-side-pane] .term[data-session="${s.id}"]`);
   await expect(term).toBeVisible();
   await term.click();
