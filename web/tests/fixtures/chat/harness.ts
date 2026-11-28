@@ -86,6 +86,8 @@ export const rec = {
     message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: tool_id, content, is_error }] },
     ...extra,
   }),
+  /** Claude's turn-end record: the turn's changed-files card shows only once the turn ends (#117). */
+  end: () => ({ type: 'system', subtype: 'turn_duration', uuid: id(), durationMs: 10 }),
   /** An Edit call and its result with the structured patch the diff card renders. */
   edit: (tool_id: string, file: string, lines: string[]) => [
     rec.use(tool_id, 'Edit', { file_path: file, old_string: 'a', new_string: 'b' }),

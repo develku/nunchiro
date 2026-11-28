@@ -124,7 +124,7 @@ function PluginsPage({ core, t }: Pick<PageContext, 'core' | 't'>) {
   useEffect(() => void act({ do: 'list' }), [core]); // eslint-disable-line react-hooks/exhaustive-deps
   const [browse, setBrowse] = useState(false);
   const state = (p: Listed) =>
-    p.error ? t('plugins.state.broken') : p.state === 'approved' ? t('plugins.state.approved') : p.state === 'changed' ? t('plugins.state.changed') : t('plugins.state.unapproved');
+    p.error ? t('plugins.state.broken') : p.blocked ? t('plugins.state.blocked') : p.state === 'approved' ? t('plugins.state.approved') : p.state === 'changed' ? t('plugins.state.changed') : t('plugins.state.unapproved');
 
   return (
     <div className="ssec-group">
@@ -161,15 +161,16 @@ function PluginsPage({ core, t }: Pick<PageContext, 'core' | 't'>) {
                   )
                 }
                 why={
-                  (p.needs || !!p.skipped || p.updated) && (
+                  (p.needs || !!p.skipped || p.updated || p.blocked) && (
                     <>
                       {p.needs && <Why id={`plg-needs-${p.id}`} reason={t(p.needs === 'web_widgets' ? 'plugins.needs.web' : 'plugins.needs.script')} />}
                       {!!p.skipped && <Why id={`plg-skipped-${p.id}`} reason={t('plugins.skipped', { n: p.skipped })} />}
                       {p.updated && <Why id={`plg-updated-${p.id}`} reason={t('plugins.updated')} />}
+                      {p.blocked && <Why id={`plg-blocked-${p.id}`} reason={t('plugins.blocked', { why: p.blocked })} />}
                     </>
                   )
                 }
-                chip={<span className={`chip${p.state === 'approved' && !p.error ? ' ok' : p.error || p.state === 'changed' ? ' warn' : ''}`}>{state(p)}</span>}
+                chip={<span className={`chip${p.state === 'approved' && !p.error && !p.blocked ? ' ok' : p.error || p.blocked || p.state === 'changed' ? ' warn' : ''}`}>{state(p)}</span>}
                 control={
                   <>
                     {!p.error && p.state !== 'approved' && (
@@ -177,7 +178,7 @@ function PluginsPage({ core, t }: Pick<PageContext, 'core' | 't'>) {
                         {t('plugins.review')}
                       </button>
                     )}
-                    <Switch checked={p.on} label={t('plugins.onOf', { name })} disabled={!!p.error} onChange={(on) => void act({ do: 'set', id: p.id, on })} />
+                    <Switch checked={p.on} label={t('plugins.onOf', { name })} disabled={!!p.error || !!p.blocked} describedBy={p.blocked ? `plg-blocked-${p.id}` : undefined} onChange={(on) => void act({ do: 'set', id: p.id, on })} />
                   </>
                 }
               />

@@ -74,6 +74,14 @@ impl Sessions {
             .map(|e| e.meta.clone())
             .ok_or_else(|| "session not found".into())
     }
+    /// A session's folder and the terminal output it keeps, for the auto-link of a PR its agent printed.
+    pub(crate) fn output_tail(&self, id: &str) -> Option<(PathBuf, Vec<u8>)> {
+        let entry = self.entries.get(id)?;
+        match read_replay(&self.home, entry, 0) {
+            Ok(crate::api::Reply::Output { data, .. }) => Some((entry.meta.cwd.clone(), data)),
+            _ => None,
+        }
+    }
     // v1b-05: the data home for an upload to a known session; the write runs after the lock is released.
     pub(crate) fn image_home(
         &self,
@@ -375,7 +383,12 @@ impl Sessions {
                 .is_some_and(|p| p.input_blocked());
         meta.completion_seq = meta.attention.completion_seq;
         // Ticket 286: a shell left after its agent quit has no agent footer and answers nothing.
-        let shell_left = self.entries.get(&meta.id).is_some_and(|e| e.agent_ended);
+        // Shown only once its card is judged (`card_judged`, at most `ENDED_MARK_WAIT`): before, a crash read as a
+        // finished turn (a done row, a "Just finished" line), then as failed.
+        let shell_left = self
+            .entries
+            .get(&meta.id)
+            .is_some_and(|e| e.agent_ended && e.card_due.is_none());
         meta.agent_ended = shell_left;
         let live = meta.state == SessionState::Running && !shell_left;
         // CHAT-PERMCHIP: read from the live screen, never stored. S9: read once per screen change, not per snapshot.

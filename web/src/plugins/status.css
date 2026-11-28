@@ -1,0 +1,10 @@
+/* A plugin's status item (chrome/StatusBar.tsx): the plugin's mark and name before its text, so it never passes for
+   the window's own. */
+.plg-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-6);
+}
+.plg-status-name {
+  color: var(--muted);
+}

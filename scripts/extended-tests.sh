@@ -36,7 +36,7 @@ group() { # name, then one command per argument (each a whole shell command)
 }
 
 core='cargo test --release -p nunchiro-core --features measure'
-# idle_cpu and search_sessions_perf_500mb open a window connection, which a release core grants only to the app's own
+# idle_cpu, search_sessions_perf_500mb and the floods open a window connection, which a release core grants only to the app's own
 # binary (peer.rs is_app); a core built with debug assertions grants it to any owner peer on a test home. So those two
 # serve an optimised core with debug assertions on, built in its own target folder so the release build stays as it is.
 window=target/window-test-hook
@@ -50,7 +50,8 @@ group measure \
   "$hook cargo build --release --locked -p nunchiro && NUNCHIRO_BIN=\"\$PWD/$window/release/nunchiro\" $core --test search_sessions search_sessions_perf_500mb -- --nocapture" \
   "$core --test observe_lock measure_snapshot_latency_during_a_bounded_firehose -- --nocapture"
 
-flood="$core --test owner_hardening -- --exact owner_hardening_handshake_refill_16 owner_hardening_handshake_refill_40 --test-threads=1"
+# The floods ask for window_auth from the test process too, so they take the same hook (and its CLI build).
+flood="$hook cargo build --release --locked -p nunchiro && $hook $core --test owner_hardening -- --exact owner_hardening_handshake_refill_16 owner_hardening_handshake_refill_40 --test-threads=1"
 if [ -z "${EXTENDED_DRY:-}" ] && ! awk -v l="${load:-99}" 'BEGIN { exit !(l < 15) }'; then
   line="$line floods=skipped"
 else

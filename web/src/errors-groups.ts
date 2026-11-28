@@ -71,6 +71,7 @@ export const GROUPS: Record<string, string[]> = {
     'invalid {} name', '{} folder must not be a symlink',
     'sessions.json: {}', 'invalid outbox domains', 'queue store is not an object', 'the Home seat lock hook could not be written', // ticket 1002 (Home chief of staff, Outbox), worktree sharing; nightly 11-21
     "plugin {}: {}", "missing plugin.toml", "plugin.toml is not UTF-8", "plugin.toml is too large", "plugin.toml id \"{}\" is not its folder's name \"{}\"", "plugin.toml needs a {}", "plugin.toml text has a hidden, control or bidi character", "a plugin has at most {} panels and commands", "two panels or commands are named \"{}\"", "setting key \"{}\" is invalid or repeated", "choice setting {} needs choices", "setting {} default: {}", // plugins.rs, approval/mod.rs: a plugin folder Settings > Plugins lists with its fault
+    "a plugin has at most {} shortcuts and {} status items", "shortcut {}: no command \"{}\"", "shortcut \"{}\" is invalid or repeated: use modifiers with Meta among them, then one key, as Meta+Shift+KeyH", "status item \"{}\" is invalid or repeated", "status item {}: its text is 1 to 24 plain characters", "status item {}: no command \"{}\"", // plugins.rs: a plugin's [[keybinding]] and [[status]]
     "a link or a file is in the way at plugins/{}: move it away first", // plugins_online.rs: Browse plugins > Install
   ],
   'err.h.limit': [
