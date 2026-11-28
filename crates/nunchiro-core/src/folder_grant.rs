@@ -599,6 +599,13 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn nested_for_cd(inside: &Path) -> Grants {
+        Grants {
+            granted: vec![inside.to_path_buf()],
+            removed: vec![inside.join("inbox")],
+        }
+    }
+
     fn scratch(tag: &str) -> PathBuf {
         let dir = Path::new("/private/tmp")
             .join(format!("nunchiro-folders-{tag}-{}", std::process::id()));
@@ -967,6 +974,40 @@ mod tests {
         ] {
             assert!(!run(&line, &root, &grants), "{line}");
         }
+        // One leading `cd <dir> && ` into the folder, then one read whose relative paths start there.
+        for line in [
+            format!("cd {i}/inbox && cat a.eml b.eml"),
+            format!("cd {i}/inbox && grep -l Subject *.eml"),
+            format!("cd {i} && ls -la inbox"),
+            "cd inbox && wc -l a.eml".to_string(),
+        ] {
+            assert!(run(&line, &inside, &grants), "{line}");
+        }
+        for line in [
+            format!("cd {i}/inbox && cat a.eml && cat b.eml"),
+            format!("cd {i}/inbox; cat a.eml"),
+            format!("cd {i}/inbox"),
+            "cd - && cat a.eml".to_string(),
+            "cd $HOME && cat a.eml".to_string(),
+            "cd ~/x && cat a.eml".to_string(),
+            format!("cd {o} && cat secret.txt"),
+            format!("cd {o} && cat {i}/inbox/a.eml"),
+            format!("cd {i}/sub/.git && cat config"),
+            format!("cd {i}/inbox && cat ../../other/secret.txt"),
+            format!("cd {i}/inbox && rm a.eml"),
+            format!("cd {i}/inbox && cd {i} && cat inbox/a.eml"),
+            format!("cd {i}/in* && cat a.eml"),
+        ] {
+            assert!(!run(&line, &root, &grants), "{line}");
+        }
+        assert!(
+            !run(
+                &format!("cd {i}/inbox && cat a.eml"),
+                &root,
+                &nested_for_cd(&inside)
+            ),
+            "cd into a removed folder"
+        );
         // A relative path, or none, counts only with the working folder inside.
         assert!(!run("cat inbox/a.eml", &root, &grants), "cwd outside");
         assert!(
