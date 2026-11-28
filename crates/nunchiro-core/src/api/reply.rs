@@ -427,8 +427,15 @@ pub enum Reply {
     WidgetPage {
         page: crate::widgets::web::Page,
     },
+    Triggers {
+        triggers: Vec<crate::schedule::triggers::Trigger>,
+    },
     Plugins {
         plugins: Vec<crate::plugins::Listed>,
+    },
+    /// The plugin catalogue's entries (Browse plugins).
+    PluginCatalog {
+        catalog: Vec<crate::plugins_online::Entry>,
     },
     /// A plugin command's run and where the window shows its output.
     PluginRun {

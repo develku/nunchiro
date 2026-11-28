@@ -59,7 +59,8 @@ that changes `.github/` or the ratchet scripts until a maintainer has reviewed i
 
 - `lint` (Linux): `cargo fmt --check`, `sh -n` of the scenario scripts, `pnpm typecheck` in `web/`.
 - `rust-build` (macOS): clippy with warnings as errors, doctests, and one nextest archive of every Rust test.
-- `rust-test` (macOS, three runners): the archive, split with `cargo nextest run --partition count:k/3`.
+- `rust-test` (macOS, two runners, pull requests): the archive, split with `cargo nextest run --partition count:k/2`. A push to
+  main runs the whole archive inside `rust-build` instead, to keep main runs to fewer macOS jobs.
 - `app` (macOS): `scripts/check-app.sh` (the Tauri app's fmt, clippy, tests and licence notices).
 - `web` (macOS): `scripts/check-cli-docs.sh`, `scripts/scenario-tests.sh`, and the Playwright core set
   (`web/tests/core-set.txt`) on Chromium through `.github/scripts/web-core.sh`.

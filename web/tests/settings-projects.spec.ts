@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, openWindow, REPO, test, type Core } from './fixtures';
 import { seed } from './tree-seed';
+import { startOf } from './start-op';
 
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 // A home folder is shown as ~ (Row.tsx `tilde`); the test's projects may sit under one.
@@ -291,7 +292,7 @@ test('projects_page_new_session_defaults: a model set on the project page is wha
     }),
   );
   // Since #57 the New tab menu sends its start as `start_or_wait` (a held start waits for memory), the start inside it.
-  const lastStart = () => frames.map((f) => (f.op === 'start_or_wait' ? (f.start as typeof f) : f)).filter((f) => f.op === 'start').at(-1)?.session;
+  const lastStart = () => frames.map(startOf).filter((f) => f).at(-1)?.session;
   const startClaude = async (project: string) => {
     await app.evaluate((p) => window.dispatchEvent(new CustomEvent('nunchiro:session.new', { detail: { project: p } })), project);
     await app.getByRole('dialog', { name: 'New tab' }).getByRole('option', { name: 'Claude' }).first().click();

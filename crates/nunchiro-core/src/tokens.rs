@@ -26,6 +26,8 @@ pub enum Scope {
     Supervised,
     /// What a session token may do, except answers, keys and settings (no scope has those); types only into its own.
     Full,
+    /// Fires triggers (`nunchiro trigger fire`) and nothing else.
+    Trigger,
 }
 impl std::str::FromStr for Scope {
     type Err = String;
@@ -34,7 +36,8 @@ impl std::str::FromStr for Scope {
             "read" => Ok(Scope::Read),
             "supervised" => Ok(Scope::Supervised),
             "full" => Ok(Scope::Full),
-            _ => Err("scope is read, supervised or full".into()),
+            "trigger" => Ok(Scope::Trigger),
+            _ => Err("scope is read, supervised, full or trigger".into()),
         }
     }
 }

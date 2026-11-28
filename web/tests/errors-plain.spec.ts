@@ -27,6 +27,7 @@ import { enable, freePort, phone } from './web-access-shared';
 import { openAt, setup, view } from './fixtures/files/harness';
 import { openQuiet } from './tree-seed';
 import { panel, search, setup as searchSetup } from './fixtures/search/harness';
+import { startOf } from './start-op';
 
 const TABLES = mergeAreas({ en: {}, ko: {}, ja: {}, 'zh-Hans': {}, 'zh-Hant': {}, es: {}, fr: {}, pt: {} }, { errors, errorsCore, errorsGaps, errorsGroups, kit, dialog, about, exitWidgets, tree, providersManage, agents, leftovers, own });
 const words = (lang: Lang) => makeT<string>(lang, lang, TABLES as never);
@@ -333,7 +334,7 @@ for (const lang of LANGS) {
     await language(app, lang);
     await app.keyboard.press('Escape');
     const raw = 'sessions.toml: No space left on device (os error 28)';
-    arm((r) => r.op === 'start', raw);
+    arm((r) => !!startOf(r), raw);
     await app.locator('[data-icon="terminal"] button.ai').click();
     const toast = app.locator('.toast');
     await expect(toast).toBeVisible();
