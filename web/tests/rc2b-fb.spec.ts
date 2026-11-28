@@ -19,7 +19,7 @@ async function restart(app: Page, core: Core) {
 // the window comes back with the tab the session had, read-only until it is restarted.
 test('resume_bar_dismiss: no resume bar after a core restart or a reload, so nothing to dismiss', async ({ app, core }) => {
   const project = core.project('demo');
-  core.agent(project, 'alpha', path.join(project, 'never'));
+  core.agent(project, 'alpha', 'never');
   await openWindow(app);
   await restart(app, core);
   const offer = app.getByRole('region', { name: 'Sessions to resume' });
@@ -29,7 +29,7 @@ test('resume_bar_dismiss: no resume bar after a core restart or a reload, so not
   await expect(app.locator('.tab[data-tab]')).toHaveCount(1); // the tab alpha had is restored
   await expect(offer).toHaveCount(0);
   expect(core.cli('snapshot', '--json').sessions[0].state).toBe('resumable'); // nothing resumed by itself
-  core.agent(project, 'beta', path.join(project, 'never'));
+  core.agent(project, 'beta', 'never');
   await restart(app, core);
   await expect(offer).toHaveCount(0);
   await expect(app.locator('.resume')).toHaveCount(0);
@@ -95,7 +95,7 @@ test('settings_view_scrolls_to_end: with a sized composer zone, Settings fills i
     'version = 1\nlocked = false\n\n[root]\nid = "centre"\nsplit = "column"\n\n[[root.children]]\nid = "terminal"\nwidgets = ["terminal"]\n\n[[root.children]]\nid = "composer"\nsize = 400\nwidgets = ["composer"]\n',
   );
   const project = core.project('demo');
-  core.agent(project, 'alpha', path.join(project, 'never'));
+  core.agent(project, 'alpha', 'never');
   await openWindow(app);
   await app.keyboard.press('Meta+Comma');
   const settings = app.getByRole('region', { name: 'Settings', exact: true });
@@ -140,7 +140,7 @@ test('done_card_opens_details: a task card in Done opens its history and receipt
 
 test('centre_chat_can_be_added_back: the centre chat zone is refused removal with a reason (needs 106), so it never needs adding back', async ({ app, core }) => {
   const project = core.project('demo');
-  core.agent(project, 'alpha', path.join(project, 'never'));
+  core.agent(project, 'alpha', 'never');
   await openWindow(app);
   await app.locator('.ib.r').getByRole('button', { name: 'Layout', exact: true }).click();
   await app.getByRole('button', { name: /^Remove .* from the Chat zone$/ }).click();
@@ -166,7 +166,7 @@ test('browser_widget_opens_or_is_not_clickable: the Browser icon opens the sessi
   await rightIcon(app, 'Browser').click();
   await expect(app.locator('aside.sbar[data-side="right"]').getByLabel('Browser space')).toHaveValue('you');
   // With an agent session open, the side pane shows its Browser tab with the address field.
-  core.agent(project, 'alpha', path.join(project, 'never'));
+  core.agent(project, 'alpha', 'never');
   await expect(app.locator('.tab[data-tab]')).toHaveCount(2);
   await app.locator('.tab[data-tab]', { hasText: 'alpha' }).click();
   await rightIcon(app, 'Browser').click();
@@ -190,7 +190,7 @@ test('right_bar_icon_never_silent: the Terminal icon toggles the side pane, or s
   await openWindow(app);
   await rightIcon(app, 'Terminal').click();
   await expect(toast(app)).toHaveText('This session shows its terminal in the centre');
-  const alpha = core.agent(project, 'alpha', path.join(project, 'never'));
+  const alpha = core.agent(project, 'alpha', 'never');
   await expect(app.locator('.tab[data-tab]')).toHaveCount(2);
   await app.locator('.tab[data-tab]', { hasText: 'alpha' }).click();
   await rightIcon(app, 'Terminal').click();
@@ -216,7 +216,7 @@ test('right_bar_icon_never_silent: the Terminal icon toggles the side pane, or s
 
 test('layout_zone_label_matches_content: in Layout edit the centre zone that shows the chat is labelled Chat', async ({ app, core }) => {
   const project = core.project('demo');
-  core.agent(project, 'alpha', path.join(project, 'never'));
+  core.agent(project, 'alpha', 'never');
   await openWindow(app);
   await rightIcon(app, 'Layout').click();
   await expect(app.locator('[data-zone-id="terminal"] .zl b')).toHaveText('Chat');
@@ -231,7 +231,7 @@ test('settings_keeps_picked_composer_tab: a zone whose picked tab is the compose
     'version = 1\nlocked = false\n\n[root]\nid = "centre"\nsplit = "column"\n\n[[root.children]]\nid = "terminal"\nwidgets = ["terminal"]\n\n[[root.children]]\nid = "lower"\nsize = 400\nwidgets = ["diff", "composer"]\n',
   );
   const project = core.project('demo');
-  core.agent(project, 'alpha', path.join(project, 'never'));
+  core.agent(project, 'alpha', 'never');
   await openWindow(app);
   await app.locator('[data-zone-id="lower"] .ztabs').getByRole('tab', { name: 'Composer' }).click();
   await app.keyboard.press('Meta+Comma');
@@ -245,7 +245,7 @@ test('settings_keeps_picked_composer_tab: a zone whose picked tab is the compose
 
 test('centre_chat_cli_refused: `nunchiro layout remove` of the centre chat is refused with the reason and leaves layout.toml as it was', async ({ app, core }) => {
   const project = core.project('demo');
-  core.agent(project, 'alpha', path.join(project, 'never'));
+  core.agent(project, 'alpha', 'never');
   await openWindow(app);
   core.cli('layout', 'resize', 'composer', '120'); // a layout.toml on disk to compare against
   const file = path.join(core.home, 'layout.toml');
