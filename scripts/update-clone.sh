@@ -5,7 +5,7 @@
 #   update-clone.sh <new folder>     prints the commit it checked out
 # Env: NUNCHIRO_UPDATE_REPO, the repository (default: the GitHub one the app's releases come from).
 set -eu
-REPO=${NUNCHIRO_UPDATE_REPO:-https://github.com/develku/nunchiro.git}
+REPO=${NUNCHIRO_UPDATE_REPO:-https://github.com/nunchiro/nunchiro.git}
 
 die() { echo "update-clone: $*" >&2; exit 1; }
 

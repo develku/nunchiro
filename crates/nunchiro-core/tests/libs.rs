@@ -1316,7 +1316,7 @@ fn core_makes_no_other_network_call() {
         1,
         "plugins_online.rs names another URL"
     );
-    assert!(catalogue.contains("\"https://raw.githubusercontent.com/develku/nunchiro/\""));
+    assert!(catalogue.contains("\"https://raw.githubusercontent.com/nunchiro/nunchiro/\""));
     let mut stack = vec![root.clone()];
     while let Some(dir) = stack.pop() {
         for e in fs::read_dir(dir).unwrap() {

@@ -15,7 +15,7 @@ use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-pub const ORIGIN: &str = "https://raw.githubusercontent.com/develku/nunchiro/";
+pub const ORIGIN: &str = "https://raw.githubusercontent.com/nunchiro/nunchiro/";
 /// The catalogue itself is read from `main`; what it points at is pinned by commit and hash.
 pub const CATALOG: &str = "main/plugins/catalog.json";
 /// Plugins the catalogue blocks (Orca's kill list): not installed, and an installed copy is turned off.

@@ -1,4 +1,4 @@
-#:schema https://raw.githubusercontent.com/develku/nunchiro/main/docs/api/plugin.schema.json
+#:schema https://raw.githubusercontent.com/nunchiro/nunchiro/main/docs/api/plugin.schema.json
 id = "quiet-hours"
 name = "Quiet hours"
 version = "0.1.0"

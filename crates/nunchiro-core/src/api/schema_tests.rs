@@ -77,7 +77,7 @@ pub(crate) fn generate() -> Value {
     }
     json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "https://raw.githubusercontent.com/develku/nunchiro/main/docs/api/nunchiro-api.schema.json",
+        "$id": "https://raw.githubusercontent.com/nunchiro/nunchiro/main/docs/api/nunchiro-api.schema.json",
         "title": "Nunchiro local API",
         "description": "Every line on the wire. A caller writes one envelope as a JSON line to $NUNCHIRO_HOME/core.sock and reads one response line back; `nunchiro events` prints event lines. A request variant's x-stability is stable (an outside token may call it; kept compatible) or window (the window's own; may change). See docs/api.md.",
         "anyOf": [
