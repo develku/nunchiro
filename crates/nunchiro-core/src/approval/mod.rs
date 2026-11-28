@@ -123,6 +123,9 @@ pub struct View {
     /// A plugin's access beyond what was approved (`plugins::access` lines): why it asks again.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub added: Vec<String>,
+    /// A plugin's shortcuts and status items, as its access lines (the sheet lists them under its parts).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extras: Vec<String>,
 }
 
 /// Held by whatever runs a subject. Only `check` makes one; re-run `check` right before spawning, because
@@ -331,8 +334,14 @@ fn view(name: &str, s: Subject, stored: Option<&store::Approval>) -> View {
         .and_then(|(id, _)| crate::plugins::parse(&s.text, id).ok())
         .map(|p| crate::plugins::parts(&p))
         .unwrap_or_default();
+    let extras = access_of(name, &s)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|a| a.contains(" on key ") || a.starts_with("status item "))
+        .collect();
     View {
         parts,
+        extras,
         updated,
         added: new,
         read_home_wide,

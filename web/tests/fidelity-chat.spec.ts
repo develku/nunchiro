@@ -187,7 +187,7 @@ test('edit_only_turn_keeps_one_summary_and_one_card_after_live_append', async ({
   const errors: string[] = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   const s = chatCore.chat('edit-only');
-  append(s.file, rec.user('edit'), rec.edit('e1', `${s.cwd}/one.txt`, ['-old', '+new']));
+  append(s.file, rec.user('edit'), rec.edit('e1', `${s.cwd}/one.txt`, ['-old', '+new']), rec.end());
   await openChat(page, s.id);
   const view = chat(page, s.id);
   await expect(view.locator('.sum')).toHaveCount(1);
@@ -236,7 +236,7 @@ test('pending_edit_is_not_reported_as_completed', async ({ page, chatCore }) => 
   const view = chat(page, s.id);
   await expect(view.getByRole('button', { name: /^1 edit/ })).toBeVisible();
   await expect(view.locator('.chcard')).toHaveCount(0);
-  append(s.file, result);
+  append(s.file, result, rec.end());
   await expect(view.getByRole('button', { name: /^Edited 1 file/ })).toBeVisible();
   await expect(view.locator('.chcard')).toHaveCount(1);
 });
@@ -442,7 +442,7 @@ test('last_test_run_decides', () => {
 
 test('claude_write_success_counts', async ({ page, chatCore }) => {
   const s = chatCore.chat('recorded-write');
-  append(s.file, rec.user('write'), ...claudeRecorded.write);
+  append(s.file, rec.user('write'), ...claudeRecorded.write, rec.end());
   await openChat(page, s.id);
   const view = chat(page, s.id);
   await expect(view.getByRole('button', { name: /^Edited 1 file/ })).toBeVisible();

@@ -1,7 +1,7 @@
 // Ticket 305 (needs 222), ticket 391 part 2 (docs/design/providers-391/final.html scene d): the setup checklist, in the
 // structure of Orca's onboarding (steps on the left, the chosen step on the right). Done is computed from real state; the
 // one exception is state.ts ONBOARDING_MARKS (a page seen, the project step skipped), the only ticked state on this page.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { accountName, type Account, type AccountAgent, type AcpRow } from '../../api';
 import { saveAssistant } from '../../features/assistants';
@@ -233,6 +233,9 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
   const inHome = !!team.home && folder === team.home;
   const folderName = (path: string) => (team.home && path === team.home ? t('assistants.title') : basename(path));
   const [prompt, setPrompt] = useState('');
+  // The first-prompt box takes the focus as it appears, unless the focus is already on this page (a palette or search
+  // link's step): the box appears only once the agent check answers, which may come after that link focused its step.
+  const promptBox = useCallback((el: HTMLInputElement | null) => void (el && !document.activeElement?.closest('[data-setting="onboarding"]') && el.focus()), []);
   const [going, setGoing] = useState(false);
   const [goError, setGoError] = useState<unknown>('');
   const [opened, setOpened] = useState<{ id: string; text: string } | null>(null);
@@ -481,7 +484,7 @@ export function OnboardingPage({ core, t, settings, commands, update, hasProject
               </div>
               <label className="ob-fld">
                 <span>{t('firstUse.prompt')}</span>
-                <input {...PLAIN} className="sinp" aria-label={t('firstUse.prompt')} placeholder={t('firstUse.promptHint', { name: NAMES[lead] })} autoFocus value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+                <input {...PLAIN} className="sinp" aria-label={t('firstUse.prompt')} placeholder={t('firstUse.promptHint', { name: NAMES[lead] })} ref={promptBox} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
               </label>
               <ErrorLine t={t} error={goError ? rawError(goError) : ''} />
               <div className="ob-fld">

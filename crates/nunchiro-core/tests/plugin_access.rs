@@ -86,6 +86,58 @@ fn an_approval_from_before_access_was_recorded_asks_again_on_any_change() {
     assert_eq!(approval::status(&home, NAME).unwrap().state, State::Changed);
 }
 
+const KEYED: &str = "[[keybinding]]\ncommand = \"hi\"\nkey = \"Meta+Shift+KeyH\"\n\n[[status]]\nname = \"greet\"\ntext = \"Hello\"\ncommand = \"hi\"\n";
+
+#[test]
+fn a_plugin_adds_a_shortcut_and_a_status_item_and_adding_one_asks_again() {
+    let home = home::short("pa4");
+    plugin(&home, &format!("{MANIFEST}\n{KEYED}"), "echo hello\n");
+    let p = nunchiro_core::plugins::parse(&format!("{MANIFEST}\n{KEYED}"), "hello").unwrap();
+    assert_eq!(p.keybinding[0].key, "Meta+Shift+KeyH");
+    assert_eq!(p.status[0].text, "Hello");
+    approve(&home);
+    // A second shortcut is new access: it asks again and names it.
+    let more =
+        format!("{MANIFEST}\n{KEYED}\n[[keybinding]]\ncommand = \"hi\"\nkey = \"Meta+Alt+KeyH\"\n");
+    plugin(&home, &more, "echo hello\n");
+    let view = approval::status(&home, NAME).unwrap();
+    assert_eq!(view.state, State::Changed);
+    assert_eq!(view.added, ["command hi on key Meta+Alt+KeyH"]);
+}
+
+#[test]
+fn shortcuts_and_status_items_are_checked() {
+    use nunchiro_core::plugins::parse;
+    let with = |extra: &str| parse(&format!("{MANIFEST}\n{extra}"), "hello");
+    for bad in [
+        // No modifier but Shift: it would take a key the user types.
+        "[[keybinding]]\ncommand = \"hi\"\nkey = \"Shift+KeyH\"\n",
+        "[[keybinding]]\ncommand = \"hi\"\nkey = \"Meta+Space+KeyH\"\n",
+        "[[keybinding]]\ncommand = \"nope\"\nkey = \"Meta+KeyH\"\n",
+        "[[status]]\nname = \"s\"\ntext = \"far too long a text for the status bar\"\n",
+        "[[status]]\nname = \"s\"\ntext = \"x\"\ncommand = \"nope\"\n",
+        "[[status]]\nname = \"s\"\ntext = \"a\"\n[[status]]\nname = \"t\"\ntext = \"b\"\n[[status]]\nname = \"u\"\ntext = \"c\"\n",
+    ] {
+        assert!(with(bad).is_err(), "{bad}");
+    }
+    // Without Meta it could take Ctrl+C, Ctrl+D or Ctrl+Z from every terminal, or a typed character with Alt.
+    for taken in [
+        "Control+KeyC",
+        "Control+Alt+Digit1",
+        "Alt+KeyE",
+        "Control+Shift+KeyZ",
+    ] {
+        assert!(
+            with(&format!(
+                "[[keybinding]]\ncommand = \"hi\"\nkey = \"{taken}\"\n"
+            ))
+            .is_err(),
+            "{taken}"
+        );
+    }
+    assert!(with("[[keybinding]]\ncommand = \"hi\"\nkey = \"Meta+Alt+Digit1\"\n").is_ok());
+}
+
 /// Approves `manifest` with `hi.sh`, then writes `changed` (and `script`): the view after.
 fn after(tag: &str, manifest: &str, changed: &str, script: &str) -> approval::View {
     let home = home::short(tag);
@@ -155,4 +207,20 @@ fn a_plugin_with_a_check_asks_again_after_any_change() {
     );
     assert_eq!(v.state, State::Changed);
     assert_eq!(v.added, ["check g when it fails allow"]);
+}
+
+#[test]
+fn a_status_item_whose_text_changes_asks_again() {
+    let home = home::short("pa10");
+    let m = format!("{MANIFEST}\n{KEYED}");
+    plugin(&home, &m, "echo hello\n");
+    approve(&home);
+    plugin(
+        &home,
+        &m.replace("text = \"Hello\"", "text = \"Update now\""),
+        "echo hello\n",
+    );
+    let view = approval::status(&home, NAME).unwrap();
+    assert_eq!(view.state, State::Changed);
+    assert_eq!(view.added, ["status item greet shows \"Update now\""]);
 }

@@ -43,25 +43,24 @@ async function shot(app: Page, pick: (typeof PICKS)[number] | undefined, place: 
 
 for (const pick of [undefined, ...PICKS]) {
   const tag = pick ? ` (${pick.name})` : '';
-  test(`second_cue_tab_dot: your turn is a hand, broken an x-circle, others stay a plain dot${tag}`, { tag: '@chromium' }, async ({ app, core }) => {
+  // #67 (design book, tabs and "never colour alone"): the tab carries the tree's state dot, no glyph. Needs you and failed
+  // differ in shape too: the needs-you dot wears the ring and glow (--you-ring), failed is a still dot, calm dots no ring.
+  test(`second_cue_tab_dot: your turn wears the ring, broken is a still dot, others carry no ring${tag}`, { tag: '@chromium' }, async ({ app, core }) => {
     await setup(app, core, pick);
     const dot = (s: string) => app.locator(`.tab .tdot[data-s="${s}"]`).first();
     await expect(dot('waiting')).toBeVisible({ timeout: 15_000 });
     await expect(dot('failed')).toBeVisible();
     await shot(app, pick, 'tab-dot', app.locator('.tab').nth(0), app.locator('.tab').nth(1));
-    expect(await icon(dot('waiting'))).toBe('hand');
-    expect(await icon(dot('failed'))).toBe('fail');
-    expect(await dot('waiting').locator('svg').count()).toBe(1);
-    // the glyph replaces the disc: no fill behind it, and the glyph is drawn at a size that reads (not a 7px speck)
-    for (const s of ['waiting', 'failed']) expect((await dot(s).boundingBox())!.width, `${s} dot keeps its 7px footprint, so a state change moves no tab`).toBe(7);
-    for (const s of ['waiting', 'failed']) {
-      const look = await dot(s).evaluate((e) => ({ fill: getComputedStyle(e).backgroundColor, w: e.querySelector('svg')!.getBoundingClientRect().width, ink: getComputedStyle(e).color }));
-      expect(look.fill, `${s} dot has no disc behind the glyph`).toBe('rgba(0, 0, 0, 0)');
-      expect(look.w, `${s} glyph size`).toBeGreaterThanOrEqual(11);
-    }
-    // the dot keeps its name for a screen reader, and a calm session's dot carries no glyph
+    const ring = (l: Locator) => l.evaluate((e) => getComputedStyle(e).boxShadow);
+    expect(await ring(dot('waiting')), 'the needs-you dot wears its ring').not.toBe('none');
+    expect(await ring(dot('failed')), 'the failed dot is a still dot with no ring').toBe('none');
+    // the book's 8 px dot for both, so a state change moves no tab
+    for (const s of ['waiting', 'failed']) expect((await dot(s).boundingBox())!.width, `${s} dot keeps its footprint`).toBe(8);
+    for (const s of ['waiting', 'failed']) await expect(dot(s).locator('svg')).toHaveCount(0);
+    // the dot keeps its name for a screen reader, and a calm session's dot wears no ring
     await expect(dot('waiting')).toHaveAttribute('aria-label', 'waiting');
-    await expect(app.locator('.tab .tdot:not([data-s="waiting"]):not([data-s="failed"]) svg')).toHaveCount(0);
+    const calm = app.locator('.tab .tdot:not([data-s="waiting"]):not([data-s="failed"])');
+    for (const c of await calm.all()) expect(await ring(c), "a calm dot is plain or the book's inset ring").toMatch(/^none$|inset/);
   });
 
   // Ticket 462 (owner 11-12): no notch on the failed bar, the approved mockup's shape. The second cue for a broken session is

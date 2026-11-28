@@ -141,6 +141,7 @@ function AssistantsPage({ core, t, reveal, closeSettings }: Pick<PageContext, 'c
               {offError && <span role="alert"> {offError}</span>}
             </>
           }
+          reset={claude && <Reset t={t} label={t('assistants.accountConnectors')} show={off} run={() => void setOff(null)} />}
           control={claude && <Switch setting="homeConnectors" label={t('assistants.accountConnectors')} checked={!off} onChange={(v) => void setOff(v ? null : true)} />}
         />
         <Row label={t('assistants.allowed')} chip={<span className="chip tag">{t('assistants.fixed')}</span>} desc={t(off ? 'assistants.allowedOffDesc' : 'assistants.allowedDesc')} />
