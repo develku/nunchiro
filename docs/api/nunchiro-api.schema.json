@@ -7685,6 +7685,30 @@
         },
         {
           "properties": {
+            "agent": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "const": "pr_written",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "title",
+            "body",
+            "agent"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "number": {
               "format": "uint64",
               "minimum": 0,
@@ -10362,6 +10386,40 @@
           "properties": {
             "op": {
               "const": "pr_draft",
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "session"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "properties": {
+            "op": {
+              "const": "pr_write",
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "session"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "properties": {
+            "op": {
+              "const": "pr_write_cancel",
               "type": "string"
             },
             "session": {
