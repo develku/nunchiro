@@ -1698,6 +1698,46 @@ fn pr_link_from_terminal_output_needs_the_branch_check() {
     }
 }
 
+/// The window asks for the chip as soon as a session starts, before its agent printed anything. That early look finds no
+/// link, and the link the agent prints a moment later is still linked within seconds, not after the 30 s between gh checks.
+#[test]
+fn pr_link_printed_after_the_first_look_is_linked_soon() {
+    let core = Core::new();
+    let dir = pr_repo(&core, 1);
+    pr_git(&dir, &["push", "-q", "-u", "origin", "fix-lexer"]);
+    let h = core.home.display();
+    let pr = json!({"number":12,"url":A12,"state":"OPEN","isDraft":false,"reviewDecision":"","headRefName":"fix-lexer",
+        "headOwner":"develku","headRepo":"nunchiro","checks":[]});
+    fs::write(core.home.join("gh-branch"), pr.to_string()).unwrap();
+    install_gh(&core, &format!("#!/bin/sh\n/bin/cat '{h}/gh-branch'\n"));
+    core.window(json!({"op":"pr_live_set","on":true}));
+    let go = core.home.join("go");
+    let s = core.start_kind(
+        AgentKind::Shell,
+        vec![
+            "/bin/sh".into(),
+            "-c".into(),
+            format!(
+                "while [ ! -f '{}' ]; do sleep 0.05; done; printf 'Opened {A12}\\n'; exec /bin/cat",
+                go.display()
+            ),
+        ],
+    );
+    let chip = || core.window(json!({"op":"pr_chip","id":s.id}))["Ok"]["chip"].clone();
+    // The first look: nothing printed yet.
+    assert!(chip().is_null());
+    fs::write(&go, "").unwrap();
+    let until = Instant::now() + Duration::from_secs(10);
+    while chip()["url"] != A12 {
+        assert!(
+            Instant::now() < until,
+            "the link printed after the first look waited: {}",
+            chip()
+        );
+        thread::sleep(Duration::from_millis(200));
+    }
+}
+
 /// "Agent made" opens Merge for that PR, so only a real `gh pr create` run that prints one PR link on its own line counts.
 #[test]
 fn created_needs_a_real_gh_run_and_its_own_link_line() {

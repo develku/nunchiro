@@ -663,9 +663,14 @@ fn note(session: &str, url: &str, draft: bool, linked: Option<String>) {
 /// Per session: the PR link, whether it is a draft, and the agent whose output it was linked from (`None`: the app made it).
 type Made = BTreeMap<String, (String, bool, Option<String>)>;
 static MADE: std::sync::LazyLock<Mutex<Made>> = std::sync::LazyLock::new(Default::default);
-/// How often one session's terminal output is looked at for a PR link it printed.
+/// How often one session's terminal output is looked at for a PR link it printed, when the last look found one (its
+/// gh check ran).
 const LINK_EVERY: Duration = Duration::from_secs(30);
-static LINK_TRIED: std::sync::LazyLock<Mutex<BTreeMap<String, Instant>>> =
+/// When the last look found no PR link (the agent printed none yet), the next look is due this soon: the early look a
+/// window makes as a session starts must not hold a link the agent prints a moment later for the whole LINK_EVERY.
+const LOOK_AGAIN: Duration = Duration::from_secs(2);
+/// Per session: the last look and how long the next one waits after it.
+static LINK_TRIED: std::sync::LazyLock<Mutex<BTreeMap<String, (Instant, Duration)>>> =
     std::sync::LazyLock::new(Default::default);
 /// Links looked at in one output.
 const LINKS_MAX: usize = 20;
@@ -700,14 +705,26 @@ pub(crate) fn link_due(session: &str) -> bool {
     let Ok(mut tried) = LINK_TRIED.lock() else {
         return false;
     };
-    if tried.get(session).is_some_and(|t| t.elapsed() < LINK_EVERY) {
+    if tried
+        .get(session)
+        .is_some_and(|(t, wait)| t.elapsed() < *wait)
+    {
         return false;
     }
     if tried.len() >= MAX_PINNED {
         tried.clear();
     }
-    tried.insert(session.to_string(), Instant::now());
+    tried.insert(session.to_string(), (Instant::now(), LINK_EVERY));
     true
+}
+
+/// The look `link_due` allowed found no PR link: the next one is due after LOOK_AGAIN, not LINK_EVERY.
+fn link_none(session: &str) {
+    if let Ok(mut tried) = LINK_TRIED.lock()
+        && let Some(entry) = tried.get_mut(session)
+    {
+        entry.1 = LOOK_AGAIN;
+    }
 }
 
 /// `link_due` said yes: when the branch's own PR (gh, by branch) is one `agent` printed and not the session's PR yet, it
@@ -715,6 +732,7 @@ pub(crate) fn link_due(session: &str) -> bool {
 pub(crate) fn link_later(session: &str, agent: String, dir: std::path::PathBuf, output: &[u8]) {
     let links = pr_links(output);
     if links.is_empty() {
+        link_none(session);
         return;
     }
     let session = session.to_string();
@@ -838,5 +856,19 @@ mod link_tests {
         assert!(link_due("rate-a"));
         assert!(!link_due("rate-a"), "a second look within 30 s");
         assert!(link_due("rate-b"));
+    }
+
+    /// A look that finds no PR link waits only LOOK_AGAIN; the 30 s is for the gh check a found link starts.
+    #[test]
+    fn a_look_with_no_link_comes_back_soon() {
+        assert!(link_due("soon-a"));
+        link_none("soon-a");
+        assert!(!link_due("soon-a"), "not at once");
+        std::thread::sleep(LOOK_AGAIN + Duration::from_millis(100));
+        assert!(link_due("soon-a"), "again after LOOK_AGAIN");
+        assert!(
+            !link_due("soon-a"),
+            "a look that found a link waits LINK_EVERY"
+        );
     }
 }
