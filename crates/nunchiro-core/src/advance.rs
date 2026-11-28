@@ -8,6 +8,8 @@
 //! line into a session re-validates its own preconditions there, and a change means nothing is done). `plan` and
 //! `beat` are pure (the clock is a parameter) and carry the rules; the rest only reads and acts.
 use crate::ledger::{Advance, Ledger, Seat, Stalled, Task, View};
+mod lines;
+pub(crate) use lines::{beat_line, nudge_line, stall_line};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -90,12 +92,6 @@ pub(crate) enum Act {
     Rounds { seat: String, name: String },
     /// Review SHOULD 1: the Reviewer the core started recorded its verdict and ended its turn: it is closed.
     Close { seat: String, name: String },
-}
-
-pub(crate) fn nudge_line(minutes: u64) -> String {
-    format!(
-        "Lead: you have been quiet for {minutes} minutes with the task open; finish it or say what blocks you."
-    )
 }
 
 /// The room line of each act, typed by the core.
@@ -408,31 +404,6 @@ pub(crate) fn beat(views: &[View]) -> Option<String> {
     beat_line(review, merge, stalled)
 }
 
-/// The heartbeat's words for these counts. Ticket 1085: one of the automatic line forms the lead's chat folds
-/// (`tests/fixtures/automatic-lines.json`, read by a core test and a web spec).
-pub(crate) fn beat_line(review: usize, merge: usize, stalled: usize) -> Option<String> {
-    let mut parts = vec![];
-    if review > 0 {
-        parts.push(match review {
-            1 => "1 report waits for review".to_string(),
-            n => format!("{n} reports wait for review"),
-        });
-    }
-    if merge > 0 {
-        parts.push(match merge {
-            1 => "1 approved waits to merge".to_string(),
-            n => format!("{n} approved wait to merge"),
-        });
-    }
-    if stalled > 0 {
-        parts.push(match stalled {
-            1 => "1 seat stalled".to_string(),
-            n => format!("{n} seats stalled"),
-        });
-    }
-    (!parts.is_empty()).then(|| format!("Team: {}.", parts.join(", ")))
-}
-
 /// The core's auto-advance thread; it ends with the core.
 pub(crate) fn spawn(
     registry: Arc<Mutex<crate::sessions::Sessions>>,
@@ -524,7 +495,7 @@ pub(crate) enum Step<'a> {
     Start,
     /// Part B: type the started Reviewer's first prompt.
     Prompt,
-    /// Part A rule 4: the heartbeat line to the lead about this task's place.
+    /// Part A rule 4: the heartbeat line to the lead about this task's place (and rule 3's stall line).
     Beat,
     /// A planned act; `was`: what `pass` read of its seat for the plan; `rev`: for a Close, the task's revision read
     /// again (git, so off the lock) just before the lock.
@@ -631,7 +602,8 @@ pub(crate) fn recheck(
 }
 
 /// A planned act, done only when `recheck` passes under the same lock right before it. A Resend the delivery checks
-/// canceled adds its seat to `refused`. Owner cards (Card, Moved, Rounds) start, close and type nothing.
+/// canceled adds its seat to `refused`. Owner cards (Card, Moved, Rounds) start and close nothing; a Card also tells
+/// the lead.
 pub(crate) fn act(
     sessions: &mut crate::sessions::Sessions,
     task: &Task,
@@ -661,7 +633,17 @@ pub(crate) fn act(
                 &check_in(task, seat, name, format!("{why}, still after one nudge")),
                 true,
             );
-            Ok(())
+            // The card alone waited for the user to relay it: the lead hears it too, through the heartbeat's gate.
+            let role = task
+                .seats
+                .iter()
+                .find(|s| s.session == *seat)
+                .map_or("Builder", |s| s.role.as_str());
+            recheck(sessions, task, lead, &Step::Beat)
+                .and_then(|()| {
+                    sessions.core_line(lead, stall_line(name, seat, &task.id, role, why))
+                })
+                .map_err(|e| format!("the lead was not told: {e}"))
         }
         Act::Moved {
             seat,

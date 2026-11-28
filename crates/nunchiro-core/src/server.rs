@@ -624,6 +624,8 @@ pub(crate) fn remote_from_owner(
             | Request::GitPush { .. } // pushes from this Mac's folder
             | Request::PrDraft { .. }
             | Request::PrCreate { .. }
+            | Request::PrWrite { .. }
+            | Request::PrWriteCancel { .. }
             | Request::FilesList { .. }
             | Request::FileRead { .. }
             | Request::FileWrite { .. } // ticket 820: a write on this Mac only
@@ -1199,9 +1201,8 @@ fn connection(
                 .map_err(|_| "session registry unavailable")?
                 .handle(Request::TreeEdit { edit });
         }
-        // Ticket 1040: as the added folder above (owner only).
         if caller.is_none() && matches!(env.request, Request::ProjectFolders) {
-            drop(sessions);
+            drop(sessions); // ticket 1040: owner only, as above
             return crate::sessions::locate::folders(registry);
         }
         if caller.is_none()
@@ -1293,9 +1294,8 @@ fn connection(
             drop(sessions);
             return crate::git_providers::handle(registry, Some(stopping), login, logout);
         }
-        // v2-2c: reads transcripts, so off the registry lock.
         if let Request::AccountUsage { limits } = env.request {
-            drop(sessions);
+            drop(sessions); // v2-2c: reads transcripts, so off the registry lock
             let reply = crate::usage::reply(home, limits);
             crate::account_near::after_usage(
                 registry,

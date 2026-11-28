@@ -519,6 +519,7 @@ fn browser_role_allowlist_table() {
         r#"{"id":1,"request":{"op":"pr_merge","url":"https://github.com/o/r/pull/1","method":"squash","head":"0123456789abcdef0123456789abcdef01234567"}}"#,
         r#"{"id":1,"request":{"op":"git_push","session":"s","head":"0123456789abcdef0123456789abcdef01234567"}}"#,
         r#"{"id":1,"request":{"op":"pr_draft","session":"s"}}"#,
+        r#"{"id":1,"request":{"op":"pr_write","session":"s"}}"#,
         r#"{"id":1,"request":{"op":"pr_create","session":"s","head":"0123456789abcdef0123456789abcdef01234567","title":"t","body":"b","base":"main"}}"#,
         // Ticket 264: the profile ops are the Mac window's alone, and no core request carries them.
         r#"{"id":1,"request":{"op":"browser_profiles"}}"#,
@@ -640,6 +641,8 @@ fn browser_role_allowlist_table() {
         "GitPush",
         "PrDraft",
         "PrCreate",
+        "PrWrite",
+        "PrWriteCancel",
     ] {
         assert!(
             names(no).iter().any(|n| n == refused),

@@ -7,7 +7,7 @@ import type { Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, openWindow, REPO, test, type Core } from './fixtures';
+import { expect, goTab, openWindow, REPO, test, type Core } from './fixtures';
 
 const git = (dir: string, ...args: string[]) =>
   execFileSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'gc.auto=0', ...args], { encoding: 'utf8' }).trim();
@@ -97,4 +97,37 @@ test('pr create: gh signed out opens the form with the button off; edited text s
   await button.click();
   await expect(form.getByLabel('Title')).toHaveValue('My own title');
   expect(fs.existsSync(path.join(core.home, 'gh-runs'))).toBe(false);
+});
+
+test('pr create: Write with AI fills the fields from a separate agent run; a terminal session has no such button', async ({ app, core }) => {
+  fakeGh(core);
+  const { s } = setup(core, 1);
+  // The session's Claude stays the picker; a print-mode run (-p) answers fixed JSON and logs its stdin.
+  fs.renameSync(path.join(core.home, 'bin/claude'), path.join(core.home, 'bin/claude-picker'));
+  const answer = JSON.stringify({ type: 'result', is_error: false, result: JSON.stringify({ title: 'Stop the lexer at the end', body: '## Summary\nIt stops.' }) });
+  fs.writeFileSync(path.join(core.home, 'claude-out'), answer);
+  fs.writeFileSync(
+    path.join(core.home, 'bin/claude'),
+    `#!/bin/sh\nif [ "$1" = -p ]; then /bin/cat > '${core.home}/claude-stdin'; /bin/cat '${core.home}/claude-out'; exit; fi\nexec '${core.home}/bin/claude-picker' "$@"\n`,
+    { mode: 0o700 },
+  );
+  await openWindow(app);
+  await diffIcon(app).click();
+  const dock = app.getByRole('complementary', { name: 'Diff' });
+  await dock.getByRole('button', { name: 'Push & PR', exact: true }).click();
+  const form = dock.getByRole('form', { name: 'Create PR' });
+  await expect(form.getByLabel('Title')).toHaveValue('Fix lexer step 0');
+  await form.getByRole('button', { name: 'Write with AI' }).click();
+  await expect(form.getByLabel('Title')).toHaveValue('Stop the lexer at the end');
+  await expect(form.getByLabel('Description')).toHaveValue('## Summary\nIt stops.');
+  await expect(form).toContainText('Written by Claude from the diff. Read it before you send it.');
+  await expect(form.getByRole('button', { name: 'Write again' })).toBeVisible();
+  expect(fs.readFileSync(path.join(core.home, 'claude-stdin'), 'utf8')).toContain('Fix lexer step 0');
+  await shot(app, 'written');
+  // The same branch in a terminal session: the form opens, with no Write with AI.
+  const shell = core.shell(s.cwd, 'term') as { id: string };
+  await goTab(app, core, shell.id);
+  await dock.getByRole('button', { name: 'Push & PR', exact: true }).click();
+  await expect(form.getByLabel('Title')).toBeVisible();
+  await expect(form.getByRole('button', { name: /Write/ })).toHaveCount(0);
 });

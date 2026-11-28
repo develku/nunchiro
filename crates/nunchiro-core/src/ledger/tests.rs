@@ -800,3 +800,67 @@ fn an_automatic_blocker_that_goes_leaves_its_waiter_asking() {
     assert!(blockers(all.iter().find(|t| t.id == d.id).unwrap(), &all)[0].dropped);
     let _ = std::fs::remove_dir_all(home);
 }
+
+/// Owner direction: reviewed task work merges into the lead's working branch with no merge card, unless the place asks
+/// ("Ask me before merging task work", off by default). Never into the default branch: its card stays.
+#[test]
+fn task_work_merges_without_a_card_only_into_a_working_branch() {
+    let home = home("merge-working");
+    let repo = home.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    let git = |args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .current_dir(&repo)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{args:?}: {out:?}");
+    };
+    git(&["init", "-q", "-b", "main"]);
+    git(&[
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "first",
+    ]);
+    assert_eq!(
+        ops::working_branch(&repo),
+        None,
+        "main is never a working branch"
+    );
+    git(&["checkout", "-q", "-b", "lead-work"]);
+    assert_eq!(ops::working_branch(&repo).as_deref(), Some("lead-work"));
+    git(&["checkout", "-q", "--detach"]);
+    assert_eq!(ops::working_branch(&repo), None, "no branch checked out");
+    git(&["checkout", "-q", "-b", "master"]);
+    assert_eq!(ops::working_branch(&repo), None);
+    // Origin's default branch, whatever its name, is never one either.
+    git(&["checkout", "-q", "-b", "trunk"]);
+    git(&["update-ref", "refs/remotes/origin/trunk", "HEAD"]);
+    git(&[
+        "symbolic-ref",
+        "refs/remotes/origin/HEAD",
+        "refs/remotes/origin/trunk",
+    ]);
+    assert_eq!(ops::working_branch(&repo), None, "origin's default");
+    git(&["checkout", "-q", "lead-work"]);
+    assert_eq!(ops::working_branch(&repo).as_deref(), Some("lead-work"));
+    // The setting: off by default, the user's alone.
+    let l = Ledger::open(&home);
+    assert!(!l.place(&repo).ask_merge);
+    assert!(l.set_ask_merge(&repo, true).unwrap().ask_merge);
+    assert!(l.place(&repo).ask_merge);
+    let line = ops::merged_line("t1", "tax", "0123456789abcdef", "lead-work");
+    assert!(
+        line.contains("git merge 0123456789abcdef")
+            && line.contains("lead-work")
+            && line.contains("Merge task t1: tax"),
+        "{line}"
+    );
+    let _ = std::fs::remove_dir_all(home);
+}

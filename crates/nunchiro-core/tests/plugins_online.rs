@@ -452,3 +452,35 @@ fn catalog_port(c: &Catalog) -> String {
         .unwrap()
         .to_string()
 }
+
+#[test]
+fn a_catalogue_that_cannot_be_reached_says_the_plugin_list_not_the_theme_server() {
+    let home = home::short("pcn");
+    // A loopback port that nothing listens on: curl fails to connect.
+    let port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let down = Catalog::with_origin(&home, &format!("http://127.0.0.1:{port}/")).unwrap();
+    let (_home, files, gone) = setup("pcg");
+    files.lock().unwrap().remove(CATALOG);
+    for (catalog, why) in [
+        (down, "the request failed (curl exit "),
+        (gone, "the plugin catalogue answered HTTP 404"),
+    ] {
+        let e = catalog.entries().unwrap_err();
+        assert!(
+            e.starts_with("the plugin list could not be read: ") && e.contains(why),
+            "{e}"
+        );
+        assert!(!e.contains("theme"), "{e}");
+        // An install reads the kill list first: unreachable and never read, it fails closed with the safety line.
+        let e = catalog.install("hello").unwrap_err();
+        assert!(
+            e.starts_with("the plugin list could not be read: ")
+                || e == "the plugin safety list could not be read; try again later",
+            "{e}"
+        );
+    }
+}

@@ -6212,6 +6212,10 @@
             "null"
           ]
         },
+        "ask_merge": {
+          "description": "The user's \"Ask me before merging task work\" (`task merge-ask on|off`). Off (the default): a lead merges reviewed\ntask work into its working branch with no merge card (`ops::working_branch`); the default branch always asks.",
+          "type": "boolean"
+        },
         "auto": {
           "description": "Ticket 1081: the core nudges stalled seats, raises their card and wakes the lead (advance.rs). Off: it does nothing.\nLeft out while on, so a place reads as before the setting (tests/ledger.rs).",
           "type": "boolean"
@@ -7740,6 +7744,30 @@
           "required": [
             "type",
             "draft"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "agent": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "const": "pr_written",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "title",
+            "body",
+            "agent"
           ],
           "type": "object"
         },
@@ -10422,6 +10450,40 @@
           "properties": {
             "op": {
               "const": "pr_draft",
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "session"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "properties": {
+            "op": {
+              "const": "pr_write",
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "session"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "properties": {
+            "op": {
+              "const": "pr_write_cancel",
               "type": "string"
             },
             "session": {

@@ -12,6 +12,8 @@ import { enT, type T } from './state';
 const ICON_MAX = 256 << 10;
 type Icon = { mime: string; data_b64: string } | null;
 const icons = new Map<string, Icon>();
+/** Bumped by `iconChanged`: a read sent before the change keeps nothing (it may answer after the change's own read). */
+const asked = new Map<string, number>();
 const ICON_EVENT = 'nunchiro:project.icon';
 
 
@@ -20,9 +22,11 @@ export function ProjectIcon({ core, project }: { core: CoreClient; project: stri
   const [icon, setIcon] = useState<Icon>(icons.get(project) ?? null);
   useEffect(() => {
     let live = true;
-    const load = () =>
+    const load = () => {
+      const gen = asked.get(project) ?? 0;
       void core.request({ op: 'project_icon_get', project }).then(
         (r) => {
+          if ((asked.get(project) ?? 0) !== gen) return; // read before a change: its answer may be the old icon
           const { mime, data_b64 } = r as { mime: string | null; data_b64: string | null };
           const next = mime && data_b64 ? { mime, data_b64 } : null;
           icons.set(project, next);
@@ -30,12 +34,20 @@ export function ProjectIcon({ core, project }: { core: CoreClient; project: stri
         },
         () => {},
       );
+    };
     if (!icons.has(project)) load();
     const on = (e: Event) => (e as CustomEvent<string>).detail === project && load();
     window.addEventListener(ICON_EVENT, on);
     return () => ((live = false), window.removeEventListener(ICON_EVENT, on));
   }, [core, project]);
   return icon ? <img className="pico" alt="" src={`data:${icon.mime};base64,${icon.data_b64}`} /> : null;
+}
+
+/** Drops the kept icon of `project` and has every drawn one read again (a set, or a Locate that moved it there). */
+export function iconChanged(project: string) {
+  asked.set(project, (asked.get(project) ?? 0) + 1);
+  icons.delete(project);
+  window.dispatchEvent(new CustomEvent(ICON_EVENT, { detail: project }));
 }
 
 const toBase64 = (file: File) =>
@@ -53,8 +65,7 @@ export async function pickIcon(core: CoreClient, project: string, f: File | unde
   if (f.size > ICON_MAX) return onError(t('projects.iconBad'));
   try {
     await core.request({ op: 'project_icon_set', project, data_b64: await toBase64(f) });
-    icons.delete(project);
-    window.dispatchEvent(new CustomEvent(ICON_EVENT, { detail: project }));
+    iconChanged(project);
   } catch (e) {
     onError(lineError(t, e));
   }
