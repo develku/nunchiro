@@ -4,15 +4,31 @@
 // stays in the chat column. One rule for every host: the room on a side is the widest any host needs.
 
 type Box = { left: number; right: number };
-/** The room each side of composer box `c` needs. A host right of the composer's middle takes the part right of its left edge,
- *  one left of it the part left of its right edge (one side each: a right pane ending inside the composer is not also a left
- *  host, which grew the composer in a loop). A host as wide as the composer or wider (a split below the chat) takes none. */
+/** The card's floor: below it the composer is not usable, so the room gives way (the right side first) and the card
+ *  reaches under a pane instead. The composer row sits under the panes, so nothing covers it. Orca keeps its main area
+ *  320 px; the card is that less the composer's own 20 px each side (chat.css). */
+export const MIN_CARD = 280;
+const PAD = 40;
+/** The room each side of composer box `c` needs: the card takes the widest stretch of the composer that no host covers
+ *  (the chat column), so two panes right of the chat (a Preview and a Diff split) both count on the right. A host as wide
+ *  as the composer or wider (a split below the chat) takes none. Until the card has MIN_CARD, the room gives way. */
 export function room(c: Box, hosts: Box[]): { left: number; right: number } {
-  let [left, right] = [0, 0];
-  for (const h of hosts) {
-    if (h.left <= c.left && h.right >= c.right) continue;
-    if (h.left + h.right >= c.left + c.right) right = Math.max(right, Math.round(c.right - h.left));
-    else left = Math.max(left, Math.round(h.right - c.left));
+  const cuts = hosts
+    .filter((h) => !(h.left <= c.left && h.right >= c.right))
+    .map((h) => [Math.max(h.left, c.left), Math.min(h.right, c.right)])
+    .filter(([a, b]) => b > a)
+    .sort((x, y) => x[0] - y[0]);
+  let [best, at] = [[c.left, c.left], c.left];
+  for (const [a, b] of [...cuts, [c.right, c.right]]) {
+    if (a - at > best[1] - best[0]) best = [at, a];
+    at = Math.max(at, b);
+  }
+  let [left, right] = [Math.round(best[0] - c.left), Math.round(c.right - best[1])];
+  const short = MIN_CARD - (c.right - c.left - PAD - left - right);
+  if (short > 0) {
+    const r = Math.max(0, right - short);
+    left = Math.max(0, left - (short - (right - r)));
+    right = r;
   }
   return { left, right };
 }

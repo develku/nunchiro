@@ -18,7 +18,7 @@ class Wired(unittest.TestCase):
     def test_every_baseline_is_guarded_by_a_gate_job(self):
         ci = (ROOT / ".github/workflows/ci.yml").read_text()
         lint = ci.split("\n  lint:", 1)[1].split("\n  rust-build:", 1)[0]
-        self.assertIn(".github/scripts/ratchets.py", lint, "the lint job runs the ratchets")
+        self.assertIn("git show HEAD^:.github/scripts/ratchets.py", lint, "the lint job runs the base commit's ratchets")
         self.assertIn("fetch-depth: 0", lint, "the ratchets read the base commit")
         script = (ROOT / ".github/scripts/ratchets.py").read_text()
         for base in sorted((ROOT / "scripts").glob("*.baseline")):
@@ -60,9 +60,45 @@ class Ratchets(unittest.TestCase):
         self.git("add", "-A")
         self.git("commit", "-q", "-m", msg)
 
-    def check(self):
-        r = subprocess.run(["python3", "-B", ".github/scripts/ratchets.py", "base"], cwd=self.dir, capture_output=True, text=True)
+    def check(self, ref="base"):
+        """As the lint job runs it: the base commit's copy of the script."""
+        script = self.dir.parent / (self.dir.name + "-ratchets.py")
+        self.addCleanup(lambda: script.unlink(missing_ok=True))
+        script.write_text(self.git("show", "base:.github/scripts/ratchets.py"))
+        r = subprocess.run(["python3", "-B", str(script), ref], cwd=self.dir, capture_output=True, text=True)
         return r.returncode, r.stdout + r.stderr
+
+    def test_a_change_cannot_loosen_its_own_gate(self):
+        # the counter, the source-file pattern and this script all come from the base commit
+        for rel, text in (("scripts/raw-literals.sh", "exit 0\n"),
+                          ("scripts/measure/scorecard.py", 'import re\nSOURCE = re.compile("^$")\nNOT_SOURCE = SOURCE\n'),
+                          (".github/scripts/ratchets.py", "print('ok')\n")):
+            self.put(rel, text)
+            self.put("web/src/a.css", "a { color: #fff; background: #000; border-color: #111; }\n")
+            self.put("src/big.rs", "x\n" * 2601)
+            self.commit("loosen " + rel)
+            code, out = self.check()
+            self.assertEqual(code, 1, rel)
+            self.assertIn("a.css", out, rel)
+            self.assertIn("src/big.rs", out, rel)
+            self.git("reset", "-q", "--hard", "base")
+
+    def test_a_file_named_like_an_option_still_counts(self):
+        self.put("web/src/-b.css", "b { color: #abc; }\n")
+        self.commit("dash file")
+        self.assertEqual(self.check()[0], 1)
+
+    def test_the_first_landing_runs_the_checkout_s_copy(self):
+        # main before this gate has no ratchets.py at HEAD^: the step falls back to the checkout's copy
+        ci = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertIn('git cat-file -e HEAD^:.github/scripts/ratchets.py', ci)
+        self.assertIn('|| cp .github/scripts/ratchets.py', ci)
+
+    def test_no_base_commit_says_so_in_one_line(self):
+        code, out = self.check("no-such-ref")
+        self.assertEqual(code, 2)
+        self.assertEqual(out.strip().count("\n"), 0, out)
+        self.assertIn("no base commit", out)
 
     def test_main_over_its_baseline_does_not_block_an_unrelated_change(self):
         self.put("README.md", "hi\n")

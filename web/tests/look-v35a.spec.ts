@@ -17,7 +17,9 @@ const look = (l: Locator) =>
     const quiet = getComputedStyle(probe).backgroundColor;
     probe.remove();
     const cs = getComputedStyle(e);
-    return { border: cs.borderTopColor, fill: cs.backgroundColor, quiet };
+    // No outline: no border width, or a clear one. Since #69 the controls have `border: 0`, so the colour is currentColor.
+    const outline = parseFloat(cs.borderTopWidth) > 0 ? cs.borderTopColor : 'rgba(0, 0, 0, 0)';
+    return { border: outline, fill: cs.backgroundColor, quiet };
   });
 const NONE = 'rgba(0, 0, 0, 0)';
 const quiet = async (l: Locator) => {

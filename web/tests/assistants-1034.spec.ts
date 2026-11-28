@@ -165,3 +165,21 @@ test('mode_recommended_tag (S3-4): the tag sits beside the Mode name, outside th
   const tag = app.locator('.srow:has(input[name="home-chief-mode"]) .snm .chip[data-recommended]');
   await expect(tag).toHaveText('Recommended: Ask every time');
 });
+
+// Account connectors off saves `home.connectors_off` (the core then starts the seat with no MCP server); on again clears it.
+test('account_connectors_switch: off saves home.connectors_off true, on clears it', async ({ app, core }) => {
+  const features = () => (JSON.parse(fs.readFileSync(path.join(core.home, 'settings.json'), 'utf8')).features ?? {}) as Record<string, unknown>;
+  await openWindow(app);
+  await openSettings(app);
+  await app.locator('.settings > nav button[data-page="assistants"]').click();
+  const sw = app.locator('input[data-setting="homeConnectors"]');
+  await expect(sw).toBeChecked();
+  await sw.click();
+  await expect(sw).not.toBeChecked();
+  await expect.poll(() => features()['home.connectors_off']).toBe(true);
+  await expect(app.locator('.srow', { hasText: 'Account connectors are off, so the assistant does not reach your mail.' })).toBeVisible();
+  await expect(app.getByText('Allowed: files in its folders')).toBeVisible();
+  await sw.click();
+  await expect(sw).toBeChecked();
+  await expect.poll(() => features()['home.connectors_off']).toBeUndefined();
+});

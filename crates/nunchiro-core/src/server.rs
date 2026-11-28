@@ -1,4 +1,5 @@
 //! Owner-only unix socket: one bounded JSON request and response per connection.
+use crate::plugins::{Asker, check_request};
 use crate::{api::*, sessions::Sessions, store};
 use std::{
     fs::{self, OpenOptions},
@@ -22,7 +23,7 @@ use std::{
 mod start_record;
 mod worktree_op;
 use start_record::record_start;
-pub(crate) use worktree_op::worktree;
+pub(crate) use worktree_op::{record_started_worktree, started_reply, worktree};
 const FRAME_BYTES: u64 = 512 * 1024;
 /// A stopping core's reply to a request it never ran, while it winds down for an `exit` (`serve restart`) or a signal:
 /// the agents stay for a next core, so the CLI sends such a request once more, to that core (ticket 305).
@@ -64,7 +65,7 @@ const REPLY_WAIT: Duration = Duration::from_secs(15);
 /// a start the core then makes (a retry would make a second seat). A `--worktree` Codex start's own bounds add up to
 /// about 75 s: the base-branch reads (`start_worktree::READ`, 10 s each), `git worktree add` (`GIT_WORKTREE`, 10 s),
 /// `--version` (`VERSION_WAIT`, 3 s), the Codex start check (`outward::CODEX_ASK_DEADLINE`, 10 s) and the holder's
-/// hello (10 s). The window's requests go over its WebSocket, which waits for every reply.
+/// hello (10 s), its folder's record (one `git worktree list`, 10 s). The window's requests go over its WebSocket.
 const START_REPLY_WAIT: Duration = Duration::from_secs(120);
 fn reply_wait(request: &Request) -> Duration {
     match request {
@@ -355,6 +356,10 @@ fn serve_locked(home: &Path) -> Result<(), String> {
     // V2.5-11: scheduled runs; it sees `stopping` before each start.
     let _schedule =
         crate::schedule::spawn(sessions.clone(), stopping.clone()).map_err(|e| e.to_string())?;
+    // Triggers: the webhook's loopback port and the GitHub reads, each asleep while none of its kind is on.
+    let _triggers =
+        crate::schedule::spawn_triggers(sessions.clone(), stopping.clone(), home.to_path_buf())
+            .map_err(|e| e.to_string())?;
     // Held new seats that wait for memory; asleep (no reading) while none waits.
     let _memory_wait =
         crate::pressure::spawn(sessions.clone(), stopping.clone()).map_err(|e| e.to_string())?;
@@ -588,9 +593,8 @@ fn refuse_stopping(stream: &mut UnixStream, quit: bool) {
     }
 }
 
-/// The owner's request for another machine: the CLI's `--machine`, and the window's New session on a machine (ticket
-/// 980; real SSH look 11-17: the window's own loop had no arm for it, so every start there was refused with "transport
-/// requires owner dispatch"). A local owner-only operation is never forwarded.
+/// The owner's request for another machine (the CLI's `--machine`, the window's New session on one; ticket 980).
+/// A local owner-only operation is never forwarded; the window/owner APIs below stay local (v1a-06 merge).
 pub(crate) fn remote_from_owner(
     sessions: &Mutex<Sessions>,
     home: &Path,
@@ -599,7 +603,6 @@ pub(crate) fn remote_from_owner(
     request: Request,
     stopping: &AtomicBool,
 ) -> Response {
-    // v1a-06 merge: these new window/owner APIs stay local, never SSH-forwarded.
     if matches!(
         request,
         Request::ChatPage { .. }
@@ -618,6 +621,9 @@ pub(crate) fn remote_from_owner(
             | Request::PrList
             | Request::PrMerge { .. }
             | Request::PrBranch { .. } // ticket 373
+            | Request::GitPush { .. } // pushes from this Mac's folder
+            | Request::PrDraft { .. }
+            | Request::PrCreate { .. }
             | Request::FilesList { .. }
             | Request::FileRead { .. }
             | Request::FileWrite { .. } // ticket 820: a write on this Mac only
@@ -640,6 +646,7 @@ pub(crate) fn remote_from_owner(
             | Request::AcpAgentSignInState { .. }
             | Request::AcpAgentSignInCancel { .. }
             | Request::AcpAgentSignOut { .. }
+            | Request::AcpAgentTry { .. }
             | Request::AgentUpdateStart { .. } // ticket 358: an installer runs here
             | Request::AgentUpdateCancel { .. }
             | Request::AgentUpdateState
@@ -789,7 +796,7 @@ fn start_seat(
             .map_err(|_| "session registry unavailable")?
             .start_failed_at(session, folder.as_deref(), e.clone());
     }
-    result.map(|session| Reply::Started { session })
+    started_reply(registry, session.worktree, result)
 }
 
 /// A session's held start, kept to go by itself (`pressure::wait`); the sentence it answers. The session hears how it
@@ -961,6 +968,13 @@ fn connection(
             Request::TokenRevoke { id } => {
                 return crate::tokens::revoke(home, id).map(|()| Reply::Ack);
             }
+            // Triggers, off the registry lock; every caller but the owner and a `trigger` token is refused there.
+            Request::Trigger { action } => {
+                let action = action.clone();
+                return crate::schedule::triggers::asked(
+                    sessions, stopping, home, owner, &env.token, action,
+                );
+            }
             Request::LibsResolve { urls, requester } => {
                 return crate::libs::Libs::open(home)
                     .resolve(urls, requester)
@@ -985,13 +999,7 @@ fn connection(
             Request::Forwarded { caller, request } if owner => {
                 // Another machine's agent: this Mac's plugin checks hold for what it sends and starts here.
                 let mut request = request;
-                crate::plugins::check_request(
-                    home,
-                    crate::plugins::Asker::Agent,
-                    "",
-                    &mut request,
-                    true,
-                )?;
+                check_request(home, Asker::Agent, "", &mut request, true)?;
                 return crate::machines::forwarded(sessions, caller, *request, stopping);
             }
             _ => {}
@@ -1132,13 +1140,7 @@ fn connection(
                 let caller = sessions.agent_caller(&env.token)?;
                 drop(sessions);
                 let mut request = request;
-                crate::plugins::check_request(
-                    home,
-                    crate::plugins::Asker::Agent,
-                    &caller.id,
-                    &mut request,
-                    true,
-                )?;
+                check_request(home, Asker::Agent, &caller.id, &mut request, true)?;
                 return crate::grants::dispatch_remote(
                     registry, &env.token, machine, *request, stopping,
                 );
@@ -1165,11 +1167,11 @@ fn connection(
                     _ => {}
                 }
                 let asker = match caller.id.starts_with(crate::tokens::CALLER) {
-                    true => crate::plugins::Asker::Token,
-                    false => crate::plugins::Asker::Agent,
+                    true => Asker::Token,
+                    false => Asker::Agent,
                 };
                 drop(sessions);
-                crate::plugins::check_request(home, asker, &caller.id, &mut env.request, false)?;
+                check_request(home, asker, &caller.id, &mut env.request, false)?;
                 sessions = registry
                     .lock()
                     .map_err(|_| "session registry unavailable")?;
@@ -1371,6 +1373,7 @@ fn connection(
                 | Request::AcpAgentSignInState { .. }
                 | Request::AcpAgentSignInCancel { .. }
                 | Request::AcpAgentSignOut { .. }
+                | Request::AcpAgentTry { .. }
         ) {
             drop(sessions);
             return crate::acp::setup(home, registry, Some(stopping), env.request);
@@ -1481,11 +1484,9 @@ fn connection(
             // `--anyway` passes it, as it passes a memory hold.
             if !anyway {
                 let asker = match &caller {
-                    None => crate::plugins::Asker::Owner,
-                    Some(c) if c.id.starts_with(crate::tokens::CALLER) => {
-                        crate::plugins::Asker::Token
-                    }
-                    Some(_) => crate::plugins::Asker::Agent,
+                    None => Asker::Owner,
+                    Some(c) if c.id.starts_with(crate::tokens::CALLER) => Asker::Token,
+                    Some(_) => Asker::Agent,
                 };
                 drop(sessions);
                 crate::plugins::check_start(home, asker, &session)?;

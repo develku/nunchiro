@@ -1,0 +1,18 @@
+--- a/calc/stats.py
++++ b/calc/stats.py
+@@ -6,3 +6,15 @@
+     """The mean of numbers given as text."""
+     values = [parse_number(t) for t in texts]
+     return sum(values) / len(values)
++
++
++def clamp(value, low, high):
++    """`value` kept inside [low, high]."""
++    if low > high:
++        raise ValueError("low is above high")
++    return max(low, min(value, low))
++
++
++def clamp_all(texts, low, high):
++    """Each number given as text, clamped."""
++    return [clamp(parse_number(t), low, high) for t in texts]

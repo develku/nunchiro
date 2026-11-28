@@ -118,6 +118,14 @@ pub struct GitFacts {
     pub upstream_unknown: bool,
     /// `gh` is on the core's PATH (the PATH the PR poller uses); whether it is logged in is not known here.
     pub gh: bool,
+    /// The commit HEAD names; null before the first commit. The Push strip shows it and sends it back.
+    #[serde(default)]
+    pub head: Option<String>,
+    /// Where the app's Push sends the branch (git_write.rs `target`); null with `push_why` saying why there is none.
+    #[serde(default)]
+    pub push_to: Option<crate::git_write::PushTo>,
+    #[serde(default)]
+    pub push_why: Option<String>,
 }
 
 /// Default-branch names checked on origin when its HEAD is unknown (`git clone` sets it; `git remote add` does not).
@@ -165,7 +173,7 @@ pub fn facts(dir: &Path) -> Option<GitFacts> {
         &[
             "config",
             "--get-regexp",
-            r"^(init\.defaultbranch|remote\..*\.url|branch\..*\.merge)$",
+            r"^(init\.defaultbranch|remote\..*\.url|branch\..*\.(merge|remote|pushremote)|remote\.pushdefault)$",
         ],
     );
     // Ticket 403 item 16b: a config too long to read whole may hide the branch's merge ref: its upstream is unknown.
@@ -278,7 +286,26 @@ pub fn facts(dir: &Path) -> Option<GitFacts> {
                     .any(|d| u.eq_ignore_ascii_case(&format!("refs/heads/{d}")))
             })
     });
+    // `upstream` (a `branch.ab` line): `ahead` counts against the very ref the push updates.
+    let push = match &branch {
+        None => Err("not pushed: HEAD is not on a branch".to_string()),
+        Some(b) => crate::git_write::target(
+            dir,
+            &config,
+            b,
+            merge_set.then_some(remoteref).flatten(),
+            upstream.then_some(ahead),
+        ),
+    };
+    let head = header("# branch.oid ").filter(|h| valid_sha(h));
+    let (push_to, push_why) = match push {
+        Ok(to) => (Some(to), None),
+        Err(e) => (None, Some(e)),
+    };
     Some(GitFacts {
+        head,
+        push_to,
+        push_why,
         is_default,
         branch,
         dirty,

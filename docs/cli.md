@@ -555,9 +555,9 @@ Without `--path` the folder is `<worktrees folder>/<project folder>/<random id>`
 as Orca's `--name` does: it must be one new plain name (not starting with `.`) right under
 `<worktrees folder>/<project folder>/`, where the worktrees folder is the `worktrees_dir` setting, a folder this
 project's worktrees already use (`$NUNCHIRO_HOME/worktrees` only while a record of this project lies there), or the
-unset default. Unset, the worktrees folder is `~/nunchiro/worktrees` (in the user's home; made on first use, and refused when `~/nunchiro` is a link or not a folder). Set a folder to use another disk. A record made under `../.worktrees` (ticket 1061) keeps working. A path
+unset default. Unset, the worktrees folder is `~/nunchiro/worktrees` for the default data folder `~/.nunchiro`, and `<its home>-worktrees/nunchiro/worktrees` beside any other `NUNCHIRO_HOME` (leading dots dropped), so two cores never share one. It is made on first use, and refused when its `nunchiro` folder, or any folder above it, is a link or not a folder. Set a folder to use another disk. A record made under `../.worktrees` (ticket 1061) keeps working. A path
 anywhere else, one that already exists, or one a worktree record already names is refused and nothing is created. When
-the user's home is not known or cannot be written, the command fails and names the `worktrees_dir`
+that folder cannot be made or written, the command fails and names the `worktrees_dir`
 setting to change.
 Inside a session the record names the session as its creator (shown only; any caller may open or remove it).
 
@@ -581,6 +581,7 @@ sends and room messages, and as the parent of the sessions it starts. Every rule
 |---|---|
 | `read` | `agent list`, `get`, `read`, `wait`; `worktree list`; `agent check`, `thread read`; `session read`; `events` |
 | `supervised` | read, plus `agent start`, room `send`/`ask`/`reply`, and `prompt`, `send`, `cancel`, `session close` of the sessions this token started |
+| `trigger` | `trigger fire` and nothing else ([triggers.md](triggers.md)) |
 | `full` | what a session token may do, minus what no token may do (below); it acts on a session (`prompt`, `send`, `cancel`, `session close`, `label`, `resize`) only when this token started it, and removes, renames or forgets only the worktrees it created |
 
 A session a token started is a token session for its whole life. A resumed run of it (by anyone, the owner's Resume
@@ -614,7 +615,7 @@ made with `--project` sees and reaches only that project's sessions, worktrees, 
 its room with `--project`.
 A refusal is exit 1 with the core's message, such as `operation not granted to a read token`.
 
-### `nunchiro token create --scope read|supervised|full [--project <dir>] [--expires 30m|12h|7d]`
+### `nunchiro token create --scope read|supervised|full|trigger [--project <dir>] [--expires 30m|12h|7d]`
 Owner only. Prints the token's secret once, alone on stdout (`export NUNCHIRO_TOKEN=$(nunchiro token create --scope
 read)`), and its id on stderr. `$NUNCHIRO_HOME/tokens.json` keeps only the secret's SHA-256, so a lost secret is
 revoked and made again. Without `--expires` the token lasts until it is revoked.
@@ -1190,6 +1191,41 @@ Runs one of the plugin's commands now, with no project, and prints its output.
 ### `nunchiro plugin remove <id>`
 Moves the folder to `$NUNCHIRO_HOME/plugins/.removed/<id>-<time>` and forgets its switch and settings; move it back
 to undo.
+
+### `nunchiro plugin catalog [--json]`
+Lists the plugin catalogue (`plugins/catalog.json` of the Nunchiro repository, read from GitHub): id, version, name
+and what it does.
+
+### `nunchiro plugin install <id>`
+Downloads the catalogue's plugin at its pinned commit, checks every file's SHA-256 and writes the folder only when
+all match (an older version moves to `plugins/.removed/`). It is off and not approved: run `plugin allow` and
+`plugin on` after reading what it asks for.
+## Triggers
+
+A trigger starts an agent run when something outside calls it; see [triggers.md](triggers.md). Only the owner adds,
+pauses and removes one; the owner or a token of the `trigger` scope fires one.
+
+### `nunchiro trigger add <name> --on cli|webhook|github --kind claude|codex --project <dir> --task <text> [--repo <owner/name> --event checks_failed|changes_requested|labeled] [--issue-label <l>] [--any-author] [--label <name>] [--model <m>] [--effort <e>] [--auto]`
+Owner only. Adds a trigger that starts this run. `--on webhook` reads the shared secret from stdin (one line, at
+least 16 characters). `--on github` reads `--repo` with your `gh` for `--event` (`labeled` takes `--issue-label`); pull request events
+watch your own pull requests unless `--any-author`.
+Without `--auto` a fire leaves a card in Decisions and starts on Start.
+
+### `nunchiro trigger list [--json]`
+Owner only. Name, how it is fired, ask or auto, on or off, project, and the last fire (its session or why not).
+
+### `nunchiro trigger fire <name> [--data @<file>|-]`
+Fires a `cli` trigger; the data reaches the session after the task as quoted data (4 KB at most). The owner, or a
+token made with `--scope trigger`.
+
+### `nunchiro trigger pause <name>`
+Owner only. The trigger stays listed and fires nothing; a webhook trigger's address closes when none is on.
+
+### `nunchiro trigger resume <name>`
+Owner only. Turns it on again.
+
+### `nunchiro trigger remove <name>`
+Owner only.
 
 ## Other machines
 

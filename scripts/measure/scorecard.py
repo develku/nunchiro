@@ -32,6 +32,10 @@ Usage:
       record holds prompts delivered and those that needed a person, and the sessions before and after each core
       restart. Writes missed_prompts_per_1000 and seats_lost_per_restart into the manual file once the record holds 7
       days (the seats figure only when a restart fell in them).
+  scorecard.py bottasks setup TASK RUN | check DIR --touches N ... | report [FILE...]
+      Part p35's bot task set (bottasks.py; the coordinator's steps in docs/measure/p35-runner.md): a fresh fixture
+      copy per run, each task's acceptance checked into docs/measure/bottasks-<date>.jsonl, and `report` writes
+      bot_task_success_pct and bot_owner_touches into the manual file only when all ten tasks have three runs.
   scorecard.py chatopen [--repeats 10] [--no-build] [--out FILE]
       The owner-run step for p33's long-chat open. Builds (or reuses) the RC core and interact_window.py's measure app
       (MEASURE_TARGET), starts that app as a copy under its own bundle id on a fresh HOME and NUNCHIRO_HOME with 20
@@ -49,8 +53,8 @@ Usage:
   scorecard.py dev [--target DIR] [--out FILE]
       Maintainability figures (part p26): a cold and a warm debug build of the Rust workspace in DIR (a fresh cargo
       target, removed first), the web build, the pull-request gate's Rust test stage (TEST_STAGE) on that target,
-      the largest source files, and the files that two or more open lanes (local branches with a commit today that
-      origin/main does not have) both change. Writes docs/measure/dev-<date>.json; `page` reads the newest one.
+      the largest source files, and the files that two or more open lanes (local branches with a commit today or an
+      open pull request, less the ones whose pull request is merged or closed; pull requests read with gh) both change. Writes docs/measure/dev-<date>.json; `page` reads the newest one.
   scorecard.py ops [--clones DIR] [--out FILE]
       Parts p27 and p29. Deploy stability from the main CI log (read only): each red episode on main (first RED to
       the next GREEN), the change failure rate over tested main tips and the minutes red; reverts landed (git log).
@@ -174,12 +178,14 @@ def log_start(text):
 
 
 def parse_main_log(text, runs=30, installs=20):
-    """Gate runs ("testing <sha>" then "GREEN|RED <sha>") with their minutes, and owner install outcomes.
+    """Gate runs ("testing <sha>" then "GREEN|RED <sha>") with their minutes, and what became of each of the last
+    `installs` green runs on the owner's app: installed when an owner install of its commit is recorded, failed when
+    only a failed one is, skipped otherwise (a wait, or nobody tried). landed_pct needs all `installs` green runs.
     A run that crosses midnight adds 24 h. Lines of other kinds are ignored."""
     def secs(hms):
         h, m, s = map(int, hms.split(":"))
         return h * 3600 + m * 60 + s
-    gates, pending, inst = [], {}, []
+    gates, pending, inst = [], {}, {}
     for line in text.splitlines():
         m = re.match(r"^(\d\d:\d\d:\d\d) testing ([0-9a-f]{40})$", line)
         if m:
@@ -188,19 +194,20 @@ def parse_main_log(text, runs=30, installs=20):
         m = re.match(r"^(\d\d:\d\d:\d\d) (GREEN|RED) ([0-9a-f]{40})\b", line)
         if m and m[3] in pending:
             d = secs(m[1]) - pending.pop(m[3])
-            gates.append(dict(sha=m[3][:9], verdict=m[2], minutes=round((d + 86400 if d < 0 else d) / 60, 1)))
+            gates.append(dict(sha=m[3][:9], commit=m[3], verdict=m[2], minutes=round((d + 86400 if d < 0 else d) / 60, 1)))
             continue
         m = re.match(r"^\d\d:\d\d:\d\d owner (?:install|build of) ([0-9a-f]{40})[: ](.*)$", line)
         if m:
-            rest = m[2]
-            inst.append("installed" if "installed" in rest else "failed" if "FAILED" in rest else "skipped")
-    last, li = gates[-runs:], inst[-installs:]
+            if "installed" in m[2] or "FAILED" in m[2] and inst.get(m[1]) != "installed":
+                inst[m[1]] = "installed" if "installed" in m[2] else "failed"
+    last = gates[-runs:]
+    li = [inst.get(g["commit"], "skipped") for g in gates if g["verdict"] == "GREEN"][-installs:]
     green = sum(g["verdict"] == "GREEN" for g in last)
     return dict(runs=len(last), green=green, green_pct=round(100 * green / len(last), 1) if last else None,
                 median_min=statistics.median([g["minutes"] for g in last]) if last else None,
                 min_min=min((g["minutes"] for g in last), default=None), max_min=max((g["minutes"] for g in last), default=None),
                 installs=dict(n=len(li), installed=li.count("installed"), skipped=li.count("skipped"), failed=li.count("failed"),
-                              landed_pct=round(100 * li.count("installed") / len(li), 1) if li else None))
+                              landed_pct=round(100 * li.count("installed") / len(li), 1) if len(li) == installs else None))
 
 
 def within(first, second):
@@ -322,17 +329,41 @@ def git(*args):
     return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True).stdout
 
 
+def live_lanes(branches, prs, today, contains):
+    """The names of the open lanes among local branches [(name, tip, day and time of the tip's commit)]. Open: a commit
+    today, or an open pull request. Not open: its pull request is merged or closed (the tip is that pull request's
+    head, or a pull request of that name was merged after the tip's commit; a squash merge leaves the branch's own
+    commits outside main), or another open branch carries it (`contains(a, b)`: commit a is b or an ancestor of b):
+    a lane built on another, or a reviewer's copy, is the same line of work, and its files are not changed twice."""
+    import datetime
+    when = lambda x: datetime.datetime.fromisoformat(x.replace("Z", "+00:00"))  # noqa: E731
+    has_pr = {p["headRefName"] for p in prs if p["state"] == "OPEN"}
+    landed = {p["headRefOid"] for p in prs if p["state"] != "OPEN"}
+    merged = {}
+    for p in prs:
+        if p["state"] == "MERGED":
+            merged[p["headRefName"]] = max(when(p["mergedAt"]), merged.get(p["headRefName"], when(p["mergedAt"])))
+    live = sorted(((n not in has_pr, n, tip) for n, tip, day, at in branches if n in has_pr or day == today
+                   and tip not in landed and not (n in merged and when(at) <= merged[n])))
+    return sorted(n for i, (_, n, tip) in enumerate(live)
+                  if not any(j != i and contains(tip, other) and (tip != other or j < i) for j, (_, _, other) in enumerate(live)))
+
+
 def open_lanes():
-    """{branch: changed files} for local branches with a commit today that origin/main does not contain."""
-    today = time.strftime("%Y-%m-%d")
-    out = {}
-    for line in git("for-each-ref", "refs/heads", "--format=%(refname:short) %(committerdate:short)").splitlines():
-        name, day = line.rsplit(" ", 1)
-        if day != today or not git("rev-list", "-1", f"origin/main..{name}").strip():
-            continue
-        base = git("merge-base", "origin/main", name).strip()
-        out[name] = [f for f in git("diff", "--name-only", base, name).splitlines() if f]
-    return out
+    """{branch: changed files} of the open lanes (live_lanes) among the local branches that origin/main does not
+    contain. The pull requests are read with gh (read only); when gh cannot say, no branch counts as landed.
+    shortcut: the newest 300 pull requests, so an older landed branch with a commit today reads open; raise the limit
+    when that is seen.
+    shortcut: two branches that both carry a third lane's commits (a reviewer's merge of it beside a lane built on it)
+    still show that lane's files as shared: worse, never better; compare their own commits pair by pair if it hides
+    the real figure."""
+    refs = [line.split(" ") for line in git("for-each-ref", "refs/heads", "--format=%(refname:short) %(objectname) %(committerdate:short) %(committerdate:iso-strict)").splitlines()]
+    r = subprocess.run(["gh", "pr", "list", "--repo", os.environ.get("MEASURE_REPO") or "develku/nunchiro", "--state", "all", "--limit", "300",
+                        "--json", "state,headRefName,headRefOid,mergedAt"], capture_output=True, text=True)
+    contains = lambda a, b: a == b or subprocess.run(["git", "-C", str(ROOT), "merge-base", "--is-ancestor", a, b]).returncode == 0  # noqa: E731
+    names = live_lanes([x for x in refs if git("rev-list", "-1", f"origin/main..{x[0]}").strip()], json.loads(r.stdout) if r.returncode == 0 else [],
+                       time.strftime("%Y-%m-%d"), contains)
+    return {n: [f for f in git("diff", "--name-only", git("merge-base", "origin/main", n).strip(), n).splitlines() if f] for n in names}
 
 
 MARK = ".scorecard-owned"
@@ -1266,6 +1297,22 @@ def record_cmd(a):
                  f"core, {res['person']} needed a person; {res['restarts']} core restarts, {res['lost']} sessions not back")
 
 
+def bottasks_cmd(a):
+    """p35's task set (bottasks.main, its arguments passed on); only a complete `report` writes the two figures."""
+    import bottasks
+    res = bottasks.main(a.args)
+    if not a.args or a.args[0] != "report":
+        return
+    if not res["complete"]:
+        print(f"not written: {res['runs']} of 30 runs" + (f", missing {' '.join(res['missing'])}" if res["missing"] else "")
+              + ("" if len(res["versions"]) < 2 else f", fixture versions {', '.join(res['versions'])} mixed"))
+        return
+    write_manual(None, res["figures"],
+                 f"scorecard.py bottasks report: the p35 set, 10 tasks x 3 runs on fixture {res['versions'][0]} "
+                 f"(scripts/measure/fixtures/p35), {res['passed']} of 30 runs passed with no owner input; "
+                 f"raw lines {', '.join(res['files'])}")
+
+
 def chat_open_verdict(opens, want):
     """(measurelib.chat_open figures, why it is not written or None): written only when all `want` opens have a mark."""
     import measurelib as ml
@@ -1449,6 +1496,8 @@ def main():
     x.add_argument("args", nargs=argparse.REMAINDER)
     x = sub.add_parser("record", add_help=False)
     x.add_argument("args", nargs=argparse.REMAINDER)
+    x = sub.add_parser("bottasks", add_help=False)
+    x.add_argument("args", nargs=argparse.REMAINDER)
     w = sub.add_parser("weigh")
     w.add_argument("--secs", type=int, default=60)
     w.add_argument("--out")
@@ -1462,7 +1511,7 @@ def main():
     st.add_argument("--no-build", action="store_true")
     st.add_argument("--out")
     a, rest = ap.parse_known_args()
-    if a.cmd in ("accuracy", "waits", "record"):
+    if a.cmd in ("accuracy", "waits", "record", "bottasks"):
         # accuracy.py's own options, --help too, in the order given: parse_known_args splits "--days 7" into
         # rest ["--days"] and args ["7"], so the raw argv after the command is passed on instead
         a.args = sys.argv[sys.argv.index(a.cmd) + 1:]
@@ -1470,7 +1519,7 @@ def main():
         ap.error("unrecognized arguments: " + " ".join(rest))
     {"run": run_cmd, "ops": ops_cmd, "dev": dev_cmd, "merge": merge_cmd, "check": check_cmd, "page": page_cmd,
      "tests": tests_cmd, "weigh": weigh_cmd, "accuracy": accuracy_cmd, "waits": waits_cmd,
-     "record": record_cmd, "chatopen": chatopen_cmd, "stream8": stream8_cmd}[a.cmd](a)
+     "record": record_cmd, "bottasks": bottasks_cmd, "chatopen": chatopen_cmd, "stream8": stream8_cmd}[a.cmd](a)
 
 
 if __name__ == "__main__":

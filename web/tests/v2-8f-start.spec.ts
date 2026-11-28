@@ -5,6 +5,7 @@ import type { Page } from '@playwright/test';
 import { expect, test, type Core, REPO } from './fixtures';
 import { repo, show } from './visual/compare';
 import { openQuiet } from './tree-seed';
+import { startOf } from './start-op';
 
 const sessions = (core: Core) => core.cli('snapshot', '--json').sessions as { id: string; cwd: string; project: string; kind: string; model: string | null; state: string }[];
 const worktrees = (core: Core) => core.cli('worktree', 'list').worktrees as { path: string; branch: string }[];
@@ -208,7 +209,7 @@ test('first_prompt_never_resent_after_error', async ({ app, core }) => {
   await expect(app.getByRole('combobox', { name: "Message New Claude session", exact: true })).toBeVisible();
   await expect(app.getByRole('combobox', { name: "Message New Claude session", exact: true })).toBeEnabled();
   expect(reads()).toBe(prompt + '\r');
-  expect(sent.filter(r => r.op === 'start')).toHaveLength(1);
+  expect(sent.filter((r) => startOf(r))).toHaveLength(1);
   expect(sessions(core).filter(s => s.kind === 'claude')).toHaveLength(1);
   expect(worktrees(core)).toHaveLength(1);
   fs.mkdirSync(path.join(REPO, '.scratch/v2-8f'), { recursive: true });
@@ -241,7 +242,7 @@ test('create_and_start_uses_existing_authority', async ({ app, core }) => {
   await expect(dialog).toHaveCount(0);
   const wt = worktrees(core)[0];
   const parent = sessions(core).find(s => s.kind === 'claude')!;
-  expect(sent.filter(r => r.op === 'start')).toEqual([{ op: 'start', folder: wt.path, session: { kind: 'claude', project, model: null, effort: null, resume: null, account: 'Work' } }]);
+  expect(sent.map(startOf).filter((r) => r)).toEqual([{ op: 'start', folder: wt.path, session: { kind: 'claude', project, model: null, effort: null, resume: null, account: 'Work' } }]);
   await expect.poll(() => fs.existsSync(path.join(core.home, `token-${parent.id}`))).toBe(true);
   // Same existing API with a real session token: cross-account refused, omitted account inherits Work.
   const request = (account?: string) => JSON.parse(execFileSync(process.execPath, ['-e', `
@@ -395,8 +396,9 @@ test('older_core_ignoring_folder_never_gets_first_prompt', async ({ app, core })
       if (typeof m === 'string') {
         const msg = JSON.parse(m);
         // Older cores ignore this optional argument and start in the parent project.
-        if (msg.request?.op === 'start') {
-          delete msg.request.folder;
+        const start = startOf(msg.request);
+        if (start) {
+          delete start.folder;
           return server.send(JSON.stringify(msg));
         }
         if (msg.request?.op === 'agent_prompt') prompts++;
