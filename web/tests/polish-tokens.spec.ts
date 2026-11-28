@@ -113,7 +113,7 @@ test('polish_defaults_1041: new sizes only for a user who never changed them; a 
   const picked = parse(JSON.stringify({ version: 2, density: 'comfortable', densityPicked: true, rowHeight: null, tabFont: 12 })).settings;
   expect([picked.tabFont, heights(picked)]).toEqual([12, { row: 30, arow: 24, tabh: 32 }]);
   expect(heights(parse(JSON.stringify({ version: 2, densityPicked: true, rowHeight: 27 })).settings).row).toBe(27);
-  expect(heights(parse(JSON.stringify({ version: 2, density: 'compact', densityPicked: true })).settings)).toEqual({ row: 22, arow: 20, tabh: 26 });
+  expect(heights(parse(JSON.stringify({ version: 2, density: 'compact', densityPicked: true })).settings)).toEqual({ row: 24, arow: 20, tabh: 26 }); // #69: the compact row is the 24 hit-target floor
   // A store already at version 3 is never moved again (11.5 there was picked after the change).
   expect(parse(JSON.stringify({ version: 3, tabFont: 11.5 })).settings.tabFont).toBe(11.5);
 });

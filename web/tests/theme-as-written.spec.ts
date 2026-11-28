@@ -125,10 +125,10 @@ for (const pick of PICKS)
     const swatch = (k: string) => style(board.locator(`.bkey [data-k="${k}"] i`), 'color');
     const d = deriveTokens(c);
     expect([await swatch('you'), await swatch('stale'), await swatch('bad')]).toEqual([rgb(d['--you']), rgb(c.palette[11]), rgb(d['--bad'])]);
-    // a primary button: fill is the theme text, label the panel
+    // a primary button: the theme's warm primary and its label (#61 tokens, #69 buttons)
     await board.getByRole('button', { name: '+ Card' }).click();
     const save = app.getByRole('dialog', { name: 'New card' }).getByRole('button', { name: 'Save' });
-    expect([await style(save, 'backgroundColor'), await style(save, 'color')]).toEqual([rgb(c.foreground), rgb(c.background)]);
+    expect([await style(save, 'backgroundColor'), await style(save, 'color')]).toEqual([rgb(d['--primary']), rgb(d['--on-primary'])]);
   });
 
 // Basics of the Appearance page for a theme as written (needs 146, 172): reached from Settings in two clicks by name, a
