@@ -245,6 +245,17 @@ pub enum OwnerAsk {
         cap: u32,
         why: String,
     },
+    /// A project's lead proposes a trigger (`line` says it). Nothing is added before the yes, which adds it, asking
+    /// first, in the lead's `place`.
+    Trigger {
+        name: String,
+        on: crate::schedule::triggers::Source,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        github: Option<crate::schedule::triggers::Github>,
+        run: crate::schedule::Run,
+        line: String,
+        place: PathBuf,
+    },
     /// A bot (`from`) offers a new bot for work it saw come back (`why`). Nothing is made before the yes, which makes
     /// the bot in the offering bot's `place` (`team::Team::make`).
     Bot {
@@ -275,6 +286,7 @@ const OWNER_KINDS: &[&str] = &[
     "session_close", // ticket 1113
     "cap",           // ticket 1099
     "bot",
+    "trigger",
 ];
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
@@ -2255,6 +2267,13 @@ impl Queue {
             ) => teammate == m && file == f,
             // Ticket 1099: one card per place; a newer ask replaces the one not yet answered.
             (Some(OwnerAsk::Cap { place, .. }), OwnerAsk::Cap { place: p, .. }) => place == p,
+            // One proposal per trigger name and place; a reworded one replaces it.
+            (
+                Some(OwnerAsk::Trigger { name, place, .. }),
+                OwnerAsk::Trigger {
+                    name: n, place: p, ..
+                },
+            ) => place == p && name == n,
             // One card per offered name and place; a reworded offer replaces it.
             (
                 Some(OwnerAsk::Bot { name, place, .. }),
@@ -2393,6 +2412,7 @@ impl Queue {
                 from,
                 ..
             } => format!("{from} offers a new bot, {name} ({job}): {why}"),
+            OwnerAsk::Trigger { line, .. } => format!("add the trigger: {line}"),
             OwnerAsk::Tidy { name, file, .. } => format!(
                 "{name}'s {file} is over the 6 KB its brief quotes, so the rest does not reach {name}: let {name} tidy it?"
             ),

@@ -1,5 +1,25 @@
 //! Schedules as sessions see them: who may read or propose one, their cards and failed runs.
 use super::*;
+/// A schedule proposal's or change's refusal for the owner, who adds and changes one in the window.
+pub(super) fn schedule_from_a_lead() -> Response {
+    Err("a schedule is proposed from a lead's session; the user adds and changes one in the Schedules widget".into())
+}
+/// A trigger proposal's refusal for every caller but a project's lead.
+pub(super) fn trigger_from_a_lead() -> Response {
+    Err("a trigger is proposed from a project lead's session; the user adds one with `nunchiro trigger add`".into())
+}
+/// A proposed task is stored as the card shows it: hidden characters (they hide or reorder what the user reads, or
+/// carry text a model reads) are refused, not dropped.
+fn shown_as_stored(task: &str) -> Result<(), String> {
+    if task.chars().any(crate::board::rights::hidden) {
+        return Err(
+            "the task has hidden characters the card would not show; write it in plain text".into(),
+        );
+    }
+    Ok(())
+}
+/// Trigger proposals a place's lead keeps waiting at once, so they never fill the owner's cards.
+const TRIGGER_PROPOSALS: usize = 3;
 impl Sessions {
     /// Ticket 993: whose schedules a session reads. Only the live seat of a place's lead reads any: `Some(place)`
     /// for a project's lead, `None` (every place) for the Home lead. A token, a session on another machine and every
@@ -110,6 +130,7 @@ impl Sessions {
         level: Option<crate::team::Level>,
     ) -> Response {
         let (reach, place) = self.schedule_proposer(caller)?;
+        shown_as_stored(&task)?;
         let name = who.trim().to_lowercase();
         let mate = crate::team::Team::open(&self.home)
             .list()?
@@ -148,6 +169,83 @@ impl Sessions {
                 place,
                 line: line.clone(),
                 reason: None,
+            },
+        )?;
+        Ok(Reply::Text { text: line })
+    }
+    /// `nunchiro trigger propose`: a project's lead asks the user for a trigger in its place's project. Checked as the
+    /// owner's add checks it, so the card can be applied; then only the card. A webhook trigger is never proposed:
+    /// its secret is the user's to set.
+    pub(super) fn trigger_propose(
+        &mut self,
+        caller: &crate::grants::Caller,
+        request: &Request,
+    ) -> Response {
+        let Request::TriggerPropose {
+            name,
+            on,
+            github,
+            kind,
+            task,
+        } = request
+        else {
+            return Err("not a trigger proposal".into());
+        };
+        use crate::schedule::triggers::{self, Mode, New, Source};
+        if *on == Source::Webhook {
+            return Err(
+                "a webhook trigger needs its secret from the user: ask them to add it".into(),
+            );
+        }
+        let Ok((reach, place)) = self.schedule_proposer(caller) else {
+            return trigger_from_a_lead();
+        };
+        if reach.is_none() {
+            return Err("a trigger runs in a project: propose it from that project's lead".into());
+        }
+        shown_as_stored(task)?;
+        if github.as_ref().is_some_and(|g| g.any_author) {
+            return Err("anyone's pull requests are the user's choice: they add such a trigger with `nunchiro trigger add --any-author`".into());
+        }
+        let waiting = self
+            .queue
+            .owner_items()
+            .into_iter()
+            .filter(|d| matches!(&d.owner, Some(queue::OwnerAsk::Trigger { name: n, place: p, .. }) if *p == place && n != name))
+            .count();
+        if waiting >= TRIGGER_PROPOSALS {
+            return Err(format!(
+                "at most {TRIGGER_PROPOSALS} trigger proposals wait in a project; the user answers those first"
+            ));
+        }
+        let new = New {
+            name: name.clone(),
+            on: *on,
+            run: crate::schedule::Run {
+                kind: *kind,
+                project: place.clone(),
+                label: name.clone(),
+                model: None,
+                effort: None,
+                task: Some(task.clone()),
+                teammate: None,
+                level: None,
+            },
+            mode: Mode::Ask,
+            secret: None,
+            github: github.clone(),
+        };
+        triggers::check_new(&self.home, &self.known_projects(), &new)?;
+        let line = triggers::proposal_line(&new);
+        self.queue.ask_owner(
+            &caller.id,
+            queue::OwnerAsk::Trigger {
+                name: new.name,
+                on: new.on,
+                github: new.github,
+                run: new.run,
+                line: line.clone(),
+                place,
             },
         )?;
         Ok(Reply::Text { text: line })

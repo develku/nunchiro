@@ -257,6 +257,7 @@ impl Sessions {
                     | queue::OwnerAsk::Tidy { place, .. } // ticket 1005
                     | queue::OwnerAsk::Cap { place, .. } // ticket 1099
                     | queue::OwnerAsk::Bot { place, .. }
+                    | queue::OwnerAsk::Trigger { place, .. }
                     | queue::OwnerAsk::SessionClose { place, .. }, // ticket 1113
                 ) => place.clone(),
                 _ => continue,

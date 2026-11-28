@@ -22,6 +22,10 @@ nunchiro trigger add fixer --on cli --kind claude --project ~/code/app \
   that quits right after your Start keeps it for you to press again.
 - `--label`, `--model`, `--effort` as for a schedule. The project must be one Nunchiro knows.
 
+A project's lead can propose one from its session (`nunchiro trigger propose <name> --on cli|github ... --task`):
+a card in Decisions says what fires it, the agent and the task; only your yes adds it, asking first. It runs in
+that lead's project, and a webhook trigger is never proposed, since its secret is yours.
+
 Only the owner adds, pauses (`trigger pause`, `trigger resume`) and removes triggers; `trigger list [--json]` shows
 them with their last fire. `triggers.json` is written by the core alone, each entry under the same key as the
 schedules, so an entry another program wrote or changed is refused.
@@ -90,5 +94,4 @@ or a field: it is only text after your task.
 
 - A GitHub mention event.
 - Slack and Linear signatures (use `X-Nunchiro-Secret` from a relay).
-- Agents proposing a trigger.
 - The address reads at most 8 requests at once, each within 10 seconds; a connection past 8 is closed unanswered.

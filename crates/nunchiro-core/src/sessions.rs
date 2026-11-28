@@ -1200,14 +1200,14 @@ impl Sessions {
             // The run starts a session off the registry lock (`schedule::run_now`; server.rs, http/mod.rs).
             Request::ScheduleRunNow { .. } => Err("run now runs off the registry lock".into()),
             // A proposal is a lead's ask for the owner's card; the owner needs none.
-            Request::SchedulePropose { .. } | Request::ScheduleChange { .. } => Err(
-                "a schedule is proposed from a lead's session; the user adds and changes one in the Schedules widget"
-                    .into(),
-            ),
+            Request::SchedulePropose { .. } | Request::ScheduleChange { .. } => {
+                schedules::schedule_from_a_lead()
+            }
             // An offer is a bot's ask for the owner's card; the owner needs none.
             Request::BotOffer { .. } => {
                 Err("a bot is offered from a bot's session; the user makes one in the Bots view".into())
             }
+            Request::TriggerPropose { .. } => schedules::trigger_from_a_lead(),
             // Ticket 1002 lane 2: the user writes their own mail; a card is the Home lead's ask, spent by its seat.
             Request::OutboxStage { .. } | Request::OutboxSpend { .. } => {
                 Err("an Outbox card is staged and sent from the Home lead's session".into())

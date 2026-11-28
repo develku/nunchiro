@@ -5881,6 +5881,49 @@
           "type": "object"
         },
         {
+          "description": "A project's lead proposes a trigger (`line` says it). Nothing is added before the yes, which adds it, asking\nfirst, in the lead's `place`.",
+          "properties": {
+            "github": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Github"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "line": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "on": {
+              "$ref": "#/$defs/Source"
+            },
+            "place": {
+              "type": "string"
+            },
+            "run": {
+              "$ref": "#/$defs/ScheduleRun"
+            },
+            "type": {
+              "const": "trigger",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "on",
+            "run",
+            "line",
+            "place"
+          ],
+          "type": "object"
+        },
+        {
           "description": "A bot (`from`) offers a new bot for work it saw come back (`why`). Nothing is made before the yes, which makes\nthe bot in the offering bot's `place` (`team::Team::make`).",
           "properties": {
             "from": {
@@ -13823,6 +13866,46 @@
             "op",
             "who",
             "when",
+            "task"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "description": "The lead of a project's place proposes a trigger (`nunchiro trigger propose`): what fires it (`cli` or `github`,\nnever a webhook, whose secret is the user's), the agent and the task, in its place's project. Nothing is stored:\nthe user gets a card (`queue::OwnerAsk::Trigger`) and only its yes adds the trigger, asking first.",
+          "properties": {
+            "github": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Github"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "$ref": "#/$defs/AgentKind"
+            },
+            "name": {
+              "type": "string"
+            },
+            "on": {
+              "$ref": "#/$defs/Source"
+            },
+            "op": {
+              "const": "trigger_propose",
+              "type": "string"
+            },
+            "task": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "name",
+            "on",
+            "kind",
             "task"
           ],
           "type": "object",

@@ -37,6 +37,9 @@ declare module '../index' {
     'trigger.authors': true;
     'trigger.anyAuthor': true;
     'trigger.anyAuthorNote': true;
+    'trigger.proposal.title': true;
+    'trigger.proposal.asks': true;
+    'trigger.proposal.add': true;
   }
 }
 
@@ -77,4 +80,7 @@ export const en = {
   "trigger.authors": "Pull requests",
   "trigger.anyAuthor": "Anyone's, not only mine",
   "trigger.anyAuthorNote": "Off: only your own pull requests. On a public repository anyone's pull request could start a run on code they wrote.",
+  "trigger.proposal.title": "A lead proposes a trigger",
+  "trigger.proposal.asks": "In {project}. Nothing is added until you say yes; it then asks you before each run.",
+  "trigger.proposal.add": "Add trigger",
 };

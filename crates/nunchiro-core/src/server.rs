@@ -720,7 +720,7 @@ pub(crate) fn remote_from_owner(
             | Request::SchedulePause { .. }
             | Request::SchedulePropose { .. }
             | Request::ScheduleChange { .. }
-            | Request::BotOffer { .. } // a bot is made on this Mac, by its owner's yes
+            | Request::BotOffer { .. } | Request::TriggerPropose { .. } // made on this Mac, by its owner's yes
             | Request::OutboxStage { .. } // ticket 1002: the Outbox is this Mac's
             | Request::OutboxSpend { .. }
             | Request::LibsResolve { .. } // v2-10c
