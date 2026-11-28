@@ -1,0 +1,299 @@
+{
+  "$defs": {
+    "Command": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "description": "argv, run from the plugin folder; never a shell string.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "read": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "show": {
+          "$ref": "#/$defs/Show",
+          "default": "note"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "command"
+      ],
+      "type": "object"
+    },
+    "Gate": {
+      "additionalProperties": false,
+      "description": "A check run before an action: it answers `{\"allow\": true}`, `{\"allow\": false, \"reason\": \"...\"}` or, before a\nmessage, `{\"allow\": true, \"text\": \"...\"}` to replace it. It can do nothing else.",
+      "properties": {
+        "command": {
+          "description": "argv, run from the plugin folder; 5 seconds at most.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "on": {
+          "$ref": "#/$defs/GateOn"
+        },
+        "on_error": {
+          "$ref": "#/$defs/OnError",
+          "default": "refuse",
+          "description": "What no answer, a crash or bad JSON means."
+        },
+        "read": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "on",
+        "command"
+      ],
+      "type": "object"
+    },
+    "GateOn": {
+      "oneOf": [
+        {
+          "const": "session.start.before",
+          "description": "A new agent session is about to start (not a plain terminal, not a resumed conversation).",
+          "type": "string"
+        },
+        {
+          "const": "prompt.send.before",
+          "description": "A message an agent, a schedule or a token sends is about to be delivered; never what the owner types.",
+          "type": "string"
+        }
+      ]
+    },
+    "OnError": {
+      "enum": [
+        "refuse",
+        "allow"
+      ],
+      "type": "string"
+    },
+    "Panel": {
+      "additionalProperties": false,
+      "description": "A widget manifest inside the plugin (the fields of `widget.toml`), named so its plugin can hold several.",
+      "properties": {
+        "command": {
+          "description": "A script panel's argv, run from the plugin folder.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "entry": {
+          "description": "A web panel's HTML file in the plugin folder.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "interval_secs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "kind": {
+          "description": "`script` or `web`.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "read": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "Setting": {
+      "additionalProperties": false,
+      "properties": {
+        "choices": {
+          "description": "The values of a `choice` setting.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "default": true,
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/SettingKind"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "type"
+      ],
+      "type": "object"
+    },
+    "SettingKind": {
+      "oneOf": [
+        {
+          "enum": [
+            "text",
+            "number",
+            "bool",
+            "choice"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "time",
+          "description": "`HH:MM`, 24-hour.",
+          "type": "string"
+        }
+      ]
+    },
+    "Show": {
+      "description": "Where a command's output goes: a note, a panel, or the focused agent's composer as a draft (never sent by itself).",
+      "enum": [
+        "note",
+        "panel",
+        "send"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "https://raw.githubusercontent.com/develku/nunchiro/main/docs/api/plugin.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "`plugin.toml`. Unknown keys refuse the whole file.",
+  "properties": {
+    "about": {
+      "default": "",
+      "type": "string"
+    },
+    "author": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "command": {
+      "description": "Rows in the command palette.",
+      "items": {
+        "$ref": "#/$defs/Command"
+      },
+      "type": "array"
+    },
+    "gate": {
+      "description": "Checks that may refuse a new session or replace a message an agent, a schedule or a token sends.",
+      "items": {
+        "$ref": "#/$defs/Gate"
+      },
+      "type": "array"
+    },
+    "id": {
+      "description": "The folder's name: a-z, 0-9, - and _ (up to 64).",
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "nunchiro": {
+      "description": "The Nunchiro versions the plugin is made for, as written; shown, not enforced yet.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "panel": {
+      "description": "Panels in the Widget library: a script that prints text or JSON, or a web page.",
+      "items": {
+        "$ref": "#/$defs/Panel"
+      },
+      "type": "array"
+    },
+    "setting": {
+      "description": "Values the user sets on the Plugins page; every run gets them as `settings`.",
+      "items": {
+        "$ref": "#/$defs/Setting"
+      },
+      "type": "array"
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "version"
+  ],
+  "title": "Nunchiro plugin.toml",
+  "type": "object"
+}

@@ -23,7 +23,7 @@ sleep 600
 `;
 const QUESTION = 'Red or blue?\r\n> 1. red\r\n  2. blue\r\nEnter to select · Esc to cancel\r\n';
 const unlabeled = (core: Core, dir: string, trigger: string) =>
-  core.cli('session', 'start', '--kind', 'claude', '--project', dir, '--model', path.join(dir, trigger)).session as { id: string };
+  core.cli('session', 'start', '--kind', 'claude', '--project', dir, '--model', trigger).session as { id: string };
 
 test('tab_title_names_agent_once: an unlabeled session tab shows its name alone; a labelled one keeps "<kind> · <label>"', async ({ app, core }) => {
   const dir = core.project('tabs473');

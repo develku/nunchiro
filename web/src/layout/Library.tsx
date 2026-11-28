@@ -78,7 +78,7 @@ export function Library({ t, core, bars, layout, onGrab, onAdd, onNest, refused 
   };
   // The Tree card says what the approved placement design says (needs 157 (2)); the rest keep their registry notes.
   const builtin: Card[] = ENTRIES.map((e) => ({ kind: e.kind, ...widgetText(t, e), korean: KOREAN[e.kind] ?? '' }));
-  const mine: Card[] = (list?.widgets ?? []).map((w) => ({ kind: userKind(w.name), title: w.name, note: w.error ? t('rest.layout.user.invalid') : `${kindWord(t, w.kind ?? 'script')} · ${t(w.state === 'approved' ? 'rest.layout.user.allowed' : w.state === 'changed' ? 'rest.layout.user.changed' : 'rest.layout.user.notAllowed')}${(w.kind === 'web' ? !list?.web_enabled : !list?.enabled) ? t('rest.layout.user.off') : ''}`, korean: '', user: w }));
+  const mine: Card[] = (list?.widgets ?? []).map((w) => ({ kind: userKind(w.name), title: w.title ?? w.name, note: w.error ? t('rest.layout.user.invalid') : `${w.plugin ? `${w.plugin} · ` : ''}${kindWord(t, w.kind ?? 'script')} · ${t(w.state === 'approved' ? 'rest.layout.user.allowed' : w.state === 'changed' ? 'rest.layout.user.changed' : 'rest.layout.user.notAllowed')}${(w.kind === 'web' ? !list?.web_enabled : !list?.enabled) ? t('rest.layout.user.off') : ''}`, korean: '', user: w }));
   const pending = mine.filter((c) => needsApproval(c) && !c.user?.error).length; // ticket 870: a broken one waits on a fix, not an approval
   const q = query.trim().toLowerCase();
   const shown = [...(chip === 'mine' ? [] : builtin), ...(chip === 'builtin' ? [] : mine)].filter((c) => !q || [c.title, c.kind, c.korean].some((t) => t.toLowerCase().includes(q)));

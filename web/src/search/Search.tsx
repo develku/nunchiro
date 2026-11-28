@@ -13,6 +13,10 @@ import { SessionSearch } from './Sessions';
 import { useHtmlLangT } from '../i18n/lib/useHtmlLangT';
 import './search.css';
 import { lineError, rawError } from '../errors';
+import { defineSetting, useFeatureSetting } from '../settings/useFeatureSetting';
+
+/** The scope used last: Search opens on it. */
+const SCOPE = defineSetting<'files' | 'sessions'>('search.scope', 'files', (v) => (v === 'files' || v === 'sessions' ? v : undefined));
 
 const PAUSE_MS = 300;
 const MAX_BYTES = 256;
@@ -77,7 +81,7 @@ export function Search({
 }) {
   const t = useHtmlLangT(); // ticket 492: the panel gets no catalogue from its zone
   const root = session?.id ?? null;
-  const [scope, setScope] = useState<'files' | 'sessions'>('files'); // v2-7
+  const [scope, setScope] = useFeatureSetting(SCOPE); // v2-7
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState<{ ask: Ask; result: Result } | null>(null);
   const [busy, setBusy] = useState(false);

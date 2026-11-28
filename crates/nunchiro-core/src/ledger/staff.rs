@@ -39,6 +39,14 @@ pub(crate) fn staff_plan(
                     role.trim()
                 )
             })?;
+    // A seat that writes waits with its task; one that plans may start. The start in a worktree checks it again
+    // (`writer_free`), under the registry lock.
+    if role.writes {
+        let waits = blockers(task, &ledger.list()?);
+        if !waits.is_empty() {
+            return Err(not_started(task, &waits));
+        }
+    }
     let folder = match (&path, task.worktrees.as_slice()) {
         (Some(path), all) => {
             let path = std::fs::canonicalize(path).map_err(|e| e.to_string())?;
@@ -256,6 +264,7 @@ pub fn seat_up(
             package: None,
             why: None,
             account: None,
+            after: vec![],
         })?;
     }
     if let Some(text) = prompt {
@@ -277,6 +286,7 @@ pub fn seat_up(
             package: None,
             why: None,
             account: None,
+            after: vec![],
         }) {
             Ok(Reply::Text { text }) => text,
             // The seat runs: it gets the words without the package rather than no prompt at all.

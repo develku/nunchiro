@@ -90,6 +90,67 @@ fn home_seat_starts_locked_in_the_chosen_mode() {
     };
     let refused = core.handle(Request::QuitSettings { patch }).unwrap_err();
     assert!(refused.contains(MODE_KEY), "{refused}");
+    // Connectors off: the Home seat starts with the strict empty MCP config (no account connector loads), a side chat
+    // too (it drops the first two lock words); a project seat never gets it. Any value but false or null is off.
+    let both = |a: &[String]| {
+        a.iter().any(|w| w == "--strict-mcp-config")
+            && a.iter().any(|w| w == r#"--mcp-config={"mcpServers":{}}"#)
+    };
+    let neither = |a: &[String]| {
+        !a.iter()
+            .any(|w| w == "--strict-mcp-config" || w.starts_with("--mcp-config"))
+    };
+    let side_chat = |core: &Sessions| {
+        let args = ["--permission-mode", "plan", SIDE_CHAT_ARG, "parent-id"];
+        let launch = core
+            .launch(at(&seat, &args))
+            .owner_start()
+            .prepare()
+            .unwrap();
+        launch.permission.clone()
+    };
+    let off = crate::home_lock::CONNECTORS_OFF_KEY;
+    for value in [
+        None,
+        Some(serde_json::json!(null)),
+        Some(serde_json::json!(false)),
+    ] {
+        match &value {
+            Some(v) => core.settings.features.insert(off.into(), v.clone()),
+            None => core.settings.features.remove(off),
+        };
+        assert!(neither(&prepared(&core, true, None).0), "{value:?}");
+        assert!(neither(&side_chat(&core)), "{value:?}");
+    }
+    for value in [
+        serde_json::json!(true),
+        serde_json::json!("yes"),
+        serde_json::json!(1),
+    ] {
+        core.settings.features.insert(off.into(), value.clone());
+        for owner in [true, false] {
+            let (cut, _) = prepared(&core, owner, None);
+            assert!(both(&cut) && locked(&cut), "{value}: {cut:?}");
+        }
+        let side = side_chat(&core);
+        assert!(both(&side), "{value}: side chat {side:?}");
+        let project_off = core
+            .launch(claude_start(&home, &[]))
+            .owner_start()
+            .prepare()
+            .unwrap();
+        assert!(neither(&project_off.permission), "{value}");
+    }
+    core.settings.features.remove(off);
+    let patch = LifetimePatch {
+        features: Some([(off.to_string(), serde_json::json!("yes"))].into()),
+        ..Default::default()
+    };
+    assert!(
+        core.handle(Request::QuitSettings { patch })
+            .unwrap_err()
+            .contains(off)
+    );
     drop((bare, project, sub));
     fs::remove_dir_all(home).unwrap();
 }
@@ -229,6 +290,8 @@ fn a_home_seats_child_inherits_the_lock() {
         commands[1].ends_with(" hook outward --home-lock"),
         "{commands:?}"
     );
+    // Connectors on: the lock hook is not told to refuse every MCP tool.
+    assert!(!commands[0].contains(crate::home_lock::NO_MCP_FLAG));
     assert_eq!(
         file["hooks"]["PreToolUse"][0]["hooks"][0]["onFailure"],
         "block"
@@ -375,7 +438,31 @@ fn a_home_seats_child_inherits_the_lock() {
         .prepare()
         .unwrap();
     assert!(!locked(&free.permission));
-    drop((child, free));
+    // Connectors off, layer 2: the lock hook of a seat started then refuses every MCP tool (`--no-mcp`).
+    core.settings
+        .features
+        .insert(crate::home_lock::CONNECTORS_OFF_KEY.into(), true.into());
+    let mut cut = core
+        .launch(StartSession {
+            project: seat.clone(),
+            ..claude_start(&home, &[])
+        })
+        .owner_start()
+        .prepare()
+        .unwrap();
+    let cut_id = core.start(&cut).unwrap().id;
+    cut.committed = true;
+    let file: serde_json::Value =
+        serde_json::from_slice(&fs::read(home.join(format!("hooks-{cut_id}.json"))).unwrap())
+            .unwrap();
+    let lock_hook = file["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+        .as_str()
+        .unwrap();
+    assert!(
+        lock_hook.ends_with(" hook home-lock --mode full-access-shell --no-mcp"),
+        "{lock_hook}"
+    );
+    drop((child, free, cut));
     let _ = core.handle(Request::Stop);
     fs::remove_dir_all(home).unwrap();
     fs::remove_dir_all(elsewhere).unwrap();

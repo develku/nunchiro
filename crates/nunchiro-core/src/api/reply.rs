@@ -11,6 +11,7 @@ fn is_false(v: &bool) -> bool {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Reply {
     SessionContext {
@@ -387,8 +388,13 @@ pub enum Reply {
         acp: Vec<crate::acp::AcpRow>,
         /// The absolute path of `agents.toml` (the window reveals it, or shows it to copy).
         file: std::path::PathBuf,
+        /// The last test message per ACP agent name.
+        turns: std::collections::BTreeMap<String, crate::acp::turn::Turn>,
     },
     AcpCheck(crate::acp::probe::Check),
+    AcpTurn {
+        turn: crate::acp::turn::Turn,
+    },
     // Ticket 358
     AgentCommand {
         view: crate::approval::CommandView,
@@ -426,6 +432,21 @@ pub enum Reply {
     // v1b-22
     WidgetPage {
         page: crate::widgets::web::Page,
+    },
+    Triggers {
+        triggers: Vec<crate::schedule::triggers::Trigger>,
+    },
+    Plugins {
+        plugins: Vec<crate::plugins::Listed>,
+    },
+    /// The plugin catalogue's entries (Browse plugins).
+    PluginCatalog {
+        catalog: Vec<crate::plugins_online::Entry>,
+    },
+    /// A plugin command's run and where the window shows its output.
+    PluginRun {
+        run: crate::widgets::Run,
+        show: crate::plugins::Show,
     },
     /// v1b-20: the target session (started for a `start` act) and its send row.
     WidgetAct {

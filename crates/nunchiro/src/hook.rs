@@ -135,11 +135,14 @@ fn exchange(
 /// The largest tool call the lock reads (a Write of a big file included); a larger one is refused, never judged in part.
 const PAYLOAD_MAX: u64 = 16 << 20;
 pub fn home_lock(home: &Path, args: &[String]) -> ! {
-    use nunchiro_core::home_lock::{Decision, NO_CARD, decide, hook_output, named, spend};
+    use nunchiro_core::home_lock::{
+        Decision, NO_CARD, NO_MCP_FLAG, decide_locked, hook_output, named, spend,
+    };
     let mode = match args {
-        [flag, mode] if flag == "--mode" => named(mode),
+        [flag, mode, ..] if flag == "--mode" => named(mode),
         _ => named(""), // no mode named: Ask, the strictest
     };
+    let no_mcp = args.iter().any(|a| a == NO_MCP_FLAG);
     let mut payload = vec![];
     let call = std::io::stdin()
         .take(PAYLOAD_MAX + 1)
@@ -154,7 +157,7 @@ pub fn home_lock(home: &Path, args: &[String]) -> ! {
         eprintln!("Home seat lock: this tool call could not be read, so it is refused");
         std::process::exit(2);
     };
-    let out = match decide(&tool, &input, mode) {
+    let out = match decide_locked(&tool, &input, mode, no_mcp) {
         Decision::Mode => None,
         Decision::Allow(why) => Some(hook_output("allow", why)),
         Decision::Ask(why) => Some(hook_output("ask", why)),

@@ -249,6 +249,7 @@ export function RoomView({ core, t, project, sessions, byId: rows, messages, pin
                       {t(`room.kind.${m.kind}` as const)}
                     </span>
                     <blockquote>{clean(m.body)}</blockquote>
+                    {m.changed_by && <small className="changed-tag" data-changed-by={m.changed_by}>{t('plugins.changedBy', { name: clean(m.changed_by) })}</small>}
                   </div>
                   {m.kind === 'lost' && lostCard(m, list)}
                 </div>
@@ -290,6 +291,7 @@ export function RoomView({ core, t, project, sessions, byId: rows, messages, pin
                   )}
                   {/* A long line (a lead's prompt with its paths) is cut to six lines here; the wide Room tab has it whole. */}
                   <blockquote title={m.body.length > 300 ? clean(m.body) : undefined}>{clean(m.body)}</blockquote>
+                  {m.changed_by && <small className="changed-tag" data-changed-by={m.changed_by}>{t('plugins.changedBy', { name: clean(m.changed_by) })}</small>}
                 </div>
               </div>
             ),
@@ -354,7 +356,12 @@ export function RoomView({ core, t, project, sessions, byId: rows, messages, pin
                 {role(s) && <span className="room-role">{t(`room.role.${role(s)!}` as const)}</span>}
               </div>
               <div className="room-meta">{t(`mw.status.${status(s)}`)}</div>
-              {ask ? <div className="room-meta room-last room-ask">{clean(ask)}</div> : last && <div className="room-meta room-last">{t('room.seatLast', { text: [...clean(last.body)].length > 80 ? `${[...clean(last.body)].slice(0, 80).join('')}…` : clean(last.body) })}</div>}
+              {ask ? <div className="room-meta room-last room-ask">{clean(ask)}</div> : last && (
+                <div className="room-meta room-last">
+                  {t('room.seatLast', { text: [...clean(last.body)].length > 80 ? `${[...clean(last.body)].slice(0, 80).join('')}…` : clean(last.body) })}
+                  {last.changed_by && ` · ${t('plugins.changedByLower', { name: clean(last.changed_by) })}`}
+                </div>
+              )}
               <div className="room-meta">{mine.length ? t('room.seatThreads', { list: mine.map(clean).join(', ') }) : t('room.seatNoThreads')}</div>
             </div>
           );

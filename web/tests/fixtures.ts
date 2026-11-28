@@ -231,8 +231,12 @@ export class Core {
     const reply = JSON.parse(execFileSync(process.execPath, ['-e', HOOK, this.home, id, event, JSON.stringify(payload)], { encoding: 'utf8', timeout: 10_000 }));
     if (!reply.Ok) throw new Error(`hook refused: ${JSON.stringify(reply)}`);
   }
-  /** Fake Claude that shows a permission dialog once `<project>/<trigger>` exists. */
+  /** Fake Claude that shows a permission dialog once `<project>/<trigger>` exists. `trigger` is a name in the project (the
+   *  fake's working folder), not a full path: the core takes a model of at most 100 bytes, and a full path under a long
+   *  checkout folder passed that ("invalid model or effort" on one machine, not on the runner). */
   agent(project: string, label: string, trigger: string, worktree = false) {
+    // A full path in the project goes as its name there (the fake runs in the project unless `worktree`).
+    if (!worktree && path.isAbsolute(trigger) && trigger.startsWith(project + path.sep)) trigger = path.relative(project, trigger);
     const args = ['session', 'start', '--kind', 'claude', '--project', project, '--label', label, '--model', trigger];
     if (worktree) args.push('--worktree');
     return this.cli(...args).session as { id: string; cwd: string; agent_session_id: string };

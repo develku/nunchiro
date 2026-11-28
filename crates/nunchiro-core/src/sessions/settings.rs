@@ -64,6 +64,9 @@ impl Sessions {
             if k == crate::home_lock::MODE_KEY {
                 crate::home_lock::check(v)?; // ticket 1002 lane 1
             }
+            if k == crate::home_lock::CONNECTORS_OFF_KEY {
+                crate::home_lock::check_connectors_off(v)?;
+            }
             // Ticket 456: an item that can run commands goes on only once the owner has read them.
             if k == crate::extensions::ENABLED_KEY {
                 crate::extensions::check_enabled(
@@ -244,6 +247,9 @@ impl Sessions {
             }
             crate::approval::SubjectKind::Setup => {
                 return Err("a setup script is approved on its own sheet".into()); // ticket 259
+            }
+            crate::approval::SubjectKind::Plugin => {
+                return Err("a plugin is approved as the widget plugin:<id>".into());
             }
         };
         self.queue.answer_owner(|i| {

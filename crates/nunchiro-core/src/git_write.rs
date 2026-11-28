@@ -22,6 +22,7 @@ const TAIL: usize = 20;
 /// Where a push of the checked-out branch goes and how many commits it carries; part of `diff::GitFacts`, so the strip
 /// shows what the core will push.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct PushTo {
     pub remote: String,
     /// The branch name on the remote (`refs/heads/` stripped).
@@ -37,6 +38,7 @@ pub struct PushTo {
 
 /// What the strip showed and the window sends back: the push is refused unless all of it still holds.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Shown {
     #[serde(default)]
     pub head: String,
@@ -412,6 +414,7 @@ const TEMPLATES: [&str; 6] = [
 
 /// What the Create PR form starts with (`pr_draft`). All text is git's or the repository's: the window draws it as text.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Draft {
     pub title: String,
     pub body: String,
@@ -744,6 +747,7 @@ fn folder(registry: &Mutex<Sessions>, session: &str) -> Result<std::path::PathBu
 }
 
 /// The window's `git_push`, `pr_draft` and `pr_create` (window only); they run git and gh, so off the frame loop.
+/// `pr_write` and its cancel go to `text_gen`, which runs the agent CLI for up to 60 s.
 pub(crate) fn answer(registry: &Mutex<Sessions>, request: Request) -> Response {
     match request {
         Request::GitPush { session, shown } => {
@@ -791,6 +795,9 @@ pub(crate) fn answer(registry: &Mutex<Sessions>, request: Request) -> Response {
                 number: made.number,
                 pushed: made.pushed,
             })
+        }
+        r @ (Request::PrWrite { .. } | Request::PrWriteCancel { .. }) => {
+            crate::text_gen::answer(registry, r)
         }
         _ => Err("not a git op".into()),
     }

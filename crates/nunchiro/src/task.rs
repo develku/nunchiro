@@ -2,7 +2,8 @@
 use nunchiro_core::api::*;
 use std::path::{Path, PathBuf};
 
-pub const USAGE: &str = "nunchiro task new \"<outcome>\" [--accept \"<condition>\"]... [--project DIR]\n\
+pub const USAGE: &str = "nunchiro task new \"<outcome>\" [--accept \"<condition>\"]... [--after <id>]... [--project DIR]\n\
+nunchiro task after <id> <id>... | --none (the lead or the user: the tasks of this place it waits for, set as a whole; --none clears them)\n\
 nunchiro task list [--all] [--project DIR] | show <id>\n\
 nunchiro task list --all-places [--all] (the Home lead only: every place's tasks, read only)\n\
 nunchiro task digest [--json] (the Home lead and the user: each project's lead, open tasks and what waits for the user)\n\
@@ -39,6 +40,7 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
     let (mut who, mut due) = (None, None); // ticket 1003
     let mut why = None; // ticket 1099 panel 4
     let mut account = None; // ticket 1120
+    let (mut after, mut none) = (vec![], false);
     // Ticket 1095: `task package`.
     let (mut when, mut images, mut kind, mut approved) = (None, vec![], None, false);
     let (mut all, mut json, mut places) = (false, false, false);
@@ -51,6 +53,8 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
             "--all-places" => places = true,
             "--json" => json = true,
             "--accept" => accept.push(value()?),
+            "--after" => after.push(value()?),
+            "--none" => none = true,
             "--task" => id = Some(value()?),
             "--cites" => cites = Some(value()?),
             "--prompt" => prompt = Some(value()?),
@@ -95,6 +99,14 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
         "staff" => {
             id = plain.next().or(id);
             text = plain.next().unwrap_or_default();
+        }
+        // Set as a whole: a bare `task after <id>` names nothing, so it clears nothing by a slip.
+        "after" => {
+            id = plain.next().or(id);
+            after.extend(plain.by_ref());
+            if after.is_empty() == !none {
+                return Err(USAGE.into());
+            }
         }
         "list" | "digest" | "loops" => {}
         "package" => {
@@ -147,6 +159,7 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
             package,
             why,
             account,
+            after,
         },
     )?;
     // Slice i: the core says what to start for the seat; the start, the seat on a task with no worktree and the first

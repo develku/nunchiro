@@ -23,6 +23,8 @@ use std::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "CloneState"))]
 pub struct State {
     pub job: String,
     pub phase: Phase,
@@ -40,6 +42,8 @@ pub struct State {
     pub removed: bool,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ClonePhase"))]
 #[serde(rename_all = "snake_case")]
 pub enum Phase {
     Cloning,
@@ -48,6 +52,8 @@ pub enum Phase {
     Cancelled,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "CloneKind"))]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
     Auth,

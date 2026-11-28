@@ -43,6 +43,7 @@ fn add_refusal(project: &Path) -> Option<String> {
 }
 /// Ticket 1040: what Settings > Projects says about a project's folder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum FolderState {
     Ok,
@@ -189,6 +190,7 @@ const PROJECTS_MAX: usize = 4096;
 const FOLDED_MAX: usize = 1024;
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Tree {
     /// Display order is creation order.
     pub groups: Vec<TreeGroup>,
@@ -204,12 +206,14 @@ pub struct Tree {
     pub names: BTreeMap<String, String>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct TreeGroup {
     pub name: String,
     pub projects: Vec<String>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum TreeEdit {
     /// A group is born with its first member: the project moves in from any other group.

@@ -177,6 +177,32 @@ export interface AcpRow {
   models?: { value: string; label: string }[];
   /** Ticket 994: the thinking levels it last reported, as it listed them; none: it has none. */
   efforts?: { value: string; label: string }[];
+  /** A listed agent's add steps (crates/nunchiro-core/src/acp/known.toml); none for a custom entry. */
+  setup?: AcpSetup | null;
+}
+export type AcpCost = 'free_plan' | 'free_limited' | 'free_models' | 'own_model' | 'paid_plan' | 'paid_key' | 'unknown';
+export interface AcpSetup {
+  install?: string[];
+  install_script?: string;
+  sign_in?: string[];
+  account?: string;
+  cost: AcpCost;
+  cost_line?: string;
+  pricing_url?: string;
+  /** YYYY-MM-DD: the day the cost line was read on the vendor's page. */
+  checked?: string;
+}
+/** The last test message of an agent (crates/nunchiro-core/src/acp/turn.rs `Turn`); `at` is Unix seconds. */
+export interface AcpTurn {
+  sent: boolean;
+  answer_read: boolean;
+  turn_end: boolean;
+  ms: number;
+  text: string;
+  version: string | null;
+  failure: 'no_answer' | 'not_signed_in' | 'error' | 'empty' | 'no_end' | 'other' | null;
+  error: string | null;
+  at: number;
 }
 /** Ticket 358: crates/nunchiro-core/src/agent_update.rs `Row`. `run` is absent once an update worked or was cancelled. */
 export interface ToolUpdate {
@@ -749,7 +775,15 @@ export class CoreClient {
   }
   /** V2-4b: terminal agents on the core's PATH and the ACP rows (bundled known list plus agents.toml). */
   acpAgents() {
-    return this.busyRetry({ op: 'acp_agents' }) as Promise<{ terminal: TerminalAgent[]; acp: AcpRow[]; file: string }>;
+    return this.busyRetry({ op: 'acp_agents' }) as Promise<{ terminal: TerminalAgent[]; acp: AcpRow[]; file: string; turns?: Record<string, AcpTurn> }>;
+  }
+  /** One fixed sentence to an approved agent, confined as the check (up to 60 s); the core keeps the result. */
+  async acpTry(name: string) {
+    return ((await this.request({ op: 'acp_agent_try', name })) as { turn: AcpTurn }).turn;
+  }
+  /** Ends the running test message (the last stored result stays). */
+  acpTryCancel(name: string) {
+    return this.request({ op: 'acp_agent_try', name, cancel: true });
   }
   /** Claude's and Codex's CLI on the core's PATH, and whether git answers (Settings > Onboarding). Walk 11: a busy refusal read as "No agent found". */
   firstRun() {

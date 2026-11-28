@@ -30,6 +30,18 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+mod github;
+pub mod triggers; // a schedule whose time is an event // GitHub triggers, read with the user's `gh`
+mod webhook; // the loopback address webhook triggers are fired at
+/// The triggers' two threads: the webhook's loopback port (`webhook.rs`) and the GitHub reads (`github.rs`).
+pub(crate) fn spawn_triggers(
+    registry: std::sync::Arc<Mutex<Sessions>>,
+    stopping: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    home: PathBuf,
+) -> std::io::Result<[std::thread::JoinHandle<()>; 2]> {
+    let hooks = webhook::spawn(registry.clone(), stopping.clone(), home.clone())?;
+    Ok([hooks, github::spawn(registry, stopping, home)?])
+}
 const FILE: &str = "schedules.json";
 const KEY: &str = "schedule.key";
 const LABEL_MAX: usize = 80;
@@ -43,6 +55,8 @@ const LATE_MS: u64 = 2 * 3_600_000;
 const EARLIER_MAX: usize = 9;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ScheduleEntry"))]
 #[serde(deny_unknown_fields)]
 pub struct Entry {
     pub id: String,
@@ -79,6 +93,7 @@ pub struct Entry {
 
 /// Ticket 993: an entry's last run.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Last {
     /// The session the run started or sent its task to; absent when it could not start.
@@ -94,6 +109,7 @@ pub struct Last {
     pub reason: Option<String>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Outcome {
     Finished,
@@ -114,6 +130,7 @@ impl Outcome {
 
 /// Ticket 993: when an entry runs. `at` and `daily` as on `Entry`; `days` only on a repeating one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct When {
     pub at: String,
@@ -194,6 +211,8 @@ impl When {
 
 /// What a schedule starts: the owner's closed choice, never a raw `StartSession`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ScheduleRun"))]
 #[serde(deny_unknown_fields)]
 pub struct Run {
     pub kind: AgentKind,
@@ -219,13 +238,13 @@ pub struct Run {
 }
 impl Run {
     /// Kind, model and effort from the window's own lists; a name of printable characters.
-    fn check(&self) -> Result<(), String> {
+    pub(crate) fn check(&self) -> Result<(), String> {
         self.check_stored()?;
         self.check_model()
     }
     /// `check` without the model: what a stored entry must still pass after an update retires its model or effort
     /// (Q9 ja-J12-1). The model is checked when the entry is made and when it fires.
-    fn check_stored(&self) -> Result<(), String> {
+    pub(crate) fn check_stored(&self) -> Result<(), String> {
         // Ticket 994: a teammate may run an ACP agent. Its agent, model and effort are read from the teammate at
         // each fire (`team::open_seat`); what is stored here is for the list.
         let acp = self.kind == AgentKind::Acp && self.teammate.is_some();
@@ -856,7 +875,7 @@ fn push_last(e: &mut Entry, last: Last) {
 }
 
 /// Reads `path` through one NOFOLLOW handle: a regular file of at most `FILE_MAX` bytes, or `None` when absent.
-fn read_file(path: &Path) -> Result<Option<Vec<u8>>, String> {
+pub(crate) fn read_file(path: &Path) -> Result<Option<Vec<u8>>, String> {
     let name = path.file_name().unwrap_or_default().to_string_lossy();
     // NOFOLLOW: a symlinked file is refused, never read through (as tree.toml).
     let file = match OpenOptions::new()
@@ -931,7 +950,9 @@ fn read(path: &Path, key: &[u8]) -> Result<Vec<Entry>, String> {
     Ok(stored.schedules)
 }
 
-fn lock(registry: &Mutex<Sessions>) -> Result<std::sync::MutexGuard<'_, Sessions>, String> {
+pub(crate) fn lock(
+    registry: &Mutex<Sessions>,
+) -> Result<std::sync::MutexGuard<'_, Sessions>, String> {
     registry
         .lock()
         .map_err(|_| "session registry unavailable".to_string())
@@ -945,11 +966,13 @@ pub fn fire(
     now_ms: u64,
     offset: &dyn Fn(i64) -> i64,
 ) -> Vec<Result<String, String>> {
+    let mut starts = vec![];
     let (due, again) = match lock(registry) {
         Ok(mut sessions) => {
             let due = sessions.schedules.take_due(now_ms, offset);
             // The owner's "run it again" on a failed run's card (sessions.rs, the schedule card): as Run now.
             let again = std::mem::take(&mut sessions.schedule_reruns);
+            starts = std::mem::take(&mut sessions.trigger_starts);
             let all = sessions.schedules.list().unwrap_or_default();
             let again: Vec<Entry> = all.into_iter().filter(|e| again.contains(&e.id)).collect();
             (due, again)
@@ -960,6 +983,24 @@ pub fn fire(
     use crate::pressure::Who;
     for entry in &again {
         let _ = run_entry(registry, stopping, entry, now_ms, Who::Window);
+    }
+    // The owner's Start on a trigger's card; the card goes once the start ran.
+    let home = lock(registry).map(|s| s.home().to_path_buf());
+    for (card, name, run, about) in starts {
+        if let Ok(home) = &home {
+            let _ = triggers::start_card(
+                registry,
+                stopping,
+                home,
+                &name,
+                &run,
+                about.as_deref(),
+                &card,
+            );
+            if let Ok(mut sessions) = lock(registry) {
+                let _ = sessions.queue.answer_owner(|i| i.id == card);
+            }
+        }
     }
     due.into_iter()
         .map(|entry| run_entry(registry, stopping, &entry, now_ms, Who::Session))
@@ -977,7 +1018,13 @@ fn run_entry(
     let result = if stopping.load(Ordering::SeqCst) {
         Err("core is stopping".into())
     } else {
-        start(registry, stopping, entry, who)
+        start(
+            registry,
+            stopping,
+            entry,
+            who,
+            crate::plugins::Asker::Schedule,
+        )
     };
     let held = result.as_ref().is_err_and(|e| crate::pressure::is_held(e));
     // A due run that was held waits for memory and runs by itself (`pressure::wait`); its Last run says so.
@@ -1164,21 +1211,26 @@ fn teammate_of(registry: &Mutex<Sessions>, entry: &Entry) -> Result<String, Stri
     Ok(mate.id)
 }
 
-fn start(
+pub(crate) fn start(
     registry: &Mutex<Sessions>,
     stopping: &AtomicBool,
     entry: &Entry,
     who: crate::pressure::Who,
+    asker: crate::plugins::Asker,
 ) -> Result<String, String> {
     let run = &entry.run;
     // A teammate's schedule opens its seat (team.rs): the teammate as it is now, one session per seat, the task in
     // the brief of a new seat or alone to an open one. A removed teammate starts nothing.
     if let (Some(_), Some(task)) = (&run.teammate, &run.task) {
         let id = teammate_of(registry, entry)?;
+        // The task is a message the schedule sends to the seat: the message checks see it first.
+        let home = lock(registry)?.home().to_path_buf();
+        let task =
+            crate::plugins::check_send(&home, crate::plugins::Asker::Schedule, &run.label, task)?;
         return crate::team::open_seat(
             registry,
             &id,
-            Some(task),
+            Some(&task),
             run.level,
             crate::team::Opener::Schedule(&entry.id, who),
         )
@@ -1192,6 +1244,13 @@ fn start(
     // A model retired since the entry was made is this run's failure, not the whole file's (`check_stored`).
     run.check_model()?;
     let (session, first) = (run.start(), run.task.clone());
+    let home = lock(registry)?.home().to_path_buf();
+    crate::plugins::check_start(&home, asker, &session)?;
+    // The task is a message a schedule sends: it passes the message checks before anything starts.
+    let first = match first {
+        Some(task) => Some(crate::plugins::check_send(&home, asker, &run.label, &task)?),
+        None => None,
+    };
     crate::pressure::check_start(&session, who, false, "schedule")?;
     let launch = {
         let sessions = lock(registry)?;

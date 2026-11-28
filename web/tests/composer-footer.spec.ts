@@ -34,6 +34,19 @@ const footer = (page: Page) => {
   };
 };
 const box = async (l: Locator) => (await l.boundingBox())!;
+/** A composer width change reaches the side pane's room a frame later (composerRoom.ts runs `fit` from a ResizeObserver in the
+ *  next frame since #16), so a measure taken at once sees the new width with the old padding: chips 0 px wide. Wait until
+ *  the room and the chips row hold still for three frames (the first two can come before `fit`). */
+const settled = (page: Page) =>
+  page.evaluate(async () => {
+    const read = () => `${document.documentElement.style.getPropertyValue('--pane-room')} ${document.querySelector('.composer .chips')?.getBoundingClientRect().width}`;
+    for (let same = 0, last = read(), i = 0; same < 3 && i < 60; i++) {
+      await new Promise(requestAnimationFrame);
+      const now = read();
+      same = now === last ? same + 1 : 0;
+      last = now;
+    }
+  });
 const meet = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
   a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
 
@@ -55,6 +68,7 @@ for (const width of [null, 760, 480, 320] as const) {
     const f = await open(page, chatCore);
     const [ring0, send0] = [await box(f.ring), await box(f.send)];
     if (width) await page.addStyleTag({ content: `[data-zone-id="composer"] { flex: none !important; width: ${width}px !important; max-width: ${width}px !important; }` });
+    if (width) await settled(page);
     const zone = await box(page.locator('[data-zone-id="composer"]'));
     if (width) expect(Math.round(zone.width)).toBe(width);
     const boxes = { model: await box(f.model), effort: await box(f.effort), perm: await box(f.perm), ring: await box(f.ring), send: await box(f.send) };
@@ -119,6 +133,7 @@ for (const width of [600, 520, 460] as const) {
   test(`composer_chips_readable_when_narrow (${width}px): no chip is cut below about eight characters (B8, es1)`, async ({ page, chatCore }) => {
     const f = await open(page, chatCore);
     await page.addStyleTag({ content: `[data-zone-id="composer"] { flex: none !important; width: ${width}px !important; max-width: ${width}px !important; }` });
+    await settled(page);
     // Polled: an open side pane keeps the card beside it (--pane-room), set again on the next frame after the zone narrows.
     const cut = () => page.evaluate(() =>
       [...document.querySelectorAll<HTMLElement>('.composer .chips .pk-text, .composer .chips > .chip')]
@@ -189,6 +204,7 @@ test('composer_stays_beside_the_browser_pane (C S2-2): at 1440 px the card ends 
 test('narrow_model_chip_keeps_the_model_name', async ({ page, chatCore }) => {
   const f = await open(page, chatCore);
   await page.addStyleTag({ content: `[data-zone-id="composer"] { flex: none !important; width: 520px !important; max-width: 520px !important; }` });
+  await settled(page);
   await expect(f.model).toBeVisible();
   // Polled: the row settles once its last chip is drawn (w25-p: read on the first frame under load, the agent word still showed).
   await expect.poll(() => f.model.evaluate((chip) => {

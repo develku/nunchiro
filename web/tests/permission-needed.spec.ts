@@ -20,7 +20,7 @@ function lockedProject(core: Core) {
 test('a blocked session shows Permission needed with Open Settings and Restart session', async ({ app, core }) => {
   const project = lockedProject(core);
   try {
-    const trigger = path.join(project, 'never');
+    const trigger = 'never';
     const old = core.cli('session', 'start', '--kind', 'claude', '--project', project, '--label', 'ext', '--model', trigger, '--effort', 'high').session as Snap;
     await expect.poll(() => snapshot(core)[0].blocked, { timeout: 10_000 }).toEqual({ reason: 'file_access', path: project });
     await openWindow(app);

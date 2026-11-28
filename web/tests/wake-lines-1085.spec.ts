@@ -9,13 +9,13 @@ import type { ChatEvent } from '../src/chat/feed';
 import { buildRows } from '../src/chat/model';
 
 const FORMS = (JSON.parse(fs.readFileSync(path.join(REPO, 'crates/nunchiro-core/tests/fixtures/automatic-lines.json'), 'utf8')) as { lines: { kind: string; text: string }[] }).lines;
-const TEAM = new Set(['heartbeat', 'nudge', 'forward']);
+const TEAM = new Set(['heartbeat', 'nudge', 'forward', 'release']);
 let cursor = 0;
 const say = (text: string): ChatEvent => ({ schema_version: 1, cursor: ++cursor, data: { kind: 'message', role: 'user', text } });
 const shape = (...texts: string[]) => buildRows(texts.map(say)).map((r) => (r.kind === 'wakes' ? `wakes:${r.n}:${r.team}` : r.kind === 'user' ? `user:${r.text}` : r.kind));
 
 test('1085: every automatic line form the core types folds into the quiet row, alone or glued before the owner words', () => {
-  expect(new Set(FORMS.map((f) => f.kind))).toEqual(new Set(['wake', 'notice', 'heartbeat', 'nudge', 'forward']));
+  expect(new Set(FORMS.map((f) => f.kind))).toEqual(new Set(['wake', 'notice', 'heartbeat', 'nudge', 'forward', 'release']));
   for (const { kind, text } of FORMS) {
     const row = `wakes:1:${TEAM.has(kind) ? 1 : 0}`;
     expect(shape(text), text).toEqual([row]);

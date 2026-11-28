@@ -18,6 +18,7 @@ const NAME_MAX: usize = 40;
 const JOB_MAX: usize = 600;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Role {
     pub name: String,
     /// What a seat of this role does, in a few lines: it opens the seat's first prompt.

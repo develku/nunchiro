@@ -97,7 +97,7 @@ test('a core error on save is shown and the row keeps its stored value', async (
 
 test('after a core restart the window comes back with its tab, read-only, and nothing resumes by itself; Restart session resumes it (v25-shell-chrome, ticket 282)', async ({ app, core }) => {
   const project = core.project('demo');
-  core.agent(project, 'alpha', path.join(project, 'never'));
+  core.agent(project, 'alpha', 'never');
   await openWindow(app);
   const before = core.cli('snapshot', '--json').sessions[0];
   expect(before.state).toBe('running');

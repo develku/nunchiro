@@ -45,6 +45,7 @@ const KEPT: [&str; 3] = ["PATH", "HOME", "GH_CONFIG_DIR"];
 
 /// What the window gets for one PR.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Live {
     pub state: PrState,
     /// `https://github.com/<owner>/<repo>/pull/<n>`, rebuilt from validated pieces.
@@ -725,6 +726,38 @@ pub(crate) fn link_later(session: &str, agent: String, dir: std::path::PathBuf, 
             note_linked(&session, &pr.url, pr.state == PrState::Draft, agent);
         }
     });
+}
+
+/// The auto-link's input: with no PR chip yet, or one linked from the output, the agent may have opened a new PR (on
+/// another branch): with live PR status on, the session's terminal output is looked at; the gh check runs off this thread.
+pub(crate) fn link_from_output(
+    registry: &Mutex<Sessions>,
+    id: &str,
+    chip: Option<&crate::chat::pr::PrChip>,
+) {
+    if chip.is_some_and(|c| c.linked.is_none()) {
+        return;
+    }
+    let Ok(mut sessions) = registry.lock() else {
+        return;
+    };
+    let on = sessions
+        .pr_live(None, None, None)
+        .is_ok_and(|(on, _, _)| on);
+    // The rate limit before the output is copied under the lock.
+    if !on || !link_due(id) {
+        return;
+    }
+    let agent = sessions.session_meta(id).ok().map(|m| match m.kind {
+        AgentKind::Claude => "Claude".to_string(),
+        AgentKind::Codex => "Codex".to_string(),
+        AgentKind::Acp => m.acp_agent.unwrap_or_else(|| "the agent".into()),
+        AgentKind::Shell => "Shell".to_string(),
+    });
+    if let (Some(agent), Some((dir, output))) = (agent, sessions.output_tail(id)) {
+        drop(sessions);
+        link_later(id, agent, dir, &output);
+    }
 }
 
 /// The chip of the PR the app made for `session`, if any.

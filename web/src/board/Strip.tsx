@@ -25,7 +25,7 @@ export function ColourKey({ t }: { t: T }) {
   );
 }
 
-/** A chip's close mark. In a span so the window's 24px floor for icon-only buttons (styles.css) leaves the chip as tall as its neighbours. */
+/** A chip's close mark. In a span so the window's 24px floor for icon-only buttons (chrome.css) leaves the chip as tall as its neighbours. */
 const XMark = () => (
   <span aria-hidden>
     <Icon name="x" size={12} />

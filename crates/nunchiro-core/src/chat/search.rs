@@ -65,6 +65,8 @@ const CHUNK: usize = 1024 * 1024;
 const LINE_MAX: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "SearchFound"))]
 pub struct Found {
     pub session: String,
     /// `ok` (hits), `missing` (no transcript), `untested` (agent version whose chat shows final text only), `error`.
@@ -78,6 +80,7 @@ pub struct Found {
     pub more: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Hit {
     /// Its place among the session's matching events, in chat order: the event id `sessions_hit` resolves.
     pub n: usize,

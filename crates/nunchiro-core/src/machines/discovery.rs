@@ -73,12 +73,14 @@ pub(crate) fn known_hosts_option(path: &Path) -> Result<String, String> {
 }
 /// What settings.json holds for the alias, without what `ssh -G` adds: the Edit form starts from these.
 #[derive(Debug, Default, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Saved {
     pub host: Option<String>,
     pub user: Option<String>,
     pub port: Option<u32>,
 }
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Details {
     pub machine: String,
     pub host: Option<String>,
