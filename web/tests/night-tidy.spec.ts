@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { type Core, expect, openWindow, REPO, test } from './fixtures';
+import { type Core, expect, openSessionFromPalette, openWindow, REPO, test } from './fixtures';
 import { icon, sidebar } from './d5b';
 import { mates } from './leader-990';
 import { openSettings } from './settings-modal';
@@ -127,5 +127,68 @@ test('night_tidy_shots @shots: the card in Decisions', async ({ app, core }) => 
   for (const scheme of ['light', 'dark'] as const) {
     await app.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
     await app.screenshot({ path: path.join(shots, `night-tidy-card-${scheme}.png`) });
+  }
+});
+
+// The card docks in the chat it is for: the Chief's seat at Home, or each bot's own seat when there is no Chief (the
+// core picks which, `tidy.rs` `night`; here the snapshot names each shell session as a bot's seat).
+async function seats(app: Page, core: Core) {
+  // Seats are Claude sessions with a composer: a fake Claude stands in.
+  const src = path.join(REPO, 'crates/nunchiro-core/tests/fixtures/claude-mode');
+  fs.writeFileSync(path.join(core.home, 'bin', 'claude'), fs.readFileSync(src), { mode: 0o700 });
+  const nuni = core.agent(core.project('home'), 'Nuni · Chief', 'x');
+  const bom = core.agent(core.project('home'), 'Bom', 'x');
+  await app.routeWebSocket(/\/ws$/, (ws) => {
+    const server = ws.connectToServer();
+    server.onMessage((m) => {
+      if (typeof m !== 'string' || JSON.parse(m).event !== 'snapshot') return ws.send(m);
+      const msg = JSON.parse(m);
+      for (const s of msg.sessions ?? []) if (s.id === nuni.id || s.id === bom.id) s.teammate = s.id === nuni.id ? 'bot-nuni' : 'bot-bom';
+      // The card names the chat it docks in: the Chief's when there is one.
+      for (const d of msg.owner_decisions ?? []) if (d.owner?.type === 'night_tidy') d.session_id = chief ? 'bot-nuni' : 'bot-bom';
+      ws.send(JSON.stringify(msg));
+    });
+  });
+  return { nuni, bom };
+}
+let chief = true;
+const docked = (app: Page) => app.locator('.composer > .dock [data-night-tidy]');
+
+test('night_tidy_docked: the card docks in the Chief\'s chat, or in the bot\'s own without a Chief', async ({ app, core }) => {
+  await seedCard(app, core);
+  chief = true;
+  const { nuni, bom } = await seats(app, core);
+  await openWindow(app, {}, core);
+  await openSessionFromPalette(app, nuni.id);
+  await expect(docked(app)).toHaveAccessibleName('Night tidy for Bom');
+  await expect(docked(app).getByRole('checkbox', { name: `Add: ${merged.text}` })).toBeChecked();
+  await openSessionFromPalette(app, bom.id);
+  await expect(docked(app)).toHaveCount(0);
+  chief = false;
+  await app.reload();
+  await openSessionFromPalette(app, bom.id);
+  await expect(docked(app)).toHaveAccessibleName('Night tidy for Bom');
+  await openSessionFromPalette(app, nuni.id);
+  await expect(docked(app)).toHaveCount(0);
+  // The card opens the bot's Memory tab.
+  await openSessionFromPalette(app, bom.id);
+  await docked(app).getByRole('button', { name: "Open Bom's memory" }).click();
+  const view = app.getByRole('dialog', { name: 'Bots' });
+  await expect(view.getByRole('tab', { name: 'Memory' })).toHaveAttribute('aria-selected', 'true');
+  await expect(view.locator('[data-bot-memory="bot-bom"]')).toBeVisible();
+});
+
+test('night_tidy_docked_shots @shots: the card docked in the Chief\'s chat', async ({ app, core }) => {
+  const shots = path.join(REPO, '.scratch/shots');
+  fs.mkdirSync(shots, { recursive: true });
+  await seedCard(app, core);
+  chief = true;
+  const { nuni } = await seats(app, core);
+  await openWindow(app, {}, core);
+  await openSessionFromPalette(app, nuni.id);
+  await expect(docked(app)).toContainText('41k tokens');
+  for (const scheme of ['light', 'dark'] as const) {
+    await app.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await app.screenshot({ path: path.join(shots, `night-tidy-docked-${scheme}.png`) });
   }
 });

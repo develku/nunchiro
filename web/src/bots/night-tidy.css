@@ -16,7 +16,13 @@
   font-size: var(--fs-12);
 }
 .nt-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-8);
   margin: 0;
+}
+.nt-name .sp {
+  flex: 1;
 }
 .nt-changes {
   display: flex;
@@ -67,6 +73,7 @@
   overflow-wrap: anywhere;
 }
 .nt-note,
+.nt-count,
 .nt-notkept {
   margin: 0;
 }

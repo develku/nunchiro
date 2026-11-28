@@ -83,6 +83,7 @@ declare module '../index' {
     'tidy.night.checked': true;
     'tidy.night.discard': true;
     'tidy.night.apply': true;
+    'tidy.night.open': true;
     'tidy.night.remove': true;
     'tidy.night.add': true;
     'tidy.night.keep': true;
@@ -170,6 +171,7 @@ export const en = {
   'tidy.night.checked': '{n} of {total} lines checked',
   'tidy.night.discard': 'Discard',
   'tidy.night.apply': 'Apply checked',
+  'tidy.night.open': "Open {name}'s memory",
   'tidy.night.remove': 'Remove: {text}',
   'tidy.night.add': 'Add: {text}',
   'tidy.night.keep': 'Keep: {text}',

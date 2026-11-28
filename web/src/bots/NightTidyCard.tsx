@@ -9,6 +9,7 @@ import type { Key } from '../i18n';
 import type { OnAnswer, T } from '../tree/DecisionLine';
 import type { Decision } from '../types';
 import { LineIcon, type Fact, type Source } from './BotMemory';
+import { MEMORY_TAB, openBots } from './bots';
 import './night-tidy.css';
 
 type Proposal = { id: string; date: string; text: string; from: Source; topic?: string; at_ms: number };
@@ -99,6 +100,10 @@ export function NightTidyCard({ d, core, onAnswer, t }: { d: Decision; core: Cor
           <section key={p.id} className="nt-bot" aria-label={p.name} data-nt-bot={p.id}>
             <p className="nt-name">
               <b>{p.name}</b> <span className="dim">{t('tidy.night.counts', { changes, proposals: p.proposals.length })}</span>
+              <span className="sp" />
+              <button type="button" className="b" data-act="open-memory" onClick={() => openBots(p.id + MEMORY_TAB)}>
+                {t('tidy.night.open', { name: p.name })}
+              </button>
             </p>
             {changes > 0 && (
               <div className="nt-changes">
@@ -127,8 +132,8 @@ export function NightTidyCard({ d, core, onAnswer, t }: { d: Decision; core: Cor
       })}
       <p className="nt-note dim">{t('tidy.night.note')}</p>
       <ErrorLine t={t} error={err} className="dc-hint err" />
+      <p className="nt-count dim">{t('tidy.night.checked', { n: all.filter((a) => isOn(a.k)).length, total: all.length })}</p>
       <div className="nt-foot">
-        <span className="dim">{t('tidy.night.checked', { n: all.filter((a) => isOn(a.k)).length, total: all.length })}</span>
         <span className="sp" />
         <button type="button" className="b" data-act="discard" disabled={busy} onClick={discard}>
           {t('tidy.night.discard')}

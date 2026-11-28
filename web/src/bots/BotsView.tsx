@@ -15,7 +15,7 @@ import { isLevel, pairText, slotText, useLevels, type LevelTable } from '../lead
 import { openSchedules, useScheduleList, whenWords } from '../schedule/schedules';
 import { basename } from '../tree';
 import type { Session } from '../types';
-import { eyesOf, LEVELS_FOLD, type Bot, type Eyes } from './bots';
+import { eyesOf, LEVELS_FOLD, MEMORY_TAB, type Bot, type Eyes } from './bots';
 import { Face } from './Face';
 import { CoreFeatureClient } from '../settings/useFeatureSetting';
 import { MemoryRows, MemoryTab } from './BotMemory';
@@ -35,13 +35,13 @@ type Props = { core: CoreClient; t: T; sessions: Session[]; first?: string | nul
 export function BotsView({ core, t, sessions, first, open, onNew }: Props) {
   const team = useTeam(core, true);
   const { table, agents } = useLevels(core, true);
-  const [shown, setShown] = useState<string | null>(first === LEVELS_FOLD ? null : (first ?? null));
+  const [shown, setShown] = useState<string | null>(first === LEVELS_FOLD ? null : (first?.replace(MEMORY_TAB, '') ?? null));
   const bots = team.bots ?? [];
   const mates = new Map(team.teammates.map((m) => [m.id, m]));
   const eyes = new Map(bots.map((b) => [b.id, eyesOf(sessions, b.id)]));
   const bot = bots.find((b) => b.id === shown);
   const chat = (id: string) => void openSeat(core, id).then(({ session }) => open(session.id), () => {});
-  if (bot) return <BotPage core={core} t={t} bot={bot} mate={mates.get(bot.id)} eyes={eyes.get(bot.id)!} table={table} line={modelLine(t, table, bot, mates.get(bot.id))} back={() => setShown(null)} chat={() => chat(bot.id)} />;
+  if (bot) return <BotPage core={core} t={t} bot={bot} mate={mates.get(bot.id)} eyes={eyes.get(bot.id)!} table={table} line={modelLine(t, table, bot, mates.get(bot.id))} back={() => setShown(null)} chat={() => chat(bot.id)} memory={first === bot.id + MEMORY_TAB} />;
   const n = (e: Eyes) => bots.filter((b) => eyes.get(b.id) === e).length;
   const groups: [string, string, string, Bot[]][] = [
     ['seat', t('bots.group.seat'), t('bots.group.seatNote'), bots.filter((b) => b.seat.kind !== 'none')],
@@ -129,9 +129,9 @@ export function BotsView({ core, t, sessions, first, open, onNew }: Props) {
   );
 }
 
-function BotPage({ core, t, bot, mate, eyes, table, line, back, chat }: { core: CoreClient; t: T; bot: Bot; mate?: Teammate; eyes: Eyes; table: LevelTable; line: string; back: () => void; chat: () => void }) {
+function BotPage({ core, t, bot, mate, eyes, table, line, back, chat, memory }: { core: CoreClient; t: T; bot: Bot; mate?: Teammate; eyes: Eyes; table: LevelTable; line: string; back: () => void; chat: () => void; memory?: boolean }) {
   const schedules = (useScheduleList() ?? []).filter((s) => s.run.teammate === bot.id);
-  const [tab, setTab] = useState<'profile' | 'memory'>('profile');
+  const [tab, setTab] = useState<'profile' | 'memory'>(memory ? 'memory' : 'profile');
   const pinned = line !== t('bots.model.follows', { agent: agentWord(bot) });
   return (
     <div className="botsv" data-bots data-bot-page={bot.id}>
