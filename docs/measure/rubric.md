@@ -642,6 +642,13 @@ Where v2 differs from the audit's proposal, and why:
   runs the others is never put on a lane. Sessions joined to none are summed apart as unassigned. 1-hour cache writes
   are priced at twice the input price (the price page). Lanes built on another machine have no cost here (not
   measured, not 0); models with no published token price stay unpriced, listed by model.
+  A worktree add or push is found whatever flags come before the branch (`-q -b`, `-q -u`), and a projects folder that
+  a second account links to is read once. The journal is read whole and kept to the project by the script, with the
+  core's own lines that name no project: a core start or a full day file ends the states left open (before, a seat
+  gone with a stopped core stayed in its last state until the run). A journal that cannot be read leaves seat use and
+  permission waits null, not 0, and so does a journal with no live seat of the project. Owner touches are counted
+  only for lanes started after the record's first live ask or answer: a record that holds verdicts but never an ask
+  gives null owner figures, not 0 touches (stricter). No anchor or band changed.
 - Two readings put back on what their anchors name (2026-11-28, the PR flow). No anchor changed.
   Owner installs that landed (p05): each of the last 20 green main CI runs is one outcome: landed when an owner
   install of its commit is recorded, not landed otherwise (a wait, a refusal or a rollback, a failure, or no try).
