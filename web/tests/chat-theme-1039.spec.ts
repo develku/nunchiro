@@ -41,6 +41,7 @@ async function open(page: Page, core: ChatCore, more: unknown[] = []) {
     rec.result('t1', '42 passed'),
     rec.assistant(ANSWER),
     ...more,
+    rec.end(),
   );
   await openChat(page, s.id);
   const view = chat(page, s.id);

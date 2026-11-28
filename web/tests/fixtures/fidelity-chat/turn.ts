@@ -20,5 +20,6 @@ export function mockupTurn(file: string, cwd: string) {
     rec.use('t1', 'Bash', { command: 'npx playwright test tree-rows' }),
     rec.result('t1', '18 passed', { timestamp: '2026-10-29T10:00:42.000Z' }),
     rec.assistant('세션 행은 30px, 프로젝트 행은 목업의 25px로 맞췄어요. 시각 게이트 차이는 **1.6%**(기준 2%)예요.\n\n접힌 그룹 헤더에는 막대를 넣지 않았어요. 10-27 G2 결정의 고정 테스트가 있어서예요. [tree-rows.spec.ts:208](https://example.com/tree-rows.spec.ts#L208)'),
+    rec.end(),
   );
 }

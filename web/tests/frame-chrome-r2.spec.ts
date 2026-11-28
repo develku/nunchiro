@@ -19,6 +19,7 @@ const turn = (file: string, cwd: string) =>
     rec.use('t1', 'Bash', { command: 'pnpm test' }),
     rec.result('t1', '18 passed', { timestamp: '2026-10-29T10:00:42.000Z' }),
     rec.assistant('Done.'),
+    rec.end(),
   );
 
 test('transcript_views_cycle', async ({ page, chatCore }) => {
