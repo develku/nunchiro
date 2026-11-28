@@ -42,8 +42,10 @@ pub(crate) fn spawn(
         .name("webhook".into())
         .spawn(move || {
             let mut open: Option<TcpListener> = None;
+            let mut cache = None;
             while !stopping.load(Ordering::SeqCst) {
-                let wanted = super::triggers::webhook_on(&home);
+                let wanted =
+                    super::triggers::on_cached(&home, super::triggers::Source::Webhook, &mut cache);
                 match (&open, wanted) {
                     (None, true) => match TcpListener::bind(("127.0.0.1", port(&home))) {
                         Ok(l) => {

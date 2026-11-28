@@ -377,7 +377,7 @@ fn serve_locked(home: &Path) -> Result<(), String> {
         // sign-in login outlives this one), then the core winds down as after an `exit` request.
         if SIGNALLED.load(Ordering::SeqCst) {
             exit_on_signal(home, &sessions);
-            stopping.store(true, Ordering::SeqCst);
+            stop(&stopping);
             continue;
         }
         // Agent output makes the tick active for ACTIVE; any other ring (a changed board file, a memory wait, a
@@ -1775,7 +1775,7 @@ fn connection(
                 quitting.store(true, Ordering::SeqCst); // before `stopping`, so the wind-down reads it
                 let _ = fs::write(home.join(STOPPED), b""); // F24: before the socket goes
             }
-            stopping.store(true, Ordering::SeqCst);
+            self::stop(stopping);
         }
         // v1a-06: append cached remote rows after releasing local state.
         drop(sessions);
@@ -1966,6 +1966,20 @@ const IDLE_TICK: Duration = Duration::from_millis(250);
 const OBSERVER_IDLE: Duration = Duration::from_secs(1);
 /// S9 r3: how long the tick stays at TICK after a request, output or an agent's end.
 const ACTIVE: Duration = Duration::from_secs(2);
+/// The core's stop: sets `stopping` and wakes every task asleep in `wait_stop`, so a long wait ends at once.
+pub(crate) fn stop(stopping: &AtomicBool) {
+    let _held = STOP.0.lock().unwrap_or_else(|e| e.into_inner());
+    stopping.store(true, Ordering::SeqCst);
+    STOP.1.notify_all();
+}
+/// Sleeps up to `d`, or until `stop` sets `stopping`: a task's wait that the stop ends at once (no short sleep loop).
+pub(crate) fn wait_stop(stopping: &AtomicBool, d: Duration) {
+    let held = STOP.0.lock().unwrap_or_else(|e| e.into_inner());
+    let _ = STOP
+        .1
+        .wait_timeout_while(held, d, |_| !stopping.load(Ordering::SeqCst));
+}
+static STOP: (Mutex<()>, std::sync::Condvar) = (Mutex::new(()), std::sync::Condvar::new());
 /// S9: blocks until one of `fds` is readable (an accept is waiting) or `timeout` passes; an accept loop's idle wait.
 pub(crate) fn wait_readable(fds: &[std::os::fd::RawFd], timeout: Duration) {
     let mut fds: Vec<libc::pollfd> = fds

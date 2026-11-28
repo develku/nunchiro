@@ -171,9 +171,30 @@ fn save(home: &Path, mut triggers: Vec<Trigger>) -> Result<(), String> {
 /// One read-modify-write of the file at a time in this core.
 static WRITE: Mutex<()> = Mutex::new(());
 
-/// Whether a webhook trigger is on (the loopback port is open only then).
-pub fn webhook_on(home: &Path) -> bool {
-    load(home).is_ok_and(|all| all.iter().any(|t| t.on == Source::Webhook && !t.paused))
+/// What `on_cached` last read: triggers.json and the key as (inode, size, mtime), and the answer then.
+pub(crate) type OnCache = Option<([Option<(u64, u64, std::time::SystemTime)>; 2], bool)>;
+/// Whether a `source` trigger is on and not paused (the webhook port is open only then; the GitHub poller polls only
+/// then); read and checked again only when triggers.json or its key changed since the last call (the core writes them
+/// whole, by rename), not on every poll.
+pub(crate) fn on_cached(home: &Path, source: Source, cache: &mut OnCache) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let stamp = [FILE, super::KEY].map(|f| {
+        std::fs::symlink_metadata(home.join(f)).ok().map(|m| {
+            (
+                m.ino(),
+                m.len(),
+                m.modified().unwrap_or(std::time::UNIX_EPOCH),
+            )
+        })
+    });
+    if let Some((seen, on)) = cache
+        && *seen == stamp
+    {
+        return *on;
+    }
+    let on = load(home).is_ok_and(|all| all.iter().any(|t| t.on == source && !t.paused));
+    *cache = Some((stamp, on));
+    on
 }
 /// A webhook trigger's secret, for the listener's check.
 pub(crate) fn secret(home: &Path, name: &str) -> Option<String> {
@@ -733,6 +754,28 @@ mod tests {
             teammate: None,
             level: None,
         }
+    }
+
+    /// The cached answer follows each write of the file (and only then reads it again).
+    #[test]
+    fn on_cached_follows_each_write() {
+        let home = std::env::temp_dir().join(format!("trg-cache-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
+        let mut t: Trigger = serde_json::from_value(serde_json::json!({
+            "name": "ci", "on": "webhook", "run": run(), "secret": "a-long-shared-secret-1234"
+        }))
+        .unwrap();
+        let (mut hooks, mut github) = (None, None);
+        assert!(!on_cached(&home, Source::Webhook, &mut hooks));
+        save(&home, vec![t.clone()]).unwrap();
+        assert!(on_cached(&home, Source::Webhook, &mut hooks));
+        assert!(on_cached(&home, Source::Webhook, &mut hooks));
+        assert!(!on_cached(&home, Source::Github, &mut github));
+        t.paused = true;
+        save(&home, vec![t]).unwrap();
+        assert!(!on_cached(&home, Source::Webhook, &mut hooks));
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
