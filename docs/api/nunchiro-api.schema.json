@@ -7907,6 +7907,26 @@
           "type": "object"
         },
         {
+          "description": "`folder_offer`: the folders on their way in for this message (none when it named none the seat may have).",
+          "properties": {
+            "folders": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "folder_offered",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "folders"
+          ],
+          "type": "object"
+        },
+        {
           "properties": {
             "send": {
               "$ref": "#/$defs/Send"
@@ -11151,7 +11171,29 @@
           "x-stability": "stable"
         },
         {
-          "description": "The window's Remove on the Assistant's \"Access given\" line: the run's grant to `folder` ends (window only).",
+          "description": "The window's composer, before it sends a message: only the words the owner typed in it (no pasted text, handoff\ncontext or image path). The folders they name become the Assistant's for this run (`folder_grant`; window only);\nthe window holds its message until they are in.",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "op": {
+              "const": "folder_offer",
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "id",
+            "text"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "description": "The window's Remove on the Assistant's folder line: the run's grant to `folder` ends (window only).",
           "properties": {
             "folder": {
               "type": "string"
