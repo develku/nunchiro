@@ -724,3 +724,86 @@ fn the_room_copy_of_a_changed_agent_send_names_the_plugin() {
     assert_eq!(line["kind"], "typed", "{line}");
     assert_eq!(line["changed_by"], "Guard", "{line}");
 }
+
+/// Marks `guard` as installed from a catalogue whose kill list (as the core keeps it, read now) names it.
+fn killed_by_catalogue(home: &Path, reason: &str) {
+    let origin = "https://raw.githubusercontent.com/develku/nunchiro/";
+    let file = home.join("plugins.json");
+    let mut store: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    store["installed"] =
+        json!({"guard": {"commit": "0123456789abcdef0123456789abcdef01234567", "origin": origin}});
+    store["on"] = json!([]); // a refresh turns it off
+    std::fs::write(&file, store.to_string()).unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    std::fs::write(
+        home.join("plugin-kill-list.json"),
+        json!({"lists": {origin: [now, [{"id": "guard", "reason": reason}]]}}).to_string(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_blocked_check_that_fails_closed_keeps_refusing() {
+    let c = core("pgk");
+    // Its script would let everything through: it is not run; the block refuses.
+    plugin(
+        &c.home,
+        "session.start.before",
+        r#"printf '{"allow": true}\n'"#,
+        "refuse",
+        true,
+    );
+    killed_by_catalogue(&c.home, "It sent files to a stranger.");
+    let out = start(&c.home, None, false);
+    assert!(!out.status.success());
+    assert!(
+        stderr(&out).contains(
+            "Guard stopped this start: blocked by its catalogue: It sent files to a stranger."
+        ),
+        "{}",
+        stderr(&out)
+    );
+    // A blocked check that fails open decides nothing.
+    let c = core("pgk2");
+    plugin(
+        &c.home,
+        "session.start.before",
+        r#"printf '{"allow": true}\n'"#,
+        "allow",
+        true,
+    );
+    killed_by_catalogue(&c.home, "It sent files to a stranger.");
+    assert!(!stderr(&start(&c.home, None, false)).contains("stopped this start"));
+}
+
+#[test]
+fn two_switches_at_once_both_stay() {
+    // Turning two plugins on together: neither switch is lost (one lock around every change of plugins.json).
+    let c = core("pgl");
+    for id in ["a1", "a2", "a3", "a4"] {
+        let dir = c.home.join("plugins").join(id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("plugin.toml"),
+            format!("id = \"{id}\"\nname = \"{id}\"\nversion = \"1\"\n"),
+        )
+        .unwrap();
+    }
+    let runs: Vec<_> = ["a1", "a2", "a3", "a4"]
+        .into_iter()
+        .map(|id| {
+            let home = c.home.clone();
+            std::thread::spawn(move || ok(&home, &["plugin", "on", id]))
+        })
+        .collect();
+    for r in runs {
+        r.join().unwrap();
+    }
+    let store: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(c.home.join("plugins.json")).unwrap()).unwrap();
+    assert_eq!(store["on"], json!(["a1", "a2", "a3", "a4"]));
+}

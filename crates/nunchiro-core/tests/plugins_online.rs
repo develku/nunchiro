@@ -20,6 +20,16 @@ const SCRIPT: &str = "#!/bin/sh\necho hello\n";
 
 /// A fake origin: path to body, changeable while it serves.
 type Files = Arc<Mutex<BTreeMap<String, Vec<u8>>>>;
+/// Every path the origin was asked for, in order.
+static ASKED: Mutex<Vec<String>> = Mutex::new(Vec::new());
+fn asked(path: &str) -> usize {
+    ASKED
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|p| p.ends_with(path))
+        .count()
+}
 fn serve(files: Files) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -49,6 +59,10 @@ fn answer(mut stream: TcpStream, files: &Files) {
         .nth(1)
         .unwrap_or("")
         .trim_start_matches('/');
+    ASKED
+        .lock()
+        .unwrap()
+        .push(format!("{}:{path}", stream.local_addr().unwrap().port()));
     let out = match files.lock().unwrap().get(path) {
         Some(body) => {
             let mut out = format!(
@@ -93,6 +107,7 @@ fn setup(tag: &str) -> (std::path::PathBuf, Files, Catalog) {
     let home = home::short(tag);
     let files: Files = Default::default();
     publish(&files, "1.0.0");
+    kill(&files, json!([]));
     let catalog = Catalog::with_origin(&home, &serve(files.clone())).unwrap();
     (home, files, catalog)
 }
@@ -355,4 +370,85 @@ fn a_kill_list_of_another_version_is_refused() {
             .into_bytes(),
     );
     assert!(catalog.refresh_kill_list().is_err());
+}
+
+#[test]
+fn an_entry_a_newer_list_adds_fields_to_still_blocks() {
+    use nunchiro_core::plugins_online::parse_kill_list;
+    let list = json!({"version": 1, "plugins": [
+        {"id": "a", "reason": "bad", "advisory": "https://example.com"},
+        {"id": "b"},
+        {"id": "c", "reason": ""}
+    ]});
+    let killed = parse_kill_list(list.to_string().as_bytes()).unwrap();
+    let ids: Vec<_> = killed.iter().map(|k| k.id.as_str()).collect();
+    assert_eq!(ids, ["a", "b", "c"]);
+    assert_eq!(killed[1].reason, "on its catalogue's kill list");
+    assert_eq!(killed[2].reason, "on its catalogue's kill list");
+}
+
+#[test]
+fn a_first_install_refuses_when_the_kill_list_cannot_be_read() {
+    let (home, files, catalog) = setup("pkr");
+    files.lock().unwrap().remove("main/plugins/kill-list.json");
+    let e = catalog.install("hello").unwrap_err();
+    assert_eq!(
+        e,
+        "the plugin safety list could not be read; try again later"
+    );
+    assert!(!home.join("plugins/hello").exists());
+}
+
+#[test]
+fn a_kill_list_that_cannot_be_read_is_not_asked_for_again_within_15_minutes() {
+    let (home, files, catalog) = setup("pkf");
+    kill(&files, json!([]));
+    catalog.install("hello").unwrap();
+    let port = catalog_port(&catalog);
+    // The list is old and cannot be read now.
+    files.lock().unwrap().remove("main/plugins/kill-list.json");
+    let cache = home.join("plugin-kill-list.json");
+    let mut v: Value = serde_json::from_slice(&fs::read(&cache).unwrap()).unwrap();
+    // Six hours and more since it was read and asked for.
+    for (_, list) in v["lists"].as_object_mut().unwrap() {
+        list[0] = json!(0);
+    }
+    for (_, at) in v["tried"].as_object_mut().unwrap() {
+        *at = json!(0);
+    }
+    fs::write(&cache, v.to_string()).unwrap();
+    let before = asked(&format!("{port}:main/plugins/kill-list.json"));
+    for _ in 0..5 {
+        plugins::list(&home, true, false);
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    assert_eq!(
+        asked(&format!("{port}:main/plugins/kill-list.json")) - before,
+        1
+    );
+}
+
+#[test]
+fn a_plugin_folder_removed_by_hand_asks_for_no_kill_list() {
+    let (home, files, catalog) = setup("pkd");
+    kill(&files, json!([]));
+    catalog.install("hello").unwrap();
+    let port = catalog_port(&catalog);
+    fs::remove_dir_all(home.join("plugins/hello")).unwrap();
+    fs::remove_file(home.join("plugin-kill-list.json")).unwrap();
+    let before = asked(&format!("{port}:main/plugins/kill-list.json"));
+    plugins::list(&home, true, false);
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    assert_eq!(
+        asked(&format!("{port}:main/plugins/kill-list.json")),
+        before
+    );
+}
+fn catalog_port(c: &Catalog) -> String {
+    c.origin()
+        .trim_end_matches('/')
+        .rsplit(':')
+        .next()
+        .unwrap()
+        .to_string()
 }

@@ -144,14 +144,19 @@ pub fn parse(bytes: &[u8]) -> Result<Vec<Entry>, String> {
 }
 
 /// One plugin the catalogue blocks: every copy, or only the listed commits.
+/// Fields a newer list adds are ignored, so an older Nunchiro still blocks the entry (blocking more is the safe way).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Killed {
     pub id: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub commits: Vec<String>,
+    #[serde(default)]
     pub reason: String,
 }
+/// The reason shown for an entry that gives none (or none that can be shown).
+const NO_REASON: &str = "on its catalogue's kill list";
+/// How long after a kill list could not be read it is asked for again.
+const KILL_RETRY_MS: u64 = 15 * 60 * 1000;
 #[derive(Deserialize)]
 struct KillList {
     version: u32,
@@ -173,13 +178,25 @@ pub fn parse_kill_list(bytes: &[u8]) -> Result<Vec<Killed>, String> {
         .into_iter()
         .take(4096)
         .filter_map(|v| serde_json::from_value::<Killed>(v).ok())
-        .filter(|k| plain(&k.reason, 1024) && !k.reason.is_empty())
+        .map(|mut k| {
+            if k.reason.trim().is_empty() || !plain(&k.reason, 1024) {
+                k.reason = NO_REASON.into();
+            }
+            k
+        })
         .collect())
 }
 #[derive(Default, Serialize, Deserialize)]
 struct KillCache {
     #[serde(default)]
     lists: BTreeMap<String, (u64, Vec<Killed>)>,
+    /// When each catalogue's list was last asked for, read or not: a failed read waits `KILL_RETRY_MS`.
+    #[serde(default)]
+    tried: BTreeMap<String, u64>,
+}
+fn save_kill_cache(home: &Path, cache: &KillCache) -> Result<(), String> {
+    let bytes = serde_json::to_vec(cache).map_err(|e| e.to_string())?;
+    crate::store::atomic_write(&home.join(KILL_CACHE), &bytes)
 }
 fn kill_cache(home: &Path) -> KillCache {
     fs::read(home.join(KILL_CACHE))
@@ -200,24 +217,44 @@ pub(crate) fn killed(home: &Path, origin: &str, id: &str, commit: &str) -> Optio
 /// Reads the kill lists again off the caller's thread when one an installed plugin came from is older than 6 hours.
 /// Nothing is read while no plugin came from a catalogue.
 pub(crate) fn refresh_if_stale(home: &Path) {
-    static RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    let installed = crate::plugins::installed(home);
+    // One read at a time per home.
+    static RUNNING: std::sync::Mutex<std::collections::BTreeSet<PathBuf>> =
+        std::sync::Mutex::new(std::collections::BTreeSet::new());
+    let running = || RUNNING.lock().unwrap_or_else(|e| e.into_inner());
+    // Only installs whose folder is still there: one deleted by hand keeps no reads going.
+    let present = crate::plugins::ids(home);
+    let installed: Vec<_> = crate::plugins::installed(home)
+        .into_iter()
+        .filter(|(id, _)| present.contains(id))
+        .collect();
     if installed.is_empty() {
         return;
     }
-    let cache = kill_cache(home);
+    let mut cache = kill_cache(home);
     let now = crate::queue::now_ms();
     let stale: std::collections::BTreeSet<String> = installed
-        .into_values()
-        .map(|i| i.origin)
+        .into_iter()
+        .map(|(_, i)| i.origin)
         .filter(|o| {
             cache
                 .lists
                 .get(o)
                 .is_none_or(|(at, _)| now.saturating_sub(*at) > KILL_FRESH_MS)
+                && cache
+                    .tried
+                    .get(o)
+                    .is_none_or(|at| now.saturating_sub(*at) > KILL_RETRY_MS)
         })
         .collect();
-    if stale.is_empty() || RUNNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+    if stale.is_empty() || !running().insert(home.to_path_buf()) {
+        return;
+    }
+    // Marked before the read, so a read that fails (or hangs) is not started again for 15 minutes.
+    for o in &stale {
+        cache.tried.insert(o.clone(), now);
+    }
+    if save_kill_cache(home, &cache).is_err() {
+        running().remove(home);
         return;
     }
     let home = home.to_path_buf();
@@ -231,7 +268,7 @@ pub(crate) fn refresh_if_stale(home: &Path) {
                 eprintln!("plugin kill list: {e}");
             }
         }
-        RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
+        running().remove(&home);
     });
 }
 
@@ -259,11 +296,10 @@ impl Catalog {
         let list = parse_kill_list(&get(&self.origin, TOTAL, KILL_LIST, CATALOG_CAP)?)?;
         let _one = INSTALL.lock().map_err(|_| "plugin installs unavailable")?;
         let mut cache = kill_cache(&self.home);
-        cache
-            .lists
-            .insert(self.origin.clone(), (crate::queue::now_ms(), list.clone()));
-        let bytes = serde_json::to_vec(&cache).map_err(|e| e.to_string())?;
-        crate::store::atomic_write(&self.home.join(KILL_CACHE), &bytes)?;
+        let now = crate::queue::now_ms();
+        cache.lists.insert(self.origin.clone(), (now, list.clone()));
+        cache.tried.insert(self.origin.clone(), now);
+        save_kill_cache(&self.home, &cache)?;
         for (id, at) in crate::plugins::installed(&self.home) {
             if at.origin == self.origin
                 && killed(&self.home, &self.origin, &id, &at.commit).is_some()
@@ -274,14 +310,23 @@ impl Catalog {
         }
         Ok(list)
     }
+    /// The origin this catalogue reads (a test checks what it asked for).
+    pub fn origin(&self) -> &str {
+        &self.origin
+    }
     pub fn entries(&self) -> Result<Vec<Entry>, String> {
         parse(&get(&self.origin, TOTAL, CATALOG, CATALOG_CAP)?)
     }
     /// Downloads `id`'s files at its commit, checks each hash, and only then puts the folder in `plugins/<id>`
     /// (an older one goes to `plugins/.removed/`, as Remove does). One mismatch installs nothing.
     pub fn install(&self, id: &str) -> Result<(), String> {
-        // A kill list that cannot be read now is the one read last (Orca keeps its cached list too).
-        let _ = self.refresh_kill_list();
+        // A kill list that cannot be read now is the one read last (Orca keeps its cached list too); with none read
+        // yet, the install fails closed (the catalogue is on the same host, so this rarely costs anything).
+        if self.refresh_kill_list().is_err()
+            && !kill_cache(&self.home).lists.contains_key(&self.origin)
+        {
+            return Err("the plugin safety list could not be read; try again later".into());
+        }
         let until = Instant::now() + TOTAL;
         let entry = self
             .entries()?
