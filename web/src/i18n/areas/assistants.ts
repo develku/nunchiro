@@ -43,6 +43,13 @@ declare module '../index' {
     'onboarding.assistant.open': true;
     'onboarding.assistant.rename': true;
     'onboarding.assistant.noClaude': true;
+    // English only until the translation pass.
+    'field.homeConnectors': true;
+    'assistants.accountConnectors': true;
+    'assistants.accountConnectorsDesc': true;
+    'assistants.connectorsOff': true;
+    'assistants.mailOffDesc': true;
+    'assistants.allowedOffDesc': true;
   }
 }
 
@@ -86,6 +93,12 @@ export const en = {
   "onboarding.assistant.open": "Open {name}",
   "onboarding.assistant.rename": "Rename it in Settings › Assistants.",
   "onboarding.assistant.noClaude": "Your main assistant runs on Claude, and Claude was not found on this Mac. Install Claude, then come back, or skip this step.",
+  "field.homeConnectors": "Account connectors",
+  "assistants.accountConnectors": "Account connectors",
+  "assistants.accountConnectorsDesc": "Off: the assistant starts with no tool servers at all, so your claude.ai connectors (mail, calendar and the rest) never load. It still works with files in its folders.",
+  "assistants.connectorsOff": "Off",
+  "assistants.mailOffDesc": "Account connectors are off, so the assistant does not reach your mail.",
+  "assistants.allowedOffDesc": "Allowed: files in its folders, shell commands that ask, stage an Outbox card. No mail, calendar or other tool server.",
 };
 export const ko = {
   "assistants.title": "비서",

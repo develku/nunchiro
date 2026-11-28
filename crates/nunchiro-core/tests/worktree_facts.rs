@@ -304,6 +304,95 @@ fn list_includes_sessionless_worktrees() {
     );
 }
 
+/// A `session start --worktree` folder is in the list when the start answers, with no window to adopt it: the project's
+/// Remove reads this list, and a worktree missing from it was stopped and its session history deleted as a plain session.
+#[test]
+fn a_worktree_start_is_listed_when_it_answers() {
+    let core = Core::new();
+    let started = core
+        .op(json!({"op":"start","session":{"kind":"shell","project":core.repo,"worktree":true,"label":"wt","args":["/bin/cat"],"model":null,"effort":null,"resume":null}}))
+        .unwrap();
+    let cwd = started["session"]["cwd"].as_str().unwrap().to_string();
+    assert_ne!(PathBuf::from(&cwd), core.repo, "{started}");
+    let row = core
+        .row(&json!(cwd))
+        .expect("the start's worktree is listed at once");
+    assert_eq!(row["missing"], false);
+    assert!(
+        row["branch"].as_str().unwrap().starts_with("nunchiro/"),
+        "{row}"
+    );
+}
+
+/// The start's record reads no facts of the project's other worktrees (review of the first round: with 30 worktrees a
+/// start answered after about 3 s, each a 10 s-bounded git read): the git it runs is the same with 1 worktree or 7.
+#[test]
+fn a_worktree_start_runs_no_git_per_worktree() {
+    let core = Core::new();
+    let log = core.home.join("git.log");
+    let git_bin = core.home.join("bin/git");
+    fs::write(
+        &git_bin,
+        format!(
+            "#!/bin/sh\necho \"$*\" >> \"{}\"\nexec /usr/bin/git \"$@\"\n",
+            log.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(
+        &git_bin,
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .unwrap();
+    let start = |label: &str| {
+        let _ = fs::remove_file(&log);
+        core.op(json!({"op":"start","session":{"kind":"shell","project":core.repo,"worktree":true,"label":label,"args":["/bin/cat"],"model":null,"effort":null,"resume":null}}))
+            .unwrap();
+        fs::read_to_string(&log).unwrap_or_default().lines().count()
+    };
+    core.create("one");
+    let few = start("a");
+    for i in 0..6 {
+        core.create(&format!("more{i}"));
+    }
+    let many = start("b");
+    assert!(few > 0, "the wrapper sees the core's git");
+    assert_eq!(
+        many, few,
+        "git calls of a start with 7 worktrees, against 2"
+    );
+}
+
+/// A `--worktree` start forwarded from another Mac is recorded too, and the core still answers (round 2 of the review:
+/// the record took the registry lock the start still held, and the core froze for good).
+#[test]
+fn a_forwarded_worktree_start_is_listed_and_the_core_answers() {
+    let core = Core::new();
+    let parent = core
+        .op(json!({"op":"start","session":{"kind":"shell","project":core.repo,"label":"parent","args":["/bin/cat"],"model":null,"effort":null,"resume":null}}))
+        .unwrap();
+    let request = json!({"op":"forwarded","caller":{"id":parent["session"]["id"],"project":core.repo,"permission_answers":false},
+        "request":{"op":"start","session":{"kind":"shell","project":core.repo,"worktree":true,"label":"fwd","args":["/bin/cat"],"model":null,"effort":null,"resume":null}}});
+    let home = core.home.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(
+            call(&home, serde_json::from_value(request).unwrap())
+                .map(|r| serde_json::to_value(r).unwrap()),
+        );
+    });
+    let started = rx
+        .recv_timeout(Duration::from_secs(30))
+        .expect("the core answers a forwarded worktree start")
+        .unwrap();
+    let cwd = started["session"]["cwd"].as_str().unwrap().to_string();
+    assert_ne!(PathBuf::from(&cwd), core.repo, "{started}");
+    assert!(
+        core.row(&json!(cwd)).is_some(),
+        "the forwarded start's worktree is listed"
+    );
+}
+
 #[test]
 fn removed_outside_nunchiro_shows_gone() {
     let core = Core::new();
@@ -1113,9 +1202,11 @@ fn adopt_session_worktree_then_rename_and_remove_ask() {
         panic!()
     };
     let path = json!(session.cwd);
+    // The start records its worktree before it answers (a_worktree_start_is_listed_when_it_answers); the window's adopt
+    // of the same folder is then a no-op.
     assert!(
-        core.row(&path).is_none(),
-        "a session's worktree has no record yet"
+        core.row(&path).is_some(),
+        "a session's worktree is recorded by its start"
     );
     let git_before = git(&core.repo, &["worktree", "list", "--porcelain"]);
     let r = core.wt("adopt", json!({"path":path})).unwrap();

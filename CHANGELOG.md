@@ -2,6 +2,12 @@
 
 What changed for people who use Nunchiro. Newest first. Nunchiro is in development; expect breaking changes.
 
+## 2026-11-28
+
+- Settings > Assistants has an Account connectors switch. Off, your assistant starts with no tool server at all, so
+  your claude.ai connectors (mail, calendar and the rest) never reach it, and any tool from one is refused if it shows
+  up anyway. It still works with files in its folders. It applies the next time the assistant's seat starts.
+
 ## 2026-11-26
 
 - A new bot takes a name and one sentence: "New bot" in the Bots view, or "New bot…" in the command palette. Its face
