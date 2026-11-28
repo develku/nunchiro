@@ -16,12 +16,20 @@ pub(crate) fn check_skill(name: &str, text: &str) -> Result<(), String> {
     if text.len() > MAX_SKILL {
         return Err(format!("skill {name}: SKILL.md is over 64 KB"));
     }
+    // A YAML reader breaks lines at \r and U+0085 too, and Claude retries a frontmatter with its tabs made spaces:
+    // either could show the review one key and Claude another. Only \n is a line break here.
+    if text.chars().any(|c| c.is_control() && c != '\n') {
+        return Err(format!(
+            "skill {name}: SKILL.md has a tab or control character; only plain lines and spaces"
+        ));
+    }
     if text.chars().any(crate::board::rights::hidden) {
         return Err(format!(
             "skill {name}: SKILL.md has a hidden or bidi character the review would not show"
         ));
     }
-    if text.contains("!`") {
+    // Claude runs an inline !`cmd` and a fenced ```! block; its own escape treats `! as one too.
+    if text.contains("!`") || text.contains("`!") {
         return Err(format!(
             "skill {name}: SKILL.md has a !`command`, which Claude runs when the skill loads; a plugin skill is text only"
         ));
@@ -42,7 +50,12 @@ pub(crate) fn check_skill(name: &str, text: &str) -> Result<(), String> {
         let (key, value) = line.split_once(':').unwrap_or((line, ""));
         match key {
             "name" => {
-                if value.trim().trim_matches(['"', '\'']) != name {
+                let v = value.trim();
+                let unquoted = [('"', '"'), ('\'', '\'')]
+                    .iter()
+                    .find_map(|(a, b)| v.strip_prefix(*a)?.strip_suffix(*b))
+                    .unwrap_or(v);
+                if unquoted != name {
                     return Err(format!(
                         "skill {name}: its SKILL.md name is not the folder's name"
                     ));
@@ -100,9 +113,10 @@ pub(crate) fn claude_skill_flags(home: &Path) -> Vec<OsString> {
     out
 }
 
-/// The approved SKILL.md files in `plugin-skills/<id>-<hash>/`, with the core's own plugin.json. A folder per approved
-/// copy is never rewritten, so a start that reads one while another start writes the next sees a whole folder.
-/// shortcut: old copies stay (a few KB each); tidy them when a plugin is removed if the folder ever grows.
+/// The approved SKILL.md files in `plugin-skills/<id>-<hash>/`, with the core's own plugin.json, rebuilt from the
+/// approved bytes at every start: nothing planted or edited there, nor a link in its place, reaches Claude.
+/// shortcut: a start that reads the folder while another start swaps it in may miss the skills once; fine for a few KB
+/// rebuilt per start, use one folder per start if that is ever seen.
 fn copy(home: &Path, id: &str, p: &Plugin, proof: &approval::Proof) -> Result<PathBuf, String> {
     let file = |path: &str| {
         proof
@@ -112,19 +126,16 @@ fn copy(home: &Path, id: &str, p: &Plugin, proof: &approval::Proof) -> Result<Pa
             .map(|f| f.bytes())
     };
     check_skills(p, file)?;
-    let hash: String = proof
-        .hash()
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .take(16)
-        .collect();
-    let root = home.join(OWN).join(format!("{id}-{hash}"));
-    if root.join(".claude-plugin/plugin.json").is_file() {
-        return Ok(root);
+    let own = home.join(OWN);
+    if own.symlink_metadata().is_ok_and(|m| !m.is_dir()) {
+        return Err("the plugin-skills folder is a link or a file".into());
     }
-    let fresh = home
-        .join(OWN)
-        .join(format!(".{id}-{hash}-{}", std::process::id()));
+    let root = own.join(format!("{id}-{}", proof.hash()));
+    let fresh = own.join(format!(
+        ".{id}-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
     let _ = fs::remove_dir_all(&fresh);
     let manifest = serde_json::json!({
         "name": format!("plugin-{id}"),
@@ -150,15 +161,20 @@ fn copy(home: &Path, id: &str, p: &Plugin, proof: &approval::Proof) -> Result<Pa
         }
         crate::store::atomic_write(&at, &bytes)?;
     }
-    match fs::rename(&fresh, &root) {
-        Ok(()) => Ok(root),
-        // Another start made the same copy first.
-        Err(_) if root.join(".claude-plugin/plugin.json").is_file() => {
-            let _ = fs::remove_dir_all(&fresh);
-            Ok(root)
+    // Whatever is at the copy's name goes (a link itself, never what it points to), then the fresh copy takes it.
+    let clear = |at: &Path| match at.symlink_metadata() {
+        Ok(m) if m.is_dir() => fs::remove_dir_all(at),
+        Ok(_) => fs::remove_file(at),
+        Err(_) => Ok(()),
+    };
+    for _ in 0..3 {
+        clear(&root).map_err(|e| e.to_string())?;
+        if fs::rename(&fresh, &root).is_ok() {
+            return Ok(root);
         }
-        Err(e) => Err(e.to_string()),
     }
+    let _ = fs::remove_dir_all(&fresh);
+    Err("the skills copy could not be put in place".into())
 }
 
 /// A plugin `sk` with skill `review` (`md` its SKILL.md), its own script, hooks, MCP file and plugin.json beside it,

@@ -1021,6 +1021,13 @@
           "description": "v1b-33: a `read` entry covers the user's whole home (`home_wide` against the core's HOME); the sheet warns.",
           "type": "boolean"
         },
+        "skills": {
+          "description": "A plugin's skills with their SKILL.md text, so the user reads what will instruct Claude before the yes.",
+          "items": {
+            "$ref": "#/$defs/SkillText"
+          },
+          "type": "array"
+        },
         "state": {
           "$ref": "#/$defs/ApprovalState"
         },
@@ -15908,6 +15915,21 @@
       },
       "required": [
         "name"
+      ],
+      "type": "object"
+    },
+    "SkillText": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "text"
       ],
       "type": "object"
     },

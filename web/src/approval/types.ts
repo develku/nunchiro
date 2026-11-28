@@ -33,6 +33,8 @@ export interface ApprovalView {
   added?: string[];
   /** A plugin's shortcuts and status items, one line each. */
   extras?: string[];
+  /** A plugin's skills with their SKILL.md text: what will instruct Claude. */
+  skills?: { name: string; text: string }[];
   parts?: { name: string; title: string; kind: 'panel' | 'command' | 'check'; runs: string[]; network?: string[]; read?: string[]; interval_secs?: number; writes_draft?: boolean; check_on?: 'session.start.before' | 'prompt.send.before'; on_error?: 'refuse' | 'allow' }[];
 }
 

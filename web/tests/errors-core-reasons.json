@@ -572,5 +572,7 @@
  "only a GitHub trigger watches a repository": "guard: a request-shape check of Add trigger; the window's form sends a repository and an event exactly for a GitHub trigger and a label only for a labeled one",
  "only a labeled trigger has a label": "guard: a request-shape check of Add trigger; the window's form sends a repository and an event exactly for a GitHub trigger and a label only for a labeled one",
  "{}: expected true or false": "guard: the Settings save check of home.connectors_off; the Assistants page saves it only as true or false",
- "the lead was not told: {}": "internal: a step of the core's auto-advance thread (advance.rs), written to the core log and the room's note; no window request runs it"
+ "the lead was not told: {}": "internal: a step of the core's auto-advance thread (advance.rs), written to the core log and the room's note; no window request runs it",
+ "the plugin-skills folder is a link or a file": "internal: a Claude start's plugin skills copy (plugins/skills.rs), written to the core log; the start goes on without them",
+ "the skills copy could not be put in place": "internal: a Claude start's plugin skills copy (plugins/skills.rs), written to the core log; the start goes on without them"
 }
