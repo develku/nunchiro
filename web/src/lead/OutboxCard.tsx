@@ -24,8 +24,8 @@ const BODIES = ['body', 'description'];
 const opOf = (tool: string) => tool.split('__').pop() ?? tool;
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
 type File = { path: string; text?: string };
-// A command card (outbox.rs `COMMAND`): the exact line Send runs once, and each file it names as the core read it (the
-// program by its hash only). It has no Open by hand.
+// A command card (outbox.rs `COMMAND`): the exact line Send runs once, and the text of each file it names as the core
+// read it, the program's too when it is a script (a binary program is bound by its hash only). No Open by hand.
 const files = (v: unknown): File[] => (Array.isArray(v) ? v.filter((f): f is File => typeof f?.path === 'string' && typeof f.text === 'string') : []);
 
 export function OutboxCard({ d, onAnswer, t }: { d: Decision; onAnswer: OnAnswer; t: T }) {
@@ -90,8 +90,8 @@ export function OutboxCard({ d, onAnswer, t }: { d: Decision; onAnswer: OnAnswer
               </dd>
             </div>
           </dl>
-          {files(a.files).map((f) => (
-            <div key={f.path}>
+          {files(a.files).map((f, i) => (
+            <div key={`${i}:${f.path}`}>
               <p className="obx-why">{t('outbox.card.file', { path: plain(f.path) })}</p>
               <div className="obx-body" tabIndex={0}>
                 {plain(f.text ?? '')}

@@ -222,10 +222,13 @@ pub const COMMAND: &str = "Bash";
 const LINE_MAX: usize = 2000;
 const WORDS_MAX: usize = 32;
 
+/// The largest file a command card reads (the program and each file it names), checked before any read.
+pub const FILE_MAX: u64 = 32 * 1024;
+
 /// A command card's line: one space between plain words (letters, digits and `._/-+,:@%=`), so the shell runs exactly
-/// the words the card shows: no quote, glob, `~`, `$`, redirect, separator or line break. The program is named by its
-/// full path (no PATH lookup); a word with a `/` is a full path too.
-/// shortcut: a bare word the program reads as a file in the seat's folder is not bound; name files by full path.
+/// the words the card shows: no quote, glob, `~`, `$`, redirect, separator or line break. Every word is a full path
+/// (`bound` then requires a regular file): a bare word could name more code the card does not bind (a launcher's
+/// `python3 -m mod`, `sh -c name`, `make target`), and zsh reads a word that starts with `=` as a PATH lookup.
 pub fn command_words(line: &str) -> Result<Vec<&str>, String> {
     let words: Vec<&str> = line.split(' ').collect();
     if line.len() > LINE_MAX || words.len() > WORDS_MAX {
@@ -241,17 +244,17 @@ pub fn command_words(line: &str) -> Result<Vec<&str>, String> {
     }) {
         return Err("a command card's line is plain words with one space between: letters, digits and ._/-+,:@%= only (no quotes, globs, ~, $, redirects or separators); put text in a file the command reads".into());
     }
-    if words.iter().any(|w| w.contains('/') && !w.starts_with('/')) || !words[0].starts_with('/') {
-        return Err(
-            "a command card names its program and every file by its full path (/...)".into(),
-        );
+    if words.iter().any(|w| !w.starts_with('/')) {
+        return Err("a command card is a program and the files it uses, each named by its full path (/...): no other word, so put recipients and text in a file".into());
     }
     Ok(words)
 }
 
 /// The call a card binds and the seat's hook checks: an MCP call's arguments as they are; a command's line with every
-/// file it names (`command_words`), read now: the program by its hash, each other file by its hash and its whole text,
-/// which the card shows. A file that changes after the owner's yes makes another call, which the card does not allow.
+/// file it names (`command_words`), read now. Each is a regular file of at most `FILE_MAX` bytes (the size is checked
+/// before the read): the program by its hash, and its text when it is UTF-8 (a script); each other file by its hash
+/// and its whole text, which must be UTF-8. The card shows every text. A file that changes after the owner's yes makes
+/// another call, which the card does not allow.
 pub fn bound(tool: &str, args: &Value) -> Result<Value, String> {
     use sha2::{Digest, Sha256};
     if tool != COMMAND {
@@ -264,29 +267,49 @@ pub fn bound(tool: &str, args: &Value) -> Result<Value, String> {
     let words = command_words(line)?;
     let mut files = vec![];
     for (i, word) in words.iter().enumerate() {
-        let path = std::path::Path::new(word);
-        let is_file = std::fs::metadata(path).is_ok_and(|m| m.is_file());
-        if i > 0 && word.starts_with('/') && path.is_dir() {
+        let meta = std::fs::metadata(word).map_err(|e| format!("{word}: {e}"))?;
+        if !meta.is_file() {
             return Err(format!(
-                "{word} is a folder: a command card names the files it uses"
+                "{word} is not a regular file: a command card names the program and the files it uses"
             ));
         }
-        if !is_file {
-            if i == 0 {
-                return Err(format!("{word} is not a program file"));
-            }
-            continue;
+        if meta.len() > FILE_MAX {
+            return Err(format!(
+                "{word} is larger than {} KB, more than a card shows",
+                FILE_MAX / 1024
+            ));
         }
-        let bytes = std::fs::read(path).map_err(|e| format!("{word}: {e}"))?;
+        let mut bytes = vec![];
+        std::io::Read::read_to_end(
+            &mut std::io::Read::take(
+                std::fs::File::open(word).map_err(|e| format!("{word}: {e}"))?,
+                FILE_MAX + 1,
+            ),
+            &mut bytes,
+        )
+        .map_err(|e| format!("{word}: {e}"))?;
+        if bytes.len() as u64 > FILE_MAX {
+            return Err(format!("{word} grew while it was read"));
+        }
         let mut file = serde_json::json!({"path": word, "sha256": hex(&Sha256::digest(&bytes))});
-        if i > 0 {
-            let text = String::from_utf8(bytes)
-                .map_err(|_| format!("{word} is not text, so the card cannot show it"))?;
-            file["text"] = body_text(word, &Value::String(text))?.into();
+        match String::from_utf8(bytes) {
+            Ok(text) => file["text"] = file_text(word, text)?.into(),
+            Err(_) if i == 0 => {} // a binary program: bound by its hash only
+            Err(_) => return Err(format!("{word} is not text, so the card cannot show it")),
         }
         files.push(file);
     }
     Ok(serde_json::json!({"command": line, "files": files}))
+}
+
+/// A file's text as a card shows it: newlines and tabs, no other control or hidden character (refused, never cleaned).
+fn file_text(word: &str, text: String) -> Result<String, String> {
+    if text.chars().any(|c| {
+        (c.is_control() && !matches!(c, '\n' | '\t' | '\r')) || crate::board::rights::hidden(c)
+    }) {
+        return Err(format!("{word} has control or hidden characters"));
+    }
+    Ok(text)
 }
 
 fn hex(bytes: &[u8]) -> String {

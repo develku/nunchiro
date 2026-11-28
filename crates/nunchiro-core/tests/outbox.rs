@@ -800,6 +800,15 @@ fn outbox_command_card_runs_exactly_its_line_once() {
     let text = "To: Jordan Lee <jordan@partner.example.com>\nSubject: Re: Can we find an hour?\n\nTuesday 14:00?\n";
     fs::write(&draft, text).unwrap();
     fs::write(work.join("blob.bin"), [0u8, 159, 146, 150]).unwrap();
+    fs::write(work.join("big.eml"), "x".repeat(32 * 1024 + 1)).unwrap();
+    let fifo = work.join("pipe");
+    assert!(
+        std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap()
+            .success()
+    );
     let line = format!("{} {}", send.display(), draft.display());
     let stage = |command: &str| {
         raw(
@@ -835,6 +844,18 @@ fn outbox_command_card_runs_exactly_its_line_once() {
         format!("{} {}", send.display(), work.display()),
         format!("{} reply.eml/x", send.display()),
         format!("{} {}", work.join("missing").display(), draft.display()),
+        // Review: a bare word or `=word` runs code the card does not bind (zsh's `=name` is a PATH lookup, a launcher's
+        // word names a program); every word after the program is a full path to a regular text file of at most 32 KB.
+        format!(
+            "{} jordan@partner.example.com {}",
+            send.display(),
+            draft.display()
+        ),
+        format!("{} ={}", send.display(), draft.display()),
+        format!("/usr/bin/env python3 {}", draft.display()),
+        format!("{} {}", send.display(), work.join("missing.eml").display()),
+        format!("{} {}", send.display(), work.join("big.eml").display()),
+        format!("{} {}", send.display(), fifo.display()),
     ] {
         let refused = stage(&bad);
         assert!(refused["Err"].is_string(), "{bad:?}: {refused}");
@@ -846,8 +867,18 @@ fn outbox_command_card_runs_exactly_its_line_once() {
     assert_eq!(card["owner"]["tool"], "Bash");
     assert_eq!(card["owner"]["args"]["command"], line.as_str());
     assert_eq!(card["owner"]["args"]["files"][1]["text"], text);
+    // Review: the program's own text is on the card too (a seat could edit a familiar script).
+    assert_eq!(
+        card["owner"]["args"]["files"][0]["text"],
+        "#!/bin/sh\ncat \"$@\" > /dev/null\n"
+    );
     // The seat's real lock hook, as Claude runs it.
-    let hook = |command: &str| {
+    let hook_with = |command: &str, extra: Value| {
+        let mut input = json!({"command": command, "description": "send"});
+        input
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
         let mut cmd = std::process::Command::new(home::cli::path());
         cmd.args(["hook", "home-lock", "--mode", "ask"])
             .env("NUNCHIRO_HOME", &home)
@@ -861,7 +892,7 @@ fn outbox_command_card_runs_exactly_its_line_once() {
             .take()
             .unwrap()
             .write_all(
-                json!({"tool_name": "Bash", "tool_input": {"command": command, "description": "send"}})
+                json!({"tool_name": "Bash", "tool_input": input})
                     .to_string()
                     .as_bytes(),
             )
@@ -874,6 +905,7 @@ fn outbox_command_card_runs_exactly_its_line_once() {
             .unwrap()
             .to_string()
     };
+    let hook = |command: &str| hook_with(command, json!({}));
     assert_eq!(hook(&line), "ask", "not before the owner's yes");
     // Staging itself asks nothing in any mode: a card sends nothing.
     assert_eq!(
@@ -911,6 +943,11 @@ fn outbox_command_card_runs_exactly_its_line_once() {
         hook(&format!("{line} {}", draft.display())),
         "ask",
         "another line"
+    );
+    // Review: a call that asks to run outside the sandbox never spends the card.
+    assert_eq!(
+        hook_with(&line, json!({"dangerouslyDisableSandbox": true})),
+        "ask"
     );
     assert_eq!(hook(&line), "allow", "the approved line, once");
     assert_eq!(hook(&line), "ask", "spent");

@@ -345,7 +345,11 @@ pub fn decide(tool: &str, input: &Value, mode: Mode) -> Decision {
                 if input
                     .get("command")
                     .and_then(Value::as_str)
-                    .is_some_and(|c| crate::outbox::command_words(c).is_ok()) =>
+                    .is_some_and(|c| crate::outbox::command_words(c).is_ok())
+                    // A call that asks to run outside Claude's sandbox never spends a card: it asks.
+                    && input
+                        .get("dangerouslyDisableSandbox")
+                        .is_none_or(|v| v == &Value::Bool(false)) =>
             {
                 Decision::Spend
             }

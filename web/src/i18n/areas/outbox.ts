@@ -53,7 +53,7 @@ export const en = {
   'outbox.card.titleCommand': "Run a command",
   'outbox.card.kindCommand': "Outbox · command",
   'outbox.card.run': "Run",
-  'outbox.card.file': "File it sends: {path}",
+  'outbox.card.file': "File it uses: {path}",
   'outbox.field.command': "Command",
   'outbox.card.kindMail': "Outbox · mail draft",
   'outbox.card.kindEvent': "Outbox · event draft",

@@ -8,6 +8,7 @@ test('outbox command card: the line and its file are shown, Run and Discard only
   const answers: { type: string }[] = [];
   const line = '/work/bin/send-mail /work/drafts/reply.eml';
   const text = 'To: Jordan Lee <jordan@partner.example.com>\nSubject: Re: Can we find an hour?\n\nTuesday 14:00?';
+  const script = '#!/bin/sh\ncat "$@" > /dev/null';
   let gone = false;
   const card = () => ({
     id,
@@ -21,7 +22,7 @@ test('outbox command card: the line and its file are shown, Run and Discard only
     owner: {
       type: 'outward',
       tool: 'Bash',
-      args: { command: line, files: [{ path: '/work/bin/send-mail', sha256: 'a' }, { path: '/work/drafts/reply.eml', sha256: 'b', text }] },
+      args: { command: line, files: [{ path: '/work/bin/send-mail', sha256: 'a', text: script }, { path: '/work/drafts/reply.eml', sha256: 'b', text }, { path: '/work/drafts/reply.eml', sha256: 'b', text }] },
       from: 'Chief',
       hash: 'h',
     },
@@ -49,8 +50,10 @@ test('outbox command card: the line and its file are shown, Run and Discard only
   const box = app.locator(`.dw [data-item="${id}"]`);
   await expect(box).toContainText('Run a command');
   await expect(box.locator('code')).toHaveText(line);
-  await expect(box).toContainText('File it sends: /work/drafts/reply.eml');
-  await expect(box.locator('.obx-body')).toHaveText(text);
+  await expect(box).toContainText('File it uses: /work/drafts/reply.eml');
+  // The program's text is shown too, and a file named twice is shown twice (keys by place, not by path).
+  await expect(box).toContainText('File it uses: /work/bin/send-mail');
+  await expect(box.locator('.obx-body')).toHaveText([script, text, text]);
   await expect(box.locator('[data-act="send-outbox"]')).toHaveText('Run');
   await expect(box.locator('[data-act="open-outbox"]')).toHaveCount(0);
   await box.locator('[data-act="discard"]').click();
