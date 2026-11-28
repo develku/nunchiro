@@ -33,11 +33,12 @@ const KEY_GAP: Duration = Duration::from_millis(800);
 const GIVE_UP: Duration = Duration::from_secs(30);
 
 impl Sessions {
-    /// The owner typed `text` to session `id` in the window: the folders it names (`folder_grant::named`) are added to
+    /// The owner typed `text` to session `id` in the window's composer (`folder_offer`): the folders it names
+    /// (`folder_grant::named`) are added to
     /// the run when it is the Assistant's (Home) Claude seat. Every other sender and seat gets none.
-    pub(crate) fn grant_named_folders(&mut self, id: &str, text: &str) {
+    pub(crate) fn grant_named_folders(&mut self, id: &str, text: &str) -> Vec<PathBuf> {
         let Some(entry) = self.entries.get(id) else {
-            return;
+            return vec![];
         };
         let meta = &entry.meta;
         if !meta.home_lock
@@ -46,17 +47,20 @@ impl Sessions {
             || !entry.agent_live()
             || entry.pty.is_none()
         {
-            return;
+            return vec![];
         }
         let had = meta.folders.clone();
         let named = folder_grant::named(text, &self.settings.user_home, &self.home);
         let g = self.folder_grants.entry(id.to_string()).or_default();
-        for folder in named {
+        let mut coming = vec![];
+        for folder in named.into_iter().filter(|f| !had.contains(f)) {
             let busy = g.now.as_ref().is_some_and(|a| a.folder == folder);
-            if !had.contains(&folder) && !g.pending.contains(&folder) && !busy {
-                g.pending.push(folder);
+            if !g.pending.contains(&folder) && !busy {
+                g.pending.push(folder.clone());
             }
+            coming.push(folder);
         }
+        coming
     }
     /// A folder is on its way in: the seat takes no other input until it is added or given up.
     pub(crate) fn granting(&self, id: &str) -> bool {

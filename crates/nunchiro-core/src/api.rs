@@ -895,7 +895,14 @@ pub enum Request {
         id: String,
         text: String,
     },
-    /// The window's Remove on the Assistant's "Access given" line: the run's grant to `folder` ends (window only).
+    /// The window's composer, before it sends a message: only the words the owner typed in it (no pasted text, handoff
+    /// context or image path). The folders they name become the Assistant's for this run (`folder_grant`; window only);
+    /// the window holds its message until they are in.
+    FolderOffer {
+        id: String,
+        text: String,
+    },
+    /// The window's Remove on the Assistant's folder line: the run's grant to `folder` ends (window only).
     FolderRemove {
         id: String,
         folder: PathBuf,

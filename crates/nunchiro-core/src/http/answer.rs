@@ -293,11 +293,16 @@ pub(super) fn answer(
                 if let Request::Close { id } = &request {
                     return sessions.close(id, true, true);
                 }
-                // The owner's decision: a folder named in a message the owner typed in this window is the Assistant's
-                // for the conversation (the app's window only: not the paired browser, a socket, a schedule or a seat).
+                // The owner's decision: a folder named in a message the owner typed in this window's composer is the
+                // Assistant's for the conversation (the app's window only: not the paired browser, a socket, a
+                // schedule, a seat, or text the window makes itself such as a pull request's "Fix with agent").
                 if window.is_some() {
                     match &request {
-                        Request::AgentPrompt { id, text } => sessions.grant_named_folders(id, text),
+                        Request::FolderOffer { id, text } => {
+                            return Ok(Reply::FolderOffered {
+                                folders: sessions.grant_named_folders(id, text),
+                            });
+                        }
                         Request::FolderRemove { id, folder } => {
                             return sessions.remove_folder(id, folder);
                         }

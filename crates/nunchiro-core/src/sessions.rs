@@ -694,7 +694,9 @@ impl Sessions {
                 Err("setup requests run off the registry lock".into()) // ticket 259: `worktree_setup::serve`
             }
             Request::AgentSend { id, text } => self.send("user", &id, text, vec![], false),
-            Request::FolderRemove { .. } => Err("folder access is removed in the Nunchiro window only".into()),
+            Request::FolderOffer { .. } | Request::FolderRemove { .. } => {
+                Err("folder access is given and removed in the Nunchiro window only".into())
+            }
             Request::AgentPrompt { id, text } => {
                 let reply = match self.send("user", &id, text.clone(), vec![], true) {
                     // The owner's words to a session that waits at a question in its terminal (a start question such

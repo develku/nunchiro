@@ -15,6 +15,7 @@ import { useImages } from '../images/attach';
 import { asks, blocked, heldIds, holdText, refuseSecond, takeHeld } from './held';
 import { claimSteer, enqueue, finishSteer, markSent, nextRow, noteSteer, putBack, queueIds, queueOf, recordStop, setPaused, takeAll, takeRow, unclaimSteer, unsend, useQueues, type Row } from './queued';
 import { useSideChats } from './useSideChats';
+import { forgetPastes, typedOnly } from './pasted';
 import type { T } from '../i18n';
 
 type Deps = {
@@ -53,6 +54,8 @@ const logRow = (s: Session, send: string) => (s as Session & { send_log?: { id: 
  *  and the handoff and fork requests (HANDOFF_EVENT). */
 export function useComposerSend({ core, sessions, current, ordered, images, handoff, setHandoff, sideChats, follow, open, addTab, accountsP, readAccounts, t, setPaneNote, connected, snapped }: Deps) {
   const forking = useRef(false);
+  const latest = useRef(sessions); // the folder wait below reads snapshots that arrive while it waits
+  latest.current = sessions;
   const sentTo = useRef(new Set<string>()); // v25-quiet-chat: sessions this window has already sent a message to
   const sendingFork = useRef(new Set<string>());
   const [pendingEnter, setPendingEnter] = useState<Record<string, boolean>>({});
@@ -382,8 +385,13 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
         clean = [context, clean].filter(Boolean).join('\n\n').replace(/\x1b\[20[01]~/g, '');
         outgoing = (await bracketedPaste(core, target.id)) ? `\x1b[200~${clean}\x1b[201~` : clean;
       }
+      // The Assistant's folders (folder_grant.rs): only the words typed in this box, no paste, handoff or image path.
+      // The message waits until the folders they name are in, as the core holds the seat meanwhile (at most ~35 s).
+      const offer = !ho && !row && !retry && target.kind !== 'shell' ? typedOnly(target.id, typed) : '';
+      if (offer.includes('/')) await folderWait(core, target.id, offer, () => latest.current);
       if (!retry || clean) await core.sendText(target.id, outgoing, seen, true);
       acknowledged = true;
+      forgetPastes(target.id);
       sentTo.current.add(target.id);
       saved.done(); // v1b-05
       await new Promise((r) => setTimeout(r, 120));
@@ -517,4 +525,13 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
     }
   };
   return { pendingEnter, uncertainSend, pressRow, drafts, setDrafts, givenBack, setGivenBack, grow, stopAgent, send, steerNow, backgroundSend };
+}
+
+/** `folder_offer` for the owner's typed words; resolves once every folder it names is in `folders`, or after 35 s. */
+async function folderWait(core: CoreClient, id: string, text: string, sessions: () => Session[]) {
+  const reply = (await core.request({ op: 'folder_offer', id, text }).catch(() => null)) as { folders?: string[] } | null;
+  const want = reply?.folders ?? [];
+  const until = Date.now() + 35_000;
+  while (want.length && Date.now() < until && !want.every((f) => sessions().find((s) => s.id === id)?.folders?.includes(f)))
+    await new Promise((r) => setTimeout(r, 100));
 }

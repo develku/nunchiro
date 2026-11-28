@@ -571,6 +571,7 @@ pub(super) fn remove_hooks(home: &Path, id: &str) -> Result<(), String> {
     for path in [
         home.join(format!("hooks-{id}.json")),
         ended_marker(home, id),
+        crate::folder_grant::file(home, id), // the run's folder grants end with it
     ] {
         match fs::remove_file(path) {
             Ok(()) => {}

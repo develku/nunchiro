@@ -8,6 +8,7 @@
 //! new run and starts with none.
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
 
 /// What the hook reads: the run's granted folders and the ones the owner removed (canonical paths).
@@ -40,9 +41,11 @@ pub(crate) fn save(home: &Path, session: &str, grants: &Grants) -> Result<(), St
     )
 }
 
-/// The folders an owner's message names, as they would be granted: each path the owner typed (a word starting with `/`
-/// or `~/`, outside `>` quote lines and ``` blocks: text the owner pasted from mail, the web or a tool) gives its nearest
-/// existing folder, canonical, unless `refused`.
+/// The folders an owner's message names, as they would be granted. `text` is only what the owner typed in the window's
+/// composer (pasted text, handoff context and image paths are left out there). Each path in it (starting with `/` or
+/// `~/`; in quotes, or with `\ ` for a space, a path may hold spaces), outside `>` quote lines and ``` blocks, gives
+/// the folder itself when it is one, or the folder of a file it names; canonical, unless `refused`. A path that does not
+/// exist (a placeholder, or one cut at a space) gives none, never its parent.
 pub fn named(text: &str, user_home: &Path, core_home: &Path) -> Vec<PathBuf> {
     let mut fenced = false;
     let mut out: Vec<PathBuf> = vec![];
@@ -55,15 +58,12 @@ pub fn named(text: &str, user_home: &Path, core_home: &Path) -> Vec<PathBuf> {
         if fenced || trimmed.starts_with('>') {
             continue;
         }
-        for word in line.split_whitespace() {
-            let word = word.trim_matches(|c: char| "\"'`()[]{}<>,;:!?".contains(c));
-            let word = word.trim_end_matches('.');
+        for word in paths(line) {
             let path = match word.strip_prefix("~/") {
                 Some(rest) => user_home.join(rest),
-                None if word.starts_with('/') => PathBuf::from(word),
-                None => continue,
+                None => PathBuf::from(&word),
             };
-            if let Some(folder) = nearest_folder(&path)
+            if let Some(folder) = named_folder(&path)
                 && !refused(&folder, user_home, core_home)
                 && !out.contains(&folder)
             {
@@ -74,22 +74,57 @@ pub fn named(text: &str, user_home: &Path, core_home: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// The path itself when it is a folder, else its nearest existing parent folder; canonical (links resolved).
-fn nearest_folder(path: &Path) -> Option<PathBuf> {
-    if path.components().any(|c| c == Component::ParentDir) {
+/// The paths in one line: a word that starts with `/` or `~/` after a space or an opening bracket (`\ ` keeps a space
+/// in it; trailing punctuation goes), or the whole text between quotes that starts so.
+fn paths(line: &str) -> Vec<String> {
+    let c: Vec<char> = line.chars().collect();
+    let starts =
+        |j: usize| c.get(j) == Some(&'/') || c.get(j) == Some(&'~') && c.get(j + 1) == Some(&'/');
+    let (mut i, mut out) = (0, vec![]);
+    while i < c.len() {
+        let after_gap = i == 0 || c[i - 1].is_whitespace() || "([{<".contains(c[i - 1]);
+        if after_gap && "\"'`".contains(c[i]) && starts(i + 1) {
+            if let Some(end) = c[i + 1..].iter().position(|&q| q == c[i]) {
+                out.push(c[i + 1..i + 1 + end].iter().collect());
+                i += end + 2;
+                continue;
+            }
+        } else if after_gap && starts(i) {
+            let mut word = String::new();
+            while i < c.len() && !c[i].is_whitespace() {
+                if c[i] == '\\' && c.get(i + 1).is_some_and(|n| n.is_whitespace()) {
+                    i += 1;
+                }
+                word.push(c[i]);
+                i += 1;
+            }
+            out.push(
+                word.trim_end_matches(|ch: char| ".,;:!?)]}>\"'`".contains(ch))
+                    .to_string(),
+            );
+            continue;
+        }
+        i += 1;
+    }
+    out
+}
+
+/// The folder a typed path names, canonical (links resolved): the path itself when it is a folder, the folder of a
+/// file when it is one; `None` when it does not exist or holds `..`.
+fn named_folder(path: &Path) -> Option<PathBuf> {
+    if !path.is_absolute() || path.components().any(|c| c == Component::ParentDir) {
         return None;
     }
-    let mut at = path;
-    loop {
-        if at.is_dir() {
-            return std::fs::canonicalize(at).ok();
-        }
-        at = at.parent()?;
+    let real = std::fs::canonicalize(path).ok()?;
+    if real.is_dir() {
+        Some(real)
+    } else {
+        real.parent().map(Path::to_path_buf)
     }
 }
 
 /// Never granted (canonical `folder`, so a link to one of these is refused too): anything but a folder below the
-/// user's home, below a volume's top folder or in a temporary folder; the home itself, `~/Library` and every
+/// user's home, below a volume's top folder or in a temporary folder; the home itself, `~/Library`, `~/Applications` and every
 /// `~/.<name>` folder (credentials, settings); the core's home and what holds it; a folder that holds what Claude loads
 /// from a working folder (`.claude`, `.mcp.json`, `CLAUDE.md`).
 pub fn refused(folder: &Path, user_home: &Path, core_home: &Path) -> bool {
@@ -102,7 +137,7 @@ pub fn refused(folder: &Path, user_home: &Path, core_home: &Path) -> bool {
     };
     let in_home = folder.strip_prefix(&home).ok().and_then(|rest| {
         let first = rest.components().next()?.as_os_str().to_str()?.to_string();
-        Some(!first.starts_with('.') && first != "Library")
+        Some(!first.starts_with('.') && first != "Library" && first != "Applications")
     });
     let temp = [Path::new("/private/tmp"), Path::new("/private/var/folders")]
         .iter()
@@ -123,7 +158,8 @@ pub fn refused(folder: &Path, user_home: &Path, core_home: &Path) -> bool {
 }
 
 /// Where a file tool's path lands, canonical: the path itself when it exists, else its nearest existing parent with the
-/// rest joined on. `None` for a relative path or one with `..`.
+/// rest joined on. `None` for a relative path, one with `..`, or one through a link that leads nowhere (a write there
+/// would land wherever the link points).
 fn landing(path: &Path) -> Option<PathBuf> {
     if !path.is_absolute() || path.components().any(|c| c == Component::ParentDir) {
         return None;
@@ -131,31 +167,39 @@ fn landing(path: &Path) -> Option<PathBuf> {
     if let Ok(real) = std::fs::canonicalize(path) {
         return Some(real);
     }
+    if std::fs::symlink_metadata(path).is_ok() {
+        return None;
+    }
     let parent = path.parent()?;
     Some(landing(parent)?.join(path.file_name()?))
 }
 
-/// Inside a granted folder, and not in what Claude loads or git keeps (the lock's deny list stays in charge there).
+/// Inside a granted folder, and not in what Claude loads or git keeps (the lock's deny list stays in charge there). The
+/// last name is no link and no file with a second hard link: a write through either would change a file outside.
 fn writable(path: &Path, grants: &Grants) -> bool {
-    landing(path).is_some_and(|p| {
-        grants.granted.iter().any(|g| p.starts_with(g))
-            && !p.components().any(|c| {
-                [
-                    ".claude",
-                    ".git",
-                    ".mcp.json",
-                    "CLAUDE.md",
-                    "CLAUDE.local.md",
-                ]
-                .iter()
-                // The Mac's disk ignores case: `.CLAUDE` is `.claude` there.
-                .any(|n| {
-                    c.as_os_str()
-                        .to_str()
-                        .is_none_or(|c| c.eq_ignore_ascii_case(n))
+    let plain = std::fs::symlink_metadata(path).map_or(true, |m| {
+        !m.file_type().is_symlink() && (m.is_dir() || m.nlink() == 1)
+    });
+    plain
+        && landing(path).is_some_and(|p| {
+            grants.granted.iter().any(|g| p.starts_with(g))
+                && !p.components().any(|c| {
+                    [
+                        ".claude",
+                        ".git",
+                        ".mcp.json",
+                        "CLAUDE.md",
+                        "CLAUDE.local.md",
+                    ]
+                    .iter()
+                    // The Mac's disk ignores case: `.CLAUDE` is `.claude` there.
+                    .any(|n| {
+                        c.as_os_str()
+                            .to_str()
+                            .is_none_or(|c| c.eq_ignore_ascii_case(n))
+                    })
                 })
-            })
-    })
+        })
 }
 
 /// `mv -n` of a source moves the entry itself (a link is not followed): its folder must be inside, and so the name.
@@ -216,12 +260,20 @@ pub fn decide(tool: &str, input: &Value, grants: &Grants) -> Option<Verdict> {
         "Glob" | "Grep" => path("path"),
         _ => None,
     };
-    if let Some(target) = target
-        && landing(target).is_some_and(|p| {
+    // While a folder is removed, a path the hook cannot place (relative, `..`, a link to nowhere) is refused too, and
+    // so is a Glob pattern whose fixed start lands there.
+    let pattern = (tool == "Glob")
+        .then(|| input.get("pattern").and_then(Value::as_str))
+        .flatten()
+        .filter(|p| p.starts_with(['/', '~']) || p.contains(".."))
+        .map(|p| Path::new(&p[..p.find(['*', '?', '[', '{']).unwrap_or(p.len())]));
+    let gone = |t: &Path| {
+        landing(t).is_none_or(|p| {
             grants.removed.iter().any(|r| p.starts_with(r))
                 && !grants.granted.iter().any(|g| p.starts_with(g))
         })
-    {
+    };
+    if !grants.removed.is_empty() && target.into_iter().chain(pattern).any(gone) {
         return Some(Verdict::Deny(
             "Home seat: the owner removed this folder's access for this conversation",
         ));
@@ -284,7 +336,7 @@ pub fn step(screen: &str, folder: &Path, downed: bool) -> Step {
         };
     }
     if flat.contains("Adddirectorytoworkspace")
-        && flat.contains(&name)
+        && screen.lines().any(|l| l.trim() == folder.to_string_lossy())
         && screen
             .lines()
             .any(|l| l.trim().starts_with('\u{276f}') && l.contains("1. Yes, for this session"))
@@ -307,8 +359,9 @@ mod tests {
         std::fs::canonicalize(dir).unwrap()
     }
 
-    // The owner's words: a grant comes only from a path the owner typed, as its nearest existing folder; a path in a
-    // quote line or a fenced block (pasted mail, web or tool text) gives none.
+    // The owner's words: a grant comes only from an existing folder, or the folder of an existing file, that the owner
+    // typed; a path that does not exist (a placeholder, one cut at a space) gives none, never its parent; a path in a
+    // quote line or a fenced block (pasted mail, web or tool text) gives none; a quoted or `\ ` path keeps its spaces.
     #[test]
     fn an_owner_message_names_its_folders() {
         let root = scratch("named");
@@ -326,9 +379,29 @@ mod tests {
         );
         std::fs::create_dir_all(root.join("quoted")).unwrap();
         std::fs::create_dir_all(root.join("fenced")).unwrap();
-        assert_eq!(
-            named(&text, &home, &core),
-            vec![run.join("inbox"), run.clone()]
+        assert_eq!(named(&text, &home, &core), vec![run.join("inbox")]);
+        std::fs::create_dir_all(root.join("My Orders/2026")).unwrap();
+        let orders = root.join("My Orders");
+        let r = root.display();
+        assert!(
+            named(
+                &format!("file them in {r}/My Orders/2026 now"),
+                &home,
+                &core
+            )
+            .is_empty(),
+            "cut at the space: {r}/My does not exist"
+        );
+        for typed in [
+            format!("file them in \"{r}/My Orders\" now"),
+            format!("file them in '{r}/My Orders'."),
+            format!("file them in {r}/My\\ Orders, please"),
+        ] {
+            assert_eq!(named(&typed, &home, &core), vec![orders.clone()], "{typed}");
+        }
+        assert!(
+            named(&format!("put it in {r}/run/missing/deeper"), &home, &core).is_empty(),
+            "no parent of a missing path"
         );
         assert_eq!(
             named(
@@ -348,7 +421,13 @@ mod tests {
         let root = scratch("never");
         let home = root.join("home");
         let core = home.join("core-home");
-        for d in [".ssh", "Library/Keychains", "docs/work", "loads"] {
+        for d in [
+            ".ssh",
+            "Library/Keychains",
+            "Applications/Some.app",
+            "docs/work",
+            "loads",
+        ] {
             std::fs::create_dir_all(home.join(d)).unwrap();
         }
         std::fs::create_dir_all(&core).unwrap();
@@ -364,6 +443,8 @@ mod tests {
             home.clone(),
             home.join(".ssh"),
             home.join("Library/Keychains"),
+            home.join("Applications"),
+            home.join("Applications/Some.app"),
             home.join("docs/ssh-link"),
             core.clone(),
             home.join("loads"),
@@ -418,8 +499,22 @@ mod tests {
             w(inside.join(".claude/settings.json")),
             &grants
         ));
-        for p in [".CLAUDE/settings.json", "sub/.Git/hooks/pre-commit"] {
+        for p in [
+            ".CLAUDE/settings.json",
+            "sub/.Git/hooks/pre-commit",
+            "x/Claude.MD",
+            "x/.MCP.json",
+        ] {
             assert!(!allow("Write", w(inside.join(p)), &grants), "{p}");
+        }
+        // A link that leads nowhere, as the last name or on the way, and a file with a second hard link outside.
+        std::os::unix::fs::symlink(outside.join("new.txt"), inside.join("dangling")).unwrap();
+        std::os::unix::fs::symlink(outside.join("newdir"), inside.join("dangling-dir")).unwrap();
+        std::fs::write(outside.join("shared.txt"), "x").unwrap();
+        std::fs::hard_link(outside.join("shared.txt"), inside.join("shared.txt")).unwrap();
+        for p in ["dangling", "dangling-dir/x.txt", "shared.txt"] {
+            assert!(!allow("Write", w(inside.join(p)), &grants), "{p}");
+            assert!(!allow("Edit", w(inside.join(p)), &grants), "{p}");
         }
         let i = inside.display();
         assert!(allow(
@@ -461,6 +556,33 @@ mod tests {
             Some(Verdict::Deny(_))
         ));
         assert!(decide("Read", &w(outside.join("x")), &gone).is_none());
+        // Ways around Remove: `..`, a relative path, and Glob's own pattern.
+        let deny = |tool: &str, input: Value| {
+            matches!(decide(tool, &input, &gone), Some(Verdict::Deny(_)))
+        };
+        assert!(deny(
+            "Read",
+            json!({"file_path": format!("{}/../run/inbox/a.eml", outside.display())})
+        ));
+        assert!(deny("Read", json!({"file_path": "inbox/a.eml"})));
+        assert!(deny("Grep", json!({"pattern": "x", "path": "../run"})));
+        assert!(deny(
+            "Glob",
+            json!({"pattern": format!("{}/**/*.eml", inside.display())})
+        ));
+        assert!(deny("Glob", json!({"pattern": "../run/**"})));
+        assert!(
+            decide("Glob", &json!({"pattern": "**/*.eml"}), &gone).is_none(),
+            "the seat's own folder"
+        );
+        assert!(
+            decide(
+                "Glob",
+                &json!({"pattern": format!("{}/*", outside.display())}),
+                &gone
+            )
+            .is_none()
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 
@@ -493,6 +615,9 @@ mod tests {
         );
         let second = "Add directory to workspace\n /Volumes/w/p35/run\n \u{276f} 1. Yes, for this session\n   2. Yes, and remember this directory\n   3. No";
         assert_eq!(step(second, folder, true), Step::Keys(b"\r"));
+        // Another folder's question whose name only starts with this one's is not answered.
+        let longer = second.replace("/p35/run\n", "/p35/run-other\n");
+        assert_eq!(step(&longer, folder, true), Step::Wait);
         assert_eq!(
             step(
                 "\u{23bf} Added /Volumes/w/p35/\nrun as a working directory for this session",

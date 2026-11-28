@@ -39,6 +39,7 @@ import type { Decision } from '../types';
 import { useFeatureSetting } from '../settings/useFeatureSetting';
 import { useEffect, useState } from 'react';
 import { composerOffer } from '../features/pasted-server';
+import { notePaste } from './pasted';
 import { restartKeeping } from '../features/restart-keeping';
 import { restartStart } from '../PermissionNeeded';
 import { escaped, joinWords } from '../settings/agents/words';
@@ -429,6 +430,7 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
           disabled={!connected || !target || (agentState(target) !== 'running' && !resuming)}
           placeholder={target ? (agentState(target) === 'running' ? (target.kind !== 'shell' && asks(target) ? (answersText || t('composer.waitsHint')) + (asked?.kind === 'question' ? ` ${t('composer.digitsCard')}` : '') + (dockAsks.length ? ` ${t('composer.toCard')}` : '') : t('composer.placeholder', { name: sessionName(target).replace(/(\.\.\.|…)$/, '') }) /* N8: a name cut to "..." gets the placeholder's one "…" */) : '') : pin ? t('composer.notRunning', { pin }) : t('composer.open')}
           onPaste={(e) => {
+            if (target) notePaste(target.id, e.clipboardData.getData('text/plain')); // never a folder grant (pasted.ts)
             const o = offers && target ? composerOffer(e.clipboardData.getData('text/plain')) : null;
             if (o && target) setOffer({ ...o, sid: target.id });
           }}

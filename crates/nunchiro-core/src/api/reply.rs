@@ -250,6 +250,10 @@ pub enum Reply {
     Text {
         text: String,
     },
+    /// `folder_offer`: the folders on their way in for this message (none when it named none the seat may have).
+    FolderOffered {
+        folders: Vec<std::path::PathBuf>,
+    },
     Delivery {
         send: crate::delivery::Send,
     },
