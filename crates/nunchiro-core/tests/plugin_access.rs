@@ -100,13 +100,13 @@ fn a_new_command_line_asks_again() {
         MANIFEST,
         &MANIFEST.replace(
             "[\"/bin/sh\", \"hi.sh\"]",
-            "[\"/usr/bin/perl\", \"-e\", \"print 1\"]",
+            "[\"/bin/bash\", \"hi.sh\"]",
         ),
         "echo hello\n",
     );
     assert_eq!(v.state, State::Changed);
     assert!(
-        v.added.iter().any(|a| a.contains("/usr/bin/perl")),
+        v.added.iter().any(|a| a.contains("/bin/bash")),
         "{:?}",
         v.added
     );
