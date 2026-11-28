@@ -606,6 +606,7 @@ impl Team {
             &self.user(),
             &quote(&self.memory(&mate.id)),
             &quote(&self.user()),
+            &quote(&self.soul(&mate.id)),
             &others,
             &brief_end(task, first.as_ref(), &self.soul(&mate.id)),
         );
@@ -841,6 +842,7 @@ fn brief_text(
     user: &Path,
     mem: &str,
     user_facts: &str,
+    soul_text: &str,
     others: &[&Teammate],
     last: &str,
 ) -> String {
@@ -911,7 +913,8 @@ fn brief_text(
          \n\
          ## Your job\n\
          {job}\n\
-         Who you are, in a few lines, is in your SOUL file: {soul}. Read it before your first reply.\n\
+         Who you are, in a few lines (your SOUL file, {soul}; quoted here, so there is nothing to read first):\n\
+         <soul>\n{soul_text}\n</soul>\n\
          \n\
          ## Your memory\n\
          - Your memory file: {memory}. It holds the user's rules and preferences for you and a short dated log of important work.\n\
@@ -1096,7 +1099,7 @@ pub(crate) fn open_seat(
     let (mate, project, prompt, first_over) = team.brief_seat(id, task)?;
     let prompt = match opener {
         // Ticket 1130 B-L3: only a lead takes over a handover; another teammate's new conversation gets its brief alone.
-        Opener::Fresh(_) if mate.lead => format!("{prompt}\n\n{TAKEOVER}"),
+        Opener::Fresh(_) if hands_over(&mate) => format!("{prompt}\n\n{TAKEOVER}"),
         _ => prompt,
     };
     memory_found(&mut *lock()?, &mate, &project, &memory);
@@ -1460,6 +1463,14 @@ pub enum Fresh {
     Now,
 }
 
+/// Only a project's lead hands its unfinished work to its next conversation (workers and worktrees live in its
+/// head). The Home lead's record is the core's own (task ledger, open loops, Outbox cards, its memory file), so its new
+/// conversation starts clean: a handover turn there carried the last task's answers on and asked the owner to allow its
+/// file write and room send (bot-task trial).
+fn hands_over(mate: &Teammate) -> bool {
+    mate.lead && mate.project.is_some()
+}
+
 /// Ticket 1096: how long a running Lead has for its handover turn. The report is one file write and one room send
 /// (well under a minute); five minutes also covers a turn that was already running when the prompt came. Longer would
 /// leave the owner with no Lead and no answer.
@@ -1541,10 +1552,13 @@ pub(crate) fn fresh_lead(
         let old = sessions.seat_of(id);
         let asked = how;
         let how = match how {
-            Fresh::Now if mate.lead && old.as_ref().is_some_and(|o| !sessions.seat_busy(o)) => {
+            Fresh::Now
+                if hands_over(&mate) && old.as_ref().is_some_and(|o| !sessions.seat_busy(o)) =>
+            {
                 Fresh::Handover
             }
             Fresh::Now => Fresh::Close,
+            Fresh::Handover if !hands_over(&mate) => Fresh::Close,
             how => how,
         };
         let (level, parent) = match &old {

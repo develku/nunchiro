@@ -1264,6 +1264,53 @@ fn a_fresh_lead_hands_over_once_and_never_resumes() {
     let _ = fs::remove_dir_all(proj);
 }
 
+/// A bot-task trial: the Assistant's first turn could not read its SOUL file (it lies outside the folders a Home seat's
+/// file tools reach), so it asked to `cat` it. Every brief carries the SOUL text itself, masked and cut as memory is.
+#[test]
+fn a_brief_carries_the_soul_text() {
+    let home = home();
+    let team = Team::open(&home);
+    let lead = Teammate {
+        lead: true,
+        ..mate("Chief", None)
+    };
+    let id = team.save(None, lead).unwrap()[0].id.clone();
+    team.ensure_files(&team.list().unwrap()[0]).unwrap();
+    fs::write(
+        team.soul(&id),
+        "I keep the week tidy. key sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789\n",
+    )
+    .unwrap();
+    let (_, _, prompt, _) = team.brief_seat(&id, None).unwrap();
+    assert!(prompt.contains("I keep the week tidy."), "{prompt}");
+    assert!(
+        !prompt.contains("abcdefghijklmnopqrstuvwxyz0123456789"),
+        "masked: {prompt}"
+    );
+    assert!(
+        !prompt.contains("Read it before your first reply"),
+        "{prompt}"
+    );
+    let _ = fs::remove_dir_all(home);
+}
+
+/// A bot-task trial: the Assistant's "New conversation" asked the owner two or three times to allow its handover (a
+/// file write and a room send) and carried the last task's results into the next one. The Home lead's record is the
+/// core's (task ledger, open loops, Outbox cards, its memory file): only a project's lead hands over and takes over.
+#[test]
+fn only_a_project_lead_hands_over() {
+    let lead = |project: Option<PathBuf>| Teammate {
+        lead: true,
+        ..mate("Lead", project)
+    };
+    assert!(hands_over(&lead(Some("/p".into()))));
+    assert!(!hands_over(&lead(None)), "the Home lead");
+    assert!(
+        !hands_over(&mate("Helper", Some("/p".into()))),
+        "not a lead"
+    );
+}
+
 /// Ticket 1096: a Lead whose turn does not end in time is left open with a line that says so (never stopped
 /// mid-turn); the wait holds no lock, a second press is refused, and only the owner's Close ends it.
 #[test]
