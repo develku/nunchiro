@@ -768,6 +768,7 @@ fn a_blocked_check_that_fails_closed_keeps_refusing() {
         stderr(&out)
     );
     // A blocked check that fails open decides nothing.
+    let c = core("pgk2");
     plugin(
         &c.home,
         "session.start.before",

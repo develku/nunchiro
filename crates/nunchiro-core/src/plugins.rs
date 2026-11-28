@@ -519,9 +519,9 @@ pub(crate) struct Installed {
 }
 /// Records where an install from a catalogue came from (`plugins_online.rs`), for its kill list.
 pub(crate) fn record_install(home: &Path, id: &str, at: Installed) -> Result<(), String> {
-    let mut store = load(home);
-    store.installed.insert(id.into(), at);
-    save(home, &store)
+    change(home, |store| {
+        store.installed.insert(id.into(), at);
+    })
 }
 /// Every catalogue a plugin was installed from, with the plugins and commits from it.
 pub(crate) fn installed(home: &Path) -> BTreeMap<String, Installed> {
@@ -538,17 +538,24 @@ fn load(home: &Path) -> Store {
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default()
 }
+/// One change of plugins.json at a time: two switches at once never lose one.
+fn change<T>(home: &Path, f: impl FnOnce(&mut Store) -> T) -> Result<T, String> {
+    static STORE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _one = STORE_LOCK.lock().map_err(|_| "plugins unavailable")?;
+    let mut store = load(home);
+    let out = f(&mut store);
+    save(home, &store)?;
+    Ok(out)
+}
 fn save(home: &Path, store: &Store) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(store).map_err(|e| e.to_string())?;
     crate::store::atomic_write(&home.join(STORE), &bytes)
 }
 /// Switches a plugin off (an install from the catalogue).
 pub(crate) fn turn_off(home: &Path, id: &str) -> Result<(), String> {
-    let mut store = load(home);
-    if store.on.remove(id) {
-        save(home, &store)?;
-    }
-    Ok(())
+    change(home, |store| {
+        store.on.remove(id);
+    })
 }
 /// A part's plugin is on (the switch on the Plugins page); its approval is checked separately.
 pub(crate) fn on(home: &Path, name: &str) -> Result<(), String> {
@@ -875,15 +882,15 @@ pub(crate) fn handle(
             if on && let Some(why) = blocked(home, &id) {
                 return Err(format!("plugin {id} is blocked by its catalogue: {why}"));
             }
-            let mut store = load(home);
             let off = !on;
-            if on {
-                store.on.insert(id.clone());
-            } else {
-                store.on.remove(&id);
-            }
             // Saved first, so no new run starts between the stop and the switch.
-            save(home, &store)?;
+            change(home, |store| {
+                if on {
+                    store.on.insert(id.clone());
+                } else {
+                    store.on.remove(&id);
+                }
+            })?;
             if off {
                 crate::sandbox::stop_subjects(home, &part_name(&id, "")); // a part still running stops now
             }
@@ -1151,10 +1158,26 @@ fn gates(
     event: Value,
 ) -> Result<Option<(String, String)>, (String, String)> {
     let store = load(home);
+    let enabled = script_widgets(home);
+    // A check its catalogue blocks is never run; one that fails closed (`on_error = "refuse"`) keeps failing closed,
+    // so a blocked guard never lets through what it stopped.
+    if enabled {
+        for id in ids(home) {
+            let Some(why) = blocked(home, &id) else {
+                continue;
+            };
+            if let Ok(p) = read(home, &id)
+                && p.gate
+                    .iter()
+                    .any(|g| g.on == on && g.on_error == OnError::Refuse)
+            {
+                return Err((p.name, format!("blocked by its catalogue: {why}")));
+            }
+        }
+    }
     if store.on.is_empty() {
         return Ok(None);
     }
-    let enabled = script_widgets(home);
     // Script parts are off: no check runs, as no panel or command does (the Plugins page says so).
     let Ok(config) = widgets::Config::core(enabled) else {
         return Ok(None);

@@ -59,6 +59,10 @@ fn answer(mut stream: TcpStream, files: &Files) {
         .nth(1)
         .unwrap_or("")
         .trim_start_matches('/');
+    ASKED
+        .lock()
+        .unwrap()
+        .push(format!("{}:{path}", stream.local_addr().unwrap().port()));
     let out = match files.lock().unwrap().get(path) {
         Some(body) => {
             let mut out = format!(
@@ -103,6 +107,7 @@ fn setup(tag: &str) -> (std::path::PathBuf, Files, Catalog) {
     let home = home::short(tag);
     let files: Files = Default::default();
     publish(&files, "1.0.0");
+    kill(&files, json!([]));
     let catalog = Catalog::with_origin(&home, &serve(files.clone())).unwrap();
     (home, files, catalog)
 }
@@ -404,8 +409,12 @@ fn a_kill_list_that_cannot_be_read_is_not_asked_for_again_within_15_minutes() {
     files.lock().unwrap().remove("main/plugins/kill-list.json");
     let cache = home.join("plugin-kill-list.json");
     let mut v: Value = serde_json::from_slice(&fs::read(&cache).unwrap()).unwrap();
+    // Six hours and more since it was read and asked for.
     for (_, list) in v["lists"].as_object_mut().unwrap() {
         list[0] = json!(0);
+    }
+    for (_, at) in v["tried"].as_object_mut().unwrap() {
+        *at = json!(0);
     }
     fs::write(&cache, v.to_string()).unwrap();
     let before = asked(&format!("{port}:main/plugins/kill-list.json"));

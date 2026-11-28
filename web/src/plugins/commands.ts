@@ -1,7 +1,7 @@
 // Plugin commands in the palette (docs/plugins.md): one row per command of a plugin that is on and approved, tagged with
 // the plugin's name. The core runs it in the widget sandbox; `note` and `panel` show the output as the window's note,
 // `send` puts it in the focused agent's message box as a draft that is never sent by itself.
-import { useEffect, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { Command } from '../keys';
 import type { Key } from '../i18n';
 import type { Session } from '../types';
@@ -27,9 +27,23 @@ const joined = (draft: string, words: string) => (draft ? `${draft.replace(/\n*$
 
 export function usePluginCommands({ core, t, open, current, composer, note }: Deps): Command[] {
   const [list, setList] = useState<Listed[]>([]);
+  // A plugin its catalogue blocks since the last read says so once, with the reason (a refresh turned it off).
+  const blocked = useRef<Map<string, string> | null>(null);
+  const take = (next: Listed[]) => {
+    const was = blocked.current;
+    for (const p of next) if (was && p.blocked && !was.has(p.id)) note(t('plugins.blockedNote', { name: p.plugin?.name ?? p.id, why: p.blocked }));
+    blocked.current = new Map(next.filter((p) => p.blocked).map((p) => [p.id, p.blocked!]));
+    setList(next);
+  };
   useEffect(() => {
-    if (open) pluginOp(core, { do: 'list' }).then(setList, () => setList([]));
-  }, [core, open]);
+    const read = () => void pluginOp(core, { do: 'list' }).then(take, () => setList([]));
+    read();
+    window.addEventListener('focus', read);
+    return () => window.removeEventListener('focus', read);
+  }, [core]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (open) pluginOp(core, { do: 'list' }).then(take, () => setList([]));
+  }, [core, open]); // eslint-disable-line react-hooks/exhaustive-deps
   return list
     .filter((p) => p.on && p.state === 'approved' && p.plugin && !p.needs)
     .flatMap((p) =>
