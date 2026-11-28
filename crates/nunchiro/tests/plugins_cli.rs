@@ -52,6 +52,22 @@ fn call(home: &Path, token: &str, request: Value) -> Value {
     BufReader::new(s).read_line(&mut line).unwrap();
     serde_json::from_str(&line).unwrap()
 }
+/// `widget_run` answers within 250 ms and reports a longer run as `running` (widgets/mod.rs ANSWER): the window asks
+/// again, and so does this, until the run's own answer.
+fn widget_run(home: &Path, token: &str, name: &str) -> Value {
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    loop {
+        let run = call(home, token, json!({"op": "widget_run", "name": name}));
+        if run["Ok"]["run"]["running"] != true {
+            return run;
+        }
+        assert!(
+            std::time::Instant::now() < until,
+            "the run never ended: {run}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
 fn copy(from: &Path, to: &Path) {
     std::fs::create_dir_all(to).unwrap();
     for e in std::fs::read_dir(from).unwrap() {
@@ -108,11 +124,7 @@ fn the_example_runs_only_when_on_and_approved() {
     ok(&home, &["plugin", "on", "quiet-hours"]);
     assert_eq!(panels(&home), ["plugin__quiet-hours__now"]);
     assert!(refused(&home, &["plugin", "run", "quiet-hours", "status"]).contains("needs approval"));
-    let run = call(
-        &home,
-        &owner,
-        json!({"op": "widget_run", "name": "plugin__quiet-hours__now"}),
-    );
+    let run = widget_run(&home, &owner, "plugin__quiet-hours__now");
     assert!(
         run["Err"].as_str().unwrap().contains("needs approval"),
         "{run}"
@@ -156,7 +168,8 @@ fn the_example_runs_only_when_on_and_approved() {
         ],
     );
     let until = std::time::Instant::now() + std::time::Duration::from_secs(20);
-    while std::fs::read_to_string(&out).map_or(true, |t| t.is_empty()) {
+    // The CLI writes its refusal to an unbuffered stderr in pieces: read it once its line is whole.
+    while std::fs::read_to_string(&out).map_or(true, |t| !t.ends_with('\n')) {
         assert!(
             std::time::Instant::now() < until,
             "the agent's call never answered"
@@ -183,11 +196,7 @@ fn the_example_runs_only_when_on_and_approved() {
             && (status.contains("22:00") || status.contains("07:00")),
         "{status}"
     );
-    let run = call(
-        &home,
-        &owner,
-        json!({"op": "widget_run", "name": "plugin__quiet-hours__now"}),
-    );
+    let run = widget_run(&home, &owner, "plugin__quiet-hours__now");
     assert!(
         run["Ok"]["run"]["output"]["text"]
             .as_str()
@@ -234,11 +243,7 @@ fn the_example_runs_only_when_on_and_approved() {
         "quiet-hours\ton\tchanged since approval"
     );
     assert!(refused(&home, &["plugin", "run", "quiet-hours", "status"]).contains("changed"));
-    let run = call(
-        &home,
-        &owner,
-        json!({"op": "widget_run", "name": "plugin__quiet-hours__now"}),
-    );
+    let run = widget_run(&home, &owner, "plugin__quiet-hours__now");
     assert!(run["Err"].as_str().unwrap().contains("changed"), "{run}");
 
     ok(&home, &["plugin", "remove", "quiet-hours"]);
