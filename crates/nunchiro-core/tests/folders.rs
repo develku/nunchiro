@@ -108,7 +108,7 @@ fn mate(home: &Path, name: &str, project: Option<PathBuf>) -> Teammate {
         .unwrap()
 }
 
-/// A fake Claude in raw mode: its input box (between two rules, as Claude draws it), `/add-dir <folder>` with both questions (the cursor on "No, leave it out",
+/// A fake Claude in raw mode: its input box (between two rules, with a faint suggested prompt, as Claude draws it), `/add-dir <folder>` with both questions (the cursor on "No, leave it out",
 /// then on "1. Yes, for this session"), the "Added" line; any other line is echoed as "got: <line>".
 const FAKE: &str = r#"#!/usr/bin/python3
 import os, sys, tty
@@ -116,7 +116,7 @@ if sys.argv[1:2] == ["--version"]:
     print("2.1.332 (Claude Code)"); sys.exit(0)
 tty.setraw(0)
 out = lambda s: (os.write(1, s.encode()))
-box = lambda: out("\r\n" + "─" * 60 + "\r\n❯ \r\n" + "─" * 60 + "\r\n")
+box = lambda: out("\r\n" + "─" * 60 + "\r\n❯\u00a0\x1b[2mgive me today's brief\x1b[22m\r\n" + "─" * 60 + "\r\n")
 out("\x1b[2J\x1b[H"); box()
 line, state, folder, yes = "", None, "", False
 def first():
