@@ -32,3 +32,18 @@ for (const scheme of ['light', 'dark'] as const) {
     await app.screenshot({ path: `../.scratch/shots/plugins-blocked-${scheme}.png` });
   });
 }
+
+test('a_refresh_that_blocks_a_plugin_says_so_once', async ({ app, core }) => {
+  const to = path.join(core.home, 'plugins/quiet-hours');
+  fs.mkdirSync(to, { recursive: true });
+  for (const f of fs.readdirSync(EXAMPLE)) fs.copyFileSync(path.join(EXAMPLE, f), path.join(to, f));
+  core.run(['plugin', 'allow', 'quiet-hours']);
+  fs.writeFileSync(path.join(core.home, 'plugins.json'), JSON.stringify({ on: ['quiet-hours'], installed: { 'quiet-hours': { commit: COMMIT, origin: ORIGIN } } }));
+  // A list read just now that names nothing: no read starts while the test runs.
+  fs.writeFileSync(path.join(core.home, 'plugin-kill-list.json'), JSON.stringify({ lists: { [ORIGIN]: [Date.now(), []] }, tried: { [ORIGIN]: Date.now() } }));
+  await openWindow(app);
+  // The next read names it: the window says so once.
+  fs.writeFileSync(path.join(core.home, 'plugin-kill-list.json'), JSON.stringify({ lists: { [ORIGIN]: [Date.now(), [{ id: 'quiet-hours', reason: 'It sent files to a stranger.' }]] }, tried: { [ORIGIN]: Date.now() } }));
+  await app.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(app.getByText('Quiet hours was turned off: its catalogue blocks it. It sent files to a stranger.')).toBeVisible();
+});
