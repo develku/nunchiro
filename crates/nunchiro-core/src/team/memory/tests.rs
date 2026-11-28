@@ -607,3 +607,52 @@ fn a_fetch_by_its_full_path_or_in_quotes_is_outside() {
     );
     assert_eq!(outside_of("Bash", &input("echo curling")), None);
 }
+
+#[test]
+fn the_memory_tab_view_follows_each_change_and_the_settings_hold_their_choices() {
+    let (home, team, id) = bot();
+    let m = team.bot_memory(&id).unwrap();
+    m.add("One.", Source::You, None, NOW).unwrap();
+    m.add("Two.", Source::Mail, None, NOW).unwrap();
+    let soul = team.soul(&id);
+    let settings = Settings { keep_days: 7 };
+    let v = m.view(&soul, None, &settings).unwrap();
+    assert_eq!(
+        (v.facts.len(), v.proposals, v.keep_days, v.limit),
+        (1, 1, 7, INDEX_LINES)
+    );
+    assert!(v.text.contains("One. (from: you)"));
+    let v = m
+        .view(
+            &soul,
+            Some(Change::Edit {
+                text: "- Three.\n".into(),
+            }),
+            &settings,
+        )
+        .unwrap();
+    assert_eq!((v.facts[0].text.as_str(), v.copies.len()), ("Three.", 1));
+    let copy = v.copies[0].id.clone();
+    let v = m
+        .view(&soul, Some(Change::Undo { copy }), &settings)
+        .unwrap();
+    assert_eq!(v.facts[0].text, "One.");
+    let v = m
+        .view(
+            &soul,
+            Some(Change::Forget {
+                text: "One.".into(),
+            }),
+            &settings,
+        )
+        .unwrap();
+    assert!(v.facts.is_empty());
+    for (value, ok) in [
+        (serde_json::json!({"keep_days": 30}), true),
+        (serde_json::json!({"keep_days": 5}), false),
+        (serde_json::json!({}), true),
+    ] {
+        assert_eq!(check_settings(&value).is_ok(), ok, "{value}");
+    }
+    let _ = fs::remove_dir_all(home);
+}

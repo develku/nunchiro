@@ -172,15 +172,19 @@ impl Sessions {
 
 /// A Claude seat's deny rules for the files only the core writes: every bot's memory index and topic files, USER.md,
 /// the core's memory records, and the SOUL.md of every bot whose first chat is over (the owner edits it on the Bots
-/// page). Each rule has a twin that matches any case, as `folder_permissions`. None when the home's path holds a
-/// character the rule syntax could read as a pattern.
+/// page). Each rule has a twin that matches any case, as `folder_permissions`. A character of the home's path that the
+/// rule syntax could read as a pattern is matched by `?`, so the rules still cover the files (and at most a look-alike
+/// path beside them), never drop.
 pub(super) fn deny_memory(settings: &mut serde_json::Map<String, serde_json::Value>, home: &Path) {
-    let Some(path) = home.to_str().filter(|h| {
-        !h.chars()
-            .any(|c| "*?[]{}()\\!".contains(c) || c.is_control())
-    }) else {
-        return;
-    };
+    let path: String = home
+        .to_string_lossy()
+        .chars()
+        .map(|c| match c {
+            '\u{FFFD}' => '*', // a path that is not UTF-8: the bytes it stands for
+            c if "*?[]{}()\\!".contains(c) || c.is_control() => '?',
+            c => c,
+        })
+        .collect();
     let team = crate::team::Team::open(home);
     let souls = team
         .list()

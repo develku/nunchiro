@@ -530,6 +530,11 @@ pub enum Reply {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         first: Option<crate::team::First>,
     },
+    /// A bot's memory as its Memory tab draws it (`team::Op::BotMemory`).
+    BotMemory {
+        id: String,
+        view: crate::team::MemoryView,
+    },
     /// Ticket 990 slice i: the user's roles.
     Roles {
         roles: Vec<crate::roles::Role>,

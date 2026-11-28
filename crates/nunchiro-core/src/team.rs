@@ -276,6 +276,12 @@ pub enum Op {
         #[serde(default)]
         undo: bool,
     },
+    /// A bot's memory as its Memory tab shows it, after the owner's `change` (`memory::Change`).
+    BotMemory {
+        id: String,
+        #[serde(default)]
+        change: Option<memory::Change>,
+    },
     /// A new bot in one step (`bots::first`): a name and one sentence. The rest has a default the owner may change:
     /// Claude on its newest model, in Home, a free face, no seat. `seat`: the seat its template asks for.
     BotNew {
@@ -1801,6 +1807,21 @@ pub fn window(
             id,
             text,
         }),
+        Op::BotMemory { id, change } => {
+            let settings = registry
+                .lock()
+                .map_err(|_| "session registry unavailable".to_string())?
+                .feature::<memory::Settings>(memory::MEMORY_KEY)
+                .unwrap_or_default();
+            team.list()?
+                .iter()
+                .find(|t| t.id == id)
+                .ok_or_else(|| format!("no bot {id}"))?;
+            let view = team
+                .bot_memory(&id)?
+                .view(&team.soul(&id), change, &settings)?;
+            Ok(Reply::BotMemory { id, view })
+        }
         Op::BotNew {
             name,
             job,
@@ -1901,9 +1922,10 @@ mod bots;
 mod memory;
 pub(crate) use bots::offered;
 pub use bots::{Bot, Face, First, ModelRule, Seat, V1, face_of};
+pub(crate) use memory::check_settings as check_memory_settings;
 pub use memory::{
-    Added, Fact, KEEP_DAYS, Memory, NotKept, Proposal, SavedCopy, Source, mark_outside, outside,
-    outside_of,
+    Added, Change, Fact, KEEP_DAYS, MEMORY_KEY, Memory, NotKept, Proposal, SavedCopy,
+    Settings as MemorySettings, Source, View as MemoryView, mark_outside, outside, outside_of,
 };
 
 #[cfg(test)]

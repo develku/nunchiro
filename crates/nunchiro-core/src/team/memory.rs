@@ -94,13 +94,13 @@ impl Source {
 }
 
 /// One index line. `date` and `from` are absent on a line someone wrote by hand.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Fact {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub date: Option<String>,
     pub text: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub from: Option<Source>,
 }
 
@@ -211,7 +211,7 @@ struct Waiting {
 
 /// A saved version of the index from before a change. `kind`: `tidy`, `edit`, `undo`, or `before` (the file as it was
 /// before this format, kept for good).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct SavedCopy {
     pub id: String,
@@ -1106,6 +1106,104 @@ pub fn outside_of(tool: &str, input: &serde_json::Value) -> Option<Source> {
             || (*w == "git" && matches!(next, "clone" | "pull" | "fetch"))
     });
     fetches.then_some(Source::Web)
+}
+
+/// The Bots view's Memory settings, for every bot (`MEMORY_KEY`). Fields a later build adds are read as their default
+/// by this one, so no field is refused.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(default)]
+pub struct Settings {
+    /// Days a saved copy is kept: 7, 30 or 90.
+    pub keep_days: u64,
+}
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            keep_days: KEEP_DAYS,
+        }
+    }
+}
+pub const MEMORY_KEY: &str = "team.memory";
+/// A value the window may store under `MEMORY_KEY`.
+pub(crate) fn check_settings(value: &serde_json::Value) -> Result<(), String> {
+    let s: Settings =
+        serde_json::from_value(value.clone()).map_err(|e| format!("memory settings: {e}"))?;
+    if ![7, 30, 90].contains(&s.keep_days) {
+        return Err("saved copies are kept 7, 30 or 90 days".into());
+    }
+    Ok(())
+}
+
+/// A change the owner makes on a bot's Memory tab.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "do", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Change {
+    /// Delete one line everywhere (`Memory::forget`); `text` is the line's exact text.
+    Forget { text: String },
+    /// The whole index as the owner wrote it (`Memory::edit`).
+    Edit { text: String },
+    /// Put a saved copy back (`Memory::undo`).
+    Undo { copy: String },
+}
+
+/// A bot's memory as its Memory tab draws it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub struct View {
+    /// The index, newest first.
+    pub facts: Vec<Fact>,
+    /// The index file as text, for Edit (its heading and format line left out).
+    pub text: String,
+    /// How many index lines a brief quotes.
+    pub limit: usize,
+    pub soul_lines: usize,
+    pub user_lines: usize,
+    /// Topic files: name and lines.
+    pub topics: Vec<(String, usize)>,
+    pub copies: Vec<SavedCopy>,
+    /// Proposals that wait for the owner's look, and lines not kept.
+    pub proposals: usize,
+    pub not_kept: usize,
+    pub keep_days: u64,
+}
+
+impl Memory {
+    /// The Memory tab's view, after `change`.
+    pub fn view(
+        &self,
+        soul: &Path,
+        change: Option<Change>,
+        settings: &Settings,
+    ) -> Result<View, String> {
+        let now = crate::queue::now_ms();
+        match change {
+            Some(Change::Forget { text }) => self.forget(&text).map(drop)?,
+            Some(Change::Edit { text }) => self.edit(&text, now)?,
+            Some(Change::Undo { copy }) => self.undo(&copy, now)?,
+            None => {}
+        }
+        let facts = self.facts()?;
+        let lines = |p: &Path| {
+            Self::read_text(p)
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+                .count()
+        };
+        let (proposals, not_kept) = self.proposals();
+        Ok(View {
+            text: facts.iter().map(|f| f.line() + "\n").collect(),
+            facts,
+            limit: INDEX_LINES,
+            soul_lines: lines(soul),
+            user_lines: lines(&self.user),
+            topics: self.topics(),
+            copies: self.saved_copies(settings.keep_days, now),
+            proposals: proposals.len(),
+            not_kept: not_kept.len(),
+            keep_days: settings.keep_days,
+        })
+    }
 }
 
 /// The topic name a USER.md proposal carries.

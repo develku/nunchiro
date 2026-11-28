@@ -729,3 +729,145 @@
   padding: var(--sp-8) 0 0;
   overflow: visible;
 }
+/* A bot's page tabs (Profile | Memory), the segmented look of the design book. */
+.bot-tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: var(--sp-2);
+  gap: var(--sp-2);
+  border-radius: var(--seg-r);
+  background: var(--tint-1);
+}
+.bot-tabs button {
+  height: var(--seg-h);
+  padding: 0 var(--sp-12);
+  border: 0;
+  border-radius: var(--seg-r);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-13);
+  cursor: pointer;
+}
+.bot-tabs button[aria-selected='true'] {
+  background: var(--raised);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+/* The Memory tab (mockup frame 1). */
+.mem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-16);
+}
+.mem-files {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--sp-8);
+}
+.mem-file {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-8) var(--sp-12);
+  border-radius: var(--r-8);
+  background: var(--tint-1);
+  font-size: var(--fs-12);
+}
+.mem-file code,
+.mem-row code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-13);
+}
+.mem-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mem-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-12);
+  padding: var(--sp-6) var(--sp-8);
+  border-radius: var(--r-8);
+  font-size: var(--fs-13);
+}
+.mem-line:hover,
+.mem-lines li[data-asking] .mem-line {
+  background: var(--hover);
+}
+.mem-date {
+  flex: none;
+  min-width: 3.5em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.mem-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.mem-from {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex: none;
+  padding: 0 var(--sp-6);
+  border-radius: var(--r-pill);
+  background: var(--tint-1);
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+/* Forget shows on the line the pointer or the keyboard is on. */
+.mem-forget {
+  opacity: 0;
+}
+.mem-line:hover .mem-forget,
+.mem-forget:focus-visible,
+.mem-lines li[data-asking] .mem-forget {
+  opacity: 1;
+}
+.mem-ask {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  margin: var(--sp-4) 0 var(--sp-4) var(--sp-32);
+  padding: var(--sp-8) var(--sp-12);
+  border-radius: var(--r-8);
+  background: var(--tint-1);
+  font-size: var(--fs-13);
+}
+.mem-ask > span {
+  flex: 1;
+}
+.mem-foot {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-8);
+  font-size: var(--fs-12);
+  color: var(--muted);
+}
+.mem-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--sp-16);
+}
+.mem-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-12);
+  font-size: var(--fs-13);
+}
+.mem-row .dim {
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.mem-icon {
+  flex: none;
+}
+.mem-row .mem-icon {
+  align-self: center;
+  color: var(--muted);
+}
