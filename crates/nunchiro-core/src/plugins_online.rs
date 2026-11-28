@@ -230,7 +230,7 @@ pub(crate) fn refresh_if_stale(home: &Path) {
     if installed.is_empty() {
         return;
     }
-    let mut cache = kill_cache(home);
+    let cache = kill_cache(home);
     let now = crate::queue::now_ms();
     let stale: std::collections::BTreeSet<String> = installed
         .into_iter()
@@ -249,11 +249,16 @@ pub(crate) fn refresh_if_stale(home: &Path) {
     if stale.is_empty() || !running().insert(home.to_path_buf()) {
         return;
     }
-    // Marked before the read, so a read that fails (or hangs) is not started again for 15 minutes.
-    for o in &stale {
-        cache.tried.insert(o.clone(), now);
-    }
-    if save_kill_cache(home, &cache).is_err() {
+    // Marked before the read, so a read that fails (or hangs) is not started again for 15 minutes; under the install
+    // lock, read again, so a list an install just wrote is not lost.
+    let marked = INSTALL.lock().map_err(|_| ()).and_then(|_one| {
+        let mut cache = kill_cache(home);
+        for o in &stale {
+            cache.tried.insert(o.clone(), now);
+        }
+        save_kill_cache(home, &cache).map_err(|_| ())
+    });
+    if marked.is_err() {
         running().remove(home);
         return;
     }
@@ -304,7 +309,7 @@ impl Catalog {
             if at.origin == self.origin
                 && killed(&self.home, &self.origin, &id, &at.commit).is_some()
             {
-                crate::plugins::turn_off(&self.home, &id)?;
+                crate::plugins::turn_off_blocked(&self.home, &id)?;
                 crate::sandbox::stop_subjects(&self.home, &crate::plugins::part_name(&id, ""));
             }
         }

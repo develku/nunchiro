@@ -59,6 +59,7 @@ declare module '../index' {
     'plugins.drafted': true;
     'plugins.sheet.extras': true;
     'plugins.blockedNote': true;
+    'plugins.blockedNoteOff': true;
     'plugins.state.blocked': true;
     'plugins.blocked': true;
     'plugins.sheet.asked': true;
@@ -137,6 +138,7 @@ export const en = {
   "plugins.drafted": "{name} put its output in the message box. Nothing was sent.",
   "plugins.sheet.extras": "Shortcuts and status items",
   "plugins.blockedNote": "{name} was turned off: its catalogue blocks it. {why}",
+  "plugins.blockedNoteOff": "{name} is blocked by its catalogue. {why}",
   "plugins.state.blocked": "Blocked",
   "plugins.blocked": "Its catalogue blocks it: {why} It stays off.",
   "plugins.sheet.asked": "asked once, and again when a change asks for more",

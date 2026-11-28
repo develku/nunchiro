@@ -725,8 +725,13 @@ fn the_room_copy_of_a_changed_agent_send_names_the_plugin() {
     assert_eq!(line["changed_by"], "Guard", "{line}");
 }
 
-/// Marks `guard` as installed from a catalogue whose kill list (as the core keeps it, read now) names it.
+/// Marks `guard` as installed from a catalogue whose kill list (as the core keeps it, read now) names it, as the read
+/// that turned it off leaves the store.
 fn killed_by_catalogue(home: &Path, reason: &str) {
+    killed(home, reason, true);
+}
+/// As `killed_by_catalogue`; `was_on`: it was on when the list blocked it.
+fn killed(home: &Path, reason: &str, was_on: bool) {
     let origin = "https://raw.githubusercontent.com/develku/nunchiro/";
     let file = home.join("plugins.json");
     let mut store: serde_json::Value =
@@ -734,6 +739,9 @@ fn killed_by_catalogue(home: &Path, reason: &str) {
     store["installed"] =
         json!({"guard": {"commit": "0123456789abcdef0123456789abcdef01234567", "origin": origin}});
     store["on"] = json!([]); // a refresh turns it off
+    if was_on {
+        store["turned_off"] = json!(["guard"]);
+    }
     std::fs::write(&file, store.to_string()).unwrap();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -806,4 +814,49 @@ fn two_switches_at_once_both_stay() {
     let store: serde_json::Value =
         serde_json::from_slice(&std::fs::read(c.home.join("plugins.json")).unwrap()).unwrap();
     assert_eq!(store["on"], json!(["a1", "a2", "a3", "a4"]));
+}
+
+#[test]
+fn a_blocked_check_never_turned_on_stops_nothing() {
+    let c = core("pgn");
+    plugin(&c.home, "session.start.before", REFUSE, "refuse", true);
+    ok(&c.home, &["plugin", "off", "guard"]);
+    // Blocked, but it was off when the list named it: it never decided anything, and still does not.
+    killed(&c.home, "It sent files to a stranger.", false);
+    assert!(!stderr(&start(&c.home, None, false)).contains("stopped this start"));
+}
+
+#[test]
+fn a_setting_saved_while_a_switch_flips_keeps_both() {
+    let c = core("pgs");
+    let dir = c.home.join("plugins/set");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("plugin.toml"),
+        "id = \"set\"\nname = \"Set\"\nversion = \"1\"\n\n[[setting]]\nkey = \"n\"\nlabel = \"N\"\ntype = \"number\"\n",
+    )
+    .unwrap();
+    for n in 0..20 {
+        let (home, owner) = (c.home.clone(), c.owner.clone());
+        let setting = std::thread::spawn(move || {
+            call(
+                &home,
+                &owner,
+                json!({"op": "plugin", "action": {"do": "setting", "id": "set", "key": "n", "value": n}}),
+            )
+        });
+        ok(
+            &c.home,
+            &["plugin", if n % 2 == 0 { "on" } else { "off" }, "set"],
+        );
+        assert!(setting.join().unwrap()["Ok"].is_object());
+        let store: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(c.home.join("plugins.json")).unwrap()).unwrap();
+        assert_eq!(store["settings"]["set"]["n"], n, "round {n}");
+        assert_eq!(
+            store["on"].as_array().unwrap().is_empty(),
+            n % 2 == 1,
+            "round {n}"
+        );
+    }
 }

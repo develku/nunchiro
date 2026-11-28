@@ -631,6 +631,10 @@ struct Store {
     /// The plugins installed from a catalogue: the commit and the catalogue's origin, for its kill list.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     installed: BTreeMap<String, Installed>,
+    /// Plugins that were on when their catalogue's kill list turned them off: a check of theirs that fails closed
+    /// keeps refusing.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    turned_off: BTreeSet<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Installed {
@@ -670,6 +674,14 @@ fn change<T>(home: &Path, f: impl FnOnce(&mut Store) -> T) -> Result<T, String> 
 fn save(home: &Path, store: &Store) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(store).map_err(|e| e.to_string())?;
     crate::store::atomic_write(&home.join(STORE), &bytes)
+}
+/// Switches off a plugin its catalogue's kill list names, remembering that it was on.
+pub(crate) fn turn_off_blocked(home: &Path, id: &str) -> Result<(), String> {
+    change(home, |store| {
+        if store.on.remove(id) {
+            store.turned_off.insert(id.into());
+        }
+    })
 }
 /// Switches a plugin off (an install from the catalogue).
 pub(crate) fn turn_off(home: &Path, id: &str) -> Result<(), String> {
@@ -1005,6 +1017,7 @@ pub(crate) fn handle(
             let off = !on;
             // Saved first, so no new run starts between the stop and the switch.
             change(home, |store| {
+                store.turned_off.remove(&id);
                 if on {
                     store.on.insert(id.clone());
                 } else {
@@ -1024,9 +1037,9 @@ pub(crate) fn handle(
                 .find(|s| s.key == key)
                 .ok_or_else(|| format!("plugin {id} has no setting {key}"))?;
             value(s, &v)?;
-            let mut store = load(home);
-            store.settings.entry(id).or_default().insert(key, v);
-            save(home, &store)?;
+            change(home, |store| {
+                store.settings.entry(id).or_default().insert(key, v);
+            })?;
             listed(home)
         }
         Action::Run {
@@ -1118,11 +1131,12 @@ pub(crate) fn handle(
                 return Err("invalid plugin id".into());
             }
             set_aside(home, &id)?;
-            let mut store = load(home);
-            store.on.remove(&id);
-            store.settings.remove(&id);
-            store.installed.remove(&id);
-            save(home, &store)?;
+            change(home, |store| {
+                store.on.remove(&id);
+                store.settings.remove(&id);
+                store.installed.remove(&id);
+                store.turned_off.remove(&id);
+            })?;
             // Its approval goes with it: the same folder moved back asks again.
             approval::forget_plugin(home, &id)?;
             listed(home)
@@ -1283,7 +1297,10 @@ fn gates(
     // so a blocked guard never lets through what it stopped.
     if enabled {
         for id in ids(home) {
-            let Some(why) = blocked(home, &id) else {
+            // Only a check that was deciding: approved, and on when its catalogue blocked it.
+            let was_deciding = (store.on.contains(&id) || store.turned_off.contains(&id))
+                && approval::check(home, &format!("{PREFIX}{id}")).is_ok();
+            let Some(why) = blocked(home, &id).filter(|_| was_deciding) else {
                 continue;
             };
             if let Ok(p) = read(home, &id)
