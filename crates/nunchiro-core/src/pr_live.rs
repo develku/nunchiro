@@ -635,6 +635,19 @@ pub(crate) fn note_found(url: &str) {
 /// A PR the app created for `session` (the Diff panel's Create PR): it joins the created ones (live status, the PR view,
 /// merge) and is that session's chip until its transcript names one. Kept in memory: a core restart drops it.
 pub(crate) fn note_made(session: &str, url: &str, draft: bool) {
+    note(session, url, draft, None);
+}
+/// `note_made` for a PR found in `agent`'s terminal output (`link_later`): never over a PR the app made itself.
+fn note_linked(session: &str, url: &str, draft: bool, agent: String) {
+    let app_made = MADE.lock().ok().is_some_and(|m| {
+        m.get(session)
+            .is_some_and(|(_, _, linked)| linked.is_none())
+    });
+    if !app_made {
+        note(session, url, draft, Some(agent));
+    }
+}
+fn note(session: &str, url: &str, draft: bool, linked: Option<String>) {
     let Some(pull) = Pull::parse(url) else {
         return;
     };
@@ -644,18 +657,117 @@ pub(crate) fn note_made(session: &str, url: &str, draft: bool) {
         if made.len() >= MAX_PINNED {
             made.clear();
         }
-        made.insert(session.to_string(), (pull.url(), draft));
+        made.insert(session.to_string(), (pull.url(), draft, linked));
     }
 }
-static MADE: std::sync::LazyLock<Mutex<BTreeMap<String, (String, bool)>>> =
+/// Per session: the PR link, whether it is a draft, and the agent whose output it was linked from (`None`: the app made it).
+type Made = BTreeMap<String, (String, bool, Option<String>)>;
+static MADE: std::sync::LazyLock<Mutex<Made>> = std::sync::LazyLock::new(Default::default);
+/// How often one session's terminal output is looked at for a PR link it printed.
+const LINK_EVERY: Duration = Duration::from_secs(30);
+static LINK_TRIED: std::sync::LazyLock<Mutex<BTreeMap<String, Instant>>> =
     std::sync::LazyLock::new(Default::default);
+/// Links looked at in one output.
+const LINKS_MAX: usize = 20;
+
+/// The pull request links in terminal `output`, rebuilt from validated pieces, at most `LINKS_MAX`.
+pub fn pr_links(output: &[u8]) -> Vec<String> {
+    let text = String::from_utf8_lossy(output);
+    let mut found: Vec<String> = vec![];
+    for (at, _) in text.match_indices(PULL_HEAD) {
+        let link: String = text[at..]
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || "/:._-".contains(*c))
+            .collect();
+        if let Some(url) = clean_url(link.trim_end_matches(['.', ':']))
+            && !found.contains(&url)
+        {
+            found.push(url);
+        }
+        if found.len() >= LINKS_MAX {
+            break;
+        }
+    }
+    found
+}
+
+/// Auto-link (no agent command): a PR link a session's agent printed in its terminal becomes that session's PR once the
+/// by-branch lookup (`gh pr view <branch>` in its folder) names that very PR. At most once per `LINK_EVERY` per
+/// session, off the caller's thread, and only with live PR status on (outside traffic only then).
+/// Whether `session`'s output may be looked at now (at most once per `LINK_EVERY`); a yes counts as the look. The caller
+/// asks before it copies the output.
+pub(crate) fn link_due(session: &str) -> bool {
+    let Ok(mut tried) = LINK_TRIED.lock() else {
+        return false;
+    };
+    if tried.get(session).is_some_and(|t| t.elapsed() < LINK_EVERY) {
+        return false;
+    }
+    if tried.len() >= MAX_PINNED {
+        tried.clear();
+    }
+    tried.insert(session.to_string(), Instant::now());
+    true
+}
+
+/// `link_due` said yes: when the branch's own PR (gh, by branch) is one `agent` printed and not the session's PR yet, it
+/// becomes the session's PR, also after an earlier linked one (a new PR on another branch).
+pub(crate) fn link_later(session: &str, agent: String, dir: std::path::PathBuf, output: &[u8]) {
+    let links = pr_links(output);
+    if links.is_empty() {
+        return;
+    }
+    let session = session.to_string();
+    thread::spawn(move || {
+        if let Ok(Some(pr)) = crate::pr::branch_pr(&dir)
+            && links.contains(&pr.url)
+            && made_chip(&session).is_none_or(|c| c.url != pr.url)
+        {
+            note_linked(&session, &pr.url, pr.state == PrState::Draft, agent);
+        }
+    });
+}
+
+/// The auto-link's input: with no PR chip yet, or one linked from the output, the agent may have opened a new PR (on
+/// another branch): with live PR status on, the session's terminal output is looked at; the gh check runs off this thread.
+pub(crate) fn link_from_output(
+    registry: &Mutex<Sessions>,
+    id: &str,
+    chip: Option<&crate::chat::pr::PrChip>,
+) {
+    if chip.is_some_and(|c| c.linked.is_none()) {
+        return;
+    }
+    let Ok(mut sessions) = registry.lock() else {
+        return;
+    };
+    let on = sessions
+        .pr_live(None, None, None)
+        .is_ok_and(|(on, _, _)| on);
+    // The rate limit before the output is copied under the lock.
+    if !on || !link_due(id) {
+        return;
+    }
+    let agent = sessions.session_meta(id).ok().map(|m| match m.kind {
+        AgentKind::Claude => "Claude".to_string(),
+        AgentKind::Codex => "Codex".to_string(),
+        AgentKind::Acp => m.acp_agent.unwrap_or_else(|| "the agent".into()),
+        AgentKind::Shell => "Shell".to_string(),
+    });
+    if let (Some(agent), Some((dir, output))) = (agent, sessions.output_tail(id)) {
+        drop(sessions);
+        link_later(id, agent, dir, &output);
+    }
+}
+
 /// The chip of the PR the app made for `session`, if any.
 pub(crate) fn made_chip(session: &str) -> Option<crate::chat::pr::PrChip> {
-    let (url, draft) = MADE.lock().ok()?.get(session)?.clone();
+    let (url, draft, linked) = MADE.lock().ok()?.get(session)?.clone();
     Some(crate::chat::pr::PrChip {
         state: if draft { PrState::Draft } else { PrState::Open },
         url,
         at: None,
+        linked,
     })
 }
 
@@ -697,4 +809,34 @@ pub(crate) fn answer(registry: &Mutex<Sessions>, request: Request) -> Response {
         live: url.as_deref().and_then(|u| p.live(u)),
         hint: on.then(|| p.hint().map(String::from)).flatten(),
     })
+}
+
+#[cfg(test)]
+mod link_tests {
+    use super::*;
+
+    #[test]
+    fn pr_links_read_terminal_text() {
+        let out = b"\x1b[32mhttps://github.com/develku/nunchiro/pull/12\x1b[0m\r\n\
+            see https://user:token@github.com/develku/nunchiro/pull/13 and https://github.com/other/thing/pull/7.\n\
+            https://github.com/develku/nunchiro/pull/12 again, https://gitlab.com/o/r/pull/1";
+        assert_eq!(
+            pr_links(out),
+            vec![
+                "https://github.com/develku/nunchiro/pull/12".to_string(),
+                "https://github.com/other/thing/pull/7".to_string(),
+            ]
+        );
+        let many: String = (1..=50)
+            .map(|n| format!("https://github.com/o/r/pull/{n} "))
+            .collect();
+        assert_eq!(pr_links(many.as_bytes()).len(), LINKS_MAX);
+    }
+
+    #[test]
+    fn link_checks_are_rate_limited_per_session() {
+        assert!(link_due("rate-a"));
+        assert!(!link_due("rate-a"), "a second look within 30 s");
+        assert!(link_due("rate-b"));
+    }
 }

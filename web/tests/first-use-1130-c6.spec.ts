@@ -37,7 +37,8 @@ async function claude(app: Page, core: Core, busy = false, open = true) {
   // The turn is written before its Stop hook, so the core reads it as finished.
   const file = core.transcriptPath(live);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const line = (type: string, content: unknown) => JSON.stringify({ type, uuid: crypto.randomUUID(), message: { role: type, content } }) + '\n';
+  // The reply ends its turn as Claude writes it (`end_turn`): a transcript read after the Stop hook then reads no open turn.
+  const line = (type: string, content: unknown) => JSON.stringify({ type, uuid: crypto.randomUUID(), message: { role: type, content, ...(type === 'assistant' && { stop_reason: 'end_turn' }) } }) + '\n';
   fs.writeFileSync(file, line('user', 'Open a pull request for the dark mode switch') + line('assistant', [{ type: 'text', text: 'I have no GitHub tool in this session. Add the GitHub MCP server and I can open it.' }]));
   core.hook(live.id, 'UserPromptSubmit');
   core.hook(live.id, 'Stop');
