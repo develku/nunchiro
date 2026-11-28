@@ -2,7 +2,7 @@
 // the plugin's name. The core runs it in the widget sandbox; `note` and `panel` show the output as the window's note,
 // `send` puts it in the focused agent's message box as a draft that is never sent by itself.
 import { useEffect, useState, type RefObject } from 'react';
-import type { Command } from '../keys';
+import type { Bindings, Command } from '../keys';
 import type { Key } from '../i18n';
 import type { Session } from '../types';
 import { getDraft, setDraft } from '../composer-drafts';
@@ -25,14 +25,21 @@ interface Deps {
 
 const joined = (draft: string, words: string) => (draft ? `${draft.replace(/\n*$/, '')}\n${words}` : words);
 
-export function usePluginCommands({ core, t, open, current, composer, note }: Deps): Command[] {
+/** The plugin commands (palette rows), the shortcuts they hold and the status items of the plugins that can run. The
+ *  list is read when the window opens, each time the palette opens and when the window comes back into focus. */
+export function usePluginCommands({ core, t, open, current, composer, note }: Deps): { commands: Command[]; keys: Bindings; status: StatusEntry[] } {
   const [list, setList] = useState<Listed[]>([]);
+  useEffect(() => {
+    const read = () => void pluginOp(core, { do: 'list' }).then(setList, () => setList([]));
+    read();
+    window.addEventListener('focus', read);
+    return () => window.removeEventListener('focus', read);
+  }, [core]);
   useEffect(() => {
     if (open) pluginOp(core, { do: 'list' }).then(setList, () => setList([]));
   }, [core, open]);
-  return list
-    .filter((p) => p.on && p.state === 'approved' && p.plugin && !p.needs)
-    .flatMap((p) =>
+  const ready = list.filter((p) => p.on && p.state === 'approved' && p.plugin && !p.needs);
+  const commands = ready.flatMap((p) =>
       (p.plugin!.command ?? []).map((c) => ({
         id: `plugin.${p.id}.${c.name}`,
         title: c.title ?? c.name,
@@ -58,5 +65,35 @@ export function usePluginCommands({ core, t, open, current, composer, note }: De
             (e: unknown) => note(t('plugins.ran', { name: p.plugin!.name, text: lineError(t, e) })), // the plain line, not the core's raw words
           ),
       })),
-    );
+  );
+  const keys: Bindings = {};
+  for (const p of ready) for (const k of p.plugin!.keybinding ?? []) (keys[`plugin.${p.id}.${k.command}`] ??= []).push(chord(k.key));
+  const status = ready.flatMap((p) => (p.plugin!.status ?? []).map((s) => ({ key: `${p.id}.${s.name}`, plugin: p.plugin!.name, text: s.text, command: s.command && `plugin.${p.id}.${s.command}` })));
+  return { commands, keys, status };
 }
+export interface StatusEntry {
+  key: string;
+  plugin: string;
+  text: string;
+  /** The palette id of the command it runs. */
+  command?: string;
+}
+const ORDER = ['Control', 'Alt', 'Shift', 'Meta'];
+/** A plugin's key (`Meta+Shift+KeyH`) as the window spells a chord: its modifiers in `chordOf`'s order. */
+export const chord = (key: string) => {
+  const parts = key.split('+');
+  const code = parts.pop()!;
+  return [...ORDER.filter((m) => parts.includes(m)), code].join('+');
+};
+/** The plugins' shortcuts under the window's: a key the window or the user already holds stays theirs. */
+export function withPluginKeys(bindings: Bindings, keys: Bindings): Bindings {
+  const held = new Set(Object.values(bindings).flat());
+  const out = { ...bindings };
+  for (const [id, ks] of Object.entries(keys)) {
+    const free = ks.filter((k) => !held.has(k));
+    if (free.length) out[id] = free;
+    free.forEach((k) => held.add(k));
+  }
+  return out;
+}
+

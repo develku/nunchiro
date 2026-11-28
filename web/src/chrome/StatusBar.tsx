@@ -1,4 +1,5 @@
 // Shell: the status bar (split out of App.tsx, needs 183).
+import type { StatusEntry } from '../plugins/commands';
 import { useEffect, useMemo, useRef } from 'react';
 import { FailedNote, plainError, type Note } from '../errors';
 import type { CoreClient } from '../api';
@@ -37,7 +38,7 @@ type Props = {
 /** The window's status bar (ticket 1031): the usage block, the account switch, and what shows only when something is off: the stale count,
  *  layout file errors and notes, Undo, pane mode and fold notes, an update, a lost core connection. The session's state,
  *  branch and changes are in its header and the tree. */
-export function StatusBar({ current, t, core, sessions, ordered, open, store, editing, moved1, pane, paneNote, setPaneNote, fold, foldName, connected, manageAccounts, addTab }: Props) {
+export function StatusBar({ current, t, core, sessions, ordered, open, store, editing, moved1, pane, paneNote, setPaneNote, fold, foldName, connected, manageAccounts, addTab, plugins = [], run }: Props & { plugins?: StatusEntry[]; run?: (id: string) => void }) {
   const staleCount = useMemo(() => sessions.filter((s) => status(s) === 'stale').length, [sessions]);
   const update = useRcUpdate();
   noteWorking(sessions.filter((s) => s.state === 'running' && s.attention.working).length); // ticket 1082: asked before an install
@@ -88,6 +89,18 @@ export function StatusBar({ current, t, core, sessions, ordered, open, store, ed
       </span>
       {/* ticket 294 item 5: the permanent "answer strip removed: signals only (Layout)" notice is gone; removing the strip says so once, when it happens (App runOp). */}
       <span className="sp" />
+      {/* Plugins' status items (docs/plugins.md): the plugin's words, tagged with its name; a press runs its command. */}
+      {plugins.map((p) =>
+        p.command ? (
+          <button key={p.key} type="button" className="it plg-status" data-plugin-status={p.key} data-tip={p.plugin} onClick={() => run?.(p.command!)}>
+            {p.text}
+          </button>
+        ) : (
+          <span key={p.key} className="it plg-status" data-plugin-status={p.key} data-tip={p.plugin}>
+            {p.text}
+          </span>
+        ),
+      )}
       <AccountSwitch t={t} core={core} connected={connected} onManage={manageAccounts} current={current} onOpen={open} />
       {update.version && (
         // Design book, status-bar note: one pill that stays until it is handled, a dot, the note and its actions.

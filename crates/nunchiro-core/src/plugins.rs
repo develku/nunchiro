@@ -56,6 +56,79 @@ pub struct Plugin {
     /// Checks that may refuse a new session or replace a message an agent, a schedule or a token sends.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gate: Vec<Gate>,
+    /// Keyboard shortcuts for its commands (`Meta+Shift+KeyH`: the window's own key names). A key the window or the
+    /// user already holds stays theirs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keybinding: Vec<Keybinding>,
+    /// Short items in the status bar; pressing one runs its command.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub status: Vec<StatusItem>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Keybinding {
+    /// One of this plugin's commands.
+    pub command: String,
+    pub key: String,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct StatusItem {
+    pub name: String,
+    /// At most 24 characters.
+    pub text: String,
+    /// One of this plugin's commands, run when the item is pressed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+}
+/// Shortcuts and status items a plugin may add, at most.
+const MAX_KEYS: usize = 16;
+const MAX_STATUS: usize = 2;
+/// A shortcut as the window names keys: modifiers (at least Control, Alt or Meta, so a typed key is never taken), then
+/// one key code.
+fn valid_key(key: &str) -> bool {
+    let mut parts: Vec<&str> = key.split('+').collect();
+    let Some(code) = parts.pop() else {
+        return false;
+    };
+    const MODS: [&str; 4] = ["Control", "Alt", "Shift", "Meta"];
+    let mods_ok = parts.iter().all(|m| MODS.contains(m))
+        && parts.iter().collect::<BTreeSet<_>>().len() == parts.len()
+        && parts.iter().any(|m| *m != "Shift");
+    let one = |p: &str, rest: &str| {
+        code.strip_prefix(p)
+            .is_some_and(|c| c.len() == 1 && rest.contains(c))
+    };
+    let named = [
+        "Comma",
+        "Period",
+        "Slash",
+        "Semicolon",
+        "Quote",
+        "BracketLeft",
+        "BracketRight",
+        "Backslash",
+        "Minus",
+        "Equal",
+        "Backquote",
+        "Enter",
+        "Space",
+        "ArrowUp",
+        "ArrowDown",
+        "ArrowLeft",
+        "ArrowRight",
+    ];
+    let function = code
+        .strip_prefix('F')
+        .and_then(|n| n.parse::<u8>().ok())
+        .is_some_and(|n| (1..=12).contains(&n));
+    mods_ok
+        && (one("Key", "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+            || one("Digit", "0123456789")
+            || named.contains(&code)
+            || function)
 }
 /// A check run before an action: it answers `{"allow": true}`, `{"allow": false, "reason": "..."}` or, before a
 /// message, `{"allow": true, "text": "..."}` to replace it. It can do nothing else.
@@ -254,6 +327,41 @@ pub fn parse(text: &str, id: &str) -> Result<Plugin, String> {
         }
         part_manifest(&p, name)?;
     }
+    let has_command = |c: &str| p.command.iter().any(|x| x.name == c);
+    if p.keybinding.len() > MAX_KEYS || p.status.len() > MAX_STATUS {
+        return Err(format!(
+            "a plugin has at most {MAX_KEYS} shortcuts and {MAX_STATUS} status items"
+        ));
+    }
+    let mut chords = BTreeSet::new();
+    for k in &p.keybinding {
+        if !has_command(&k.command) {
+            return Err(format!("shortcut {}: no command {:?}", k.key, k.command));
+        }
+        if !valid_key(&k.key) || !chords.insert(k.key.as_str()) {
+            return Err(format!(
+                "shortcut {:?} is invalid or repeated: use modifiers with Control, Alt or Meta, then one key, as Meta+Shift+KeyH",
+                k.key
+            ));
+        }
+    }
+    let mut items = BTreeSet::new();
+    for s in &p.status {
+        if !approval::valid_name(&s.name) || !items.insert(s.name.as_str()) {
+            return Err(format!("status item {:?} is invalid or repeated", s.name));
+        }
+        if s.text.is_empty() || s.text.chars().count() > 24 || !shown(&s.text) {
+            return Err(format!(
+                "status item {}: its text is 1 to 24 plain characters",
+                s.name
+            ));
+        }
+        if let Some(c) = &s.command
+            && !has_command(c)
+        {
+            return Err(format!("status item {}: no command {c:?}", s.name));
+        }
+    }
     let mut keys = BTreeSet::new();
     for s in &p.setting {
         if !approval::valid_name(&s.key) || !keys.insert(s.key.as_str()) {
@@ -399,6 +507,15 @@ pub(crate) fn access(p: &Plugin) -> BTreeSet<String> {
     }
     for panel in &p.panel {
         out.insert(format!("panel {} is a {} panel", panel.name, panel.kind));
+    }
+    for k in &p.keybinding {
+        out.insert(format!("command {} on key {}", k.command, k.key));
+    }
+    for item in &p.status {
+        out.insert(format!("status item {}", item.name));
+        if let Some(c) = &item.command {
+            out.insert(format!("status item {} runs command {c}", item.name));
+        }
     }
     out
 }

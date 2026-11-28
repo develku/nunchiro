@@ -104,6 +104,23 @@
         }
       ]
     },
+    "Keybinding": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "description": "One of this plugin's commands.",
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "key"
+      ],
+      "type": "object"
+    },
     "OnError": {
       "enum": [
         "refuse",
@@ -226,6 +243,30 @@
         "send"
       ],
       "type": "string"
+    },
+    "StatusItem": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "description": "One of this plugin's commands, run when the item is pressed.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "text": {
+          "description": "At most 24 characters.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "text"
+      ],
+      "type": "object"
     }
   },
   "$id": "https://raw.githubusercontent.com/develku/nunchiro/main/docs/api/plugin.schema.json",
@@ -261,6 +302,13 @@
       "description": "The folder's name: a-z, 0-9, - and _ (up to 64).",
       "type": "string"
     },
+    "keybinding": {
+      "description": "Keyboard shortcuts for its commands (`Meta+Shift+KeyH`: the window's own key names). A key the window or the\nuser already holds stays theirs.",
+      "items": {
+        "$ref": "#/$defs/Keybinding"
+      },
+      "type": "array"
+    },
     "name": {
       "type": "string"
     },
@@ -282,6 +330,13 @@
       "description": "Values the user sets on the Plugins page; every run gets them as `settings`.",
       "items": {
         "$ref": "#/$defs/Setting"
+      },
+      "type": "array"
+    },
+    "status": {
+      "description": "Short items in the status bar; pressing one runs its command.",
+      "items": {
+        "$ref": "#/$defs/StatusItem"
       },
       "type": "array"
     },
