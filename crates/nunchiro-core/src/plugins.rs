@@ -86,17 +86,19 @@ pub struct StatusItem {
 /// Shortcuts and status items a plugin may add, at most.
 const MAX_KEYS: usize = 16;
 const MAX_STATUS: usize = 2;
-/// A shortcut as the window names keys: modifiers (at least Control, Alt or Meta, so a typed key is never taken), then
-/// one key code.
+/// A shortcut as the window names keys: modifiers (Meta among them, so a typed key or a terminal's control key is
+/// never taken), then one key code.
 fn valid_key(key: &str) -> bool {
     let mut parts: Vec<&str> = key.split('+').collect();
     let Some(code) = parts.pop() else {
         return false;
     };
     const MODS: [&str; 4] = ["Control", "Alt", "Shift", "Meta"];
+    // Meta always: without it a plugin could take Ctrl+C, Ctrl+D or Ctrl+Z from every terminal and agent, or a
+    // character Alt types on some layouts.
     let mods_ok = parts.iter().all(|m| MODS.contains(m))
         && parts.iter().collect::<BTreeSet<_>>().len() == parts.len()
-        && parts.iter().any(|m| *m != "Shift");
+        && parts.contains(&"Meta");
     let one = |p: &str, rest: &str| {
         code.strip_prefix(p)
             .is_some_and(|c| c.len() == 1 && rest.contains(c))
@@ -340,7 +342,7 @@ pub fn parse(text: &str, id: &str) -> Result<Plugin, String> {
         }
         if !valid_key(&k.key) || !chords.insert(k.key.as_str()) {
             return Err(format!(
-                "shortcut {:?} is invalid or repeated: use modifiers with Control, Alt or Meta, then one key, as Meta+Shift+KeyH",
+                "shortcut {:?} is invalid or repeated: use modifiers with Meta among them, then one key, as Meta+Shift+KeyH",
                 k.key
             ));
         }
@@ -527,6 +529,7 @@ pub(crate) fn access(p: &Plugin) -> BTreeSet<String> {
     }
     for item in &p.status {
         out.insert(format!("status item {}", item.name));
+        out.insert(format!("status item {} shows {:?}", item.name, item.text));
         if let Some(c) = &item.command {
             out.insert(format!("status item {} runs command {c}", item.name));
         }

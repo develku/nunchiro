@@ -11,7 +11,7 @@ function keyed(core: Core) {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(
     path.join(dir, 'plugin.toml'),
-    'id = "keys"\nname = "Keys"\nversion = "1.0.0"\n\n[[command]]\nname = "hi"\ntitle = "Say hi"\ncommand = ["/bin/sh", "hi.sh"]\nshow = "note"\n\n[[keybinding]]\ncommand = "hi"\nkey = "Control+Alt+KeyJ"\n\n[[status]]\nname = "greet"\ntext = "Hi there"\ncommand = "hi"\n',
+    'id = "keys"\nname = "Keys"\nversion = "1.0.0"\n\n[[command]]\nname = "hi"\ntitle = "Say hi"\ncommand = ["/bin/sh", "hi.sh"]\nshow = "note"\n\n[[keybinding]]\ncommand = "hi"\nkey = "Meta+Alt+KeyJ"\n\n[[status]]\nname = "greet"\ntext = "Hi there"\ncommand = "hi"\n',
   );
   fs.writeFileSync(path.join(dir, 'hi.sh'), '#!/bin/sh\necho "hello $(od -An -N4 -tu4 /dev/urandom | tr -d \' \')"\n');
 }
@@ -33,7 +33,7 @@ for (const scheme of ['light', 'dark'] as const) {
     await app.locator('.settings > nav button[data-page="plugins"]').click();
     await app.locator('.plg[data-plugin="keys"]').getByRole('button', { name: 'Review Keys' }).click();
     const extras = app.locator('.ps [data-field="extras"] li');
-    await expect(extras).toHaveText(['command hi on key Control+Alt+KeyJ', 'status item greet', 'status item greet runs command hi']);
+    await expect(extras).toHaveText(['command hi on key Meta+Alt+KeyJ', 'status item greet', 'status item greet runs command hi', 'status item greet shows "Hi there"']);
     await app.keyboard.press('Escape');
     core.run(['plugin', 'allow', 'keys']);
     core.run(['plugin', 'on', 'keys']);
@@ -42,10 +42,13 @@ for (const scheme of ['light', 'dark'] as const) {
     await app.evaluate(() => window.dispatchEvent(new Event('focus')));
     // Once the window has read the plugin again, its status item shows its text.
     const item = app.locator('footer.status [data-plugin-status="keys.greet"]');
-    await expect(item).toHaveText('Hi there');
+    // With the plugin's mark and name, so it never passes for the window's own.
+    await expect(item).toHaveText('KeysHi there');
+    await expect(item).toHaveAccessibleName('Keys: Hi there');
+    await expect(item.locator('svg')).toBeVisible();
     // The shortcut runs its command (the output is a fresh number each run).
     const note = app.getByText(/^Keys: hello \d+$/);
-    await app.keyboard.press('Control+Alt+KeyJ');
+    await app.keyboard.press('Meta+Alt+KeyJ');
     await expect(note).toBeVisible();
     const first = await note.textContent();
     // A press on the status item runs it again.

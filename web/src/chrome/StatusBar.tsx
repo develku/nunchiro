@@ -1,5 +1,7 @@
 // Shell: the status bar (split out of App.tsx, needs 183).
 import type { StatusEntry } from '../plugins/commands';
+import { StrokeIcon } from '../settings/shell/NavIcon';
+import '../plugins/status.css';
 import { useEffect, useMemo, useRef } from 'react';
 import { FailedNote, plainError, type Note } from '../errors';
 import type { CoreClient } from '../api';
@@ -90,17 +92,25 @@ export function StatusBar({ current, t, core, sessions, ordered, open, store, ed
       {/* ticket 294 item 5: the permanent "answer strip removed: signals only (Layout)" notice is gone; removing the strip says so once, when it happens (App runOp). */}
       <span className="sp" />
       {/* Plugins' status items (docs/plugins.md): the plugin's words, tagged with its name; a press runs its command. */}
-      {plugins.map((p) =>
-        p.command ? (
-          <button key={p.key} type="button" className="it plg-status" data-plugin-status={p.key} data-tip={p.plugin} onClick={() => run?.(p.command!)}>
+      {plugins.map((p) => {
+        // Always with the plugin's mark and name, so an item can never pass for the window's own.
+        const shown = (
+          <>
+            <StrokeIcon name="puzzle" size={12} />
+            <span className="plg-status-name">{p.plugin}</span>
             {p.text}
+          </>
+        );
+        return p.command ? (
+          <button key={p.key} type="button" className="it plg-status" data-plugin-status={p.key} aria-label={`${p.plugin}: ${p.text}`} onClick={() => run?.(p.command!)}>
+            {shown}
           </button>
         ) : (
-          <span key={p.key} className="it plg-status" data-plugin-status={p.key} data-tip={p.plugin}>
-            {p.text}
+          <span key={p.key} className="it plg-status" data-plugin-status={p.key} aria-label={`${p.plugin}: ${p.text}`}>
+            {shown}
           </span>
-        ),
-      )}
+        );
+      })}
       <AccountSwitch t={t} core={core} connected={connected} onManage={manageAccounts} current={current} onOpen={open} />
       {update.version && (
         // Design book, status-bar note: one pill that stays until it is handled, a dot, the note and its actions.
