@@ -6,10 +6,16 @@
 # stablyai/orca 2fbb071e).
 # Rust runs on macOS only: nunchiro-core uses macOS APIs (libproc, LOCAL_PEERTOKEN, renameatx_np) and does not build for
 # Linux, so the tests are split over macOS runners from one nextest archive instead of over Linux runners.
+# Two steps on pull requests: every push runs only the Linux jobs; the macOS jobs run once the pull request is ready
+# (auto-merge on, or the `ready-ci` label), because the free plan's 5 macOS runners cannot serve every push. Until then
+# `gate` fails, so nothing merges untested; turning auto-merge on or adding the label starts the full run.
 name: CI
 
 on:
   pull_request:
+    # The default three, plus the two that make a pull request ready. Removing the label or auto-merge starts no run:
+    # the head that last passed stays tested.
+    types: [opened, synchronize, reopened, auto_merge_enabled, labeled]
   merge_group:
     types: [checks_requested]
   push:
@@ -18,7 +24,7 @@ on:
 permissions:
   contents: read
 
-# A new push to a pull request cancels its older run; merge-queue and main runs are never cancelled (T3 Code ci.yml:12-14).
+# A new push to a pull request cancels its older run, and so does the run that starts when it becomes ready; merge-queue and main runs are never cancelled (T3 Code ci.yml:12-14).
 # The group of a main run is its commit: in one group per branch GitHub keeps one waiting run and cancels the one that
 # waited before it, so two landings during a run would leave a main tip untested.
 concurrency:
@@ -80,7 +86,7 @@ jobs:
   # job instead of three per main tip, and the `tests` output tells `gate` the tests ran.
   rust-build:
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.web_only != 'true'
+    if: needs.changes.outputs.ready == 'true' && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.web_only != 'true'
     runs-on: macos-latest
     timeout-minutes: 75
     outputs:
@@ -163,6 +169,7 @@ jobs:
       app: ${{ steps.app.outputs.needed }}
       docs_only: ${{ steps.docs.outputs.only }}
       web_only: ${{ steps.web.outputs.only }}
+      ready: ${{ steps.ready.outputs.ready }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -199,10 +206,18 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.base_ref }}
+      # Main and merge-queue runs are always ready. The event's pull request is read as it is now, so a later push to a
+      # ready pull request runs the full set too.
+      - id: ready
+        run: echo "ready=$READY" >> "$GITHUB_OUTPUT"
+        env:
+          READY: >-
+            ${{ github.event_name != 'pull_request' || github.event.pull_request.auto_merge != null
+            || contains(github.event.pull_request.labels.*.name, 'ready-ci') }}
 
   app:
     needs: changes
-    if: needs.changes.outputs.app == 'true'
+    if: needs.changes.outputs.ready == 'true' && needs.changes.outputs.app == 'true'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -226,7 +241,7 @@ jobs:
   # cli docs, the Python scenario suite and the Playwright core set: all three need the core binary.
   web:
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.ready == 'true' && needs.changes.outputs.docs_only != 'true'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -265,7 +280,8 @@ jobs:
   # ci.yml:660-696; Orca pr.yml:1279). Add every new job to `needs`. The allowed skips: `app` when `changes` said no app
   # input changed, `rust-build`, `rust-test` and `web` when `changes` said only safe docs changed, and `rust-build` and
   # `rust-test` when it said only window code and tests no Rust file reads changed, and `rust-test` when rust-build ran
-  # the tests itself (a push to main) and says so in its `tests` output.
+  # the tests itself (a push to main) and says so in its `tests` output. A pull request that is not ready skips the macOS
+  # jobs without an allowed reason, so it fails here, unless none of them would have run (only safe docs changed).
   gate:
     if: always()
     needs: [lint, changes, rust-build, rust-test, app, web]
@@ -281,4 +297,8 @@ jobs:
             .value.result == "success" or (.key == "app" and .value.result == "skipped" and $app == "false")
             or ((.key == "rust-build" or .key == "rust-test" or .key == "web") and .value.result == "skipped" and $docs == "true")
             or ((.key == "rust-build" or .key == "rust-test") and .value.result == "skipped" and $webonly == "true")
-            or (.key == "rust-test" and .value.result == "skipped" and $tests == "true"))' > /dev/null
+            or (.key == "rust-test" and .value.result == "skipped" and $tests == "true"))' > /dev/null && exit 0
+          if [ "$(echo "$RESULTS" | jq -r '.changes.outputs.ready')" != true ]; then
+            echo "::error::macOS checks run when auto-merge is on or the ready-ci label is set"
+          fi
+          exit 1

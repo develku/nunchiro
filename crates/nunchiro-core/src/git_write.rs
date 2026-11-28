@@ -445,7 +445,7 @@ fn github(dir: &Path, remote: &str) -> Result<(String, String), String> {
 }
 
 /// The remote's default branch: its recorded HEAD, else main or master when it has one.
-fn default_base(dir: &Path, remote: &str) -> Option<String> {
+pub(crate) fn default_base(dir: &Path, remote: &str) -> Option<String> {
     text(
         dir,
         &[
@@ -488,7 +488,7 @@ fn readable(branch: &str) -> String {
 }
 
 /// The repository's PR template, a regular file (no link) under its top folder, cut at `BODY_MAX`.
-fn template(dir: &Path) -> Option<String> {
+pub(crate) fn template(dir: &Path) -> Option<String> {
     let top = std::path::PathBuf::from(text(dir, &["rev-parse", "--show-toplevel"])?);
     TEMPLATES.iter().find_map(|t| {
         let path = top.join(t);
@@ -747,6 +747,7 @@ fn folder(registry: &Mutex<Sessions>, session: &str) -> Result<std::path::PathBu
 }
 
 /// The window's `git_push`, `pr_draft` and `pr_create` (window only); they run git and gh, so off the frame loop.
+/// `pr_write` and its cancel go to `text_gen`, which runs the agent CLI for up to 60 s.
 pub(crate) fn answer(registry: &Mutex<Sessions>, request: Request) -> Response {
     match request {
         Request::GitPush { session, shown } => {
@@ -794,6 +795,9 @@ pub(crate) fn answer(registry: &Mutex<Sessions>, request: Request) -> Response {
                 number: made.number,
                 pushed: made.pushed,
             })
+        }
+        r @ (Request::PrWrite { .. } | Request::PrWriteCancel { .. }) => {
+            crate::text_gen::answer(registry, r)
         }
         _ => Err("not a git op".into()),
     }

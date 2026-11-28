@@ -374,6 +374,51 @@ pub struct Part {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub on_error: Option<OnError>,
 }
+/// A plugin with a check keeps the rule from before access: any change asks again, because a check reads (and can
+/// replace) every message agents, schedules and tokens send, so a changed script must not run unreviewed.
+pub(crate) fn hash_only(p: &Plugin) -> bool {
+    !p.gate.is_empty()
+}
+/// What a plugin can reach, one line each, as its approval records it: its author, every part with its command line
+/// (and a panel's interval), and each host, folder, message box, action and failure rule a part has. A change that
+/// adds a line asks for approval again and the sheet lists it; a change to its scripts or texts alone stays approved
+/// (Orca re-asks only for added access: docs/plugins.md), unless the plugin has a check (`hash_only`).
+pub(crate) fn access(p: &Plugin) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for part in parts(p) {
+        let at = format!("{} {}", part.kind, part.name);
+        out.extend(part.network.iter().map(|h| format!("{at} reaches {h}")));
+        out.extend(part.read.iter().map(|r| format!("{at} reads {r}")));
+        if part.writes_draft {
+            out.insert(format!("{at} writes into the message box"));
+        }
+        let word = |v: serde_json::Value| v.as_str().unwrap_or_default().to_string();
+        if let Some(on) = part.check_on {
+            out.insert(format!(
+                "{at} runs on {}",
+                word(serde_json::to_value(on).unwrap_or_default())
+            ));
+        }
+        if let Some(e) = part.on_error {
+            out.insert(format!(
+                "{at} when it fails {}",
+                word(serde_json::to_value(e).unwrap_or_default())
+            ));
+        }
+        if let Some(secs) = part.interval_secs {
+            out.insert(format!("{at} runs every {secs} s"));
+        }
+        out.insert(format!("{at} runs {:?}", part.runs));
+        out.insert(at);
+    }
+    for panel in &p.panel {
+        out.insert(format!("panel {} is a {} panel", panel.name, panel.kind));
+    }
+    if let Some(a) = &p.author {
+        out.insert(format!("author {a}"));
+    }
+    out
+}
 pub(crate) fn parts(p: &Plugin) -> Vec<Part> {
     let part = |name: &String,
                 title: &Option<String>,
@@ -576,6 +621,9 @@ pub struct Listed {
     /// Absent when the folder or its manifest cannot be read (`error` says why).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub state: Option<approval::State>,
+    /// Changed since its approval but asking for nothing new (`approval::View::updated`): still approved.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub updated: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plugin: Option<Plugin>,
     /// The current value of each setting (stored, else the default).
@@ -601,9 +649,9 @@ pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
             let on = store.on.contains(&id);
             let name = format!("{PREFIX}{id}");
             let parsed = approval::status(home, &name)
-                .and_then(|v| Ok((v.state, parse(&v.manifest_text, &id)?)));
+                .and_then(|v| Ok((v.state, v.updated, parse(&v.manifest_text, &id)?)));
             match parsed {
-                Ok((state, p)) => {
+                Ok((state, updated, p)) => {
                     let scripts =
                         p.command.len() + p.panel.iter().filter(|x| x.kind == "script").count();
                     let needs = if scripts > 0 && !script_on {
@@ -623,6 +671,7 @@ pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
                         id,
                         on,
                         state: Some(state),
+                        updated,
                         plugin: Some(p),
                         error: None,
                         needs,
@@ -633,6 +682,7 @@ pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
                     id,
                     on,
                     state: None,
+                    updated: false,
                     plugin: None,
                     values: BTreeMap::new(),
                     error: Some(e),

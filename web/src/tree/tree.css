@@ -510,10 +510,11 @@
 .tree .crewsum > .more {
   margin: 0;
 }
-/* Ticket 1115 step 1: the lead row's "N working" tag gives way before the lead's name (ticket 995: the name wins). The
-   name's one-line word clamp cuts it at any shortfall (lead.css .lvl-mark), so the weight is the age's 1e8, not a small one. */
+/* Ticket 1115 step 1: the lead row's "N working" tag gives way before the lead's name (ticket 995: the name wins), after
+   the time and before the model pair (below: the real model stays whole). The name's one-line word clamp cuts it at any
+   shortfall (lead.css .lvl-mark), so the weight is a large one, between the time's 1e12 and the pair's 1e8. */
 .tree .row.wt2 .lead-tag {
-  flex: 0 100000000 auto;
+  flex: 0 10000000000 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1839,15 +1840,32 @@
 .row.wt2 .sw[data-word='bad'] {
   color: var(--bad-text);
 }
-/* The name wins (needs 72, ticket 995): the model pair gives way first, then the age, then the state word, and the name
-   last (weight 1, above). Each weight is 1e4 times the next, so a step's share of the shortfall stays under 1/64 px until
-   it is gone (the pair was 1e9 and the age 1e5 in lead.css and above; the word sits between the age and the name now).
-   The word and the age stay whole in the row's tooltip and label. */
-.tree .row.wt2 > .lvl-mark {
+/* The name wins (needs 72, ticket 995), and the model is shown as it is (ticket 994; owner 11-28: the real model before
+   the time): where a row is short the time's age gives way first ("<1m", .tm-ago inside .tm), then the state word, then
+   a lead's tag (above), then the model pair, and the name last (weight 1, above). Each weight is 1e4 times the next, so a step's share of the
+   shortfall stays under 1/64 px until it is gone. The word and the age stay whole in the row's tooltip and label. */
+.tree .row.wt2 .tm:not(.sw, .cache) {
   flex-shrink: 1000000000000;
 }
-.tree .row.wt2 .tm:not(.sw, .cache) {
+.tree .row.wt2 > .lvl-mark {
   flex-shrink: 100000000;
+}
+/* The age goes whole, never cut to "<1": it wraps onto a second line the box does not show (as .pk-text), then the word
+   takes the ellipsis. */
+.tree .row.wt2 .tm:not(.sw, .cache):has(> .tm-ago) {
+  display: inline-flex;
+  flex-wrap: wrap;
+  height: 1lh;
+}
+.tree .row.wt2 .tm > span {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+.tree .row.wt2 .tm > .tm-ago {
+  flex: none;
 }
 .row.wt2 .sw {
   flex: 0 10000 auto;

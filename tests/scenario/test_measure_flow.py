@@ -209,7 +209,7 @@ class DevSpeed(UtcClock):
         speed.git = lambda *a: "abc1234\n"
         (tmp / "ci-main.log").write_text(log)
         return speed.measure(7, record_path=tmp / "lane-record.jsonl", log_path=tmp / "ci-main.log", now=speed.iso("2026-11-28T12:00:00Z"),
-                             core=list(core), prs=prs, runs=runs if runs is None else list(runs), **dirs)
+                             core=None if core is None else list(core), prs=prs, runs=runs if runs is None else list(runs), **dirs)
 
     def test_pull_requests_are_the_landings(self):
         d = self.measure()
@@ -377,14 +377,28 @@ class DevSpeed(UtcClock):
 
     def test_lanes_before_the_record_are_unknown_not_zero(self):
         prs = [pr("lead/a", T + "00:00:00Z", T + "01:00:00Z", A, number=1), pr("lead/b", T + "03:00:00Z", T + "04:00:00Z", B, number=2)]
-        d = self.measure(prs=prs, record=[dict(at=T + "02:00:00Z", kind="review_start", pr=2)])
+        d = self.measure(prs=prs, record=[dict(at=T + "02:00:00Z", kind="ask", pr=9), dict(at=T + "02:10:00Z", kind="answer", pr=9)])
         self.assertEqual({r["lane"]: r.get("owner_touches") for r in d["lanes"]}, {"lead/a": None, "lead/b": 0})
         self.assertEqual((d["owner"]["measured"], d["owner"]["lanes"]), ("part", 1))
         # lines copied in later from older notes say nothing about the asks of their days
-        d = self.measure(prs=prs, record=[dict(at="2026-11-20T00:00:00Z", kind="verdict", pr=1, verdict="accept", note="backfill x"),
-                                          dict(at=T + "02:00:00Z", kind="review_start", pr=2)])
-        self.assertEqual((d["owner"]["measured"], d["coverage"]["record_from"]), ("part", "2026-11-27 02:00"))
+        d = self.measure(prs=prs, record=[dict(at="2026-11-20T00:00:00Z", kind="ask", pr=1, note="backfill x"),
+                                          dict(at=T + "02:00:00Z", kind="ask", pr=9)])
+        self.assertEqual((d["owner"]["measured"], d["coverage"]["asks_from"]), ("part", "2026-11-27 02:00"))
         self.assertIsNone(self.measure(prs=prs)["owner"]["measured"])
+
+    def test_a_record_without_asks_gives_no_owner_figures(self):
+        # verdicts only: the record never saw an ask, so 0 touches would be a guess that scores well
+        prs = [pr("lead/a", T + "03:00:00Z", T + "04:00:00Z", A, number=1)]
+        d = self.measure(prs=prs, record=[dict(at=T + "02:00:00Z", kind="verdict", pr=1, verdict="accept", by="acceptance")])
+        self.assertIsNone(d["lanes"][0].get("owner_touches"))
+        o = d["owner"]
+        self.assertEqual((o["measured"], o["lanes"], o["touches"], o["median_per_lane"], o["max_wait_min"]), (None, 0, None, None, None))
+
+    def test_no_seat_of_the_project_in_the_journal_is_not_measured(self):
+        at = lambda t: speed.iso(t) * 1000  # noqa: E731
+        d = self.measure([dict(type="core_started", at=at(T + "00:00:00Z"))])
+        self.assertEqual((d["seat_use"]["seat_hours"], d["seat_use"]["share_pct"]), (None, None))
+        self.assertIn("no live seat", d["seat_use"]["journal"])
 
     def test_task_line_by_branch_gives_task_to_main(self):
         d = self.measure(record=self.FLOW_A)
@@ -530,8 +544,69 @@ class DevSpeed(UtcClock):
         keep = speed.subprocess.run
         self.addCleanup(lambda: setattr(speed.subprocess, "run", keep))
         speed.subprocess.run = fake
+        os.environ["MEASURE_NUNCHIRO"] = "nunchiro"  # never the owner's app on this machine
+        self.addCleanup(lambda: os.environ.pop("MEASURE_NUNCHIRO"))
         self.assertEqual([e["type"] for e in speed.core_events("/p", 7)], ["core_started", "state"])
-        self.assertEqual(seen, [["nunchiro", "events", "--history", "8", "--project", "/p"]])
+        self.assertEqual(seen, [["nunchiro", "events", "--history", "8"]])
+
+    def fake_cli(self, out, code=0):
+        seen = []
+
+        def fake(cmd, **kw):
+            seen.append(cmd)
+            return subprocess.CompletedProcess(cmd, code, out, "nunchiro: unknown command; use --help" if code else "")
+        keep = speed.subprocess.run
+        self.addCleanup(lambda: setattr(speed.subprocess, "run", keep))
+        speed.subprocess.run = fake
+        return seen
+
+    def test_core_events_keep_the_project_and_the_core_s_own_lines(self):
+        # "--project" drops every line without a project (core_started, journal_full): the script filters itself
+        lines = [dict(type="state", at=1, project="/p", session="s"), dict(type="state", at=2, project="/q", session="t"),
+                 dict(type="core_started", at=3, project=""), dict(type="journal_full", at=4)]
+        seen = self.fake_cli("".join(json.dumps(x) + "\n" for x in lines))
+        os.environ["MEASURE_NUNCHIRO"] = "/apps/cli"
+        self.addCleanup(lambda: os.environ.pop("MEASURE_NUNCHIRO"))
+        self.assertEqual([e["at"] for e in speed.core_events("/p", 7)], [1, 3, 4])
+        self.assertEqual(seen, [["/apps/cli", "events", "--history", "8"]])
+
+    def test_a_journal_not_read_is_not_measured(self):
+        self.fake_cli("", code=2)
+        self.assertIsNone(speed.core_events("/p", 7))
+        d = self.measure(core=None, project="/p")
+        self.assertIsNone(d["seat_use"]["share_pct"])
+        self.assertIsNone(d["seat_use"]["seat_hours"])
+        self.assertIsNone(d["owner"]["permission_waits"])
+        self.assertIn("not read", d["seat_use"]["journal"])
+
+    def test_a_core_restart_ends_the_states_it_left_open(self):
+        at = lambda t: speed.iso(t) * 1000  # noqa: E731
+        core = [dict(type="session_started", at=at(T + "00:00:00Z"), session="s1", state="permission"),
+                dict(type="core_started", at=at(T + "01:00:00Z")),  # s1 did not come back: never listed again
+                dict(type="session_started", at=at(T + "01:00:00Z"), session="s2", state="working"),
+                dict(type="journal_full", at=at(T + "02:00:00Z"))]  # nothing seen after it that day
+        d = self.measure(core)
+        self.assertEqual((d["owner"]["permission_wait_min"], d["seat_use"]["seat_hours"]), (60, 2.0))
+        self.assertEqual(d["seat_use"]["share_pct"], {"permission": 50.0, "working": 50.0})
+
+    def test_worktree_add_and_push_with_other_flags_are_joined(self):
+        d = self.costs({"-src/s1/subagents/agent-a.jsonl": [self.said("Build."), self.did(
+                            "m1", command="git -C /src worktree add -q -b flow-a /w/wa origin/main 2>&1", output_tokens=1_000_000)],
+                        "-src/s1/subagents/agent-b.jsonl": [self.said("Fix."), self.did(
+                            "m2", command="cd /w/wb && git push -q -u origin flow-b 2>&1 | tail -1", output_tokens=1_000_000)]})
+        self.assertEqual({r["lane"]: r.get("usd") for r in d["lanes"]}, {"flow-a": 20.0, "flow-b": 20.0})
+
+    def test_a_linked_claude_folder_is_read_once(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(tmp))
+        f = tmp / "claude/projects/-src/main.jsonl"
+        f.parent.mkdir(parents=True)
+        f.write_text(json.dumps(self.said("Start.")) + "\n")
+        (tmp / "claude/projects/-src/main/subagents").mkdir(parents=True)
+        (tmp / "other").mkdir()
+        (tmp / "other/projects").symlink_to(tmp / "claude/projects")  # a second account sharing the first one's projects
+        d = self.measure(prs=[], claude_dirs=[tmp / "claude", tmp / "other"])
+        self.assertEqual(d["owner"]["chat_messages_by_day"], {"2026-11-27": 1})
 
 
 if __name__ == "__main__":

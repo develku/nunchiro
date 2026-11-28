@@ -27,6 +27,10 @@ export interface ApprovalView {
   /** v1b-34: why act cannot be granted (a web widget naming a script CDN host); absent when it can. */
   act_refused?: string;
   /** A plugin's panels and commands with exactly what each runs (`plugin:<id>`; its manifest's command is empty). */
+  /** A plugin whose files changed since its approval, asking for nothing new: still approved. */
+  updated?: boolean;
+  /** A plugin's access beyond its approval, one line each (`plugins::access`): why it asks again. */
+  added?: string[];
   parts?: { name: string; title: string; kind: 'panel' | 'command' | 'check'; runs: string[]; network?: string[]; read?: string[]; interval_secs?: number; writes_draft?: boolean; check_on?: 'session.start.before' | 'prompt.send.before'; on_error?: 'refuse' | 'allow' }[];
 }
 

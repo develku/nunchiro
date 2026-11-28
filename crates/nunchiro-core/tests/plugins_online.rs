@@ -71,7 +71,11 @@ fn sha(b: &[u8]) -> String {
 }
 /// The origin's files for `hello` at `version`, and a catalogue that names them (plus one entry that is not valid).
 fn publish(files: &Files, version: &str) {
-    let manifest = MANIFEST.replace("VERSION", version);
+    publish_with(files, version, "");
+}
+/// As `publish`, with `extra` added to the command's table (more access, such as a network host).
+fn publish_with(files: &Files, version: &str, extra: &str) {
+    let manifest = MANIFEST.replace("VERSION", version) + extra;
     let dir = "examples/hello";
     let catalog = json!({"version": 1, "plugins": [
         {"id": "hello", "name": "Hello", "about": "Says hello.", "version": version, "adds": {"command": 1},
@@ -214,13 +218,11 @@ fn a_catalogue_must_say_its_version_and_nothing_unknown() {
     }
 }
 
-#[test]
-fn an_update_of_an_approved_plugin_that_was_on_is_off_and_asks_again() {
-    let (home, files, catalog) = setup("pca");
-    catalog.install("hello").unwrap();
-    let view = nunchiro_core::approval::status(&home, "plugin:hello").unwrap();
+/// Approves `hello` as it is now and turns it on.
+fn approve_and_turn_on(home: &std::path::Path) {
+    let view = nunchiro_core::approval::status(home, "plugin:hello").unwrap();
     nunchiro_core::approval::grant(
-        &home,
+        home,
         "plugin:hello",
         nunchiro_core::approval::Level::Read,
         &view.hash,
@@ -231,18 +233,36 @@ fn an_update_of_an_approved_plugin_that_was_on_is_off_and_asks_again() {
         json!({"on": ["hello"]}).to_string(),
     )
     .unwrap();
-    let hello = |home: &std::path::Path| {
-        plugins::list(home, true, false)
-            .into_iter()
-            .find(|p| p.id == "hello")
-            .unwrap()
-    };
-    assert!(hello(&home).on && hello(&home).state == Some(State::Approved));
+}
+fn hello(home: &std::path::Path) -> plugins::Listed {
+    plugins::list(home, true, false)
+        .into_iter()
+        .find(|p| p.id == "hello")
+        .unwrap()
+}
+
+#[test]
+fn an_update_that_asks_for_nothing_new_stays_on_and_approved() {
+    let (home, files, catalog) = setup("pca");
+    catalog.install("hello").unwrap();
+    approve_and_turn_on(&home);
     publish(&files, "1.1.0");
     catalog.install("hello").unwrap();
     let after = hello(&home);
-    assert!(!after.on, "an update is off");
-    assert_ne!(after.state, Some(State::Approved), "and asks again");
+    assert!(after.on, "an update that asks for nothing new stays on");
+    assert_eq!(after.state, Some(State::Approved));
+}
+
+#[test]
+fn an_update_that_adds_access_is_off_and_asks_again() {
+    let (home, files, catalog) = setup("pcn");
+    catalog.install("hello").unwrap();
+    approve_and_turn_on(&home);
+    publish_with(&files, "1.1.0", "network = [\"example.com\"]\n");
+    catalog.install("hello").unwrap();
+    let after = hello(&home);
+    assert!(!after.on, "an update that adds access is off");
+    assert_eq!(after.state, Some(State::Changed), "and asks again");
 }
 
 #[test]
@@ -268,4 +288,31 @@ fn a_link_where_the_plugin_goes_is_refused_and_leaves_nothing() {
     std::os::unix::fs::symlink(&elsewhere, home.join("plugins")).unwrap();
     assert!(catalog.install("hello").unwrap_err().contains("symlink"));
     assert_eq!(fs::read_dir(&elsewhere).unwrap().count(), 0);
+}
+
+#[test]
+fn a_catalogue_that_cannot_be_reached_says_the_plugin_list_not_the_theme_server() {
+    let home = home::short("pcn");
+    // A loopback port that nothing listens on: curl fails to connect.
+    let port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let down = Catalog::with_origin(&home, &format!("http://127.0.0.1:{port}/")).unwrap();
+    let (_home, files, gone) = setup("pcg");
+    files.lock().unwrap().remove(CATALOG);
+    for (catalog, why) in [
+        (down, "the request failed (curl exit "),
+        (gone, "the plugin catalogue answered HTTP 404"),
+    ] {
+        let e = catalog.entries().unwrap_err();
+        assert!(
+            e.starts_with("the plugin list could not be read: ") && e.contains(why),
+            "{e}"
+        );
+        assert!(!e.contains("theme"), "{e}");
+        let e = catalog.install("hello").unwrap_err();
+        assert!(e.starts_with("the plugin list could not be read: "), "{e}");
+    }
 }

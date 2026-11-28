@@ -66,6 +66,8 @@ declare module '../index' {
     'lead.place.seatsAsk': true;
     'lead.place.seatsEdits': true;
     'lead.place.autoNote': true;
+    'lead.mergeAsk.group': true;
+    'lead.mergeAsk.note': true;
     'lead.account.group': true;
     'lead.account.note': true;
     'lead.account.own': true;
@@ -143,6 +145,8 @@ export const en = {
   'lead.place.seatsAsk': 'Seats ask you before each edit and command.',
   'lead.place.seatsEdits': 'Seats edit files without asking. Commands still ask you.',
   'lead.place.autoNote': 'A stalled seat gets one nudge; if it stays stalled, you get asked.',
+  'lead.mergeAsk.group': 'Ask me before merging task work',
+  'lead.mergeAsk.note': 'Off: the lead merges reviewed task work into its working branch and you get its final result. The main branch always asks.',
   // Ticket 1120: English only until ticket 1035's pass.
   'lead.account.group': 'Seats run on',
   'lead.account.note': "The account a Builder or Reviewer seat here starts on. A lead can use it as its own.",

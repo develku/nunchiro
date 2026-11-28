@@ -59,6 +59,36 @@ chatTest('composer_resume_continues_with_the_draft: same tab, box enabled, draft
   await expect(reason(page)).toHaveCount(0);
 });
 
+// A real drive lost the words typed right after Continue: the box stayed disabled until the new session ran (1-2 s).
+chatTest('composer_resume_typed_at_once_is_kept: words typed right after Continue land in the box and Enter waits', async ({ page, chatCore }) => {
+  const s = chatCore.chat();
+  append(s.file, rec.user('before'), rec.assistant('the answer'));
+  let sends = 0;
+  await page.routeWebSocket(/\/ws$/, (ws) => {
+    const server = ws.connectToServer();
+    ws.onMessage((message) => {
+      const msg = typeof message === 'string' ? JSON.parse(message) : null;
+      if (msg?.request?.op === 'send_text') sends++;
+      if (msg?.request?.op === 'start') return void setTimeout(() => server.send(message), 1500); // a slow start
+      server.send(message);
+    });
+    server.onMessage((message) => ws.send(message));
+  });
+  await openChat(page, s.id);
+  const box = page.locator('.composer textarea');
+  chatCore.windowClose(s.id); // ticket 1013 F6: the window's own Close keeps the done tab
+  await expect(box).toBeDisabled();
+  await reason(page).getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.keyboard.type('typed at once'); // no click into the box first: the drive typed straight after Continue
+  await page.keyboard.press('Enter'); // before the session runs: nothing is sent and nothing is lost
+  await expect(box).toHaveValue('typed at once');
+  await expect.poll(() => snap(chatCore).find((x) => x.id !== s.id && x.state === 'running')?.agent_session_id).toBe(s.agent_session_id);
+  await expect(box).toBeEnabled();
+  await expect(box).toHaveValue('typed at once');
+  await expect(box).toBeFocused();
+  expect(sends).toBe(0);
+});
+
 chatTest('composer_resume_failure_keeps_the_draft_and_starts_once: a double press sends one start; the note says why until another tab is in front', async ({ page, chatCore }) => {
   const s = chatCore.chat();
   append(s.file, rec.user('before'), rec.assistant('the answer'));

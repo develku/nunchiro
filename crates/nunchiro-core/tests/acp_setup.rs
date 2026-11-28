@@ -1794,6 +1794,10 @@ fn acp_try_agent_that_stops_reading_fails_fast_and_frees_the_slot() {
             .contains("not reading its input"),
         "{turn}"
     );
+    assert!(
+        !turn["error"].as_str().unwrap().contains("os error"),
+        "{turn}"
+    );
     wait_gone(
         info(&core)["pid"].as_i64().unwrap() as i32,
         "the agent outlived the try",
@@ -1857,4 +1861,28 @@ fn acp_try_cancel_ends_a_running_test_and_a_second_waits_its_turn() {
     );
     // A cancelled test keeps no result.
     assert!(core.ok(json!({"op":"acp_agents"}))["turns"]["fake"].is_null());
+}
+
+#[test]
+fn acp_try_stores_the_version_cut_and_clean() {
+    let core = Core::new("try-version", "");
+    let wrapper = core.project.join("noisy-agent");
+    fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\n[ \"$1\" = --version ] && {{ printf '\\033[31m'; head -c 60000 /dev/zero | tr '\\0' v; echo; exit 0; }}\nexec /usr/bin/python3 {} {}\n",
+            fixture().display(),
+            core.log.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+    core.ok(
+        json!({"op":"acp_agent_add","entry":{"name":"noisy","command":wrapper,"args":[],"env":[]}}),
+    );
+    core.approve("noisy");
+    let turn = try_turn(&core, "noisy");
+    let version = turn["version"].as_str().unwrap();
+    assert!(version.chars().count() <= 80, "{} chars", version.len());
+    assert!(!version.chars().any(char::is_control), "{version:?}");
 }
