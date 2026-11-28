@@ -482,14 +482,15 @@ pub struct Part {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub on_error: Option<OnError>,
 }
-/// What a plugin can reach, one line each, as its approval records it: its author, every part with its command line
-/// (and a panel's interval), and each host, folder, message box, action and failure rule a part has. A change that adds a line asks for approval again and the sheet lists it; a change
-/// to its scripts or texts alone stays approved (Orca re-asks only for added access: docs/plugins.md).
 /// A plugin with a check keeps the rule from before access: any change asks again, because a check reads (and can
 /// replace) every message agents, schedules and tokens send, so a changed script must not run unreviewed.
 pub(crate) fn hash_only(p: &Plugin) -> bool {
     !p.gate.is_empty()
 }
+/// What a plugin can reach, one line each, as its approval records it: its author, every part with its command line
+/// (and a panel's interval), and each host, folder, message box, action and failure rule a part has. A change that
+/// adds a line asks for approval again and the sheet lists it; a change to its scripts or texts alone stays approved
+/// (Orca re-asks only for added access: docs/plugins.md), unless the plugin has a check (`hash_only`).
 pub(crate) fn access(p: &Plugin) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     for part in parts(p) {
