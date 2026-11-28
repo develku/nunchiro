@@ -28,11 +28,16 @@ const joined = (draft: string, words: string) => (draft ? `${draft.replace(/\n*$
 export function usePluginCommands({ core, t, open, current, composer, note }: Deps): Command[] {
   const [list, setList] = useState<Listed[]>([]);
   // A plugin its catalogue blocks since the last read says so once, with the reason (a refresh turned it off).
-  const blocked = useRef<Map<string, string> | null>(null);
+  // `true` for a plugin that was on at the last read, so only that one is told it "was turned off".
+  const seen = useRef<Map<string, { blocked: boolean; on: boolean }> | null>(null);
   const take = (next: Listed[]) => {
-    const was = blocked.current;
-    for (const p of next) if (was && p.blocked && !was.has(p.id)) note(t('plugins.blockedNote', { name: p.plugin?.name ?? p.id, why: p.blocked }));
-    blocked.current = new Map(next.filter((p) => p.blocked).map((p) => [p.id, p.blocked!]));
+    const was = seen.current;
+    for (const p of next) {
+      const before = was?.get(p.id);
+      if (!was || !p.blocked || before?.blocked) continue;
+      note(t(before?.on ? 'plugins.blockedNote' : 'plugins.blockedNoteOff', { name: p.plugin?.name ?? p.id, why: p.blocked }));
+    }
+    seen.current = new Map(next.map((p) => [p.id, { blocked: !!p.blocked, on: p.on }]));
     setList(next);
   };
   useEffect(() => {
