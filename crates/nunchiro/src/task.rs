@@ -20,6 +20,7 @@ nunchiro task done <id> | drop <id>\n\
 nunchiro task package <id> quote \"<words, exactly>\" --who \"<who said it>\" --when \"<when>\" [--image <attached image>]... | unquote <n> | background \"<your text>\" | see \"<what the user will see>\" | shown <n> | approve <n> | link <path or URL> --kind mockup|doc|code|url [--approved] | unlink <n> (the lead or the user: the task's work package; a quote is never edited, only removed and added)\n\
 nunchiro task auto on|off --project DIR (the user's choice for a place: the core nudges stalled seats, wakes the lead, starts Reviewers)\n\
 nunchiro task account <label>|own --project DIR (the user's choice for a place: the agent account its seats start on, staffed and auto-started alike; own is the lead's own)\n\
+nunchiro task merge-ask on|off --project DIR (the user's choice for a place: a merge card before task work merges into the lead's working branch; off by default, the default branch always asks)\n\
 nunchiro task cap 2|4|6|8 --project DIR (the user's choice: live seats of the place at which the core stops starting Reviewers; 4 by default)\n\
 nunchiro task ask-cap 2|4|6|8 --why \"<what you saw>\" (a lead: asks the user on a card to change its place's live seats)\n\
 nunchiro note list\n\
@@ -86,7 +87,9 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
     let mut plain = plain.into_iter();
     match operation.as_str() {
         "new" | "pass" | "changes" | "learn" | "way" | "grant" | "auto" | "cap" | "account"
-        | "ask-cap" | "goal" | "promise" | "waiting" => text = plain.next().unwrap_or_default(),
+        | "merge-ask" | "ask-cap" | "goal" | "promise" | "waiting" => {
+            text = plain.next().unwrap_or_default()
+        }
         "loop-close" => {
             id = plain.next().or(id);
             text = plain.next().unwrap_or_default();
