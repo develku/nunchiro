@@ -26,6 +26,8 @@ export interface Listed {
   id: string;
   on: boolean;
   state?: ApprovalState;
+  /** Changed since its approval but asking for nothing new, so still approved. */
+  updated?: boolean;
   plugin?: Plugin;
   values?: Record<string, unknown>;
   error?: string;

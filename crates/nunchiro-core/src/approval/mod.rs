@@ -117,6 +117,12 @@ pub struct View {
     /// A plugin's panels and commands with what each runs (the sheet lists them; `manifest.command` is empty).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub parts: Vec<crate::plugins::Part>,
+    /// A plugin approved for its access whose files changed since, asking for nothing new: it stays approved.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub updated: bool,
+    /// A plugin's access beyond what was approved (`plugins::access` lines): why it asks again.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub added: Vec<String>,
 }
 
 /// Held by whatever runs a subject. Only `check` makes one; re-run `check` right before spawning, because
@@ -277,6 +283,23 @@ fn stored_as(kind: SubjectKind, name: &str) -> (SubjectKind, String) {
     }
 }
 
+/// A plugin's access now (`plugins::access`), when `s` is a plugin.
+fn access_of(name: &str, s: &Subject) -> Option<std::collections::BTreeSet<String>> {
+    let (id, _) = crate::plugins::split(name)?;
+    crate::plugins::parse(&s.text, id)
+        .ok()
+        .map(|p| crate::plugins::access(&p))
+}
+/// What a plugin asks for beyond its approval: `None` when the stored grant holds no access (anything but a
+/// plugin, or a grant from before access was recorded), so only the hash decides.
+fn added(name: &str, s: &Subject, a: &store::Approval) -> Option<Vec<String>> {
+    if a.access.is_empty() {
+        return None;
+    }
+    let now = access_of(name, s)?;
+    Some(now.into_iter().filter(|x| !a.access.contains(x)).collect())
+}
+
 fn view(name: &str, s: Subject, stored: Option<&store::Approval>) -> View {
     let act_refused = crate::widgets::web::act_refused(&s.manifest);
     let (state, level) = match stored {
@@ -286,8 +309,17 @@ fn view(name: &str, s: Subject, stored: Option<&store::Approval>) -> View {
             (State::Changed, Some(a.level))
         }
         Some(a) if a.hash == s.hash => (State::Approved, Some(a.level)),
+        // Changed, but asking for nothing it was not approved for: still approved (Orca's rule for updates).
+        Some(a) if added(name, &s, a).is_some_and(|n| n.is_empty()) => {
+            (State::Approved, Some(a.level))
+        }
         Some(a) => (State::Changed, Some(a.level)),
     };
+    let updated = stored.is_some_and(|a| a.hash != s.hash) && state == State::Approved;
+    let new = stored
+        .filter(|_| state == State::Changed)
+        .and_then(|a| added(name, &s, a))
+        .unwrap_or_default();
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
     let read_home_wide = home.is_some_and(|h| s.manifest.read.iter().any(|e| home_wide(e, &h))); // v1b-33
     let parts = crate::plugins::split(name)
@@ -296,6 +328,8 @@ fn view(name: &str, s: Subject, stored: Option<&store::Approval>) -> View {
         .unwrap_or_default();
     View {
         parts,
+        updated,
+        added: new,
         read_home_wide,
         act_refused,
         name: name.into(),
@@ -401,6 +435,9 @@ fn grant_kind(
         level,
         hash: s.hash.clone(),
         granted_at_ms: crate::queue::now_ms(),
+        access: access_of(name, &s)
+            .map(|a| a.into_iter().collect())
+            .unwrap_or_default(),
     });
     stored.save(home)?;
     let stored = stored.find(at, &key).cloned();
@@ -424,8 +461,16 @@ fn check_kind(home: &Path, name: &str, kind: SubjectKind) -> Result<Proof, Strin
     let stored = store::load(home)?;
     let s = subject(home, name, kind)?;
     let (at, key) = stored_as(kind, name);
+    // A plugin part is checked against its whole plugin's access.
+    let whole = crate::plugins::split(name)
+        .map(|(id, _)| format!("{}{id}", crate::plugins::PREFIX))
+        .unwrap_or_default();
     match stored.find(at, &key) {
-        Some(a) if a.hash == s.hash => {
+        Some(a)
+            if a.hash == s.hash
+                || (at == SubjectKind::Plugin
+                    && added(&whole, &s, a).is_some_and(|n| n.is_empty())) =>
+        {
             // v1b-34: an act grant stored before the rule (or by hand) is no proof.
             if let Some(reason) = crate::widgets::web::act_refused(&s.manifest)
                 && a.level == Level::Act
@@ -540,6 +585,7 @@ pub fn grant_agent(home: &Path, name: &str, seen_hash: &str) -> Result<AgentView
         level: Level::Act,
         hash: view.hash,
         granted_at_ms: crate::queue::now_ms(),
+        access: vec![],
     });
     stored.save(home)?;
     agent_view(home, name)
@@ -621,6 +667,7 @@ pub fn grant_setup(
         level: Level::Act,
         hash: seen_hash.into(),
         granted_at_ms: crate::queue::now_ms(),
+        access: vec![],
     });
     stored.save(home)?;
     setup_status(home, project, path, script)
@@ -661,6 +708,7 @@ mod setup_tests {
             level: Level::Read,
             hash: hash::text("w"),
             granted_at_ms: 0,
+            access: vec![],
         });
         stored.save(&home).unwrap();
         let again = store::load(&home).unwrap();

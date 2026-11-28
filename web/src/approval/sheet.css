@@ -48,6 +48,10 @@
   background: var(--signal-soft);
   color: var(--signal-text);
 }
+.ps-changed ul {
+  margin: var(--sp-6) 0 0;
+  padding-left: var(--sp-16);
+}
 .ps-perm {
   border: 1px solid var(--g3);
   border-radius: var(--r-6);
