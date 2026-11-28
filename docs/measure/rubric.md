@@ -148,8 +148,9 @@ that is owner-run or not yet scores 0 until it is measured (rule 1).
 ## Peer tasks (p04, p11, p13)
 
 The tasks, the path rule and the score are in [tasks.md](tasks.md). In short: every cell is one task driven in the
-running app, the same way in every app, on the default GUI path a new user finds; the steps and the seconds are
-recorded; three drives, the median. The task score is the lower of the step score and the time score. T1 starts at
+running app, the same way in every app and in one session, on the default GUI path a new user finds; the steps and
+the seconds are recorded (by computer use the seconds are a fixed user time per step plus the app's measured waits);
+three drives, the median. The task score is the lower of the step score and the time score. T1 starts at
 the app's public download page. A Nunchiro cell not driven in this run scores 0. A task counts only when at least two
 peers were driven on it.
 
@@ -319,7 +320,7 @@ sandboxes. A phone client is row M2 of p01.
 | Idle weight with real agents | with at least 5 Claude or Codex sessions waiting at their prompts and the window open: `python3 -B scripts/measure/scorecard.py weigh` (read only; writes the manual file) | idle_mib_5, idle_cpu_pct_5 |
 | Terminal paint and streaming | `sh scripts/measure/build.sh`, then the echo `paint.sh` command of the anchor table and copy p95_ms into the manual file; `python3 -B scripts/measure/scorecard.py stream8` runs the stream command and writes the worst frame itself. Both commands need the measure core: built with release optimisation and debug assertions on (`CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true`), on a throwaway home. A plain release core gives the window token to the app only (crates/nunchiro-core/src/peer.rs `is_app`), so the measure page cannot open a terminal on it. `stream8` builds that core; the echo command takes it through `NUNCHIRO_MEASURE_CORE`. A core without release optimisation is not these figures | term_paint_p95_ms, stream8_worst_frame_ms |
 | Real agent turns | `sh scripts/scenario/agent-kinds.sh`: every installed kind's test message (ACP agents) and the chat rows of `v1b-full.sh` (Claude, Codex); it writes `docs/measure/evidence/agent-kinds-<date>.json`, and a kind counts only with sent, answer read and turn end all yes (a `self_test` record never counts) | the count of p06, EX5, A3 |
-| Peer tasks | drive T1-T12 in Nunchiro (an isolated RC), Orca and T3 Code the same way (by hand with a recording, or computer use for all; the owner answers its access dialog); record steps, seconds and the date in tasks.json | p04, p11, p13 |
+| Peer tasks | drive T1-T12 in Nunchiro (an isolated RC), Orca and T3 Code the same way (by hand with a recording, or computer use for all; the owner answers its access dialog), in one session, the apps in turn; a computer-use drive records each step's kind, time stamp and wait, and `scripts/measure/drive.py seconds` gives its seconds; record steps, seconds and the date in tasks.json | p04, p11, p13 |
 | Seats lost per restart | over 7 days, for each restart of the owner's app (update, serve restart, relaunch): seats held before minus seats back after, from `nunchiro agent list` before and after; the mean | seats_lost_per_restart |
 | 24 h soak | 20 real agent sessions on a core with its own NUNCHIRO_HOME for 24 h with a heartbeat prompt every 10 min; clean hours until the first crash, stuck terminal or lost session (`python3 -B scripts/measure/soak.py --nunchiro <RC nunchiro> --sessions 20`; raw samples in soak-<date>.jsonl, `--report FILE` for a stopped run; it writes soak_clean_hours only from a day of exactly 20 sessions) | soak_clean_hours |
 | Accuracy trial | p34 above: `python3 -B scripts/measure/scorecard.py accuracy --machine <alias> --remote-project <dir on the second Mac>` (raw records in accuracy-<date>.json; the figures go into the manual file only when the run is counted; `--self-test` checks the script on a fixture agent and is never counted) | the five p34 trial figures, prompt_delivery_ms |
@@ -542,6 +543,20 @@ How far a user's agent team runs without the person stepping in.
 2. Peer tasks (p04, p11, p13): driven and timed in the running apps, one path rule, the lower of the step score and
    the time score, T1 from the download page. Reason: v1 counted steps from code, Nunchiro on its best path and the
    peers on their default path; one more step per task moved Usability from 86 to 53.
+   A later change, after the first drives: the seconds of a computer-use drive are a fixed user time per step plus
+   the app's own waits, where they were the wall time of the drive. The user time is the Keystroke-Level Model's (a
+   click 2.73 s, a key or a typed field 1.35 s + 0.28 s per key or character); a wait runs from the time stamped
+   right before a step's input to the first picture, in a time-stamped recording of the app's window, that shows the
+   screen ready for the next step or the done state. The apps of a run are driven in one session and take turns, and
+   a peer's seconds are not carried into a later run (its steps are, while its version is the same). Reason: by
+   computer use the wall time measures the driver, not the app. The same four-step path took 7 s from a driver that
+   sent its steps without looking and 27 s from one that looked before each step, and the peers had been driven at
+   a third pace, so "every app driven the same way" could not be met by wall time, and no wall time could be kept
+   for a run with another driver. With a fixed user time the time score differs from the step score only by the
+   app's waits and by the kind of its steps (a key is quicker than a pointed click), which is what "a short path with
+   long waits does not win" asks for. Not looser: every wait counts in full, with the tool's own time to deliver the
+   input inside it, and the peers are driven again in every run. A hand drive with a recording is unchanged, the
+   score formula is unchanged, and no seconds of a drive made before this change count.
 3. Speed (p15): the warm launch is measured on a home with 20 sessions and a 5,000-event conversation, 100 at 0.3 s
    and 0 at 1.5 s (v1: 0.5 and 3.0 on an empty home); the cold launch's 0 point moves from 5.0 to 3.5 s; terminal key
    to paint p95 replaces "send to agent", which every local socket passed. "Send to agent" is still measured and shown.
