@@ -51,7 +51,10 @@ export NUNCHIRO_TOKEN=$(nunchiro token create --scope trigger)
 ```
 
 A webhook request needs the trigger's secret: GitHub's `X-Hub-Signature-256` (set the webhook's secret to the same
-value) or the header `X-Nunchiro-Secret: <secret>`. The address answers `202` with no body when it takes a request,
+value), Slack's `X-Slack-Signature` (add the trigger with the Slack app's signing secret:
+`printf '%s\n' "$SLACK_SIGNING_SECRET" | nunchiro trigger add ...`) or the header `X-Nunchiro-Secret: <secret>`.
+A Slack request whose `X-Slack-Request-Timestamp` is more than five minutes from now is refused, as Slack asks, and
+Slack's URL check, sent once when you set the address in the app, gets its challenge back and starts nothing. The address answers `202` with no body when it takes a request,
 `401` without the secret (one line in the core's log), `404` for a trigger that does not exist, `413` for a body
 over 256 KB. It listens on 127.0.0.1 only, and only while a webhook trigger is on; settings.json `triggers_port`
 moves it. A request is not tied to a time: one captured on its way (a proxy log, a shared tunnel) can be sent again,
@@ -89,6 +92,6 @@ or a field: it is only text after your task.
 ## Not yet
 
 - A GitHub mention event.
-- Slack and Linear signatures (use `X-Nunchiro-Secret` from a relay).
+- Linear signatures (use `X-Nunchiro-Secret` from a relay).
 - Agents proposing a trigger.
 - The address reads at most 8 requests at once, each within 10 seconds; a connection past 8 is closed unanswered.
