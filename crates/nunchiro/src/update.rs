@@ -1045,7 +1045,18 @@ fn own_dir(path: &Path) -> Result<(), String> {
 
 /// Security round 1 (MUST 2): one install at a time (the CLI's and the app's share `new` and `backup`). A second
 /// one fails at once instead of waiting behind the first.
-fn lock(work: &Path) -> Result<fs::File, String> {
+/// The install lock. Dropping it unlocks first: a child forked meanwhile (a tool run with `pre_exec`, on any thread)
+/// holds a copy of the descriptor until its exec, and the flock, which belongs to the shared open file, would stay
+/// held by that copy; the next install would read "another update is installing" until then.
+struct Lock(fs::File);
+impl Drop for Lock {
+    fn drop(&mut self) {
+        // Safety: flock on this live descriptor; LOCK_UN releases the lock for every copy of it.
+        unsafe { libc::flock(self.0.as_raw_fd(), libc::LOCK_UN) };
+    }
+}
+
+fn lock(work: &Path) -> Result<Lock, String> {
     let path = work.join("lock");
     let file = fs::OpenOptions::new()
         .create(true)
@@ -1062,7 +1073,7 @@ fn lock(work: &Path) -> Result<fs::File, String> {
     if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
         return Err("refused: another update is installing now; try again when it ends".into());
     }
-    Ok(file)
+    Ok(Lock(file))
 }
 
 fn tool(
