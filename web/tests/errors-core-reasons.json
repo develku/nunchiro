@@ -588,6 +588,11 @@
  "no topic file {}": "agent: only a bot's seat sends `nunchiro memory add|forget|read` with these fields; the Memory tab sends its own fixed changes",
  "no such saved copy": "guard: a dispatch or request-shape guard: the window sends only fixed values, ids and ops it knows, so it does not trip",
  "not a session id": "agent: only a bot's seat sends `nunchiro memory add|forget|read` with these fields; the Memory tab sends its own fixed changes",
- "this conversation read outside content, so it cannot forget a memory line: ask the user to remove it on the Memory tab": "agent: only a bot's seat sends `nunchiro memory add|forget|read` with these fields; the Memory tab sends its own fixed changes",
- "outside read not marked: {}": "internal: the hook's reply when a mark was not written; the hook keeps its journal copy and the next core start marks it"
+ "outside read not marked: {}": "internal: the hook's reply when a mark was not written; the hook keeps its journal copy and the next core start marks it",
+ "memory unavailable": "agent: only a bot's seat sends `nunchiro memory` (its own memory); no window request reads or changes memory yet",
+ "no memory line holds \"{}\"": "agent: only a bot's seat sends `nunchiro memory` (its own memory); no window request reads or changes memory yet",
+ "{} lines hold \"{}\"; say more of the one to forget: {}": "agent: only a bot's seat sends `nunchiro memory` (its own memory); no window request reads or changes memory yet",
+ "the index has at most {} KB": "agent: only a bot's seat sends `nunchiro memory` (its own memory); no window request reads or changes memory yet",
+ "the index is plain text": "agent: only a bot's seat sends `nunchiro memory` (its own memory); no window request reads or changes memory yet",
+ "that saved copy is gone": "agent: only a bot's seat sends `nunchiro memory` (its own memory); no window request reads or changes memory yet"
 }
