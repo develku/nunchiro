@@ -282,6 +282,12 @@ pub enum Op {
         #[serde(default)]
         change: Option<memory::Change>,
     },
+    /// Night tidy's card: each bot's waiting part and the Memory group's numbers. `apply`, by bot id: its checked
+    /// lines are kept (`Memory::apply_tidy`) and the card that names only applied bots goes.
+    MemoryTidy {
+        #[serde(default)]
+        apply: Option<std::collections::BTreeMap<String, memory::tidy::Checked>>,
+    },
     /// A new bot in one step (`bots::first`): a name and one sentence. The rest has a default the owner may change:
     /// Claude on its newest model, in Home, a free face, no seat. `seat`: the seat its template asks for.
     BotNew {
@@ -1822,6 +1828,48 @@ pub fn window(
                 .view(&team.soul(&id), change, &settings)?;
             Ok(Reply::BotMemory { id, view })
         }
+        Op::MemoryTidy { apply } => {
+            let (settings, home) = {
+                let s = registry
+                    .lock()
+                    .map_err(|_| "session registry unavailable".to_string())?;
+                let settings: memory::Settings = s.feature(memory::MEMORY_KEY).unwrap_or_default();
+                (settings, s.home().to_path_buf())
+            };
+            let now = crate::queue::now_ms();
+            let mates = team.list()?;
+            if let Some(apply) = &apply {
+                for (id, checked) in apply {
+                    mates
+                        .iter()
+                        .find(|t| &t.id == id)
+                        .ok_or_else(|| format!("no bot {id}"))?;
+                    team.bot_memory(id)?.apply_tidy(checked, now)?;
+                }
+                let done = |i: &crate::queue::Decision| {
+                    matches!(&i.owner, Some(crate::queue::OwnerAsk::NightTidy { bots, .. })
+                        if bots.iter().all(|b| apply.contains_key(b)))
+                };
+                let _ = registry
+                    .lock()
+                    .map_err(|_| "session registry unavailable".to_string())?
+                    .queue
+                    .answer_owner(done);
+            }
+            let parts = mates
+                .iter()
+                .filter_map(|t| {
+                    team.bot_memory(&t.id)
+                        .ok()?
+                        .tidy_part(&t.id, &t.name)
+                        .ok()?
+                })
+                .collect();
+            Ok(Reply::MemoryTidy {
+                parts,
+                stats: memory::tidy::stats(&home, &settings, now),
+            })
+        }
         Op::BotNew {
             name,
             job,
@@ -1923,6 +1971,10 @@ mod memory;
 pub(crate) use bots::offered;
 pub use bots::{Bot, Face, First, ModelRule, Seat, V1, face_of};
 pub(crate) use memory::check_settings as check_memory_settings;
+#[cfg(test)]
+pub(crate) use memory::tidy::night as memory_night;
+pub(crate) use memory::tidy::spawn as tidy_spawn;
+pub use memory::tidy::{Part as TidyPart, Stats as TidyStats};
 pub use memory::{
     Added, Change, Fact, KEEP_DAYS, MEMORY_KEY, Memory, NotKept, Proposal, SavedCopy,
     Settings as MemorySettings, Source, View as MemoryView, mark_outside, outside, outside_of,

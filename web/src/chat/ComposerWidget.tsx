@@ -29,6 +29,7 @@ import { busyRow, takeRow, useQueue } from './queued';
 import type { RefObject } from 'react';
 import type { T } from '../i18n';
 import { FOLLOWUP } from '../features/followup-default';
+import { NightTidyCard } from '../bots/NightTidyCard';
 import { DecisionCard, digitButton, focusCard } from './DecisionCard'; // ticket 1030
 import { OutboxCard } from '../lead/OutboxCard';
 import { alsoInDecisions, asks as waitingAsks, rowPlan, type Item } from '../tree/decisions';
@@ -218,6 +219,8 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
     return true;
   };
   const dockOut = inFront ? owner.filter((d) => d.owner?.type === 'outward' && d.session_id === target.id) : [];
+  // Night tidy's card docks in the chat of the bot it is for (the Chief's, or each bot's own without a Chief).
+  const dockNight = inFront ? owner.filter((d) => d.owner?.type === 'night_tidy' && !!target.teammate && d.session_id === target.teammate) : [];
   // Ticket 1130 C6 (owner Q2; mockup docs/design/first-use-b-1130/mockup.html #c6): a pasted stdio `claude mcp add` line
   // shows one offer row with the name and the whole command. Nothing is added before the click; the text stays in the box
   // and Enter still sends it. The add is Settings > Skills & hooks' own sealed `extensions_mcp_add` (env values never
@@ -300,8 +303,14 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
         </div>
       )}
       {/* Floats over the output's bottom edge: an arrival never resizes the composer or the terminal (answer-strip rule). */}
-      {target && dockAsks.length + dockOut.length > 0 && (
+      {target && dockAsks.length + dockOut.length + dockNight.length > 0 && (
         <div className="dock" ref={dockHeight}>
+          {dockNight.map((d) => (
+            <div key={d.id} className="dock-out">
+              <NightTidyCard d={d} core={core} onAnswer={onAnswer} t={t} />
+              <p className="dc-hint dc-also">{t('decisions.alsoInDecisions')}</p>
+            </div>
+          ))}
           {dockOut.map((d) => (
             <div key={d.id} className="dock-out">
               <OutboxCard d={d} onAnswer={onAnswer} t={t} />

@@ -119,7 +119,7 @@ export function BotsView({ core, t, sessions, first, open, onNew }: Props) {
           <div className="settings bots-levels" role="region" aria-label={t('memory.settings')}>
             <div className="sbody">
               <CoreFeatureClient.Provider value={core}>
-                <MemoryRows t={t} />
+                <MemoryRows t={t} core={core} />
               </CoreFeatureClient.Provider>
             </div>
           </div>

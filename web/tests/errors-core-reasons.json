@@ -587,5 +587,11 @@
  "no such saved copy": "guard: a dispatch or request-shape guard: the window sends only fixed values, ids and ops it knows, so it does not trip",
  "not a session id": "agent: only a bot's seat sends `nunchiro memory add|forget|read` with these fields; the Memory tab sends its own fixed changes",
  "this conversation read outside content, so it cannot forget a memory line: ask the user to remove it on the Memory tab": "agent: only a bot's seat sends `nunchiro memory add|forget|read` with these fields; the Memory tab sends its own fixed changes",
- "outside read not marked: {}": "internal: the hook's reply when a mark was not written; the hook keeps its journal copy and the next core start marks it"
+ "outside read not marked: {}": "internal: the hook's reply when a mark was not written; the hook keeps its journal copy and the next core start marks it",
+ "a night tidy card is applied with its checked lines": "guard: a dispatch or request-shape guard: the window sends only fixed values, ids and ops it knows, so it does not trip",
+ "night tidy runs every night, every 3 nights or weekly": "guard: a dispatch or request-shape guard: the window sends only fixed values, ids and ops it knows, so it does not trip",
+ "night tidy runs on {}": "guard: a dispatch or request-shape guard: the window sends only fixed values, ids and ops it knows, so it does not trip",
+ "a bot's night tidy is on or off": "guard: a dispatch or request-shape guard: the window sends only fixed values, ids and ops it knows, so it does not trip",
+ "the answer held no lines": "internal: a night tidy run's own failure, written to the core log; no window request runs a tidy",
+ "no agent": "internal: a night tidy run's own failure, written to the core log; no window request runs a tidy"
 }

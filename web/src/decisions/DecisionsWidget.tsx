@@ -12,6 +12,7 @@ import { age, basename } from '../tree';
 import { withResumed, type Decision, type Session } from '../types';
 import './decisions.css';
 import { ErrorLine, rawError } from '../errors';
+import { NightTidyCard } from '../bots/NightTidyCard';
 import type { CoreClient } from '../api';
 import { MergeCard } from '../notes/MergeCard';
 import { RoleCard } from '../lead/RoleCard';
@@ -280,6 +281,7 @@ export function DecisionsWidget({ sessions, onAnswer, ask, onBack, onFocused, on
   const waiting = sessions.filter((s) => asks(s.pending).length).sort((a, b) => oldest(a) - oldest(b));
   const stalls = owner.filter((d) => d.owner?.type === 'stall'); // ticket 1004
   const tidies = owner.filter((d) => d.owner?.type === 'tidy'); // ticket 1005
+  const nights = owner.filter((d) => d.owner?.type === 'night_tidy');
   const resets = owner.filter((d) => d.owner?.type === 'codex_reset');
   const merges = owner.filter((d) => d.owner?.type === 'merge');
   const byId = withResumed(new Map(sessions.map((s) => [s.id, s])), sessions); // a merge card filed before its lead's Resume
@@ -331,6 +333,9 @@ export function DecisionsWidget({ sessions, onAnswer, ask, onBack, onFocused, on
           ))}
           {tidies.map((d) => (
             <TidyCard key={d.id} d={d} onAnswer={onAnswer} t={t} />
+          ))}
+          {nights.map((d) => (
+            <NightTidyCard key={d.id} d={d} core={core} onAnswer={onAnswer} t={t} />
           ))}
           {setups.map((d) => (
             <SetupCard key={d.id} d={d} core={core} onAnswer={onAnswer} t={t} />

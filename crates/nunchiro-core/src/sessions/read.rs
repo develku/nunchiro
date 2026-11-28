@@ -247,6 +247,7 @@ impl Sessions {
                     | queue::OwnerAsk::Schedule { place, .. } // ticket 993
                     | queue::OwnerAsk::Stall { place, .. } // ticket 1004
                     | queue::OwnerAsk::Tidy { place, .. } // ticket 1005
+                    | queue::OwnerAsk::NightTidy { place, .. }
                     | queue::OwnerAsk::Cap { place, .. } // ticket 1099
                     | queue::OwnerAsk::Bot { place, .. }
                     | queue::OwnerAsk::SessionClose { place, .. }, // ticket 1113

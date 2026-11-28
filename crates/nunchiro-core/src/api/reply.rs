@@ -530,6 +530,11 @@ pub enum Reply {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         first: Option<crate::team::First>,
     },
+    /// Night tidy's card and numbers (`team::Op::MemoryTidy`).
+    MemoryTidy {
+        parts: Vec<crate::team::TidyPart>,
+        stats: crate::team::TidyStats,
+    },
     /// A bot's memory as its Memory tab draws it (`team::Op::BotMemory`).
     BotMemory {
         id: String,

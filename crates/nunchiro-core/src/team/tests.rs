@@ -2067,3 +2067,30 @@ fn openers_hold_a_new_seat_by_who_opens_it() {
     assert_eq!(who(Opener::Fresh(None)), None);
     assert_eq!(who(Opener::Undo("old", "seat")), None);
 }
+
+/// Bot memory: a fresh Lead takes over the old seat's outside-read mark (it reads the old seat's handoff).
+#[test]
+fn a_fresh_lead_carries_the_old_seats_outside_mark() {
+    use crate::sessions::Sessions;
+    let (home, proj) = (home(), self::home());
+    let (id, _log) = fake_lead(&home, &proj, ", \"load\"");
+    let reg = std::sync::Mutex::new(Sessions::open(&home).unwrap());
+    let fresh = ticking(&reg, || {
+        let old = open_seat(&reg, &id, None, None, Opener::Window)
+            .unwrap()
+            .session
+            .id;
+        until("the old seat took its brief", || {
+            reg.lock().unwrap().seat_idle(&old)
+        });
+        crate::team::mark_outside(&home, &old, crate::team::Source::Web).unwrap();
+        fresh_lead(&reg, &id, Fresh::Close, std::time::Duration::from_secs(30))
+            .unwrap()
+            .session
+    });
+    assert_eq!(
+        crate::team::outside(&home, std::slice::from_ref(&fresh.id)),
+        Some(crate::team::Source::Web)
+    );
+    reg.lock().unwrap().stop().unwrap();
+}
