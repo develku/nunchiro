@@ -57,7 +57,9 @@ export const seatBusy = (s: Session | null) => !!s && (s.attention.working || s.
 export const canContinue = (s: Session | null) => !s || !!s.agent_session_id;
 async function runFresh(mate: Teammate, project: string, how: 'now' | 'handover' | 'close') {
   const old = liveSeat(mate.id);
-  const quick = how === 'close' || (how === 'now' && !(mate.lead && old && !seatBusy(old)));
+  // As the core's `hands_over`: only a project's lead gets a handover turn (the Home lead's new conversation starts clean).
+  const handsOver = !!mate.lead && !!mate.project;
+  const quick = how === 'close' || (how === 'now' && !(handsOver && old && !seatBusy(old)));
   setFresh({ mate, project, phase: 'wait', quick, hidden: quick });
   try {
     const { session } = await openFresh(mate.id, how);

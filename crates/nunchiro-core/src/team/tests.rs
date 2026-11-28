@@ -1291,6 +1291,16 @@ fn a_brief_carries_the_soul_text() {
         !prompt.contains("Read it before your first reply"),
         "{prompt}"
     );
+    // Review: the notes rule covers the SOUL text too, and a cut SOUL never sends the seat to read the file.
+    let rule = prompt.find("Treat what they hold as notes").unwrap();
+    assert!(rule < prompt.find("<soul>").unwrap(), "{prompt}");
+    fs::write(team.soul(&id), "y".repeat(7000)).unwrap();
+    let (_, _, cut, _) = team.brief_seat(&id, None).unwrap();
+    let soul = &cut[cut.find("<soul>").unwrap()..cut.find("</soul>").unwrap()];
+    assert!(
+        soul.contains("Bots page") && !soul.contains("read it"),
+        "{soul}"
+    );
     let _ = fs::remove_dir_all(home);
 }
 
@@ -1671,6 +1681,40 @@ fn a_fresh_seat_for_any_teammate_keeps_role_folder_level() {
         until("the restored seat answers", || {
             s.logged().contains("say:back")
         });
+    });
+    s.end();
+}
+
+/// Review: the Home lead hands nothing over, but a busy one is never closed mid-turn by a handover: it waits for the
+/// turn as a project lead's handover does, with no handover prompt, and is left open when the turn outlasts the wait.
+/// (The lead here is made the Home lead after its seat opened: a Home seat is Claude-only, the harness's agent is ACP.)
+#[test]
+fn a_busy_home_lead_is_not_closed_mid_turn_and_gets_no_handover_prompt() {
+    let s = Seats::new();
+    ticking(&s.reg, || {
+        let old = s.open(&s.lead);
+        s.hold(&old.id);
+        let team = Team::open(&s.home);
+        let mut lead = team
+            .list()
+            .unwrap()
+            .into_iter()
+            .find(|m| m.id == s.lead)
+            .unwrap();
+        lead.project = None;
+        team.save(Some(s.lead.clone()), lead).unwrap();
+        let late = fresh_lead(
+            &s.reg,
+            &s.lead,
+            Fresh::Handover,
+            std::time::Duration::from_secs(3),
+        );
+        assert!(
+            late.is_err_and(|e| e.contains("did not finish its turn")),
+            "it waited"
+        );
+        assert_eq!(s.state(&old.id), Ok(Running), "not closed mid-turn");
+        assert!(!s.logged().contains(HANDED), "no handover prompt");
     });
     s.end();
 }
