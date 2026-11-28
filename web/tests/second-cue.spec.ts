@@ -43,6 +43,27 @@ async function shot(app: Page, pick: (typeof PICKS)[number] | undefined, place: 
 
 for (const pick of [undefined, ...PICKS]) {
   const tag = pick ? ` (${pick.name})` : '';
+  test(`second_cue_tab_dot: your turn is a hand, broken an x-circle, others stay a plain dot${tag}`, { tag: '@chromium' }, async ({ app, core }) => {
+    await setup(app, core, pick);
+    const dot = (s: string) => app.locator(`.tab .tdot[data-s="${s}"]`).first();
+    await expect(dot('waiting')).toBeVisible({ timeout: 15_000 });
+    await expect(dot('failed')).toBeVisible();
+    await shot(app, pick, 'tab-dot', app.locator('.tab').nth(0), app.locator('.tab').nth(1));
+    expect(await icon(dot('waiting'))).toBe('hand');
+    expect(await icon(dot('failed'))).toBe('fail');
+    expect(await dot('waiting').locator('svg').count()).toBe(1);
+    // the glyph replaces the disc: no fill behind it, and the glyph is drawn at a size that reads (not a 7px speck)
+    for (const s of ['waiting', 'failed']) expect((await dot(s).boundingBox())!.width, `${s} dot keeps its 7px footprint, so a state change moves no tab`).toBe(7);
+    for (const s of ['waiting', 'failed']) {
+      const look = await dot(s).evaluate((e) => ({ fill: getComputedStyle(e).backgroundColor, w: e.querySelector('svg')!.getBoundingClientRect().width, ink: getComputedStyle(e).color }));
+      expect(look.fill, `${s} dot has no disc behind the glyph`).toBe('rgba(0, 0, 0, 0)');
+      expect(look.w, `${s} glyph size`).toBeGreaterThanOrEqual(11);
+    }
+    // the dot keeps its name for a screen reader, and a calm session's dot carries no glyph
+    await expect(dot('waiting')).toHaveAttribute('aria-label', 'waiting');
+    await expect(app.locator('.tab .tdot:not([data-s="waiting"]):not([data-s="failed"]) svg')).toHaveCount(0);
+  });
+
   // Ticket 462 (owner 11-12): no notch on the failed bar, the approved mockup's shape. The second cue for a broken session is
   // its row's x-circle (tree_broken_row_red); on the strip both urgent bars are 14px and solid.
   test(`second_cue_head_strip: on the head's colour strip (ticket 388, which took the pills out) a broken bar and a your-turn bar are both solid and the same size${tag}`, { tag: '@chromium' }, async ({ app, core }) => {
