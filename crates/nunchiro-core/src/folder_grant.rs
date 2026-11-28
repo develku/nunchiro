@@ -472,6 +472,25 @@ fn read_line(command: &str, cwd: Option<&Path>, grants: &Grants) -> bool {
     })
 }
 
+/// `cd <dir> && <line>` with one plain word for `<dir>` (no `-`, `~`, variable or glob), a folder that is `readable`
+/// (a relative one from `cwd`, itself readable): that folder, canonical, and the line. Anything else is `None`.
+fn into<'a>(command: &'a str, cwd: Option<&Path>, grants: &Grants) -> Option<(PathBuf, &'a str)> {
+    let (dir, line) = command.strip_prefix("cd ")?.split_once(" && ")?;
+    let words = words(dir)?;
+    let [(dir, false)] = words.as_slice() else {
+        return None;
+    };
+    if dir.is_empty() || dir == "-" {
+        return None;
+    }
+    let dir = match Path::new(dir) {
+        d if d.is_absolute() => d.to_path_buf(),
+        d => cwd.filter(|c| readable(c, grants))?.join(d),
+    };
+    (readable(&dir, grants) && dir.is_dir())
+        .then(|| std::fs::canonicalize(&dir).ok().map(|d| (d, line)))?
+}
+
 /// Why the hook lets a call run, or refuses it; `None` leaves the call to the lock's own rules.
 pub enum Verdict {
     Allow(&'static str),
@@ -535,7 +554,13 @@ pub fn decide(tool: &str, input: &Value, cwd: Option<&Path>, grants: &Grants) ->
             if input
                 .get("command")
                 .and_then(Value::as_str)
-                .is_some_and(|c| file_line(c, grants) || read_line(c, cwd, grants)) =>
+                .is_some_and(|c| match c.strip_prefix("cd ") {
+                    // One leading `cd <folder> && `: the line runs from that folder, as with full paths.
+                    Some(_) => into(c, cwd, grants).is_some_and(|(dir, line)| {
+                        file_line(line, grants) || read_line(line, Some(&dir), grants)
+                    }),
+                    None => file_line(c, grants) || read_line(c, cwd, grants),
+                }) =>
         {
             Some(Verdict::Allow(GIVEN))
         }
@@ -977,7 +1002,7 @@ mod tests {
         // One leading `cd <dir> && ` into the folder, then one read whose relative paths start there.
         for line in [
             format!("cd {i}/inbox && cat a.eml b.eml"),
-            format!("cd {i}/inbox && grep -l Subject *.eml"),
+            format!("cd {i}/inbox && grep -l Subject ?.eml"),
             format!("cd {i} && ls -la inbox"),
             "cd inbox && wc -l a.eml".to_string(),
         ] {
@@ -997,6 +1022,7 @@ mod tests {
             format!("cd {i}/inbox && rm a.eml"),
             format!("cd {i}/inbox && cd {i} && cat inbox/a.eml"),
             format!("cd {i}/in* && cat a.eml"),
+            format!("cd {i}/inbox && grep -l Subject *.eml"), // matches link.eml, a link out
         ] {
             assert!(!run(&line, &root, &grants), "{line}");
         }
