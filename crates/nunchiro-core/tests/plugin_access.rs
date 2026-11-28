@@ -121,9 +121,17 @@ fn shortcuts_and_status_items_are_checked() {
         assert!(with(bad).is_err(), "{bad}");
     }
     // Without Meta it could take Ctrl+C, Ctrl+D or Ctrl+Z from every terminal, or a typed character with Alt.
-    for taken in ["Control+KeyC", "Control+Alt+Digit1", "Alt+KeyE", "Control+Shift+KeyZ"] {
+    for taken in [
+        "Control+KeyC",
+        "Control+Alt+Digit1",
+        "Alt+KeyE",
+        "Control+Shift+KeyZ",
+    ] {
         assert!(
-            with(&format!("[[keybinding]]\ncommand = \"hi\"\nkey = \"{taken}\"\n")).is_err(),
+            with(&format!(
+                "[[keybinding]]\ncommand = \"hi\"\nkey = \"{taken}\"\n"
+            ))
+            .is_err(),
             "{taken}"
         );
     }
@@ -207,7 +215,11 @@ fn a_status_item_whose_text_changes_asks_again() {
     let m = format!("{MANIFEST}\n{KEYED}");
     plugin(&home, &m, "echo hello\n");
     approve(&home);
-    plugin(&home, &m.replace("text = \"Hello\"", "text = \"Update now\""), "echo hello\n");
+    plugin(
+        &home,
+        &m.replace("text = \"Hello\"", "text = \"Update now\""),
+        "echo hello\n",
+    );
     let view = approval::status(&home, NAME).unwrap();
     assert_eq!(view.state, State::Changed);
     assert_eq!(view.added, ["status item greet shows \"Update now\""]);
