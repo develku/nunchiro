@@ -61,6 +61,9 @@ impl Sessions {
             if k == crate::team::WORKERS_KEY && !v.is_null() {
                 crate::team::check_workers(v)?; // ticket 1055
             }
+            if k == crate::team::MEMORY_KEY && !v.is_null() {
+                crate::team::check_memory_settings(v)?;
+            }
             if k == crate::home_lock::MODE_KEY {
                 crate::home_lock::check(v)?; // ticket 1002 lane 1
             }

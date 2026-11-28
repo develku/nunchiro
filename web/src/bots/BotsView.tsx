@@ -18,6 +18,7 @@ import type { Session } from '../types';
 import { eyesOf, LEVELS_FOLD, type Bot, type Eyes } from './bots';
 import { Face } from './Face';
 import { CoreFeatureClient } from '../settings/useFeatureSetting';
+import { MemoryRows, MemoryTab } from './BotMemory';
 import './bots.css';
 
 const agentWord = (bot: Bot) => (bot.agent === 'claude' ? 'Claude Code' : bot.agent === 'codex' ? 'Codex' : bot.agent.replace(/^acp:/, ''));
@@ -109,6 +110,20 @@ export function BotsView({ core, t, sessions, first, open, onNew }: Props) {
             </div>
           </div>
         </details>
+        {/* Memory for every bot, beside Models and limits; a bot's own memory is on its page's Memory tab. */}
+        <details className="bot-card bot-models" data-bots-memory>
+          <summary>
+            <Icon name="chevron-right" size={12} />
+            {t('memory.settings')} <small>{t('memory.settings.note')}</small>
+          </summary>
+          <div className="settings bots-levels" role="region" aria-label={t('memory.settings')}>
+            <div className="sbody">
+              <CoreFeatureClient.Provider value={core}>
+                <MemoryRows t={t} />
+              </CoreFeatureClient.Provider>
+            </div>
+          </div>
+        </details>
       </div>
     </div>
   );
@@ -116,6 +131,7 @@ export function BotsView({ core, t, sessions, first, open, onNew }: Props) {
 
 function BotPage({ core, t, bot, mate, eyes, table, line, back, chat }: { core: CoreClient; t: T; bot: Bot; mate?: Teammate; eyes: Eyes; table: LevelTable; line: string; back: () => void; chat: () => void }) {
   const schedules = (useScheduleList() ?? []).filter((s) => s.run.teammate === bot.id);
+  const [tab, setTab] = useState<'profile' | 'memory'>('profile');
   const pinned = line !== t('bots.model.follows', { agent: agentWord(bot) });
   return (
     <div className="botsv" data-bots data-bot-page={bot.id}>
@@ -137,34 +153,48 @@ function BotPage({ core, t, bot, mate, eyes, table, line, back, chat }: { core: 
             {t('bots.openChat')}
           </button>
         </div>
-        <Soul core={core} t={t} bot={bot} />
-        <section className="bot-card" aria-label={t('bots.schedules')}>
-          <header>
-            {t('bots.schedules')}
-            <span className="sp" />
-            <button type="button" className="btn" onClick={() => openSchedules()}>
-              {t('bots.schedules.open')}
+        {/* The page's first tabs: Profile is who the bot is and how it runs; Memory is what it keeps (mockup frame 1). */}
+        <div className="bot-tabs" role="tablist" aria-label={t('memory.tabs', { name: bot.name })}>
+          {(['profile', 'memory'] as const).map((k) => (
+            <button type="button" role="tab" key={k} aria-selected={tab === k} data-bot-tab={k} onClick={() => setTab(k)}>
+              {t(k === 'profile' ? 'memory.tab.profile' : 'memory.tab.memory')}
             </button>
-          </header>
-          {schedules.length === 0 && <span className="bot-sched dim">{t('bots.schedules.none')}</span>}
-          {schedules.map((s) => (
-            <div className="bot-sched" key={s.id} data-bot-schedule={s.id}>
-              <span className="wordcut">{(s.run.task ?? '').split('\n')[0]}</span>
-              <span className="dim">
-                {whenWords(t, s)}
-                {s.paused ? ` · ${t('bots.schedules.paused')}` : ''}
-              </span>
-            </div>
           ))}
-        </section>
-        {/* Closed until asked for (owner: model handles stay off the default screen). The key reopens it closed per bot. */}
-        <details className="bot-card bot-models" data-bot-models key={bot.id}>
-          <summary>
-            <Icon name="chevron-right" size={12} />
-            {t('bots.models')} <small>{pinned ? t('bots.models.pinned', { model: line.replace(/^[^:]*:\s*/, '') }) : t('bots.models.follow')}</small>
-          </summary>
-          {mate && <Models core={core} t={t} mate={mate} table={table} />}
-        </details>
+        </div>
+        {tab === 'memory' ? (
+          <MemoryTab core={core} t={t} bot={bot} />
+        ) : (
+          <>
+            <Soul core={core} t={t} bot={bot} />
+            <section className="bot-card" aria-label={t('bots.schedules')}>
+              <header>
+                {t('bots.schedules')}
+                <span className="sp" />
+                <button type="button" className="btn" onClick={() => openSchedules()}>
+                  {t('bots.schedules.open')}
+                </button>
+              </header>
+              {schedules.length === 0 && <span className="bot-sched dim">{t('bots.schedules.none')}</span>}
+              {schedules.map((s) => (
+                <div className="bot-sched" key={s.id} data-bot-schedule={s.id}>
+                  <span className="wordcut">{(s.run.task ?? '').split('\n')[0]}</span>
+                  <span className="dim">
+                    {whenWords(t, s)}
+                    {s.paused ? ` · ${t('bots.schedules.paused')}` : ''}
+                  </span>
+                </div>
+              ))}
+            </section>
+            {/* Closed until asked for (owner: model handles stay off the default screen). The key reopens it closed per bot. */}
+            <details className="bot-card bot-models" data-bot-models key={bot.id}>
+              <summary>
+                <Icon name="chevron-right" size={12} />
+                {t('bots.models')} <small>{pinned ? t('bots.models.pinned', { model: line.replace(/^[^:]*:\s*/, '') }) : t('bots.models.follow')}</small>
+              </summary>
+              {mate && <Models core={core} t={t} mate={mate} table={table} />}
+            </details>
+          </>
+        )}
       </div>
     </div>
   );

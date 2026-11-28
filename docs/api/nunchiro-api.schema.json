@@ -3028,6 +3028,34 @@
       ],
       "type": "object"
     },
+    "Fact": {
+      "description": "One index line. `date` and `from` are absent on a line someone wrote by hand.",
+      "properties": {
+        "date": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "from": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
     "Failed": {
       "description": "Ticket 373: one failing check, outside text: the window shows it as text and a link, and the fix prompt wraps it as\nuntrusted data.",
       "properties": {
@@ -9223,6 +9251,27 @@
           "type": "object"
         },
         {
+          "description": "A bot's memory as its Memory tab draws it (`team::Op::BotMemory`).",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "bot_memory",
+              "type": "string"
+            },
+            "view": {
+              "$ref": "#/$defs/View"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "view"
+          ],
+          "type": "object"
+        },
+        {
           "description": "Ticket 990 slice i: the user's roles.",
           "properties": {
             "roles": {
@@ -15030,6 +15079,35 @@
       },
       "type": "object"
     },
+    "SavedCopy": {
+      "description": "A saved version of the index from before a change. `kind`: `tidy`, `edit`, `undo`, or `before` (the file as it was\nbefore this format, kept for good).",
+      "properties": {
+        "at_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changed": {
+          "description": "Lines that differ between this copy and the version after it.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "at_ms",
+        "kind",
+        "changed"
+      ],
+      "type": "object"
+    },
     "ScheduleEntry": {
       "additionalProperties": false,
       "properties": {
@@ -15995,6 +16073,38 @@
         {
           "const": "github",
           "description": "An event read from GitHub with the user's own `gh` (`github.rs`).",
+          "type": "string"
+        }
+      ]
+    },
+    "Source2": {
+      "description": "Where a fact came from. Nunchiro sets it, never the line's text.",
+      "oneOf": [
+        {
+          "enum": [
+            "web",
+            "mail"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "you",
+          "description": "The user said it.",
+          "type": "string"
+        },
+        {
+          "const": "conversation",
+          "description": "The bot learned it in a conversation with no outside content.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "A line the core did not write (a file edited outside Nunchiro): its own claim is not believed.",
+          "type": "string"
+        },
+        {
+          "const": "tool",
+          "description": "Another tool's or MCP server's results. Outside sources are ordered by how much they tell: a tool, web, mail.",
           "type": "string"
         }
       ]
@@ -17356,6 +17466,92 @@
           "type": "object"
         }
       ]
+    },
+    "View": {
+      "description": "A bot's memory as its Memory tab draws it.",
+      "properties": {
+        "copies": {
+          "items": {
+            "$ref": "#/$defs/SavedCopy"
+          },
+          "type": "array"
+        },
+        "facts": {
+          "description": "The index, newest first.",
+          "items": {
+            "$ref": "#/$defs/Fact"
+          },
+          "type": "array"
+        },
+        "keep_days": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "limit": {
+          "description": "How many index lines a brief quotes.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "not_kept": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "proposals": {
+          "description": "Proposals that wait for the owner's look, and lines not kept.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "soul_lines": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "description": "The index file as text, for Edit (its heading and format line left out).",
+          "type": "string"
+        },
+        "topics": {
+          "description": "Topic files: name and lines.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "user_lines": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "facts",
+        "text",
+        "limit",
+        "soul_lines",
+        "user_lines",
+        "topics",
+        "copies",
+        "proposals",
+        "not_kept",
+        "keep_days"
+      ],
+      "type": "object"
     },
     "WebPage": {
       "properties": {

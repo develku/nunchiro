@@ -20,6 +20,7 @@ export const GROUPS: Record<string, string[]> = {
     'journal not open', '{} is busy: not closed', // events.rs; sessions.rs: Close idle on a session that is working or waiting
     'machine is already being forgotten', 'machine channel is still closing; retry removal', 'machine start in progress; retry removal', 'machine is being forgotten',
     'a new conversation is already being opened', // team.rs: a second New conversation (or its Undo) while the first one opens
+    'memory unavailable', // team/memory.rs: a memory write's lock was lost to a panic; the next try works
     'a check is running', '{} is signing in', 'agent commands are busy', 'chat cache busy', 'chat append already pending', 'chat append exceeded hook wait',
     'search canceled', 'already loading that theme', 'request failed', 'could not start the request; try again', 'could not start the sign-in: {}',
     '{}; the agent still runs', '{} already running',
@@ -91,6 +92,7 @@ export const GROUPS: Record<string, string[]> = {
     "Codex arguments cannot set hooks; Nunchiro's outward-action check runs as a Codex hook. Keep your own hooks in Codex's config", // sessions/spawn.rs
     "a role note names its role", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
     "a SOUL needs at least one line", "a SOUL has at most 16 KB and no control characters", // team/bots.rs (ticket 1168)
+    'the index has at most {} KB', 'the index is plain text', 'saved copies are kept 7, 30 or 90 days', 'memory settings: {}', 'no memory line holds "{}"', '{} lines hold "{}"; say more of the one to forget: {}', // team/memory.rs: a bot's Memory tab and the Bots view's Memory group
     "a worktree to hand over must be a real folder, not through a symlink", "what to do with a worktree has at most {} characters and no control characters", // team/bots/first.rs: Hand to a bot
     "a teammate runs Claude, Codex or an ACP agent", "a model or effort is 1 to 100 characters", "a teammate's name has 1 to {} characters and no control characters", "a teammate needs a job: one or two lines on what it is for", "a teammate's job has at most {} characters and no control characters", "a teammate's project must be a real folder, not through a symlink", 'a worktree is handed to the lead of its project', // team.rs (tickets 970, 990)
    
@@ -166,6 +168,7 @@ export const GROUPS: Record<string, string[]> = {
     'the schedule was removed while it waited for memory', // schedule/mod.rs: a held scheduled run whose schedule left meanwhile
     'the message is not attached', "the agent's box is not empty: nothing was written", // sessions/deliver.rs knock, sessions/home.rs ⌘Z put back
     "plugin {} is off", // plugins.rs: a plugin turned off since the palette listed its command
+    'that saved copy is gone', 'no bot {}', // team/memory.rs, team.rs: Undo on a copy that expired, a bot removed while its Memory tab was open
   ],
   // Ticket 259: the owner's cleanup script refused a remove; the worktree stays.
   // sessions.rs teammate_removed: the window's Remove teammate; the core's sentence under Details names what is left.

@@ -288,3 +288,16 @@ fn end_family_keep(mut core: Sessions, launches: Vec<Launch>) {
     core.handle(Request::Stop).unwrap();
     drop((core, launches));
 }
+
+#[test]
+fn a_home_path_with_pattern_characters_still_gets_the_memory_rules() {
+    let mut settings = serde_json::Map::new();
+    super::super::memory::deny_memory(&mut settings, Path::new("/h/my (old) [x]/home"));
+    let deny = settings["permissions"]["deny"].as_array().unwrap();
+    for rule in [
+        "Edit(//h/my ?old? ?x?/home/team/USER.md)",
+        "Edit(//h/my ?old? ?x?/home/memory-state/**)",
+    ] {
+        assert!(deny.iter().any(|r| r == rule), "{rule}: {deny:?}");
+    }
+}
