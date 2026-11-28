@@ -21,7 +21,7 @@ pub const HELD_SCHEDULE: &str = "This Mac is low on memory, so the scheduled run
 /// An agent's own token asking to start anyway.
 pub const OWNER_ONLY: &str = "Only you can start a session anyway; a session cannot";
 /// A session's `agent start` that waits (`wait`).
-pub const WAITING_SESSION: &str = "This Mac is low on memory, so the new session is waiting. It starts by itself when memory is free, and you get a message then. Do not start it again";
+pub const WAITING_SESSION: &str = "This Mac is low on memory, so the new session is waiting. It starts by itself when memory is free, and you get a message then. Do not start it again. It starts with no first prompt: send it one when that message comes";
 /// A schedule's run that waits: its Last run's reason.
 pub const WAITING_SCHEDULE: &str = "waiting for memory";
 /// A schedule's run dropped after the longest wait: its Last run's reason.
@@ -32,6 +32,26 @@ pub(crate) fn waiting_lead(name: &str) -> String {
     format!(
         "This Mac is low on memory, so {name}'s seat is waiting. The task is kept and goes to {name} when the seat opens. Do not open it again"
     )
+}
+
+/// A session's held start that went: only the start was kept, so the seat has no first prompt (a `task staff` prompt
+/// is sent by the CLI after the start, which then never came). The asker gets the seat's id to send it.
+pub(crate) fn unprompted_line(name: &str, id: &str) -> String {
+    format!(
+        "{name} started after waiting for memory, with no first prompt: send it its brief now (nunchiro agent prompt {id} \"<brief>\")."
+    )
+}
+
+/// The line a session's held start sends its asker: `unprompted_line` once it started, else `asker_line`.
+pub(crate) fn session_line(
+    name: &str,
+    done: wait::Done,
+    result: &Result<String, String>,
+) -> String {
+    match result {
+        Ok(id) => unprompted_line(name, id),
+        Err(_) => asker_line(name, done, result),
+    }
 }
 
 /// The line a waiting start's asker gets when it leaves the list.
@@ -95,14 +115,33 @@ fn level() -> Option<i32> {
         };
         return fake.trim().parse().ok();
     }
-    read()
+    read().map(|level| settled(level, free()))
+}
+
+/// A warning with at least this much of memory free (percent) reads as normal.
+const WARNING_FREE: i32 = 25;
+/// The level a start goes by. macOS keeps "warning" set long after memory is free again (a bot-task trial held a seat
+/// with 45 % free), so a warning with at least `WARNING_FREE` percent free reads as normal; critical always holds.
+/// shortcut: one fixed percent, measured on one Mac; tune it from the hold log lines if holds still look wrong.
+fn settled(level: i32, free: Option<i32>) -> i32 {
+    if level == 2 && free.is_some_and(|f| f >= WARNING_FREE) {
+        1
+    } else {
+        level
+    }
+}
+/// The percent of memory free (`kern.memorystatus_level`, what `memory_pressure` prints as free).
+fn free() -> Option<i32> {
+    sysctl(c"kern.memorystatus_level")
 }
 
 /// One `sysctlbyname` read, no process started.
 fn read() -> Option<i32> {
+    sysctl(c"kern.memorystatus_vm_pressure_level")
+}
+fn sysctl(name: &std::ffi::CStr) -> Option<i32> {
     let mut value: i32 = 0;
     let mut size = std::mem::size_of::<i32>();
-    let name = c"kern.memorystatus_vm_pressure_level";
     let read = unsafe {
         libc::sysctlbyname(
             name.as_ptr(),
@@ -196,7 +235,8 @@ fn checked(
     let log = key.is_none_or(|key| first_hold(key, result.is_err(), level));
     result.map_err(|held| {
         if log {
-            eprintln!("memory pressure: held a new seat (level {level}, {path})");
+            let free = free().map_or("?".into(), |f| f.to_string());
+            eprintln!("memory pressure: held a new seat (level {level}, {free} % free, {path})");
         }
         held.to_string()
     })
@@ -297,6 +337,23 @@ mod tests {
     #[test]
     fn the_real_reading_is_a_known_level() {
         assert!(matches!(read(), Some(1 | 2 | 4)), "{:?}", read());
+        assert!(
+            free().is_some_and(|f| (0..=100).contains(&f)),
+            "{:?}",
+            free()
+        );
+    }
+
+    // A bot-task trial: a lead's new seat was held at "warning" with 45 % of memory free. macOS keeps warning set long
+    // after memory is free again; a warning with plenty free reads as normal, critical always holds.
+    #[test]
+    fn a_warning_with_plenty_free_is_no_hold() {
+        assert_eq!(settled(2, Some(45)), 1);
+        assert_eq!(settled(2, Some(WARNING_FREE)), 1);
+        assert_eq!(settled(2, Some(WARNING_FREE - 1)), 2);
+        assert_eq!(settled(2, None), 2, "free not known: the warning stands");
+        assert_eq!(settled(4, Some(90)), 4);
+        assert_eq!(settled(1, Some(5)), 1);
     }
 
     #[test]
