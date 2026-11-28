@@ -5,7 +5,7 @@ use nunchiro_core::api::*;
 use std::io::Read;
 use std::path::Path;
 
-pub const USAGE: &str = "nunchiro outbox stage --tool <tool name> --args '<JSON arguments>'|--args - [--source \"what it answers\"] (the Home lead: one mcp__<server>__send_message or mcp__<server>__create_event call as the user's card; nothing is sent before the user's yes)";
+pub const USAGE: &str = "nunchiro outbox stage --tool <tool name> --args '<JSON arguments>'|--args - [--source \"what it answers\"] (the Home lead: one mcp__<server>__send_message or mcp__<server>__create_event call as the user's card), or nunchiro outbox stage --command '<program> <files>' [--source ...] (one plain command line, program and files by full path, which you run once after the yes); nothing is sent before the user's yes";
 
 pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
     if args.first().map(String::as_str) != Some("stage") {
@@ -17,6 +17,10 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
         let value = words.next().ok_or(USAGE)?.clone();
         match word.as_str() {
             "--tool" => tool = Some(value),
+            "--command" => {
+                tool = Some(nunchiro_core::home_lock::COMMAND.to_string());
+                json = Some(serde_json::json!({ "command": value }).to_string());
+            }
             "--args" if value == "-" => {
                 let mut text = String::new();
                 std::io::stdin()
@@ -40,7 +44,7 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
     super::ensure_core(home)?;
     match super::call(home, request)? {
         Reply::Text { text } => println!(
-            "Staged {text} for the user. Nothing is sent: after the user's yes you get a message to make exactly this call, once. End your turn; the answer comes as a line in your room."
+            "Staged {text} for the user. Nothing is sent: after the user's yes you get a message to make exactly this call, once (a command: its line, with its files unchanged). End your turn; the answer comes as a line in your room."
         ),
         reply => println!(
             "{}",

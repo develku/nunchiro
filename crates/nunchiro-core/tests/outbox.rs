@@ -729,3 +729,191 @@ fn outbox_card_stage_yes_no_and_expiry() {
         heard(&owner, "outbox_expired")
     });
 }
+
+/// A bot-task trial: the Assistant's only way to send was a local script, and `nunchiro outbox stage` took only a
+/// connector's call, so it asked in chat and no card ever showed. A command is a card too: one plain line whose program
+/// and files are named by full path. The card shows the line and every file it names, and binds their content; the
+/// seat's lock hook lets exactly that line run once after the owner's yes, with those files unchanged. Any other line,
+/// or the same line with a changed file, asks as every shell command does.
+#[test]
+fn outbox_command_card_runs_exactly_its_line_once() {
+    let home = home::short("outbox-cmd");
+    fs::create_dir_all(home.join("bin")).unwrap();
+    let claude = home.join("bin/claude");
+    fs::write(
+        &claude,
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo '2.1.310 (Claude Code)'; exit; fi\nprintf '\\342\\235\\257 \\n'\necho \"TOKEN=$NUNCHIRO_TOKEN.\"\nexec cat\n",
+    )
+    .unwrap();
+    fs::set_permissions(&claude, fs::Permissions::from_mode(0o700)).unwrap();
+    let path = format!("{}:/usr/bin:/bin", home.join("bin").display());
+    fs::create_dir_all(home.join("alpha")).unwrap();
+    let alpha = fs::canonicalize(home.join("alpha")).unwrap();
+    let chief = mate(&home, "Chief", None);
+    let mut s = Schedules::load(&home);
+    s.add(
+        Run {
+            kind: AgentKind::Claude,
+            project: alpha.clone(),
+            label: "x".into(),
+            model: None,
+            effort: None,
+            task: Some("start".into()),
+            teammate: Some(chief.id.clone()),
+            level: None,
+        },
+        "21:00".into(),
+        false,
+        None,
+        &BTreeSet::from([alpha.to_string_lossy().into_owned()]),
+        0,
+        &|_| 0,
+    )
+    .unwrap();
+    drop(s);
+    let mut core = home::spawn_serve(
+        &home,
+        &[
+            ("PATH", path.as_str()),
+            (
+                "CLAUDE_CONFIG_DIR",
+                &home.join("claude-home").to_string_lossy(),
+            ),
+            ("NUNCHIRO_TEST_OPENER", "record"),
+        ],
+    );
+    wait("the seat did not open", || {
+        rows(&home).iter().any(|s| s.label == "Chief")
+    });
+    let seat = rows(&home)
+        .into_iter()
+        .find(|r| r.label == "Chief")
+        .unwrap();
+    let chief_t = token_of(&home, &seat.id);
+    let owner = fs::read_to_string(home.join("core.token")).unwrap();
+    let owner = owner.trim().to_string();
+    let work = fs::canonicalize(&alpha).unwrap();
+    let send = work.join("send-mail");
+    fs::write(&send, "#!/bin/sh\ncat \"$@\" > /dev/null\n").unwrap();
+    fs::set_permissions(&send, fs::Permissions::from_mode(0o755)).unwrap();
+    let draft = work.join("reply.eml");
+    let text = "To: Jordan Lee <jordan@partner.example.com>\nSubject: Re: Can we find an hour?\n\nTuesday 14:00?\n";
+    fs::write(&draft, text).unwrap();
+    fs::write(work.join("blob.bin"), [0u8, 159, 146, 150]).unwrap();
+    let line = format!("{} {}", send.display(), draft.display());
+    let stage = |command: &str| {
+        raw(
+            &home,
+            &chief_t,
+            json!({"op":"outbox_stage","tool":"Bash","args":{"command":command},"source":"Jordan's mail"}),
+        )
+    };
+    let cards = || -> Vec<Value> {
+        raw(&home, &owner, json!({"op":"snapshot"}))["Ok"]["owner_decisions"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter(|c| c["owner"]["type"] == "outward")
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    // Only one plain line the card can show whole: full paths, no shell marks, quotes or globs, files that are text.
+    for bad in [
+        format!("send-mail {}", draft.display()),
+        format!("{line}; rm -rf {}", work.display()),
+        format!("{line} | tee x"),
+        format!("{line} > {}/out", work.display()),
+        format!("{} $(cat {})", send.display(), draft.display()),
+        format!("{} '{}'", send.display(), draft.display()),
+        format!("{} {}/*.eml", send.display(), work.display()),
+        format!("{} ~/x.eml", send.display()),
+        format!("{}  {}", send.display(), draft.display()),
+        format!("{line}\n{line}"),
+        format!("{} {}", send.display(), work.join("blob.bin").display()),
+        format!("{} {}", send.display(), work.display()),
+        format!("{} reply.eml/x", send.display()),
+        format!("{} {}", work.join("missing").display(), draft.display()),
+    ] {
+        let refused = stage(&bad);
+        assert!(refused["Err"].is_string(), "{bad:?}: {refused}");
+    }
+    assert!(cards().is_empty());
+    let staged = stage(&line);
+    assert!(staged["Err"].is_null(), "{staged}");
+    let card = cards().pop().expect("the card shows");
+    assert_eq!(card["owner"]["tool"], "Bash");
+    assert_eq!(card["owner"]["args"]["command"], line.as_str());
+    assert_eq!(card["owner"]["args"]["files"][1]["text"], text);
+    // The seat's real lock hook, as Claude runs it.
+    let hook = |command: &str| {
+        let mut cmd = std::process::Command::new(home::cli::path());
+        cmd.args(["hook", "home-lock", "--mode", "ask"])
+            .env("NUNCHIRO_HOME", &home)
+            .env("NUNCHIRO_TOKEN", &chief_t)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null());
+        let mut child = cmd.spawn().unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(
+                json!({"tool_name": "Bash", "tool_input": {"command": command, "description": "send"}})
+                    .to_string()
+                    .as_bytes(),
+            )
+            .unwrap();
+        let out = child.wait_with_output().unwrap();
+        assert!(out.status.success(), "{out:?}");
+        let v: Value = serde_json::from_slice(&out.stdout).unwrap();
+        v["hookSpecificOutput"]["permissionDecision"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    assert_eq!(hook(&line), "ask", "not before the owner's yes");
+    // Staging itself asks nothing in any mode: a card sends nothing.
+    assert_eq!(
+        hook(&format!("nunchiro outbox stage --command '{line}'")),
+        "allow"
+    );
+    // A command card has no Open by hand: Send runs it, Discard drops it.
+    let by_hand = window(
+        &home,
+        json!({"op":"answer","item":card["id"],"answer":{"type":"choose","index":1},"confirmed":true}),
+    );
+    assert!(by_hand["Err"].is_string(), "{by_hand}");
+    assert!(
+        window(
+            &home,
+            json!({"op":"answer","item":card["id"],"answer":{"type":"allow_once"},"confirmed":true})
+        )["Err"]
+            .is_null()
+    );
+    let id = card["id"].as_str().unwrap().to_string();
+    wait_long("the Home lead was not told to run it", || {
+        rows(&home).iter().any(|r| {
+            r.id == seat.id
+                && r.send_log
+                    .iter()
+                    .chain(&r.send_queue)
+                    .any(|s| s.content.contains(&id) && s.content.contains(&line))
+        })
+    });
+    // A file changed after the yes is not what the owner saw: the line asks, and the card stays approved.
+    fs::write(&draft, text.replace("Tuesday", "Never")).unwrap();
+    assert_eq!(hook(&line), "ask", "a changed file");
+    fs::write(&draft, text).unwrap();
+    assert_eq!(
+        hook(&format!("{line} {}", draft.display())),
+        "ask",
+        "another line"
+    );
+    assert_eq!(hook(&line), "allow", "the approved line, once");
+    assert_eq!(hook(&line), "ask", "spent");
+    core.stop();
+    let _ = fs::remove_dir_all(&home);
+}

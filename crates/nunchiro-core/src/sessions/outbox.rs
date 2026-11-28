@@ -13,6 +13,9 @@ impl Sessions {
             return Err("not an outbox request".into());
         };
         let from = self.home_lead_caller(caller)?;
+        crate::outbox::check(tool, args)?;
+        // A command card binds the files its line names, as they are now (`bound`); a call's arguments are unchanged.
+        let args = &crate::outbox::bound(tool, args)?;
         let shown = crate::outbox::check(tool, args)?;
         let waiting = self.outbox_count();
         if waiting >= crate::outbox::CARDS_MAX {
@@ -300,13 +303,18 @@ impl Sessions {
                 live && self.seat_of(&lead.id).as_deref() == Some(item.session_id.as_str())
             });
             // Round 4 S-r4a: straight into that run (never `open_seat`, which could open a new seat if it ended).
-            let woken = lead.is_some()
-                && self
-                    .prompt_as_user(&item.session_id, format!(
-                        "The user approved Outbox card {}: {what}. Send it now: call {tool} once, with exactly the arguments you staged for this card. It is allowed once, within 10 minutes; any other call is refused."
-                        , item.id
-                    ))
-                    .is_ok();
+            let go = if tool == crate::outbox::COMMAND {
+                format!(
+                    "The user approved Outbox card {}: {what}. Run it now: one Bash call with exactly this line, once, and its files as they are: {}. It is allowed once, within 10 minutes; any other line asks the user.",
+                    item.id, shown.subject
+                )
+            } else {
+                format!(
+                    "The user approved Outbox card {}: {what}. Send it now: call {tool} once, with exactly the arguments you staged for this card. It is allowed once, within 10 minutes; any other call is refused.",
+                    item.id
+                )
+            };
+            let woken = lead.is_some() && self.prompt_as_user(&item.session_id, go).is_ok();
             self.outbox_note(
                 format!("The user approved {what}; send it now."),
                 "outbox_yes",

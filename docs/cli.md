@@ -745,6 +745,15 @@ entry. The card binds the call by its hash (`approval::outward_call_hash`: the f
 canonical JSON): staging the same call again keeps the card, a changed byte is a card of its own. "New recipient"
 marks an address whose domain the user never said yes to. At most 20 cards wait at once.
 
+`nunchiro outbox stage --command '<program> <files>' [--source ...]` stages a command instead, for a send whose only
+route is a local tool (a script the user names). The line is plain words with one space between (letters, digits and
+`._/-+,:@%=`: no quotes, globs, `~`, `$`, redirects or separators), the program and every file named by full path, no
+folder. The card shows the line and the whole text of each file it names (UTF-8, at most 8000 characters; the program
+is bound by its hash only) and binds them: the hash covers the line and every file's content as read at staging. After
+the yes the seat runs exactly that line once; its hook reads the files again, so a file changed after the yes makes
+another call, which asks like any shell command. A command card has no Open by hand. Staging (`nunchiro outbox stage`)
+runs without asking in every mode: a card sends nothing.
+
 The user answers in the Nunchiro window only (an answer over the core's socket is refused). Send has a 10 second
 Undo. Not undone, the card is approved, in the core's memory only: the core tells the Home lead's seat to make exactly
 that call, and lets it through once within 10 minutes, for the session that staged it (the seat's hook asks the core,

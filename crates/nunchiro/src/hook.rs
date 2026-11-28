@@ -136,7 +136,7 @@ fn exchange(
 const PAYLOAD_MAX: u64 = 16 << 20;
 pub fn home_lock(home: &Path, args: &[String]) -> ! {
     use nunchiro_core::home_lock::{
-        Decision, NO_CARD, NO_MCP_FLAG, decide_locked, hook_output, named, spend,
+        ASK_SHELL, Decision, NO_CARD, NO_MCP_FLAG, decide_locked, hook_output, named, spend,
     };
     let mode = match args {
         [flag, mode, ..] if flag == "--mode" => named(mode),
@@ -163,14 +163,20 @@ pub fn home_lock(home: &Path, args: &[String]) -> ! {
         Decision::Ask(why) => Some(hook_output("ask", why)),
         Decision::Deny(why) => Some(hook_output("deny", why)),
         Decision::Spend => Some(
-            match env::var("NUNCHIRO_TOKEN")
-                .map_err(|e| e.to_string())
-                .and_then(|token| spend(&home.join("core.sock"), &token, &tool, &input))
-            {
+            // A command card's line is hashed with its files as they are now (`outbox::bound`).
+            match nunchiro_core::home_lock::bound(&tool, &input).and_then(|call| {
+                env::var("NUNCHIRO_TOKEN")
+                    .map_err(|e| e.to_string())
+                    .and_then(|token| spend(&home.join("core.sock"), &token, &tool, &call))
+            }) {
                 Ok(_card) => hook_output(
                     "allow",
                     "Home seat: the owner said yes to this exact call on its Outbox card",
                 ),
+                // A shell line with no approved card is an ordinary command: it asks, as every one does.
+                Err(_) if tool == nunchiro_core::home_lock::COMMAND => {
+                    hook_output("ask", ASK_SHELL)
+                }
                 Err(e) => {
                     eprintln!("Home seat lock: {e}");
                     hook_output("deny", NO_CARD)

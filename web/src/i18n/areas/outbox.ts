@@ -6,6 +6,11 @@ declare module '../index' {
     'outbox.card.titleReply': true;
     'outbox.card.titleMail': true;
     'outbox.card.titleEvent': true;
+    'outbox.card.titleCommand': true;
+    'outbox.card.kindCommand': true;
+    'outbox.card.run': true;
+    'outbox.card.file': true;
+    'outbox.field.command': true;
     'outbox.card.kindMail': true;
     'outbox.card.kindEvent': true;
     'outbox.card.newRecipient': true;
@@ -45,6 +50,11 @@ export const en = {
   'outbox.card.titleReply': "Reply to {name}",
   'outbox.card.titleMail': "Mail to {name}",
   'outbox.card.titleEvent': "New event: {subject}",
+  'outbox.card.titleCommand': "Run a command",
+  'outbox.card.kindCommand': "Outbox · command",
+  'outbox.card.run': "Run",
+  'outbox.card.file': "File it sends: {path}",
+  'outbox.field.command': "Command",
   'outbox.card.kindMail': "Outbox · mail draft",
   'outbox.card.kindEvent': "Outbox · event draft",
   'outbox.card.newRecipient': "New recipient",
