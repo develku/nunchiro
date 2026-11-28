@@ -40,6 +40,7 @@ impl Sessions {
             entry.stale = None;
             entry.meta.pid = None;
             entry.meta.state = resumable(&entry.meta);
+            entry.meta.folders.clear(); // the run's folder grants end with it
             cancel_queue(&mut entry.meta);
             if let Err(e) = self.queue.close(&entry.meta.id, false) {
                 eprintln!("pre-lock Home seat queue: {e}");

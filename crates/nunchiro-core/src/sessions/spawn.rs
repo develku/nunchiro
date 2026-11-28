@@ -630,6 +630,7 @@ impl Sessions {
                 })
                 .take(64)
                 .collect(),
+            folders: vec![], // a new run starts with no folder grant (Claude's `/add-dir` holds for one run)
             level: prior_ids.iter().find_map(|id| self.entries[id].meta.level),
             // Ticket 993: a resumed run of a scheduled run is still that run until the user speaks to it.
             schedule: prior_ids

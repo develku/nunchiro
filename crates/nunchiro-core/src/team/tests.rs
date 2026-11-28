@@ -216,6 +216,8 @@ fn one_lead_per_place_and_the_briefs_say_who_leads() {
         // Ticket 1003: open loops are the core's rows, and the Home lead only asks to keep or close one.
         "`nunchiro task loops` lists them",
         "nothing is kept or closed before their yes",
+        // A folder the user names: one simple command with full paths runs without asking.
+        "use one simple command with full paths (no loops, pipes or chains)",
     ] {
         assert!(boss.contains(part), "{part} missing in:\n{boss}");
     }

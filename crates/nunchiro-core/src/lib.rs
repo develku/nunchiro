@@ -12,6 +12,7 @@ mod agent_update; // ticket 358
 pub mod api;
 pub mod codex_reset; // needs 225
 mod dirfd; // ticket 452
+pub mod folder_grant; // the Assistant's folders, given in the owner's message
 pub mod home_lock; // ticket 1002 lane 1: the Home seat lock
 pub mod outward; // ticket 1130 S1: outward actions ask in every session
 pub(crate) mod session_context;

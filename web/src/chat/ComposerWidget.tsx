@@ -39,6 +39,7 @@ import type { Decision } from '../types';
 import { useFeatureSetting } from '../settings/useFeatureSetting';
 import { useEffect, useState } from 'react';
 import { composerOffer } from '../features/pasted-server';
+import './typed'; // the composer box's typed-only state (folder offers)
 import { restartKeeping } from '../features/restart-keeping';
 import { restartStart } from '../PermissionNeeded';
 import { escaped, joinWords } from '../settings/agents/words';
@@ -299,6 +300,15 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
           })}
         </div>
       )}
+      {/* The Assistant's folders the owner gave in a message (folder_grant.rs): a quiet line each, with Remove. */}
+      {target?.folders?.map((folder) => (
+        <p key={folder} className="dc-hint folder-given" role="status" data-folder={folder}>
+          {t('composer.folder.given', { folder })}{' '}
+          <button type="button" className="mo-x" data-act="folder-remove" onClick={() => void core.request({ op: 'folder_remove', id: target.id, folder }).catch((e) => setPaneNote(errorNote(notePlain(t, e), e)))}>
+            {t('composer.folder.remove')}
+          </button>
+        </p>
+      ))}
       {/* Floats over the output's bottom edge: an arrival never resizes the composer or the terminal (answer-strip rule). */}
       {target && dockAsks.length + dockOut.length > 0 && (
         <div className="dock" ref={dockHeight}>

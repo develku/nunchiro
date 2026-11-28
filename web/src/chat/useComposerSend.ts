@@ -15,6 +15,7 @@ import { useImages } from '../images/attach';
 import { asks, blocked, heldIds, holdText, refuseSecond, takeHeld } from './held';
 import { claimSteer, enqueue, finishSteer, markSent, nextRow, noteSteer, putBack, queueIds, queueOf, recordStop, setPaused, takeAll, takeRow, unclaimSteer, unsend, useQueues, type Row } from './queued';
 import { useSideChats } from './useSideChats';
+import { typedBox } from './typed';
 import type { T } from '../i18n';
 
 type Deps = {
@@ -53,6 +54,9 @@ const logRow = (s: Session, send: string) => (s as Session & { send_log?: { id: 
  *  and the handoff and fork requests (HANDOFF_EVENT). */
 export function useComposerSend({ core, sessions, current, ordered, images, handoff, setHandoff, sideChats, follow, open, addTab, accountsP, readAccounts, t, setPaneNote, connected, snapped }: Deps) {
   const forking = useRef(false);
+  const latest = useRef(sessions); // the folder wait below reads snapshots that arrive while it waits
+  const heldOffers = useRef(new Map<string, string>()); // a held first message's folder offer, for its release
+  latest.current = sessions;
   const sentTo = useRef(new Set<string>()); // v25-quiet-chat: sessions this window has already sent a message to
   const sendingFork = useRef(new Set<string>());
   const [pendingEnter, setPendingEnter] = useState<Record<string, boolean>>({});
@@ -318,6 +322,10 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
         return;
       }
     const typed = el.value;
+    // The Assistant's folders: the typed words when every change to the box was typing (typed.ts); a held message
+    // keeps that offer for its release, never its image path lines.
+    const offerText = released ? (heldOffers.current.get(target.id) ?? '') : !ho && !row && !retry && target.kind !== 'shell' && typedBox(el) ? typed : '';
+    heldOffers.current.delete(target.id);
     const text = [typed, ...saved.paths].filter(Boolean).join('\n');
     // v1b-05 (end of block)
     // v25-quiet-chat (ticket 294 item 2): the first message to a session, while a dialog (trust, imports) is still asked, would be taken
@@ -329,6 +337,7 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
       el.closest('.cbox')?.removeAttribute('data-shell'); // ticket 1044: the "!" cue ends with the text
       noDraft(target.id);
       saved.done();
+      heldOffers.current.set(target.id, offerText);
       return holdText(target.id, text);
     }
     // v2-3b: this Enter carries the handoff: the core starts (or reuses) the other agent's session in this folder and
@@ -383,6 +392,9 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
         clean = [context, clean].filter(Boolean).join('\n\n').replace(/\x1b\[20[01]~/g, '');
         outgoing = (await bracketedPaste(core, target.id)) ? `\x1b[200~${clean}\x1b[201~` : clean;
       }
+      // The Assistant's folders (folder_grant.rs): only the words typed in this box, no paste, handoff or image path.
+      // The message waits until the folders they name are in, as the core holds the seat meanwhile (at most ~35 s).
+      if (offerText.includes('/')) await folderWait(core, target.id, offerText, () => latest.current);
       if (!retry || clean) await core.sendText(target.id, outgoing, seen, true);
       acknowledged = true;
       sentTo.current.add(target.id);
@@ -518,4 +530,13 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
     }
   };
   return { pendingEnter, uncertainSend, pressRow, drafts, setDrafts, givenBack, setGivenBack, grow, stopAgent, send, steerNow, backgroundSend };
+}
+
+/** `folder_offer` for the owner's typed words; resolves once every folder it names is in `folders`, or after 35 s. */
+async function folderWait(core: CoreClient, id: string, text: string, sessions: () => Session[]) {
+  const reply = (await core.request({ op: 'folder_offer', id, text }).catch(() => null)) as { folders?: string[] } | null;
+  const want = reply?.folders ?? [];
+  const until = Date.now() + 35_000;
+  while (want.length && Date.now() < until && !want.every((f) => sessions().find((s) => s.id === id)?.folders?.includes(f)))
+    await new Promise((r) => setTimeout(r, 100));
 }

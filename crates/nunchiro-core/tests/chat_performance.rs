@@ -54,6 +54,7 @@ fn chat_release_100mb_poll_and_memory_budget() {
         teammate: None,
         resumed_from: vec![],
         owned_from: vec![],
+        folders: vec![],
         level: None,
         side_split: None,
         machine: None, // v1a-06: existing fixture is local.

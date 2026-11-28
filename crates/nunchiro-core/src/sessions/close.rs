@@ -248,6 +248,7 @@ impl Sessions {
                         };
                         // v1a-14: cancel queued sends under the one save below; left to the next tick, each
                         // would save on its own (seconds for a long queue) and outlast `serve restart`'s wait.
+                        entry.meta.folders.clear(); // the run's folder grants end with it
                         cancel_queue(&mut entry.meta);
                         cap_log(&mut entry.meta.send_log);
                         if let Err(e) = remove_hooks(&self.home, &entry.meta.id) {
@@ -571,6 +572,7 @@ pub(super) fn remove_hooks(home: &Path, id: &str) -> Result<(), String> {
     for path in [
         home.join(format!("hooks-{id}.json")),
         ended_marker(home, id),
+        crate::folder_grant::file(home, id), // the run's folder grants end with it
     ] {
         match fs::remove_file(path) {
             Ok(()) => {}

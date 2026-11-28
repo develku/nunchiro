@@ -37,6 +37,7 @@ mod answer;
 mod close;
 mod codex_config;
 mod deliver;
+mod folders; // the Assistant's folders, given in the owner's message
 mod handoff;
 mod home;
 mod launch;
@@ -293,6 +294,8 @@ pub struct Sessions {
     room: room::State, // ticket 571
     // v1a-15: per session, the submit send whose pasted text is written and whose Enter a later tick writes.
     pending_enter: BTreeMap<String, PendingEnter>,
+    /// The Assistant's folders on their way in (`folders`), by run.
+    folder_grants: BTreeMap<String, folders::Granting>,
     /// Ticket 1137: per plain shell still waiting for a window's size, the file that ends the wait (`spawn`).
     size_waits: BTreeMap<String, PathBuf>,
     /// Look 11-17 v8 N1: per session, the last submit whose Enter the core wrote and has not seen taken (`verify_submits`).
@@ -691,6 +694,9 @@ impl Sessions {
                 Err("setup requests run off the registry lock".into()) // ticket 259: `worktree_setup::serve`
             }
             Request::AgentSend { id, text } => self.send("user", &id, text, vec![], false),
+            Request::FolderOffer { .. } | Request::FolderRemove { .. } => {
+                Err("folder access is given and removed in the Nunchiro window only".into())
+            }
             Request::AgentPrompt { id, text } => {
                 let reply = match self.send("user", &id, text.clone(), vec![], true) {
                     // The owner's words to a session that waits at a question in its terminal (a start question such
@@ -1533,6 +1539,7 @@ impl Sessions {
         self.room_notices(); // ticket 571
         self.advance_walks(); // CHAT-MODELIST
         self.advance_typed();
+        self.advance_grants();
         self.advance_switches() // v1a-10
     }
     /// `finish_send` without its save, for a caller that saves once after many rows (ticket 300).
@@ -1775,19 +1782,7 @@ impl Sessions {
 /// v1a-68 r3 (needs 2, 78): the closed shells whose view the core holds, at most `REPLAY_BYTES` each (16 MiB).
 const CLOSED_VIEWS: usize = 16;
 use crate::agent_permission::{ALLOW_SKIP, START_IN_SKIP};
-/// A send that reached a final status, taken out of `meta`'s queue by the caller, goes to the same session's log and
-/// its widget hash is dropped (v1b-20). The one retire step of `mark_send` and the exit cancel (ticket 300).
-fn retire_send(
-    meta: &mut Session,
-    widget_hashes: &mut BTreeMap<String, String>,
-    mut send: crate::delivery::Send,
-    status: &str,
-) {
-    send.status = status.into();
-    widget_hashes.remove(&send.id);
-    meta.send_log.push(send);
-    cap_log(&mut meta.send_log);
-}
+use deliver::retire_send;
 
 #[cfg(test)]
 mod tests; // 2026-11-20: moved out for the 1 MiB publish scan

@@ -343,18 +343,20 @@ impl Sessions {
     /// agent that took no turn from it (a dropped or refused submit) never holds every later send for ever.
     pub(super) fn delivery_open(&self, id: &str, snapshot: &Session) -> bool {
         let now = std::time::Instant::now();
-        self.delivery_inflight
-            .get(id)
-            .is_none_or(|seq| snapshot.completion_seq > *seq)
-            || !snapshot.attention.working
-                && self
-                    .inflight_at
-                    .get(id)
-                    .is_some_and(|t| now.duration_since(*t) >= INFLIGHT_IDLE)
-                && self
-                    .entries
-                    .get(id)
-                    .is_some_and(|e| composer(&e.observer.screen.text(), e.meta.kind).is_some())
+        // A folder the owner named is being added: its message waits until the seat can reach it.
+        !self.granting(id)
+            && (self
+                .delivery_inflight
+                .get(id)
+                .is_none_or(|seq| snapshot.completion_seq > *seq)
+                || !snapshot.attention.working
+                    && self
+                        .inflight_at
+                        .get(id)
+                        .is_some_and(|t| now.duration_since(*t) >= INFLIGHT_IDLE)
+                    && self.entries.get(id).is_some_and(|e| {
+                        composer(&e.observer.screen.text(), e.meta.kind).is_some()
+                    }))
     }
     /// N1: the core wrote `text` and its Enter into session `id`'s input box; `verify_submits` looks once more.
     pub(super) fn submitted(&mut self, id: &str, text: &str) {
@@ -1099,4 +1101,17 @@ pub(super) struct PendingEnter {
     pub(super) quiet: std::time::Instant,
     /// The composer showed this paste at some pass: a composer that stops showing it took something else in.
     pub(super) held: bool,
+}
+/// A send that reached a final status, taken out of `meta`'s queue by the caller, goes to the same session's log and
+/// its widget hash is dropped (v1b-20). The one retire step of `mark_send` and the exit cancel (ticket 300).
+pub(super) fn retire_send(
+    meta: &mut Session,
+    widget_hashes: &mut BTreeMap<String, String>,
+    mut send: crate::delivery::Send,
+    status: &str,
+) {
+    send.status = status.into();
+    widget_hashes.remove(&send.id);
+    meta.send_log.push(send);
+    cap_log(&mut meta.send_log);
 }

@@ -321,6 +321,10 @@ pub struct Session {
     /// `session start --resume` keeps `resumed_from` (names only) and gets none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owned_from: Vec<String>,
+    /// The folders the owner gave this run of the Assistant's seat by naming them in a window message (canonical;
+    /// `folder_grant`): read and write for this conversation, each shown with a Remove action. A new run has none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub folders: Vec<PathBuf>,
     /// Ticket 992: the level a seat was started at (team.rs `open_seat`); absent on a seat with a custom model and on
     /// every other session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -890,6 +894,18 @@ pub enum Request {
     AgentPrompt {
         id: String,
         text: String,
+    },
+    /// The window's composer, before it sends a message: only the words the owner typed in it (no pasted text, handoff
+    /// context or image path). The folders they name become the Assistant's for this run (`folder_grant`; window only);
+    /// the window holds its message until they are in.
+    FolderOffer {
+        id: String,
+        text: String,
+    },
+    /// The window's Remove on the Assistant's folder line: the run's grant to `folder` ends (window only).
+    FolderRemove {
+        id: String,
+        folder: PathBuf,
     },
     /// v25-sendkeys: the composer's Ctrl+Enter. Claude Code's send-now breaks the running turn (Esc, through Stop's
     /// gate) and this text then goes in where the ordinary send would put it: at once when the agent is idle, after

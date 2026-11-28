@@ -126,6 +126,7 @@ test('handoff-chip: editable, Hangul composes, Enter while composing does not se
   await app.locator('#composer').press('Enter');
   await expect.poll(() => w.ops('handoff_send').length).toBe(1);
   expect(w.ops('handoff_send')[0]).toEqual({ op: 'handoff_send', from: s.id, to: 'codex', text: `${edited}\n\n계속해` });
+  expect(w.ops('folder_offer')).toHaveLength(0); // a handoff's words carry another seat's text: no folder grant
   await expect(app.locator('[data-handoff-chip]')).toHaveCount(0);
   await expect.poll(() => sessions(core).length).toBe(2);
   const codex = sessions(core).find((x) => x.kind === 'codex')!;
