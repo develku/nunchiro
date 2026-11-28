@@ -345,3 +345,34 @@ test('remove_closes_an_ended_side_chat: no error and the head leaves the tree', 
   // The closed side chat row keeps the project known to the core, so its pin and group must go by their own edits.
   expect(fs.readFileSync(`${core.home}/tree.toml`, 'utf8')).not.toContain(project);
 });
+
+// Review of the worktree start fix: a worktree that is not in the core's list (its record refused: a project that is a
+// linked worktree or a subfolder, or the registry lock held) still blocks Remove, through the session that runs in it.
+test('remove_refuses_a_session_in_a_folder_of_its_own: a session outside the project folder that no listed worktree holds blocks Remove; nothing closes', async ({ app, core }) => {
+  const log = sent(app);
+  const project = core.project('alpha');
+  fs.writeFileSync(`${project}/f`, 'x');
+  for (const a of [['init', '-q'], ['add', '.'], ['-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-qm', 'x']]) execFileSync('git', a, { cwd: project });
+  const inWt = core.agent(project, 'wt', 'never', true).id;
+  // The core's list as it is when the record was refused: no worktree for this project.
+  await app.routeWebSocket(/\/ws$/, (ws) => {
+    const server = ws.connectToServer();
+    ws.onMessage((m) => server.send(m));
+    server.onMessage((m) => {
+      if (typeof m !== 'string') return ws.send(m);
+      const f = JSON.parse(m) as { response?: { Ok?: { type?: string; worktrees?: unknown[] } } };
+      if (f.response?.Ok?.type === 'worktrees') f.response.Ok.worktrees = [];
+      ws.send(JSON.stringify(f));
+    });
+  });
+  openQuiet(core);
+  await openWindow(app, {}, core);
+  await openRemove(app, 'alpha');
+  const d = dialog(app);
+  await expect(d.locator('[data-elsewhere]')).toContainText('Sessions in a folder of their own');
+  await expect(d.locator('[data-elsewhere]')).toContainText('wt');
+  await expect(d.getByRole('button', { name: 'Remove from Nunchiro' })).toHaveCount(0);
+  await expect(d.getByRole('button', { name: /^Stop .* and remove$/ })).toHaveCount(0);
+  expect(closes(log)).toEqual([]);
+  expect(stateOf(core, inWt)).toBe('running');
+});
