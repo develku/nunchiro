@@ -160,6 +160,35 @@ fn installed_in(dir: &Path) -> (PathBuf, PathBuf) {
     (at.join(APP), at.join(WORK))
 }
 
+/// A child forked while the lock is held (a tool run with `pre_exec` on another thread) keeps a copy of the lock's
+/// descriptor until its exec. Dropping the lock frees it for the next install all the same.
+#[test]
+fn a_dropped_lock_is_free_while_a_forked_child_still_holds_its_descriptor() {
+    use std::os::unix::process::CommandExt;
+    let dir = folder("forked", OWNER_ID);
+    let work = dir.join("work");
+    fs::create_dir_all(&work).unwrap();
+    let held = lock(&work).unwrap();
+    let mut cmd = std::process::Command::new("/usr/bin/true");
+    // Safety: sleep is async-signal-safe; the child sleeps before its exec, holding every descriptor it inherited.
+    unsafe {
+        cmd.pre_exec(|| {
+            libc::sleep(2);
+            Ok(())
+        })
+    };
+    // spawn returns only after the exec, so another thread forks, as a parallel tool run does.
+    let other = std::thread::spawn(move || cmd.status().unwrap());
+    std::thread::sleep(std::time::Duration::from_millis(500)); // the child sleeps in pre_exec now
+    drop(held);
+    assert!(
+        lock(&work).is_ok(),
+        "the lock stayed held by the forked child's copy"
+    );
+    other.join().unwrap();
+    fs::remove_dir_all(dir).unwrap();
+}
+
 #[test]
 fn a_second_install_fails_at_once_and_touches_nothing() {
     let dir = folder("lock", OWNER_ID);
