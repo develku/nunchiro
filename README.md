@@ -52,13 +52,21 @@ A new worktree of this repository needs its own packages and `web/dist` before `
 
 ## CI
 
-[.github/workflows/ci.yml](.github/workflows/ci.yml) runs on GitHub-hosted runners for every pull request and again in
-the merge queue on the merged tree; the queue is the only way into `main`, and its one required check is the `gate`
-job, which passes only when every other job passed.
+[.github/workflows/ci.yml](.github/workflows/ci.yml) runs on GitHub-hosted runners for every pull request and every
+push to `main`. A pull request is the only way into `main`. It needs two checks: the `gate` job, which passes only when
+every other job passed, and `ci-guard` ([ci-guard.yml](.github/workflows/ci-guard.yml)), which holds a pull request
+that changes `.github/` or the ratchet scripts until a maintainer has reviewed it.
+
+Pull requests run in two steps, because the free plan runs only 5 macOS jobs at once. Every push runs the Linux jobs
+(`lint`, `changes`). The macOS jobs run once the pull request is ready: auto-merge is turned on, or it carries the
+`ready-ci` label (for a pull request under review that is not on auto-merge yet). Turning either on starts the full run,
+and every later push runs the full set. Until then `gate` fails with "macOS checks run when auto-merge is on or the
+ready-ci label is set", so nothing merges untested; a pull request that changes only safe docs passes without it.
 
 - `lint` (Linux): `cargo fmt --check`, `sh -n` of the scenario scripts, `pnpm typecheck` in `web/`.
 - `rust-build` (macOS): clippy with warnings as errors, doctests, and one nextest archive of every Rust test.
-- `rust-test` (macOS, three runners): the archive, split with `cargo nextest run --partition count:k/3`.
+- `rust-test` (macOS, two runners, pull requests): the archive, split with `cargo nextest run --partition count:k/2`. A push to
+  main runs the whole archive inside `rust-build` instead, to keep main runs to fewer macOS jobs.
 - `app` (macOS): `scripts/check-app.sh` (the Tauri app's fmt, clippy, tests and licence notices).
 - `web` (macOS): `scripts/check-cli-docs.sh`, `scripts/scenario-tests.sh`, and the Playwright core set
   (`web/tests/core-set.txt`) on Chromium through `.github/scripts/web-core.sh`.
@@ -79,7 +87,7 @@ Nunchiro has no telemetry. [PRIVACY.md](PRIVACY.md) lists every host it connects
 
 ## Contributing
 
-Outside pull requests are not accepted yet.
+Bug fixes and small, focused changes are welcome. Open an issue first; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { openRow } from './accounts-rows';
 import { type Core, expect, openWindow, REPO, test } from './fixtures';
 import { closeSettings, openSettings } from './settings-modal';
+import { startOf } from './start-op';
 
 const FIXTURES = path.join(REPO, 'crates/nunchiro/tests/fixtures');
 const start = (core: Core, ...flags: string[]) => core.cli('session', 'start', '--kind', 'claude', '--project', core.project('demo'), '--label', 'claude', ...flags).session as { id: string };
@@ -82,8 +83,8 @@ test('a_default_model_session_passes_its_effort_on', async ({ app, core }) => {
     ws.on('framesent', (f) => {
       const request = typeof f.payload === 'string' && f.payload.includes('"op":"start"') ? JSON.parse(f.payload).request : null;
       // Since #57 the New tab menu sends its start as `start_or_wait`, the start inside it.
-      const start = request?.op === 'start_or_wait' ? request.start : request;
-      if (start?.op === 'start') starts.push(start.session);
+      const start = startOf(request);
+      if (start) starts.push(start.session);
     }),
   );
   await openWindow(app);

@@ -19,7 +19,7 @@ sleep 600
 `;
 const QUESTION = 'Red or blue?\r\n> 1. red\r\n  2. blue\r\nEnter to select · Esc to cancel\r\n';
 const unlabeled = (core: Core, dir: string, trigger: string) =>
-  core.cli('session', 'start', '--kind', 'claude', '--project', dir, '--model', path.join(dir, trigger)).session as { id: string };
+  core.cli('session', 'start', '--kind', 'claude', '--project', dir, '--model', trigger).session as { id: string };
 /** As fixtures.ts stripOnTop, with the Decisions widget (the approval cards) in its own zone too. */
 const stripAndCards = (core: Core) => {
   const zone = (id: string) => `\n[[root.children]]\nid = "${id}"\nwidgets = ["${id}"]\n`;

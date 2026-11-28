@@ -67,6 +67,13 @@ impl Sessions {
             .map(|e| e.meta.cwd.clone())
             .ok_or_else(|| "session not found".into())
     }
+    /// A session's record, for the form's Write with AI (`text_gen`), which runs after the lock is released.
+    pub(crate) fn session_meta(&self, id: &str) -> Result<crate::api::Session, String> {
+        self.entries
+            .get(id)
+            .map(|e| e.meta.clone())
+            .ok_or_else(|| "session not found".into())
+    }
     // v1b-05: the data home for an upload to a known session; the write runs after the lock is released.
     pub(crate) fn image_home(
         &self,

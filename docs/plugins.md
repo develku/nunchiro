@@ -76,8 +76,14 @@ may write only its cache, reach only the `network` hosts, and read only the proj
 
 ## Approval and the switch
 
-A plugin is one approval: the hash of its whole folder (the `cache` folder aside). It starts off and not approved,
-and any change to any file shows it as "Changed since approval" and stops every part until it is approved again.
+A plugin is one approval, for what it can reach: every part, and each host, folder, message box and action a part
+reaches. It starts off and not approved. A change that asks for nothing new (its scripts, its texts, a new version
+from the catalogue) stays approved and stays on; the Plugins page says it changed. A change that adds a part, a host,
+a folder it reads, writing into the message box or a check shows it as "Changed since approval", stops every part
+until it is approved again, and Review lists what is new. An approval given before this rule asks again after any
+change. A plugin with a check asks again after any change, its scripts included, because a check reads and can
+replace every message agents, schedules and tokens send. The access lines also name each part's command line, a
+panel's interval, what a failing check does and the author.
 Approving and turning on are the owner's: an agent can write and check a plugin, and its `plugin allow` becomes one
 waiting item in the window. A plugin is approved whole (`plugin:<id>`); a part's name is never approved alone. The
 sheet and `plugin allow` list every part with what it runs, its hosts, the folders it reads and whether it writes
@@ -107,7 +113,7 @@ command = ["/bin/sh", "gate.sh"]
 on_error = "allow"            # or "refuse" (the default): what no answer, a crash or bad JSON means
 ```
 
-`$NUNCHIRO_CONTEXT` holds `event`, `asker` (`owner`, `agent`, `schedule`, `token`), `settings`, and `start` (`kind`,
+`$NUNCHIRO_CONTEXT` holds `event`, `asker` (`owner`, `agent`, `schedule`, `token`, `trigger`), `settings`, and `start` (`kind`,
 `project`, `worktree`, `label`) or `to` and `text`. The check prints one line:
 
 ```json
@@ -130,13 +136,25 @@ schedule's changed task leaves a line in the core's log. With `on_error = "allow
 busy action is skipped: the core's log says so, and the Plugins page counts the skipped checks. A check cannot answer a permission, skip an outward card or widen
 anything: allow, refuse and replacement text are its only outputs. With no plugin on, nothing is run.
 
+## Browse and install
+
+Plugins, Browse plugins (or `nunchiro plugin catalog`) lists the catalogue: `plugins/catalog.json` of the Nunchiro
+repository on GitHub. Each entry pins a plugin to one commit and lists every file with its SHA-256. Install (or
+`nunchiro plugin install <id>`) downloads exactly those files at that commit and writes `plugins/<id>` only when every
+hash matches; one file changed after the catalogue was made installs nothing. An installed plugin is off and not
+approved, so it runs nothing until you review it. When the catalogue has a newer version, the button says Update;
+the old folder moves to `plugins/.removed/` and the new one asks for approval again.
+
+The catalogue holds Nunchiro's own examples for now. It is a folder of the main repository, read from GitHub the
+way a separate catalogue repository would be; `scripts/plugin-catalog.py` writes it.
+
 ## Through the API
 
 The window and scripts use the same request, `{"op": "plugin", "action": {"do": "list"}}` (also `set`, `setting`,
-`run`, `remove`), owner and window only; see [api.md](api.md). A panel is the widget `plugin__<id>__<panel>` in
+`run`, `remove`, `catalog`, `install`), owner and window only; see [api.md](api.md). A panel is the widget `plugin__<id>__<panel>` in
 `widget_list` and `widget_run`.
 
 ## Not yet
 
 - Skills, hooks and MCP servers in a plugin (today they are extension folders, `nunchiro extensions`).
-- A catalogue to install from.
+- Plugins from outside the catalogue by a git URL and commit; submissions to the catalogue.

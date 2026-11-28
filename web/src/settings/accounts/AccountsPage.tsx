@@ -15,7 +15,9 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 're
 // Ticket 391 (final.html scene a): this is Settings > Providers, the old Agents and Accounts pages in one. Each provider is a
 // one-line card head (head.tsx); an open Claude or Codex card has 연결·로그인, 계정, 모델, 새 세션 기본값 and 고급, an ACP card
 // 연결·로그인, 모델 and 고급. The default agent (defaults.tsx) and agents.toml moved here from the Agents page.
-import { accountName, type Account, type AccountAgent, type AccountUsage, type AcpRow, type CommandView, type CoreClient, type SignInState, type TerminalAgent } from '../../api';
+import { accountName, type Account, type AccountAgent, type AccountUsage, type AcpRow, type AcpTurn, type CommandView, type CoreClient, type SignInState, type TerminalAgent } from '../../api';
+import { AcpTry, TryChip } from './acpTry';
+import { AcpSteps, costWord } from './steps';
 import { AcpLogin, AcpLoginChip } from './acpSignIn';
 import type { Key } from '../../i18n';
 import { ageText } from '../../chat/PrChip';
@@ -142,6 +144,7 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
   const [opened, setOpened] = useState('');
   const [terminal, setTerminal] = useState<TerminalAgent[] | null>(null);
   const [rows, setRows] = useState<AcpRow[]>([]);
+  const [turns, setTurns] = useState<Record<string, AcpTurn>>({});
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [rechecking, setRechecking] = useState(false);
   const [now, setNow] = useState(Date.now);
@@ -150,7 +153,8 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
   const [changing, setChanging] = useState('');
   const [removing, setRemoving] = useState('');
   // The tile whose form is showing: a known row, a name from UNCONFIRMED, or 'custom' for 직접 입력.
-  const [form, setForm] = useState<{ row: AcpRow | null; start?: { name: string; label: string }; id: string } | null>(null);
+  // `steps`: a listed agent's four add steps (steps.tsx); its Change, and every other tile, is the form.
+  const [form, setForm] = useState<{ row: AcpRow | null; start?: { name: string; label: string }; id: string; steps?: boolean } | null>(null);
   const [, setEnded] = useState(0); // redraws when `loginEnded` changes
   const [agentsOff] = useFeatureSetting(AGENTS_OFF); // ticket 358
   /** The card another surface asked for: an unapproved ACP entry opens its form under 추가; an approved one goes straight to its command form. */
@@ -176,10 +180,12 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
     setFile(r.file);
     setTerminal(r.terminal);
     setRows(r.acp);
+    setTurns(r.turns ?? {});
     setCheckedAt(new Date().toISOString());
     setNow(Date.now());
     return r;
   }, [core]);
+  const recheckRows = useCallback(() => void readAgents().catch(() => {}), [readAgents]);
   // After the account list: the window runs at most 4 off-loop requests, and the listing runs every agent's --version, so
   // starting both at once starves the sign-in probes (an account then reads "unknown").
   const accountsRead = accounts !== null || error !== '';
@@ -755,6 +761,8 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
     const missing = review ? [] : missingOf(r.env, r.env_set);
     const absent = !review && !r.found_path;
     const bad = !!r.refused || absent || missing.length > 0;
+    // A test message needs an approved ACP entry that is installed and whole; a terminal-only CLI has none.
+    const tryable = r.acp && !review && !bad;
     const runner = r.source === 'service' ? rows.find((x) => x.name === r.command.split('/').pop())?.label : undefined;
     const version = versionOf(r.version);
     const login = (
@@ -823,6 +831,7 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
             <>
               {absent ? <Chip word={t('agents.page.stMissing')} tone="bad" /> : bad ? <Chip word={t('providers.failed')} tone="bad" /> : review ? <Chip word={t('providers.needsApproval')} tone="warn" /> : <Chip word={t('providers.approved')} />}
               <AcpLoginChip t={t} name={r.name} bad={bad} />
+              {tryable && <TryChip t={t} turn={turns[r.name]} version={r.version} />}
             </>
           }
           open={open}
@@ -834,6 +843,7 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
             <Block title={t('providersPage.login')}>
               {login}
               {!form && <AcpLogin t={t} core={core} row={r} />}
+              {!form && tryable && <AcpTry t={t} core={core} name={r.name} label={r.label} turn={turns[r.name]} onDone={() => void readAgents().catch(() => {})} />}
               <span className="prv-calm">{t('providersPage.calm')}</span>
             </Block>
             {!form && <AcpModelSection t={t} row={r} />}
@@ -897,7 +907,8 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
     const label = <span className="prv-tname" title={name}>{name}</span>;
     const service = KEY_TILES.includes(id);
     const on = form?.id === id;
-    const pick = () => setForm(on ? null : { row: r ?? null, start: unconfirmed && { name: unconfirmed.name, label: unconfirmed.label }, id });
+    const steps = !!r?.setup && r.acp && !service;
+    const pick = () => setForm(on ? null : { row: r ?? null, start: unconfirmed && { name: unconfirmed.name, label: unconfirmed.label }, id, steps });
     if (r?.state != null)
       return (
         <div key={id} className="prv-tile done" data-tile={id}>
@@ -909,7 +920,7 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
     // Aider and the like run in a terminal: there is no ACP form for them.
     if (r && !r.acp && r.found_path)
       return (
-        <div key={id} className="prv-tile" data-tile={id}>
+        <div key={id} className="prv-tile" data-tile={id} title={t('providersSteps.terminalOnly')}>
           <Mark name={id} />
           {label}
           <span className="prv-st">{t('providers.terminalOnly')}</span>
@@ -919,13 +930,17 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
     const url = r?.install_url ?? unconfirmed?.url;
     return (
       <button key={id} type="button" className={`prv-tile go${on ? ' on' : ''}`} data-tile={id} aria-pressed={on} onClick={() => {
+        // A listed agent's steps show its install command; only a tool with no steps sends you to its page.
+        if (steps) return pick();
         if (install && url) void openExternal(url);
         if (!r || r.found_path || service) pick();
       }}>
         <Mark name={id} service={service} />
         {label}
         <span className="prv-st">
-          {install ? (
+          {steps && r?.setup ? (
+            t(costWord(r.setup.cost))
+          ) : install ? (
             <>
               {t('providers.install')}
               {EXT_MARK}
@@ -1025,7 +1040,8 @@ export function AccountsPage({ t, core, onViewUsage, open: asked, focus, project
             <h6>{t('providers.groupKeys')}</h6>
             {tiles(KEY_TILES.filter((id) => rows.some((r) => r.name === id)))}
           </div>
-          {form && <ProviderForm key={form.id} t={t} core={core} row={form.row} start={form.start} taken={entries.map((r) => r.name)} onClose={() => setForm(null)} onApproved={(view) => approved(form.row?.label ?? form.start?.label ?? view.name)} />}
+          {form?.steps && form.row && <AcpSteps key={form.id} t={t} core={core} row={rows.find((x) => x.name === form.row!.name) ?? form.row} onChange={() => setForm({ ...form, steps: false })} onRecheck={recheckRows} onApproved={() => (approved(form.row!.label), setOpenRow(form.row!.name))} />}
+          {form && !form.steps && <ProviderForm key={form.id} t={t} core={core} row={form.row} start={form.start} taken={entries.map((r) => r.name)} onClose={() => setForm(null)} onApproved={(view) => approved(form.row?.label ?? form.start?.label ?? view.name)} />}
         </div>
       </div>
       {file && (

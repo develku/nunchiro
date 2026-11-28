@@ -224,7 +224,7 @@ pub(super) fn folder(home: &Path) -> Result<Folder, String> {
 }
 
 /// `<command> --version` as the first-run checklist runs it (3 s), but with the check's environment, not the core's.
-fn version(path: &Path, entry: &Entry, folder: &Path) -> Option<String> {
+pub(super) fn version(path: &Path, entry: &Entry, folder: &Path) -> Option<String> {
     let mut command = crate::process::command(path);
     command
         .arg("--version")
@@ -253,7 +253,8 @@ impl Run {
         self.stdin
             .write_all((message.to_string() + "\n").as_bytes())
             .and_then(|()| self.stdin.flush())
-            .map_err(|e| format!("the agent is not reading its input: {e}"))
+            // The OS words ("Resource temporarily unavailable") say nothing more to the owner.
+            .map_err(|_| "the agent is not reading its input".to_string())
     }
 }
 
@@ -274,6 +275,12 @@ pub(super) fn run(entry: &Entry, path: &Path, folder: &Folder) -> Result<Run, St
         .map_err(|e| format!("{}: {e}", path.display()))?;
     let mut agent = Spawned(child);
     let stdin = agent.0.stdin.take().ok_or("no agent stdin")?;
+    // Non-blocking: an agent that stops reading fails the send ("not reading its input") instead of holding this thread.
+    let fd = std::os::fd::AsRawFd::as_raw_fd(&stdin);
+    let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+    if flags == -1 || unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } == -1 {
+        return Err("the agent's input could not be set up".into());
+    }
     let stdout = agent.0.stdout.take().ok_or("no agent stdout")?;
     // Bounded: an agent that floods lines waits on its own stdout instead of growing the core.
     let (tell, messages) = mpsc::sync_channel::<Value>(256);
@@ -387,7 +394,7 @@ fn handshake(entry: &Entry, path: &Path, folder: &Folder, out: &mut Check) -> Re
 }
 
 /// ACP's `auth_required` is error code -32000; agents also say it in words.
-fn auth_required(error: &Value, message: &str) -> bool {
+pub(super) fn auth_required(error: &Value, message: &str) -> bool {
     let lower = message.to_lowercase();
     error["code"] == -32000
         || lower.contains("auth_required")

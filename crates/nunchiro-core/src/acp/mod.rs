@@ -6,6 +6,7 @@ pub(crate) mod add;
 mod client;
 pub mod config;
 pub mod probe;
+pub(crate) mod turn;
 
 use crate::{
     api::{Reply, Response, Session},
@@ -39,6 +40,39 @@ struct Known {
     /// An API key service run through another agent: listed with its own display name, never as an agent program.
     #[serde(default)]
     service: bool,
+    #[serde(flatten)]
+    setup: Setup,
+}
+/// What the add steps show for a listed agent: how to install it, how it signs in, what it costs. From this bundled table
+/// only; the window types the install command into a terminal tab and never runs it.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub struct Setup {
+    /// The package-manager form, as an argv.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub install: Vec<String>,
+    /// The vendor's one-line installer, when it is the only documented way.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub install_script: Option<String>,
+    /// The agent's own sign-in command for the terminal fallback.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sign_in: Vec<String>,
+    /// The service named in "With your {account} account".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    /// free_plan, free_limited, free_models, own_model, paid_plan, paid_key or unknown.
+    #[serde(default = "unknown_cost")]
+    pub cost: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_line: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pricing_url: Option<String>,
+    /// The day the cost line was read on the vendor's page (YYYY-MM-DD).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checked: Option<String>,
+}
+fn unknown_cost() -> String {
+    "unknown".into()
 }
 #[derive(serde::Deserialize)]
 struct KnownFile {
@@ -166,6 +200,9 @@ pub struct AcpRow {
     /// Ticket 994: the thinking levels it last reported, lowest first as it listed them; empty: it has none.
     #[serde(default)]
     pub efforts: Vec<AcpModel>,
+    /// A listed agent's add steps (none for a custom entry).
+    #[serde(default)]
+    pub setup: Option<Setup>,
 }
 
 /// The first dotted number in a `--version` output: the rest of that output is the program's own text.
@@ -256,6 +293,7 @@ pub(crate) fn rows(home: &Path) -> Result<Vec<AcpRow>, String> {
                 refused: None,
                 models: vec![],
                 efforts: vec![],
+                setup: Some(k.setup.clone()),
             }
         })
         .collect();
@@ -282,6 +320,7 @@ pub(crate) fn rows(home: &Path) -> Result<Vec<AcpRow>, String> {
                 refused: None,
                 models: vec![],
                 efforts: vec![],
+                setup: None,
             });
         }
     }
@@ -334,6 +373,7 @@ pub(crate) fn setup(
             terminal: crate::firstrun::detect_all(),
             acp: rows(home)?,
             file: home.join("agents.toml"),
+            turns: turn::turns(home),
         })
     };
     match request {
@@ -376,6 +416,7 @@ pub(crate) fn setup(
         Request::AcpAgentSignInState { attempt } => add::state(&attempt),
         Request::AcpAgentSignInCancel { attempt } => add::cancel(&attempt),
         Request::AcpAgentSignOut { name } => add::sign_out(home, &name),
+        Request::AcpAgentTry { name, cancel } => turn::try_turn(home, &name, cancel, stopping),
         _ => Err("not an agent setup request".into()),
     }
 }
@@ -1192,6 +1233,15 @@ mod tests {
                 "cursor",
                 "grok",
                 "antigravity",
+                "copilot",
+                "kiro",
+                "kilo",
+                "mistral-vibe",
+                "cline",
+                "hermes",
+                "qwen",
+                "droid",
+                "auggie",
                 "openrouter",
                 "glm",
                 "kimi"
@@ -1222,6 +1272,7 @@ mod tests {
                 Some(&k.install_url),
                 k.docs_url.as_ref(),
                 k.source_url.as_ref(),
+                k.setup.pricing_url.as_ref(),
             ]
             .into_iter()
             .flatten()
@@ -1244,6 +1295,81 @@ mod tests {
             assert!(text.contains("https://"), "{table} lost its links");
         }
         assert_eq!(plain_links("url = 'HTTP://example.com'"), 1);
+    }
+
+    /// Every entry's setup facts: a cost word from the fixed set, a short cost sentence, a checked date, https pricing.
+    #[test]
+    fn every_setup_is_complete_and_short() {
+        let kinds = [
+            "copilot",
+            "kiro",
+            "kilo",
+            "mistral-vibe",
+            "cline",
+            "hermes",
+            "qwen",
+            "droid",
+            "auggie",
+        ];
+        for name in kinds {
+            assert!(
+                known().iter().any(|k| k.name == name && k.acp),
+                "{name} missing"
+            );
+        }
+        for k in known().iter().filter(|k| k.acp && !k.service) {
+            let s = &k.setup;
+            // The window types these into a terminal tab and never presses Return: a newline (or any control
+            // character) in the text would run it.
+            let typed = s.install.iter().chain(s.install_script.iter());
+            assert!(
+                !typed.flat_map(|w| w.chars()).any(char::is_control),
+                "{}: a control character in the install text",
+                k.name
+            );
+            assert!(
+                [
+                    "free_plan",
+                    "free_limited",
+                    "free_models",
+                    "own_model",
+                    "paid_plan",
+                    "paid_key",
+                    "unknown"
+                ]
+                .contains(&s.cost.as_str()),
+                "{}: cost {}",
+                k.name,
+                s.cost
+            );
+            if s.cost == "unknown" {
+                continue; // the window says "Cost not checked"
+            }
+            let line = s.cost_line.as_deref().unwrap_or_default();
+            assert!(
+                line.chars().count() < 140 && line.ends_with('.'),
+                "{}: {line}",
+                k.name
+            );
+            let checked = s.checked.as_deref().unwrap_or_default();
+            assert!(
+                checked.len() == 10 && checked.split('-').all(|p| p.parse::<u32>().is_ok()),
+                "{}: checked {checked}",
+                k.name
+            );
+            assert!(
+                s.pricing_url
+                    .as_deref()
+                    .is_some_and(|u| u.starts_with("https://")),
+                "{}: pricing_url",
+                k.name
+            );
+            assert!(
+                !s.install.is_empty() || s.install_script.is_some(),
+                "{}: no install",
+                k.name
+            );
+        }
     }
 
     #[test]
@@ -1270,6 +1396,7 @@ mod tests {
             diagnostics: String::new(),
             models: vec![],
             efforts: vec![],
+            setup: None,
         };
         let text = diagnostics(&row);
         assert_eq!(

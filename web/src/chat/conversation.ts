@@ -65,13 +65,15 @@ function unwrapPastes(raw: string): string {
 const BRIEF = /^You are [^\n]{1,120}, a teammate of this user in Nunchiro\./;
 /** Ticket 1085: every line the core types into a seat's box by itself, also arriving as user messages: a worker's wake
  *  line (sessions/wake.rs `line`), the room's notice (room.rs `notice`), and auto-advance's heartbeat and nudge
- *  (advance.rs `beat_line`, `nudge_line`, `forward_line` to a Builder, and the dependency lines; the pattern's group 1, the core's team lines). crates/nunchiro-core/tests/fixtures/automatic-lines.json lists each form; a
+ *  (advance.rs `beat_line`, `nudge_line`, `stall_line`, `forward_line` to a Builder, and the dependency lines; the pattern's group 1, the core's team lines). crates/nunchiro-core/tests/fixtures/automatic-lines.json lists each form; a
  *  core test proves the core types only those, web/tests/wake-lines-1085.spec.ts that each one folds. */
 const BEAT_PART = String.raw`\d+ (?:reports? waits? for review|approved waits? to merge|seats? stalled)`;
 /** Task dependencies (advance.rs `landed_line`, `dropped_line`): what a landing freed, or who waited for a dropped task. */
 const RELEASE = String.raw`".{1,200}?" (?:landed\.(?: .{1,2000}? no longer waits?: start (?:it|them) when you are ready\.)?(?: ".{1,200}?" still waits for \d+ tasks?\.)*|was dropped\.(?: ".{1,200}?" waited for it: stop waiting \(nunchiro task after t\d+ --none\) or drop it\.)+)`;
+/** A stalled seat's card, told to the lead (advance.rs `stall_line`). */
+const STALL = String.raw`Stalled: .{1,200}? \(\S{1,80}\): .{1,200}?, still after one nudge\. If \`nunchiro task show \S{1,80}\` still lists it as stalled, replace it now without asking the user: nunchiro session close \S{1,80}, then nunchiro task staff \S{1,80} .{1,80}? with its brief\. Ask the user instead only if your brief or the user says so, or it is a teammate you did not open\.`;
 const AUTO = new RegExp(
-  String.raw`^(?:worker .{1,200}? (?:done|blocked \((?:question|permission)\)|failed|exited|ended a turn \(no report yet\)|waits for your answer to its question in the room)(?:; report says: "[^"\n]*")?|\d+ new messages?: run nunchiro agent check|(Team: ${BEAT_PART}(?:, ${BEAT_PART})*\.|Lead: you have been quiet for \d+ minutes with the task open; finish it or say what blocks you\.|Review round \d+ of \d+ asked for changes at [0-9a-f ]{1,200}: .{0,4000}?\. .{1,200}? sends you the full findings as a room message \(agent send\): read them with \`nunchiro agent check\`, fix them, commit, and write REPORT\.md again\.|${RELEASE}))`,
+  String.raw`^(?:worker .{1,200}? (?:done|blocked \((?:question|permission)\)|failed|exited|ended a turn \(no report yet\)|waits for your answer to its question in the room)(?:; report says: "[^"\n]*")?|\d+ new messages?: run nunchiro agent check|(Team: ${BEAT_PART}(?:, ${BEAT_PART})*\.|Lead: you have been quiet for \d+ minutes with the task open; finish it or say what blocks you\.|${STALL}|Review round \d+ of \d+ asked for changes at [0-9a-f ]{1,200}: .{0,4000}?\. .{1,200}? sends you the full findings as a room message \(agent send\): read them with \`nunchiro agent check\`, fix them, commit, and write REPORT\.md again\.|${RELEASE}))`,
 );
 const AUTO_LINE = new RegExp(`${AUTO.source}$`);
 

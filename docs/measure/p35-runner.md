@@ -7,9 +7,26 @@ makes a fresh copy per run and checks each task's acceptance.
 ## Before the first run
 
 - Use an isolated RC: its own `HOME` and `NUNCHIRO_HOME`, never the owner's app or home.
-- No mail or calendar account or connector is signed in on that RC. The mail tasks work on files only. On an Outbox
+- Tasks 8-10 run with the account connectors off (below). The mail tasks work on files only. On an Outbox
   card, press Discard, never Send.
 - `python3` and `git` on the PATH.
+
+### Tasks 8-10: the Assistant sees no account connector
+
+The RC's Claude may be signed in to an account whose claude.ai connectors (Gmail, Calendar) are real. Before the first
+of tasks 8-10, cut them off for the Assistant's seat; the fixtures are files, so the seat needs no tool server at all.
+
+1. With the RC's `NUNCHIRO_HOME` set, turn **Settings > Assistants > Connectors > Account connectors** off. Without the
+   window: stop the RC's core, add `"home.connectors_off": true` under `"features"` in `$NUNCHIRO_HOME/settings.json`,
+   start it again. The seat then starts with `--strict-mcp-config` and an empty `--mcp-config`, so no MCP server loads.
+2. Close any Assistant seat that was open before the change (the setting applies at the next start), then open it.
+3. Check before sending the task: `nunchiro agent list --json` gives the seat's id, `nunchiro agent get <id> --json`
+   its `pid`, and `ps -ww -o command= -p <pid> | grep -c -- --strict-mcp-config` must print 1 (without `-ww`, macOS
+   cuts the line at the terminal width). If it does not, stop: do not send the task. This shows the flag was passed; it
+   is not proof that no connector loaded. The seat's lock hook also refuses every `mcp__` tool while the switch is off.
+4. Keep the Assistant's mode below "Full access, shell included" for tasks 8-10: in that mode its shell runs unasked
+   and could start another `claude` that loads the connectors.
+5. Do not ask the seat to list or call mail or calendar tools.
 
 ## One run
 
@@ -28,10 +45,12 @@ makes a fresh copy per run and checks each task's acceptance.
 Task 6 (a worker stops answering) needs three more steps, with the RC's `NUNCHIRO_HOME` set:
 
 - When the lead has handed the work to a worker and that worker is working: `nunchiro agent list --json > before.json`.
+  Stop the worker right after it; the check reads the time `before.json` was saved, so do not copy or edit the file.
 - Stop that worker: `nunchiro agent get <worker id> --json` gives its `pid`; check with `ps -o command= -p <pid>` that
   it is the worker's agent, then `kill -STOP <pid>`. This is the test, not an owner touch. Never stop any other process.
-- When the task has ended: `nunchiro agent list --json > after.json`, then `kill -CONT <pid>`, and check with
-  `--stalled <worker id> --agents-before before.json --agents-after after.json`.
+- When the task has ended: `nunchiro events --history 2 > events.ndjson` (the core's journal of every session start
+  and state; it still holds a worker the lead closed, which `agent list` may not), then `kill -CONT <pid>`, and
+  check with `--stalled <worker id> --agents-before before.json --events events.ndjson`.
 
 Task 9: when the approval card for the reply shows in the window, add `--card-shown` to the check, then press Discard.
 
@@ -44,7 +63,7 @@ Task 9: when the approval card for the reply shows in the window, add `--card-sh
 | 3 | the suite is green; `parse_number` is in no file; `calc/numbers.py` defines `to_number` and the other four files use it |
 | 4 | on `main` (the branch, not the working copy): the suite is green with at least 2 new tests, `mul 4 3` prints 12, `median 3 1 2` prints 2 and `median 1 2 3 4` prints 2.5 |
 | 5 | `REVIEW.md` at the repository root names line 15 of the patched `calc/stats.py` (`stats.py:15` or "line 15") and at most 3 lines in all (`stats.py:N`, "line N", lists, and every line of a range such as "lines 1-40") |
-| 6 | the suite is green with a new test and `pow 2 10` prints 1024; the stalled worker is in `before.json`, and `after.json` holds an agent session that `before.json` does not |
+| 6 | the suite is green with a new test and `pow 2 10` prints 1024; the stalled worker is in `before.json`, and the journal shows a session of this run's repository that `before.json` does not hold, started after `before.json` was saved, that went to work (a shell or a seat nobody prompted does not count) |
 | 7 | origin's `main` is unchanged; a new branch on origin has the `mod` change (suite green, `mod 7 3` prints 1) and `PULL_REQUEST.md` at its tip naming every file it changes |
 | 8 | at least 9 of the 10 mails are in `labels/<right label>/` and in no other label |
 | 9 | `drafts/` holds a mail to the sender with Subject "Re: <subject>" and a body; `sent/` is empty; the card was seen |
@@ -58,3 +77,12 @@ After all 30 runs: `python3 -B scripts/measure/scorecard.py bottasks report`. It
 that passed with 0 touches, of 30) and `bot_owner_touches` (the median over the 30 runs) into
 `docs/measure/manual-<date>.json` only when every task has its three runs on one fixture version; otherwise it says what
 is missing. `scorecard.py page` then scores p35 from them.
+
+## Changes
+
+- Task 6 reads the core's event journal, where it read `agent list` saved at the end. Reason: the acceptance is that
+  a fresh conversation was started, and a list taken at the end cannot show a fresh worker the lead closed in between
+  (a closed row can leave the list), so a run that met the acceptance failed. Not easier: the fresh session must be
+  of this run's repository, start after the stall and go to work, none of which the list asked; a shell, a seat
+  nobody prompted and a worker from before the stall do not count. A task 6 run checked the old way is checked again
+  with `--events`.

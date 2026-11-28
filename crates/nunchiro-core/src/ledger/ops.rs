@@ -458,7 +458,7 @@ pub(crate) fn serve(
         }
         // Slice i: the user's choices for this place (`text`): `way` solo|team|strict, `grant` ask|edits. The
         // place's lead hears a new way in the room.
-        op @ ("way" | "grant" | "auto" | "cap" | "account") => {
+        op @ ("way" | "grant" | "auto" | "cap" | "account" | "merge-ask") => {
             if who.session.is_some() && op == "account" {
                 return Err("only the user sets the account a place's seats start on (`nunchiro task account <label> --project DIR` in the user's shell, or Settings > Team)".into());
             }
@@ -478,6 +478,14 @@ pub(crate) fn serve(
                 "way" => ledger.set_place(place, Some(ask.text.trim()), None, None)?,
                 "grant" => ledger.set_place(place, None, Some(ask.text.trim()), None)?,
                 "account" => ledger.set_account(place, known_account(&home, ask.text.trim())?)?,
+                "merge-ask" => ledger.set_ask_merge(
+                    place,
+                    match ask.text.trim() {
+                        "on" => true,
+                        "off" => false,
+                        _ => return Err("asking before merging task work is on or off".into()),
+                    },
+                )?,
                 "cap" => ledger.set_cap(
                     place,
                     ask.text
@@ -504,6 +512,12 @@ pub(crate) fn serve(
                     )
                 } else if op == "auto" {
                     crate::advance::auto_line(now_is.auto)
+                } else if op == "merge-ask" {
+                    if now_is.ask_merge {
+                        "The user wants a merge card again before task work merges here: `nunchiro task ask-merge <id>` asks them.".to_string()
+                    } else {
+                        "The user lets reviewed task work merge into your working branch here without a card: `nunchiro task ask-merge <id>` then tells you to merge it. Never into the default branch: that still takes the user's card.".to_string()
+                    }
                 } else if op == "account" {
                     match &now_is.account {
                         Some(label) => format!(
@@ -769,6 +783,17 @@ pub(crate) fn serve(
                     view.task.id
                 ));
             }
+            // Owner direction: reviewed task work merges into the lead's working branch with no card, unless the user
+            // asks for one here. The default branch always takes the card.
+            if !ledger.place(&view.task.place).ask_merge
+                && let Some(branch) = working_branch(&view.task.place)
+            {
+                ledger.merge_ok(&view.task.id, &revision, now)?;
+                crate::events::tasks(&view.task.place);
+                return Ok(crate::api::Reply::Text {
+                    text: merged_line(&view.task.id, &view.task.title, &revision, &branch),
+                });
+            }
             let session = who.session.clone().unwrap_or_default();
             lock()?.ask_merge(&session, &view.task, &revision)?;
             return Ok(crate::api::Reply::Tasks {
@@ -821,4 +846,27 @@ fn cap(word: &str) -> String {
     c.next()
         .map(|f| f.to_uppercase().chain(c).collect())
         .unwrap_or_default()
+}
+
+/// The project checkout's branch a lead may merge reviewed task work into with no card: a named branch that is not the
+/// default one (origin's, or `main`/`master`). None for the default branch, a detached HEAD or an unreadable checkout.
+pub(super) fn working_branch(project: &Path) -> Option<String> {
+    let read = |args: &[&str]| {
+        crate::process::git_read(project, args, std::time::Duration::from_secs(10))
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o).trim().to_string())
+    };
+    let branch = read(&["symbolic-ref", "--quiet", "--short", "HEAD"]).filter(|b| !b.is_empty())?;
+    let default = crate::auto_pull::origin_default(project).ok();
+    (!["main", "master"].contains(&branch.as_str()) && default.as_deref() != Some(branch.as_str()))
+        .then_some(branch)
+}
+
+/// What the lead is told when its reviewed task work needs no card.
+pub(super) fn merged_line(task: &str, title: &str, revision: &str, branch: &str) -> String {
+    format!(
+        "No card needed: this project merges reviewed task work into your working branch. Merge task {task} ({title}) \
+         now into {branch}, exactly the reviewed commit (`git merge {revision}`), with the message \"Merge task {task}: \
+         {title}\". Never into the default branch: it changes only through a pull request."
+    )
 }

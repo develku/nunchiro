@@ -172,7 +172,7 @@ pub enum SettingKind {
 
 /// A plugin id: a widget name with no `__` (it separates id and part) and no `_` at the end (`plugin__x___c` would
 /// read as plugin `x`, part `_c`).
-fn valid_id(id: &str) -> bool {
+pub(crate) fn valid_id(id: &str) -> bool {
     approval::valid_name(id) && !id.contains("__") && !id.ends_with('_')
 }
 /// The widget name of one part, `plugin__<id>__<part>`: plain widget-name characters, so a panel is placed, framed
@@ -374,6 +374,51 @@ pub struct Part {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub on_error: Option<OnError>,
 }
+/// A plugin with a check keeps the rule from before access: any change asks again, because a check reads (and can
+/// replace) every message agents, schedules and tokens send, so a changed script must not run unreviewed.
+pub(crate) fn hash_only(p: &Plugin) -> bool {
+    !p.gate.is_empty()
+}
+/// What a plugin can reach, one line each, as its approval records it: its author, every part with its command line
+/// (and a panel's interval), and each host, folder, message box, action and failure rule a part has. A change that
+/// adds a line asks for approval again and the sheet lists it; a change to its scripts or texts alone stays approved
+/// (Orca re-asks only for added access: docs/plugins.md), unless the plugin has a check (`hash_only`).
+pub(crate) fn access(p: &Plugin) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for part in parts(p) {
+        let at = format!("{} {}", part.kind, part.name);
+        out.extend(part.network.iter().map(|h| format!("{at} reaches {h}")));
+        out.extend(part.read.iter().map(|r| format!("{at} reads {r}")));
+        if part.writes_draft {
+            out.insert(format!("{at} writes into the message box"));
+        }
+        let word = |v: serde_json::Value| v.as_str().unwrap_or_default().to_string();
+        if let Some(on) = part.check_on {
+            out.insert(format!(
+                "{at} runs on {}",
+                word(serde_json::to_value(on).unwrap_or_default())
+            ));
+        }
+        if let Some(e) = part.on_error {
+            out.insert(format!(
+                "{at} when it fails {}",
+                word(serde_json::to_value(e).unwrap_or_default())
+            ));
+        }
+        if let Some(secs) = part.interval_secs {
+            out.insert(format!("{at} runs every {secs} s"));
+        }
+        out.insert(format!("{at} runs {:?}", part.runs));
+        out.insert(at);
+    }
+    for panel in &p.panel {
+        out.insert(format!("panel {} is a {} panel", panel.name, panel.kind));
+    }
+    if let Some(a) = &p.author {
+        out.insert(format!("author {a}"));
+    }
+    out
+}
 pub(crate) fn parts(p: &Plugin) -> Vec<Part> {
     let part = |name: &String,
                 title: &Option<String>,
@@ -474,6 +519,14 @@ fn save(home: &Path, store: &Store) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(store).map_err(|e| e.to_string())?;
     crate::store::atomic_write(&home.join(STORE), &bytes)
 }
+/// Switches a plugin off (an install from the catalogue).
+pub(crate) fn turn_off(home: &Path, id: &str) -> Result<(), String> {
+    let mut store = load(home);
+    if store.on.remove(id) {
+        save(home, &store)?;
+    }
+    Ok(())
+}
 /// A part's plugin is on (the switch on the Plugins page); its approval is checked separately.
 pub(crate) fn on(home: &Path, name: &str) -> Result<(), String> {
     match split(name) {
@@ -568,6 +621,9 @@ pub struct Listed {
     /// Absent when the folder or its manifest cannot be read (`error` says why).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub state: Option<approval::State>,
+    /// Changed since its approval but asking for nothing new (`approval::View::updated`): still approved.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub updated: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plugin: Option<Plugin>,
     /// The current value of each setting (stored, else the default).
@@ -593,9 +649,9 @@ pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
             let on = store.on.contains(&id);
             let name = format!("{PREFIX}{id}");
             let parsed = approval::status(home, &name)
-                .and_then(|v| Ok((v.state, parse(&v.manifest_text, &id)?)));
+                .and_then(|v| Ok((v.state, v.updated, parse(&v.manifest_text, &id)?)));
             match parsed {
-                Ok((state, p)) => {
+                Ok((state, updated, p)) => {
                     let scripts =
                         p.command.len() + p.panel.iter().filter(|x| x.kind == "script").count();
                     let needs = if scripts > 0 && !script_on {
@@ -615,6 +671,7 @@ pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
                         id,
                         on,
                         state: Some(state),
+                        updated,
                         plugin: Some(p),
                         error: None,
                         needs,
@@ -625,6 +682,7 @@ pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
                     id,
                     on,
                     state: None,
+                    updated: false,
                     plugin: None,
                     values: BTreeMap::new(),
                     error: Some(e),
@@ -737,6 +795,12 @@ pub enum Action {
     Remove {
         id: String,
     },
+    /// The catalogue's plugins (`plugins_online.rs`); the network, so off every lock.
+    Catalog,
+    /// Installs or updates a plugin from the catalogue: off and not approved until the owner reviews it.
+    Install {
+        id: String,
+    },
 }
 
 /// Dispatch for `Request::Plugin` (server.rs and http/answer.rs, after their owner checks); runs after the lock.
@@ -764,6 +828,13 @@ pub(crate) fn handle(
     };
     match action {
         Action::List => listed(home),
+        Action::Catalog => crate::plugins_online::Catalog::new(home)
+            .entries()
+            .map(|catalog| Reply::PluginCatalog { catalog }),
+        Action::Install { id } => {
+            crate::plugins_online::Catalog::new(home).install(&id)?;
+            listed(home)
+        }
         Action::Set { id, on } => {
             read(home, &id)?;
             let mut store = load(home);
@@ -881,22 +952,7 @@ pub(crate) fn handle(
             if !approval::valid_name(&id) {
                 return Err("invalid plugin id".into());
             }
-            let from = dir(home).join(&id);
-            if !from.symlink_metadata().is_ok_and(|m| m.is_dir()) {
-                return Err(format!("no plugin {id}"));
-            }
-            let removed = dir(home).join(".removed");
-            fs::DirBuilder::new()
-                .recursive(true)
-                .mode(0o700)
-                .create(&removed)
-                .map_err(|e| e.to_string())?;
-            fs::rename(
-                &from,
-                removed.join(format!("{id}-{}", crate::queue::now_ms())),
-            )
-            .map_err(|e| e.to_string())?;
-            crate::sandbox::stop_subjects(home, &part_name(&id, ""));
+            set_aside(home, &id)?;
             let mut store = load(home);
             store.on.remove(&id);
             store.settings.remove(&id);
@@ -906,6 +962,33 @@ pub(crate) fn handle(
             listed(home)
         }
     }
+}
+
+/// Moves `plugins/<id>` to `plugins/.removed/` (moving it back undoes it) and stops its runs: Remove, and an
+/// update from the catalogue before the new folder goes in.
+pub(crate) fn set_aside(home: &Path, id: &str) -> Result<(), String> {
+    let from = dir(home).join(id);
+    if !from.symlink_metadata().is_ok_and(|m| m.is_dir()) {
+        return Err(format!("no plugin {id}"));
+    }
+    let removed = dir(home).join(".removed");
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&removed)
+        .map_err(|e| e.to_string())?;
+    // Two set aside in one millisecond (an update right after another) get their own names.
+    let at = crate::queue::now_ms();
+    let to = (0..)
+        .map(|n| match n {
+            0 => removed.join(format!("{id}-{at}")),
+            n => removed.join(format!("{id}-{at}-{n}")),
+        })
+        .find(|p| p.symlink_metadata().is_err())
+        .unwrap_or_default();
+    fs::rename(&from, to).map_err(|e| e.to_string())?;
+    crate::sandbox::stop_subjects(home, &part_name(id, ""));
+    Ok(())
 }
 
 /// One part's result in `plugin check`.
@@ -1015,6 +1098,7 @@ pub(crate) enum Asker {
     Agent,
     Schedule,
     Token,
+    Trigger,
 }
 /// A replaced message is cut to this many bytes.
 const MAX_TEXT: usize = 16 * 1024;

@@ -14,6 +14,10 @@ use std::path::Path;
 
 /// Settings > Assistants: the Home seat's mode (`Mode`'s names; absent or unreadable = Ask).
 pub(crate) const MODE_KEY: &str = "home.chief_mode";
+/// Settings > Assistants: `true` starts the seat with no MCP server at all, so the claude.ai account connectors (mail,
+/// calendar) never load (probe 2026-11-28: `--strict-mcp-config` with an empty `--mcp-config` lists no `mcp__` tool).
+/// Absent, null or false = the connectors load as before.
+pub(crate) const CONNECTORS_OFF_KEY: &str = "home.connectors_off";
 /// The two connectors (the Google Calendar one did not load in the CLI on 2026-11-20); one list with the outward hook's.
 pub use crate::outward::{CALENDAR, MAIL};
 /// The tools the seat may call as the mode allows. No draft tools: a draft is an Outbox card's own hashed copy.
@@ -158,19 +162,35 @@ pub(crate) fn deny_arg(servers: &[String]) -> String {
 /// The lock's launch arguments (`mode` already `effective`). Fable check M3: `--restricted` keeps the claude.ai
 /// connectors, `--settings` hooks and `--plugin-dir` (probe 2026-11-20), ignores user, project and local settings,
 /// confines the file tools to the working folders and refuses Skip permissions; `--tools` names the built-ins.
-pub(crate) fn args(mode: Mode, servers: &[String]) -> Vec<String> {
+/// `connectors_off` (`CONNECTORS_OFF_KEY`) adds the strict empty MCP config, after the first two words (a side chat
+/// drops those).
+pub(crate) fn args(mode: Mode, servers: &[String], connectors_off: bool) -> Vec<String> {
     let claude_mode = if mode == Mode::Ask {
         "manual"
     } else {
         "acceptEdits"
     };
-    vec![
+    let mut out = vec![
         "--permission-mode".into(),
         claude_mode.into(),
         "--restricted".into(),
         format!("--tools={}", BUILTIN.join(",")),
         deny_arg(servers),
-    ]
+    ];
+    if connectors_off {
+        // The `=` form: `--mcp-config` is variadic, so a bare value list could swallow a later word.
+        out.push("--strict-mcp-config".into());
+        out.push(r#"--mcp-config={"mcpServers":{}}"#.into());
+    }
+    out
+}
+
+/// Settings save for `CONNECTORS_OFF_KEY`: null or a boolean.
+pub(crate) fn check_connectors_off(value: &Value) -> Result<(), String> {
+    match value {
+        Value::Null | Value::Bool(_) => Ok(()),
+        _ => Err(format!("{CONNECTORS_OFF_KEY}: expected true or false")),
+    }
 }
 
 /// The arguments carry the lock (`args` or `deny_arg`).
@@ -259,27 +279,69 @@ const UNASKED_VERBS: &[&str] = &[
     "agent", "task", "schedule", "role", "note", "team", "outbox", "events", "skill",
 ];
 
+/// Only ASCII letters, digits, marks and the plain space: the shell splits words on its own whitespace only, so a
+/// no-break space (or any other Unicode or control space) would join what `split(' ')` reads as two words.
+fn plain(command: &str) -> bool {
+    command.bytes().all(|b| b.is_ascii_graphic() || b == b' ')
+}
+
 /// Fable check S3: one `nunchiro` command on the verb list and nothing else: no separator, redirect, substitution,
 /// subshell, line break, leading `VAR=` or `--machine`.
 pub fn nunchiro_line(command: &str) -> bool {
-    let command = command.trim();
-    let mut words = command.split_whitespace();
-    words.next() == Some("nunchiro")
+    let command = command.trim_matches(' ');
+    let mut words = command.split(' ').filter(|w| !w.is_empty());
+    plain(command)
+        && words.next() == Some("nunchiro")
         && words
             .next()
             .is_some_and(|verb| UNASKED_VERBS.contains(&verb))
-        && !command
-            .split_whitespace()
-            .any(|w| w.starts_with("--machine"))
+        && !command.split(' ').any(|w| w.starts_with("--machine"))
         && !command.contains([
             ';', '&', '|', '<', '>', '(', ')', '$', '`', '\\', '\n', '\r',
         ])
 }
 
+const SETUP: &str = "Home seat: a setup step of its brief";
+
+/// The two setup steps a seat's brief names, unasked in every mode (they asked before the seat was ready):
+/// `nunchiro task list`, and `cat` of a bot's SOUL file in this core's `team/<bot>/` folder. Exactly that line, plain
+/// ASCII, the path absolute and of `[A-Za-z0-9._/-]` only (no glob, quote or shell mark); the file resolves to
+/// `<team>/<bot>/SOUL.md` (a linked bot folder or file resolves elsewhere: another session could plant one) and has one link (a hard link
+/// shows another file's content). Anything else asks as before.
+pub fn setup_line(home: &Path, command: &str) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    if !plain(command) {
+        return false;
+    }
+    let words: Vec<&str> = command.split(' ').filter(|w| !w.is_empty()).collect();
+    match words[..] {
+        ["nunchiro", "task", "list"] => true,
+        ["cat", path]
+            if path.starts_with('/')
+                && path.split('/').all(|c| c != ".." && c != ".")
+                && path
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"._/-".contains(&b)) =>
+        {
+            let (Ok(team), Ok(real)) = (
+                std::fs::canonicalize(home.join("team")),
+                std::fs::canonicalize(path),
+            ) else {
+                return false;
+            };
+            real.file_name() == Some("SOUL.md".as_ref())
+                && real.parent().and_then(Path::parent) == Some(team.as_path())
+                && std::fs::symlink_metadata(&real)
+                    .is_ok_and(|m| m.file_type().is_file() && m.nlink() == 1)
+        }
+        _ => false,
+    }
+}
+
 /// Fail closed: a built-in runs only from `BUILTIN`, an MCP tool only by exact read name or as a spent outward call.
 /// `input` is the call's `tool_input` (a Bash line is read from it). Fable review R3: the file tools are never allowed
 /// by the hook (Claude's own mode and `--restricted` decide them), so no path outside the folder gets a hook yes.
-pub fn decide(tool: &str, input: &Value, mode: Mode) -> Decision {
+pub fn decide(tool: &str, input: &Value, mode: Mode, home: &Path) -> Decision {
     let full = mode >= Mode::Full;
     let allow_full = if full {
         Decision::Allow(FULL)
@@ -289,6 +351,14 @@ pub fn decide(tool: &str, input: &Value, mode: Mode) -> Decision {
     let Some(rest) = tool.strip_prefix("mcp__") else {
         return match tool {
             "Bash" if mode == Mode::FullShell => Decision::Allow(FULL),
+            "Bash"
+                if input
+                    .get("command")
+                    .and_then(Value::as_str)
+                    .is_some_and(|c| setup_line(home, c)) =>
+            {
+                Decision::Allow(SETUP)
+            }
             "Bash"
                 if full
                     && input
@@ -318,6 +388,17 @@ pub fn decide(tool: &str, input: &Value, mode: Mode) -> Decision {
             "Home seat: mail and calendar are read only and other connectors are off; an outward action needs an Outbox card",
         )
     }
+}
+
+/// The hook flag `spawn` adds when the seat started with connectors off (its arguments hold `--strict-mcp-config`).
+pub const NO_MCP_FLAG: &str = "--no-mcp";
+
+/// Layer 2 of connectors off: with `no_mcp`, every MCP tool is refused, whatever server it came from; otherwise `decide`.
+pub fn decide_locked(tool: &str, input: &Value, mode: Mode, home: &Path, no_mcp: bool) -> Decision {
+    if no_mcp && tool.starts_with("mcp__") {
+        return Decision::Deny("Home seat: account connectors are off (Settings > Assistants)");
+    }
+    decide(tool, input, mode, home)
 }
 
 /// Asks the core over `sock` to spend the owner's yes for this exact call (`Request::OutboxSpend`, lane 2: the card's
@@ -377,15 +458,57 @@ mod tests {
     }
 
     #[test]
+    fn connectors_off_adds_the_strict_empty_mcp_config_only_when_set() {
+        let strict = |a: &[String]| a.iter().any(|w| w == "--strict-mcp-config");
+        for m in [Mode::Ask, Mode::FullShell] {
+            assert!(!strict(&args(m, &[], false)));
+            let on = args(m, &[], true);
+            assert!(strict(&on) && locked(&on), "{on:?}");
+            assert!(on.ends_with(&s(&[
+                "--strict-mcp-config",
+                r#"--mcp-config={"mcpServers":{}}"#
+            ])));
+        }
+        assert!(
+            check_connectors_off(&json!(true)).is_ok()
+                && check_connectors_off(&json!(null)).is_ok()
+        );
+        assert!(check_connectors_off(&json!("yes")).is_err());
+        // Layer 2: with the flag every MCP tool is refused, a read and a gated send too; built-ins are unchanged.
+        let home = Path::new("/nonexistent-home");
+        let (read, send) = (
+            format!("mcp__{MAIL}__get_thread"),
+            format!("mcp__{MAIL}__send_message"),
+        );
+        for tool in [read.as_str(), send.as_str(), "mcp__fake__list"] {
+            assert!(
+                matches!(
+                    decide_locked(tool, &json!({}), Mode::Full, home, true),
+                    Decision::Deny(_)
+                ),
+                "{tool}"
+            );
+        }
+        assert_eq!(
+            decide_locked(&read, &json!({}), Mode::Full, home, false),
+            decide(&read, &json!({}), Mode::Full, home)
+        );
+        assert_eq!(
+            decide_locked("Read", &json!({}), Mode::Ask, home, true),
+            Decision::Mode
+        );
+    }
+
+    #[test]
     fn argv_per_mode_and_rule_six() {
         let servers = s(&["memo", "claude_ai_Claude_Docs"]);
         assert_eq!(
-            args(Mode::Ask, &servers)[..2],
+            args(Mode::Ask, &servers, false)[..2],
             s(&["--permission-mode", "manual"])
         );
         for m in [Mode::AcceptEdits, Mode::Full, Mode::FullShell] {
             assert_eq!(
-                args(m, &servers)[..2],
+                args(m, &servers, false)[..2],
                 s(&["--permission-mode", "acceptEdits"])
             );
         }
@@ -395,7 +518,7 @@ mod tests {
         assert_eq!(effective(Mode::Ask, false), Mode::Ask);
         assert_eq!(effective(Mode::FullShell, true), Mode::FullShell);
         for m in [Mode::Ask, Mode::AcceptEdits, Mode::Full, Mode::FullShell] {
-            let a = args(m, &servers);
+            let a = args(m, &servers, false);
             assert!(locked(&a) && a.contains(&"--restricted".to_string()));
             assert!(a.contains(&"--tools=Read,Grep,Glob,Edit,Write,Bash".to_string()));
             // No mode is Skip permissions (M3).
@@ -427,7 +550,8 @@ mod tests {
     fn hook_fails_closed_and_shell_follows_the_mode() {
         let none = json!({});
         let bash = |c: &str| json!({"command": c});
-        let d = |tool: &str, m| decide(tool, &none, m);
+        let home = Path::new("/nonexistent-home");
+        let d = |tool: &str, m| decide(tool, &none, m, home);
         for tool in [
             "mcp__claude_ai_Gmail__search_threads",
             "mcp__claude_ai_Google_Calendar__list_events",
@@ -473,7 +597,7 @@ mod tests {
         }
         // Decision B: Bash asks in Full access (one plain `nunchiro` line on the verb list excepted) and not in "Full
         // access, shell included".
-        let b = |c: &str, m| decide("Bash", &bash(c), m);
+        let b = |c: &str, m| decide("Bash", &bash(c), m, home);
         assert!(matches!(b("echo hi", Mode::Full), Decision::Ask(_)));
         for line in [
             "nunchiro task list",
@@ -483,7 +607,7 @@ mod tests {
             assert!(matches!(b(line, Mode::Full), Decision::Allow(_)), "{line}");
         }
         assert!(matches!(
-            b("nunchiro task list", Mode::AcceptEdits),
+            b("nunchiro agent list", Mode::AcceptEdits),
             Decision::Ask(_)
         ));
         for line in [
@@ -499,6 +623,8 @@ mod tests {
             "nunchiro machine add x",
             "nunchiro --machine m task list",
             "nunchiro task list --machine=m",
+            "nunchiro\u{a0}task\u{a0}x/y",
+            "nunchiro task\u{2028}list",
             "nunchiro",
         ] {
             assert!(matches!(b(line, Mode::Full), Decision::Ask(_)), "{line}");
@@ -511,6 +637,68 @@ mod tests {
             (named("full-access-shell"), named("bogus")),
             (Mode::FullShell, Mode::Ask)
         );
+    }
+
+    // A bot-task trial: the chief of staff's first turn asked twice before it was ready, for the two setup steps its
+    // brief names. Those two run unasked in every mode; any other line, file or form still asks.
+    #[test]
+    fn the_seats_own_setup_steps_run_unasked() {
+        let home = std::env::temp_dir().join(format!("home-lock-setup-{}", std::process::id()));
+        let bot = home.join("team/593a1861");
+        std::fs::create_dir_all(&bot).unwrap();
+        std::fs::write(bot.join("SOUL.md"), "who I am").unwrap();
+        std::fs::write(bot.join("MEMORY.md"), "notes").unwrap();
+        std::os::unix::fs::symlink("/etc/hosts", bot.join("LINK.md")).unwrap();
+        let other = home.join("team/other");
+        std::fs::create_dir_all(&other).unwrap();
+        std::os::unix::fs::symlink("/etc/hosts", other.join("SOUL.md")).unwrap();
+        let away = home.join("away");
+        std::fs::create_dir_all(&away).unwrap();
+        std::fs::write(away.join("SOUL.md"), "not a bot").unwrap();
+        std::os::unix::fs::symlink(&away, home.join("team/linked")).unwrap();
+        std::fs::create_dir_all(home.join("team/hard")).unwrap();
+        std::fs::hard_link(away.join("SOUL.md"), home.join("team/hard/SOUL.md")).unwrap();
+        let b = |c: &str, m| decide("Bash", &json!({ "command": c }), m, &home);
+        let soul = format!("cat {}", bot.join("SOUL.md").display());
+        for m in [Mode::Ask, Mode::AcceptEdits, Mode::Full] {
+            assert!(
+                matches!(b("nunchiro task list", m), Decision::Allow(_)),
+                "{m:?}"
+            );
+            assert!(matches!(b(&soul, m), Decision::Allow(_)), "{m:?}");
+        }
+        for line in [
+            "nunchiro task list --all-places".to_string(),
+            "nunchiro agent list".into(),
+            "nunchiro task list; rm -rf x".into(),
+            "nunchiro\ntask\nlist".into(),
+            soul.replace(' ', "\n"),
+            format!("{soul}; rm -rf x"),
+            format!("{soul} /etc/hosts"),
+            format!("cat {}", bot.join("MEMORY.md").display()),
+            format!("cat {}", bot.join("LINK.md").display()),
+            format!("cat {}", other.join("SOUL.md").display()),
+            format!("cat {}", bot.join("../593a1861/SOUL.md").display()),
+            format!("cat {}", home.join("SOUL.md").display()),
+            format!("less {}", bot.join("SOUL.md").display()),
+            // Acceptance review: Unicode and control spaces the shell does not split on, a glob, a relative path, a
+            // linked bot folder, a hard link.
+            soul.replace(' ', "\u{a0}"),
+            soul.replace(' ', "\u{b}"),
+            soul.replace(' ', "\u{c}"),
+            soul.replace(' ', "\u{85}"),
+            soul.replace(' ', "\u{2028}"),
+            soul.replace(' ', "\t"),
+            "nunchiro\u{a0}task\u{a0}list".into(),
+            format!("cat {}", home.join("team/*/SOUL.md").display()),
+            format!("cat {}", home.join("team/59?a1861/SOUL.md").display()),
+            "cat team/593a1861/SOUL.md".into(),
+            format!("cat {}", home.join("team/linked/SOUL.md").display()),
+            format!("cat {}", home.join("team/hard/SOUL.md").display()),
+        ] {
+            assert!(matches!(b(&line, Mode::Ask), Decision::Ask(_)), "{line}");
+        }
+        let _ = std::fs::remove_dir_all(home);
     }
 
     /// A stand-in core for `OutboxSpend` (lane 2's rule: the card id once for the one approved hash, Err otherwise); it

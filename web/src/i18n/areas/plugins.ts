@@ -57,6 +57,20 @@ declare module '../index' {
     'plugins.ran': true;
     'plugins.ranEmpty': true;
     'plugins.drafted': true;
+    'plugins.sheet.asked': true;
+    'plugins.sheet.added': true;
+    'plugins.updated': true;
+    'plugins.browse.open': true;
+    'plugins.browse.title': true;
+    'plugins.browse.lede': true;
+    'plugins.browse.loading': true;
+    'plugins.browse.install': true;
+    'plugins.browse.installOf': true;
+    'plugins.browse.update': true;
+    'plugins.browse.updateOf': true;
+    'plugins.browse.installed': true;
+    'plugins.browse.network': true;
+    'plugins.browse.noNetwork': true;
   }
 }
 
@@ -117,4 +131,18 @@ export const en = {
   "plugins.ran": "{name}: {text}",
   "plugins.ranEmpty": "{name} ran and printed nothing.",
   "plugins.drafted": "{name} put its output in the message box. Nothing was sent.",
+  "plugins.sheet.asked": "asked once, and again when a change asks for more",
+  "plugins.sheet.added": "New since you approved it:",
+  "plugins.updated": "Its files changed since you approved it; it asks for nothing new, so it stays approved.",
+  "plugins.browse.open": "Browse plugins",
+  "plugins.browse.title": "Plugin catalogue",
+  "plugins.browse.lede": "Nunchiro's plugin catalogue on GitHub. Each file is checked against the catalogue before it is written; an installed plugin is off until you review it.",
+  "plugins.browse.loading": "Reading the catalogue…",
+  "plugins.browse.install": "Install",
+  "plugins.browse.installOf": "Install {name}",
+  "plugins.browse.update": "Update",
+  "plugins.browse.updateOf": "Update {name}",
+  "plugins.browse.installed": "Installed",
+  "plugins.browse.network": "reaches {hosts}",
+  "plugins.browse.noNetwork": "no network",
 };

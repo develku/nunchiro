@@ -92,17 +92,15 @@ fn hand_edits(kind: AgentKind) -> bool {
 #[derive(Clone, Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
-    /// Ticket 1083: the user's home (`$HOME`), read once when the core opens; the unset worktrees folder lies in it.
+    /// Ticket 1083: holds the unset `nunchiro/worktrees`, set at open: `$HOME`, or beside a core's own home (`worktree_user_home`).
     #[serde(skip)]
     user_home: PathBuf,
-    // v1a-06
-    machines: BTreeMap<String, crate::machines::Config>,
+    machines: BTreeMap<String, crate::machines::Config>, // v1a-06
     disable_hook_injection: bool,
     worktrees_dir: Option<PathBuf>,
     stale_after_ms: Option<u64>,
     permission_answers: BTreeMap<PathBuf, bool>,
-    // v1a-09
-    session_lifetime: Lifetime,
+    session_lifetime: Lifetime, // v1a-09
     start_at_login: bool,
     // v1b-19: off until the security review (ticket 21) turns it on.
     script_widgets: bool,
@@ -123,6 +121,8 @@ struct Settings {
     orchestration: OrchestrationSettings,
     // Ticket 211: canonical folders the owner allowed Usage to read through a link; `usage.rs` reads the file itself.
     usage_link_roots: Vec<PathBuf>,
+    triggers_port: Option<u16>, // the webhook port, absent 47800; `schedule/webhook.rs` reads the file itself
+    triggers_poll_secs: Option<u64>, // GitHub triggers' read interval, absent 120 s; `schedule/github.rs` reads it
     // Ticket 250: absorb features' own values by dotted key (`quit_settings` checks key and size); read with `feature`.
     features: BTreeMap<String, serde_json::Value>,
 }
@@ -381,8 +381,7 @@ pub struct Sessions {
     window_size: Option<(u16, u16)>,
     // Ticket 32: account folder -> its logout tab (in memory). While that row is listed, no agent starts on the folder.
     pub(crate) logouts: BTreeMap<PathBuf, String>,
-    // v1b-15
-    board_error: Option<String>,
+    board_error: Option<String>, // v1b-15
     // S9: the rows the board last observed, with the `board_key` they were built at.
     board_rows: Option<(u64, Vec<Session>)>,
     // S9: the `board_key` and time of the last board observation.
@@ -451,6 +450,9 @@ pub struct Sessions {
     /// Look 11-17 v8 (Home S2-B): the entries the owner asked to run again on a failed run's card; the schedule timer
     /// runs them off this lock (`schedule::fire`), as Run now.
     pub(crate) schedule_reruns: Vec<String>,
+    /// The owner's Start on a trigger's card: its id, the trigger, the run and the subject; the schedule timer starts
+    /// them off this lock (`schedule::fire`). The card stays until the start ran.
+    pub(crate) trigger_starts: Vec<(String, String, crate::schedule::Run, Option<String>)>,
     /// Ticket 1004: the check-ins that wait for the judge, at most one per task (`check_in_due`); the server's loop
     /// has them judged off this lock (`start_judge`: git is read there).
     pub(crate) check_ins: Vec<crate::ledger::CheckIn>,
@@ -577,8 +579,7 @@ impl Sessions {
             | Request::MachineTrust { .. } => {
                 Err("machine discovery requires unlocked owner dispatch".into())
             }
-            // v1a-06: transport requests are handled outside the registry lock.
-            Request::RemoteService { .. }
+            Request::RemoteService { .. } // v1a-06: transport requests are handled outside the registry lock
             | Request::Remote { .. }
             | Request::Forwarded { .. }
             | Request::MachineStatus { .. } => Err("transport requires owner dispatch".into()),
@@ -588,8 +589,7 @@ impl Sessions {
             Request::Browser { .. } | Request::BrowserNext | Request::BrowserDone { .. } => {
                 Err("browser verbs run only on the owner socket".into())
             }
-            // v1b-02
-            Request::ChatPage { .. } => Err("chat requires unlocked transport dispatch".into()),
+            Request::ChatPage { .. } => Err("chat requires unlocked transport dispatch".into()), // v1b-02
             Request::HandoffPreview { .. } | Request::HandoffSend { .. } => {
                 Err("handoff requires unlocked transport dispatch".into())
             }
@@ -603,13 +603,18 @@ impl Sessions {
                 Err("the PR view requires the window".into())
             }
             Request::PrBranch { .. } => Err("the PR view requires the window".into()), // ticket 373
-            Request::GitPush { .. } => Err("push requires the window".into()),
+            Request::GitPush { .. }
+            | Request::PrDraft { .. }
+            | Request::PrCreate { .. }
+            | Request::PrWrite { .. }
+            | Request::PrWriteCancel { .. } => {
+                Err("push requires the window".into())
+            }
             Request::LibsResolve { .. } | Request::LibsEntry { .. } => {
                 Err("libraries require owner dispatch".into()) // the socket server answers after its owner check
             }
-            // Ticket 573: answered by the socket server after its owner check.
             Request::TokenCreate { .. } | Request::TokenList | Request::TokenRevoke { .. } => {
-                Err("tokens require owner dispatch".into())
+                Err("tokens require owner dispatch".into()) // ticket 573: the socket server answers after its owner check
             }
             Request::AccountList
             | Request::AccountCheck { .. }
@@ -660,14 +665,13 @@ impl Sessions {
             Request::AcpAgents
             | Request::AcpAgentCheck { .. }
             | Request::AcpAgentAdd { .. }
-            | Request::AcpAgentLogin { .. } => {
-                Err("agent setup requires unlocked transport dispatch".into()) // V2-4b
-            }
-            Request::AcpAgentSignIn { .. }
+            | Request::AcpAgentLogin { .. }
+            | Request::AcpAgentSignIn { .. }
             | Request::AcpAgentSignInState { .. }
             | Request::AcpAgentSignInCancel { .. }
-            | Request::AcpAgentSignOut { .. } => {
-                Err("agent setup requires unlocked transport dispatch".into()) // ticket 358
+            | Request::AcpAgentSignOut { .. }
+            | Request::AcpAgentTry { .. } => {
+                Err("agent setup requires unlocked transport dispatch".into()) // V2-4b, ticket 358
             }
             Request::ExtensionsList
             | Request::ExtensionsMcpAdd { .. }
@@ -1398,6 +1402,9 @@ impl Sessions {
             | Request::Plugin { .. } => {
                 Err("widget requests run outside the registry lock".into())
             }
+            Request::Trigger { .. } => {
+                Err("trigger requests are the owner's socket's (`nunchiro trigger`)".into())
+            }
             // v1b-05
             Request::ImagePut { .. } => Err("image uploads run outside the registry lock".into()),
             // CHAT-MODELIST: the window's mode list; the owner path only (see `check_agent`).
@@ -1786,18 +1793,6 @@ fn retire_send(
 mod tests; // 2026-11-20: moved out for the 1 MiB publish scan
 
 #[cfg(test)]
-type BeforeDecide = Box<dyn FnOnce(&std::sync::Mutex<Sessions>)>;
-/// Ticket 32: the fake `claude` and `codex` unit tests run, set once (`agent_program`).
+mod test_hooks;
 #[cfg(test)]
-static FAKE_AGENTS: std::sync::OnceLock<(String, String)> = std::sync::OnceLock::new();
-#[cfg(test)]
-thread_local! {
-    // Ticket 32: runs at the start of `Launch::prepare` on the thread that prepares.
-    static IN_PREPARE: std::cell::Cell<Option<Box<dyn FnOnce()>>> = const { std::cell::Cell::new(None) };
-    static IN_HOOKS_CHECK: std::cell::Cell<Option<Box<dyn FnOnce() -> bool>>> = const { std::cell::Cell::new(None) };
-}
-#[cfg(test)]
-thread_local! {
-    // Ticket 39: runs in `handoff_send` between the first decision (and prepare) and the lock that decides again.
-    static BEFORE_DECIDE: std::cell::Cell<Option<BeforeDecide>> = const { std::cell::Cell::new(None) };
-}
+use test_hooks::*;

@@ -2,6 +2,16 @@
 
 What changed for people who use Nunchiro. Newest first. Nunchiro is in development; expect breaking changes.
 
+## 2026-11-28
+
+- A project lead now merges a bot's task work into its own working branch by itself once the work is reviewed and
+  approved, so you no longer press a merge card for each task; you get the lead's final result as a pull request.
+  It never merges into the main branch: while the project is on its default branch, the card still asks you. Settings
+  > Team has "Ask me before merging task work" (off by default) to bring the card back for a project.
+- Settings > Assistants has an Account connectors switch. Off, your assistant starts with no tool server at all, so
+  your claude.ai connectors (mail, calendar and the rest) never reach it, and any tool from one is refused if it shows
+  up anyway. It still works with files in its folders. It applies the next time the assistant's seat starts.
+
 ## 2026-11-26
 
 - A new bot takes a name and one sentence: "New bot" in the Bots view, or "New bot…" in the command palette. Its face
