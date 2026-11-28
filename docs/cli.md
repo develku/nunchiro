@@ -631,7 +631,8 @@ comes.
 ### `nunchiro mcp`
 A stdio MCP (Model Context Protocol) server, one JSON-RPC message per line. Its tools are the CLI verbs: `agent_start`,
 `agent_prompt`, `agent_send`, `agent_wait`, `agent_read`, `agent_get`, `agent_list`, `agent_stop` (`session close`),
-`worktree_create`, `worktree_list`, `room_send`, `room_ask`, `room_reply`, `room_check`, `room_thread_read`. Each call
+`worktree_create`, `worktree_list`, `room_send`, `room_ask`, `room_reply`, `room_check`, `room_thread_read`,
+`memory_add`, `memory_forget`, `memory_read`. Each call
 runs on its own thread, so a long wait holds up no other request, and runs this binary with the CLI's arguments and the server's environment (`NUNCHIRO_HOME`, `NUNCHIRO_TOKEN`), so results
 and refusals are the CLI's. A result's `structuredContent` is `{"result": ...}` with the CLI's JSON output (text output
 as `{"text": ...}`); exit 2, such as an ask that timed out, is `{"needs_answer": true, "message": ...}` and not an
@@ -753,6 +754,28 @@ refused. Open in Mail (or Calendar) instead opens a new message (or an .ics even
 the user to send or save. Discard is No; a card left unanswered for 24 hours, and an approval not spent in 10
 minutes, count as No. Each outcome is one line in Home's room; `nunchiro task digest` counts the waiting cards
 ("Outbox: N waiting").
+
+### `nunchiro memory add|forget|read`
+`nunchiro memory add "<one fact>" [--topic <name>] [--user] [--from-user]`, `nunchiro memory forget "<words of the
+line>"`, `nunchiro memory read [<topic>]`. A bot's seat only (its own memory; any other session, a token and the
+user's own shell are refused). A bot's memory is `team/<bot>/MEMORY.md`, an index of one fact per line with its date
+and source (`- 2026-11-27 Never send a mail without an Outbox card. (from: you)`), topic files in
+`team/<bot>/memory/<topic>.md` that an index line points to, and the shared `team/USER.md`. Every brief quotes SOUL.md,
+USER.md and the newest 200 index lines, and names how many older lines it left out.
+
+`add` keeps one line of up to 400 characters; the core adds today's date and the source: `you` with `--from-user`,
+otherwise `a conversation`. A line that looks like a secret is refused. `--topic mail-rules` writes the line to that
+topic file and, once, an index line that points to it; `--user` writes to USER.md. Once the seat's conversation read
+outside content (a mail connector, a web fetch or search, another MCP server's tool, a shell `curl`, `wget` or
+`nunchiro browser`), an add waits as a proposal with that source (`mail`, `web`, `a tool`) for the user's look, and a
+line that reads like an instruction is not kept at all (only its first words are counted for the user). `forget`
+deletes the one line that holds the words (its exact text wins over a part) from the index, every saved copy, the topic
+files, USER.md and the waiting proposals; words that match several lines are refused with the lines. `read` prints the
+index and the topic files, or one topic file.
+
+An index from before this format is rewritten once into it, each line a fact from a conversation dated by the file (a
+line that starts with a date keeps it); the old file is kept as a saved copy for good. The user's own changes keep the
+version before them as a saved copy, kept 30 days, which Undo puts back.
 
 ### `nunchiro task loops [--json]`
 Ticket 1003: open loops, the user's promises and what the user waits for. The core keeps them as rows in

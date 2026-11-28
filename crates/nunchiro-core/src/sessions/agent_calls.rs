@@ -301,6 +301,7 @@ impl Sessions {
             "schedule_propose",
             "schedule_change",
             "bot_offer",
+            "bot_memory",
             "room_send",
             "room_reply",
             "room_check",
@@ -796,6 +797,7 @@ impl Sessions {
                 return self.schedule_change(caller, id, change);
             }
             Request::BotOffer { name, job, why } => return self.bot_offer(caller, name, job, why),
+            Request::BotMemory { .. } => return self.memory_op(caller, &request),
             Request::OutboxStage { .. } => return self.outbox_stage(caller, &request), // ticket 1002
             Request::OutboxSpend { tool, args_hash } => {
                 return self.outbox_spend(caller, tool, args_hash);

@@ -313,6 +313,50 @@ fn tools() -> Vec<Tool> {
             },
             build: |v| room(v, "thread read", vec![], &["thread"]),
         },
+        Tool {
+            name: "memory_add",
+            description: "Keep one lasting fact in this bot's memory (nunchiro memory add). Nunchiro adds the date and the source; after outside content it waits as a proposal.",
+            schema: || {
+                schema(
+                    &["text"],
+                    json!({"text": {"type": "string", "description": "one fact, one line"},
+                        "topic": {"type": "string", "description": "a topic file, like mail-rules"},
+                        "user": {"type": "boolean", "description": "a fact about the user (USER.md)"},
+                        "from_user": {"type": "boolean", "description": "the user said it"}}),
+                )
+            },
+            build: |v| {
+                let mut a = vec!["memory".into(), "add".into(), text(v, "text")?];
+                opt(v, "topic", "--topic", &mut a);
+                for (key, flag) in [("user", "--user"), ("from_user", "--from-user")] {
+                    if yes(v, key) {
+                        a.push(flag.into());
+                    }
+                }
+                Ok(a)
+            },
+        },
+        Tool {
+            name: "memory_forget",
+            description: "Delete one line from this bot's memory everywhere it is kept (nunchiro memory forget).",
+            schema: || {
+                schema(
+                    &["text"],
+                    json!({"text": {"type": "string", "description": "words of the line"}}),
+                )
+            },
+            build: |v| Ok(vec!["memory".into(), "forget".into(), text(v, "text")?]),
+        },
+        Tool {
+            name: "memory_read",
+            description: "This bot's memory index, or one topic file (nunchiro memory read).",
+            schema: || schema(&[], json!({"topic": {"type": "string"}})),
+            build: |v| {
+                let mut a = vec!["memory".into(), "read".into()];
+                opt(v, "topic", "--topic", &mut a);
+                Ok(a)
+            },
+        },
     ]
 }
 /// `agent <verb> [options] -- <positional>...`: the options first, then `--`, so a body or id that starts with `--` is

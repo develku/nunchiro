@@ -7660,7 +7660,13 @@ fn cancel_own_queue_uses_shared_retire() {
             assert!(!body.contains(step), "{name} repeats {step}");
         }
     }
-    assert_eq!(source.matches(concat!("fn ", "retire_send(")).count(), 1);
+    // The one definition lives beside the other send steps.
+    let send = include_str!("send.rs");
+    assert_eq!(
+        source.matches(concat!("fn ", "retire_send(")).count()
+            + send.matches(concat!("fn ", "retire_send(")).count(),
+        1
+    );
 }
 // Ticket 300 twin: an exit cancels the queued rows in queue order and drops their widget hashes; a row still
 // attempting stays with its hash; a row `mark_send` cancels is logged the same way.

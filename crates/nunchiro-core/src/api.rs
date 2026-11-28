@@ -1532,6 +1532,22 @@ pub enum Request {
         job: String,
         why: String,
     },
+    /// A bot's seat reads or changes its own memory (`nunchiro memory`): `operation` is `add` (`text` one fact;
+    /// `topic` a topic file; `user` the shared USER.md; `from_user` the user said it), `forget` (`text`: words of the
+    /// line) or `read` (`topic`, or the index). Nunchiro adds the date and the source; once the seat read outside
+    /// content (mail, web, another MCP server) an add waits as a proposal. Refused to every caller that is no bot's
+    /// seat. Reply: `Text`.
+    BotMemory {
+        operation: String,
+        #[serde(default)]
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        topic: Option<String>,
+        #[serde(default)]
+        user: bool,
+        #[serde(default)]
+        from_user: bool,
+    },
     /// Ticket 993: a lead asks to `pause`, `resume` or `remove` (`change`) a schedule it may read; a card, as above.
     ScheduleChange {
         id: String,

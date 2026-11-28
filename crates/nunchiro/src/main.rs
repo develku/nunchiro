@@ -8,6 +8,7 @@ mod hook;
 mod layout;
 mod machine; // v1a-06
 mod mcp; // ticket 573
+mod memory;
 mod outbox; // ticket 1002 lane 2
 mod plugin;
 mod skill; // V2.5-31
@@ -159,6 +160,7 @@ fn run() -> Result<(), String> {
         println!("{}", task::USAGE); // ticket 990 slice g
         println!("{}", schedule::USAGE); // ticket 993
         println!("{}", outbox::USAGE); // ticket 1002 lane 2
+        println!("{}", memory::USAGE);
         println!("{}", update::USAGE); // ticket 1082
         return Ok(());
     }
@@ -288,6 +290,10 @@ fn run() -> Result<(), String> {
     // Ticket 993: schedules, read by the user and a place's lead; a lead's proposal is the user's card.
     if args.first().map(String::as_str) == Some("schedule") {
         return schedule::run(&home, &args[1..]);
+    }
+    // A bot's seat reads and changes its own memory.
+    if args.first().map(String::as_str) == Some("memory") {
+        return memory::run(&home, &args[1..]);
     }
     // Ticket 1002 lane 2: the Home lead's outward action is the user's Outbox card.
     if args.first().map(String::as_str) == Some("outbox") {

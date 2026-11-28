@@ -41,6 +41,8 @@ mod handoff;
 mod home;
 mod launch;
 mod machines;
+mod memory;
+use send::retire_send;
 mod model_mode;
 mod observe;
 mod outbox;
@@ -1204,6 +1206,7 @@ impl Sessions {
                 "a schedule is proposed from a lead's session; the user adds and changes one in the Schedules widget"
                     .into(),
             ),
+            Request::BotMemory { .. } => Err(memory::OWNER.into()),
             // An offer is a bot's ask for the owner's card; the owner needs none.
             Request::BotOffer { .. } => {
                 Err("a bot is offered from a bot's session; the user makes one in the Bots view".into())
@@ -1312,6 +1315,7 @@ impl Sessions {
                     )?);
                 }
                 self.outbox_sent(&id, &event, &payload);
+                self.note_outside(&id, &event, &payload);
                 // Ticket 571: unread room messages reach a long Claude turn as one context line; a subagent's tool
                 // call (non-empty `agent_id`) neither gets it nor uses up the batch.
                 match (event == "PostToolUse" && payload["agent_id"].as_str().is_none_or(str::is_empty))
@@ -1775,20 +1779,6 @@ impl Sessions {
 /// v1a-68 r3 (needs 2, 78): the closed shells whose view the core holds, at most `REPLAY_BYTES` each (16 MiB).
 const CLOSED_VIEWS: usize = 16;
 use crate::agent_permission::{ALLOW_SKIP, START_IN_SKIP};
-/// A send that reached a final status, taken out of `meta`'s queue by the caller, goes to the same session's log and
-/// its widget hash is dropped (v1b-20). The one retire step of `mark_send` and the exit cancel (ticket 300).
-fn retire_send(
-    meta: &mut Session,
-    widget_hashes: &mut BTreeMap<String, String>,
-    mut send: crate::delivery::Send,
-    status: &str,
-) {
-    send.status = status.into();
-    widget_hashes.remove(&send.id);
-    meta.send_log.push(send);
-    cap_log(&mut meta.send_log);
-}
-
 #[cfg(test)]
 mod tests; // 2026-11-20: moved out for the 1 MiB publish scan
 

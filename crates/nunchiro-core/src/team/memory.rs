@@ -1,0 +1,935 @@
+//! A bot's memory, in three layers. Layer 1 is quoted in every brief: SOUL.md, USER.md and the MEMORY.md index, one
+//! dated fact per line with where it came from. Layer 2 is the topic files an index line points to
+//! (`memory/<topic>.md`), read on demand. Every write goes through Nunchiro (`nunchiro memory`, `Team::window`), which
+//! adds the date and the source.
+//!
+//! A seat that read outside content (mail, a web page, another MCP server's results) never writes directly: what it
+//! adds waits as a proposal for the owner's look, and a line that reads like an instruction is not kept at all.
+//! Changes the owner makes keep the version before them as a saved copy, kept for a number of days; Forget deletes a
+//! line from the index, every saved copy, the topic files and the waiting proposals.
+use super::{Team, mask_secrets};
+use crate::store;
+use serde::{Deserialize, Serialize};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
+/// How many index lines a brief quotes; older lines are named, not quoted.
+pub(crate) const INDEX_LINES: usize = 200;
+/// What a brief reads of the index before it cuts by lines (a hand-written line can be long).
+pub(crate) const INDEX_BYTES: usize = 48 * 1024;
+const FACT_MAX: usize = 400;
+const TOPIC_MAX: usize = 40;
+/// Saved copies older than this go, unless the settings keep them longer.
+pub const KEEP_DAYS: u64 = 30;
+const DAY_MS: u64 = 86_400_000;
+const PROPOSALS_MAX: usize = 100;
+/// The index's second line: an index with it is in this format. One without it is migrated once (`Memory::migrate`).
+pub(crate) const MARK: &str = "<!-- One fact per line: date, fact, (from: source). Change it with `nunchiro memory add` and `nunchiro memory forget`. -->";
+
+/// One write at a time across every bot: an add, a forget and an undo each read and rewrite whole files.
+static WRITE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Where a fact came from. Nunchiro sets it, never the line's text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum Source {
+    /// The user said it.
+    You,
+    /// The bot learned it in a conversation with no outside content.
+    Conversation,
+    /// Another tool's or MCP server's results. Outside sources are ordered by how much they tell: a tool, web, mail.
+    Tool,
+    Web,
+    Mail,
+}
+
+impl Source {
+    pub fn words(self) -> &'static str {
+        match self {
+            Source::You => "you",
+            Source::Conversation => "a conversation",
+            Source::Mail => "mail",
+            Source::Web => "web",
+            Source::Tool => "a tool",
+        }
+    }
+    fn parse(words: &str) -> Option<Source> {
+        [
+            Source::You,
+            Source::Conversation,
+            Source::Mail,
+            Source::Web,
+            Source::Tool,
+        ]
+        .into_iter()
+        .find(|s| s.words() == words)
+    }
+    /// Read outside this Mac's conversation: what it brings in is a proposal.
+    pub fn outside(self) -> bool {
+        matches!(self, Source::Mail | Source::Web | Source::Tool)
+    }
+}
+
+/// One index line. `date` and `from` are absent on a line someone wrote by hand.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub struct Fact {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date: Option<String>,
+    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<Source>,
+}
+
+impl Fact {
+    fn line(&self) -> String {
+        match (&self.date, self.from) {
+            (Some(date), Some(from)) => format!("- {date} {} (from: {})", self.text, from.words()),
+            _ => format!("- {}", self.text),
+        }
+    }
+    /// `- 2026-11-27 Never send a mail without an Outbox card. (from: you)`; any other bullet is a hand-written line.
+    fn parse(line: &str) -> Option<Fact> {
+        let body = line.trim().strip_prefix("- ")?.trim();
+        if body.is_empty() {
+            return None;
+        }
+        let dated = body
+            .get(..10)
+            .filter(|d| is_date(d) && body[10..].starts_with(' '));
+        let sourced = body
+            .strip_suffix(')')
+            .and_then(|b| b.rsplit_once(" (from: "))
+            .and_then(|(text, from)| Some((text, Source::parse(from)?)));
+        match (dated, sourced) {
+            (Some(date), Some((text, from))) if text.len() > 11 => Some(Fact {
+                date: Some(date.into()),
+                text: text[11..].trim().into(),
+                from: Some(from),
+            }),
+            _ => Some(Fact {
+                date: None,
+                text: body.into(),
+                from: None,
+            }),
+        }
+    }
+}
+
+fn is_date(d: &str) -> bool {
+    d.len() == 10
+        && d.char_indices().all(|(i, c)| match i {
+            4 | 7 => c == '-',
+            _ => c.is_ascii_digit(),
+        })
+}
+
+/// A fact that waits for the owner: it came from a seat that read outside content.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Proposal {
+    pub id: String,
+    pub date: String,
+    pub text: String,
+    pub from: Source,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub topic: Option<String>,
+    pub at_ms: u64,
+}
+
+/// A line from outside content that read like an instruction: not kept, only counted for the owner.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct NotKept {
+    /// The first words, so the owner can tell which.
+    pub start: String,
+    pub from: Source,
+    pub at_ms: u64,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Waiting {
+    version: u32,
+    #[serde(default)]
+    proposals: Vec<Proposal>,
+    #[serde(default)]
+    not_kept: Vec<NotKept>,
+}
+
+/// A saved version of the index from before a change. `kind`: `tidy`, `edit`, `undo`, or `before` (the file as it was
+/// before this format, kept for good).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub struct SavedCopy {
+    pub id: String,
+    pub at_ms: u64,
+    pub kind: String,
+    /// Lines that differ between this copy and the version after it.
+    pub changed: usize,
+}
+
+/// What an add did.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Added {
+    Kept,
+    /// Already in the index (or already waiting): nothing changed.
+    Known,
+    Proposed,
+    /// It read like an instruction inside outside content.
+    NotKept,
+}
+
+/// One bot's memory files.
+pub struct Memory {
+    /// `team/<id>`
+    dir: PathBuf,
+    user: PathBuf,
+}
+
+impl Team {
+    pub fn bot_memory(&self, id: &str) -> Result<Memory, String> {
+        if !store::valid_id(id) {
+            return Err("not a bot id".into());
+        }
+        Ok(Memory {
+            dir: self.dir.join(id),
+            user: self.user(),
+        })
+    }
+}
+
+impl Memory {
+    pub fn index(&self) -> PathBuf {
+        self.dir.join("MEMORY.md")
+    }
+    fn folder(&self) -> PathBuf {
+        self.dir.join("memory")
+    }
+    fn copies(&self) -> PathBuf {
+        self.folder().join("copies")
+    }
+    fn waiting_file(&self) -> PathBuf {
+        self.folder().join("proposals.json")
+    }
+    fn topic(&self, name: &str) -> Result<PathBuf, String> {
+        let name = name.strip_suffix(".md").unwrap_or(name);
+        let ok = !name.is_empty()
+            && name.len() <= TOPIC_MAX
+            && name
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+            && !name.starts_with('-');
+        if !ok {
+            return Err(format!(
+                "a topic name has 1 to {TOPIC_MAX} lowercase letters, digits and dashes, like mail-rules"
+            ));
+        }
+        Ok(self.folder().join(format!("{name}.md")))
+    }
+
+    fn read_text(path: &Path) -> String {
+        store::read_regular(path)
+            .map(|b| String::from_utf8_lossy(&b).into_owned())
+            .unwrap_or_default()
+    }
+    fn write_text(&self, path: &Path, text: &str) -> Result<(), String> {
+        store::private_dir(&self.dir)?;
+        if let Some(parent) = path.parent() {
+            store::private_dir(parent)?;
+        }
+        store::atomic_write(path, text.as_bytes())
+    }
+
+    /// The index in this format: an index without the format line is saved as it was (a `before` copy, kept for good)
+    /// and rewritten as dated lines, each bullet or line of text one fact from a conversation, dated by the file. An
+    /// older build reads the new file as plain text, as it read the old one.
+    pub(crate) fn migrate(&self) -> Result<(), String> {
+        let path = self.index();
+        let Ok(bytes) = store::read_regular(&path) else {
+            return Ok(());
+        };
+        let old = String::from_utf8_lossy(&bytes).into_owned();
+        if old.lines().nth(1) == Some(MARK) {
+            return Ok(());
+        }
+        let modified = path
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or_else(crate::queue::now_ms, |d| d.as_millis() as u64);
+        let facts = convert(&old, &crate::loops::today(modified));
+        self.save_copy(&old, "before", crate::queue::now_ms())?;
+        self.write_facts(&facts)
+    }
+
+    /// A new bot's index.
+    pub(crate) fn empty() -> String {
+        Self::render(&[])
+    }
+    fn render(facts: &[Fact]) -> String {
+        let mut text = format!("# Memory\n{MARK}\n\n");
+        for f in facts {
+            text.push_str(&f.line());
+            text.push('\n');
+        }
+        text
+    }
+    fn write_facts(&self, facts: &[Fact]) -> Result<(), String> {
+        self.write_text(&self.index(), &mask_secrets(&Self::render(facts)).0)
+    }
+
+    /// The index's lines, newest first.
+    pub fn facts(&self) -> Result<Vec<Fact>, String> {
+        self.migrate()?;
+        Ok(Self::read_text(&self.index())
+            .lines()
+            .filter_map(Fact::parse)
+            .collect())
+    }
+
+    /// The index as a brief quotes it: masked, the newest `INDEX_LINES` lines, and a line that says how many older
+    /// ones are left out.
+    pub(crate) fn quote(&self) -> String {
+        let one = WRITE.lock();
+        if let Err(e) = self.migrate() {
+            eprintln!("memory index not migrated: {e}");
+        }
+        let text = super::quote_max(&self.index(), INDEX_BYTES);
+        drop(one);
+        let lines: Vec<&str> = text
+            .lines()
+            .filter(|l| !l.trim().is_empty() && !l.starts_with('#') && *l != MARK)
+            .collect();
+        let mut out = lines
+            .iter()
+            .take(INDEX_LINES)
+            .copied()
+            .collect::<Vec<_>>()
+            .join("\n");
+        if lines.len() > INDEX_LINES {
+            out.push_str(&format!(
+                "\n[{} older lines are not quoted here: `nunchiro memory read` shows the whole index]",
+                lines.len() - INDEX_LINES
+            ));
+        }
+        out
+    }
+
+    /// One fact, checked: one line of text, no secret, no source of its own.
+    fn check_text(text: &str) -> Result<String, String> {
+        if text.trim().contains(['\n', '\r']) {
+            return Err("one fact per line: add each line by itself".into());
+        }
+        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        if text.is_empty() || text.chars().count() > FACT_MAX {
+            return Err(format!("a memory line has 1 to {FACT_MAX} characters"));
+        }
+        if text.chars().any(char::is_control) || text.contains("(from: ") {
+            return Err(
+                "a memory line is one line of text; Nunchiro adds the date and the source".into(),
+            );
+        }
+        if mask_secrets(&text).1 > 0 {
+            return Err(
+                "this looks like a secret (a key, a token or a password): memory never keeps one"
+                    .into(),
+            );
+        }
+        Ok(text)
+    }
+
+    /// Adds one fact. `from` outside: it waits as a proposal, or is not kept when it reads like an instruction.
+    /// `topic`: the line goes to that topic file, and the index gets a line that points to it if none does.
+    pub fn add(
+        &self,
+        text: &str,
+        from: Source,
+        topic: Option<&str>,
+        now_ms: u64,
+    ) -> Result<Added, String> {
+        let text = Self::check_text(text)?;
+        let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
+        let date = crate::loops::today(now_ms);
+        let topic_path = topic.map(|t| self.topic(t)).transpose()?;
+        if from.outside() {
+            return self.propose(text, from, topic.map(String::from), date, now_ms);
+        }
+        let fact = Fact {
+            date: Some(date),
+            text,
+            from: Some(from),
+        };
+        let mut facts = self.facts()?;
+        match topic_path {
+            None => {
+                if facts.iter().any(|f| f.text == fact.text) {
+                    return Ok(Added::Known);
+                }
+                facts.insert(0, fact);
+            }
+            Some(path) => {
+                let name = path.file_name().unwrap_or_default().to_string_lossy();
+                let mut body = Self::read_text(&path);
+                if body
+                    .lines()
+                    .filter_map(Fact::parse)
+                    .any(|f| f.text == fact.text)
+                {
+                    return Ok(Added::Known);
+                }
+                if body.is_empty() {
+                    body = format!("# {}\n\n", name.trim_end_matches(".md"));
+                }
+                body.push_str(&fact.line());
+                body.push('\n');
+                self.write_text(&path, &body)?;
+                if !facts.iter().any(|f| f.text.contains(name.as_ref())) {
+                    facts.insert(
+                        0,
+                        Fact {
+                            text: format!("{}: see {name}", title(&name)),
+                            ..fact
+                        },
+                    );
+                } else {
+                    return Ok(Added::Kept);
+                }
+            }
+        }
+        self.write_facts(&facts)?;
+        Ok(Added::Kept)
+    }
+
+    /// A fact about the user, in the shared USER.md (no copies: every bot reads it).
+    pub fn add_user(&self, text: &str, from: Source, now_ms: u64) -> Result<Added, String> {
+        let text = Self::check_text(text)?;
+        let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
+        let date = crate::loops::today(now_ms);
+        if from.outside() {
+            return self.propose(text, from, Some(USER_TOPIC.into()), date, now_ms);
+        }
+        let mut body = Self::read_text(&self.user);
+        if body.lines().filter_map(Fact::parse).any(|f| f.text == text) {
+            return Ok(Added::Known);
+        }
+        if !body.is_empty() && !body.ends_with('\n') {
+            body.push('\n');
+        }
+        body.push_str(
+            &Fact {
+                date: Some(date),
+                text,
+                from: Some(from),
+            }
+            .line(),
+        );
+        body.push('\n');
+        self.write_text(&self.user, &body)?;
+        Ok(Added::Kept)
+    }
+
+    fn waiting(&self) -> Waiting {
+        store::read_regular(&self.waiting_file())
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Waiting>(&b).ok())
+            .filter(|w| w.version == 1)
+            .unwrap_or(Waiting {
+                version: 1,
+                ..Waiting::default()
+            })
+    }
+    fn write_waiting(&self, w: &Waiting) -> Result<(), String> {
+        let bytes = serde_json::to_vec_pretty(w).map_err(|e| e.to_string())?;
+        self.write_text(
+            &self.waiting_file(),
+            std::str::from_utf8(&bytes).map_err(|e| e.to_string())?,
+        )
+    }
+    fn propose(
+        &self,
+        text: String,
+        from: Source,
+        topic: Option<String>,
+        date: String,
+        now_ms: u64,
+    ) -> Result<Added, String> {
+        let mut w = self.waiting();
+        if instruction_like(&text) {
+            w.not_kept.push(NotKept {
+                start: text.chars().take(48).collect(),
+                from,
+                at_ms: now_ms,
+            });
+            let cut = w.not_kept.len().saturating_sub(PROPOSALS_MAX);
+            w.not_kept.drain(..cut);
+            self.write_waiting(&w)?;
+            return Ok(Added::NotKept);
+        }
+        if w.proposals
+            .iter()
+            .any(|p| p.text == text && p.topic == topic)
+        {
+            return Ok(Added::Known);
+        }
+        if w.proposals.len() >= PROPOSALS_MAX {
+            return Err(format!(
+                "{PROPOSALS_MAX} proposals already wait for the user's look; nothing more is kept until then"
+            ));
+        }
+        w.proposals.push(Proposal {
+            id: store::new_id()?,
+            date,
+            text,
+            from,
+            topic,
+            at_ms: now_ms,
+        });
+        self.write_waiting(&w)?;
+        Ok(Added::Proposed)
+    }
+
+    /// The proposals that wait, and the lines that were not kept.
+    pub fn proposals(&self) -> (Vec<Proposal>, Vec<NotKept>) {
+        let w = self.waiting();
+        (w.proposals, w.not_kept)
+    }
+
+    /// The owner's look at a proposal: `keep` adds it with its own source and date, otherwise it goes.
+    pub fn settle(&self, id: &str, keep: bool) -> Result<(), String> {
+        let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
+        let mut w = self.waiting();
+        let at = w
+            .proposals
+            .iter()
+            .position(|p| p.id == id)
+            .ok_or("no such proposal")?;
+        let p = w.proposals.remove(at);
+        if keep {
+            // Kept with its own date and source: the line says it came from outside.
+            let fact = Fact {
+                date: Some(p.date),
+                text: p.text,
+                from: Some(p.from),
+            };
+            if p.topic.as_deref() == Some(USER_TOPIC) {
+                let mut body = Self::read_text(&self.user);
+                body.push_str(&fact.line());
+                body.push('\n');
+                self.write_text(&self.user, &body)?;
+            } else {
+                let mut facts = self.facts()?;
+                if !facts.iter().any(|f| f.text == fact.text) {
+                    facts.insert(0, fact);
+                    self.write_facts(&facts)?;
+                }
+            }
+        }
+        self.write_waiting(&w)
+    }
+
+    /// Deletes one line: from the index, every saved copy, every topic file, USER.md when it is there, and the
+    /// waiting proposals. `words`: the line's text, or words only one line holds. Nothing keeps it after this.
+    pub fn forget(&self, words: &str) -> Result<String, String> {
+        let words = words.trim();
+        if words.is_empty() {
+            return Err("say which line: its text, or words only that line holds".into());
+        }
+        let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
+        let mut facts = self.facts()?;
+        let user: Vec<Fact> = Self::read_text(&self.user)
+            .lines()
+            .filter_map(Fact::parse)
+            .collect();
+        let lower = words.to_lowercase();
+        let all: Vec<&Fact> = facts.iter().chain(user.iter()).collect();
+        let text = match all.iter().find(|f| f.text == words) {
+            Some(f) => f.text.clone(),
+            None => {
+                let mut hits: Vec<&&Fact> = all
+                    .iter()
+                    .filter(|f| f.text.to_lowercase().contains(&lower))
+                    .collect();
+                hits.sort_by(|a, b| a.text.cmp(&b.text));
+                hits.dedup_by(|a, b| a.text == b.text);
+                match hits.as_slice() {
+                    [one] => one.text.clone(),
+                    [] => return Err(format!("no memory line holds \"{words}\"")),
+                    many => {
+                        return Err(format!(
+                            "{} lines hold \"{words}\"; say more of the one to forget:\n{}",
+                            many.len(),
+                            many.iter()
+                                .take(5)
+                                .map(|f| format!("- {}", f.text))
+                                .collect::<Vec<_>>()
+                                .join("\n")
+                        ));
+                    }
+                }
+            }
+        };
+        let gone = |body: &str| -> Option<String> {
+            let kept: Vec<&str> = body
+                .lines()
+                .filter(|l| Fact::parse(l).is_none_or(|f| f.text != text))
+                .collect();
+            (kept.len() != body.lines().count()).then(|| kept.join("\n") + "\n")
+        };
+        facts.retain(|f| f.text != text);
+        self.write_facts(&facts)?;
+        let mut files: Vec<PathBuf> = vec![self.user.clone()];
+        for dir in [self.folder(), self.copies()] {
+            if let Ok(read) = fs::read_dir(&dir) {
+                files.extend(
+                    read.flatten()
+                        .map(|e| e.path())
+                        .filter(|p| p.extension().is_some_and(|x| x == "md")),
+                );
+            }
+        }
+        for file in files {
+            if let Some(body) = gone(&Self::read_text(&file)) {
+                self.write_text(&file, &body)?;
+            }
+        }
+        let mut w = self.waiting();
+        let before = w.proposals.len();
+        w.proposals.retain(|p| p.text != text);
+        if w.proposals.len() != before {
+            self.write_waiting(&w)?;
+        }
+        Ok(text)
+    }
+
+    /// The index (no topic) with the topic files listed, or one topic file.
+    pub fn read(&self, topic: Option<&str>) -> Result<String, String> {
+        match topic {
+            Some(t) => {
+                let path = self.topic(t)?;
+                let text = Self::read_text(&path);
+                if text.is_empty() {
+                    return Err(format!("no topic file {}", path.display()));
+                }
+                Ok(mask_secrets(&text).0)
+            }
+            None => {
+                {
+                    let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
+                    self.migrate()?;
+                }
+                let mut text = mask_secrets(&Self::read_text(&self.index())).0;
+                let topics = self.topics();
+                if !topics.is_empty() {
+                    text.push_str("\nTopic files (`nunchiro memory read <topic>`):\n");
+                    for (name, lines) in topics {
+                        text.push_str(&format!("- {name} ({lines} lines)\n"));
+                    }
+                }
+                Ok(text)
+            }
+        }
+    }
+
+    /// The topic files, by name, with their line counts.
+    pub fn topics(&self) -> Vec<(String, usize)> {
+        let mut out: Vec<(String, usize)> = fs::read_dir(self.folder())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "md") && p.is_file())
+            .map(|p| {
+                let lines = Self::read_text(&p).lines().filter_map(Fact::parse).count();
+                (
+                    p.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned(),
+                    lines,
+                )
+            })
+            .collect();
+        out.sort();
+        out
+    }
+
+    fn outside_file(&self, session: &str) -> Result<PathBuf, String> {
+        if !store::valid_id(session) {
+            return Err("not a session id".into());
+        }
+        Ok(self.folder().join("outside").join(session))
+    }
+    /// This seat's conversation read outside content (`outside_of`): kept on disk, so a core restart does not clear it.
+    pub fn mark_outside(&self, session: &str, source: Source) -> Result<(), String> {
+        let path = self.outside_file(session)?;
+        if self.outside(session).is_some_and(|s| s >= source) {
+            return Ok(());
+        }
+        self.write_text(&path, source.words())
+    }
+    /// What outside content this seat's conversation read, the most telling first (mail, web, a tool).
+    pub fn outside(&self, session: &str) -> Option<Source> {
+        let path = self.outside_file(session).ok()?;
+        Source::parse(Self::read_text(&path).trim())
+    }
+
+    fn save_copy(&self, text: &str, kind: &str, now_ms: u64) -> Result<(), String> {
+        let mut at = now_ms;
+        while self.copies().join(format!("{at}-{kind}.md")).exists() {
+            at += 1;
+        }
+        // Masked as the index is: a copy never keeps a secret the index lost.
+        let text = mask_secrets(text).0;
+        self.write_text(&self.copies().join(format!("{at}-{kind}.md")), &text)
+    }
+
+    /// The owner's edit of the whole index (the Memory tab's Edit): the version before it is a saved copy. Each line
+    /// is kept as written; secrets are masked.
+    pub fn edit(&self, text: &str, now_ms: u64) -> Result<(), String> {
+        if text.len() > INDEX_BYTES {
+            return Err(format!("the index has at most {} KB", INDEX_BYTES / 1024));
+        }
+        if text
+            .chars()
+            .any(|c| c.is_control() && c != '\n' && c != '\t')
+        {
+            return Err("the index is plain text".into());
+        }
+        let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
+        self.migrate()?;
+        let facts: Vec<Fact> = mask_secrets(text)
+            .0
+            .lines()
+            .filter(|l| *l != MARK && !l.starts_with('#'))
+            .filter_map(|l| {
+                Fact::parse(l).or_else(|| {
+                    let l = l.trim();
+                    (!l.is_empty()).then(|| Fact {
+                        date: None,
+                        text: l.into(),
+                        from: None,
+                    })
+                })
+            })
+            .collect();
+        let before = Self::read_text(&self.index());
+        if Self::render(&facts) == before {
+            return Ok(());
+        }
+        self.save_copy(&before, "edit", now_ms)?;
+        self.write_facts(&facts)
+    }
+
+    /// A new version of the index that replaces the current one, which is kept as a saved copy of `kind` (night tidy).
+    pub fn replace(&self, facts: &[Fact], kind: &str, now_ms: u64) -> Result<(), String> {
+        let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
+        self.migrate()?;
+        self.save_copy(&Self::read_text(&self.index()), kind, now_ms)?;
+        self.write_facts(facts)
+    }
+
+    /// The saved copies, newest first. Copies past `keep_days` go first (a `before` copy is kept for good).
+    pub fn saved_copies(&self, keep_days: u64, now_ms: u64) -> Vec<SavedCopy> {
+        let mut copies: Vec<(u64, String, PathBuf)> = fs::read_dir(self.copies())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .filter_map(|p| {
+                let stem = p.file_stem()?.to_str()?.to_string();
+                let (at, kind) = stem.split_once('-')?;
+                Some((at.parse().ok()?, kind.to_string(), p))
+            })
+            .collect();
+        copies.retain(|(at, kind, path)| {
+            let keep = kind == "before" || now_ms.saturating_sub(*at) <= keep_days * DAY_MS;
+            if !keep {
+                let _ = fs::remove_file(path);
+            }
+            keep
+        });
+        copies.sort_by_key(|c| std::cmp::Reverse(c.0));
+        let mut after = Self::read_text(&self.index());
+        copies
+            .into_iter()
+            .map(|(at_ms, kind, path)| {
+                let text = Self::read_text(&path);
+                let changed = changed_lines(&text, &after);
+                after = text;
+                SavedCopy {
+                    id: format!("{at_ms}-{kind}"),
+                    at_ms,
+                    kind,
+                    changed,
+                }
+            })
+            .collect()
+    }
+
+    /// Puts a saved copy back as the index; the index it replaces is kept as an `undo` copy.
+    pub fn undo(&self, copy: &str, now_ms: u64) -> Result<(), String> {
+        if !copy.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return Err("no such saved copy".into());
+        }
+        let path = self.copies().join(format!("{copy}.md"));
+        let Ok(bytes) = store::read_regular(&path) else {
+            return Err("that saved copy is gone".into());
+        };
+        let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
+        let current = Self::read_text(&self.index());
+        self.save_copy(&current, "undo", now_ms)?;
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        // A `before` copy is the old free-form file: it comes back in this format, dated by the copy.
+        if text.lines().nth(1) != Some(MARK) {
+            let at = copy
+                .split('-')
+                .next()
+                .and_then(|a| a.parse().ok())
+                .unwrap_or(now_ms);
+            return self.write_facts(&convert(&text, &crate::loops::today(at)));
+        }
+        self.write_text(&self.index(), &text)
+    }
+}
+
+/// An index from before this format as facts: each bullet or line of text one fact from a conversation, dated `date`
+/// unless it starts with its own date (a log line).
+fn convert(old: &str, date: &str) -> Vec<Fact> {
+    old.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#') && !l.starts_with("<!--"))
+        .map(|l| {
+            let body = l
+                .trim_start_matches(['-', '*'])
+                .trim()
+                .trim_start_matches("[ ]")
+                .trim();
+            let (date, text) = match body.get(..10).filter(|d| is_date(d)) {
+                Some(d) => (
+                    d.to_string(),
+                    body[10..].trim_start_matches([':', ' ']).trim(),
+                ),
+                None => (date.to_string(), body),
+            };
+            Fact {
+                date: Some(date),
+                text: text.to_string(),
+                from: Some(Source::Conversation),
+            }
+        })
+        .filter(|f| !f.text.is_empty())
+        .collect()
+}
+
+/// What a tool call reads from outside this Mac's conversation, by its name and input as an agent's hook gives them
+/// (Claude and Codex): a mail connector, a web fetch or search, another MCP server's results, or a shell command that
+/// fetches a page. Nunchiro's own MCP tools are not outside.
+/// shortcut: a shell command is judged by its words (`curl`, `wget`, `nunchiro browser`), so a script that fetches
+/// passes; upgrade to marking every shell call if a fetched page is seen reaching memory that way.
+pub fn outside_of(tool: &str, input: &serde_json::Value) -> Option<Source> {
+    let lower = tool.to_lowercase();
+    if let Some(rest) = tool.strip_prefix("mcp__") {
+        let server = rest.split("__").next().unwrap_or_default().to_lowercase();
+        return match server {
+            s if s.contains("nunchiro") => None,
+            s if s == crate::outward::MAIL.to_lowercase() || s.contains("mail") => {
+                Some(Source::Mail)
+            }
+            s if s.contains("browser") || s.contains("fetch") || s.contains("web") => {
+                Some(Source::Web)
+            }
+            _ => Some(Source::Tool),
+        };
+    }
+    if matches!(
+        lower.as_str(),
+        "webfetch" | "websearch" | "web_fetch" | "web_search"
+    ) {
+        return Some(Source::Web);
+    }
+    let command = input["command"]
+        .as_str()
+        .map(String::from)
+        .or_else(|| {
+            input["command"].as_array().map(|a| {
+                a.iter()
+                    .filter_map(|w| w.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+        })
+        .unwrap_or_default();
+    let fetches = command
+        .split(|c: char| c.is_whitespace() || ";|&()".contains(c))
+        .collect::<Vec<_>>()
+        .windows(2)
+        .any(|w| matches!(w[0], "curl" | "wget") || w == ["nunchiro", "browser"])
+        || command.starts_with("curl ")
+        || command.starts_with("wget ");
+    fetches.then_some(Source::Web)
+}
+
+/// The topic name a USER.md proposal carries.
+pub(crate) const USER_TOPIC: &str = "user";
+
+fn title(file: &str) -> String {
+    let name = file.trim_end_matches(".md").replace('-', " ");
+    let mut c = name.chars();
+    c.next()
+        .map(|f| f.to_uppercase().chain(c).collect())
+        .unwrap_or_default()
+}
+
+fn changed_lines(a: &str, b: &str) -> usize {
+    use std::collections::BTreeSet;
+    let set = |t: &str| -> BTreeSet<String> {
+        t.lines()
+            .filter(|l| l.starts_with("- "))
+            .map(String::from)
+            .collect()
+    };
+    set(a).symmetric_difference(&set(b)).count()
+}
+
+/// A line from outside content that tells the reader to do something is not a fact about the user: it is not kept.
+/// shortcut: a word list, so a reworded instruction passes as a proposal (the owner still sees it, unchecked); upgrade
+/// to the night tidy's model judging each proposal if one gets through.
+pub(crate) fn instruction_like(text: &str) -> bool {
+    let t = text.to_lowercase();
+    const SAYS: &[&str] = &[
+        "ignore previous",
+        "ignore all",
+        "ignore the above",
+        "ignore your",
+        "disregard",
+        "new instructions",
+        "system prompt",
+        "you must",
+        "you should always",
+        "from now on",
+        "do not tell",
+        "don't tell",
+        "forward all",
+        "forward every",
+        "always forward",
+        "send all",
+        "send every",
+        "always send",
+        "always reply",
+        "delete all",
+        "run this",
+        "execute",
+    ];
+    SAYS.iter().any(|s| t.contains(s))
+}
+
+#[cfg(test)]
+#[path = "memory/tests.rs"]
+mod tests;
