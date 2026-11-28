@@ -1,6 +1,7 @@
 // V2-8e (DECISIONW): the "Decisions" widget lists every session's pending decisions, oldest first, grouped by session.
 // Each group is the existing DecisionCard, hosted (chat/DecisionCard.tsx owns the answer, risky and focus rules). The
 // widget header is the sidebar's (NODUP): this body only counts.
+import { TriggerProposalCard } from '../schedule/TriggerProposalCard';
 import { useEffect, useRef, useState } from 'react';
 import { accountName } from '../api';
 import { DecisionCard } from '../chat/DecisionCard';
@@ -285,6 +286,7 @@ export function DecisionsWidget({ sessions, onAnswer, ask, onBack, onFocused, on
   const byId = withResumed(new Map(sessions.map((s) => [s.id, s])), sessions); // a merge card filed before its lead's Resume
   const roles = owner.filter((d) => d.owner?.type === 'role');
   const offers = owner.filter((d) => d.owner?.type === 'bot');
+  const proposed = owner.filter((d) => d.owner?.type === 'trigger');
   const goals = owner.filter((d) => d.owner?.type === 'goal');
   const schedules = owner.filter((d) => d.owner?.type === 'schedule'); // ticket 993
   const outbox = owner.filter((d) => d.owner?.type === 'outward'); // ticket 1002 lane 2
@@ -307,6 +309,9 @@ export function DecisionsWidget({ sessions, onAnswer, ask, onBack, onFocused, on
           ))}
           {offers.map((d) => (
             <BotOfferCard key={d.id} d={d} home={home} onAnswer={onAnswer} t={t} />
+          ))}
+          {proposed.map((d) => (
+            <TriggerProposalCard key={d.id} d={d} onAnswer={onAnswer} t={t} />
           ))}
           {goals.map((d) => (
             <GoalCard key={d.id} d={d} onAnswer={onAnswer} t={t} />

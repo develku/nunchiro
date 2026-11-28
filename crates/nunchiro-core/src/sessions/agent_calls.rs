@@ -796,6 +796,7 @@ impl Sessions {
                 return self.schedule_change(caller, id, change);
             }
             Request::BotOffer { name, job, why } => return self.bot_offer(caller, name, job, why),
+            Request::TriggerPropose { .. } => return self.trigger_propose(caller, &request),
             Request::OutboxStage { .. } => return self.outbox_stage(caller, &request), // ticket 1002
             Request::OutboxSpend { tool, args_hash } => {
                 return self.outbox_spend(caller, tool, args_hash);

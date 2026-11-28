@@ -269,6 +269,8 @@ const STALE_RETRY: std::time::Duration = std::time::Duration::from_secs(5);
 /// Ticket 353: a holder still busy after this many tries (about 35 s, backing off) is not under load and will not admit
 /// this core: a holder from before the fix whose app was updated answers busy for as long as it lives.
 const BUSY_TRIES: u32 = 4;
+/// A trigger proposal's refusal for every caller but a project's lead.
+const TRIGGER_FROM_A_LEAD: &str = "a trigger is proposed from a project lead's session; the user adds one with `nunchiro trigger add`";
 pub struct Sessions {
     // v1a-06: remote authority expires with this local core.
     pub(crate) remote: crate::machines::State,
@@ -1208,6 +1210,7 @@ impl Sessions {
             Request::BotOffer { .. } => {
                 Err("a bot is offered from a bot's session; the user makes one in the Bots view".into())
             }
+            Request::TriggerPropose { .. } => Err(TRIGGER_FROM_A_LEAD.into()),
             // Ticket 1002 lane 2: the user writes their own mail; a card is the Home lead's ask, spent by its seat.
             Request::OutboxStage { .. } | Request::OutboxSpend { .. } => {
                 Err("an Outbox card is staged and sent from the Home lead's session".into())

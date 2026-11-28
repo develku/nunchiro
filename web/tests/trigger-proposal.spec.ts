@@ -25,8 +25,8 @@ for (const scheme of ['light', 'dark'] as const) {
     await app.locator('#icon-decisions').click();
     const card = app.locator('.dw [data-trigger-proposal="ci-fix"]');
     await expect(card.locator('.mc-head')).toHaveText('A lead proposes a trigger');
-    await expect(card.locator('.rc-words b')).toHaveText('ci-fix · GitHub o/r: checks fail · Claude: Find why the checks failed and fix it.');
-    await expect(card.locator('.rc-pill')).toHaveText('nunchiro');
+    await expect(card.locator('[data-trigger-line] p')).toHaveText('ci-fix · GitHub o/r: checks fail · Claude: Find why the checks failed and fix it.');
+    await expect(card.locator('[data-trigger-line] small')).toHaveText('In nunchiro. Nothing is added until you say yes; it then asks you before each run.');
     fs.mkdirSync('../.scratch/shots', { recursive: true });
     await app.screenshot({ path: `../.scratch/shots/trigger-proposal-${scheme}.png` });
     // Not now: nothing is added.

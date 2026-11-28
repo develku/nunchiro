@@ -41,6 +41,8 @@ export type OwnerAsk =
   | { type: 'merge'; task: string; title: string; place: string; revision: string; learned?: Lesson[] }
   // Ticket 990 slice i: a lead proposes a new role for the user's roles; `place` is where it was proposed.
   | { type: 'bot'; name: string; job: string; why: string; from: string; place: string }
+  /** A project lead's proposed trigger (the core's `OwnerAsk::Trigger`): only the yes adds it, asking first. */
+  | { type: 'trigger'; name: string; on: 'cli' | 'github'; github?: { repo: string; event: string; label?: string }; run: { kind: string; project: string; label: string; task?: string }; line: string; place: string }
   | { type: 'role'; role: { name: string; job: string; kind: string; model?: string; effort?: string; writes: boolean }; why: string; place: string }
   // Home view change 4: the Home lead (`from`) asks to give the lead (teammate id) of `place` a goal; Send or Not now.
   | { type: 'goal'; place: string; lead: string; from: string; text: string }

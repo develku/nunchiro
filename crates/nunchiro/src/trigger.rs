@@ -1,5 +1,6 @@
-//! `nunchiro trigger add|list|fire|pause|resume|remove` (docs/triggers.md). Everything but `fire` is the owner's; `fire`
-//! also works with a token of the `trigger` scope (`NUNCHIRO_TOKEN`), which can do nothing else.
+//! `nunchiro trigger add|list|fire|pause|resume|remove|propose` (docs/triggers.md). Everything but `fire` and `propose`
+//! is the owner's; `fire` also works with a token of the `trigger` scope (`NUNCHIRO_TOKEN`), which can do nothing else;
+//! `propose` is a project lead's, from its session, and only asks the user on a card.
 use nunchiro_core::{
     api::*,
     schedule::{
@@ -10,7 +11,7 @@ use nunchiro_core::{
 use std::io::Read;
 use std::path::Path;
 
-const USAGE: &str = "usage: nunchiro trigger add <name> --on cli|webhook|github [--repo <owner/name> --event checks_failed|changes_requested|labeled [--issue-label <l>] [--any-author]] --kind claude|codex --project <dir> --task <text> [--label <name>] [--model <m>] [--effort <e>] [--auto] | list [--json] | fire <name> [--data @<file>|-] | pause <name> | resume <name> | remove <name>";
+const USAGE: &str = "usage: nunchiro trigger add <name> --on cli|webhook|github [--repo <owner/name> --event checks_failed|changes_requested|labeled [--issue-label <l>] [--any-author]] --kind claude|codex --project <dir> --task <text> [--label <name>] [--model <m>] [--effort <e>] [--auto] | list [--json] | fire <name> [--data @<file>|-] | pause <name> | resume <name> | remove <name> | propose <name> --on cli|github [--repo <owner/name> --event <e> [--issue-label <l>] [--any-author]] [--kind claude|codex] --task <text>";
 
 pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
     let words: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -30,6 +31,7 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
             name: name.to_string(),
         },
         ["add", name, rest @ ..] => add(name, rest)?,
+        ["propose", name, rest @ ..] => return propose(home, name, rest),
         _ => return Err(USAGE.into()),
     };
     let fires = matches!(action, Action::Fire { .. });
@@ -186,4 +188,79 @@ fn add(name: &str, rest: &[&str]) -> Result<Action, String> {
         secret,
         github,
     })
+}
+
+/// A project lead's proposal: the user is asked on a card; only the user's yes adds the trigger, asking first.
+fn propose(home: &Path, name: &str, rest: &[&str]) -> Result<(), String> {
+    let (mut on, mut kind, mut task) = (None, AgentKind::Claude, None);
+    let (mut repo, mut event, mut gh_label, mut any_author) = (None, None, None, false);
+    let mut i = 0;
+    while i < rest.len() {
+        if rest[i] == "--any-author" {
+            any_author = true;
+            i += 1;
+            continue;
+        }
+        let value = rest.get(i + 1).copied().ok_or(USAGE)?;
+        match rest[i] {
+            "--on" => {
+                on = Some(match value {
+                    "cli" => Source::Cli,
+                    "github" => Source::Github,
+                    "webhook" => {
+                        return Err(
+                            "a webhook trigger needs its secret from the user: ask them to add it"
+                                .into(),
+                        );
+                    }
+                    _ => return Err("--on is cli or github".into()),
+                })
+            }
+            "--kind" => {
+                kind =
+                    serde_json::from_value(value.into()).map_err(|_| "--kind is claude or codex")?
+            }
+            "--task" => task = Some(value.to_string()),
+            "--repo" => repo = Some(value.to_string()),
+            "--issue-label" => gh_label = Some(value.to_string()),
+            "--event" => {
+                event = Some(match value {
+                    "checks_failed" => GithubEvent::ChecksFailed,
+                    "changes_requested" => GithubEvent::ChangesRequested,
+                    "labeled" => GithubEvent::Labeled,
+                    _ => {
+                        return Err("--event is checks_failed, changes_requested or labeled".into());
+                    }
+                })
+            }
+            _ => return Err(USAGE.into()),
+        }
+        i += 2;
+    }
+    let on = on.ok_or("--on cli|github is required")?;
+    let github = match (on, repo, event) {
+        (Source::Github, Some(repo), Some(event)) => Some(Github {
+            repo,
+            event,
+            label: gh_label,
+            any_author,
+        }),
+        (Source::Github, ..) => return Err("--on github needs --repo and --event".into()),
+        _ => None,
+    };
+    let request = Request::TriggerPropose {
+        name: name.into(),
+        on,
+        github,
+        kind,
+        task: task.ok_or("--task is required")?,
+    };
+    super::ensure_core(home)?;
+    match super::call(home, request)? {
+        Reply::Text { text } => {
+            println!("The user is asked on a card: {text}");
+            Ok(())
+        }
+        _ => Err("unexpected reply".into()),
+    }
 }

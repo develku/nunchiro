@@ -1219,6 +1219,10 @@ least 16 characters). `--on github` reads `--repo` with your `gh` for `--event` 
 watch your own pull requests unless `--any-author`.
 Without `--auto` a fire leaves a card in Decisions and starts on Start.
 
+### `nunchiro trigger propose <name> --on cli|github [--repo <owner/name> --event checks_failed|changes_requested|labeled] [--issue-label <l>] [--any-author] [--kind claude|codex] --task <text>`
+A project's lead, from its session: asks the user on a card for a trigger in its project. Nothing is stored until
+the user's yes, which adds it asking first. A webhook trigger is not proposed (its secret is the user's).
+
 ### `nunchiro trigger list [--json]`
 Owner only. Name, how it is fired, ask or auto, on or off, project, and the last fire (its session or why not).
 

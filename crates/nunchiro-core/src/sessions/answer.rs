@@ -285,6 +285,38 @@ impl Sessions {
                 }
                 return Ok(Reply::Ack);
             }
+            // A lead's proposed trigger: only this yes adds it (asking first); a yes that cannot be applied (the name
+            // was taken meanwhile, the project is gone) is an error and the card stays.
+            if let Some(queue::OwnerAsk::Trigger {
+                name,
+                on,
+                github,
+                run,
+                ..
+            }) = &item.owner
+            {
+                let yes = match &answer {
+                    queue::Answer::AllowOnce => true,
+                    queue::Answer::Deny | queue::Answer::DenyWith { .. } => false,
+                    _ => return Err("a trigger card takes allow_once or deny".into()),
+                };
+                if yes {
+                    crate::schedule::triggers::add(
+                        &self.home,
+                        &self.known_projects(),
+                        crate::schedule::triggers::New {
+                            name: name.clone(),
+                            on: *on,
+                            run: run.clone(),
+                            mode: crate::schedule::triggers::Mode::Ask,
+                            secret: None,
+                            github: github.clone(),
+                        },
+                    )?;
+                }
+                self.queue.answer_owner(|i| i.id == id)?;
+                return Ok(Reply::Ack);
+            }
             // A bot's offer of a new bot. Only this yes makes the bot, in the offering bot's place, with its first chat
             // ahead of it; a yes that cannot be applied (the name was taken meanwhile) is an error and the card
             // stays, as the role card's. The place's lead hears the answer.

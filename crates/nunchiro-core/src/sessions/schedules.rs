@@ -152,6 +152,68 @@ impl Sessions {
         )?;
         Ok(Reply::Text { text: line })
     }
+    /// `nunchiro trigger propose`: a project's lead asks the user for a trigger in its place's project. Checked as the
+    /// owner's add checks it, so the card can be applied; then only the card. A webhook trigger is never proposed:
+    /// its secret is the user's to set.
+    pub(super) fn trigger_propose(
+        &mut self,
+        caller: &crate::grants::Caller,
+        request: &Request,
+    ) -> Response {
+        let Request::TriggerPropose {
+            name,
+            on,
+            github,
+            kind,
+            task,
+        } = request
+        else {
+            return Err("not a trigger proposal".into());
+        };
+        use crate::schedule::triggers::{self, Mode, New, Source};
+        if *on == Source::Webhook {
+            return Err(
+                "a webhook trigger needs its secret from the user: ask them to add it".into(),
+            );
+        }
+        let (reach, place) = self
+            .schedule_proposer(caller)
+            .map_err(|_| super::TRIGGER_FROM_A_LEAD.to_string())?;
+        if reach.is_none() {
+            return Err("a trigger runs in a project: propose it from that project's lead".into());
+        }
+        let new = New {
+            name: name.clone(),
+            on: *on,
+            run: crate::schedule::Run {
+                kind: *kind,
+                project: place.clone(),
+                label: name.clone(),
+                model: None,
+                effort: None,
+                task: Some(task.clone()),
+                teammate: None,
+                level: None,
+            },
+            mode: Mode::Ask,
+            secret: None,
+            github: github.clone(),
+        };
+        triggers::check_new(&self.home, &self.known_projects(), &new)?;
+        let line = triggers::proposal_line(&new);
+        self.queue.ask_owner(
+            &caller.id,
+            queue::OwnerAsk::Trigger {
+                name: new.name,
+                on: new.on,
+                github: new.github,
+                run: new.run,
+                line: line.clone(),
+                place,
+            },
+        )?;
+        Ok(Reply::Text { text: line })
+    }
     /// Ticket 993: `nunchiro schedule change <id> pause|resume|remove`, for an entry the caller may read; a card.
     pub(super) fn schedule_change(
         &mut self,

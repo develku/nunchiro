@@ -239,6 +239,122 @@ pub(crate) fn asked(
     handle(registry, stopping, home, action)
 }
 
+/// A trigger to add: the owner's own (`trigger add`, the window), or a lead's proposal the owner said yes to.
+pub(crate) struct New {
+    pub name: String,
+    pub on: Source,
+    pub run: Run,
+    pub mode: Mode,
+    pub secret: Option<String>,
+    pub github: Option<Github>,
+}
+/// Everything an add checks before it writes: the name, the run, a known project, the secret (a webhook's only) and
+/// what a GitHub trigger watches (its only). A proposal is checked the same way before its card is made.
+pub(crate) fn check_new(
+    home: &Path,
+    known: &std::collections::BTreeSet<String>,
+    t: &New,
+) -> Result<(), String> {
+    if !crate::approval::valid_name(&t.name) {
+        return Err("trigger name: a-z, 0-9, - and _ (up to 64)".into());
+    }
+    if t.run.teammate.is_some() {
+        return Err("a trigger starts an agent, not a teammate's seat".into());
+    }
+    t.run.check()?;
+    super::known_project(&t.run.project, known)?;
+    match (t.on, &t.secret) {
+        (Source::Webhook, Some(s))
+            if s.chars().count() >= SECRET_MIN && !s.chars().any(char::is_control) => {}
+        (Source::Webhook, _) => {
+            return Err(format!(
+                "a webhook trigger needs a secret of at least {SECRET_MIN} characters"
+            ));
+        }
+        (Source::Cli | Source::Github, None) => {}
+        (Source::Cli | Source::Github, Some(_)) => {
+            return Err("only a webhook trigger has a secret".into());
+        }
+    }
+    match (t.on, &t.github) {
+        (Source::Github, Some(g)) => g.check()?,
+        (Source::Github, None) => {
+            return Err("a GitHub trigger needs a repository and an event".into());
+        }
+        (_, Some(_)) => return Err("only a GitHub trigger watches a repository".into()),
+        (_, None) => {}
+    }
+    if load(home)?.iter().any(|x| x.name == t.name) {
+        return Err(format!("a trigger named {} exists", t.name));
+    }
+    Ok(())
+}
+/// Adds a trigger after `check_new`. The caller holds no registry lock (`known` is read before).
+pub(crate) fn add(
+    home: &Path,
+    known: &std::collections::BTreeSet<String>,
+    t: New,
+) -> Result<(), String> {
+    check_new(home, known, &t)?;
+    let _w = WRITE.lock().map_err(|_| "triggers unavailable")?;
+    let mut all = load(home)?;
+    if all.iter().any(|x| x.name == t.name) {
+        return Err(format!("a trigger named {} exists", t.name));
+    }
+    if all.len() >= MAX_TRIGGERS {
+        return Err(format!("at most {MAX_TRIGGERS} triggers"));
+    }
+    all.push(Trigger {
+        name: t.name,
+        on: t.on,
+        run: t.run,
+        mode: t.mode,
+        secret: t.secret,
+        github: t.github,
+        mac: String::new(),
+        paused: false,
+        fired: vec![],
+        last: None,
+        started_cards: vec![],
+    });
+    save(home, all)
+}
+/// A proposed trigger in one line, as its card says it: name, what fires it, the agent and the task.
+pub(crate) fn proposal_line(t: &New) -> String {
+    let from = match (t.on, &t.github) {
+        (Source::Github, Some(g)) => format!(
+            "GitHub {}: {}",
+            g.repo,
+            match g.event {
+                GithubEvent::ChecksFailed => "checks fail".to_string(),
+                GithubEvent::ChangesRequested => "a review asks for changes".to_string(),
+                GithubEvent::Labeled => format!("label {}", g.label.clone().unwrap_or_default()),
+            }
+        ),
+        (Source::Webhook, _) => "a webhook".into(),
+        _ => "the command line".into(),
+    };
+    let agent = match t.run.kind {
+        crate::api::AgentKind::Codex => "Codex",
+        _ => "Claude",
+    };
+    let task: String = t
+        .run
+        .task
+        .as_deref()
+        .unwrap_or_default()
+        .chars()
+        .filter(|c| !crate::board::rights::hidden(*c))
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(160)
+        .collect();
+    format!("{} · {from} · {agent}: {task}", t.name)
+}
+
 /// Owner dispatch (server.rs answers a `trigger` token's `Fire` here too, and refuses every other caller first).
 pub(crate) fn handle(
     registry: &Mutex<Sessions>,
@@ -261,59 +377,19 @@ pub(crate) fn handle(
             secret,
             github,
         } => {
-            if !crate::approval::valid_name(&name) {
-                return Err("trigger name: a-z, 0-9, - and _ (up to 64)".into());
-            }
-            if run.teammate.is_some() {
-                return Err("a trigger starts an agent, not a teammate's seat".into());
-            }
-            run.check()?;
             let known = super::lock(registry)?.known_projects();
-            super::known_project(&run.project, &known)?;
-            match (on, &secret) {
-                (Source::Webhook, Some(s))
-                    if s.chars().count() >= SECRET_MIN && !s.chars().any(char::is_control) => {}
-                (Source::Webhook, _) => {
-                    return Err(format!(
-                        "a webhook trigger needs a secret of at least {SECRET_MIN} characters"
-                    ));
-                }
-                (Source::Cli | Source::Github, None) => {}
-                (Source::Cli | Source::Github, Some(_)) => {
-                    return Err("only a webhook trigger has a secret".into());
-                }
-            }
-            match (on, &github) {
-                (Source::Github, Some(g)) => g.check()?,
-                (Source::Github, None) => {
-                    return Err("a GitHub trigger needs a repository and an event".into());
-                }
-                (_, Some(_)) => return Err("only a GitHub trigger watches a repository".into()),
-                (_, None) => {}
-            }
-            let _w = WRITE.lock().map_err(|_| "triggers unavailable")?;
-            let mut all = load(home)?;
-            if all.iter().any(|t| t.name == name) {
-                return Err(format!("a trigger named {name} exists"));
-            }
-            if all.len() >= MAX_TRIGGERS {
-                return Err(format!("at most {MAX_TRIGGERS} triggers"));
-            }
-            all.push(Trigger {
-                name,
-                on,
-                run,
-                mode,
-                secret,
-                github,
-                mac: String::new(),
-                paused: false,
-                fired: vec![],
-                last: None,
-                started_cards: vec![],
-            });
-            save(home, all)?;
-            drop(_w);
+            add(
+                home,
+                &known,
+                New {
+                    name,
+                    on,
+                    run,
+                    mode,
+                    secret,
+                    github,
+                },
+            )?;
             listed(home)
         }
         Action::Remove { name } => {

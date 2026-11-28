@@ -1524,6 +1524,17 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         level: Option<crate::team::Level>,
     },
+    /// The lead of a project's place proposes a trigger (`nunchiro trigger propose`): what fires it (`cli` or `github`,
+    /// never a webhook, whose secret is the user's), the agent and the task, in its place's project. Nothing is stored:
+    /// the user gets a card (`queue::OwnerAsk::Trigger`) and only its yes adds the trigger, asking first.
+    TriggerPropose {
+        name: String,
+        on: crate::schedule::triggers::Source,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        github: Option<crate::schedule::triggers::Github>,
+        kind: AgentKind,
+        task: String,
+    },
     /// A bot's seat offers the user a new bot for work it saw come back (`nunchiro bot offer`): `why` is what it
     /// counted. Nothing is made: the user gets a card (`queue::OwnerAsk::Bot`) and only its yes makes the bot, in the
     /// offering bot's place. Refused to every caller that is no bot's seat.

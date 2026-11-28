@@ -3263,11 +3263,8 @@ fn a_leads_trigger_proposal_is_the_users_card() {
             .as_str()
             .is_some_and(|e| e.contains("webhook"))
     );
-    assert!(
-        propose(&l.chief, "github")["Err"]
-            .as_str()
-            .is_some_and(|e| e.contains("project"))
-    );
+    // (The Home lead's seat is refused before the proposal is read: its seat takes only its own requests.)
+    assert!(propose(&l.chief, "github")["Err"].is_string());
     assert!(propose(owner, "github")["Err"].is_string());
     assert!(cards().is_empty());
     // The project's lead: one line, a card, nothing stored.
