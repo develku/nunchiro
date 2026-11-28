@@ -1050,24 +1050,28 @@ fn serve(
                         };
                         jobs.spawn(frame.id, move || crate::schedule::run_now(&registry, &id))
                     }
-                    // Ticket 373: the by-branch lookup runs git and gh: off this loop, as the PR view.
-                    Ok(frame) if matches!(frame.request, Some(Request::PrBranch { .. })) => {
-                        let registry = registry.clone();
-                        let request = frame.request.unwrap();
-                        jobs.spawn(frame.id, move || crate::pr::answer(&registry, request))
+                    // Plugins (a catalogue read, an install) and `gh` runs (V2.5-8/9, ticket 373; a merge up to
+                    // 60 s): off this loop.
+                    Ok(frame) if frame.request.as_ref().is_some_and(answer::off_loop) => {
+                        let job = answer::job(registry, home, frame.request.unwrap());
+                        jobs.spawn(frame.id, job)
                     }
-                    // V2.5-8/9: `gh` runs of up to 15 s (a merge up to 60 s): off this loop.
+                    // The Diff panel's Push runs git for up to 120 s: off this loop.
                     Ok(frame)
                         if matches!(
                             frame.request,
                             Some(
-                                Request::PrView { .. } | Request::PrList | Request::PrMerge { .. }
+                                Request::GitPush { .. }
+                                    | Request::PrDraft { .. }
+                                    | Request::PrCreate { .. }
                             )
                         ) =>
                     {
                         let registry = registry.clone();
                         let request = frame.request.unwrap();
-                        jobs.spawn(frame.id, move || crate::pr::answer(&registry, request))
+                        jobs.spawn(frame.id, move || {
+                            crate::git_write::answer(&registry, request)
+                        })
                     }
                     Ok(frame) if matches!(frame.request, Some(Request::SessionContext { .. })) => {
                         let Some(Request::SessionContext { id, refresh }) = frame.request else {
@@ -1235,11 +1239,16 @@ fn serve(
                             crate::accounts::probe_reply(&home, request)
                         })
                     }
-                    // Ticket 358: sign-in reads the reported methods first and sign-out waits for the answer.
+                    // Ticket 358: sign-in reads the reported methods first and sign-out waits for the answer; the
+                    // test message waits up to 60 s for the agent's turn.
                     Ok(frame)
                         if matches!(
                             frame.request,
-                            Some(Request::AcpAgentSignIn { .. } | Request::AcpAgentSignOut { .. })
+                            Some(
+                                Request::AcpAgentSignIn { .. }
+                                    | Request::AcpAgentSignOut { .. }
+                                    | Request::AcpAgentTry { .. }
+                            )
                         ) =>
                     {
                         let (registry, home) = (registry.clone(), home.to_path_buf());
@@ -1824,8 +1833,13 @@ fn read_pr_chip(registry: &Mutex<Sessions>, id: &str) -> Response {
     let (mut before, mut generation, mut events, mut chip, mut past) =
         (None, None, vec![], None, 0);
     for _ in 0..PAGES {
-        let Reply::ChatPage { page, .. } = read_chat(registry, id, before, None, generation)?
-        else {
+        let read = read_chat(registry, id, before, None, generation);
+        // A session with no conversation to read (a terminal) still shows the PR the app made for it.
+        let Ok(Reply::ChatPage { page, .. }) = read else {
+            if let Some(chip) = crate::pr_live::made_chip(id) {
+                return Ok(Reply::PrChip { chip: Some(chip) });
+            }
+            read?;
             return Err("chat unavailable".into());
         };
         // Every later page must match the first page's generation: after a reset, start over from the newest page.
@@ -1853,6 +1867,8 @@ fn read_pr_chip(registry: &Mutex<Sessions>, id: &str) -> Response {
     if chip.is_some() {
         crate::pr_live::note_created(&events); // v2-8c
     }
+    // A PR the app created from the Diff panel, until the transcript names one.
+    let chip = chip.or_else(|| crate::pr_live::made_chip(id));
     Ok(Reply::PrChip { chip })
 }
 

@@ -61,6 +61,10 @@ declare module '../index' {
     'schedule.failedRun': true;
     'schedule.found': true;
     'schedule.card.title.add': true;
+    'schedule.card.title.trigger': true;
+    'schedule.card.trigger': true;
+    'schedule.card.fromTrigger': true;
+    'schedule.card.triggerOff': true;
     'schedule.card.title.pause': true;
     'schedule.card.title.resume': true;
     'schedule.card.title.remove': true;
@@ -140,6 +144,10 @@ export const en = {
   'schedule.failedRun': "Scheduled run failed: {reason}",
   'schedule.found': "Open the widget",
   'schedule.card.title.add': "New schedule",
+  'schedule.card.title.trigger': "A trigger fired",
+  'schedule.card.trigger': "Start",
+  'schedule.card.fromTrigger': "Trigger {name}",
+  'schedule.card.triggerOff': "Turn this trigger off",
   'schedule.card.title.pause': "Pause schedule",
   'schedule.card.title.resume': "Resume schedule",
   'schedule.card.title.remove': "Remove schedule",

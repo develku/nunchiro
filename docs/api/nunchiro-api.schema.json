@@ -451,6 +451,161 @@
             "id"
           ],
           "type": "object"
+        },
+        {
+          "description": "The catalogue's plugins (`plugins_online.rs`); the network, so off every lock.",
+          "properties": {
+            "do": {
+              "const": "catalog",
+              "type": "string"
+            }
+          },
+          "required": [
+            "do"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Installs or updates a plugin from the catalogue: off and not approved until the owner reviews it.",
+          "properties": {
+            "do": {
+              "const": "install",
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "do",
+            "id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Action2": {
+      "description": "What the owner and the CLI ask of triggers.",
+      "oneOf": [
+        {
+          "properties": {
+            "do": {
+              "const": "list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "do"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The owner's alone. A webhook trigger needs a `secret` of at least 16 characters.",
+          "properties": {
+            "do": {
+              "const": "add",
+              "type": "string"
+            },
+            "github": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Github"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "What a `github` trigger watches."
+            },
+            "mode": {
+              "$ref": "#/$defs/Mode",
+              "default": "ask"
+            },
+            "name": {
+              "type": "string"
+            },
+            "on": {
+              "$ref": "#/$defs/Source"
+            },
+            "run": {
+              "$ref": "#/$defs/ScheduleRun"
+            },
+            "secret": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "do",
+            "name",
+            "on",
+            "run"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "do": {
+              "const": "remove",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "do",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "do": {
+              "const": "pause",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "paused": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "do",
+            "name",
+            "paused"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The owner, or a token of the `trigger` scope. `data` is the payload, shown to the session as quoted data.",
+          "properties": {
+            "data": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "do": {
+              "const": "fire",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "do",
+            "name"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -1097,6 +1252,10 @@
     "Blocker": {
       "description": "A task this one waits for, as a reader gets it.",
       "properties": {
+        "dropped": {
+          "description": "It closed without landing (dropped, or its worktree removed): the waiting task asks instead of waiting.",
+          "type": "boolean"
+        },
         "id": {
           "type": "string"
         },
@@ -1520,6 +1679,71 @@
         "agent_changed"
       ],
       "type": "string"
+    },
+    "CatalogEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "about": {
+          "type": "string"
+        },
+        "adds": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "default": {},
+          "description": "How many of each kind it adds (`panel`, `command`, `setting`, `check`).",
+          "type": "object"
+        },
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commit": {
+          "description": "The commit its files are read at (40 hex).",
+          "type": "string"
+        },
+        "dir": {
+          "description": "Its folder in the repository at that commit.",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/File2"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network": {
+          "default": [],
+          "description": "The hosts its parts may reach.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "about",
+        "version",
+        "commit",
+        "dir",
+        "files"
+      ],
+      "type": "object"
     },
     "Change": {
       "properties": {
@@ -2565,6 +2789,58 @@
       ],
       "type": "object"
     },
+    "Draft": {
+      "description": "What the Create PR form starts with (`pr_draft`). All text is git's or the repository's: the window draws it as text.",
+      "properties": {
+        "bases": {
+          "description": "The default branch first, then the remote's other branches.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "body": {
+          "type": "string"
+        },
+        "commits": {
+          "description": "Commits the PR holds (against the default branch).",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gh_why": {
+          "description": "Why gh cannot create it now (not installed, not signed in); the form still opens.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head": {
+          "type": "string"
+        },
+        "push": {
+          "$ref": "#/$defs/PushTo",
+          "description": "Where the push goes first; `ahead` 0 when nothing needs pushing."
+        },
+        "template": {
+          "description": "The body is the repository's PR template.",
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "body",
+        "template",
+        "commits",
+        "bases",
+        "head",
+        "push"
+      ],
+      "type": "object"
+    },
     "Envelope": {
       "properties": {
         "request": {
@@ -2812,6 +3088,23 @@
         "path",
         "additions",
         "deletions"
+      ],
+      "type": "object"
+    },
+    "File2": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Relative to `dir`.",
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
       ],
       "type": "object"
     },
@@ -3168,9 +3461,36 @@
         "has_remote": {
           "type": "boolean"
         },
+        "head": {
+          "default": null,
+          "description": "The commit HEAD names; null before the first commit. The Push strip shows it and sends it back.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "is_default": {
           "description": "The checked-out branch is the default branch: one press must never push there.",
           "type": "boolean"
+        },
+        "push_to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PushTo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where the app's Push sends the branch (git_write.rs `target`); null with `push_why` saying why there is none."
+        },
+        "push_why": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "upstream": {
           "description": "The branch has an upstream; `ahead` and `behind` count against it (0 without one).",
@@ -3200,6 +3520,54 @@
         "missing"
       ],
       "type": "string"
+    },
+    "Github": {
+      "additionalProperties": false,
+      "description": "What a GitHub trigger watches: one repository and one kind of event.",
+      "properties": {
+        "any_author": {
+          "description": "Pull requests of anyone, not only the owner's own (`--author @me`): on a public repository a stranger's pull\nrequest could then start a run on code the stranger wrote.",
+          "type": "boolean"
+        },
+        "event": {
+          "$ref": "#/$defs/GithubEvent"
+        },
+        "label": {
+          "description": "The label a `labeled` trigger waits for.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo": {
+          "description": "`owner/name`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "event"
+      ],
+      "type": "object"
+    },
+    "GithubEvent": {
+      "oneOf": [
+        {
+          "const": "checks_failed",
+          "description": "An open pull request's checks failed (once per head commit).",
+          "type": "string"
+        },
+        {
+          "const": "changes_requested",
+          "description": "A review asked for changes on an open pull request (once per head commit).",
+          "type": "string"
+        },
+        {
+          "const": "labeled",
+          "description": "An open issue or pull request has the label.",
+          "type": "string"
+        }
+      ]
     },
     "Group": {
       "description": "One row of a tab: an agent, a model, a folder or an agent session.",
@@ -3672,6 +4040,13 @@
           "minimum": 0,
           "type": "integer"
         },
+        "early": {
+          "description": "A seat that writes sat on it before it waited: `started before \"<title>\" landed`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "floor": {
           "description": "Ticket 1055 rule 2: a seat that does not write runs its role's own model, so the floor of its Builder's level\ncould not apply. One plain line.",
           "type": [
@@ -3740,6 +4115,13 @@
           "description": "The project root, or the Home folder.",
           "type": "string"
         },
+        "released": {
+          "description": "The tasks of `after` whose landing or drop its lead was told (advance.rs `release`), so a restart tells it once.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "review": {
           "anyOf": [
             {
@@ -3783,6 +4165,13 @@
         "state": {
           "description": "`needs` (a seat waits for the user), `working`, `review` (a reviewer runs, or the files changed after the\nreview), `changes` (the review asked for changes), `approved` (the review passed and nothing changed since),\n`merge` (approved, and the user said yes to merging these files), `asked` (no seat works and one of its room asks\nis open), `idle`, or how it closed.",
           "type": "string"
+        },
+        "stuck": {
+          "description": "A task it waits for was dropped: what the user is asked (the state is then `needs`).",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "title": {
           "description": "The outcome, one line.",
@@ -4610,6 +4999,21 @@
         "ts"
       ],
       "type": "object"
+    },
+    "Mode": {
+      "oneOf": [
+        {
+          "enum": [
+            "auto"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "ask",
+          "description": "A Decisions card: Start or Not this time.",
+          "type": "string"
+        }
+      ]
     },
     "ModeState": {
       "description": "CHAT-MODELIST: the mode list's per-session facts.",
@@ -6152,6 +6556,40 @@
       ],
       "type": "object"
     },
+    "PushTo": {
+      "description": "Where a push of the checked-out branch goes and how many commits it carries; part of `diff::GitFacts`, so the strip\nshows what the core will push.",
+      "properties": {
+        "ahead": {
+          "description": "Commits on HEAD the remote branch lacks (against the upstream; without one, against every branch of the remote).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "branch": {
+          "description": "The branch name on the remote (`refs/heads/` stripped).",
+          "type": "string"
+        },
+        "key": {
+          "description": "A fingerprint of the remote's push URL (never the URL, which may hold a token): a URL changed after the strip\nshowed is caught.",
+          "type": "string"
+        },
+        "remote": {
+          "type": "string"
+        },
+        "upstream": {
+          "description": "The branch has this upstream already; a first push sets it.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "remote",
+        "branch",
+        "ahead",
+        "upstream",
+        "key"
+      ],
+      "type": "object"
+    },
     "QueueDecision": {
       "properties": {
         "actionable": {
@@ -7187,6 +7625,82 @@
         },
         {
           "properties": {
+            "branch": {
+              "type": "string"
+            },
+            "note": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "pushed": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "remote": {
+              "type": "string"
+            },
+            "type": {
+              "const": "git_pushed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "pushed",
+            "remote",
+            "branch"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "type": {
+              "const": "pr_draft",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "draft"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "number": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pushed": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": {
+              "const": "pr_created",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url",
+            "number",
+            "pushed"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "pr": {
               "anyOf": [
                 {
@@ -7920,6 +8434,13 @@
               },
               "type": "array"
             },
+            "turns": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Turn"
+              },
+              "description": "The last test message per ACP agent name.",
+              "type": "object"
+            },
             "type": {
               "const": "acp_agents",
               "type": "string"
@@ -7929,7 +8450,8 @@
             "type",
             "terminal",
             "acp",
-            "file"
+            "file",
+            "turns"
           ],
           "type": "object"
         },
@@ -7943,6 +8465,22 @@
           },
           "required": [
             "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "turn": {
+              "$ref": "#/$defs/Turn"
+            },
+            "type": {
+              "const": "acp_turn",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "turn"
           ],
           "type": "object"
         },
@@ -8117,6 +8655,25 @@
         },
         {
           "properties": {
+            "triggers": {
+              "items": {
+                "$ref": "#/$defs/Trigger"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "triggers",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "triggers"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "plugins": {
               "items": {
                 "$ref": "#/$defs/Listed"
@@ -8131,6 +8688,26 @@
           "required": [
             "type",
             "plugins"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The plugin catalogue's entries (Browse plugins).",
+          "properties": {
+            "catalog": {
+              "items": {
+                "$ref": "#/$defs/CatalogEntry"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "plugin_catalog",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "catalog"
           ],
           "type": "object"
         },
@@ -9725,6 +10302,119 @@
           "required": [
             "op",
             "path"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "description": "What the strip showed and the window sends back: the push is refused unless all of it still holds.",
+          "properties": {
+            "ahead": {
+              "default": 0,
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "branch": {
+              "default": "",
+              "type": "string"
+            },
+            "head": {
+              "default": "",
+              "type": "string"
+            },
+            "key": {
+              "default": "",
+              "type": "string"
+            },
+            "op": {
+              "const": "git_push",
+              "type": "string"
+            },
+            "remote": {
+              "default": "",
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "session"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "properties": {
+            "op": {
+              "const": "pr_draft",
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "session"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "description": "What the strip showed and the window sends back: the push is refused unless all of it still holds.",
+          "properties": {
+            "ahead": {
+              "default": 0,
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "base": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "branch": {
+              "default": "",
+              "type": "string"
+            },
+            "draft": {
+              "default": false,
+              "type": "boolean"
+            },
+            "head": {
+              "default": "",
+              "type": "string"
+            },
+            "key": {
+              "default": "",
+              "type": "string"
+            },
+            "op": {
+              "const": "pr_create",
+              "type": "string"
+            },
+            "remote": {
+              "default": "",
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "session",
+            "title",
+            "body",
+            "base"
           ],
           "type": "object",
           "x-stability": "window"
@@ -11788,6 +12478,28 @@
           "x-stability": "window"
         },
         {
+          "description": "The test message of an approved agent (one fixed sentence, confined as the check, 60 s); `cancel` ends a running one.",
+          "properties": {
+            "cancel": {
+              "default": false,
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "op": {
+              "const": "acp_agent_try",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "name"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
           "description": "Skills and hooks, the agents' MCP servers read-only (env names only), and Nunchiro's own servers.",
           "properties": {
             "op": {
@@ -12352,6 +13064,24 @@
             },
             "op": {
               "const": "plugin",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "action"
+          ],
+          "type": "object",
+          "x-stability": "window"
+        },
+        {
+          "description": "Triggers (`schedule/triggers.rs`): the owner lists, adds, removes and pauses them; the owner or a token of the\n`trigger` scope fires one.",
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/Action2"
+            },
+            "op": {
+              "const": "trigger",
               "type": "string"
             }
           },
@@ -15015,6 +15745,25 @@
       ],
       "type": "object"
     },
+    "Source": {
+      "oneOf": [
+        {
+          "const": "cli",
+          "description": "`nunchiro trigger fire <name>`.",
+          "type": "string"
+        },
+        {
+          "const": "webhook",
+          "description": "`POST http://127.0.0.1:<port>/hooks/<name>`, signed (GitHub `X-Hub-Signature-256`) or with\n`X-Nunchiro-Secret`.",
+          "type": "string"
+        },
+        {
+          "const": "github",
+          "description": "An event read from GitHub with the user's own `gh` (`github.rs`).",
+          "type": "string"
+        }
+      ]
+    },
     "SourceState": {
       "properties": {
         "error": {
@@ -15508,6 +16257,11 @@
           "const": "full",
           "description": "What a session token may do, except answers, keys and settings (no scope has those); types only into its own.",
           "type": "string"
+        },
+        {
+          "const": "trigger",
+          "description": "Fires triggers (`nunchiro trigger fire`) and nothing else.",
+          "type": "string"
         }
       ]
     },
@@ -15826,6 +16580,144 @@
       "required": [
         "name",
         "projects"
+      ],
+      "type": "object"
+    },
+    "Trigger": {
+      "additionalProperties": false,
+      "properties": {
+        "fired": {
+          "description": "The starts of the last hour (unix ms), for `PER_HOUR`. Outside the MAC.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "github": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Github"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A GitHub trigger's repository and event."
+        },
+        "last": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Last"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The last fire: the session it started, or why not. Outside the MAC."
+        },
+        "mac": {
+          "default": "",
+          "description": "HMAC of name, on, run, mode, secret and github under `schedule.key`.",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode",
+          "default": "ask"
+        },
+        "name": {
+          "description": "a-z, 0-9, - and _; the webhook path and the CLI's name.",
+          "type": "string"
+        },
+        "on": {
+          "$ref": "#/$defs/Source"
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "run": {
+          "$ref": "#/$defs/ScheduleRun"
+        },
+        "secret": {
+          "description": "A webhook's shared secret, kept only in this 0600 file the core writes; never in a reply.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "started_cards": {
+          "description": "The cards whose Start already ran (newest last, at most 20), so a card a quit left behind starts nothing twice.\nOutside the MAC.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "on",
+        "run"
+      ],
+      "type": "object"
+    },
+    "Turn": {
+      "description": "The three flags are the scorecard's words: a prompt sent, an answer read, the turn's end seen.",
+      "properties": {
+        "answer_read": {
+          "type": "boolean"
+        },
+        "at": {
+          "description": "Unix seconds of the try.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "error": {
+          "description": "The failure's detail, one line.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "failure": {
+          "description": "Why the try failed: `no_answer`, `not_signed_in`, `error` (the agent's own words in `error`), `empty`, `no_end`\n(it stopped before the turn ended) or `other`; none when it answered.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ms": {
+          "description": "From the start of the run to the turn's end (or to the failure).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sent": {
+          "type": "boolean"
+        },
+        "text": {
+          "description": "The answer's first `TEXT_MAX` characters, control characters removed.",
+          "type": "string"
+        },
+        "turn_end": {
+          "type": "boolean"
+        },
+        "version": {
+          "description": "The agent's `--version`, as the check reads it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "sent",
+        "answer_read",
+        "turn_end",
+        "ms",
+        "text",
+        "at"
       ],
       "type": "object"
     },

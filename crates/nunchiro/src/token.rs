@@ -26,7 +26,7 @@ pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
             let Reply::TokenCreated { token, secret } = super::call(
                 home,
                 Request::TokenCreate {
-                    scope: scope.ok_or("--scope read|supervised|full is required")?,
+                    scope: scope.ok_or("--scope read|supervised|full|trigger is required")?,
                     project,
                     expires_in_ms: expires,
                 },

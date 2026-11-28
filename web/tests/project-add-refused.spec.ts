@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, openWindow, test } from './fixtures';
+import { startOf } from './start-op';
 
 /** A native folder picker that answers `folder`; every other app call answers null. */
 const picker = (page: Page, folder: string) =>
@@ -59,7 +60,7 @@ test('project_add_privacy_refusal_offers_settings: an EPERM refusal shows the Fi
     const server = ws.connectToServer();
     ws.onMessage((msg) => {
       const r = typeof msg === 'string' ? JSON.parse(msg) : null;
-      if (r?.request?.op === 'start') return ws.send(JSON.stringify({ id: r.id, response: { Err: `file_access: cannot read ${ok}: Operation not permitted (os error 1)` } }));
+      if (startOf(r?.request)) return ws.send(JSON.stringify({ id: r.id, response: { Err: `file_access: cannot read ${ok}: Operation not permitted (os error 1)` } }));
       server.send(msg);
     });
     server.onMessage((msg) => ws.send(msg));
@@ -82,7 +83,7 @@ test('project_add_unknown_file_access_reason_is_plain: an unmatched file_access 
     const server = ws.connectToServer();
     ws.onMessage((msg) => {
       const r = typeof msg === 'string' ? JSON.parse(msg) : null;
-      if (r?.request?.op === 'start') return ws.send(JSON.stringify({ id: r.id, response: { Err: 'file_access: the disk answered in an odd way' } }));
+      if (startOf(r?.request)) return ws.send(JSON.stringify({ id: r.id, response: { Err: 'file_access: the disk answered in an odd way' } }));
       server.send(msg);
     });
     server.onMessage((msg) => ws.send(msg));
