@@ -451,6 +451,36 @@
             "id"
           ],
           "type": "object"
+        },
+        {
+          "description": "The catalogue's plugins (`plugins_online.rs`); the network, so off every lock.",
+          "properties": {
+            "do": {
+              "const": "catalog",
+              "type": "string"
+            }
+          },
+          "required": [
+            "do"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Installs or updates a plugin from the catalogue: off and not approved until the owner reviews it.",
+          "properties": {
+            "do": {
+              "const": "install",
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "do",
+            "id"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -1649,6 +1679,71 @@
         "agent_changed"
       ],
       "type": "string"
+    },
+    "CatalogEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "about": {
+          "type": "string"
+        },
+        "adds": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "default": {},
+          "description": "How many of each kind it adds (`panel`, `command`, `setting`, `check`).",
+          "type": "object"
+        },
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commit": {
+          "description": "The commit its files are read at (40 hex).",
+          "type": "string"
+        },
+        "dir": {
+          "description": "Its folder in the repository at that commit.",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/File2"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network": {
+          "default": [],
+          "description": "The hosts its parts may reach.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "about",
+        "version",
+        "commit",
+        "dir",
+        "files"
+      ],
+      "type": "object"
     },
     "Change": {
       "properties": {
@@ -2993,6 +3088,23 @@
         "path",
         "additions",
         "deletions"
+      ],
+      "type": "object"
+    },
+    "File2": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Relative to `dir`.",
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
       ],
       "type": "object"
     },
@@ -8600,6 +8712,26 @@
           "required": [
             "type",
             "plugins"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The plugin catalogue's entries (Browse plugins).",
+          "properties": {
+            "catalog": {
+              "items": {
+                "$ref": "#/$defs/CatalogEntry"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "plugin_catalog",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "catalog"
           ],
           "type": "object"
         },

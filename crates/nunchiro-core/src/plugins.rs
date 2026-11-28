@@ -172,7 +172,7 @@ pub enum SettingKind {
 
 /// A plugin id: a widget name with no `__` (it separates id and part) and no `_` at the end (`plugin__x___c` would
 /// read as plugin `x`, part `_c`).
-fn valid_id(id: &str) -> bool {
+pub(crate) fn valid_id(id: &str) -> bool {
     approval::valid_name(id) && !id.contains("__") && !id.ends_with('_')
 }
 /// The widget name of one part, `plugin__<id>__<part>`: plain widget-name characters, so a panel is placed, framed
@@ -474,6 +474,14 @@ fn save(home: &Path, store: &Store) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(store).map_err(|e| e.to_string())?;
     crate::store::atomic_write(&home.join(STORE), &bytes)
 }
+/// Switches a plugin off (an install from the catalogue).
+pub(crate) fn turn_off(home: &Path, id: &str) -> Result<(), String> {
+    let mut store = load(home);
+    if store.on.remove(id) {
+        save(home, &store)?;
+    }
+    Ok(())
+}
 /// A part's plugin is on (the switch on the Plugins page); its approval is checked separately.
 pub(crate) fn on(home: &Path, name: &str) -> Result<(), String> {
     match split(name) {
@@ -737,6 +745,12 @@ pub enum Action {
     Remove {
         id: String,
     },
+    /// The catalogue's plugins (`plugins_online.rs`); the network, so off every lock.
+    Catalog,
+    /// Installs or updates a plugin from the catalogue: off and not approved until the owner reviews it.
+    Install {
+        id: String,
+    },
 }
 
 /// Dispatch for `Request::Plugin` (server.rs and http/answer.rs, after their owner checks); runs after the lock.
@@ -764,6 +778,13 @@ pub(crate) fn handle(
     };
     match action {
         Action::List => listed(home),
+        Action::Catalog => crate::plugins_online::Catalog::new(home)
+            .entries()
+            .map(|catalog| Reply::PluginCatalog { catalog }),
+        Action::Install { id } => {
+            crate::plugins_online::Catalog::new(home).install(&id)?;
+            listed(home)
+        }
         Action::Set { id, on } => {
             read(home, &id)?;
             let mut store = load(home);
@@ -881,22 +902,7 @@ pub(crate) fn handle(
             if !approval::valid_name(&id) {
                 return Err("invalid plugin id".into());
             }
-            let from = dir(home).join(&id);
-            if !from.symlink_metadata().is_ok_and(|m| m.is_dir()) {
-                return Err(format!("no plugin {id}"));
-            }
-            let removed = dir(home).join(".removed");
-            fs::DirBuilder::new()
-                .recursive(true)
-                .mode(0o700)
-                .create(&removed)
-                .map_err(|e| e.to_string())?;
-            fs::rename(
-                &from,
-                removed.join(format!("{id}-{}", crate::queue::now_ms())),
-            )
-            .map_err(|e| e.to_string())?;
-            crate::sandbox::stop_subjects(home, &part_name(&id, ""));
+            set_aside(home, &id)?;
             let mut store = load(home);
             store.on.remove(&id);
             store.settings.remove(&id);
@@ -906,6 +912,33 @@ pub(crate) fn handle(
             listed(home)
         }
     }
+}
+
+/// Moves `plugins/<id>` to `plugins/.removed/` (moving it back undoes it) and stops its runs: Remove, and an
+/// update from the catalogue before the new folder goes in.
+pub(crate) fn set_aside(home: &Path, id: &str) -> Result<(), String> {
+    let from = dir(home).join(id);
+    if !from.symlink_metadata().is_ok_and(|m| m.is_dir()) {
+        return Err(format!("no plugin {id}"));
+    }
+    let removed = dir(home).join(".removed");
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&removed)
+        .map_err(|e| e.to_string())?;
+    // Two set aside in one millisecond (an update right after another) get their own names.
+    let at = crate::queue::now_ms();
+    let to = (0..)
+        .map(|n| match n {
+            0 => removed.join(format!("{id}-{at}")),
+            n => removed.join(format!("{id}-{at}-{n}")),
+        })
+        .find(|p| p.symlink_metadata().is_err())
+        .unwrap_or_default();
+    fs::rename(&from, to).map_err(|e| e.to_string())?;
+    crate::sandbox::stop_subjects(home, &part_name(id, ""));
+    Ok(())
 }
 
 /// One part's result in `plugin check`.
