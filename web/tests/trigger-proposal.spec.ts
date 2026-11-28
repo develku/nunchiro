@@ -40,3 +40,20 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(triggers(core)).toMatchObject([{ name: 'ci-fix', mode: 'ask', github: { repo: 'o/r' } }]);
   });
 }
+
+test('trigger_proposal_full_task: the card shows the whole task that would be stored, and the full project path on hover', async ({ app, core }) => {
+  tokenClaude(core);
+  const project = repo(core, 'nunchiro');
+  mates(core, [{ id: 'bot-dalsu', name: 'Dalsu', job: 'Splits goals into tasks.', project, lead: true }]);
+  await patchSnapshots(app);
+  await openWindow(app, {}, core);
+  const lead = await openSeat(app, core, 'Dalsu');
+  const token = await tokenOf(core, lead);
+  const task = `${'Find why the checks failed. '.repeat(12)}Then push the fix and say what it was.`;
+  nunchiro({ ...core.env, NUNCHIRO_TOKEN: token }, ['trigger', 'propose', 'long', '--on', 'github', '--repo', 'o/r', '--event', 'checks_failed', '--task', task]);
+  await app.locator('#icon-decisions').click();
+  const card = app.locator('.dw [data-trigger-proposal="long"]');
+  // The one line is cut; the task block holds all of it.
+  await expect(card.locator('[data-trigger-task]')).toHaveText(task);
+  await expect(card.locator('[data-trigger-line] small')).toHaveAttribute('title', project);
+});
