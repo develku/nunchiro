@@ -955,6 +955,13 @@
             "null"
           ]
         },
+        "added": {
+          "description": "A plugin's access beyond what was approved (`plugins::access` lines): why it asks again.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "cli": {
           "description": "The equivalent command line (read level).",
           "type": "string"
@@ -997,6 +1004,10 @@
         },
         "state": {
           "$ref": "#/$defs/ApprovalState"
+        },
+        "updated": {
+          "description": "A plugin approved for its access whose files changed since, asking for nothing new: it stays approved.",
+          "type": "boolean"
         }
       },
       "required": [
@@ -4627,6 +4638,10 @@
             }
           ],
           "description": "Absent when the folder or its manifest cannot be read (`error` says why)."
+        },
+        "updated": {
+          "description": "Changed since its approval but asking for nothing new (`approval::View::updated`): still approved.",
+          "type": "boolean"
         },
         "values": {
           "additionalProperties": true,
