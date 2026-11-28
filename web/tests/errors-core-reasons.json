@@ -489,6 +489,7 @@
  "task {} is closed: its package is kept as it is": "cli: only `nunchiro task|note|role ...` typed by a lead or a seat (or a CLI flag) sends this; the window's requests do not",
  "name the seat": "cli: only `nunchiro task|note|role ...` typed by a lead or a seat (or a CLI flag) sends this; the window's requests do not",
  "{} is no task id": "internal: an id, a code word or a cursor the core made itself, or a shape guard; not text for a user",
+ "plugins unavailable": "internal: the plugins.json store's own lock, taken by every switch, setting and install; a poisoned lock is a core fault, not text for a user",
  "packages unavailable": "internal: the package store's own lock, taken only by `nunchiro task package` and `task staff` writes; a poisoned lock is a core fault, not text for a user",
  "seats at once is 2, 4, 6 or 8": "guard: Settings > Team's Live seats control sends only 2, 4, 6 or 8 (lead/place.tsx CAPS), so it does not trip",
  "auto-advance is on or off": "guard: Settings > Team's Auto-advance switch sends only on or off (lead/place.tsx), so it does not trip",
