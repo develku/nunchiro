@@ -46,7 +46,7 @@ export const en = {
   'git.prefix': 'Branch name prefix for new worktrees',
   'git.prefixDesc': 'Added before the branch name of a new worktree, for example feature/. If empty, nothing is added.',
   'git.root': 'Folder for new worktrees',
-  'git.rootDesc': 'Default: ~/nunchiro/worktrees. Set a folder here to use another disk.',
+  'git.rootDesc': 'Default: ~/nunchiro/worktrees (a core on its own data folder uses a folder beside it). Set a folder here to use another disk.',
   'git.browse': 'Browse',
   'git.newWt': 'New session in a new worktree',
   'git.newWtDesc': 'Change the key on the Keyboard page.',

@@ -702,8 +702,7 @@ fn serve(
     // v1a-27: each watched session's replay end, read without the registry; refreshed by every registry pass.
     let mut tails: BTreeMap<String, crate::pty::Tail> = BTreeMap::new();
     let mut synced_at = Instant::now();
-    // v1b-02
-    let mut chat_watches: BTreeMap<String, (u64, u64, u64)> = BTreeMap::new();
+    let mut chat_watches: BTreeMap<String, (u64, u64, u64)> = BTreeMap::new(); // v1b-02
     let mut last_snapshot = String::new();
     let mut snapshot_at = Instant::now() - SNAPSHOT_EVERY;
     let mut active_until = Instant::now() + WINDOW_ACTIVE;
@@ -1050,13 +1049,13 @@ fn serve(
                         };
                         jobs.spawn(frame.id, move || crate::schedule::run_now(&registry, &id))
                     }
-                    // Ticket 373: the by-branch lookup runs git and gh: off this loop, as the PR view.
-                    Ok(frame) if matches!(frame.request, Some(Request::PrBranch { .. })) => {
-                        let registry = registry.clone();
-                        let request = frame.request.unwrap();
-                        jobs.spawn(frame.id, move || crate::pr::answer(&registry, request))
+                    // Plugins (a catalogue read, an install) and `gh` runs (V2.5-8/9, ticket 373; a merge up to
+                    // 60 s): off this loop.
+                    Ok(frame) if frame.request.as_ref().is_some_and(answer::off_loop) => {
+                        let job = answer::job(registry, home, frame.request.unwrap());
+                        jobs.spawn(frame.id, job)
                     }
-                    // The Diff panel's Push runs git for up to 120 s: off this loop.
+                    // The Diff panel's Push runs git for up to 120 s, Write with AI the agent CLI up to 60 s: off this loop.
                     Ok(frame)
                         if matches!(
                             frame.request,
@@ -1064,6 +1063,8 @@ fn serve(
                                 Request::GitPush { .. }
                                     | Request::PrDraft { .. }
                                     | Request::PrCreate { .. }
+                                    | Request::PrWrite { .. }
+                                    | Request::PrWriteCancel { .. }
                             )
                         ) =>
                     {
@@ -1072,19 +1073,6 @@ fn serve(
                         jobs.spawn(frame.id, move || {
                             crate::git_write::answer(&registry, request)
                         })
-                    }
-                    // V2.5-8/9: `gh` runs of up to 15 s (a merge up to 60 s): off this loop.
-                    Ok(frame)
-                        if matches!(
-                            frame.request,
-                            Some(
-                                Request::PrView { .. } | Request::PrList | Request::PrMerge { .. }
-                            )
-                        ) =>
-                    {
-                        let registry = registry.clone();
-                        let request = frame.request.unwrap();
-                        jobs.spawn(frame.id, move || crate::pr::answer(&registry, request))
                     }
                     Ok(frame) if matches!(frame.request, Some(Request::SessionContext { .. })) => {
                         let Some(Request::SessionContext { id, refresh }) = frame.request else {
@@ -1320,10 +1308,9 @@ fn serve(
                                 .map(|check| Reply::CommandCheck { check })
                         })
                     }
-                    // Q9 psn-J12-5: off this loop (`KidReads`).
                     Ok(Frame {
                         id: frame,
-                        request: Some(Request::Subagents { id, open }),
+                        request: Some(Request::Subagents { id, open }), // Q9 psn-J12-5: off this loop (`KidReads`)
                         ..
                     }) => {
                         if kid_reads.is_none() {

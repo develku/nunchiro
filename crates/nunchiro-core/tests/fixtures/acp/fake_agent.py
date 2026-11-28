@@ -9,7 +9,8 @@ updates on the shared stdout and exits after its first prompt. Ticket 358: `nomo
 `set-fails` answers session/set_config_option with an error; `many:N` adds N long model ids after the two short ones.
 Ticket 1130: while a file LOG.noload exists, `session/load` answers an error (a resume whose load fails).
 The test message ("Reply with the one word: ready.") answers "ready" unless `try-silent`, `try-empty`, `try-error` or
-`try-ask`, `try-flood` (never reads again) or `try-huge-error` says otherwise (see on_prompt).
+`try-ask` or `try-flood` (never reads again) says otherwise (see on_prompt); `try-huge-error` answers `initialize` with a
+900 KB error that starts with an escape sequence.
 A prompt's first text block picks the behaviour:
   later          end the turn, then ask permission with no prompt in flight
   elicit         ask a URL elicitation, end the turn once it is answered
@@ -118,10 +119,6 @@ def on_prompt(message):
                 send({"jsonrpc": "2.0", "id": "flood-%d" % n, "method": "fs/read_text_file",
                       "params": {"sessionId": session, "path": "/x"}})
             time.sleep(300)
-            return
-        if "try-huge-error" in MODES:
-            send({"jsonrpc": "2.0", "id": prompt["id"], "error": {"code": -32603, "message": "\u001b[31m" + "x" * 900000}})
-            prompt["id"] = None
             return
         if "try-error" in MODES:
             send({"jsonrpc": "2.0", "id": prompt["id"], "error": {"code": -32603, "message": "quota exceeded"}})
@@ -341,6 +338,9 @@ for line in sys.stdin:
         continue
     rid = message.get("id")
     if method == "initialize" and "hang" in MODES:
+        continue
+    if method == "initialize" and "try-huge-error" in MODES:
+        send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32603, "message": "\u001b[31m" + "x" * 900000}})
         continue
     if method == "initialize":
         send({"jsonrpc": "2.0", "id": rid, "result": {"protocolVersion": VERSION,

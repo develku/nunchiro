@@ -152,7 +152,7 @@ const ask = (home: string, id: string, question = false) => spawn(process.execPa
 test('home_counts (look 1117 v3 N1, N2): no leader is never counted; a pending decision is, leader or not, and the row says what waits; a session at a permission card is not working', async ({ app, core }) => {
   const shop = core.project('demo-shop');
   const tool = core.project('tool-box');
-  const perm = core.agent(shop, 'perm-1', path.join(shop, 'go'));
+  const perm = core.agent(shop, 'perm-1', 'go');
   core.shell(tool, 'tb-shell');
   mates(core, [{ id: 'mate-chief', name: 'Chief', lead: true }]);
   await openWindow(app, {}, core);
@@ -255,7 +255,7 @@ test('lead_decisions_own_place (v11 S3-7): in a project lead\'s tab the Decision
 test('home_widths (look 1117 v3 N3): a project row keeps its name whole on one line, the counts on a second line and nothing past the row, at 250, 384 and 564 px and in the wide tab', async ({ app, core }) => {
   const shop = core.project('demo-shop');
   const long = core.project('a-rather-long-project-name-for-one-row');
-  const perm = core.agent(shop, 'perm-1', path.join(shop, 'never'));
+  const perm = core.agent(shop, 'perm-1', 'never');
   core.shell(long, 'sh');
   mates(core, [
     { id: 'mate-chief', name: 'Chief', lead: true },

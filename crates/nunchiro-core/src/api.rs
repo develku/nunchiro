@@ -715,6 +715,14 @@ pub enum Request {
         session: String,
     },
     // The form's Create PR: checked and pushed as `GitPush`, then `gh pr create` with the body on stdin. Window only.
+    // The form's Write with AI: one separate run of the session's agent CLI that answers a title and a description;
+    // its Cancel stops that run alone. Window only.
+    PrWrite {
+        session: String,
+    },
+    PrWriteCancel {
+        session: String,
+    },
     PrCreate {
         session: String,
         #[serde(flatten)]
@@ -1357,6 +1365,11 @@ pub enum Request {
     /// Plugins (`plugins.rs`): list, on and off, settings, a command run, remove. Owner and window only.
     Plugin {
         action: crate::plugins::Action,
+    },
+    /// Triggers (`schedule/triggers.rs`): the owner lists, adds, removes and pauses them; the owner or a token of the
+    /// `trigger` scope fires one.
+    Trigger {
+        action: crate::schedule::triggers::Action,
     },
     /// v1a-10: owner only. Claude replies `delivery` (the switch runs as one send row); Codex restarts into
     /// the same conversation and replies `started` with the replacing session.

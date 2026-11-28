@@ -33,6 +33,7 @@ const TICK: Duration = Duration::from_millis(100);
 
 /// The three flags are the scorecard's words: a prompt sent, an answer read, the turn's end seen.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Turn {
     pub sent: bool,
     pub answer_read: bool,
@@ -142,7 +143,7 @@ fn run(
     let path =
         super::found(&entry.command).ok_or_else(|| format!("{} was not found.", entry.command))?;
     let folder = probe::folder(home)?;
-    turn.version = probe::version(&path, entry, &folder.0);
+    turn.version = probe::version(&path, entry, &folder.0).map(|v| clean(&v, 80));
     let began = Instant::now();
     let mut agent = probe::run(entry, &path, &folder)?;
     // A core that dies mid-try leaves no agent behind: the next start kills the recorded group.

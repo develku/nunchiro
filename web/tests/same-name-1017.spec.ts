@@ -23,7 +23,7 @@ sleep 600
 `;
 const QUESTION = 'Red or blue?\r\n> 1. red\r\n  2. blue\r\nEnter to select · Esc to cancel\r\n';
 const start = (core: Core, dir: string, trigger: string) =>
-  core.cli('session', 'start', '--kind', 'claude', '--project', dir, '--model', path.join(dir, trigger)).session as { id: string };
+  core.cli('session', 'start', '--kind', 'claude', '--project', dir, '--model', trigger).session as { id: string };
 /** The first message names the session, as Claude's prompt hook does. */
 const firstMessage = (core: Core, id: string, prompt: string) => core.hook(id, 'UserPromptSubmit', { prompt });
 
@@ -68,7 +68,7 @@ test('hand_set_name_is_never_numbered_1017: the user names a session "ASK" besid
   fs.writeFileSync(path.join(core.home, 'bin/claude'), FAKE, { mode: 0o700 });
   const dir = core.project('hand1017');
   const auto = start(core, dir, 'never-a');
-  const hand = core.cli('session', 'start', '--kind', 'claude', '--project', dir, '--label', 'ASK', '--model', path.join(dir, 'never-b')).session as { id: string };
+  const hand = core.cli('session', 'start', '--kind', 'claude', '--project', dir, '--label', 'ASK', '--model', 'never-b').session as { id: string };
   firstMessage(core, auto.id, 'ASK');
   await openWindow(app, {}, core);
   const tab = (id: string) => app.locator(`.tab[data-tab="${id}"] .tname`);

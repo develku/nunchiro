@@ -19,12 +19,17 @@ type Text = { title: string; body: string; base: string; draft: boolean };
 /** The edited text per session, kept while the window lives (closing the panel or a refusal keeps it; never on disk). */
 const KEPT = new Map<string, Text>();
 
-/** `onOpen`: open a PR in the PR view (after a create, or the one that already exists). */
-export function PrForm({ core, session, onCreated, onCancel, onOpen, t }: { core: CoreClient; session: string; onCreated: (c: Created) => void; onCancel: () => void; onOpen: (url: string) => void; t: T }) {
+/** `onOpen`: open a PR in the PR view (after a create, or the one that already exists). `writer`: the session's agent
+ *  that Write with AI runs (Claude or Codex); none for an ACP agent or a terminal, which get no button. */
+export function PrForm({ core, session, writer, writerOff, onCreated, onCancel, onOpen, t }: { core: CoreClient; session: string; writer?: string; writerOff?: boolean; onCreated: (c: Created) => void; onCancel: () => void; onOpen: (url: string) => void; t: T }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [text, setText] = useState<Text | null>(KEPT.get(session) ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  // Write with AI: running, and whether the fields now hold the agent's text.
+  const [writing, setWriting] = useState(false);
+  const [written, setWritten] = useState(false);
+  const [aiError, setAiError] = useState<unknown>(null);
   const first = useRef<HTMLInputElement>(null);
   useEffect(() => {
     let live = true;
@@ -54,8 +59,23 @@ export function PrForm({ core, session, onCreated, onCancel, onOpen, t }: { core
       KEPT.set(session, next);
       return next;
     });
+  const write = () => {
+    if (writing || busy) return;
+    setWriting(true);
+    setAiError(null);
+    core.request({ op: 'pr_write', session }).then(
+      (r) => {
+        const w = r as { title: string; body: string };
+        setWriting(false);
+        setWritten(true);
+        edit({ title: w.title, body: w.body });
+      },
+      (e: unknown) => (setWriting(false), /: cancelled$/.test(rawError(e)) || setAiError(e)),
+    );
+  };
+  const stop = () => void core.request({ op: 'pr_write_cancel', session }).catch(() => {});
   const n = draft?.push.ahead ?? 0;
-  const off = !draft || !text || busy || !!draft.gh_why || !text.title.trim() || !draft.bases.includes(text.base);
+  const off = !draft || !text || busy || writing || !!draft.gh_why || !text.title.trim() || !draft.bases.includes(text.base);
   const go = () => {
     if (off || !draft || !text) return;
     setBusy(true);
@@ -85,11 +105,11 @@ export function PrForm({ core, session, onCreated, onCancel, onOpen, t }: { core
         <>
           <label className="dfld">
             {t('gitActions.pr.title')}
-            <input {...PLAIN} ref={first} value={text.title} maxLength={256} disabled={busy} onChange={(e) => edit({ title: e.target.value })} />
+            <input {...PLAIN} ref={first} value={text.title} maxLength={256} disabled={busy || writing} onChange={(e) => edit({ title: e.target.value })} />
           </label>
           <label className="dfld">
             {t('gitActions.pr.body')}
-            <textarea {...PLAIN} value={text.body} maxLength={60000} rows={6} disabled={busy} onChange={(e) => edit({ body: e.target.value })} />
+            <textarea {...PLAIN} value={text.body} maxLength={60000} rows={6} disabled={busy || writing} onChange={(e) => edit({ body: e.target.value })} />
           </label>
           <div className="drow">
             <label className="dfld inline">
@@ -106,6 +126,21 @@ export function PrForm({ core, session, onCreated, onCancel, onOpen, t }: { core
               <input type="checkbox" checked={text.draft} disabled={busy} onChange={(e) => edit({ draft: e.target.checked })} /> {t('gitActions.pr.draft')}
             </label>
           </div>
+          {writer && (
+            <div className="drow">
+              <button type="button" className="btn sm" disabled={writing || busy} onClick={write}>
+                {writing ? t('gitActions.ai.writing') : t(written ? 'gitActions.ai.again' : 'gitActions.ai.write')}
+              </button>
+              {writing && (
+                <button type="button" className="btn q sm" onClick={stop}>
+                  {t('gitActions.ai.stop')}
+                </button>
+              )}
+              {written && !writing && <span className="dfact">{t('gitActions.ai.written', { agent: writer })}</span>}
+            </div>
+          )}
+          {writerOff && <p className="dfact">{t('gitActions.ai.claudeOnly')}</p>}
+          <ErrorLine t={t} error={aiError} className="dpush-err" />
           <p className="dfact">
             {t(draft.template ? 'gitActions.pr.fromTemplate' : 'gitActions.pr.filled', { n: draft.commits })}
             {n > 0 && <> {t(n === 1 ? 'gitActions.pr.pushFirst.one' : 'gitActions.pr.pushFirst.other', { n, remote: draft.push.remote, branch: draft.push.branch, head: draft.head.slice(0, 7) })}</>}

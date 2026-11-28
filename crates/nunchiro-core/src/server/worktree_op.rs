@@ -262,3 +262,46 @@ pub(crate) fn worktree(
         default_base: None,
     })
 }
+
+/// A `--worktree` start's folder is recorded before the start answers, as a create's is: before, only an open window
+/// adopted it, later, and a project Remove read in between took its agent for a plain session (stopped, its history
+/// deleted). The record only (`record_only`: git is read once, never written, and no worktree's facts are read, so the
+/// start's reply does not wait on the project's other worktrees); a refusal leaves the window's adopt to try again.
+pub(crate) fn record_started_worktree(
+    registry: &Mutex<Sessions>,
+    requested: bool,
+    started: &crate::api::Session,
+) {
+    if !requested || started.cwd == started.project {
+        return;
+    }
+    let adopt = Request::Worktree {
+        operation: "adopt".into(),
+        project: Some(started.project.clone()),
+        path: Some(started.cwd.clone()),
+        branch: None,
+        base: String::new(),
+        label: String::new(),
+        from: None,
+        confirm: None,
+    };
+    let plan = registry
+        .lock()
+        .map_err(|_| "session registry unavailable".to_string())
+        .and_then(|sessions| sessions.worktree_plan(None, adopt));
+    if let Err(e) = plan.and_then(|plan| plan.record_only().run()) {
+        eprintln!("session {}: its worktree was not recorded: {e}", started.id);
+    }
+}
+
+/// A start's reply, its `--worktree` folder recorded first (`record_started_worktree`), with no registry guard held.
+pub(crate) fn started_reply(
+    registry: &Mutex<Sessions>,
+    worktree: bool,
+    result: Result<crate::api::Session, String>,
+) -> Response {
+    if let Ok(started) = &result {
+        record_started_worktree(registry, worktree, started);
+    }
+    result.map(|session| Reply::Started { session })
+}

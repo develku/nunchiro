@@ -70,12 +70,14 @@ mod scrollback;
 pub mod scrollback_edit;
 // v1b-19
 pub mod plugins; // panels, commands and settings from one approved folder
+pub mod plugins_online; // the plugin catalogue
 pub mod widgets;
 // v1a-47
 pub mod themes_online;
 // v25f F7
 pub mod git_providers;
 pub mod git_write; // the Diff panel's Push, after the window's confirm
+pub mod text_gen; // the Create PR form's Write with AI
 // Ticket 335
 mod auto_pull;
 // v2-8c

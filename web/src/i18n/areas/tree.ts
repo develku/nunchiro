@@ -148,6 +148,9 @@ declare module '../index' {
     "tree.project.blockedWorktrees.other": true;
     "tree.project.blockedWorktree": true;
     "tree.project.blockedWorktreeFix": true;
+    "tree.project.blockedElsewhere": true;
+    "tree.project.blockedElsewhereFix": true;
+    "tree.project.closeElsewhere": true;
     "tree.project.blockedStop.one": true;
     "tree.project.blockedStop.other": true;
     "tree.project.blockedWorktreeMerge": true;
@@ -306,6 +309,9 @@ export const en = {
   "tree.project.blockedWorktrees.other": "{n} worktrees",
   "tree.project.blockedWorktree": "Worktree",
   "tree.project.blockedWorktreeFix": "Nunchiro shows the project again while worktrees remain. Remove the worktrees first.",
+  "tree.project.blockedElsewhere": "Sessions in a folder of their own",
+  "tree.project.closeElsewhere": "Close the ended rows",
+  "tree.project.blockedElsewhereFix": "These are outside the project folder, such as in a worktree. Remove would close them and delete their history: stop or close them here first.",
   "tree.project.blockedStop.one": "Stop {n} session",
   "tree.project.blockedStop.other": "Stop {n} sessions",
   "tree.project.blockedWorktreeMerge": "Task “{title}” waits for a merge. If you remove this worktree, the work of the task is lost.",

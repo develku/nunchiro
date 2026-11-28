@@ -501,11 +501,11 @@ pub(crate) fn output_detached(
     timeout: Duration,
     cap: usize,
 ) -> Result<Output, String> {
-    run_capped(command, timeout, cap, true, None)
+    run_capped(command, timeout, cap, true, None, None)
 }
 /// `output` keeping up to `cap` bytes of stdout and up to `OUTPUT_CAP` of stderr (ticket 403 item 15).
 fn output_capped(command: Command, timeout: Duration, cap: usize) -> Result<Output, String> {
-    run_capped(command, timeout, cap, false, None)
+    run_capped(command, timeout, cap, false, None, None)
 }
 /// `output` with `input` written to the child's stdin (a pull request body), then stdin closed.
 pub(crate) fn output_with_input(
@@ -513,7 +513,24 @@ pub(crate) fn output_with_input(
     timeout: Duration,
     input: Vec<u8>,
 ) -> Result<Output, String> {
-    run_capped(command, timeout, OUTPUT_CAP, false, Some(input))
+    run_capped(command, timeout, OUTPUT_CAP, false, Some(input), None)
+}
+/// `output_with_input` that hands the child's PID (its process group) to `spawned` once it runs, so a caller can stop
+/// that run alone (the Diff panel's Write with AI Cancel).
+pub(crate) fn output_watched(
+    command: Command,
+    timeout: Duration,
+    input: Vec<u8>,
+    spawned: &dyn Fn(u32),
+) -> Result<Output, String> {
+    run_capped(
+        command,
+        timeout,
+        OUTPUT_CAP,
+        false,
+        Some(input),
+        Some(spawned),
+    )
 }
 fn run_capped(
     mut command: Command,
@@ -521,6 +538,7 @@ fn run_capped(
     cap: usize,
     detached: bool,
     input: Option<Vec<u8>>,
+    spawned: Option<&dyn Fn(u32)>,
 ) -> Result<Output, String> {
     // Round 2: the file name only, never a full path, arguments or environment (the error can reach a reply).
     let program = std::path::Path::new(command.get_program())
@@ -540,6 +558,9 @@ fn run_capped(
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| e.to_string())?;
+    if let Some(spawned) = spawned {
+        spawned(child.id());
+    }
     // A writer thread, so a child that reads slowly (or not at all) never blocks the output loop; it ends at EOF or EPIPE.
     if let (Some(bytes), Some(mut stdin)) = (input, child.stdin.take()) {
         thread::spawn(move || {

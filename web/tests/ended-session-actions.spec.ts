@@ -5,6 +5,7 @@ import type { Page } from '@playwright/test';
 import { expect, openWindow, test, type Core } from './fixtures';
 import { makeT } from './i18n-tables';
 import { openQuiet } from './tree-seed';
+import { startOf } from './start-op';
 
 type Snap = { id: string; kind: string; label: string; state: string };
 const snap = (core: Core) => core.cli('snapshot', '--json').sessions as Snap[];
@@ -180,7 +181,7 @@ for (const late of ['reply', 'snapshot'] as const) {
       const server = ws.connectToServer();
       ws.onMessage((m) => {
         const f = typeof m === 'string' ? JSON.parse(m) : null;
-        if (f?.request?.op === 'start') hold.start = f.id;
+        if (startOf(f?.request)) hold.start = f.id;
         server.send(m);
       });
       server.onMessage((m) => {

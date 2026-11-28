@@ -175,7 +175,7 @@ test('remove_refuses_a_worktree: the listed worktree would bring the head back, 
   const project = core.project('alpha');
   fs.writeFileSync(`${project}/f`, 'x');
   for (const a of [['init', '-q'], ['add', '.'], ['-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-qm', 'x']]) execFileSync('git', a, { cwd: project });
-  const inWt = core.agent(project, 'wt', `${project}/never`, true).id;
+  const inWt = core.agent(project, 'wt', 'never', true).id;
   const shell = core.shell(project, 'live').id;
   await ended(core, project, 'done', '/usr/bin/true', 'exited');
   openQuiet(core);
@@ -344,4 +344,84 @@ test('remove_closes_an_ended_side_chat: no error and the head leaves the tree', 
   await expect(grp(app, 'alpha')).toHaveCount(0);
   // The closed side chat row keeps the project known to the core, so its pin and group must go by their own edits.
   expect(fs.readFileSync(`${core.home}/tree.toml`, 'utf8')).not.toContain(project);
+});
+
+/** The core's worktree list as it is when a start's record was refused: no worktree at all. */
+async function unlisted(app: Page) {
+  await app.routeWebSocket(/\/ws$/, (ws) => {
+    const server = ws.connectToServer();
+    ws.onMessage((m) => server.send(m));
+    server.onMessage((m) => {
+      if (typeof m !== 'string') return ws.send(m);
+      const f = JSON.parse(m) as { response?: { Ok?: { type?: string; worktrees?: unknown[] } } };
+      if (f.response?.Ok?.type === 'worktrees') f.response.Ok.worktrees = [];
+      ws.send(JSON.stringify(f));
+    });
+  });
+}
+const gitRepo = (project: string) => {
+  fs.writeFileSync(`${project}/f`, 'x');
+  for (const a of [['init', '-q'], ['add', '.'], ['-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-qm', 'x']]) execFileSync('git', a, { cwd: project });
+};
+
+// Review of the worktree start fix: a worktree that is not in the core's list (its record refused: a project that is a
+// linked worktree or a subfolder, or the registry lock held) still blocks Remove, through the session that runs in it.
+test('remove_refuses_a_session_in_a_folder_of_its_own: a session outside the project folder that no listed worktree holds blocks Remove; nothing closes', async ({ app, core }) => {
+  const log = sent(app);
+  const project = core.project('alpha');
+  fs.writeFileSync(`${project}/f`, 'x');
+  for (const a of [['init', '-q'], ['add', '.'], ['-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-qm', 'x']]) execFileSync('git', a, { cwd: project });
+  const inWt = core.agent(project, 'wt', 'never', true).id;
+  await unlisted(app);
+  openQuiet(core);
+  await openWindow(app, {}, core);
+  await openRemove(app, 'alpha');
+  const d = dialog(app);
+  await expect(d.locator('[data-elsewhere]')).toContainText('Sessions in a folder of their own');
+  await expect(d.locator('[data-elsewhere]')).toContainText('wt');
+  await expect(d.getByRole('button', { name: 'Remove from Nunchiro' })).toHaveCount(0);
+  await expect(d.getByRole('button', { name: /^Stop .* and remove$/ })).toHaveCount(0);
+  expect(closes(log)).toEqual([]);
+  expect(stateOf(core, inWt)).toBe('running');
+});
+
+// Follow-up: a session in a folder of its own stays a blocker once stopped; its row is still there with its history.
+test('remove_elsewhere_stays_blocked_after_stop: Stop ends the session in an unlisted folder, and Remove is still refused until its row is closed', async ({ app, core }) => {
+  const project = core.project('alpha');
+  gitRepo(project);
+  // A shell: its stop leaves a closed row (an agent's leaves a resumable one), which the old read no longer counted.
+  const inWt = (core.cli('session', 'start', '--kind', 'shell', '--project', project, '--worktree', '--label', 'wt', '--', '/bin/cat').session as { id: string }).id;
+  await unlisted(app);
+  openQuiet(core);
+  await openWindow(app, {}, core);
+  await openRemove(app, 'alpha');
+  const d = dialog(app);
+  await expect(d.locator('[data-elsewhere]')).toContainText('wt');
+  await d.getByRole('button', { name: 'Stop 1 session' }).click();
+  await expect.poll(() => stateOf(core, inWt)).toBe('closed');
+  // Read again as the owner would: the sheet closed and Remove pressed once more.
+  await d.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(d).toHaveCount(0);
+  await openRemove(app, 'alpha');
+  await expect(d.locator('[data-elsewhere]')).toContainText('wt');
+  await expect(d.getByRole('button', { name: 'Remove from Nunchiro' })).toHaveCount(0);
+});
+
+// Follow-up: an ended row in a folder of its own blocks Remove, and the sheet itself closes it.
+test('remove_elsewhere_closes_ended_rows: an ended row in an unlisted folder is closed from the sheet, which then offers Remove', async ({ app, core }) => {
+  const project = core.project('alpha');
+  gitRepo(project);
+  const ended = core.cli('session', 'start', '--kind', 'shell', '--project', project, '--worktree', '--label', 'gone', '--', '/usr/bin/true').session as { id: string };
+  await expect.poll(() => stateOf(core, ended.id)).toBe('exited');
+  await unlisted(app);
+  openQuiet(core);
+  await openWindow(app, {}, core);
+  await openRemove(app, 'alpha');
+  const d = dialog(app);
+  await expect(d.locator('[data-elsewhere]')).toContainText('gone');
+  await expect(d.locator('[data-elsewhere]')).not.toContainText(/\brun/i);
+  await d.getByRole('button', { name: 'Close the ended rows' }).click();
+  await expect.poll(() => rows(core).some((r) => r.id === ended.id)).toBe(false);
+  await expect(d.locator('[data-elsewhere]')).toHaveCount(0);
+  await expect(d.getByRole('button', { name: 'Remove from Nunchiro' })).toBeVisible();
 });
