@@ -625,8 +625,7 @@ fn handshake(
     stream
         .set_write_timeout(Some(WRITE_TIMEOUT))
         .map_err(|e| e.to_string())?;
-    // Keystrokes and their echoes are tiny frames: Nagle would hold each one behind a delayed ACK.
-    let _ = stream.set_nodelay(true);
+    let _ = stream.set_nodelay(true); // keystrokes and echoes are tiny frames: Nagle would hold each behind a delayed ACK
     // V2.5-17: tungstenite zero-fills its whole read buffer on every read, and an idle tick or PTY wake is a read
     // that ends in WouldBlock: at the 128 KiB default that was most of an open window's idle core CPU.
     let config = WebSocketConfig::default()
@@ -725,8 +724,7 @@ fn serve(
     // v2-7: per Search panel (`channel`), a newer page cancels the one still scanning; at most 8 panels kept.
     let mut search_cancel = SearchCancel(vec![]);
     while !stopping.load(Ordering::SeqCst) {
-        // S9: an idle read lasts until the next timed check below, not a fixed 8 ms tick.
-        let every = cadence(active_until);
+        let every = cadence(active_until); // S9: an idle read lasts until the next timed check, not an 8 ms tick
         let layout_due = window
             .is_some()
             .then(|| layout_at + LAYOUT_EVERY.max(every));
@@ -1836,7 +1834,9 @@ fn read_pr_chip(registry: &Mutex<Sessions>, id: &str) -> Response {
         let read = read_chat(registry, id, before, None, generation);
         // A session with no conversation to read (a terminal) still shows the PR the app made for it.
         let Ok(Reply::ChatPage { page, .. }) = read else {
-            if let Some(chip) = crate::pr_live::made_chip(id) {
+            let made = crate::pr_live::made_chip(id);
+            crate::pr_live::link_from_output(registry, id, made.as_ref());
+            if let Some(chip) = made {
                 return Ok(Reply::PrChip { chip: Some(chip) });
             }
             read?;
@@ -1851,8 +1851,7 @@ fn read_pr_chip(registry: &Mutex<Sessions>, id: &str) -> Response {
         generation = Some(page.generation);
         // Older pages go in front, so a result on a newer page still meets its tool_use.
         events.splice(0..0, page.events.into_iter().map(|e| e.data));
-        // The chip is the one the newest pages give; older pages only add creates.
-        chip = chip.or_else(|| crate::chat::pr::scan(&events));
+        chip = chip.or_else(|| crate::chat::pr::scan(&events)); // newest pages give the chip; older add creates
         if let Some(c) = &chip {
             if past == PAST_CHIP || crate::chat::pr::created(&events).contains(&c.url) {
                 break;
@@ -1867,8 +1866,9 @@ fn read_pr_chip(registry: &Mutex<Sessions>, id: &str) -> Response {
     if chip.is_some() {
         crate::pr_live::note_created(&events); // v2-8c
     }
-    // A PR the app created from the Diff panel, until the transcript names one.
+    // A PR the app created from the Diff panel, or one the agent printed in its terminal, until the transcript names one.
     let chip = chip.or_else(|| crate::pr_live::made_chip(id));
+    crate::pr_live::link_from_output(registry, id, chip.as_ref());
     Ok(Reply::PrChip { chip })
 }
 
