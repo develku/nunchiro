@@ -760,22 +760,29 @@ minutes, count as No. Each outcome is one line in Home's room; `nunchiro task di
 line>"`, `nunchiro memory read [<topic>]`. A bot's seat only (its own memory; any other session, a token and the
 user's own shell are refused). A bot's memory is `team/<bot>/MEMORY.md`, an index of one fact per line with its date
 and source (`- 2026-11-27 Never send a mail without an Outbox card. (from: you)`), topic files in
-`team/<bot>/memory/<topic>.md` that an index line points to, and the shared `team/USER.md`. Every brief quotes SOUL.md,
-USER.md and the newest 200 index lines, and names how many older lines it left out.
+`team/<bot>/memory/<topic>.md` that an index line points to, and the shared `team/USER.md`. Every brief quotes USER.md
+and the newest index lines (at most 200 lines and 32 KB; the last one names how many older lines it left out).
 
 `add` keeps one line of up to 400 characters; the core adds today's date and the source: `you` with `--from-user`,
 otherwise `a conversation`. A line that looks like a secret is refused. `--topic mail-rules` writes the line to that
-topic file and, once, an index line that points to it; `--user` writes to USER.md. Once the seat's conversation read
-outside content (a mail connector, a web fetch or search, another MCP server's tool, a shell `curl`, `wget` or
-`nunchiro browser`), an add waits as a proposal with that source (`mail`, `web`, `a tool`) for the user's look, and a
-line that reads like an instruction is not kept at all (only its first words are counted for the user). `forget`
-deletes the one line that holds the words (its exact text wins over a part) from the index, every saved copy, the topic
-files, USER.md and the waiting proposals; words that match several lines are refused with the lines. `read` prints the
-index and the topic files, or one topic file.
+topic file and, once, an index line that points to it; `--user` writes to USER.md. An add waits as a proposal for the
+user's look, with the source `mail`, `web` or `a tool`, once the seat's conversation read outside content: a mail
+connector, a web fetch or search, another MCP server's tool (Nunchiro's own server, `nunchiro`, excepted), or a shell
+`curl`, `wget`, `gh`, `git clone|pull|fetch` or `nunchiro browser`; or heard from a session that did (a room message,
+`agent send|prompt`); or continues a run that did. A seat whose tool calls the core cannot see (an ACP agent, Codex, a
+seat started without hooks, or hooks turned off) only proposes. A line that reads like an instruction is not kept at all
+(only its first words are counted for the user). `forget` deletes the one line that holds the words (its exact text wins
+over a part) from the index, every saved copy (lines of an old-format file too), the topic files, USER.md and the
+waiting proposals; words that match several lines are refused with the lines, and a forget a crash cut short finishes
+on the next one. `read` prints the index and the topic files, or one topic file.
 
-An index from before this format is rewritten once into it, each line a fact from a conversation dated by the file (a
-line that starts with a date keeps it); the old file is kept as a saved copy for good. The user's own changes keep the
-version before them as a saved copy, kept 30 days, which Undo puts back.
+The core keeps its own records in `$NUNCHIRO_HOME/memory-state/` (out of the memory folder): a hash of every line it
+wrote, the outside-read marks and the proposals. A line it did not write reads as `(from: unknown)` whatever it claims,
+on the Memory tab and in the brief. A Claude seat's settings deny edits to the memory files and that folder.
+
+An index from before this format is rewritten once into it, newest first, each line a fact from a conversation dated by
+the file (a line that starts with a date keeps it); the old file is kept as a saved copy for good. The user's own
+changes keep the version before them as a saved copy, kept 30 days, which Undo puts back.
 
 ### `nunchiro task loops [--json]`
 Ticket 1003: open loops, the user's promises and what the user waits for. The core keeps them as rows in

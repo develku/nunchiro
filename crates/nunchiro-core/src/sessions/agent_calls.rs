@@ -726,6 +726,7 @@ impl Sessions {
         self.refresh()?;
         self.observe()?;
         self.check_agent(caller, &request)?;
+        self.pass_outside(&caller.id, &request);
         match &request {
             Request::AgentSend { id, text } | Request::SendText { id, text, .. } => {
                 return self.send(&caller.id, id, text.clone(), vec![], false);

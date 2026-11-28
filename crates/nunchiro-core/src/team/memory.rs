@@ -3,22 +3,27 @@
 //! (`memory/<topic>.md`), read on demand. Every write goes through Nunchiro (`nunchiro memory`, `Team::window`), which
 //! adds the date and the source.
 //!
-//! A seat that read outside content (mail, a web page, another MCP server's results) never writes directly: what it
-//! adds waits as a proposal for the owner's look, and a line that reads like an instruction is not kept at all.
-//! Changes the owner makes keep the version before them as a saved copy, kept for a number of days; Forget deletes a
-//! line from the index, every saved copy, the topic files and the waiting proposals.
+//! A seat that read outside content (mail, a web page, another MCP server's results), or whose tool calls the core
+//! cannot see, never writes directly: what it adds waits as a proposal for the owner's look, and a line that reads like
+//! an instruction is not kept at all. Changes the owner makes keep the version before them as a saved copy, kept for a
+//! number of days; Forget deletes a line from the index, every saved copy, the topic files and the waiting proposals.
+//!
+//! Trust: the memory files sit where a seat's own file tools reach. The core keeps, in its own `memory-state/` folder, a
+//! hash of every line it wrote; a line it did not write reads as `(from: unknown)`, whatever source it claims. The
+//! outside-read marks and the proposals live in that folder too.
 use super::{Team, mask_secrets};
 use crate::store;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
 };
 
-/// How many index lines a brief quotes; older lines are named, not quoted.
+/// How many index lines a brief quotes, the line that names the older ones included.
 pub(crate) const INDEX_LINES: usize = 200;
-/// What a brief reads of the index before it cuts by lines (a hand-written line can be long).
-pub(crate) const INDEX_BYTES: usize = 48 * 1024;
+/// What a brief quotes of the index at most (a hand-written line can be long).
+pub(crate) const INDEX_BYTES: usize = 32 * 1024;
 const FACT_MAX: usize = 400;
 const TOPIC_MAX: usize = 40;
 /// Saved copies older than this go, unless the settings keep them longer.
@@ -27,9 +32,16 @@ const DAY_MS: u64 = 86_400_000;
 const PROPOSALS_MAX: usize = 100;
 /// The index's second line: an index with it is in this format. One without it is migrated once (`Memory::migrate`).
 pub(crate) const MARK: &str = "<!-- One fact per line: date, fact, (from: source). Change it with `nunchiro memory add` and `nunchiro memory forget`. -->";
+/// The core's own folder under the home: written lines, outside-read marks and proposals.
+const STATE: &str = "memory-state";
+/// Nunchiro's own MCP server, as docs/cli.md names it.
+const OWN_SERVER: &str = "nunchiro";
 
 /// One write at a time across every bot: an add, a forget and an undo each read and rewrite whole files.
 static WRITE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(crate) fn write_lock() -> Result<std::sync::MutexGuard<'static, ()>, String> {
+    WRITE.lock().map_err(|_| "memory unavailable".to_string())
+}
 
 /// Where a fact came from. Nunchiro sets it, never the line's text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -40,6 +52,8 @@ pub enum Source {
     You,
     /// The bot learned it in a conversation with no outside content.
     Conversation,
+    /// A line the core did not write (a file edited outside Nunchiro): its own claim is not believed.
+    Unknown,
     /// Another tool's or MCP server's results. Outside sources are ordered by how much they tell: a tool, web, mail.
     Tool,
     Web,
@@ -51,18 +65,20 @@ impl Source {
         match self {
             Source::You => "you",
             Source::Conversation => "a conversation",
-            Source::Mail => "mail",
-            Source::Web => "web",
+            Source::Unknown => "unknown",
             Source::Tool => "a tool",
+            Source::Web => "web",
+            Source::Mail => "mail",
         }
     }
     fn parse(words: &str) -> Option<Source> {
         [
             Source::You,
             Source::Conversation,
-            Source::Mail,
-            Source::Web,
+            Source::Unknown,
             Source::Tool,
+            Source::Web,
+            Source::Mail,
         ]
         .into_iter()
         .find(|s| s.words() == words)
@@ -86,35 +102,58 @@ pub struct Fact {
 
 impl Fact {
     fn line(&self) -> String {
-        match (&self.date, self.from) {
-            (Some(date), Some(from)) => format!("- {date} {} (from: {})", self.text, from.words()),
-            _ => format!("- {}", self.text),
+        let mut line = String::from("- ");
+        if let Some(date) = &self.date {
+            line.push_str(date);
+            line.push(' ');
         }
+        line.push_str(&self.text);
+        if let Some(from) = self.from {
+            line.push_str(&format!(" (from: {})", from.words()));
+        }
+        line
     }
-    /// `- 2026-11-27 Never send a mail without an Outbox card. (from: you)`; any other bullet is a hand-written line.
+    /// `- 2026-11-27 Never send a mail without an Outbox card. (from: you)`; the date and the source are each optional.
+    /// Any other line of text is a hand-written fact (`plain`).
     fn parse(line: &str) -> Option<Fact> {
-        let body = line.trim().strip_prefix("- ")?.trim();
-        if body.is_empty() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with("<!--") {
             return None;
         }
-        let dated = body
+        let Some(body) = line.strip_prefix("- ").map(str::trim) else {
+            return Some(Fact {
+                date: None,
+                text: line.into(),
+                from: None,
+            });
+        };
+        let (date, body) = match body
             .get(..10)
-            .filter(|d| is_date(d) && body[10..].starts_with(' '));
-        let sourced = body
+            .filter(|d| is_date(d) && body[10..].starts_with(' '))
+        {
+            Some(d) => (Some(d.to_string()), body[11..].trim()),
+            None => (None, body),
+        };
+        let (text, from) = match body
             .strip_suffix(')')
             .and_then(|b| b.rsplit_once(" (from: "))
-            .and_then(|(text, from)| Some((text, Source::parse(from)?)));
-        match (dated, sourced) {
-            (Some(date), Some((text, from))) if text.len() > 11 => Some(Fact {
-                date: Some(date.into()),
-                text: text[11..].trim().into(),
-                from: Some(from),
-            }),
-            _ => Some(Fact {
-                date: None,
-                text: body.into(),
-                from: None,
-            }),
+            .and_then(|(text, from)| Some((text, Source::parse(from)?)))
+        {
+            Some((text, from)) => (text, Some(from)),
+            None => (body, None),
+        };
+        (!text.trim().is_empty()).then(|| Fact {
+            date,
+            text: text.trim().into(),
+            from,
+        })
+    }
+    /// The fact a line of a file stands for: as this format reads it, or as the migration reads a line in an old one
+    /// (`* x`, `- [ ] x`, `2026-11-02: x`).
+    fn text_of(line: &str) -> Option<String> {
+        match Fact::parse(line)? {
+            f if f.date.is_some() || f.from.is_some() => Some(f.text),
+            _ => convert(line, "").pop().map(|f| f.text),
         }
     }
 }
@@ -125,6 +164,10 @@ fn is_date(d: &str) -> bool {
             4 | 7 => c == '-',
             _ => c.is_ascii_digit(),
         })
+}
+
+fn line_hash(line: &str) -> String {
+    store::token_sha256(line.trim())
 }
 
 /// A fact that waits for the owner: it came from a seat that read outside content.
@@ -190,6 +233,10 @@ pub struct Memory {
     /// `team/<id>`
     dir: PathBuf,
     user: PathBuf,
+    /// `memory-state/<id>`: the core's own records for this bot.
+    state: PathBuf,
+    /// `memory-state`
+    root: PathBuf,
 }
 
 impl Team {
@@ -197,11 +244,18 @@ impl Team {
         if !store::valid_id(id) {
             return Err("not a bot id".into());
         }
+        let root = state_root(self.dir.parent().unwrap_or(&self.dir));
         Ok(Memory {
             dir: self.dir.join(id),
             user: self.user(),
+            state: root.join(id),
+            root,
         })
     }
+}
+
+fn state_root(home: &Path) -> PathBuf {
+    home.join(STATE)
 }
 
 impl Memory {
@@ -215,7 +269,7 @@ impl Memory {
         self.folder().join("copies")
     }
     fn waiting_file(&self) -> PathBuf {
-        self.folder().join("proposals.json")
+        self.state.join("proposals.json")
     }
     fn topic(&self, name: &str) -> Result<PathBuf, String> {
         let name = name.strip_suffix(".md").unwrap_or(name);
@@ -232,23 +286,87 @@ impl Memory {
         }
         Ok(self.folder().join(format!("{name}.md")))
     }
+    /// The topic files and the saved copies, each a file the core wrote.
+    fn files_in(dir: &Path) -> Vec<PathBuf> {
+        let mut out: Vec<PathBuf> = fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "md") && p.is_file())
+            .collect();
+        out.sort();
+        out
+    }
 
     fn read_text(path: &Path) -> String {
         store::read_regular(path)
             .map(|b| String::from_utf8_lossy(&b).into_owned())
             .unwrap_or_default()
     }
-    fn write_text(&self, path: &Path, text: &str) -> Result<(), String> {
-        store::private_dir(&self.dir)?;
-        if let Some(parent) = path.parent() {
-            store::private_dir(parent)?;
+
+    /// Where the core keeps the hashes of the lines it wrote to `path`.
+    fn record(&self, path: &Path) -> PathBuf {
+        if path == self.user {
+            return self.root.join("USER.md.json");
         }
+        let name = path
+            .strip_prefix(&self.dir)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('/', "_");
+        self.state.join(format!("{name}.json"))
+    }
+    fn trusted(&self, path: &Path) -> BTreeSet<String> {
+        store::read_regular(&self.record(path))
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
+    }
+    /// Writes `text` to `path`. The lines it trusts afterwards: those it trusted before, and the lines in `new`.
+    fn write_kept(&self, path: &Path, text: &str, new: &[String]) -> Result<(), String> {
+        let before = self.trusted(path);
+        let new: BTreeSet<String> = new.iter().map(|l| line_hash(l)).collect();
+        let trusted: BTreeSet<String> = text
+            .lines()
+            .map(line_hash)
+            .filter(|h| before.contains(h) || new.contains(h))
+            .collect();
+        for dir in [
+            Some(self.dir.as_path()),
+            path.parent(),
+            Some(self.state.as_path()),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            store::private_dir(dir)?;
+        }
+        store::private_dir(&self.root)?;
+        // The record first: a crash between the two leaves lines distrusted, never a planted line trusted.
+        let record = serde_json::to_vec(&trusted).map_err(|e| e.to_string())?;
+        store::atomic_write(&self.record(path), &record)?;
         store::atomic_write(path, text.as_bytes())
+    }
+    /// The facts of a file the core keeps: each line it did not write reads as `(from: unknown)`.
+    fn read_facts(&self, path: &Path) -> Vec<Fact> {
+        let trusted = self.trusted(path);
+        Self::read_text(path)
+            .lines()
+            .filter(|l| *l != MARK)
+            .filter_map(|l| {
+                let mut f = Fact::parse(l)?;
+                if !trusted.contains(&line_hash(l)) {
+                    f.from = Some(Source::Unknown);
+                }
+                Some(f)
+            })
+            .collect()
     }
 
     /// The index in this format: an index without the format line is saved as it was (a `before` copy, kept for good)
-    /// and rewritten as dated lines, each bullet or line of text one fact from a conversation, dated by the file. An
-    /// older build reads the new file as plain text, as it read the old one.
+    /// and rewritten as dated lines, newest first, each bullet or line of text one fact from a conversation, dated by
+    /// the file. An older build reads the new file as plain text, as it read the old one.
     pub(crate) fn migrate(&self) -> Result<(), String> {
         let path = self.index();
         let Ok(bytes) = store::read_regular(&path) else {
@@ -264,8 +382,9 @@ impl Memory {
             .ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map_or_else(crate::queue::now_ms, |d| d.as_millis() as u64);
-        let facts = convert(&old, &crate::loops::today(modified));
-        self.save_copy(&old, "before", crate::queue::now_ms())?;
+        let mut facts = convert(&old, &crate::loops::today(modified));
+        facts.sort_by(|a, b| b.date.cmp(&a.date));
+        self.save_copy(&old, "before", crate::queue::now_ms(), true)?;
         self.write_facts(&facts)
     }
 
@@ -281,45 +400,75 @@ impl Memory {
         }
         text
     }
+    /// The index as `facts`: every line is the core's, so every line is trusted (a distrusted one says `unknown`).
     fn write_facts(&self, facts: &[Fact]) -> Result<(), String> {
-        self.write_text(&self.index(), &mask_secrets(&Self::render(facts)).0)
+        let text = mask_secrets(&Self::render(facts)).0;
+        let lines: Vec<String> = text.lines().map(String::from).collect();
+        self.write_kept(&self.index(), &text, &lines)
     }
 
+    fn facts_now(&self) -> Result<Vec<Fact>, String> {
+        self.migrate()?;
+        Ok(self.read_facts(&self.index()))
+    }
     /// The index's lines, newest first.
     pub fn facts(&self) -> Result<Vec<Fact>, String> {
-        self.migrate()?;
-        Ok(Self::read_text(&self.index())
-            .lines()
-            .filter_map(Fact::parse)
-            .collect())
+        let _one = write_lock()?;
+        self.facts_now()
     }
 
-    /// The index as a brief quotes it: masked, the newest `INDEX_LINES` lines, and a line that says how many older
-    /// ones are left out.
+    /// The index as a brief quotes it: masked, at most `INDEX_LINES` lines and `INDEX_BYTES`, the newest first; when
+    /// older lines are left out, the last quoted line says how many.
     pub(crate) fn quote(&self) -> String {
-        let one = WRITE.lock();
-        if let Err(e) = self.migrate() {
-            eprintln!("memory index not migrated: {e}");
-        }
-        let text = super::quote_max(&self.index(), INDEX_BYTES);
-        drop(one);
-        let lines: Vec<&str> = text
-            .lines()
-            .filter(|l| !l.trim().is_empty() && !l.starts_with('#') && *l != MARK)
-            .collect();
-        let mut out = lines
+        let facts = match self.facts() {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("memory index not read: {e}");
+                return String::new();
+            }
+        };
+        let lines: Vec<String> = facts
             .iter()
-            .take(INDEX_LINES)
-            .copied()
-            .collect::<Vec<_>>()
-            .join("\n");
-        if lines.len() > INDEX_LINES {
-            out.push_str(&format!(
-                "\n[{} older lines are not quoted here: `nunchiro memory read` shows the whole index]",
-                lines.len() - INDEX_LINES
+            .map(|f| {
+                let mut l = mask_secrets(&f.line()).0;
+                l.retain(|c| !c.is_control() || c == '\t');
+                l
+            })
+            .collect();
+        let (mut out, mut size) = (vec![], 0);
+        for l in &lines {
+            let room = out.len() + 1 < INDEX_LINES || lines.len() <= INDEX_LINES;
+            if !room || size + l.len() + 1 > INDEX_BYTES - 200 {
+                break;
+            }
+            size += l.len() + 1;
+            out.push(l.as_str());
+        }
+        let left = lines.len() - out.len();
+        let mut text = out.join("\n");
+        if left > 0 {
+            text.push_str(&format!(
+                "\n[{left} older lines are not quoted here: `nunchiro memory read` shows the whole index]"
             ));
         }
-        out
+        text
+    }
+
+    /// USER.md as a brief quotes it: a line that claims a source the core did not write says `(from: unknown)`.
+    pub(crate) fn user_text(&self) -> String {
+        let trusted = self.trusted(&self.user);
+        Self::read_text(&self.user)
+            .lines()
+            .map(|l| match Fact::parse(l) {
+                Some(f) if f.from.is_some() && !trusted.contains(&line_hash(l)) => Fact {
+                    from: Some(Source::Unknown),
+                    ..f
+                }
+                .line(),
+                _ => l.to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     /// One fact, checked: one line of text, no secret, no source of its own.
@@ -355,7 +504,7 @@ impl Memory {
         now_ms: u64,
     ) -> Result<Added, String> {
         let text = Self::check_text(text)?;
-        let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
+        let _one = write_lock()?;
         let date = crate::loops::today(now_ms);
         let topic_path = topic.map(|t| self.topic(t)).transpose()?;
         if from.outside() {
@@ -366,7 +515,7 @@ impl Memory {
             text,
             from: Some(from),
         };
-        let mut facts = self.facts()?;
+        let mut facts = self.facts_now()?;
         match topic_path {
             None => {
                 if facts.iter().any(|f| f.text == fact.text) {
@@ -377,11 +526,7 @@ impl Memory {
             Some(path) => {
                 let name = path.file_name().unwrap_or_default().to_string_lossy();
                 let mut body = Self::read_text(&path);
-                if body
-                    .lines()
-                    .filter_map(Fact::parse)
-                    .any(|f| f.text == fact.text)
-                {
+                if self.read_facts(&path).iter().any(|f| f.text == fact.text) {
                     return Ok(Added::Known);
                 }
                 if body.is_empty() {
@@ -389,18 +534,17 @@ impl Memory {
                 }
                 body.push_str(&fact.line());
                 body.push('\n');
-                self.write_text(&path, &body)?;
-                if !facts.iter().any(|f| f.text.contains(name.as_ref())) {
-                    facts.insert(
-                        0,
-                        Fact {
-                            text: format!("{}: see {name}", title(&name)),
-                            ..fact
-                        },
-                    );
-                } else {
+                self.write_kept(&path, &body, &[fact.line()])?;
+                if facts.iter().any(|f| f.text.contains(name.as_ref())) {
                     return Ok(Added::Kept);
                 }
+                facts.insert(
+                    0,
+                    Fact {
+                        text: format!("{}: see {name}", title(&name)),
+                        ..fact
+                    },
+                );
             }
         }
         self.write_facts(&facts)?;
@@ -410,29 +554,29 @@ impl Memory {
     /// A fact about the user, in the shared USER.md (no copies: every bot reads it).
     pub fn add_user(&self, text: &str, from: Source, now_ms: u64) -> Result<Added, String> {
         let text = Self::check_text(text)?;
-        let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
+        let _one = write_lock()?;
         let date = crate::loops::today(now_ms);
         if from.outside() {
             return self.propose(text, from, Some(USER_TOPIC.into()), date, now_ms);
         }
-        let mut body = Self::read_text(&self.user);
-        if body.lines().filter_map(Fact::parse).any(|f| f.text == text) {
+        if self.read_facts(&self.user).iter().any(|f| f.text == text) {
             return Ok(Added::Known);
         }
+        self.append_user(&Fact {
+            date: Some(date),
+            text,
+            from: Some(from),
+        })?;
+        Ok(Added::Kept)
+    }
+    fn append_user(&self, fact: &Fact) -> Result<(), String> {
+        let mut body = Self::read_text(&self.user);
         if !body.is_empty() && !body.ends_with('\n') {
             body.push('\n');
         }
-        body.push_str(
-            &Fact {
-                date: Some(date),
-                text,
-                from: Some(from),
-            }
-            .line(),
-        );
+        body.push_str(&fact.line());
         body.push('\n');
-        self.write_text(&self.user, &body)?;
-        Ok(Added::Kept)
+        self.write_kept(&self.user, &body, &[fact.line()])
     }
 
     fn waiting(&self) -> Waiting {
@@ -446,11 +590,10 @@ impl Memory {
             })
     }
     fn write_waiting(&self, w: &Waiting) -> Result<(), String> {
+        store::private_dir(&self.root)?;
+        store::private_dir(&self.state)?;
         let bytes = serde_json::to_vec_pretty(w).map_err(|e| e.to_string())?;
-        self.write_text(
-            &self.waiting_file(),
-            std::str::from_utf8(&bytes).map_err(|e| e.to_string())?,
-        )
+        store::atomic_write(&self.waiting_file(), &bytes)
     }
     fn propose(
         &self,
@@ -503,7 +646,7 @@ impl Memory {
 
     /// The owner's look at a proposal: `keep` adds it with its own source and date, otherwise it goes.
     pub fn settle(&self, id: &str, keep: bool) -> Result<(), String> {
-        let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
+        let _one = write_lock()?;
         let mut w = self.waiting();
         let at = w
             .proposals
@@ -519,12 +662,9 @@ impl Memory {
                 from: Some(p.from),
             };
             if p.topic.as_deref() == Some(USER_TOPIC) {
-                let mut body = Self::read_text(&self.user);
-                body.push_str(&fact.line());
-                body.push('\n');
-                self.write_text(&self.user, &body)?;
+                self.append_user(&fact)?;
             } else {
-                let mut facts = self.facts()?;
+                let mut facts = self.facts_now()?;
                 if !facts.iter().any(|f| f.text == fact.text) {
                     facts.insert(0, fact);
                     self.write_facts(&facts)?;
@@ -534,32 +674,45 @@ impl Memory {
         self.write_waiting(&w)
     }
 
-    /// Deletes one line: from the index, every saved copy, every topic file, USER.md when it is there, and the
-    /// waiting proposals. `words`: the line's text, or words only one line holds. Nothing keeps it after this.
+    /// Every file a line may be kept in: the index, USER.md, the topic files and the saved copies.
+    fn kept_in(&self) -> Vec<PathBuf> {
+        let mut files = vec![self.index(), self.user.clone()];
+        files.extend(Self::files_in(&self.folder()));
+        files.extend(Self::files_in(&self.copies()));
+        files
+    }
+
+    /// Deletes one line: from the index, every saved copy (old-format lines too), every topic file, USER.md when it is
+    /// there, and the waiting proposals. `words`: the line's text, or words only one line holds. A forget a crash cut
+    /// short finds what is left and finishes.
     pub fn forget(&self, words: &str) -> Result<String, String> {
         let words = words.trim();
         if words.is_empty() {
             return Err("say which line: its text, or words only that line holds".into());
         }
-        let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
-        let mut facts = self.facts()?;
-        let user: Vec<Fact> = Self::read_text(&self.user)
-            .lines()
-            .filter_map(Fact::parse)
+        let _one = write_lock()?;
+        self.migrate()?;
+        let files = self.kept_in();
+        let mut all: BTreeSet<String> = files
+            .iter()
+            .flat_map(|f| {
+                Self::read_text(f)
+                    .lines()
+                    .filter_map(Fact::text_of)
+                    .collect::<Vec<_>>()
+            })
             .collect();
+        all.extend(self.waiting().proposals.into_iter().map(|p| p.text));
         let lower = words.to_lowercase();
-        let all: Vec<&Fact> = facts.iter().chain(user.iter()).collect();
-        let text = match all.iter().find(|f| f.text == words) {
-            Some(f) => f.text.clone(),
+        let text = match all.get(words) {
+            Some(t) => t.clone(),
             None => {
-                let mut hits: Vec<&&Fact> = all
+                let hits: Vec<&String> = all
                     .iter()
-                    .filter(|f| f.text.to_lowercase().contains(&lower))
+                    .filter(|t| t.to_lowercase().contains(&lower))
                     .collect();
-                hits.sort_by(|a, b| a.text.cmp(&b.text));
-                hits.dedup_by(|a, b| a.text == b.text);
                 match hits.as_slice() {
-                    [one] => one.text.clone(),
+                    [one] => (*one).clone(),
                     [] => return Err(format!("no memory line holds \"{words}\"")),
                     many => {
                         return Err(format!(
@@ -567,7 +720,7 @@ impl Memory {
                             many.len(),
                             many.iter()
                                 .take(5)
-                                .map(|f| format!("- {}", f.text))
+                                .map(|t| format!("- {t}"))
                                 .collect::<Vec<_>>()
                                 .join("\n")
                         ));
@@ -575,28 +728,15 @@ impl Memory {
                 }
             }
         };
-        let gone = |body: &str| -> Option<String> {
+        // The copies and topic files first, the index last: a rerun after a crash still finds the line.
+        for file in files.iter().rev() {
+            let body = Self::read_text(file);
             let kept: Vec<&str> = body
                 .lines()
-                .filter(|l| Fact::parse(l).is_none_or(|f| f.text != text))
+                .filter(|l| Fact::text_of(l).as_ref() != Some(&text))
                 .collect();
-            (kept.len() != body.lines().count()).then(|| kept.join("\n") + "\n")
-        };
-        facts.retain(|f| f.text != text);
-        self.write_facts(&facts)?;
-        let mut files: Vec<PathBuf> = vec![self.user.clone()];
-        for dir in [self.folder(), self.copies()] {
-            if let Ok(read) = fs::read_dir(&dir) {
-                files.extend(
-                    read.flatten()
-                        .map(|e| e.path())
-                        .filter(|p| p.extension().is_some_and(|x| x == "md")),
-                );
-            }
-        }
-        for file in files {
-            if let Some(body) = gone(&Self::read_text(&file)) {
-                self.write_text(&file, &body)?;
+            if kept.len() != body.lines().count() {
+                self.write_kept(file, &(kept.join("\n") + "\n"), &[])?;
             }
         }
         let mut w = self.waiting();
@@ -610,21 +750,22 @@ impl Memory {
 
     /// The index (no topic) with the topic files listed, or one topic file.
     pub fn read(&self, topic: Option<&str>) -> Result<String, String> {
+        let shown = |facts: Vec<Fact>| {
+            facts
+                .iter()
+                .map(|f| mask_secrets(&f.line()).0 + "\n")
+                .collect::<String>()
+        };
         match topic {
             Some(t) => {
                 let path = self.topic(t)?;
-                let text = Self::read_text(&path);
-                if text.is_empty() {
+                if !path.is_file() {
                     return Err(format!("no topic file {}", path.display()));
                 }
-                Ok(mask_secrets(&text).0)
+                Ok(shown(self.read_facts(&path)))
             }
             None => {
-                {
-                    let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
-                    self.migrate()?;
-                }
-                let mut text = mask_secrets(&Self::read_text(&self.index())).0;
+                let mut text = shown(self.facts()?);
                 let topics = self.topics();
                 if !topics.is_empty() {
                     text.push_str("\nTopic files (`nunchiro memory read <topic>`):\n");
@@ -639,14 +780,10 @@ impl Memory {
 
     /// The topic files, by name, with their line counts.
     pub fn topics(&self) -> Vec<(String, usize)> {
-        let mut out: Vec<(String, usize)> = fs::read_dir(self.folder())
+        Self::files_in(&self.folder())
             .into_iter()
-            .flatten()
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|x| x == "md") && p.is_file())
             .map(|p| {
-                let lines = Self::read_text(&p).lines().filter_map(Fact::parse).count();
+                let lines = self.read_facts(&p).len();
                 (
                     p.file_name()
                         .unwrap_or_default()
@@ -655,43 +792,57 @@ impl Memory {
                     lines,
                 )
             })
-            .collect();
-        out.sort();
-        out
+            .collect()
     }
 
-    fn outside_file(&self, session: &str) -> Result<PathBuf, String> {
-        if !store::valid_id(session) {
-            return Err("not a session id".into());
+    /// Masks what `mask_secrets` finds in the index and USER.md and writes the files back (a line the core trusted
+    /// stays trusted); how many it masked, and USER.md's length after.
+    pub(crate) fn mask_files(&self) -> (usize, usize) {
+        let Ok(_one) = write_lock() else {
+            return (0, 0);
+        };
+        let mut masked = 0;
+        for path in [self.index(), self.user.clone()] {
+            let trusted = self.trusted(&path);
+            let text = Self::read_text(&path);
+            let (out, n) = mask_secrets(&text);
+            if n == 0 {
+                continue;
+            }
+            let carried: Vec<String> = text
+                .lines()
+                .zip(out.lines())
+                .filter(|(was, _)| trusted.contains(&line_hash(was)))
+                .map(|(_, now)| now.to_string())
+                .collect();
+            match self.write_kept(&path, &out, &carried) {
+                Ok(()) => masked += n,
+                Err(e) => eprintln!("{}: masked text not written back: {e}", path.display()),
+            }
         }
-        Ok(self.folder().join("outside").join(session))
-    }
-    /// This seat's conversation read outside content (`outside_of`): kept on disk, so a core restart does not clear it.
-    pub fn mark_outside(&self, session: &str, source: Source) -> Result<(), String> {
-        let path = self.outside_file(session)?;
-        if self.outside(session).is_some_and(|s| s >= source) {
-            return Ok(());
-        }
-        self.write_text(&path, source.words())
-    }
-    /// What outside content this seat's conversation read, the most telling first (mail, web, a tool).
-    pub fn outside(&self, session: &str) -> Option<Source> {
-        let path = self.outside_file(session).ok()?;
-        Source::parse(Self::read_text(&path).trim())
+        (masked, Self::read_text(&self.user).len())
     }
 
-    fn save_copy(&self, text: &str, kind: &str, now_ms: u64) -> Result<(), String> {
+    /// `trust`: the copy's lines keep the trust they had in the index (a `before` copy is trusted as it is: it is what
+    /// the migration read).
+    fn save_copy(&self, text: &str, kind: &str, now_ms: u64, trust: bool) -> Result<(), String> {
         let mut at = now_ms;
         while self.copies().join(format!("{at}-{kind}.md")).exists() {
             at += 1;
         }
         // Masked as the index is: a copy never keeps a secret the index lost.
         let text = mask_secrets(text).0;
-        self.write_text(&self.copies().join(format!("{at}-{kind}.md")), &text)
+        let index = self.trusted(&self.index());
+        let new: Vec<String> = text
+            .lines()
+            .filter(|l| trust || index.contains(&line_hash(l)))
+            .map(String::from)
+            .collect();
+        self.write_kept(&self.copies().join(format!("{at}-{kind}.md")), &text, &new)
     }
 
-    /// The owner's edit of the whole index (the Memory tab's Edit): the version before it is a saved copy. Each line
-    /// is kept as written; secrets are masked.
+    /// The owner's edit of the whole index (the Memory tab's Edit): the version before it is a saved copy. A line the
+    /// owner wrote without a source is theirs, dated today; secrets are masked.
     pub fn edit(&self, text: &str, now_ms: u64) -> Result<(), String> {
         if text.len() > INDEX_BYTES {
             return Err(format!("the index has at most {} KB", INDEX_BYTES / 1024));
@@ -702,46 +853,50 @@ impl Memory {
         {
             return Err("the index is plain text".into());
         }
-        let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
-        self.migrate()?;
+        let _one = write_lock()?;
+        let before_facts = self.facts_now()?;
+        let today = crate::loops::today(now_ms);
         let facts: Vec<Fact> = mask_secrets(text)
             .0
             .lines()
-            .filter(|l| *l != MARK && !l.starts_with('#'))
-            .filter_map(|l| {
-                Fact::parse(l).or_else(|| {
-                    let l = l.trim();
-                    (!l.is_empty()).then(|| Fact {
-                        date: None,
-                        text: l.into(),
-                        from: None,
-                    })
-                })
+            .filter(|l| *l != MARK)
+            .filter_map(Fact::parse)
+            .map(|f| match f.from {
+                // A line the owner left as it was keeps what the core knew of it.
+                Some(_) => before_facts
+                    .iter()
+                    .find(|b| b.text == f.text && b.date == f.date)
+                    .cloned()
+                    .unwrap_or(Fact {
+                        from: Some(Source::You),
+                        ..f
+                    }),
+                None => Fact {
+                    date: f.date.or(Some(today.clone())),
+                    from: Some(Source::You),
+                    ..f
+                },
             })
             .collect();
-        let before = Self::read_text(&self.index());
-        if Self::render(&facts) == before {
+        if facts == before_facts {
             return Ok(());
         }
-        self.save_copy(&before, "edit", now_ms)?;
+        self.save_copy(&Self::read_text(&self.index()), "edit", now_ms, false)?;
         self.write_facts(&facts)
     }
 
     /// A new version of the index that replaces the current one, which is kept as a saved copy of `kind` (night tidy).
     pub fn replace(&self, facts: &[Fact], kind: &str, now_ms: u64) -> Result<(), String> {
-        let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
+        let _one = write_lock()?;
         self.migrate()?;
-        self.save_copy(&Self::read_text(&self.index()), kind, now_ms)?;
+        self.save_copy(&Self::read_text(&self.index()), kind, now_ms, false)?;
         self.write_facts(facts)
     }
 
     /// The saved copies, newest first. Copies past `keep_days` go first (a `before` copy is kept for good).
     pub fn saved_copies(&self, keep_days: u64, now_ms: u64) -> Vec<SavedCopy> {
-        let mut copies: Vec<(u64, String, PathBuf)> = fs::read_dir(self.copies())
+        let mut copies: Vec<(u64, String, PathBuf)> = Self::files_in(&self.copies())
             .into_iter()
-            .flatten()
-            .flatten()
-            .map(|e| e.path())
             .filter_map(|p| {
                 let stem = p.file_stem()?.to_str()?.to_string();
                 let (at, kind) = stem.split_once('-')?;
@@ -752,6 +907,7 @@ impl Memory {
             let keep = kind == "before" || now_ms.saturating_sub(*at) <= keep_days * DAY_MS;
             if !keep {
                 let _ = fs::remove_file(path);
+                let _ = fs::remove_file(self.record(path));
             }
             keep
         });
@@ -773,29 +929,43 @@ impl Memory {
             .collect()
     }
 
-    /// Puts a saved copy back as the index; the index it replaces is kept as an `undo` copy.
+    /// Puts a saved copy back as the index; the index it replaces is kept as an `undo` copy. A line of the copy the
+    /// core did not write comes back as `(from: unknown)`.
     pub fn undo(&self, copy: &str, now_ms: u64) -> Result<(), String> {
         if !copy.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
             return Err("no such saved copy".into());
         }
         let path = self.copies().join(format!("{copy}.md"));
-        let Ok(bytes) = store::read_regular(&path) else {
+        if !path.is_file() {
             return Err("that saved copy is gone".into());
-        };
-        let _one = WRITE.lock().map_err(|_| "memory unavailable".to_string())?;
-        let current = Self::read_text(&self.index());
-        self.save_copy(&current, "undo", now_ms)?;
-        let text = String::from_utf8_lossy(&bytes).into_owned();
-        // A `before` copy is the old free-form file: it comes back in this format, dated by the copy.
-        if text.lines().nth(1) != Some(MARK) {
+        }
+        let _one = write_lock()?;
+        let text = Self::read_text(&path);
+        let trusted = self.trusted(&path);
+        let facts: Vec<Fact> = if text.lines().nth(1) == Some(MARK) {
+            self.read_facts(&path)
+        } else {
+            // A `before` copy is the old free-form file: it comes back in this format, dated by the copy.
             let at = copy
                 .split('-')
                 .next()
                 .and_then(|a| a.parse().ok())
                 .unwrap_or(now_ms);
-            return self.write_facts(&convert(&text, &crate::loops::today(at)));
-        }
-        self.write_text(&self.index(), &text)
+            let date = crate::loops::today(at);
+            text.lines()
+                .flat_map(|l| {
+                    let known = trusted.contains(&line_hash(l));
+                    convert(l, &date).into_iter().map(move |mut f| {
+                        if !known {
+                            f.from = Some(Source::Unknown);
+                        }
+                        f
+                    })
+                })
+                .collect()
+        };
+        self.save_copy(&Self::read_text(&self.index()), "undo", now_ms, false)?;
+        self.write_facts(&facts)
     }
 }
 
@@ -810,6 +980,7 @@ fn convert(old: &str, date: &str) -> Vec<Fact> {
                 .trim_start_matches(['-', '*'])
                 .trim()
                 .trim_start_matches("[ ]")
+                .trim_start_matches("[x]")
                 .trim();
             let (date, text) = match body.get(..10).filter(|d| is_date(d)) {
                 Some(d) => (
@@ -828,17 +999,45 @@ fn convert(old: &str, date: &str) -> Vec<Fact> {
         .collect()
 }
 
+fn mark_file(home: &Path, session: &str) -> Result<PathBuf, String> {
+    if !store::valid_id(session) {
+        return Err("not a session id".into());
+    }
+    Ok(state_root(home).join("outside").join(session))
+}
+/// This session's conversation read outside content (`outside_of`), or heard from one that did. Kept in the core's own
+/// folder, out of the seats' file tools' way, so a core restart does not clear it.
+pub fn mark_outside(home: &Path, session: &str, source: Source) -> Result<(), String> {
+    let path = mark_file(home, session)?;
+    if outside(home, &[session.to_string()]).is_some_and(|s| s >= source) {
+        return Ok(());
+    }
+    store::private_dir(&state_root(home))?;
+    store::private_dir(&state_root(home).join("outside"))?;
+    store::atomic_write(&path, source.words().as_bytes())
+}
+/// What outside content any of `sessions` (a seat and the runs it continues) read, the most telling first.
+pub fn outside(home: &Path, sessions: &[String]) -> Option<Source> {
+    sessions
+        .iter()
+        .filter_map(|s| {
+            let path = mark_file(home, s).ok()?;
+            Source::parse(Memory::read_text(&path).trim())
+        })
+        .max()
+}
+
 /// What a tool call reads from outside this Mac's conversation, by its name and input as an agent's hook gives them
 /// (Claude and Codex): a mail connector, a web fetch or search, another MCP server's results, or a shell command that
-/// fetches a page. Nunchiro's own MCP tools are not outside.
-/// shortcut: a shell command is judged by its words (`curl`, `wget`, `nunchiro browser`), so a script that fetches
-/// passes; upgrade to marking every shell call if a fetched page is seen reaching memory that way.
+/// fetches a page, an issue or a repository. Nunchiro's own MCP server is not outside.
+/// shortcut: a shell command is judged by its words (`curl`, `wget`, `nunchiro browser`, `gh`, `git clone|pull|fetch`), so
+/// a script that fetches passes; upgrade to marking every shell call if a fetched page is seen reaching memory that way.
 pub fn outside_of(tool: &str, input: &serde_json::Value) -> Option<Source> {
     let lower = tool.to_lowercase();
     if let Some(rest) = tool.strip_prefix("mcp__") {
         let server = rest.split("__").next().unwrap_or_default().to_lowercase();
         return match server {
-            s if s.contains("nunchiro") => None,
+            s if s == OWN_SERVER => None,
             s if s == crate::outward::MAIL.to_lowercase() || s.contains("mail") => {
                 Some(Source::Mail)
             }
@@ -866,13 +1065,16 @@ pub fn outside_of(tool: &str, input: &serde_json::Value) -> Option<Source> {
             })
         })
         .unwrap_or_default();
-    let fetches = command
+    let words: Vec<&str> = command
         .split(|c: char| c.is_whitespace() || ";|&()".contains(c))
-        .collect::<Vec<_>>()
-        .windows(2)
-        .any(|w| matches!(w[0], "curl" | "wget") || w == ["nunchiro", "browser"])
-        || command.starts_with("curl ")
-        || command.starts_with("wget ");
+        .filter(|w| !w.is_empty())
+        .collect();
+    let fetches = words.iter().enumerate().any(|(i, w)| {
+        let next = words.get(i + 1).copied().unwrap_or_default();
+        matches!(*w, "curl" | "wget" | "gh")
+            || (*w == "nunchiro" && next == "browser")
+            || (*w == "git" && matches!(next, "clone" | "pull" | "fetch"))
+    });
     fetches.then_some(Source::Web)
 }
 
@@ -888,7 +1090,6 @@ fn title(file: &str) -> String {
 }
 
 fn changed_lines(a: &str, b: &str) -> usize {
-    use std::collections::BTreeSet;
     let set = |t: &str| -> BTreeSet<String> {
         t.lines()
             .filter(|l| l.starts_with("- "))

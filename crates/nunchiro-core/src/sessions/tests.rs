@@ -10558,6 +10558,7 @@ mod gap_tests; // the gap rule
 mod home_lock_tests;
 mod home_tests; // text left in the terminal comes home
 mod lock_followups_tests; // S-m1, Q9 en-b-J7-2, ticket 1002
+mod memory_tests; // a bot's memory marks
 // Ticket 39: a core that starts stopping after the first decision (set by the hook) refuses the hand-off under
 // the lock, before it starts a target or writes any text, both when the target would be reused and when it
 // would start. (The check before the first decision: `http_handoff_refused_while_stopping`.)

@@ -290,6 +290,9 @@ impl Sessions {
             settings.insert("permissions".into(), rules);
         }
         // end v1b-07
+        if start.kind == AgentKind::Claude {
+            memory::deny_memory(&mut settings, &self.home);
+        }
         // Round 4 (security MUST 1): a run that continues a token session (a resume by anyone, a problem restart) or a
         // side chat of one is a token session too.
         // Round 6 (security r5 MUST 1): the origin is stored on the record, so a later close or resume of a parent
