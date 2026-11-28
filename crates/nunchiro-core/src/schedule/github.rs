@@ -251,4 +251,27 @@ mod tests {
             "{asked}"
         );
     }
+
+    #[test]
+    fn a_mention_is_one_event_per_open_issue_or_pull_that_mentions_the_owner() {
+        let answer = r#"[{"url": "https://github.com/o/r/issues/3"}]"#;
+        let asked = Mutex::new(vec![]);
+        let run = |a: &[String]| {
+            asked.lock().unwrap().push(a.to_vec());
+            Ok(answer.as_bytes().to_vec())
+        };
+        let found = events(&watch(GithubEvent::Mentioned), &run).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].0, "https://github.com/o/r/issues/3");
+        assert_eq!(found[0].1["event"], "mentioned");
+        assert_eq!(
+            found[0].1["issue"]["html_url"],
+            "https://github.com/o/r/issues/3"
+        );
+        let asked = asked.lock().unwrap()[0].join(" ");
+        assert!(
+            asked.starts_with("search issues --repo o/r --mentions @me --state open --include-prs"),
+            "{asked}"
+        );
+    }
 }

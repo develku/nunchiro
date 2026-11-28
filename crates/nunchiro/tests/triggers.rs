@@ -990,3 +990,59 @@ fn a_start_that_fails_is_not_tried_again_until_a_new_head_commit() {
     std::thread::sleep(Duration::from_secs(4));
     assert_eq!(last()["at"], at, "tried again: {}", last());
 }
+
+#[test]
+fn a_mention_trigger_asks_first_once_for_each_open_issue_or_pull_that_mentions_the_owner() {
+    let (c, gh) = github_core("tgm");
+    // Anyone can mention the owner on a public repository, so a mention trigger never starts by itself.
+    let project = c.project.to_str().unwrap();
+    let out = nunchiro(
+        &c.home,
+        None,
+        &[
+            "trigger",
+            "add",
+            "m",
+            "--on",
+            "github",
+            "--repo",
+            "o/r",
+            "--event",
+            "mentioned",
+            "--kind",
+            "claude",
+            "--project",
+            project,
+            "--task",
+            "Answer the mention.",
+            "--auto",
+        ],
+        "",
+    );
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !out.status.success() && err.contains("a mention trigger asks first"),
+        "{err}"
+    );
+    add_github(&c, "mention", "o/r", "mentioned", &[]);
+    std::thread::sleep(Duration::from_secs(3));
+    let asked = std::fs::read_to_string(gh.join("asked")).unwrap_or_default();
+    assert!(
+        asked.contains("search issues --repo o/r --mentions @me --state open --include-prs"),
+        "{asked}"
+    );
+    std::fs::write(
+        gh.join("answer"),
+        r#"[{"url": "https://github.com/o/r/issues/3"}]"#,
+    )
+    .unwrap();
+    wait_for("a card", || trigger_cards(&c).len() == 1);
+    assert_eq!(
+        trigger_cards(&c)[0]["owner"]["reason"],
+        "https://github.com/o/r/issues/3"
+    );
+    // The same mention read again: no second card, and nothing started without the owner's yes.
+    std::thread::sleep(Duration::from_secs(3));
+    assert_eq!(trigger_cards(&c).len(), 1);
+    assert!(started(&c).is_empty());
+}
