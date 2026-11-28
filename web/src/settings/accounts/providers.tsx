@@ -19,7 +19,7 @@ const same = (a: AcpEntry, b: AcpEntry) => a.name === b.name && a.command === b.
 const composing = (e: KeyboardEvent) => e.nativeEvent.isComposing || e.keyCode === 229;
 
 /** Colour logos are held (V2.5-2): a bordered monogram. Two letters where one would repeat (Gemini, goose, Grok). */
-const MONOGRAM: Record<string, string> = { claude: 'C', codex: 'X', gemini: 'Gm', opencode: 'O', goose: 'Gs', aider: 'A', cursor: 'Cu', grok: 'Gk', antigravity: 'Ag', muse: 'Mc', pi: 'Pi' };
+const MONOGRAM: Record<string, string> = { claude: 'C', codex: 'X', gemini: 'Gm', opencode: 'O', goose: 'Gs', aider: 'A', cursor: 'Cu', grok: 'Gk', antigravity: 'Ag', muse: 'Mc', pi: 'Pi', copilot: 'Co', kiro: 'Ki', kilo: 'Kl', 'mistral-vibe': 'Mv', cline: 'Cl', hermes: 'He', qwen: 'Qw', droid: 'Dr', auggie: 'Au' };
 export const Mark = ({ name, service }: { name: string; service?: boolean }) => (
   <span className="prv-mark" aria-hidden="true">
     {service ? (
@@ -48,7 +48,7 @@ export const UNCONFIRMED: { name: string; label: string; url?: string; docs?: st
   { name: 'muse', label: 'Muse Code' },
   { name: 'pi', label: 'Pi', url: 'https://pi.dev', docs: 'https://pi.dev/docs/latest', source: 'https://github.com/earendil-works/pi' },
 ];
-export const AGENT_TILES = ['gemini', 'opencode', 'goose', 'aider', 'cursor', 'grok', 'antigravity', 'muse', 'pi'];
+export const AGENT_TILES = ['opencode', 'antigravity', 'copilot', 'kiro', 'kilo', 'mistral-vibe', 'cursor', 'cline', 'hermes', 'goose', 'gemini', 'qwen', 'droid', 'auggie', 'grok', 'aider', 'muse', 'pi'];
 export const KEY_TILES = ['openrouter', 'glm', 'kimi'];
 
 /** The how-to is one true sentence: the core imports no shell environment (main.rs `core_command`; `login_path` only feeds the

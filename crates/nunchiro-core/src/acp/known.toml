@@ -1,7 +1,10 @@
 # The agents Settings > Agents offers a row for (V2-4b). Bundled, never fetched online. No Claude entry: a Claude ACP
 # agent is a custom entry and needs an API key (ADR 0001 Q3). `args` are each agent's documented ACP switch; a wrong
 # one only makes the setup sheet's check fail visibly. `acp = false` is a terminal-only CLI. `docs_url` and `source_url`
-# (ticket 358) are each confirmed to answer and https only (the test in mod.rs); a tool with no confirmed page has none.
+# are each confirmed to answer and https only (the test in mod.rs); a tool with no confirmed page has none.
+# The add steps: `install` (an argv) or `install_script` (the vendor's one line) is typed into a terminal tab and never
+# run by Nunchiro; `sign_in` is the agent's own sign-in command; `cost`, `cost_line` and `pricing_url` were read on the
+# vendor's page on `checked`. Prices change: the link is the reference.
 # Gemini CLI's docs name `gemini --acp` (the older `--experimental-acp` is gone from them).
 [[known]]
 name = "gemini"
@@ -13,6 +16,12 @@ install_url = "https://github.com/google-gemini/gemini-cli"
 docs_url = "https://geminicli.com/docs/"
 source_url = "https://github.com/google-gemini/gemini-cli"
 acp = true
+install = ["npm", "install", "-g", "@google/gemini-cli"]
+account = "Google"
+cost = "paid_key"
+cost_line = "Needs a paid API key. Free Google sign-in ended in June 2026."
+pricing_url = "https://ai.google.dev/gemini-api/docs/pricing"
+checked = "2026-11-27"
 
 [[known]]
 name = "opencode"
@@ -24,6 +33,13 @@ install_url = "https://opencode.ai"
 docs_url = "https://opencode.ai/docs"
 source_url = "https://github.com/anomalyco/opencode"
 acp = true
+install_script = "curl -fsSL https://opencode.ai/install | bash"
+sign_in = ["opencode", "auth", "login"]
+account = "OpenCode"
+cost = "free_models"
+cost_line = "Free models are offered for a limited time. Other models are paid per use."
+pricing_url = "https://opencode.ai/docs/zen/"
+checked = "2026-11-27"
 
 [[known]]
 name = "goose"
@@ -35,6 +51,13 @@ install_url = "https://block.github.io/goose"
 docs_url = "https://goose-docs.ai/docs/quickstart"
 source_url = "https://github.com/aaif-goose/goose"
 acp = true
+install = ["brew", "install", "block-goose-cli"]
+sign_in = ["goose", "configure"]
+account = "model provider"
+cost = "own_model"
+cost_line = "Runs on a model you connect. What it costs depends on that provider."
+pricing_url = "https://goose-docs.ai/docs/getting-started/installation"
+checked = "2026-11-27"
 
 [[known]]
 name = "aider"
@@ -57,6 +80,13 @@ env = []
 install_url = "https://cursor.com/docs/cli/overview"
 docs_url = "https://cursor.com/docs/cli/overview"
 acp = true
+install_script = "curl https://cursor.com/install -fsS | bash"
+sign_in = ["agent", "login"]
+account = "Cursor"
+cost = "free_limited"
+cost_line = "The Free plan has limited agent requests. Whether it covers the CLI is not confirmed."
+pricing_url = "https://cursor.com/pricing"
+checked = "2026-11-27"
 
 # Confirmed in T3 Code provider-grok acpSupport.ts (grok agent stdio, XAI_API_KEY); ACP itself in the xAI Grok Build docs.
 [[known]]
@@ -79,6 +109,179 @@ env = []
 install_url = "https://antigravity.google/download"
 docs_url = "https://antigravity.google/docs/cli/acp/"
 acp = true
+install_script = "curl -fsSL https://antigravity.google/cli/install.sh | bash"
+account = "Google"
+cost = "free_limited"
+cost_line = "The Free tier has a weekly agent quota. Pro and Ultra come with Google AI plans."
+pricing_url = "https://antigravity.google/pricing"
+checked = "2026-11-27"
+
+# Confirmed in GitHub docs: https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server ("copilot --acp --stdio";
+# stdio is the default).
+[[known]]
+name = "copilot"
+label = "GitHub Copilot"
+command = "copilot"
+args = ["--acp"]
+env = []
+install_url = "https://github.com/github/copilot-cli"
+docs_url = "https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server"
+source_url = "https://github.com/github/copilot-cli"
+acp = true
+install = ["npm", "install", "-g", "@github/copilot"]
+sign_in = ["copilot", "login"]
+account = "GitHub"
+cost = "free_plan"
+cost_line = "Copilot Free includes the CLI, with limited monthly AI credits. Pro is $10 a month."
+pricing_url = "https://github.com/features/copilot/plans"
+checked = "2026-11-27"
+
+# Confirmed in Kiro docs: https://kiro.dev/docs/cli/acp/ (kiro-cli acp).
+[[known]]
+name = "kiro"
+label = "Kiro"
+command = "kiro-cli"
+args = ["acp"]
+env = []
+install_url = "https://kiro.dev/docs/getting-started/installation/"
+docs_url = "https://kiro.dev/docs/cli/acp/"
+acp = true
+install_script = "curl -fsSL https://cli.kiro.dev/install | bash"
+sign_in = ["kiro-cli", "login"]
+account = "Kiro"
+cost = "free_limited"
+cost_line = "The Free plan gives 50 credits a month. Pro is $20 a month."
+pricing_url = "https://kiro.dev/pricing/"
+checked = "2026-11-27"
+
+# Confirmed in Kilo docs: https://kilo.ai/docs/code-with-ai/platforms/cli-reference (kilo acp, "start ACP ... server").
+[[known]]
+name = "kilo"
+label = "Kilo Code"
+command = "kilo"
+args = ["acp"]
+env = []
+install_url = "https://kilo.ai/docs/code-with-ai/platforms/cli"
+docs_url = "https://kilo.ai/docs/code-with-ai/platforms/cli-reference"
+source_url = "https://github.com/Kilo-Org/kilocode"
+acp = true
+install = ["npm", "install", "-g", "@kilocode/cli"]
+sign_in = ["kilo", "auth", "login"]
+account = "Kilo"
+cost = "free_models"
+cost_line = "Free for individuals, with free models through Kilo Gateway or your own key."
+pricing_url = "https://kilo.ai/pricing"
+checked = "2026-11-27"
+
+# Confirmed in Mistral docs: https://docs.mistral.ai/vibe/code/use-vibe-in-other-ides ("command": "vibe-acp", its own binary).
+[[known]]
+name = "mistral-vibe"
+label = "Mistral Vibe"
+command = "vibe-acp"
+args = []
+env = []
+install_url = "https://docs.mistral.ai/vibe/code/cli/install-setup"
+docs_url = "https://docs.mistral.ai/vibe/code/use-vibe-in-other-ides"
+source_url = "https://github.com/mistralai/mistral-vibe"
+acp = true
+install_script = "curl -LsSf https://mistral.ai/vibe/install.sh | bash"
+sign_in = ["vibe", "--setup"]
+account = "Mistral"
+cost = "free_limited"
+cost_line = "The Free plan includes limited Vibe coding sessions. Pro is $14.99 a month."
+pricing_url = "https://mistral.ai/pricing"
+checked = "2026-11-27"
+
+# Confirmed in Cline docs: https://docs.cline.bot/cline-cli/acp-editor-integrations ("started with the --acp flag").
+[[known]]
+name = "cline"
+label = "Cline"
+command = "cline"
+args = ["--acp"]
+env = []
+install_url = "https://docs.cline.bot/cline-cli/acp-editor-integrations"
+docs_url = "https://docs.cline.bot/cline-cli/acp-editor-integrations"
+source_url = "https://github.com/cline/cline"
+acp = true
+install = ["npm", "install", "-g", "cline"]
+sign_in = ["cline", "auth"]
+account = "Cline"
+cost = "own_model"
+cost_line = "The CLI is free for individuals. Bring your own key or pay Cline per use."
+pricing_url = "https://cline.bot/pricing"
+checked = "2026-11-27"
+
+# Confirmed in Hermes docs: https://hermes-agent.nousresearch.com/docs/user-guide/features/acp (hermes acp).
+[[known]]
+name = "hermes"
+label = "Hermes"
+command = "hermes"
+args = ["acp"]
+env = []
+install_url = "https://hermes-agent.nousresearch.com/docs/getting-started/installation"
+docs_url = "https://hermes-agent.nousresearch.com/docs/user-guide/features/acp"
+source_url = "https://github.com/NousResearch/hermes-agent"
+acp = true
+install_script = "curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash"
+sign_in = ["hermes", "model"]
+account = "model provider"
+cost = "own_model"
+cost_line = "Runs on a model you connect. What it costs depends on that provider."
+pricing_url = "https://portal.nousresearch.com"
+checked = "2026-11-27"
+
+# Confirmed in Qwen Code docs: https://qwenlm.github.io/qwen-code-docs/en/users/integration-zed ("args": ["--acp"]).
+[[known]]
+name = "qwen"
+label = "Qwen Code"
+command = "qwen"
+args = ["--acp"]
+env = []
+install_url = "https://github.com/QwenLM/qwen-code"
+docs_url = "https://qwenlm.github.io/qwen-code-docs/en/users/integration-zed"
+source_url = "https://github.com/QwenLM/qwen-code"
+acp = true
+install = ["npm", "install", "-g", "@qwen-code/qwen-code"]
+account = "Qwen"
+cost = "paid_plan"
+cost_line = "Sign-in needs a paid Qwen plan or your own API key."
+pricing_url = "https://qwenlm.github.io/qwen-code-docs/en/users/configuration/auth/"
+checked = "2026-11-27"
+
+# Confirmed in Factory docs: https://docs.factory.com/integrations/zed (droid exec --output-format acp).
+[[known]]
+name = "droid"
+label = "Factory Droid"
+command = "droid"
+args = ["exec", "--output-format", "acp"]
+env = []
+install_url = "https://docs.factory.com/cli/getting-started/quickstart"
+docs_url = "https://docs.factory.com/integrations/zed"
+acp = true
+install_script = "curl -fsSL https://app.factory.ai/cli | sh"
+account = "Factory"
+cost = "paid_key"
+cost_line = "The Free plan works with your own API keys. Pro is $20 a month."
+pricing_url = "https://factory.com/pricing"
+checked = "2026-11-27"
+
+# Confirmed in Augment docs: https://docs.augmentcode.com/cli/acp ("pass the --acp flag when starting Auggie").
+[[known]]
+name = "auggie"
+label = "Auggie"
+command = "auggie"
+args = ["--acp"]
+env = []
+install_url = "https://docs.augmentcode.com/cli/overview"
+docs_url = "https://docs.augmentcode.com/cli/acp"
+acp = true
+install = ["npm", "install", "-g", "@augmentcode/auggie"]
+sign_in = ["auggie", "login"]
+account = "Augment"
+cost = "paid_plan"
+cost_line = "There is no free plan, only a trial. Standard is $20 a month."
+pricing_url = "https://www.augmentcode.com/pricing"
+checked = "2026-11-27"
 
 # API key services run through OpenCode. A variable name is filled in only when the service names it in its own docs:
 # openrouter.ai/docs/quickstart and platform.kimi.ai/docs/guide/start-using-kimi-api do; the Z.ai and BigModel pages name

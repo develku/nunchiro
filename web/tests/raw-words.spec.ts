@@ -11,6 +11,7 @@ import { expect, openWindow, REPO, test } from './fixtures';
 import { closeModal, openSettings } from './settings-modal';
 import { BASE, buildSheetHarness, widget } from './sheet-harness-build';
 import { layoutButton, lib } from './d5b';
+import { startOf } from './start-op';
 
 // Internal words a user never needs to read, each matched as a whole word.
 const DENY: [RegExp, string][] = [
@@ -58,9 +59,9 @@ test('raw_words_none_on_seeded_pages: no absolute path, UUID-like id or internal
   git('commit', '-qm', 'first');
   fs.writeFileSync(path.join(dir, 'a.txt'), 'two\n');
   const shell = core.shell(dir, 'build');
-  const agent = core.agent(dir, 'helper', path.join(dir, 'never'));
+  const agent = core.agent(dir, 'helper', 'never');
   // Ticket 471 r3: a session started with no label (New session sends none) is named after its agent, not "claude 3fa2b1".
-  const bare = core.cli('session', 'start', '--kind', 'claude', '--project', dir, '--model', path.join(dir, 'never')).session as { id: string };
+  const bare = core.cli('session', 'start', '--kind', 'claude', '--project', dir, '--model', 'never').session as { id: string };
   const ids = [shell.id, agent.id, bare.id].flatMap((id) => [id, id.slice(0, 6)]);
   await openWindow(app, {}, core);
   await expect(app.locator('.ib.r')).toBeVisible();
@@ -103,8 +104,8 @@ test('raw_words_none_on_work_surfaces: chat, tabs, tree, palette, new session, s
   fs.writeFileSync(path.join(dir, 'notes.txt'), 'needle in a haystack\n');
   const trigger = path.join(dir, 'ask');
   const shell = core.shell(dir, 'build');
-  const agent = core.agent(dir, 'helper', trigger);
-  const bare = core.cli('session', 'start', '--kind', 'claude', '--project', dir, '--model', path.join(dir, 'never')).session as { id: string };
+  const agent = core.agent(dir, 'helper', 'ask'); // the fake waits for <dir>/ask (`trigger`)
+  const bare = core.cli('session', 'start', '--kind', 'claude', '--project', dir, '--model', 'never').session as { id: string };
   const ids = [shell.id, agent.id, bare.id].flatMap((id) => [id, id.slice(0, 6)]);
   // A refused start (the Terminal icon) is a toast in plain words; the other requests pass.
   let refuseStart = false;
@@ -112,7 +113,7 @@ test('raw_words_none_on_work_surfaces: chat, tabs, tree, palette, new session, s
     const server = ws.connectToServer();
     ws.onMessage((msg) => {
       const r = typeof msg === 'string' ? JSON.parse(msg) : null;
-      if (refuseStart && r?.request?.op === 'start') return ws.send(JSON.stringify({ id: r.id, response: { Err: 'sessions.toml: No space left on device (os error 28)' } }));
+      if (refuseStart && startOf(r?.request)) return ws.send(JSON.stringify({ id: r.id, response: { Err: 'sessions.toml: No space left on device (os error 28)' } }));
       server.send(msg);
     });
     server.onMessage((msg) => ws.send(msg));

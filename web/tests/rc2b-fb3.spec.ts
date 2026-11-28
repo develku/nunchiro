@@ -29,7 +29,7 @@ const rightIcon = (app: Page, name: string) => app.locator('.ib.r').getByRole('b
 test('browser_icon_opens_in_app: with the board shown in the terminal zone, the Browser icon shows the session Browser tab', async ({ app, core }) => {
   fs.writeFileSync(path.join(core.home, 'layout.toml'), OWNER_LAYOUT);
   const project = core.project('demo');
-  core.agent(project, 'alpha', path.join(project, 'never'));
+  core.agent(project, 'alpha', 'never');
   await openWindow(app);
   await expect(app.getByRole('dialog', { name: 'Board' })).toBeVisible(); // the layout's centre Board migrates to the modal (v25f)
   await app.keyboard.press('Escape');
@@ -42,7 +42,7 @@ test('browser_icon_opens_in_app: with the board shown in the terminal zone, the 
 test('terminal_icon_opens_behind_board: the Terminal icon on the same layout shows the side pane, not a hidden one', async ({ app, core }) => {
   fs.writeFileSync(path.join(core.home, 'layout.toml'), OWNER_LAYOUT);
   const project = core.project('demo');
-  core.agent(project, 'alpha', path.join(project, 'never'));
+  core.agent(project, 'alpha', 'never');
   await openWindow(app);
   await expect(app.getByRole('dialog', { name: 'Board' })).toBeVisible();
   await app.keyboard.press('Escape'); // the migrated Board modal (v25f)
