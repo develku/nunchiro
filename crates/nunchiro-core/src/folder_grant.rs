@@ -148,7 +148,12 @@ fn writable(path: &Path, grants: &Grants) -> bool {
                     "CLAUDE.local.md",
                 ]
                 .iter()
-                .any(|n| c.as_os_str() == *n)
+                // The Mac's disk ignores case: `.CLAUDE` is `.claude` there.
+                .any(|n| {
+                    c.as_os_str()
+                        .to_str()
+                        .is_none_or(|c| c.eq_ignore_ascii_case(n))
+                })
             })
     })
 }
@@ -413,6 +418,9 @@ mod tests {
             w(inside.join(".claude/settings.json")),
             &grants
         ));
+        for p in [".CLAUDE/settings.json", "sub/.Git/hooks/pre-commit"] {
+            assert!(!allow("Write", w(inside.join(p)), &grants), "{p}");
+        }
         let i = inside.display();
         assert!(allow(
             "Bash",
