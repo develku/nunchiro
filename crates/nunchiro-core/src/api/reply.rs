@@ -433,6 +433,9 @@ pub enum Reply {
     WidgetPage {
         page: crate::widgets::web::Page,
     },
+    Triggers {
+        triggers: Vec<crate::schedule::triggers::Trigger>,
+    },
     Plugins {
         plugins: Vec<crate::plugins::Listed>,
     },

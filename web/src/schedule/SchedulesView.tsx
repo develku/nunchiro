@@ -13,6 +13,7 @@ import { agentKey, LevelMark, pairShort, slotPair, slotText, useLevels } from '.
 import { dotOfStatus } from '../stateDot';
 import type { Session } from '../types';
 import { ScheduleForm } from './ScheduleForm';
+import { TriggersSection } from './TriggersSection';
 import { WidenMark } from '../history/HistoryView';
 import { dayWords, levelOf, nameOf, NEW_SCHEDULE, nextExact, nextWords, onOpenSchedules, ranOnce, refreshSchedules, scheduleList, scheduleOp, showSchedTab, sorted, takeWanted, taskShown, useSchedAt, useScheduleList, whenWords, type Schedule } from './schedules';
 import '../lead/lead.css';
@@ -278,6 +279,7 @@ export function SchedulesView({ core, t, sessions, open, where }: { core: CoreCl
             </ul>
           </>
         )}
+        <TriggersSection core={core} t={t} sessions={sessions} />
       </div>
     </div>
   );

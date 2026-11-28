@@ -1366,6 +1366,11 @@ pub enum Request {
     Plugin {
         action: crate::plugins::Action,
     },
+    /// Triggers (`schedule/triggers.rs`): the owner lists, adds, removes and pauses them; the owner or a token of the
+    /// `trigger` scope fires one.
+    Trigger {
+        action: crate::schedule::triggers::Action,
+    },
     /// v1a-10: owner only. Claude replies `delivery` (the switch runs as one send row); Codex restarts into
     /// the same conversation and replies `started` with the replacing session.
     SwitchModel {

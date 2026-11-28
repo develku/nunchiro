@@ -389,8 +389,13 @@ impl Sessions {
         // the call (`onFailure`, probe 2026-11-20). M3: no settings layer may turn hooks or skill shell lines back on.
         if let Some(mode) = home_mode {
             let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+            let no_mcp = if permission.iter().any(|a| a == "--strict-mcp-config") {
+                format!(" {}", crate::home_lock::NO_MCP_FLAG)
+            } else {
+                String::new()
+            };
             let command = format!(
-                "{} hook home-lock --mode {}",
+                "{} hook home-lock --mode {}{no_mcp}",
                 shell_quote(&exe.to_string_lossy()),
                 crate::home_lock::name(mode)
             );

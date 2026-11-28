@@ -107,7 +107,7 @@ command = ["/bin/sh", "gate.sh"]
 on_error = "allow"            # or "refuse" (the default): what no answer, a crash or bad JSON means
 ```
 
-`$NUNCHIRO_CONTEXT` holds `event`, `asker` (`owner`, `agent`, `schedule`, `token`), `settings`, and `start` (`kind`,
+`$NUNCHIRO_CONTEXT` holds `event`, `asker` (`owner`, `agent`, `schedule`, `token`, `trigger`), `settings`, and `start` (`kind`,
 `project`, `worktree`, `label`) or `to` and `text`. The check prints one line:
 
 ```json
