@@ -170,6 +170,10 @@ fn a_claude_seat_may_not_edit_the_memory_files_or_a_settled_soul() {
         format!("Edit(/{h}/[tT][eE][aA][mM]/[uU][sS][eE][rR].[mM][dD])"),
         format!("Edit(/{h}/memory-state/**)"),
         format!("Edit(/{h}/[mM][eE][mM][oO][rR][yY]-[sS][tT][aA][tT][eE]/**)"),
+        // The search index of past conversations: read only through `nunchiro memory search`, which passes marks on.
+        format!("Edit(/{h}/memory-search/**)"),
+        format!("Read(/{h}/memory-search/**)"),
+        format!("Read(/{h}/[mM][eE][mM][oO][rR][yY]-[sS][eE][aA][rR][cC][hH]/**)"),
         // A bot with no first chat: its SOUL is the owner's to edit, on the Bots page.
         format!("Edit(/{h}/team/{bot}/SOUL.md)"),
     ] {

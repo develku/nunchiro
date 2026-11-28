@@ -779,6 +779,7 @@ mod legacy;
 mod log;
 mod persistence;
 pub mod pr; // v2-8b
+pub mod recall;
 pub mod search; // v2-7
 mod service;
 pub mod turn_files; // ticket 222 (B19)

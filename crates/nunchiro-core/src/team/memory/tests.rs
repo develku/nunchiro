@@ -615,7 +615,10 @@ fn the_memory_tab_view_follows_each_change_and_the_settings_hold_their_choices()
     m.add("One.", Source::You, None, NOW).unwrap();
     m.add("Two.", Source::Mail, None, NOW).unwrap();
     let soul = team.soul(&id);
-    let settings = Settings { keep_days: 7 };
+    let settings = Settings {
+        keep_days: 7,
+        ..Settings::default()
+    };
     let v = m.view(&soul, None, &settings).unwrap();
     assert_eq!(
         (v.facts.len(), v.proposals, v.keep_days, v.limit),
@@ -655,4 +658,27 @@ fn the_memory_tab_view_follows_each_change_and_the_settings_hold_their_choices()
         assert_eq!(check_settings(&value).is_ok(), ok, "{value}");
     }
     let _ = fs::remove_dir_all(home);
+}
+
+#[test]
+fn forget_also_deletes_the_line_from_the_search_index() {
+    use crate::chat::recall;
+    let (home, team, id) = bot();
+    let m = team.bot_memory(&id).unwrap();
+    m.add("Dana prefers short mails.", Source::You, None, NOW)
+        .unwrap();
+    let path = home.join("t.jsonl");
+    let line = serde_json::json!({"type":"user","timestamp":"2026-11-01T00:00:00Z",
+        "message":{"role":"user","content":"Remember: Dana prefers short mails."}});
+    fs::write(&path, line.to_string() + "\n").unwrap();
+    let source = recall::Source {
+        id: "s1".into(),
+        kind: AgentKind::Claude,
+        label: "Mail".into(),
+        path,
+    };
+    recall::refresh(&home, &[source], NOW).unwrap();
+    assert_eq!(recall::find(&home, "dana").unwrap().1, 1);
+    m.forget("Dana prefers").unwrap();
+    assert_eq!(recall::find(&home, "dana").unwrap().1, 0);
 }

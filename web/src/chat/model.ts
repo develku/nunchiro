@@ -314,6 +314,9 @@ export function groupLine(tools: Tool[]): [string, string] {
 }
 
 const WORK = new Set<Row['kind']>(['tool', 'group', 'task', 'orphan']);
+/** Bot memory: a search of past conversations shows its hits in the reply, never folded into the turn's work. */
+export const isMemorySearch = (t: Tool) => /(^|__)memory_search$/.test(t.use.name);
+const folded = (r: Row) => WORK.has(r.kind) && !(r.kind === 'tool' && isMemorySearch(r.tool));
 // Recognize even unfinished/background test runs so they clear an earlier pass count.
 const TEST_CMD = /^(?:(?:npx|(?:pnpm|npm|yarn)\s+exec|bunx)\s+(?:playwright\s+test|vitest(?:\s+run)?|jest)|(?:pnpm|npm|yarn|bun)(?:\s+run)?\s+test|(?:python3?\s+-m\s+)?pytest|vitest(?:\s+run)?|jest|cargo\s+test|go\s+test)(?=\s|$|[;&|<>`$()])/;
 const testRun = (t: Tool) => {
@@ -432,7 +435,7 @@ function summarize(work: Row[], stopped = false, asking = 0): { parts: SummaryPa
 }
 
 function foldTurn(turn: Row[], view: View, asking = 0, working = false): Row[] {
-  const work = turn.filter((r) => WORK.has(r.kind) || (r.kind === 'diff' && !!r.tool));
+  const work = turn.filter((r) => folded(r) || (r.kind === 'diff' && !!r.tool));
   // Only confirmed edits become a changes card; unknown outcomes keep the neutral patch view.
   const done = (r: Row): r is Extract<Row, { kind: 'diff' }> => r.kind === 'diff' && editSucceeded(r);
   const finished = turn.filter(done);
@@ -446,7 +449,7 @@ function foldTurn(turn: Row[], view: View, asking = 0, working = false): Row[] {
       out.push({ kind: 'summary', key: r.key - 0.5, rows: work, ...summarize(work, turn.some((x) => x.kind === 'interrupted'), asking) });
       summed = true;
     }
-    if (WORK.has(r.kind)) {
+    if (folded(r)) {
       return;
     } else if (r.kind === 'thinking') {
       if (view === 'thinking') out.push(r);

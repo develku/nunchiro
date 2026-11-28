@@ -191,7 +191,7 @@ fn search(
 }
 
 /// A session's transcript, checked as the chat view checks it, or the status to show instead (`None`: a shell).
-fn transcript_of(
+pub(crate) fn transcript_of(
     meta: &Session,
     observed: Option<PathBuf>,
 ) -> Option<Result<PathBuf, (&'static str, Option<String>)>> {
@@ -468,7 +468,7 @@ fn text(data: &Value, needle: &str) -> Option<String> {
     }
 }
 
-fn snippet(s: &str, at: usize, len: usize) -> String {
+pub(crate) fn snippet(s: &str, at: usize, len: usize) -> String {
     let mut start = at.saturating_sub(60);
     while !s.is_char_boundary(start) {
         start -= 1;

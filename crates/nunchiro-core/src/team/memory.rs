@@ -735,7 +735,8 @@ impl Memory {
                 }
             }
         };
-        // The copies and topic files first, the index last: a rerun after a crash still finds the line.
+        // The search index, the copies and topic files first, the index last: a rerun after a crash still finds the line.
+        crate::chat::recall::forget(self.root.parent().unwrap_or(&self.root), &text)?;
         for file in files.iter().rev() {
             let body = Self::read_text(file);
             let kept: Vec<&str> = body
@@ -1116,11 +1117,14 @@ pub fn outside_of(tool: &str, input: &serde_json::Value) -> Option<Source> {
 pub struct Settings {
     /// Days a saved copy is kept: 7, 30 or 90.
     pub keep_days: u64,
+    /// Search past conversations (`chat::recall`); off deletes the index.
+    pub search: bool,
 }
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             keep_days: KEEP_DAYS,
+            search: true,
         }
     }
 }

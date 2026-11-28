@@ -871,3 +871,10 @@
   align-self: center;
   color: var(--muted);
 }
+/* Search past conversations: the index's size, what it holds, and its limit, one line each (mockup frame 3). */
+.mem-search-desc > span {
+  display: block;
+}
+.mem-search-stats {
+  color: var(--text);
+}

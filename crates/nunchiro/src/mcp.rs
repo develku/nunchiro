@@ -348,6 +348,24 @@ fn tools() -> Vec<Tool> {
             build: |v| Ok(vec!["memory".into(), "forget".into(), text(v, "text")?]),
         },
         Tool {
+            name: "memory_search",
+            description: "Search past conversations of every agent on this Mac for words (nunchiro memory search). Secrets are masked; a hit from a conversation that read outside content marks this one too.",
+            schema: || {
+                schema(
+                    &["query"],
+                    json!({"query": {"type": "string", "description": "words to find, 1 to 256 bytes"}}),
+                )
+            },
+            build: |v| {
+                Ok(vec![
+                    "memory".into(),
+                    "search".into(),
+                    text(v, "query")?,
+                    "--json".into(),
+                ])
+            },
+        },
+        Tool {
             name: "memory_read",
             description: "This bot's memory index, or one topic file (nunchiro memory read).",
             schema: || schema(&[], json!({"topic": {"type": "string"}})),

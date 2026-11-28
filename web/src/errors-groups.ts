@@ -142,6 +142,7 @@ export const GROUPS: Record<string, string[]> = {
     "ledger unavailable", "notes unavailable", "roles unavailable", "open loops unavailable", // ledger.rs, notes.rs, roles.rs, sessions.rs: merge card, role card, Settings > Notes, way menu (ticket 991)
     "team store unavailable", // team.rs (ticket 970)
     'team unavailable', // team.rs: Locate moves a project's teammates (ticket 1040)
+    'memory search unavailable', // chat/recall.rs: the search index's lock (Forget on a bot's Memory tab)
    
     'handoff not sent', 'sha256 does not match the bytes received', 'theme fetcher unavailable', 'update list unavailable', 'sign-in list unavailable', 'account registry unavailable', 'session registry unavailable', 'the entry did not round-trip through agents.toml', 'Stop store unavailable', 'session list unavailable', 'chat store unavailable', 'chat source unavailable', 'transcript source unavailable', 'chat unavailable',
     'sessions unavailable', 'cache unavailable', 'browser broker unavailable', 'integration source state unavailable', 'clone list unavailable', 'room cache unavailable', 'room pins unavailable', 'token store unavailable', 'widget state unavailable', 'widget act state unavailable', 'version probe thread: {}',

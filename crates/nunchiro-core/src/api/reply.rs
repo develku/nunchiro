@@ -530,6 +530,15 @@ pub enum Reply {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         first: Option<crate::team::First>,
     },
+    /// `nunchiro memory search`: the past conversations' lines that hold the words, newest first, and how many matched.
+    MemoryHits {
+        hits: Vec<crate::chat::recall::Hit>,
+        total: usize,
+    },
+    /// The Memory group's Search past conversations line (`team::Op::MemorySearch`).
+    MemorySearch {
+        status: crate::chat::recall::Status,
+    },
     /// A bot's memory as its Memory tab draws it (`team::Op::BotMemory`).
     BotMemory {
         id: String,
