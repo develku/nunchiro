@@ -1384,6 +1384,34 @@ mod tests {
                 .contains("(worktrees_dir)")
         );
     }
+    // A core on its own data folder (NUNCHIRO_HOME, a test or trial core) keeps its new worktrees in a folder named
+    // after it: only the default `~/.nunchiro` uses the shared `~/nunchiro/worktrees`, so a second core never puts its
+    // worktrees beside the owner's.
+    #[test]
+    fn only_the_default_home_shares_the_user_homes_worktrees() {
+        let user = home("wtc-own-user");
+        std::fs::create_dir_all(user.join(".nunchiro")).unwrap();
+        let own = home("wtc-own-home");
+        std::fs::create_dir_all(&own).unwrap();
+        let holder = |h: &Path| crate::sessions::worktree_user_home(h, Some(user.clone()));
+        assert_eq!(holder(&user.join(".nunchiro")), user);
+        let beside = own.with_file_name(format!(
+            "{}-worktrees",
+            own.file_name().unwrap().to_string_lossy()
+        ));
+        assert_eq!(holder(&own), beside);
+        let root = crate::sessions::worktree_root_for(None, Path::new("/r/repo"), &holder(&own));
+        let root = root.unwrap();
+        assert!(!root.starts_with(&user), "not in the user's home: {root:?}");
+        assert!(!root.starts_with(&own), "outside the data folder: {root:?}");
+        // No user home known: its own folder's still. A dotted home's has no `.nunchiro*` folder.
+        assert_eq!(crate::sessions::worktree_user_home(&own, None), beside);
+        let rc = user.join(".nunchiro-rc");
+        std::fs::create_dir_all(&rc).unwrap();
+        assert_eq!(holder(&rc), user.join("nunchiro-rc-worktrees"));
+        let _ = std::fs::remove_dir_all(user);
+        let _ = std::fs::remove_dir_all(own);
+    }
     // Ticket 1083: the unset default is the visible `<user home>/nunchiro/worktrees`, never a `.nunchiro*` folder (peer.rs
     // owner_home() would take it for the owner's data folder); records under the 1061 default (`../.worktrees`) and
     // the older `<home>/worktrees` still list and remove after the default moved.
@@ -1522,6 +1550,15 @@ mod tests {
             "{e}"
         );
         assert_eq!(std::fs::read_dir(&planted).unwrap().count(), 0);
+        // A core on its own home: a `<home>-worktrees` folder that is a link is refused too, nothing lands behind it.
+        std::fs::remove_file(user.join("nunchiro")).unwrap();
+        let holder = home.join("holder");
+        std::fs::create_dir_all(&holder).unwrap();
+        std::fs::remove_dir_all(&user).unwrap();
+        std::os::unix::fs::symlink(&holder, &user).unwrap();
+        let e = create(&core, "three").err().unwrap_or_default();
+        assert!(e.contains("aliased"), "{e}"); // worktree_parent: the parent must be its own real path
+        assert_eq!(std::fs::read_dir(&holder).unwrap().count(), 0);
         std::fs::remove_dir_all(&home).unwrap();
     }
     // SHOULD 4 (r2): a session that started in the worktree after the pass read its running list: the real

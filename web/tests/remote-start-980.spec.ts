@@ -3,6 +3,7 @@
 // machine and the remote core are stood in for on the window's socket (the real transport is scripts/scenario/remote.sh).
 import type { Page } from '@playwright/test';
 import { expect, openWindow, test, type Core } from './fixtures';
+import { startOf } from './start-op';
 
 const UP = { machine: 'macbook', host: 'macbook.local', user: 'me', port: 22, keys: [], fingerprint: null, channel: { state: 'up', since_ms: Date.now(), remote_version: '0.9.4', remote_protocol: 2, local_protocol: 2 } };
 type Sent = { op: string; machine?: string; request?: { op: string; session: Record<string, unknown> } };
@@ -16,11 +17,12 @@ async function wire(app: Page, core: Core) {
       const msg = JSON.parse(String(raw));
       const r = msg.request as Sent | undefined;
       if (r?.op === 'machine_details') return ws.send(JSON.stringify({ id: msg.id, response: { Ok: { type: 'machine_details', machines: [UP] } } }));
-      if (r?.op === 'remote' && r.request?.op === 'start') {
+      const start = r?.op === 'remote' ? startOf(r.request) : null;
+      if (r && start) {
         sent.push(r);
         // The remote core's reply: its own row, with no machine on it.
         const like = (core.cli('snapshot', '--json').sessions as Record<string, unknown>[])[0];
-        remote = { ...like, id: 'remote-1', kind: r.request.session.kind, project: r.request.session.project, cwd: r.request.session.project, label: '' };
+        remote = { ...like, id: 'remote-1', kind: start.session.kind, project: start.session.project, cwd: start.session.project, label: '' };
         return ws.send(JSON.stringify({ id: msg.id, response: { Ok: { type: 'started', session: remote } } }));
       }
       server.send(raw);

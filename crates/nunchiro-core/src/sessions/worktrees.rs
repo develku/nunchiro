@@ -200,6 +200,7 @@ impl Sessions {
                 .feature::<String>("git.branch_prefix")
                 .unwrap_or_default(),
             titles: vec![],
+            record_only: false,
         })
     }
 }
@@ -362,6 +363,22 @@ pub(crate) fn worktree_root_for(
     };
     Ok(base.join(parts.as_path()))
 }
+/// The folder whose `nunchiro/worktrees` is the unset default: the user's home for the default data folder
+/// (`~/.nunchiro`), else `<home>-worktrees` beside the core's own `home`, so a core on its own NUNCHIRO_HOME never
+/// shares the owner's worktrees. Beside, not inside: a session's worktree is refused inside the data folder
+/// (`tokens::outside_home`); its leading dots go, so it is no `.nunchiro*` folder (peer.rs `owner_home`).
+pub(crate) fn worktree_user_home(home: &Path, user_home: Option<PathBuf>) -> PathBuf {
+    let canon = |p: &Path| fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let home = canon(home);
+    match (user_home, home.parent(), home.file_name()) {
+        (Some(user), _, _) if canon(&user.join(".nunchiro")) == home => user,
+        (_, Some(parent), Some(name)) => parent.join(format!(
+            "{}-worktrees",
+            name.to_string_lossy().trim_start_matches('.')
+        )),
+        _ => home,
+    }
+}
 /// The worktree store's bytes, None when there is none. Follow-ups 1112: judged and read on one handle
 /// (`store::read_regular`: no link followed, a non-blocking open, at most 1 MiB). It used to check the path's metadata
 /// and then open the path again, so a link or FIFO swapped in between was followed or waited on, under worktrees.lock.
@@ -451,8 +468,16 @@ pub(crate) struct WorktreePlan {
     prefix: String,
     /// Ticket 991 (Q7 point 1): `Sessions::take_branch_titles`, applied under worktrees.lock before the operation.
     titles: Vec<(PathBuf, String)>,
+    /// A start's own adopt (`record_only`): the record is written and nothing more is read, so a start never reads the
+    /// facts of every worktree of its project before it answers.
+    record_only: bool,
 }
 impl WorktreePlan {
+    /// The record only: an adopt that skips the reply's list and its facts (a start records its folder this way).
+    pub(crate) fn record_only(mut self) -> Self {
+        self.record_only = true;
+        self
+    }
     pub(crate) fn name_branches(&mut self, titles: Vec<(PathBuf, String)>) {
         self.titles = titles;
     }
@@ -476,6 +501,7 @@ impl WorktreePlan {
             user_home: PathBuf::new(),
             prefix: String::new(),
             titles: vec![],
+            record_only: false,
         }
     }
     /// V2-8a auto-clean: a confirm the core itself gives for merged commits on the kept branch (no uncommitted files).
@@ -809,6 +835,9 @@ impl WorktreePlan {
                         &file,
                         &serde_json::to_vec_pretty(&disk).map_err(|e| e.to_string())?,
                     )?;
+                }
+                if self.record_only {
+                    return Ok((vec![], None, None)); // no list, no facts: a start waits on this
                 }
             }
             "open" | "remove" | "forget" => {

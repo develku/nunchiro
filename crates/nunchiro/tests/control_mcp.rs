@@ -1285,10 +1285,8 @@ fn a_token_works_outside_the_data_folder_and_on_its_own() {
             json!({"op":"worktree","operation":"remove","project":repo,"path":path,"branch":null,"base":"","label":""}),
         )
     };
-    // Tickets 1061, 1083: the default worktree folder is in the user's home, so a token's --worktree start goes there.
-    let beside = fs::canonicalize(Harness::user_home(&h.home))
-        .unwrap()
-        .join("nunchiro/worktrees/repo");
+    // Tickets 1061, 1083: the default worktree folder is beside this core's own home, so a token's --worktree start goes there.
+    let beside = own_worktrees(&h.home).join("repo");
     let started = start(repo, true).unwrap();
     let cwd = started["session"]["cwd"].as_str().unwrap_or_default();
     assert!(cwd.starts_with(beside.to_str().unwrap()), "{started}");
@@ -1366,7 +1364,7 @@ fn a_linked_worktree_folder_never_moves_a_checkout() {
     };
     let planted = h.home.join("planted");
     fs::create_dir_all(&planted).unwrap();
-    let worktrees = Harness::user_home(&h.home).join("nunchiro/worktrees");
+    let worktrees = own_worktrees(&h.home);
     fs::create_dir_all(&worktrees).unwrap();
     std::os::unix::fs::symlink(&planted, worktrees.join("repo")).unwrap();
     for (who, refused) in [
@@ -1602,4 +1600,17 @@ fn a_token_session_chain_of_twenty_stays_limited() {
     );
     assert!(kept_out(&session_settings(&h, &last)));
     h.ok(&token, &["agent", "send", &last, "still yours"]);
+}
+
+/// A core on its own NUNCHIRO_HOME keeps its unset-default worktrees beside that home, not in the user's home.
+fn own_worktrees(home: &std::path::Path) -> std::path::PathBuf {
+    let home = std::fs::canonicalize(home).unwrap();
+    let name = format!(
+        "{}-worktrees",
+        home.file_name()
+            .unwrap()
+            .to_string_lossy()
+            .trim_start_matches('.')
+    );
+    home.with_file_name(name).join("nunchiro/worktrees")
 }
