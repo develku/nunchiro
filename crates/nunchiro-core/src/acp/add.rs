@@ -187,7 +187,7 @@ fn rewrite(home: &Path, name: &str, new: Option<&Entry>) -> Result<(), String> {
     store::atomic_write(&path, text.as_bytes())
 }
 
-fn approved(home: &Path, name: &str) -> Result<approval::AgentView, String> {
+pub(super) fn approved(home: &Path, name: &str) -> Result<approval::AgentView, String> {
     match approval::agent_status(home, name) {
         Ok(view) if view.state == State::Approved && view.refused.is_none() => Ok(view),
         _ => Err("approve the agent first".into()),
