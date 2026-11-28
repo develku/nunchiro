@@ -267,6 +267,76 @@ impl Sessions {
             eprintln!("schedule {id}: no card for its failed run: {e}");
         }
     }
+    /// A trigger that asks first fired: the owner's card, with the run its Start starts (the owner's task and the
+    /// caller's payload as quoted data). No session asked; the item carries the trigger's own id.
+    pub(crate) fn trigger_card(
+        &mut self,
+        name: &str,
+        run: crate::schedule::Run,
+        source: crate::schedule::triggers::Source,
+        subject: Option<String>,
+    ) -> Result<(), String> {
+        let from = match source {
+            crate::schedule::triggers::Source::Cli => "the command line",
+            crate::schedule::triggers::Source::Webhook => "a webhook",
+            crate::schedule::triggers::Source::Github => "GitHub",
+        };
+        // All trigger cards together take at most half of the owner's queue, so approvals, proposals and setup cards
+        // always fit.
+        let all = self
+            .queue
+            .owner_items()
+            .iter()
+            .filter(|i| matches!(&i.owner, Some(queue::OwnerAsk::Schedule { change, .. }) if change == "trigger"))
+            .count();
+        if all >= crate::schedule::triggers::CARDS_SHARE {
+            return Err(format!(
+                "{all} trigger cards wait for your answer in Decisions; this fire of trigger {name} was not added"
+            ));
+        }
+        let waiting = self
+            .queue
+            .owner_items()
+            .iter()
+            .filter(|i| matches!(&i.owner, Some(queue::OwnerAsk::Schedule { change, id: Some(id), .. }) if change == "trigger" && id == name))
+            .count();
+        if waiting >= crate::schedule::triggers::CARDS_MAX {
+            return Err(format!(
+                "trigger {name}: {waiting} cards wait for your answer in Decisions; this fire was not added"
+            ));
+        }
+        // One card per subject: a fire about another subject is another card, never one that replaces it (each card's
+        // subject is released by its own Start or Not now).
+        let card_key = match &subject {
+            Some(s) => {
+                use sha2::Digest;
+                let h = sha2::Sha256::digest(s.as_bytes());
+                format!(
+                    "trigger-{name}-{}",
+                    h[..6]
+                        .iter()
+                        .map(|b| format!("{b:02x}"))
+                        .collect::<String>()
+                )
+            }
+            None => format!("trigger-{name}"),
+        };
+        let ask = queue::OwnerAsk::Schedule {
+            change: "trigger".into(),
+            id: Some(name.into()),
+            line: format!("Trigger {name} fired from {from}"),
+            place: run.project.clone(),
+            run,
+            when: crate::schedule::When {
+                at: String::new(),
+                daily: false,
+                days: vec![],
+            },
+            // The subject the fire took (a pull request, an issue), so a Start or a Not now settles it.
+            reason: subject,
+        };
+        self.queue.ask_owner(&card_key, ask).map(|_| ())
+    }
     pub(super) fn drop_failed_card(&mut self, entry: &str) {
         self.drop_failed_cards(|id| id == entry);
     }

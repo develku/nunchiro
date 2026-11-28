@@ -585,6 +585,8 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | PrMerge { .. }
         | PrBranch { .. } // ticket 373: runs the user's gh on the Mac
         | GitPush { .. } // pushes as the user: the Mac window's confirm alone
+        | PrDraft { .. }
+        | PrCreate { .. } // pushes and creates a PR as the user: the Mac window's form alone
         | LibsResolve { .. }
         | LibsEntry { .. }
         | TokenCreate { .. }
@@ -701,6 +703,7 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | AcpAgentSignInState { .. }
         | AcpAgentSignInCancel { .. }
         | AcpAgentSignOut { .. }
+        | AcpAgentTry { .. }
         | AgentUpdateStart { .. } // ticket 358: owner and window only
         | AgentUpdateCancel { .. }
         | AgentUpdateState
@@ -728,6 +731,7 @@ pub(crate) fn request_allowed(request: &Request) -> bool {
         | WidgetAct { .. }
         | WidgetPage { .. }
         | Plugin { .. }
+        | Trigger { .. }
         | SwitchModel { .. }
         | SetMode { .. } // CHAT-MODELIST: owner window only
         | AgentPermissionGet // ticket 362: the owner's setting

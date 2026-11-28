@@ -1,7 +1,7 @@
 // AGENTVIEW: the right side pane of an agent session tab. Tabs, in order: this session's PTY (not closable), extra shells
 // (closable), `+ Shell`, Browser (V2.5-19: the native view), Preview. Diff and Artifacts stay right-bar widgets.
 import { agentName } from '../chat/conversation';
-import { docT, errorNote, notePlain, type Note } from '../errors';
+import { docT, errorNote, notePlain, rawError, type Note } from '../errors';
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { CoreClient } from '../api';
 import { Preview } from '../artifacts/Preview';
@@ -36,7 +36,7 @@ export async function startShell(core: CoreClient, session: Session, then?: (she
     // In a worktree: the project with the worktree as `folder`, so the tree keeps the shell under the agent's project.
     const start = (inFolder: boolean) => core.request({ op: 'start', session: { kind: 'shell', project: inFolder ? session.project : session.cwd, label, resume: null }, ...(inFolder ? { folder: session.cwd } : {}) });
     // A folder that is no managed worktree of the project (a resumed session's old folder) starts as a folder of its own.
-    const reply = (await (session.cwd === session.project ? start(false) : start(true).catch((e) => (/not a managed worktree/.test(String(e)) ? start(false) : Promise.reject(e))))) as { session?: Session };
+    const reply = (await (session.cwd === session.project ? start(false) : start(true).catch((e) => (/not a managed worktree/.test(rawError(e)) ? start(false) : Promise.reject(e))))) as { session?: Session };
     // `picked` and `open`: the pane's tab and whether it was open when the shell started (a choice made meanwhile is kept).
     const picked = tabNow(session.id);
     const open = openNow(session.id);

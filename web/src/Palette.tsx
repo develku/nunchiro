@@ -101,14 +101,19 @@ export function Palette({ commands, recent, bindings, onClose, t }: { commands: 
   }, [sel]);
   // V2.5-34 (finding 27): Esc (wherever focus is) and a press outside the palette close it, as running a command does.
   const root = useRef<HTMLDivElement>(null);
+  // Registered once, for as long as the palette is open: the window passes a new `onClose` on every render, and with it as
+  // a dependency the listeners went and came back on each snapshot's render, so an Esc could find none (about one in two
+  // right after ⌘K). The listeners read the latest `onClose` through the ref.
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
     // Ticket 535: Esc closes without acting, so a page the palette was opened from gets its keys back.
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && !e.isComposing && (e.stopPropagation(), pageFocus(true), onClose());
-    const away = (e: PointerEvent) => !root.current?.contains(e.target as Node) && onClose();
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && !e.isComposing && (e.stopPropagation(), pageFocus(true), close.current());
+    const away = (e: PointerEvent) => !root.current?.contains(e.target as Node) && close.current();
     window.addEventListener('keydown', esc, true);
     document.addEventListener('pointerdown', away, true);
     return () => (window.removeEventListener('keydown', esc, true), document.removeEventListener('pointerdown', away, true));
-  }, [onClose]);
+  }, []);
   const run = (c?: Command) => {
     if (c?.enabled === false) return setSaid(why(c));
     if (!c) return;

@@ -290,7 +290,8 @@ card for it), with `scorecard.py waits`.
    8. Sort ten fixture mails into three labels (at least nine of ten right).
    9. Draft a reply to a fixture mail and stop at the approval card (a draft exists, nothing was sent).
    10. Find a free hour in a fixture calendar and propose it (the hour is free in the fixture).
-   The fixtures (repository, mails, calendar) do not exist yet; making them is the first step of the first run.
+   The fixtures (repository, mails, calendar) are in scripts/measure/fixtures/p35; the runner's steps and each
+   task's check are in [p35-runner.md](p35-runner.md) (`scorecard.py bottasks`).
 2. Owner touches per task in that set, median.
 3. First-pass review rate of the real lanes of the last 7 days (`scripts/measure-dev-speed.py`, rework.first_pass_pct,
    from the verdicts in the private review record).
@@ -317,13 +318,13 @@ sandboxes. A phone client is row M2 of p01.
 | Tests of this run | `python3 -B scripts/measure/scorecard.py tests --target <cargo target>` (writes tests-<date>.json) | rule 3 |
 | Idle weight with real agents | with at least 5 Claude or Codex sessions waiting at their prompts and the window open: `python3 -B scripts/measure/scorecard.py weigh` (read only; writes the manual file) | idle_mib_5, idle_cpu_pct_5 |
 | Terminal paint and streaming | `sh scripts/measure/build.sh`, then the echo `paint.sh` command of the anchor table and copy p95_ms into the manual file; `python3 -B scripts/measure/scorecard.py stream8` runs the stream command and writes the worst frame itself. Both commands need the measure core: built with release optimisation and debug assertions on (`CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true`), on a throwaway home. A plain release core gives the window token to the app only (crates/nunchiro-core/src/peer.rs `is_app`), so the measure page cannot open a terminal on it. `stream8` builds that core; the echo command takes it through `NUNCHIRO_MEASURE_CORE`. A core without release optimisation is not these figures | term_paint_p95_ms, stream8_worst_frame_ms |
-| Real agent turns | `sh scripts/scenario/v1b-full.sh` (Claude and Codex rows), one real ACP agent turn by hand | the count of p06, EX5, A3 |
+| Real agent turns | `sh scripts/scenario/agent-kinds.sh`: every installed kind's test message (ACP agents) and the chat rows of `v1b-full.sh` (Claude, Codex); it writes `docs/measure/evidence/agent-kinds-<date>.json`, and a kind counts only with sent, answer read and turn end all yes (a `self_test` record never counts) | the count of p06, EX5, A3 |
 | Peer tasks | drive T1-T12 in Nunchiro (an isolated RC), Orca and T3 Code the same way (by hand with a recording, or computer use for all; the owner answers its access dialog); record steps, seconds and the date in tasks.json | p04, p11, p13 |
 | Seats lost per restart | over 7 days, for each restart of the owner's app (update, serve restart, relaunch): seats held before minus seats back after, from `nunchiro agent list` before and after; the mean | seats_lost_per_restart |
 | 24 h soak | 20 real agent sessions on a core with its own NUNCHIRO_HOME for 24 h with a heartbeat prompt every 10 min; clean hours until the first crash, stuck terminal or lost session (`python3 -B scripts/measure/soak.py --nunchiro <RC nunchiro> --sessions 20`; raw samples in soak-<date>.jsonl, `--report FILE` for a stopped run; it writes soak_clean_hours only from a day of exactly 20 sessions) | soak_clean_hours |
 | Accuracy trial | p34 above: `python3 -B scripts/measure/scorecard.py accuracy --machine <alias> --remote-project <dir on the second Mac>` (raw records in accuracy-<date>.json; the figures go into the manual file only when the run is counted; `--self-test` checks the script on a fixture agent and is never counted) | the five p34 trial figures, prompt_delivery_ms |
 | Waits with no card | p34 above: `python3 -B scripts/measure/scorecard.py waits` on the owner's Mac for 7 days (read only; samples in waits-<date>.jsonl; `--report <file>` gives the figure of a stopped run) | waited_no_card_min_per_day |
-| Bot task set | p35 above | bot_task_success_pct, bot_owner_touches |
+| Bot task set | p35 above: `scorecard.py bottasks` setup, check and report ([p35-runner.md](p35-runner.md)) | bot_task_success_pct, bot_owner_touches |
 | Reach | p37 above | RE1-RE5 |
 
 | Long-chat open | p33 above: `python3 -B scripts/measure/scorecard.py chatopen` (builds the RC core and the measure app, or `--no-build`; the window shows and takes the front for about a minute) | chat_open_5000_ms |

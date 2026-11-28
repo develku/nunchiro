@@ -22,6 +22,7 @@ What leaves your Mac is listed below. `tests/scenario/test_outbound_hosts.py` fa
 |---|---|---|
 | `cdnjs.cloudflare.com`, `cdn.jsdelivr.net`, `unpkg.com`, `cdn.tailwindcss.com`, `code.jquery.com` | After you approve a script library that an artifact page names: the file is downloaded once at its pinned version, then served from the cache | A download request for that file |
 | `raw.githubusercontent.com` | "Browse themes online" in the theme settings | Download requests for theme files at a pinned commit |
+| `raw.githubusercontent.com` | "Browse plugins" on the Plugins page and `nunchiro plugin catalog` or `install` | Download requests for this repository's plugin catalogue, and for a plugin's files at its pinned commit |
 | `www.google.com`, `duckduckgo.com`, `www.bing.com`, `kagi.com` | A search typed in the browser widget goes to the engine you chose; pages you open there load as in any browser | Your search text |
 | `claude.ai` | A claude.ai artifact link in a chat shows as a link; it opens when you click it | Nothing until you click |
 
