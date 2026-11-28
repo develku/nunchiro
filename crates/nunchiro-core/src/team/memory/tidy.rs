@@ -19,6 +19,8 @@ const RUN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 const RUNS_KEPT: usize = 200;
 /// The most lines a tidy's answer may hold.
 const LINES_MAX: usize = 2 * INDEX_LINES;
+/// The running tidy's process group, so a stopping core ends it (cleared just before the reap: never a reused PID).
+static RUNNING: Mutex<Option<u32>> = Mutex::new(None);
 
 /// A tidy's new index for one bot, waiting for the owner's look.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,7 +51,8 @@ pub struct Part {
     pub tokens: u64,
 }
 
-/// The owner's choice for one bot: the texts of the checked removed and added lines, and the checked proposals' ids.
+/// The owner's choice for one bot: the texts of the checked removed and added lines, the checked proposals' ids, and
+/// the ids of the proposals the card showed (only those settle; a newer one keeps waiting).
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Checked {
@@ -59,6 +62,8 @@ pub struct Checked {
     pub add: Vec<String>,
     #[serde(default)]
     pub keep: Vec<String>,
+    #[serde(default)]
+    pub seen: Vec<String>,
 }
 
 /// The night tidies of the last days, for the Memory group's numbers.
@@ -123,7 +128,7 @@ pub fn stats(home: &Path, settings: &Settings, now_ms: u64) -> Stats {
 }
 
 impl Memory {
-    fn tidy_file(&self) -> PathBuf {
+    pub(super) fn tidy_file(&self) -> PathBuf {
         self.state.join("tidy.json")
     }
     fn index_hash(&self) -> String {
@@ -134,38 +139,60 @@ impl Memory {
             .ok()
             .and_then(|b| serde_json::from_slice(&b).ok())
     }
-    /// Keeps a tidy's answer for the owner's look.
+    /// What a tidy reads: the index's lines and a hash of its text, read together under one lock.
+    pub(crate) fn tidy_input(&self) -> Result<(Vec<Fact>, String), String> {
+        let _one = write_lock()?;
+        Ok((self.facts_now()?, self.index_hash()))
+    }
+    /// Keeps a tidy's answer for the owner's look; false (and nothing kept) when the index changed since `base` was
+    /// read, so a forget or an add during the run is never undone.
     pub(crate) fn keep_tidy(
         &self,
         lines: Vec<Fact>,
+        base: &str,
         model: &str,
         tokens: u64,
         now_ms: u64,
-    ) -> Result<(), String> {
+    ) -> Result<bool, String> {
         let _one = write_lock()?;
+        if self.index_hash() != base {
+            return Ok(false);
+        }
         let pending = Pending {
             at_ms: now_ms,
             model: model.into(),
             tokens,
-            base: self.index_hash(),
+            base: base.into(),
             lines,
         };
         store::private_dir(&self.root)?;
         store::private_dir(&self.state)?;
         let bytes = serde_json::to_vec(&pending).map_err(|e| e.to_string())?;
-        store::atomic_write(&self.tidy_file(), &bytes)
+        store::atomic_write(&self.tidy_file(), &bytes)?;
+        Ok(true)
     }
     /// Discard: the index stays as it is; the proposals keep waiting.
     pub fn drop_tidy(&self) {
-        let _ = fs::remove_file(self.tidy_file());
+        if let Ok(_one) = write_lock() {
+            let _ = fs::remove_file(self.tidy_file());
+        }
     }
 
     /// This bot's part of the card: None when nothing changed and nothing waits.
     pub fn tidy_part(&self, id: &str, name: &str) -> Result<Option<Part>, String> {
-        let pending = self.pending_tidy();
+        let _one = write_lock()?;
+        let mut pending = self.pending_tidy();
+        if pending
+            .as_ref()
+            .is_some_and(|p| p.base != self.index_hash())
+        {
+            // Made from an index that changed since: it is never applied, so it goes (tidied again next night).
+            let _ = fs::remove_file(self.tidy_file());
+            pending = None;
+        }
         let (removed, added) = match &pending {
-            Some(p) if p.base == self.index_hash() => {
-                let old = self.facts()?;
+            Some(p) => {
+                let old = self.facts_now()?;
                 (
                     old.iter()
                         .filter(|f| !p.lines.contains(f))
@@ -178,7 +205,7 @@ impl Memory {
                         .collect(),
                 )
             }
-            _ => (vec![], vec![]),
+            None => (vec![], vec![]),
         };
         let (proposals, not_kept) = self.proposals();
         if removed.is_empty() && added.is_empty() && proposals.is_empty() && not_kept.is_empty() {
@@ -198,17 +225,16 @@ impl Memory {
     }
 
     /// Apply: the index without the checked removed lines and with the checked added ones (the index before it kept as
-    /// a `tidy` saved copy), the checked proposals kept and the others dropped, the lines not kept forgotten.
-    pub fn apply_tidy(&self, checked: &Checked, now_ms: u64) -> Result<(), String> {
+    /// a `tidy` saved copy), the shown proposals settled (the checked kept), the lines not kept forgotten. False when
+    /// the tidy was made from an index that changed since: its lines are dropped, not applied; the proposals still settle.
+    pub fn apply_tidy(&self, checked: &Checked, now_ms: u64) -> Result<bool, String> {
         let _one = write_lock()?;
         let old = self.facts_now()?;
+        let mut applied = true;
         if let Some(p) = self.pending_tidy() {
-            if p.base != self.index_hash() {
-                return Err(
-                    "this bot's memory changed since the tidy, so nothing was applied; it is tidied again next night"
-                        .into(),
-                );
-            }
+            applied = p.base == self.index_hash();
+        }
+        if let Some(p) = self.pending_tidy().filter(|_| applied) {
             let mut new: Vec<Fact> = old
                 .iter()
                 .filter(|f| p.lines.contains(f) || !checked.drop.contains(&f.text))
@@ -227,15 +253,17 @@ impl Memory {
             }
         }
         for p in self.proposals().0 {
-            self.settle_now(&p.id, checked.keep.contains(&p.id))?;
+            if checked.seen.contains(&p.id) {
+                self.settle_now(&p.id, checked.keep.contains(&p.id))?;
+            }
         }
         let mut w = self.waiting();
         if !w.not_kept.is_empty() {
             w.not_kept.clear();
             self.write_waiting(&w)?;
         }
-        self.drop_tidy();
-        Ok(())
+        let _ = fs::remove_file(self.tidy_file());
+        Ok(applied)
     }
 }
 
@@ -257,8 +285,9 @@ pub(crate) fn prompt(facts: &[Fact], marker: &str) -> String {
     p + &format!("</data-{marker}>\n")
 }
 
-/// The new index in Claude's answer, and the tokens the run used. A line keeps the newest date and the most outside
-/// source of the lines it came from; a line with no source line, or one a line would not be kept as, is left out.
+/// The new index in Claude's answer, and the tokens the run used. A verbatim copy of a line is that line; any other line
+/// keeps the newest date of the lines it cites and the most outside source of every line in the prompt (the model saw
+/// them all, so a citation proves nothing). A line with no cited line, or one a line would not be kept as, is left out.
 pub(crate) fn parse(stdout: &[u8], facts: &[Fact]) -> Result<(Vec<Fact>, u64), String> {
     let v: serde_json::Value =
         serde_json::from_slice(stdout).map_err(|_| "the answer was not JSON")?;
@@ -284,6 +313,7 @@ pub(crate) fn parse(stdout: &[u8], facts: &[Fact]) -> Result<(Vec<Fact>, u64), S
     };
     let a: serde_json::Value = serde_json::from_str(answer.get(start..=end).unwrap_or_default())
         .map_err(|_| "the answer held no lines")?;
+    let worst = facts.iter().filter_map(|f| f.from).max();
     let mut out: Vec<Fact> = vec![];
     for line in a["lines"]
         .as_array()
@@ -303,11 +333,11 @@ pub(crate) fn parse(stdout: &[u8], facts: &[Fact]) -> Result<(Vec<Fact>, u64), S
         if from.is_empty() || out.iter().any(|f| f.text == text) {
             continue;
         }
-        let fact = match from.iter().find(|f| f.text == text) {
-            Some(same) => (*same).clone(),
+        let fact = match facts.iter().find(|f| f.text == text) {
+            Some(same) => same.clone(),
             None => Fact {
                 date: from.iter().filter_map(|f| f.date.clone()).max(),
-                from: from.iter().filter_map(|f| f.from).max(),
+                from: worst,
                 text,
             },
         };
@@ -343,7 +373,11 @@ pub(crate) fn run(
         .env_remove("NUNCHIRO_TOKEN")
         .env_remove("NUNCHIRO_SESSION");
     let input = prompt(facts, &store::new_id()?);
-    let out = crate::process::output_watched(c, RUN_TIMEOUT, input.into_bytes(), &|_| {});
+    let out = crate::process::output_watched(c, RUN_TIMEOUT, input.into_bytes(), &|pid| {
+        if let Ok(mut r) = RUNNING.lock() {
+            *r = pid;
+        }
+    });
     let _ = fs::remove_dir_all(&empty);
     parse(&out?.stdout, facts)
 }
@@ -392,12 +426,13 @@ fn plan(
     Ok(Some((settings, bots)))
 }
 
-/// One night's pass: each bot's tidy off the lock, then the card.
+/// One night's pass: each bot's tidy off the lock, then the card. A stopping core ends it between bots.
 pub(crate) fn night(
     registry: &Mutex<crate::sessions::Sessions>,
     home: &Path,
     now_ms: u64,
     bin: Option<&Path>,
+    stopping: &AtomicBool,
 ) -> Result<(), String> {
     let Some((settings, bots)) = plan(registry, home, now_ms)? else {
         return Ok(());
@@ -405,19 +440,30 @@ pub(crate) fn night(
     let team = Team::open(home);
     let mut ran = vec![];
     for (id, name, talked) in &bots {
-        let memory = team.bot_memory(id)?;
-        let facts = memory.facts()?;
-        if *talked
-            && !facts.is_empty()
-            && let Some(bin) = bin
-        {
-            match run(home, bin, &settings.model, &facts) {
-                Ok((lines, tokens)) => {
-                    memory.keep_tidy(lines, &settings.model, tokens, now_ms)?;
-                    ran.push((now_ms, id.clone(), tokens));
-                }
-                Err(e) => eprintln!("bot {name}: night tidy did not run: {e}"),
+        if stopping.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+        let Some(bin) = bin.filter(|_| *talked) else {
+            continue;
+        };
+        // One bot's failure is logged; the others still tidy (the night's time has already moved on).
+        let tidied = team.bot_memory(id).and_then(|memory| {
+            let (facts, base) = memory.tidy_input()?;
+            if facts.is_empty() {
+                return Ok(None);
             }
+            let (lines, tokens) = run(home, bin, &settings.model, &facts)?;
+            if !memory.keep_tidy(lines, &base, &settings.model, tokens, now_ms)? {
+                eprintln!(
+                    "bot {name}: memory changed during the night tidy; its answer is dropped"
+                );
+            }
+            Ok(Some(tokens))
+        });
+        match tidied {
+            Ok(Some(tokens)) => ran.push((now_ms, id.clone(), tokens)),
+            Ok(None) => {}
+            Err(e) => eprintln!("bot {name}: night tidy did not run: {e}"),
         }
     }
     if let Some(mut runs) = read_runs(home) {
@@ -467,6 +513,71 @@ pub(crate) fn night(
     Ok(())
 }
 
+/// The window's `memory_tidy` (`team::Op::MemoryTidy`): each bot's waiting part and the Memory group's numbers; with
+/// `apply`, each bot's checked lines kept first.
+pub(crate) fn window(
+    registry: &Mutex<crate::sessions::Sessions>,
+    team: &Team,
+    apply: Option<std::collections::BTreeMap<String, Checked>>,
+) -> Result<crate::api::Reply, String> {
+    let (settings, home) = {
+        let s = registry
+            .lock()
+            .map_err(|_| "session registry unavailable".to_string())?;
+        let settings: Settings = s.feature(MEMORY_KEY).unwrap_or_default();
+        (settings, s.home().to_path_buf())
+    };
+    let now = crate::queue::now_ms();
+    let mates = team.list()?;
+    // Each bot on its own: one bot's refusal never stops the others; it is reported by bot id.
+    let (mut not_applied, mut stale) = (std::collections::BTreeMap::new(), vec![]);
+    if let Some(apply) = &apply {
+        let mut settled = std::collections::BTreeSet::new();
+        for (id, checked) in apply {
+            let applied = mates
+                .iter()
+                .find(|t| &t.id == id)
+                .ok_or_else(|| format!("no bot {id}"))
+                .and_then(|_| team.bot_memory(id))
+                .and_then(|m| m.apply_tidy(checked, now));
+            // A bot not applied keeps the card, so the owner reads why (Discard closes it).
+            match applied {
+                Ok(true) => {
+                    settled.insert(id.clone());
+                }
+                Ok(false) => stale.push(id.clone()),
+                Err(e) => {
+                    not_applied.insert(id.clone(), e);
+                }
+            }
+        }
+        let done = |i: &crate::queue::Decision| {
+            matches!(&i.owner, Some(crate::queue::OwnerAsk::NightTidy { bots, .. })
+                if bots.iter().all(|b| settled.contains(b)))
+        };
+        let _ = registry
+            .lock()
+            .map_err(|_| "session registry unavailable".to_string())?
+            .queue
+            .answer_owner(done);
+    }
+    let parts = mates
+        .iter()
+        .filter_map(|t| {
+            team.bot_memory(&t.id)
+                .ok()?
+                .tidy_part(&t.id, &t.name)
+                .ok()?
+        })
+        .collect();
+    Ok(crate::api::Reply::MemoryTidy {
+        parts,
+        not_applied,
+        stale,
+        stats: stats(&home, &settings, now),
+    })
+}
+
 /// The night tidy thread: a look every minute.
 pub(crate) fn spawn(
     registry: Arc<Mutex<crate::sessions::Sessions>>,
@@ -476,6 +587,23 @@ pub(crate) fn spawn(
     std::thread::Builder::new()
         .name("night-tidy".into())
         .spawn(move || {
+            // A stopping core ends a running tidy now, not after its timeout.
+            let watch = stopping.clone();
+            let _ = std::thread::Builder::new()
+                .name("night-tidy-stop".into())
+                .spawn(move || {
+                    while !watch.load(Ordering::SeqCst) {
+                        std::thread::sleep(std::time::Duration::from_secs(1));
+                    }
+                    if let Ok(r) = RUNNING.lock()
+                        && let Some(pid) = *r
+                    {
+                        // Under the lock: the reap waits for it, so the group is still the tidy's.
+                        unsafe {
+                            libc::killpg(pid as i32, libc::SIGKILL);
+                        }
+                    }
+                });
             let mut last = 0;
             while !stopping.load(Ordering::SeqCst) {
                 std::thread::sleep(std::time::Duration::from_secs(1));
@@ -485,7 +613,7 @@ pub(crate) fn spawn(
                 }
                 last = now;
                 let bin = crate::firstrun::on_path("claude");
-                if let Err(e) = night(&registry, &home, now, bin.as_deref()) {
+                if let Err(e) = night(&registry, &home, now, bin.as_deref(), &stopping) {
                     eprintln!("night tidy: {e}");
                 }
             }

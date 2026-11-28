@@ -2185,3 +2185,47 @@ fn a_fresh_lead_carries_the_old_seats_outside_mark() {
     );
     reg.lock().unwrap().stop().unwrap();
 }
+
+/// Night tidy's Apply: each bot on its own; a stale or unknown bot is reported by id and the others still apply.
+#[test]
+fn a_tidy_apply_reports_each_bot_and_one_refusal_stops_none() {
+    let home = home();
+    let team = Team::open(&home);
+    let a = team.save(None, mate("Ana", None)).unwrap()[0].id.clone();
+    let b = team.save(None, mate("Bom", None)).unwrap()[1].id.clone();
+    let reg = std::sync::Mutex::new(crate::sessions::Sessions::open(&home).unwrap());
+    for id in [&a, &b] {
+        let m = team.bot_memory(id).unwrap();
+        m.add("Review is on Fridays.", Source::You, None, 1)
+            .unwrap();
+        let (_, base) = m.tidy_input().unwrap();
+        assert!(m.keep_tidy(vec![], &base, "haiku", 1, 1).unwrap());
+    }
+    // Ana's index changes after her tidy: hers is stale.
+    team.bot_memory(&a)
+        .unwrap()
+        .add("A new line.", Source::You, None, 2)
+        .unwrap();
+    let json = format!(
+        r#"{{"op":"memory_tidy","apply":{{"bot-nope":{{}},"{a}":{{"drop":["Review is on Fridays."]}},"{b}":{{"drop":["Review is on Fridays."]}}}}}}"#
+    );
+    let Reply::MemoryTidy {
+        not_applied, stale, ..
+    } = window(&reg, &home, serde_json::from_str(&json).unwrap()).unwrap()
+    else {
+        panic!("not a tidy reply")
+    };
+    assert_eq!(not_applied.keys().collect::<Vec<_>>(), vec!["bot-nope"]);
+    assert_eq!(stale, vec![a.clone()]);
+    let texts = |id: &str| -> Vec<String> {
+        team.bot_memory(id)
+            .unwrap()
+            .facts()
+            .unwrap()
+            .into_iter()
+            .map(|f| f.text)
+            .collect()
+    };
+    assert_eq!(texts(&b), Vec::<String>::new(), "Bom's tidy applied");
+    assert_eq!(texts(&a).len(), 2, "Ana's stale tidy did not");
+}

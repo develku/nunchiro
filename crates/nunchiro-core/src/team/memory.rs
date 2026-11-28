@@ -692,9 +692,13 @@ impl Memory {
         files.extend(Self::files_in(&self.copies()));
         files
     }
+    /// Files made from every line at once (a waiting night tidy's answer): a forget deletes them whole.
+    fn derived(&self) -> Vec<PathBuf> {
+        vec![self.tidy_file()]
+    }
 
     /// Deletes one line: from the index, every saved copy (old-format lines too), every topic file, USER.md when it is
-    /// there, and the waiting proposals. `words`: the line's text, or words only one line holds. A forget a crash cut
+    /// there, the waiting proposals, and whatever was derived from it (`derived`). `words`: the line's text, or words only one line holds. A forget a crash cut
     /// short finds what is left and finishes.
     pub fn forget(&self, words: &str) -> Result<String, String> {
         let words = words.trim();
@@ -739,6 +743,12 @@ impl Memory {
                 }
             }
         };
+        for file in self.derived() {
+            match fs::remove_file(&file) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
+                _ => {}
+            }
+        }
         // The copies and topic files first, the index last: a rerun after a crash still finds the line.
         for file in files.iter().rev() {
             let body = Self::read_text(file);
@@ -906,6 +916,8 @@ impl Memory {
 
     /// The saved copies, newest first. Copies past `keep_days` go first (a `before` copy is kept for good).
     pub fn saved_copies(&self, keep_days: u64, now_ms: u64) -> Vec<SavedCopy> {
+        // A copy past its days is deleted under the write lock, never under a forget or an undo that reads it.
+        let _one = write_lock();
         let mut copies: Vec<(u64, String, PathBuf)> = Self::files_in(&self.copies())
             .into_iter()
             .filter_map(|p| {

@@ -347,7 +347,9 @@ fn a_night_tidy_runs_for_a_bot_that_talked_and_raises_one_card() {
     .unwrap();
     fs::set_permissions(&bin, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
     let registry = std::sync::Mutex::new(core);
-    let night = |now: u64| crate::team::memory_night(&registry, &home, now, Some(&bin)).unwrap();
+    let night = |now: u64| {
+        crate::team::memory_night(&registry, &home, now, Some(&bin), &Default::default()).unwrap()
+    };
     // A new home only notes the time: no tidy the first day.
     let day = 86_400_000;
     let now = 1_795_780_800_000u64; // noon UTC: past three in the morning in any zone near it
@@ -366,7 +368,8 @@ fn a_night_tidy_runs_for_a_bot_that_talked_and_raises_one_card() {
     );
     let part = m.tidy_part(&bom, "Bom").unwrap().unwrap();
     assert_eq!(part.added[0].text, "Weekly review is on Friday at 10:00.");
-    assert_eq!(part.added[0].from, Some(Source::You));
+    // A rewritten line takes the most outside source of the whole prompt: here a conversation's.
+    assert_eq!(part.added[0].from, Some(Source::Conversation));
     assert_eq!(part.tokens, 42);
     let core = registry.into_inner().unwrap();
     let cards: Vec<_> = core

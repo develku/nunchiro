@@ -61,6 +61,7 @@
   align-items: center;
   gap: var(--sp-4);
 }
+.nt-line .nt-src,
 .nt-sign,
 .nt-date {
   flex: none;

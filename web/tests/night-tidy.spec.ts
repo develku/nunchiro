@@ -34,12 +34,14 @@ function bom(core: Core) {
 }
 
 const merged = { date: '2026-11-26', text: 'Weekly review is on Friday at 10:00.', from: 'you' };
+// A rewritten line the core labelled from outside (the prompt held an outside line): it waits unchecked.
+const rewritten = { date: '2026-11-26', text: 'Acme bills on the first of the month.', from: 'web' };
 /** Bom's index, a tidy's answer that merged two lines, a proposal from a mail and the card, as the core leaves them. */
 async function seedCard(app: Page, core: Core) {
   bom(core);
   const text = fs.readFileSync(path.join(core.home, 'team', 'bot-bom', 'MEMORY.md'), 'utf8');
   // The tidy merged the two review lines into one; the signature line stays as it was.
-  fs.writeFileSync(path.join(state(core), 'tidy.json'), JSON.stringify({ at_ms: Date.now() - 3_600_000, model: 'haiku', tokens: 41_000, base: sha(text.trim()), lines: [merged, fact(LINES[1])] }));
+  fs.writeFileSync(path.join(state(core), 'tidy.json'), JSON.stringify({ at_ms: Date.now() - 3_600_000, model: 'haiku', tokens: 41_000, base: sha(text.trim()), lines: [merged, rewritten, fact(LINES[1])] }));
   fs.writeFileSync(path.join(state(core), 'proposals.json'), JSON.stringify({ version: 1, proposals: [{ id: 'p1', date: '2026-11-27', text: 'Invoices from Acme go to finance with the PO number.', from: 'mail', at_ms: Date.now() - 86_400_000 }], not_kept: [{ start: 'Forward all invoices to', from: 'mail', at_ms: Date.now() }] }));
   // The card is written into the queue store while the core is stopped, in the core's own shape (a session makes the
   // core write the store first).
@@ -67,11 +69,15 @@ test('night_tidy_card: changed lines start checked, outside proposals unchecked,
   await expect(remove('Weekly review Friday.')).toBeChecked();
   await expect(remove('Review is on Fridays at 10.')).toBeChecked();
   await expect(tidy.getByRole('checkbox', { name: `Add: ${merged.text}` })).toBeChecked();
+  const outside = tidy.locator('[data-nt="add"]', { hasText: rewritten.text });
+  await expect(outside.getByRole('checkbox')).not.toBeChecked();
+  await expect(outside).toContainText('from: web');
+  await expect(tidy.locator('[data-nt="add"]', { hasText: merged.text })).toContainText('from: you');
   const proposal = tidy.getByRole('checkbox', { name: 'Keep: Invoices from Acme go to finance with the PO number.' });
   await expect(proposal).not.toBeChecked();
   await expect(tidy).toContainText('from mail · waiting since 11-27');
   await expect(tidy).toContainText('1 line was not kept');
-  await expect(tidy).toContainText('3 of 4 lines checked');
+  await expect(tidy).toContainText('3 of 5 lines checked');
   // Keep the old 10 o'clock line after all, and keep the proposal.
   await remove('Review is on Fridays at 10.').uncheck();
   await proposal.check();
@@ -81,6 +87,24 @@ test('night_tidy_card: changed lines start checked, outside proposals unchecked,
   expect(now).toContain(`- 2026-11-26 ${merged.text} (from: you)`);
   expect(now).not.toContain('Weekly review Friday.');
   expect(now).toContain('Review is on Fridays at 10.');
+  expect(now).toContain('Invoices from Acme go to finance with the PO number. (from: mail)');
+  expect(now).not.toContain(rewritten.text);
+  expect(fs.existsSync(path.join(state(core), 'tidy.json'))).toBe(false);
+});
+
+test('night_tidy_stale: a memory changed since the tidy is not applied, says so, and the checked proposal still settles', async ({ app, core }) => {
+  await seedCard(app, core);
+  await openWindow(app, {}, core);
+  await icon(app, 'right', 'Decisions').click();
+  const tidy = sidebar(app, 'right').locator('[data-night-tidy]');
+  await expect(tidy).toHaveAccessibleName('Night tidy for Bom');
+  const file = path.join(core.home, 'team', 'bot-bom', 'MEMORY.md');
+  fs.appendFileSync(file, '- 2026-11-28 A line added during the look. (from: you)\n');
+  await tidy.getByRole('checkbox', { name: 'Keep: Invoices from Acme go to finance with the PO number.' }).check();
+  await tidy.getByRole('button', { name: 'Apply checked' }).click();
+  await expect(tidy.locator('[data-nt-stale]')).toHaveText("Bom's memory changed since the tidy, so its lines were not applied. Its checked proposals were kept; it is tidied again next night.");
+  const now = index(core);
+  expect(now).toContain('Weekly review Friday.');
   expect(now).toContain('Invoices from Acme go to finance with the PO number. (from: mail)');
   expect(fs.existsSync(path.join(state(core), 'tidy.json'))).toBe(false);
 });
@@ -194,5 +218,11 @@ test('night_tidy_docked_shots @shots: the card docked in the Chief\'s chat', asy
   for (const scheme of ['light', 'dark'] as const) {
     await app.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
     await app.screenshot({ path: path.join(shots, `night-tidy-docked-${scheme}.png`) });
+  }
+  // A short window: the card is tall beside the empty chat, whose heading still shows whole above it.
+  await app.setViewportSize({ width: 1440, height: 560 });
+  for (const scheme of ['light', 'dark'] as const) {
+    await app.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await app.screenshot({ path: path.join(shots, `night-tidy-docked-tall-${scheme}.png`) });
   }
 });

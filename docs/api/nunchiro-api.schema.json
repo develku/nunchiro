@@ -9402,9 +9402,23 @@
         {
           "description": "Night tidy's card and numbers (`team::Op::MemoryTidy`).",
           "properties": {
+            "not_applied": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "After an Apply, by bot id: why that bot's checked lines were not applied.",
+              "type": "object"
+            },
             "parts": {
               "items": {
                 "$ref": "#/$defs/Part2"
+              },
+              "type": "array"
+            },
+            "stale": {
+              "description": "After an Apply: the bots whose tidy was made from a memory that changed since, so their lines were not\napplied (their checked proposals were); each is tidied again next night.",
+              "items": {
+                "type": "string"
               },
               "type": "array"
             },

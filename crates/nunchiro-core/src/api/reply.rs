@@ -533,6 +533,13 @@ pub enum Reply {
     /// Night tidy's card and numbers (`team::Op::MemoryTidy`).
     MemoryTidy {
         parts: Vec<crate::team::TidyPart>,
+        /// After an Apply, by bot id: why that bot's checked lines were not applied.
+        #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+        not_applied: std::collections::BTreeMap<String, String>,
+        /// After an Apply: the bots whose tidy was made from a memory that changed since, so their lines were not
+        /// applied (their checked proposals were); each is tidied again next night.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        stale: Vec<String>,
         stats: crate::team::TidyStats,
     },
     /// A bot's memory as its Memory tab draws it (`team::Op::BotMemory`).

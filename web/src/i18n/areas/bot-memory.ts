@@ -87,6 +87,7 @@ declare module '../index' {
     'tidy.night.remove': true;
     'tidy.night.add': true;
     'tidy.night.keep': true;
+    'tidy.night.stale': true;
   }
 }
 export const en = {
@@ -175,4 +176,5 @@ export const en = {
   'tidy.night.remove': 'Remove: {text}',
   'tidy.night.add': 'Add: {text}',
   'tidy.night.keep': 'Keep: {text}',
+  'tidy.night.stale': "{name}'s memory changed since the tidy, so its lines were not applied. Its checked proposals were kept; it is tidied again next night.",
 };
