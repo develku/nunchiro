@@ -3589,6 +3589,11 @@
           "const": "labeled",
           "description": "An open issue or pull request has the label.",
           "type": "string"
+        },
+        {
+          "const": "mentioned",
+          "description": "An open issue or pull request mentions the owner (`@me`), once each. Anyone can mention the owner on a public\nrepository, so such a trigger always asks first.",
+          "type": "string"
         }
       ]
     },

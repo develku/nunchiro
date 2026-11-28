@@ -63,6 +63,9 @@ pub enum GithubEvent {
     ChangesRequested,
     /// An open issue or pull request has the label.
     Labeled,
+    /// An open issue or pull request mentions the owner (`@me`), once each. Anyone can mention the owner on a public
+    /// repository, so such a trigger always asks first.
+    Mentioned,
 }
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
@@ -284,7 +287,12 @@ pub(crate) fn handle(
                 }
             }
             match (on, &github) {
-                (Source::Github, Some(g)) => g.check()?,
+                (Source::Github, Some(g)) => {
+                    g.check()?;
+                    if g.event == GithubEvent::Mentioned && mode == Mode::Auto {
+                        return Err("a mention trigger asks first: anyone can mention you".into());
+                    }
+                }
                 (Source::Github, None) => {
                     return Err("a GitHub trigger needs a repository and an event".into());
                 }

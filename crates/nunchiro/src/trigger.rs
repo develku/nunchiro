@@ -10,7 +10,7 @@ use nunchiro_core::{
 use std::io::Read;
 use std::path::Path;
 
-const USAGE: &str = "usage: nunchiro trigger add <name> --on cli|webhook|github [--repo <owner/name> --event checks_failed|changes_requested|labeled [--issue-label <l>] [--any-author]] --kind claude|codex --project <dir> --task <text> [--label <name>] [--model <m>] [--effort <e>] [--auto] | list [--json] | fire <name> [--data @<file>|-] | pause <name> | resume <name> | remove <name>";
+const USAGE: &str = "usage: nunchiro trigger add <name> --on cli|webhook|github [--repo <owner/name> --event checks_failed|changes_requested|labeled|mentioned [--issue-label <l>] [--any-author]] --kind claude|codex --project <dir> --task <text> [--label <name>] [--model <m>] [--effort <e>] [--auto] | list [--json] | fire <name> [--data @<file>|-] | pause <name> | resume <name> | remove <name>";
 
 pub fn run(home: &Path, args: &[String]) -> Result<(), String> {
     let words: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -139,8 +139,12 @@ fn add(name: &str, rest: &[&str]) -> Result<Action, String> {
                     "checks_failed" => GithubEvent::ChecksFailed,
                     "changes_requested" => GithubEvent::ChangesRequested,
                     "labeled" => GithubEvent::Labeled,
+                    "mentioned" => GithubEvent::Mentioned,
                     _ => {
-                        return Err("--event is checks_failed, changes_requested or labeled".into());
+                        return Err(
+                            "--event is checks_failed, changes_requested, labeled or mentioned"
+                                .into(),
+                        );
                     }
                 })
             }

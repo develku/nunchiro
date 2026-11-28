@@ -70,3 +70,28 @@ for (const scheme of ['light', 'dark'] as const) {
     await app.screenshot({ path: `../.scratch/shots/triggers-window-side-${scheme}.png` });
   });
 }
+
+test('trigger_mention_asks_first: a GitHub mention trigger offers only Ask me first and no author choice', async ({ app, core }) => {
+  const demo = core.project('demo');
+  core.shell(demo, 'main');
+  await openWindow(app);
+  const widget = await openWidget(app);
+  await widget.locator('[data-move="tab"]').click();
+  const section = app.locator('.schedv[data-where="tab"] [data-triggers]');
+  await section.getByRole('button', { name: 'Add trigger' }).click();
+  const form = section.getByRole('form', { name: 'New trigger' });
+  // Starts by itself first, then the mention event: anyone can mention the owner, so it asks first.
+  await form.getByRole('combobox', { name: 'Before it starts' }).selectOption('auto');
+  await form.getByRole('combobox', { name: 'When' }).selectOption({ label: 'GitHub: someone mentions me' });
+  await expect(form.getByRole('combobox', { name: 'Before it starts' })).toHaveValue('ask');
+  await expect(form.getByRole('combobox', { name: 'Before it starts' }).locator('option')).toHaveCount(1);
+  await expect(form.getByText('Anyone can mention you, so this trigger always asks first.')).toBeVisible();
+  await expect(form.getByRole('checkbox', { name: "Anyone's, not only mine" })).toHaveCount(0);
+  await form.getByRole('textbox', { name: 'Repository' }).fill('o/r');
+  await form.getByRole('textbox', { name: 'Name' }).fill('mentions');
+  await form.getByRole('textbox', { name: 'What' }).fill('Read the mention and answer it.');
+  await form.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(section.locator('[data-trigger="mentions"] .chip')).toHaveText('Ask me first');
+  expect(triggers(core)).toMatchObject([{ name: 'mentions', on: 'github', mode: 'ask', github: { repo: 'o/r', event: 'mentioned' } }]);
+  expect(triggers(core)[0].github?.any_author).toBeUndefined();
+});
