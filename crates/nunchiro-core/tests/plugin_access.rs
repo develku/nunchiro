@@ -81,3 +81,40 @@ fn an_approval_from_before_access_was_recorded_asks_again_on_any_change() {
     plugin(&home, MANIFEST, "echo HELLO\n");
     assert_eq!(approval::status(&home, NAME).unwrap().state, State::Changed);
 }
+
+const KEYED: &str = "[[keybinding]]\ncommand = \"hi\"\nkey = \"Meta+Shift+KeyH\"\n\n[[status]]\nname = \"greet\"\ntext = \"Hello\"\ncommand = \"hi\"\n";
+
+#[test]
+fn a_plugin_adds_a_shortcut_and_a_status_item_and_adding_one_asks_again() {
+    let home = home::short("pa4");
+    plugin(&home, &format!("{MANIFEST}\n{KEYED}"), "echo hello\n");
+    let p = nunchiro_core::plugins::parse(&format!("{MANIFEST}\n{KEYED}"), "hello").unwrap();
+    assert_eq!(p.keybinding[0].key, "Meta+Shift+KeyH");
+    assert_eq!(p.status[0].text, "Hello");
+    approve(&home);
+    // A second shortcut is new access: it asks again and names it.
+    let more =
+        format!("{MANIFEST}\n{KEYED}\n[[keybinding]]\ncommand = \"hi\"\nkey = \"Meta+Alt+KeyH\"\n");
+    plugin(&home, &more, "echo hello\n");
+    let view = approval::status(&home, NAME).unwrap();
+    assert_eq!(view.state, State::Changed);
+    assert_eq!(view.added, ["command hi on key Meta+Alt+KeyH"]);
+}
+
+#[test]
+fn shortcuts_and_status_items_are_checked() {
+    use nunchiro_core::plugins::parse;
+    let with = |extra: &str| parse(&format!("{MANIFEST}\n{extra}"), "hello");
+    for bad in [
+        // No modifier but Shift: it would take a key the user types.
+        "[[keybinding]]\ncommand = \"hi\"\nkey = \"Shift+KeyH\"\n",
+        "[[keybinding]]\ncommand = \"hi\"\nkey = \"Meta+Space+KeyH\"\n",
+        "[[keybinding]]\ncommand = \"nope\"\nkey = \"Meta+KeyH\"\n",
+        "[[status]]\nname = \"s\"\ntext = \"far too long a text for the status bar\"\n",
+        "[[status]]\nname = \"s\"\ntext = \"x\"\ncommand = \"nope\"\n",
+        "[[status]]\nname = \"s\"\ntext = \"a\"\n[[status]]\nname = \"t\"\ntext = \"b\"\n[[status]]\nname = \"u\"\ntext = \"c\"\n",
+    ] {
+        assert!(with(bad).is_err(), "{bad}");
+    }
+    assert!(with("[[keybinding]]\ncommand = \"hi\"\nkey = \"Control+Alt+Digit1\"\n").is_ok());
+}
