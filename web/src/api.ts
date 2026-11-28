@@ -177,6 +177,20 @@ export interface AcpRow {
   models?: { value: string; label: string }[];
   /** Ticket 994: the thinking levels it last reported, as it listed them; none: it has none. */
   efforts?: { value: string; label: string }[];
+  /** A listed agent's add steps (crates/nunchiro-core/src/acp/known.toml); none for a custom entry. */
+  setup?: AcpSetup | null;
+}
+export type AcpCost = 'free_plan' | 'free_limited' | 'free_models' | 'own_model' | 'paid_plan' | 'paid_key' | 'unknown';
+export interface AcpSetup {
+  install?: string[];
+  install_script?: string;
+  sign_in?: string[];
+  account?: string;
+  cost: AcpCost;
+  cost_line?: string;
+  pricing_url?: string;
+  /** YYYY-MM-DD: the day the cost line was read on the vendor's page. */
+  checked?: string;
 }
 /** The last test message of an agent (crates/nunchiro-core/src/acp/turn.rs `Turn`); `at` is Unix seconds. */
 export interface AcpTurn {

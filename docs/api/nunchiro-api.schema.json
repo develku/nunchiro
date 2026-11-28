@@ -276,6 +276,18 @@
             "null"
           ]
         },
+        "setup": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Setup"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A listed agent's add steps (none for a custom entry)."
+        },
         "source": {
           "description": "`known` (the bundled list; an `agents.toml` entry of the same name supplies its content), `service` (the same, an\nAPI key service) or `custom`.",
           "type": "string"
@@ -15586,6 +15598,64 @@
         "turn_end_nudge": {
           "default": true,
           "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "Setup": {
+      "description": "What the add steps show for a listed agent: how to install it, how it signs in, what it costs. From this bundled table\nonly; the window types the install command into a terminal tab and never runs it.",
+      "properties": {
+        "account": {
+          "description": "The service named in \"With your {account} account\".",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checked": {
+          "description": "The day the cost line was read on the vendor's page (YYYY-MM-DD).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cost": {
+          "default": "unknown",
+          "description": "free_plan, free_limited, free_models, own_model, paid_plan, paid_key or unknown.",
+          "type": "string"
+        },
+        "cost_line": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "install": {
+          "description": "The package-manager form, as an argv.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "install_script": {
+          "description": "The vendor's one-line installer, when it is the only documented way.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pricing_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sign_in": {
+          "description": "The agent's own sign-in command for the terminal fallback.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "type": "object"
