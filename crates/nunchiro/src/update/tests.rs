@@ -780,30 +780,49 @@ fn a_candidate_whose_cli_hangs_or_floods_is_rolled_back() {
     let alive = |pid: i32| unsafe { libc::kill(pid, 0) } == 0;
     let bg = dir.join("bg.pid");
     let pid = || -> i32 { fs::read_to_string(&bg).unwrap().trim().parse().unwrap() };
-    // a hanging CLI with a background child: stopped at 1 s, both gone, the previous build back
+    // a hanging CLI with a background child: stopped at 1 s, both gone, the previous build back. Under load the 1 s can
+    // pass before the stand-in's shell has even started its child: no bg.pid, and no child to check. That run is
+    // not the case under test, so it runs again (the stop, the message and the rollback are checked every time).
     cli(&bundle, "#!/bin/sh\necho old\n");
     cli(
         &staged,
         &format!(
-            "#!/bin/sh\nsleep 30 &\necho $! > {}\nexec sleep 30\n",
-            bg.display()
+            "#!/bin/sh\nsleep 30 &\necho $! > {b}.tmp && mv {b}.tmp {b}\nexec sleep 30\n",
+            b = bg.display()
         ),
     );
-    let started = std::time::Instant::now();
-    let why = swap(&bundle, &staged, &backup, || {
-        serve_update(&dir, &bundle, std::time::Duration::from_secs(1))
-    })
-    .unwrap_err();
-    assert!(
-        why.contains("did not end within 1 s") && why.contains("put back"),
-        "{why}"
-    );
-    assert!(started.elapsed() < std::time::Duration::from_secs(10));
-    assert!(
-        fs::read_to_string(bundle.join("Contents/MacOS/nunchiro"))
-            .unwrap()
-            .contains("echo old")
-    );
+    let mut tries = 0;
+    while !bg.exists() {
+        tries += 1;
+        assert!(
+            tries <= 5,
+            "the stand-in never started its child within the 1 s limit"
+        );
+        let started = std::time::Instant::now();
+        let why = swap(&bundle, &staged, &backup, || {
+            serve_update(&dir, &bundle, std::time::Duration::from_secs(1))
+        })
+        .unwrap_err();
+        assert!(
+            why.contains("did not end within 1 s") && why.contains("put back"),
+            "{why}"
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+        assert!(
+            fs::read_to_string(bundle.join("Contents/MacOS/nunchiro"))
+                .unwrap()
+                .contains("echo old")
+        );
+        if !staged.exists() {
+            cli(
+                &staged,
+                &format!(
+                    "#!/bin/sh\nsleep 30 &\necho $! > {b}.tmp && mv {b}.tmp {b}\nexec sleep 30\n",
+                    b = bg.display()
+                ),
+            );
+        }
+    }
     std::thread::sleep(std::time::Duration::from_millis(300));
     assert!(
         !alive(pid()),
