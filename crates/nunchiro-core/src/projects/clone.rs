@@ -991,7 +991,8 @@ mod tests {
         let git = stand_in(
             &d,
             &format!(
-                "echo x > \"$target/partial\"\nsleep 600 &\necho $! > {c}\necho $$ > {g}\nwait",
+                // Each pid file appears whole (written, then renamed): the test reads it as soon as it exists.
+                "echo x > \"$target/partial\"\nsleep 600 &\necho $! > {c}.tmp && mv {c}.tmp {c}\necho $$ > {g}.tmp && mv {g}.tmp {g}\nwait",
                 c = child_pid.display(),
                 g = git_pid.display()
             ),

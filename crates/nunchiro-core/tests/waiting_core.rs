@@ -461,7 +461,7 @@ fn t1149_codex_outward_hook_asks_on_a_card_and_fails_closed() {
     // Runs the hook once per `call-N.json`, as Codex does before each tool call; what it printed is `out-N.txt`.
     fs::write(
         core.home.join("codex"),
-        home::codex_fake("#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'codex-cli 0.161.0'; exit; fi\nprintf '%s\\n' \"$@\" > argv.txt\nn=0\nwhile :; do\n  if [ -f call-$n.json ]; then\n    \"$NUNCHIRO_HOME/bridge-cli\" hook outward --codex < call-$n.json > out-$n.tmp 2>> err.txt\n    mv out-$n.tmp out-$n.txt\n    n=$((n+1))\n  fi\n  sleep 0.05\ndone\n"),
+        home::codex_fake("#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'codex-cli 0.161.0'; exit; fi\nprintf '%s\\n' \"$@\" > argv.tmp\nmv argv.tmp argv.txt\nn=0\nwhile :; do\n  if [ -f call-$n.json ]; then\n    \"$NUNCHIRO_HOME/bridge-cli\" hook outward --codex < call-$n.json > out-$n.tmp 2>> err.txt\n    mv out-$n.tmp out-$n.txt\n    n=$((n+1))\n  fi\n  sleep 0.05\ndone\n"),
     )
     .unwrap();
     let Reply::Started { session: s } = core
@@ -501,13 +501,16 @@ fn t1149_codex_outward_hook_asks_on_a_card_and_fails_closed() {
     assert!(args.contains("trusted_hash="), "{args}");
     assert!(!args.contains("--dangerously-bypass-hook-trust"), "{args}");
     assert!(!args.contains("hook PermissionRequest"), "{args}");
+    // Each file the fake polls for appears whole (written, then renamed), as each it writes back does.
     let call = |n: u32, tool: &str, input: serde_json::Value| {
+        let tmp = core.home.join(format!("call-{n}.tmp"));
         fs::write(
-            core.home.join(format!("call-{n}.json")),
+            &tmp,
             serde_json::json!({"hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": input})
                 .to_string(),
         )
         .unwrap();
+        fs::rename(tmp, core.home.join(format!("call-{n}.json"))).unwrap();
     };
     let decision = |out: &str| -> (String, String) {
         let v: serde_json::Value = serde_json::from_str(out).unwrap();
@@ -587,7 +590,8 @@ fn t1149_codex_outward_hook_asks_on_a_card_and_fails_closed() {
         serde_json::json!({"command": "git push origin main"}),
     );
     assert_eq!(wait_file("out-3.txt"), "");
-    fs::write(core.home.join("call-4.json"), "not json").unwrap();
+    fs::write(core.home.join("call-4.tmp"), "not json").unwrap();
+    fs::rename(core.home.join("call-4.tmp"), core.home.join("call-4.json")).unwrap();
     assert_eq!(decision(&wait_file("out-4.txt")).0, "deny");
     // Round 2: the owner never allows what the card does not show. A field the card would leave out (the journal
     // drops fields named like a secret) or a call too large for a card is refused, not asked.
