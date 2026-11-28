@@ -298,6 +298,9 @@
   padding-bottom: 6px;
   max-height: var(--dock-max, none);
 }
+.composer > .dock[data-over] {
+  overflow-y: auto;
+}
 /* A card that fits itself to the capped dock: its body scrolls, its buttons stay in view (night tidy). */
 .composer > .dock > .dock-fit {
   display: flex;

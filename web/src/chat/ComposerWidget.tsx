@@ -85,7 +85,8 @@ type Props = { first: boolean; pin?: string } & Pick<ReturnType<typeof useCompos
   };
 
 /** Ticket 1030: the floating card's height as `--dock-h`, so the output's last lines and its "new" chip stay clear of it.
- *  The dock is capped at 60% of the output above it (`--dock-max`): a tall card scrolls inside and never covers the tabs. */
+ *  The dock is capped at 60% of the output above it (`--dock-max`), so it never covers the tabs; cards taller than the
+ *  cap scroll in the dock (`data-over`), so every button stays reachable. */
 const dockHeight = (el: HTMLDivElement | null) => {
   if (!el) return;
   const root = document.documentElement.style;
@@ -93,12 +94,18 @@ const dockHeight = (el: HTMLDivElement | null) => {
     const out = document.querySelector('.chat:not([data-off]) .cscroll')?.getBoundingClientRect();
     const top = el.parentElement?.getBoundingClientRect().top;
     if (out && top !== undefined) el.style.setProperty('--dock-max', `${Math.max(120, Math.floor((top - out.top) * 0.6))}px`);
+    // Scrolls only when over the cap: a scrolling box clips, and a card that fits keeps its whole ring and shadow.
+    el.toggleAttribute('data-over', el.scrollHeight > el.clientHeight + 1);
     root.setProperty('--dock-h', `${Math.ceil(el.offsetHeight)}px`);
   };
+  // The dock itself stops growing at the cap, so its cards are watched too (and the cards that arrive later).
   const watch = new ResizeObserver(fit);
-  watch.observe(el);
+  const cards = () => [el, ...el.children].forEach((c) => watch.observe(c));
+  const added = new MutationObserver(() => (cards(), fit()));
+  cards();
+  added.observe(el, { childList: true });
   window.addEventListener('resize', fit);
-  return () => void (watch.disconnect(), window.removeEventListener('resize', fit), root.removeProperty('--dock-h'));
+  return () => void (watch.disconnect(), added.disconnect(), window.removeEventListener('resize', fit), root.removeProperty('--dock-h'));
 };
 
 /** The composer of the focused session, or of a pinned one (`pin`). Its send path is useComposerSend's. */
