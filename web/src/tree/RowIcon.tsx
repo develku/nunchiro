@@ -240,7 +240,9 @@ export function WtRow({ name, pre, state, sessionId, selected, sub, count, onOpe
       {!sub && (state.tone === 'you' || state.tone === 'bad' || state.kind === 'limit') && <span className={`sw${state.kind === 'limit' ? ' tm lim' : ''}`} data-word={state.tone}>{t(state.tone === 'you' ? 'lead.state.needs' : state.tone === 'bad' ? 'tree.status.failed' : 'limit.row')}</span>}
       {!sub && state.tone === 'idle' && (state.kind === 'idle' || state.kind === 'stale') && (
         <span className="tm" data-word={state.rest ? 'done' : state.kind}>
-          {[t(state.rest ? 'mw.status.done' : state.kind === 'stale' ? 'mw.status.stale' : 'mw.status.idle'), state.ago !== undefined && shortAge(Date.now() - state.ago)].filter(Boolean).join(' · ')}
+          {/* The age is its own box: where the row is short it goes before the word (tree.css). */}
+          <span>{t(state.rest ? 'mw.status.done' : state.kind === 'stale' ? 'mw.status.stale' : 'mw.status.idle')}</span>
+          {state.ago !== undefined && <span className="tm-ago">{` · ${shortAge(Date.now() - state.ago)}`}</span>}
         </span>
       )}
       {note && <span className="tm">{note}</span>}

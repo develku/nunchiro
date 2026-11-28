@@ -57,6 +57,12 @@ push to `main`. A pull request is the only way into `main`. It needs two checks:
 every other job passed, and `ci-guard` ([ci-guard.yml](.github/workflows/ci-guard.yml)), which holds a pull request
 that changes `.github/` or the ratchet scripts until a maintainer has reviewed it.
 
+Pull requests run in two steps, because the free plan runs only 5 macOS jobs at once. Every push runs the Linux jobs
+(`lint`, `changes`). The macOS jobs run once the pull request is ready: auto-merge is turned on, or it carries the
+`ready-ci` label (for a pull request under review that is not on auto-merge yet). Turning either on starts the full run,
+and every later push runs the full set. Until then `gate` fails with "macOS checks run when auto-merge is on or the
+ready-ci label is set", so nothing merges untested; a pull request that changes only safe docs passes without it.
+
 - `lint` (Linux): `cargo fmt --check`, `sh -n` of the scenario scripts, `pnpm typecheck` in `web/`.
 - `rust-build` (macOS): clippy with warnings as errors, doctests, and one nextest archive of every Rust test.
 - `rust-test` (macOS, two runners, pull requests): the archive, split with `cargo nextest run --partition count:k/2`. A push to

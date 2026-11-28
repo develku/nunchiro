@@ -76,8 +76,14 @@ may write only its cache, reach only the `network` hosts, and read only the proj
 
 ## Approval and the switch
 
-A plugin is one approval: the hash of its whole folder (the `cache` folder aside). It starts off and not approved,
-and any change to any file shows it as "Changed since approval" and stops every part until it is approved again.
+A plugin is one approval, for what it can reach: every part, and each host, folder, message box and action a part
+reaches. It starts off and not approved. A change that asks for nothing new (its scripts, its texts, a new version
+from the catalogue) stays approved and stays on; the Plugins page says it changed. A change that adds a part, a host,
+a folder it reads, writing into the message box or a check shows it as "Changed since approval", stops every part
+until it is approved again, and Review lists what is new. An approval given before this rule asks again after any
+change. A plugin with a check asks again after any change, its scripts included, because a check reads and can
+replace every message agents, schedules and tokens send. The access lines also name each part's command line, a
+panel's interval, what a failing check does and the author.
 Approving and turning on are the owner's: an agent can write and check a plugin, and its `plugin allow` becomes one
 waiting item in the window. A plugin is approved whole (`plugin:<id>`); a part's name is never approved alone. The
 sheet and `plugin allow` list every part with what it runs, its hosts, the folders it reads and whether it writes

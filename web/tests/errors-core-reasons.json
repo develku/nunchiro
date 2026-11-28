@@ -492,6 +492,7 @@
  "packages unavailable": "internal: the package store's own lock, taken only by `nunchiro task package` and `task staff` writes; a poisoned lock is a core fault, not text for a user",
  "seats at once is 2, 4, 6 or 8": "guard: Settings > Team's Live seats control sends only 2, 4, 6 or 8 (lead/place.tsx CAPS), so it does not trip",
  "auto-advance is on or off": "guard: Settings > Team's Auto-advance switch sends only on or off (lead/place.tsx), so it does not trip",
+ "asking before merging task work is on or off": "guard: Settings > Team's merge-ask switch sends only on or off (lead/place.tsx), so it does not trip",
  "no seat to start": "internal: a dispatch arm or invariant inside the core, never reached by a request as text for a user",
  "the seat did not start": "internal: a dispatch arm or invariant inside the core, never reached by a request as text for a user",
  "invalid host in link": "guard: the Add machine form checks a pasted link with the core's own rules (settings/machines/MachinesPage.tsx parseLink) and sends machine_trust only for a link that passes, so it does not trip",
@@ -565,5 +566,10 @@
  "{} was not found on PATH": "internal: a Write with AI reason; text_gen.rs answer sends it as '<agent> could not write it: <reason>', which KNOWN maps",
  "it did not answer in {} seconds": "internal: a Write with AI reason; text_gen.rs answer sends it as '<agent> could not write it: <reason>', which KNOWN maps",
  "not a text op": "guard: a dispatch, request-shape, role or input guard: the window sends a complete, valid request, so it does not trip",
- "this session has no agent that can write it": "internal: a Write with AI reason; text_gen.rs answer sends it as '<agent> could not write it: <reason>', which KNOWN maps"
+ "this session has no agent that can write it": "internal: a Write with AI reason; text_gen.rs answer sends it as '<agent> could not write it: <reason>', which KNOWN maps",
+ "a GitHub trigger needs a repository and an event": "guard: a request-shape check of Add trigger; the window's form sends a repository and an event exactly for a GitHub trigger and a label only for a labeled one",
+ "only a GitHub trigger watches a repository": "guard: a request-shape check of Add trigger; the window's form sends a repository and an event exactly for a GitHub trigger and a label only for a labeled one",
+ "only a labeled trigger has a label": "guard: a request-shape check of Add trigger; the window's form sends a repository and an event exactly for a GitHub trigger and a label only for a labeled one",
+ "{}: expected true or false": "guard: the Settings save check of home.connectors_off; the Assistants page saves it only as true or false",
+ "the lead was not told: {}": "internal: a step of the core's auto-advance thread (advance.rs), written to the core log and the room's note; no window request runs it"
 }

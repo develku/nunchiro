@@ -1,7 +1,7 @@
 // Ticket 1099 (owner 11-24, mockup docs/design/cohesion-1099 panels 1-3): how a project's lead works (way of working, what
 // its seats may do, auto-advance, live seats) is a setting, so it lives in Settings > Team as one section per project.
 // The Team view's gear and the day-one card's "Change" open that section on their project. The core still refuses these
-// four ops from a session (ledger.rs `op @ ("way" | "grant" | "auto" | "cap")`): only this page, the user, sets them.
+// place ops from a session (ledger.rs `op @ ("way" | "grant" | "auto" | "cap" | ...)`): only this page, the user, sets them.
 import { useEffect, useState } from 'react';
 import type { CoreClient } from '../api';
 import type { T } from '../i18n';
@@ -65,10 +65,10 @@ export function PlaceSection({ core, t, projects, sessions, onSummary }: { core:
   // The page summary (mockup panel 1: "nunchiro Build + review · Live seats 4") says the shown project's way.
   useEffect(() => onSummary?.(shown && place ? { project: shown, place } : null), [shown, place, onSummary]);
   if (!shown) return null;
-  const set = (operation: 'way' | 'grant' | 'auto' | 'cap' | 'account', text: string) => (setErr(false), void setPlace(core, shown, operation, text).catch(() => setErr(operation === 'account' ? 'account' : 'other')));
+  const set = (operation: 'way' | 'grant' | 'auto' | 'cap' | 'account' | 'merge-ask', text: string) => (setErr(false), void setPlace(core, shown, operation, text).catch(() => setErr(operation === 'account' ? 'account' : 'other')));
   const cap = String(place?.cap ?? 4);
   // Ticket 1122 (ticket 543's rule): each row shows a reset while it differs from the core's default (ledger.rs Place).
-  const reset = (label: string, changed: boolean, operation: 'way' | 'grant' | 'auto' | 'cap', text: string) => <Reset t={t} label={label} show={!!place && changed} run={() => set(operation, text)} />;
+  const reset = (label: string, changed: boolean, operation: 'way' | 'grant' | 'auto' | 'cap' | 'merge-ask', text: string) => <Reset t={t} label={label} show={!!place && changed} run={() => set(operation, text)} />;
   return (
     <Sec
       id="h-place"
@@ -97,6 +97,7 @@ export function PlaceSection({ core, t, projects, sessions, onSummary }: { core:
         control={<Seg name="place-seats" value={place?.seats ?? null} label={t('lead.seats.group')} onChange={(v) => set('grant', v)} options={SEATS.map((s) => [s, t(`lead.seats.${s}Short`)])} />}
       />
       <Row label={t('lead.auto.group')} desc={t('lead.place.autoNote')} reset={reset(t('lead.auto.group'), place?.auto === false, 'auto', 'on')} control={<Switch checked={place?.auto !== false} label={t('lead.auto.group')} disabled={!place} onChange={(on) => set('auto', on ? 'on' : 'off')} />} />
+      <Row label={t('lead.mergeAsk.group')} desc={t('lead.mergeAsk.note')} reset={reset(t('lead.mergeAsk.group'), place?.ask_merge === true, 'merge-ask', 'off')} control={<Switch checked={place?.ask_merge === true} label={t('lead.mergeAsk.group')} disabled={!place} onChange={(on) => set('merge-ask', on ? 'on' : 'off')} />} />
       <Row
         label={t('lead.cap.group')}
         desc={t('lead.cap.note', { n: cap })}

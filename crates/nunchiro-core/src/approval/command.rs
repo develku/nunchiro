@@ -287,6 +287,7 @@ pub fn command_grant(home: &Path, kind: AgentKind, seen_hash: &str) -> Result<Co
             level: Level::Act,
             hash,
             granted_at_ms: crate::queue::now_ms(),
+            access: vec![],
         });
         stored.approved = Some(pending);
         save(home, agent, &stored)?;

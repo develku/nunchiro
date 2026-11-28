@@ -1321,6 +1321,16 @@ mod tests {
         assert_eq!(crate::advance::beat_line(0, 0, 0), None);
         add("nudge", crate::advance::nudge_line(15));
         add(
+            "stall",
+            crate::advance::stall_line(
+                "Builder · Add a pow (x)",
+                "0a1b2c3d",
+                "t2",
+                "builder",
+                "quiet for 25 min",
+            ),
+        );
+        add(
             "forward",
             crate::advance::forward_line(
                 "Reviewer · tax",

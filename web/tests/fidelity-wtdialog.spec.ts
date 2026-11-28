@@ -1,6 +1,6 @@
 import { expect, test, type Core } from './fixtures';
 import type { Page } from '@playwright/test';
-import { repo, show, expectMatchesMockup, outDir } from './visual/compare';
+import { bookControls, bookPalette, bookSurface, repo, show, expectMatchesMockup, outDir } from './visual/compare';
 import fs from 'node:fs';
 import path from 'node:path';
 import { openQuiet } from './tree-seed';
@@ -132,8 +132,13 @@ for (const scheme of ['light', 'dark'] as const) {
         prepare: async (m) => {
           // Isolate the card from the comparison grid, as the existing fidelity gate does.
           await m.addStyleTag({ content: '.cols{display:block!important}' });
+          // The design book (#69 controls, #71 dialogs) replaced the mockup's palette, field and dialog surface, as
+          // v2-8f-fidelity and fidelity-worktree take it: the frame still compares layout, words and the hint lines.
+          await bookPalette(d, m);
           const golden = m.locator('section[aria-labelledby="h-d1"] .dlg[aria-label="new worktree"]').first();
           await golden.locator('input').fill(input);
+          await bookControls(d, 'input', golden, 'input');
+          await bookSurface(d, golden);
           // Translate copy only; retain both golden hint elements, styles and geometry.
           await golden.locator('.hint').nth(0).evaluate((e, branch) => {
             e.replaceChildren(document.createTextNode('Creates '), Object.assign(document.createElement('code'), { textContent: branch }), document.createTextNode(' from current branch'));

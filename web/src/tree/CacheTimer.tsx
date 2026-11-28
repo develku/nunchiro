@@ -20,6 +20,7 @@ export const CACHE_TTL = defineSetting<number>('tree.cache_ttl', FIVE_MIN, (v) =
 // opened (or restarted) on an already idle session shows nothing; read the transcript's time if owners ask for it.
 const stopped = new Map<string, number>(); // session id -> when the window saw it stop working
 const wasWorking = new Map<string, boolean>();
+const turns = new Map<string, number>(); // session id -> its finished-turn count (`completion_seq`) at the last update
 let now = Date.now();
 let clock: ReturnType<typeof setInterval> | 0 = 0;
 let ttl = FIVE_MIN;
@@ -39,15 +40,19 @@ const stop = () => (clearInterval(clock), (clock = 0));
 /** Reads the sessions' transitions; App calls it with the window's whole list (rows read the store by id). */
 export function trackCache(sessions: Session[], enabled: boolean, ms: number) {
   const ids = new Set(sessions.map((s) => s.id));
-  for (const id of [...wasWorking.keys()]) if (!ids.has(id)) (wasWorking.delete(id), stopped.delete(id));
+  for (const id of [...wasWorking.keys()]) if (!ids.has(id)) (wasWorking.delete(id), stopped.delete(id), turns.delete(id));
   for (const s of sessions) {
     if (s.kind !== 'claude') continue;
     const st = status(s);
     const working = st === 'working' || st === 'stale'; // stale is a turn still in progress, only silent for 20 min
     // A done (exited, resumable) session keeps counting: a resume within the TTL still reads the cache.
+    // A turn shorter than one update is never seen working: its finished-turn count still grows.
+    const seq = s.completion_seq ?? 0;
+    const before = turns.get(s.id);
     if (working || s.state === 'closed') stopped.delete(s.id);
-    else if (wasWorking.get(s.id)) stopped.set(s.id, Date.now());
+    else if (wasWorking.get(s.id) || (before !== undefined && seq > before)) stopped.set(s.id, Date.now());
     wasWorking.set(s.id, working);
+    turns.set(s.id, seq);
   }
   on = enabled;
   ttl = ms;

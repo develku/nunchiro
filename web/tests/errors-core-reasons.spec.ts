@@ -96,3 +96,12 @@ test('errors_gaps_layout_and_file_words: the four layout command refusals and th
     if (lang !== 'en') expect(said, lang).not.toBe(en('own.file.unknown'));
   }
 });
+
+test('errors_plugin_list_unreachable: a plugin list read that failed reads as the plugin list line, a theme read as the theme line', async () => {
+  const { explainError } = await import('../src/errors');
+  const t = words('en');
+  const plugin = explainError(t as never, 'the plugin list could not be read: the request failed (curl exit 7)');
+  expect([plugin.known, plugin.what]).toEqual([true, t('err.pluginNet')]);
+  const theme = explainError(t as never, 'the request failed (curl exit 7)');
+  expect([theme.known, theme.what]).toEqual([true, t('err.g.themeNet')]);
+});
