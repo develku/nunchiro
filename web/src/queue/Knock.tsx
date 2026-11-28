@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import type { CoreClient } from '../api';
 import type { T } from '../i18n';
 import type { Session, SendRow } from '../types';
+import { changedBy } from '../plugins/changedBy';
 import { sessionName } from '../Sidebar';
 import { Face } from '../bots/Face';
 import type { BotFace } from '../bots/bots';
@@ -219,6 +220,11 @@ export function useSentBy(session: Session | null, text: string, team: Team | nu
   if (!words) return null;
   const row = log.find((r) => r.sender !== 'user' && r.status === 'delivered' && r.content.trim() === words);
   return row ? whoSent(row.sender, sessions, team) : null;
+}
+
+export function useChangedBy(session: Session | null, text: string): string | null {
+  if (!session) return null;
+  return changedBy((session as Session & { send_log?: SendRow[] }).send_log ?? [], text);
 }
 
 // The composer's `typing`: at most once every 2 s per session; the core holds other senders' lines 5 s after the last.

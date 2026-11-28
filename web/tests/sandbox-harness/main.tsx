@@ -4,6 +4,9 @@ import { createRoot } from 'react-dom/client';
 import { ArtifactFrame, type ArtifactFrameProps } from '../../src/sandbox/ArtifactFrame';
 import { Hints } from '../../src/Hints';
 import '../../src/styles.css';
+import '../../src/layout.css';
+import '../../src/keys.css';
+import '../../src/chrome.css';
 import '../../src/chat/chat.css'; // v1b-06
 import '../../src/artifacts/artifacts.css'; // v1b-06
 

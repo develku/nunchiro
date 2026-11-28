@@ -15,6 +15,8 @@ export type RoomMessage = {
   thread: string;
   reply_to?: string;
   body: string;
+  /** A plugin's check replaced what the sender wrote: the plugin's name (the original is not kept in the room). */
+  changed_by?: string;
   created_by: 'agent' | 'person' | 'core';
   ts: number;
   /** Ticket 990: on a `team` line written by the core, what happened to the lead's team (the body says it in English). */

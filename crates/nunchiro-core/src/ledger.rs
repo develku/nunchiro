@@ -16,6 +16,8 @@ mod ops;
 mod staff;
 pub(crate) use ops::*;
 use staff::known_account;
+mod lines;
+pub use lines::lines;
 pub use staff::seat_up;
 pub(crate) use staff::staff_plan;
 
@@ -37,6 +39,7 @@ pub const LEARNED_KEPT: usize = 2;
 const TOLD_TWICE_MS: u64 = 5_000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Task {
     pub id: String,
     /// The project root, or the Home folder.
@@ -82,6 +85,9 @@ pub struct Task {
     /// Who last changed `after`, so a lead's handover reads who ordered it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ordered: Option<Ordered>,
+    /// The tasks of `after` whose landing or drop its lead was told (advance.rs `release`), so a restart tells it once.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub released: Vec<String>,
     pub created: u64,
     pub updated: u64,
 }
@@ -90,6 +96,7 @@ pub struct Task {
 /// Progress is what the core records itself: the task's record (`updated`: a seat, a review, a worktree, the user's
 /// words) and its worktrees' files (`revision`). Never what an agent wrote.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct Stall {
     /// `updated` and the revision at the last check-in; empty when the task has no worktree that could be read.
@@ -104,6 +111,7 @@ pub struct Stall {
 }
 /// Ticket 1081: the core's auto-advance record of a task. Kept so a restart repeats no nudge and no card.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct Advance {
     /// What was done once, as `nudge:<session>:<n>` and `card:<session>:<n>` (`n`: the stall's start), newest last.
@@ -129,6 +137,7 @@ impl Advance {
 }
 /// One stalled seat: `why` is a plain line ("quiet for 20 min"), `at` the nudge's time, `n` the stall's start.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Stalled {
     pub session: String,
     pub name: String,
@@ -144,6 +153,7 @@ pub const STALL_QUIET: u32 = 2;
 pub const STALL_SAME: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Lesson {
     pub text: String,
     /// Who proposed it, as the card shows it ("Reviewer · review-tax").
@@ -156,6 +166,7 @@ pub struct Lesson {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Ordered {
     /// `the user`, or the lead's seat name.
     pub by: String,
@@ -164,11 +175,45 @@ pub struct Ordered {
 
 /// A task this one waits for, as a reader gets it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Blocker {
     pub id: String,
     pub title: String,
     /// `plan`, `build`, `review`, `gate` (`stage`), or how it closed when that was not a landing (`dropped`).
     pub stage: String,
+    /// It closed without landing (dropped, or its worktree removed): the waiting task asks instead of waiting.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dropped: bool,
+}
+
+/// The refusal of a seat that writes on a task that waits.
+pub(crate) fn not_started(t: &Task, b: &[Blocker]) -> String {
+    let (what, have) = match b {
+        [one] => (format!("\"{}\"", one.title), "has"),
+        many => (
+            format!(
+                "{} tasks ({})",
+                many.len(),
+                quoted(many.iter().map(|b| b.title.as_str()))
+            ),
+            "have",
+        ),
+    };
+    format!(
+        "Not started: \"{}\" waits for {what}, which {have} not landed. You are told when it lands. A seat that does \
+         not write files may start now. To stop waiting: nunchiro task after {} --none",
+        t.title, t.id
+    )
+}
+
+/// `"a"`, `"a" and "b"`, `"a", "b" and "c"`.
+pub(crate) fn quoted<'a>(titles: impl Iterator<Item = &'a str>) -> String {
+    let all: Vec<String> = titles.map(|t| format!("\"{t}\"")).collect();
+    match all.split_last() {
+        Some((last, [])) => last.clone(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+        None => String::new(),
+    }
 }
 
 /// A task waits for at most this many.
@@ -205,6 +250,7 @@ pub fn blockers(t: &Task, all: &[Task]) -> Vec<Blocker> {
             id: b.id.clone(),
             title: b.title.clone(),
             stage: stage(b).into(),
+            dropped: b.closed.is_some(),
         })
         .collect()
 }
@@ -282,6 +328,7 @@ fn check_after(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct MergeOk {
     pub revision: String,
     pub at: u64,
@@ -289,6 +336,7 @@ pub struct MergeOk {
 
 /// One session of a role on this task. Never reused: a second builder after the first ended is a second seat.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema), schemars(rename = "LedgerSeat"))]
 pub struct Seat {
     pub session: String,
     pub name: String,
@@ -305,6 +353,7 @@ pub struct Seat {
 
 /// What the user said to a seat directly, in the user's words (masked and cut by the caller).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Told {
     pub at: u64,
     pub session: String,
@@ -313,6 +362,7 @@ pub struct Told {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Review {
     /// What was reviewed: `revision` of every worktree of the task at that moment, in the task's order.
     pub revision: String,
@@ -326,6 +376,7 @@ pub struct Review {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Closed {
     pub at: u64,
     /// `done` (the lead or the user said so), `merged` (its last worktree went with nothing left outside the project),
@@ -336,6 +387,7 @@ pub struct Closed {
 /// Slice i: what a place (a project, or Home) decided for the work done in it. A role carries neither: the same
 /// Builder asks before each edit in one project and edits freely in another.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Place {
     /// The way of working: `solo` (build only), `team` (build, then a fresh review), `strict` (team plus a security
     /// review). The guide's `levels.md`.
@@ -395,6 +447,7 @@ struct Stored {
 
 /// A task as a reader gets it: the record, and what the core worked out now.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema), schemars(rename = "LedgerView"))]
 pub struct View {
     #[serde(flatten)]
     pub task: Task,
@@ -439,6 +492,12 @@ pub struct View {
     /// How many open tasks wait for this one.
     #[serde(default, skip_serializing_if = "is_zero_usize")]
     pub waiters: usize,
+    /// A task it waits for was dropped: what the user is asked (the state is then `needs`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stuck: Option<String>,
+    /// A seat that writes sat on it before it waited: `started before "<title>" landed`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub early: Option<String>,
 }
 fn is_zero_usize(n: &usize) -> bool {
     *n == 0
@@ -688,6 +747,7 @@ impl Ledger {
                 advance: Advance::default(),
                 after: vec![],
                 ordered: None,
+                released: vec![],
                 created: now,
                 updated: now,
             };
@@ -723,6 +783,29 @@ impl Ledger {
             });
             t.updated = now;
             Ok((t.clone(), true))
+        })
+    }
+
+    /// Marks, on each open task of `waiters`, that its lead was told `blocker` closed. The ones marked now.
+    pub(crate) fn mark_released(
+        &self,
+        blocker: &str,
+        waiters: &[String],
+    ) -> Result<Vec<String>, String> {
+        self.change(|s| {
+            let mut now = vec![];
+            for t in s.tasks.iter_mut().filter(|t| {
+                t.closed.is_none()
+                    && waiters.contains(&t.id)
+                    && !t.released.iter().any(|r| r == blocker)
+            }) {
+                t.released.push(blocker.into());
+                // Only the ids it still names matter: the rest go, so the list stays as short as `after`.
+                t.released.retain(|r| t.after.contains(r));
+                now.push(t.id.clone());
+            }
+            let changed = !now.is_empty();
+            Ok((now, changed))
         })
     }
 
@@ -795,8 +878,7 @@ impl Ledger {
                 }
             }
             let target = s.tasks[to].id.clone();
-            s.tasks
-                .retain(|t| t.id == target || !(t.auto && t.closed.is_none() && empty(t)));
+            drop_unused(&mut s.tasks, Some(&target), now);
             let t = s
                 .tasks
                 .iter_mut()
@@ -865,8 +947,7 @@ impl Ledger {
                     changed = true;
                 }
             }
-            s.tasks
-                .retain(|t| !(t.auto && t.closed.is_none() && empty(t)));
+            drop_unused(&mut s.tasks, None, now);
             Ok(((), changed))
         })
     }
@@ -876,6 +957,10 @@ impl Ledger {
         let Some(task) = self.of_worktree(path) else {
             return Ok(());
         };
+        let waits = blockers(&task, &self.list()?);
+        if !waits.is_empty() {
+            return Err(not_started(&task, &waits));
+        }
         match task
             .seats
             .iter()
@@ -1225,6 +1310,8 @@ impl Ledger {
             // 11-17: a lead made its worktrees, then its own tasks, and the view read "2 dropped today").
             if how == "dropped"
                 && closed.auto
+                // Its waiters read it as dropped and ask; gone, they would start as if it had landed.
+                && !s.tasks.iter().any(|w| w.closed.is_none() && w.after.contains(&closed.id))
                 && closed.seats.is_empty()
                 && closed.told.is_empty()
                 && closed.review.is_none()
@@ -1261,6 +1348,30 @@ fn in_project(t: &Task) -> bool {
             .and_then(|out| String::from_utf8(out).ok())
             .is_some_and(|base| base.trim() == commit)
     })
+}
+
+/// An automatic task left with nothing (no worktree, seat, word or review) goes, but `keep`; one an open task waits for
+/// closes as dropped instead, so its waiters ask rather than start as if it had landed.
+fn drop_unused(tasks: &mut Vec<Task>, keep: Option<&str>, now: u64) {
+    let unused = |t: &Task| Some(t.id.as_str()) != keep && t.auto && t.closed.is_none() && empty(t);
+    let waited: Vec<String> = tasks
+        .iter()
+        .filter(|t| {
+            unused(t)
+                && tasks
+                    .iter()
+                    .any(|w| w.closed.is_none() && w.after.contains(&t.id))
+        })
+        .map(|t| t.id.clone())
+        .collect();
+    for t in tasks.iter_mut().filter(|t| waited.contains(&t.id)) {
+        t.closed = Some(Closed {
+            at: now,
+            how: "dropped".into(),
+        });
+        t.updated = now;
+    }
+    tasks.retain(|t| !unused(t));
 }
 
 fn empty(t: &Task) -> bool {
@@ -1457,12 +1568,15 @@ pub fn view(
         accounts: Default::default(),
         blockers: vec![],
         waiters: 0,
+        stuck: None,
+        early: None,
     }
 }
 
 /// Home view change 1 (11-17): one registered project as the Home view's Projects part shows it. Every number is the
 /// core's, from the ledger, the decision queue and the sessions; no agent writes one.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct DigestRow {
     pub project: PathBuf,
     /// The project's lead (a teammate id); none: the row is never counted for that.
@@ -1490,6 +1604,7 @@ pub struct DigestRow {
 /// Ticket 993 rule 6: a schedule whose last run failed, for the digest: which schedule (its id, and `line`, the
 /// sentence its card would say) and why. It stays until the schedule runs again, is edited or is removed.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct FailedRun {
     pub schedule: String,
     pub line: String,
@@ -1740,13 +1855,33 @@ pub(crate) fn views(
                 _ => None,
             };
             let accounts = task_accounts(&v.task, &accounts);
+            let blockers = blockers(&v.task, &all);
+            let stuck = blockers.iter().find(|b| b.dropped).map(|b| {
+                format!(
+                    "\"{}\" was dropped, so this cannot start. Stop waiting for it, or drop this too?",
+                    b.title
+                )
+            });
+            let early = blockers
+                .iter()
+                .find(|b| !b.dropped)
+                .filter(|_| v.task.closed.is_none() && v.task.seats.iter().any(|s| s.writes))
+                .map(|b| format!("started before \"{}\" landed", b.title));
+            // It asks the user, unless a seat that writes is at work on it (the board tells the truth).
+            let state = match &stuck {
+                Some(_) if v.task.closed.is_none() && v.state != "working" => "needs".to_string(),
+                _ => v.state.clone(),
+            };
             View {
                 floor,
                 seen,
                 waits,
                 accounts,
-                blockers: blockers(&v.task, &all),
                 waiters: waiters(&v.task, &all),
+                blockers,
+                stuck,
+                early,
+                state,
                 ..v
             }
         })
@@ -1770,104 +1905,6 @@ fn working(v: &View, now: &std::collections::BTreeMap<String, SeatNow>) -> bool 
         now.get(&s.session)
             .is_some_and(|n| n.live && n.state == "working")
     })
-}
-
-/// A task in a few plain lines, for a lead's brief and the CLI; `whole` (`task show`) gives a review note all its
-/// lines, a list its first.
-pub fn lines(v: &View, whole: bool) -> String {
-    let t = &v.task;
-    let mut out = format!("{} [{}", t.id, v.state);
-    if v.stale {
-        out += ", changed after the review";
-    }
-    out += &format!("] {}\n", t.title);
-    for a in &t.accept {
-        out += &format!("  accept: {a}\n");
-    }
-    for b in &v.blockers {
-        out += &format!("  waits for {} \"{}\" ({})\n", b.id, b.title, b.stage);
-    }
-    match v.waiters {
-        0 => {}
-        1 => out += "  1 task waits for this\n",
-        n => out += &format!("  {n} tasks wait for this\n"),
-    }
-    for w in &t.worktrees {
-        out += &format!("  worktree: {}\n", w.display());
-    }
-    for s in &t.seats {
-        let live = if v.live.contains(&s.session) {
-            "running"
-        } else {
-            "ended"
-        };
-        // Ticket 1081: a running seat's last activity, as the Team view shows it.
-        let ago = match v.seen.get(&s.session) {
-            Some(at) if v.live.contains(&s.session) => {
-                match crate::queue::now_ms().saturating_sub(*at) / 60_000 {
-                    0 => ", active now".to_string(),
-                    m => format!(", active {m} min ago"),
-                }
-            }
-            _ => String::new(),
-        };
-        // Ticket 1120: the account the seat runs on, when it is not the default one.
-        let on = v
-            .accounts
-            .get(&s.session)
-            .map_or(String::new(), |a| format!(", on {a}"));
-        out += &format!(
-            "  seat: {} · {} ({}, {live}{ago}{on})\n",
-            s.role, s.name, s.session
-        );
-    }
-    for n in &t.told {
-        out += &format!("  the user told {}: \"{}\"\n", n.name, n.text);
-    }
-    for a in &v.asks {
-        out += &format!("  open question: {a}\n");
-    }
-    if let Some(f) = &v.floor {
-        out += &format!("  note: {f}\n");
-    }
-    // Ticket 1081: what the core's auto-advance saw.
-    for s in &t.advance.stalled {
-        out += &format!("  stalled: {} ({})\n", s.name, s.why);
-    }
-    match v.waits.as_deref() {
-        Some("review") => out += "  waits: its report for a review\n",
-        Some("merge") => out += "  waits: the merge\n",
-        _ => {}
-    }
-    if let Some(r) = &t.review {
-        let verdict = if r.pass { "pass" } else { "changes asked" };
-        let mut parts = r.note.lines();
-        let note = match parts.next() {
-            None => String::new(),
-            Some(first) if whole => {
-                let rest: String = parts.map(|l| format!("\n    {l}")).collect();
-                format!(": {first}{rest}")
-            }
-            Some(first) if parts.next().is_some() => {
-                format!(": {first} (more: nunchiro task show {})", t.id)
-            }
-            Some(first) => format!(": {first}"),
-        };
-        out += &format!("  review by {}: {verdict}{note}\n", r.name);
-    }
-    for l in &t.learned {
-        out += &format!("  lesson proposed by {}: {}\n", l.name, l.text);
-    }
-    if v.state == "merge" {
-        out += "  the user said yes to merging these files\n";
-    }
-    if whole && let Some(o) = &t.ordered {
-        out += &format!("  order set by {}\n", o.by);
-    }
-    if whole && let Some(p) = &v.package {
-        out += &package::lines(p, &t.id);
-    }
-    out
 }
 
 #[cfg(test)]

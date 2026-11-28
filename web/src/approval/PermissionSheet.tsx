@@ -133,6 +133,10 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
   const htmlT = useHtmlLangT();
   const t = given ?? htmlT;
   const isSource = subject === 'source'; // v1a-23 r2
+  // A plugin (`plugin:<id>`, or one of its panels `plugin__<id>__<panel>` from the library) is shown and approved whole:
+  // its parts take the command's place; the rest of the sheet reads the same.
+  const plugin = /^plugin:([a-z0-9_-]+)$/.exec(name)?.[1] ?? /^plugin__(.+?)__/.exec(name)?.[1] ?? null;
+  const asked = plugin ? `plugin:${plugin}` : name;
   const [view, setView] = useState<ApprovalView | null>(null);
   const [error, setError] = useState<unknown>('');
   const [act, setAct] = useState(false);
@@ -143,12 +147,12 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
 
   useEffect(() => {
     core
-      .request(isSource ? { op: 'board_source_status', name } : { op: 'approval_status', name })
+      .request(isSource ? { op: 'board_source_status', name } : { op: 'approval_status', name: asked })
       .then((r) => setView((r as { view: ApprovalView }).view))
       .catch((e: Error) => setError(e));
     const prev = back.current;
     return () => (prev as HTMLElement | null)?.focus?.();
-  }, [core, name, isSource]);
+  }, [core, asked, isSource]);
   // Focus lands on Cancel, so a stray Enter never approves.
   useEffect(() => {
     root.current?.querySelector<HTMLElement>('[data-cancel]')?.focus();
@@ -159,7 +163,7 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
     if (!view || busy) return;
     setBusy(true);
     core
-      .request(isSource ? { op: 'board_source_grant', name, level, hash: view.hash } : { op: 'approval_grant', name, level, hash: view.hash })
+      .request(isSource ? { op: 'board_source_grant', name, level, hash: view.hash } : { op: 'approval_grant', name: asked, level, hash: view.hash })
       .then((r) => onGranted?.((r as { view: ApprovalView }).view))
       .catch((e: Error) => (setError(e), setBusy(false)));
   };
@@ -174,10 +178,10 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
       <div className="ps-scrim" onClick={onClose} />
       <div ref={root} className="ps" role="dialog" aria-modal="true" aria-labelledby="ps-title" onKeyDown={keys}>
         <div>
-          <h3 id="ps-title">{t('approval.title', { name })}</h3>
+          <h3 id="ps-title">{t('approval.title', { name: plugin ?? name })}</h3>
           <div className="ps-meta">
-            {isSource ? t('approval.kindSource') : t('approval.kindWidget')}
-            {m && ` · ${m.kind}`}
+            {isSource ? t('approval.kindSource') : plugin ? t('plugins.sheet.kind') : t('approval.kindWidget')}
+            {m && !plugin && ` · ${m.kind}`}
             {m && (
               <>
                 {' · '}
@@ -188,7 +192,7 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
             )}
             {' · '}
             <span className="mono">
-              ~/.nunchiro/{isSource ? 'sources' : 'widgets'}/{name}/
+              ~/.nunchiro/{isSource ? 'sources' : plugin ? `plugins/${plugin}` : `widgets/${name}`}/
             </span>
             {/* v1a-23 r2: the content this approval is bound to. */}
             {view && (
@@ -208,9 +212,37 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
             {t('approval.changed')}
           </p>
         )}
+        {view && m && plugin && (
+          <div data-field="parts">
+            <p className="ps-meta">{t('plugins.sheet.notOurs')}</p>
+            <b>{t('plugins.sheet.runs')}</b>
+            <ul className="ps-parts">
+              {(view.parts ?? []).map((p) => (
+                <li key={p.name}>
+                  {t(p.kind === 'panel' ? 'plugins.sheet.panel' : p.kind === 'check' ? 'plugins.sheet.check' : 'plugins.sheet.command')} · {p.title}
+                  <pre>{p.runs.map(word).join(' ')}</pre>
+                  {p.check_on && (
+                    <p className="ps-meta" data-field="check-does">
+                      {t(p.check_on === 'session.start.before' ? 'plugins.sheet.checkStart' : 'plugins.sheet.checkSend')}{' '}
+                      {t(p.on_error === 'allow' ? 'plugins.sheet.onErrorAllow' : 'plugins.sheet.onErrorRefuse')}
+                    </p>
+                  )}
+                  <p className="ps-meta" data-field="part-rights">
+                    {[
+                      p.network?.length ? t('plugins.sheet.net', { hosts: p.network.join(' · ') }) : t('plugins.sheet.noNet'),
+                      p.read?.length ? t('plugins.sheet.reads', { paths: p.read.join(' · ') }) : t('plugins.sheet.noReads'),
+                      ...(p.interval_secs ? [t('plugins.sheet.every', { secs: p.interval_secs })] : []),
+                      ...(p.writes_draft ? [t('plugins.sheet.draft')] : []),
+                    ].join(' · ')}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {view && m && (
           <>
-            <div>
+            <div hidden={!!plugin}>
               <b>
                 {m.kind === 'web'
                   ? t('approval.pageToShow')
@@ -236,7 +268,7 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
                 </ul>
                 <span className="ps-tag">{t('approval.tagDefaultOn')}</span>
               </div>
-              <div className="ps-row">
+              <div className="ps-row" hidden={!!plugin}>
                 <span className="ps-pk">{t('approval.act')}</span>
                 <ul>
                   {view.act_refused ? (
@@ -289,7 +321,7 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
                 <span className="ps-tag">{m.network.length ? t('approval.tagAllowed') : t('approval.tagNone')}</span>
               </div>
               {/* v1b-33 (needs 45): script widgets read their project, cache and tools, plus what they declare. */}
-              {m.kind === 'script' && (
+              {(m.kind === 'script' || m.kind === 'plugin') && (
                 <div className="ps-row">
                   <span className="ps-pk" id="ps-files">
                     {t('approval.files')}
@@ -329,10 +361,10 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
         )}
         <div className="ps-acts">
           <button className="btn" aria-expanded={source} disabled={!view} onClick={() => setSource(!source)}>
-            {source ? t('approval.hideToml') : t('approval.viewToml')}
+            {plugin ? (source ? t('plugins.sheet.hideToml') : t('plugins.sheet.viewToml')) : source ? t('approval.hideToml') : t('approval.viewToml')}
           </button>
           <span className="dim mono" data-field="cli">
-            = {view ? view.cli.replace(/--read$/, `--${level}`) : `nunchiro widget allow ${name} --${level}`}
+            = {view ? view.cli.replace(/--read$/, `--${level}`) : plugin ? `nunchiro plugin allow ${plugin}` : `nunchiro widget allow ${name} --${level}`}
           </span>
           <span className="sp" />
           <button className="btn" data-cancel onClick={onClose}>

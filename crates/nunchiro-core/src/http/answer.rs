@@ -182,6 +182,9 @@ pub(super) fn answer(
             } => {
                 // Held as the socket's start, at critical only; the window's "Start anyway" passes it.
                 let who = crate::pressure::Who::Window;
+                if !anyway {
+                    crate::plugins::check_start(home, crate::plugins::Asker::Owner, &session)?;
+                }
                 crate::pressure::check_start(&session, who, anyway, "window start")?;
                 window_start(registry, &session, folder, env)
             }
@@ -197,6 +200,7 @@ pub(super) fn answer(
                     return Err("start_or_wait carries a start only".into());
                 };
                 let who = crate::pressure::Who::Window;
+                crate::plugins::check_start(home, crate::plugins::Asker::Owner, &session)?;
                 if let Err(held) =
                     crate::pressure::check_start(&session, who, false, "window start")
                 {
@@ -229,6 +233,10 @@ pub(super) fn answer(
             Request::MemoryWaitGo { id } => crate::pressure::answer(registry, stopping, &id, true),
             Request::MemoryWaitCancel { id } => {
                 crate::pressure::answer(registry, stopping, &id, false)
+            }
+            // The window is the owner: a trigger card's "Turn this trigger off", and the list.
+            Request::Trigger { action } => {
+                crate::schedule::triggers::handle(registry, stopping, home, action)
             }
             Request::MemoryWaitList => Ok(Reply::MemoryWait {
                 entries: crate::pressure::shown()
@@ -337,4 +345,33 @@ fn window_start(
             .start_failed_at(session, folder.as_deref(), e.clone());
     }
     result.map(|session| Reply::Started { session })
+}
+
+/// The requests the frame loop hands to a job: a plugin request (the catalogue and an install fetch,
+/// `plugins_online.rs`) and the PR view's `gh` runs.
+pub(super) fn off_loop(request: &Request) -> bool {
+    matches!(
+        request,
+        Request::Plugin { .. }
+            | Request::PrView { .. }
+            | Request::PrList
+            | Request::PrMerge { .. }
+            | Request::PrBranch { .. }
+    )
+}
+pub(super) fn job(
+    registry: &Arc<Mutex<Sessions>>,
+    home: &Path,
+    request: Request,
+) -> impl FnOnce() -> Response + Send + 'static {
+    let (registry, home) = (registry.clone(), home.to_path_buf());
+    move || match request {
+        Request::Plugin { .. } => {
+            let sessions = registry
+                .lock()
+                .map_err(|_| "session registry unavailable")?;
+            crate::plugins::handle(&home, sessions, request)
+        }
+        _ => crate::pr::answer(&registry, request),
+    }
 }

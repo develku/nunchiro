@@ -8,6 +8,8 @@ use std::{io::Read, path::Path};
 const MAX_BYTES: u64 = 256 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "ConfigEntry"))]
 #[serde(deny_unknown_fields)]
 pub struct Entry {
     pub name: String,

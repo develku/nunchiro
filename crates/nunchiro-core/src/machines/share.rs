@@ -27,6 +27,7 @@ pub(crate) struct Link {
     pub label: Option<String>,
 }
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Share {
     pub host: String,
     pub link: String,

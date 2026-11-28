@@ -27,6 +27,7 @@ struct Stored {
 
 /// A bot's first chat, as the window draws it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct First {
     /// The bot wrote its SOUL file: the chat shows it on a card, with Undo.
     pub wrote: bool,

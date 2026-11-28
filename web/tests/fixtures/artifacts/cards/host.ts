@@ -16,6 +16,9 @@ export async function showFrame(card: Locator) {
   await card.locator('.af-chip.fold').click();
   await expect(card).toHaveClass(/\bframe\b/);
   await expect(card).not.toHaveAttribute('data-state', 'loading');
+  // The frame opens under the pointer that pressed the chip, and while the pointer is on a frame its library cards stay
+  // folded behind the bar's chip (ArtifactFrame `frozen`, by design). The pointer leaves, as a user's would.
+  await card.page().mouse.move(1, 1);
 }
 
 export async function installHost(page: Page, art: Art, opened: string[] = []) {

@@ -287,6 +287,8 @@ fn usage(dir: &Path, limit: u64) -> Result<u64, String> {
 struct Runs {
     groups: BTreeMap<i32, PathBuf>,
     closed: std::collections::BTreeSet<PathBuf>,
+    /// The approval name each live group runs, so turning a plugin off stops its parts (`stop_subjects`).
+    subjects: BTreeMap<i32, String>,
 }
 type Live = Mutex<Runs>;
 fn live() -> &'static Live {
@@ -383,6 +385,18 @@ pub fn stop_all(home: &Path) {
     }
     live.closed.insert(home); // v1b-21 r3
 }
+/// Kills the live run groups at `home` whose subject name starts with `prefix` (a plugin turned off or removed).
+pub fn stop_subjects(home: &Path, prefix: &str) {
+    let home = home.canonicalize().unwrap_or_else(|_| home.into());
+    let live = live().lock().unwrap_or_else(|e| e.into_inner());
+    for (pgid, _) in live
+        .groups
+        .iter()
+        .filter(|(g, h)| **h == home && live.subjects.get(g).is_some_and(|n| n.starts_with(prefix)))
+    {
+        kill_group(*pgid, Duration::from_millis(500));
+    }
+}
 /// At core open: kill each run group a dead core at `home` recorded whose leader is still the same process (start
 /// time matches), drop the records, and remove the run dirs left in widget and source caches.
 pub fn sweep(home: &Path) {
@@ -411,16 +425,39 @@ pub fn sweep(home: &Path) {
         }
         let _ = fs::remove_file(e.path());
     }
-    for kind in ["widgets", "sources"] {
-        for e in fs::read_dir(home.join(kind))
-            .into_iter()
-            .flatten()
-            .flatten()
-        {
-            let runs = e.path().join("cache/.runs");
+    // A plugin part's cache is `plugins/<id>/cache/<part>`: its run dirs are one level deeper.
+    let parts = fs::read_dir(home.join("plugins"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| {
+            e.path()
+                .join("cache")
+                .symlink_metadata()
+                .is_ok_and(|m| m.is_dir())
+        })
+        .flat_map(|e| {
+            fs::read_dir(e.path().join("cache"))
+                .into_iter()
+                .flatten()
+                .flatten()
+        });
+    let subjects = ["widgets", "sources"]
+        .into_iter()
+        .flat_map(|kind| {
+            fs::read_dir(home.join(kind))
+                .into_iter()
+                .flatten()
+                .flatten()
+        })
+        .map(|e| (e.path(), e.path().join("cache")))
+        .chain(parts.map(|e| (e.path(), e.path())));
+    {
+        for (subject, cache) in subjects {
+            let runs = cache.join(".runs");
             // Only real folders: a symlinked subject, cache or .runs is never followed.
             let real = |p: &Path| p.symlink_metadata().is_ok_and(|m| m.is_dir());
-            if !(real(&e.path()) && real(&e.path().join("cache")) && real(&runs)) {
+            if !(real(&subject) && real(&cache) && real(&runs)) {
                 continue;
             }
             for run in fs::read_dir(&runs).into_iter().flatten().flatten() {
@@ -435,6 +472,7 @@ fn execute(
     timeout: Duration,
     limit: usize,
     owner: Option<&Path>, // v1b-21 r2: the core home of a subject run; none for the self-check
+    subject: Option<&str>,
 ) -> Result<Vec<u8>, String> {
     // v1b-21 r3: spawned and registered under the live lock, so a stopping core either finds the group or refuses
     // the spawn; never a run it cannot see.
@@ -446,6 +484,9 @@ fn execute(
     let pid = child.id();
     if let Some(home) = owner {
         runs.groups.insert(pid as i32, home.to_path_buf());
+    }
+    if let Some(name) = subject {
+        runs.subjects.insert(pid as i32, name.into());
     }
     drop(runs);
     let record = owner.map(|home| {
@@ -526,6 +567,7 @@ fn execute(
         let mut live = live().lock().unwrap_or_else(|e| e.into_inner());
         let emptied = kill_group(pid as i32, Duration::from_secs(2));
         live.groups.remove(&(pid as i32));
+        live.subjects.remove(&(pid as i32));
         if let Some(record) = &record {
             let _ = fs::remove_file(record);
         }
@@ -572,10 +614,10 @@ fn self_check(p: &Profile, policy: &str, port: u16) -> Result<(), String> {
         return Err("sandbox self-check: nc missing".into());
     }
     c.args(["/bin/sh","-c","if /usr/bin/touch \"$1\" 2>/dev/null; then exit 11; fi; /usr/bin/nc -z -w 1 127.0.0.1 \"$2\" 2>/dev/null && exit 12; exit 0","self-check"]).arg(&denied).arg(target.to_string());
-    let result = execute(c, Duration::from_secs(3), 8192, None).and_then(|_| {
+    let result = execute(c, Duration::from_secs(3), 8192, None, None).and_then(|_| {
         let mut c=base(p,policy,port,&p.cache,empty)?;
         c.args(["/usr/bin/perl","-MPOSIX","-e","my $p=fork(); defined($p) or exit 15; if($p==0){POSIX::setsid()==-1 or exit 13; defined(POSIX::setpgid(0,0)) and exit 14; syscall(244,0,0,0,0,0,0); $!==1 or exit 16; exit 0}; wait; exit($? >> 8)"]);
-        execute(c,Duration::from_secs(3),8192,None).map(|_|())
+        execute(c,Duration::from_secs(3),8192,None,None).map(|_|())
     });
     let wrote = denied.exists();
     if wrote {
@@ -684,7 +726,13 @@ pub fn run_env(
     c.envs(extra.iter().map(|(k, v)| (k, v))); // v1b-19
     c.args(proof.argv());
     let owner = p.home.canonicalize().unwrap_or_else(|_| p.home.clone()); // v1b-21 r2
-    execute(c, p.timeout, p.output_limit, Some(&owner))
+    execute(
+        c,
+        p.timeout,
+        p.output_limit,
+        Some(&owner),
+        Some(proof.name()),
+    )
 }
 
 #[cfg(test)]

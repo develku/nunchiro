@@ -634,6 +634,7 @@ fn msg(
         ts: 1000,
         team: None,
         send: None,
+        changed_by: None,
     }
 }
 // A room at its 10000-message cap, nearly every ask answered (by a reply, a plain message from the asked seat, a

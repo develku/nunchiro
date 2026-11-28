@@ -117,7 +117,7 @@ function Dialog({ core, t, projects: listed, front, open, onClose }: Props & { o
             <div className="nb-hint">{t('bots.new.faceHint')}</div>
           </div>
         </div>
-        <textarea ref={sentence} className="nb-job" aria-label={t('bots.new.job')} placeholder={t('bots.new.jobPh')} value={job} maxLength={2000} rows={2} disabled={busy} onChange={(e) => setJob(e.target.value)} />
+        <textarea {...PLAIN} ref={sentence} className="nb-job" aria-label={t('bots.new.job')} placeholder={t('bots.new.jobPh')} value={job} maxLength={2000} rows={2} disabled={busy} onChange={(e) => setJob(e.target.value)} />
         <div className="nb-lab" id="nb-from">
           {t('bots.new.from')}
         </div>

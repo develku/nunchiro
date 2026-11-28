@@ -6,6 +6,10 @@ import { tEn, type Key, type T } from '../i18n';
 import { PrView, type PrFrom } from '../pr/PrView';
 
 export type PrState = 'draft' | 'open' | 'checks_pass' | 'checks_fail' | 'approved' | 'merged' | 'closed';
+/** A session's PR changed outside its chat (the Diff panel created one): the chat header reads its chip again. */
+export const PR_CHIP_EVENT = 'nunchiro:pr.chip';
+export const prChipChanged = (session: string) => window.dispatchEvent(new CustomEvent(PR_CHIP_EVENT, { detail: { session } }));
+
 export interface PrChipData {
   state: PrState;
   url: string;

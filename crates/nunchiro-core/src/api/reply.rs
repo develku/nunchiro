@@ -11,6 +11,7 @@ fn is_false(v: &bool) -> bool {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Reply {
     SessionContext {
@@ -189,6 +190,23 @@ pub enum Reply {
     PrMerged {
         url: String,
     },
+    // `git_push`: how many commits went to which remote branch.
+    GitPushed {
+        pushed: u64,
+        remote: String,
+        branch: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        note: Option<String>,
+    },
+    PrDraft {
+        draft: crate::git_write::Draft,
+    },
+    // `pr_create`: the new PR, and how many commits were pushed first.
+    PrCreated {
+        url: String,
+        number: u64,
+        pushed: u64,
+    },
     // Ticket 373: `None` when the branch has no PR of its own (or none is looked up: the default branch, no upstream).
     PrBranch {
         pr: Option<crate::pr::BranchPr>,
@@ -364,8 +382,13 @@ pub enum Reply {
         acp: Vec<crate::acp::AcpRow>,
         /// The absolute path of `agents.toml` (the window reveals it, or shows it to copy).
         file: std::path::PathBuf,
+        /// The last test message per ACP agent name.
+        turns: std::collections::BTreeMap<String, crate::acp::turn::Turn>,
     },
     AcpCheck(crate::acp::probe::Check),
+    AcpTurn {
+        turn: crate::acp::turn::Turn,
+    },
     // Ticket 358
     AgentCommand {
         view: crate::approval::CommandView,
@@ -403,6 +426,21 @@ pub enum Reply {
     // v1b-22
     WidgetPage {
         page: crate::widgets::web::Page,
+    },
+    Triggers {
+        triggers: Vec<crate::schedule::triggers::Trigger>,
+    },
+    Plugins {
+        plugins: Vec<crate::plugins::Listed>,
+    },
+    /// The plugin catalogue's entries (Browse plugins).
+    PluginCatalog {
+        catalog: Vec<crate::plugins_online::Entry>,
+    },
+    /// A plugin command's run and where the window shows its output.
+    PluginRun {
+        run: crate::widgets::Run,
+        show: crate::plugins::Show,
     },
     /// v1b-20: the target session (started for a `start` act) and its send row.
     WidgetAct {

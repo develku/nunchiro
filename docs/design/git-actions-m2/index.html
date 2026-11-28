@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>M2: Push와 PR 만들기를 앱이 직접 합니다</title>
+<style>
+/* Colour and size values copied from web/src/tokens.css (origin/main). Buttons, the confirm strip, task cards and the
+   Diff panel head follow web/src/styles.css, pr/pr.css (.pr-confirm, .pr-row), lead/lead.css (.tboard, .tcard) and
+   the M8 page beside this file. No network, no external files. */
+:root,.lt{--page:#f6f6f4;--panel:#ffffff;--raised:#ffffff;--text:#1f2328;--muted:#59636e;--faint:#818b98;--line:#d1d9e0;--hover:#f0f2f4;
+--you:#bc4c00;--you-bg:#fff1e5;--bad:#cf222e;--warn:#9a6700;--run:#0969da;--ok:#1a7f37;--idle:#8c959f;--on-status:#ffffff;
+--tint-1:rgb(15 20 30/.045);--tint-2:rgb(15 20 30/.085);--glass-bg:rgb(255 255 255/.6);--glass-hi:rgb(255 255 255/.85);
+--shadow-card:0 1px 3px #0000001f;--shadow-float:0 12px 32px rgb(0 0 0/.14),0 1px 3px rgb(0 0 0/.08);
+--font-ui:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Segoe UI',sans-serif;--font-code:'SF Mono',Menlo,'D2Coding',monospace;color-scheme:light}
+[data-theme=dark]{--page:#0d1117;--panel:#151b23;--raised:#151b23;--text:#e6edf3;--muted:#9198a1;--faint:#9198a1;--line:#3d444d;--hover:#262c36;
+--you:#f0883e;--you-bg:#3a2614;--bad:#f85149;--warn:#d29922;--run:#4493f8;--ok:#3fb950;--idle:#7d8c86;--on-status:#151b23;
+--tint-1:rgb(255 255 255/.055);--tint-2:rgb(255 255 255/.1);--glass-bg:rgb(48 52 60/.5);--glass-hi:rgb(255 255 255/.14);
+--shadow-card:0 1px 3px #0000005c;--shadow-float:0 12px 32px rgb(0 0 0/.45),0 1px 3px rgb(0 0 0/.3);color-scheme:dark}
+*{box-sizing:border-box}
+html{word-break:keep-all;overflow-wrap:break-word}
+body{margin:0;font:13px/1.55 var(--font-ui);color:var(--text);background:var(--page)}
+h1,h2,h3,h4,p{margin:0}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+code{font:12px var(--font-code);background:var(--tint-1);padding:1px 5px;border-radius:4px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px 80px}
+.nav{position:sticky;top:0;z-index:9;display:flex;gap:4px;align-items:center;padding:8px 0;background:var(--page);box-shadow:0 1px 0 var(--tint-2);overflow-x:auto}
+.nav a{padding:3px 9px;border-radius:6px;color:var(--muted);white-space:nowrap;text-decoration:none}.nav a:hover{background:var(--tint-1);color:var(--text)}
+.nav button{margin-left:auto;border-radius:6px;padding:4px 12px;background:var(--tint-2);white-space:nowrap}
+.top h1{font-size:26px;line-height:1.25;letter-spacing:-.01em;margin:26px 0 8px}
+.top p{color:var(--muted);max-width:880px;font-size:14px}
+.sum{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:16px;margin-top:18px;align-items:stretch}
+.card{background:var(--panel);border-radius:12px;box-shadow:var(--shadow-card)}
+.sum .card{padding:16px 18px}
+.sum ol{margin:8px 0 0;padding-left:18px}.sum li{margin:0 0 5px}
+.fig b{display:block;font-size:40px;line-height:1;letter-spacing:-.03em;margin:6px 0 6px}
+.fig small{color:var(--muted);display:block}
+.cap{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.panel{margin:46px 0 0;scroll-margin-top:50px}
+.phead{display:flex;gap:14px;align-items:flex-start;margin:0 0 14px}
+.num{font-size:40px;font-weight:700;line-height:1;color:var(--faint);letter-spacing:-.04em;min-width:30px}
+.phead h2{font-size:19px;letter-spacing:-.01em}
+.phead p{color:var(--muted);max-width:860px}
+.rec{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;background:var(--text);color:var(--panel);font-size:11px;font-weight:600;vertical-align:3px}
+.two{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr);gap:18px;align-items:start}
+.half{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+@media(max-width:1000px){.two,.half,.sum{grid-template-columns:1fr}}
+.when{font-size:12px;color:var(--muted);margin:14px 0 6px}.when:first-child{margin-top:0}.when b{color:var(--text)}
+.notes{font-size:13px}.notes ul{margin:6px 0 12px;padding-left:16px}.notes li{margin:0 0 5px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;vertical-align:top;padding:8px 12px}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:700}
+tr+tr td{box-shadow:inset 0 1px 0 var(--tint-1)}
+td small{color:var(--muted);display:block}
+td code{white-space:normal}
+.yes{color:var(--ok);font-weight:600}.no{color:var(--bad);font-weight:600}.mid{color:var(--you);font-weight:600}
+.stack{display:grid;gap:10px}
+.qa{padding:14px 18px;margin:0 0 10px}.qa b{display:block;margin:0 0 4px}.qa small{color:var(--muted)}
+
+/* app pieces */
+.app{background:var(--panel);color:var(--text);border-radius:12px;box-shadow:var(--shadow-float),0 0 0 1px var(--tint-2);overflow:hidden;font:13px/1.45 var(--font-ui)}
+.ph{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;box-shadow:inset 0 -1px 0 var(--tint-2);font-size:12px}
+.ph .pt{font-weight:600}.ph .r{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.ph .sp{flex:1}
+.btn{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:2px 9px;background:var(--tint-1);font-size:12px;font-weight:500;white-space:nowrap;flex:none;color:var(--text)}
+.btn:hover{background:var(--tint-2)}
+.btn.p{background:var(--text);color:var(--panel);font-weight:600}
+.btn.q{background:none;color:var(--muted)}
+.btn.off{color:var(--faint);cursor:default}
+.confirm{margin:8px 10px;padding:8px 12px;border-radius:6px;background:var(--you-bg);font-size:12px}
+.confirm p{margin:0 0 6px}
+.files{padding:4px 10px 10px;font:12px/1.9 var(--font-code);color:var(--muted)}
+.files b{font-weight:400;color:var(--ok)}.files i{font-style:normal;color:var(--bad)}
+.form{margin:8px 10px 10px;padding:10px 12px;border-radius:8px;background:var(--tint-1);font-size:12px;display:grid;gap:8px}
+.form label{display:grid;gap:3px;color:var(--muted);font-size:11px}
+.inp{display:block;padding:4px 8px;border-radius:6px;background:var(--panel);box-shadow:inset 0 0 0 1px var(--line);color:var(--text);font-size:12px;min-height:26px}
+.inp.area{min-height:92px;white-space:pre-line;line-height:1.5}
+.inp.sel::after{content:'▾';float:right;color:var(--muted)}
+.frow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chk{display:inline-flex;align-items:center;gap:6px;color:var(--text)}
+.chk::before{content:'';width:13px;height:13px;border-radius:3px;box-shadow:inset 0 0 0 1px var(--faint);background:var(--panel);flex:none}
+.chk.on::before{background:var(--text);box-shadow:none}
+.fact{color:var(--muted);font-size:11px}
+.err{color:var(--bad)}
+.chat{padding:10px 14px;font-size:12px;color:var(--muted);display:grid;gap:8px}
+.bub{justify-self:end;max-width:86%;padding:6px 10px;border-radius:10px;background:var(--tint-2);color:var(--text)}
+.said{color:var(--text)}
+.sys{padding:8px 10px;border-radius:8px;background:var(--tint-1);color:var(--text);white-space:pre-line}
+.sys small{display:block;color:var(--muted);margin-bottom:3px}
+.chip{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:999px;background:var(--tint-1);font-size:11px;font-weight:500;white-space:nowrap}
+.chip.ok{color:var(--ok)}.chip.bad{color:var(--bad)}.chip.you{background:var(--you-bg);color:var(--you)}.chip.run{color:var(--run)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.note{display:flex;align-items:center;gap:8px;height:24px;padding:0 10px;font-size:11px;font-weight:600;box-shadow:inset 0 1px 0 var(--tint-2)}
+.note .x{color:var(--muted);margin-left:auto;font-weight:400}
+.tip{display:inline-block;margin:6px 0 0 10px;background:#1f2328;color:#f6f8fa;font-size:11px;padding:4px 8px;border-radius:6px;box-shadow:var(--shadow-float)}
+.term{font:12px/1.55 var(--font-code);padding:10px 12px;border-radius:8px;background:var(--panel);box-shadow:var(--shadow-card);white-space:pre-wrap;overflow-wrap:anywhere}
+.term .dim{color:var(--faint)}
+/* owner card (the decision queue's card) */
+.ocard{padding:12px 14px;border-radius:10px;background:var(--raised);border:1px solid var(--you);font-size:12px;display:grid;gap:6px}
+.ocard.calm{border-color:var(--line)}
+.ocard h4{font-size:13px;font-weight:600}
+.ocard p{color:var(--muted)}
+.ocard .frow{margin-top:2px}
+/* list rows (pr.css .pr-row) */
+.tabsrow{display:flex;gap:4px;align-items:center;padding:8px 10px 0;font-size:12px}
+.tb{height:24px;padding:0 10px;border-radius:6px;display:flex;align-items:center;color:var(--muted)}.tb.on{background:var(--tint-1);color:var(--text);font-weight:500}
+.lrow{display:grid;grid-template-columns:54px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:6px 12px;font-size:12px;box-shadow:inset 0 1px 0 var(--tint-1)}
+.lrow .n{color:var(--muted);font-variant-numeric:tabular-nums}
+.lrow .t{min-width:0}.lrow .t b{font-weight:500;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .t small{color:var(--muted);font-size:11px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .u{color:var(--muted);font-size:11px;white-space:nowrap}
+.lab{display:inline-block;padding:0 6px;border-radius:999px;background:var(--tint-2);font-size:10px;color:var(--muted);margin-right:3px}
+.empty{padding:22px 14px;text-align:center;color:var(--muted);font-size:12px}
+/* Team board (lead.css .tboard, .tcard) */
+.tboard{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;padding:10px}
+.tcard{position:relative;display:flex;flex-direction:column;gap:6px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--raised);min-width:0;font-size:12px}
+.tcard.you{border-color:var(--you)}.tcard.waits{opacity:.72}.tcard.sel{outline:2px solid var(--run);outline-offset:-1px}
+.tcard>b{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stg{display:flex;flex-wrap:wrap;gap:4px;font-size:11px}
+.stg span{padding:1px 6px;border-radius:999px;background:var(--tint-1);color:var(--faint)}
+.stg .done{color:var(--ok)}.stg .now{background:var(--run);color:var(--on-status)}.stg .yo{background:var(--you);color:var(--on-status)}
+.now-l{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.now-l.yo{padding:4px 8px;border-radius:6px;background:var(--you-bg);color:var(--you);white-space:normal}
+.facts{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--muted)}
+.menu{width:250px;background:var(--panel);border:1px solid var(--faint);border-radius:8px;box-shadow:0 8px 24px rgb(0 0 0/.25);font-size:12px;overflow:hidden;padding:4px}
+.menu .r{display:flex;align-items:center;gap:8px;min-height:26px;padding:0 8px;border-radius:6px}.menu .r.on{background:var(--hover)}
+.menu .r small{margin-left:auto;color:var(--faint);font-size:11px}
+.menu hr{border:0;height:1px;background:var(--tint-2);margin:4px 0}
+.pop{padding:12px 14px;border-radius:14px;background:var(--glass-bg);box-shadow:inset 0 1px 0 var(--glass-hi),inset 0 0 0 .5px var(--glass-hi),var(--shadow-float);font-size:12px;display:grid;gap:8px;max-width:380px}
+.pop h4{font:500 13px/1.4 var(--font-ui)}
+.pop p{color:var(--muted);font-size:11px}
+.dock{width:100%;max-width:430px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="nav">
+  <a href="#p1">1 지금</a><a href="#p2">2 A 확인 줄만</a><a href="#p3">3 B 폼이 확인 (추천)</a><a href="#p4">4 C 커밋도 앱이</a><a href="#p5">5 비교</a><a href="#p6">6 다른 앱</a><a href="#p7">7 문구</a><a href="#p8">8 질문</a>
+  <button onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">밝게 / 어둡게</button>
+</div>
+
+<div class="top">
+  <h1>Push와 PR 만들기를 에이전트에게 부탁하지 않고 앱이 직접 합니다. 누르기 전에 무엇이 나가는지 보여 줍니다</h1>
+  <p>지금 Diff 패널의 git 버튼은 에이전트에게 정해진 문장을 보냅니다. 에이전트가 git을 돌리므로 토큰이 들고, 무엇이 push될지 누르기 전에 보이지 않습니다. 점수표(p01)도 이것을 "앱이 하는 일"로 세지 않습니다(G2, G6 반쪽). 아래는 앱이 직접 push하고 PR을 만드는 안 세 가지입니다. 이미 있는 Merge 버튼과 같은 규칙을 씁니다. 창이 보여 준 커밋을 코어가 다시 확인하고, 그 사이에 바뀌었으면 아무것도 하지 않습니다.</p>
+  <div class="sum">
+    <div class="card">
+      <div class="cap">추천: B, 네 번에 나눠 만들기</div>
+      <ol>
+        <li><b>Push는 확인 한 줄.</b> 커밋 수, 가는 곳, 맨 위 커밋을 보여 주고 <code>Push</code>를 누르면 코어가 <code>git push</code>를 돌립니다.</li>
+        <li><b>PR은 폼이 곧 확인.</b> 제목과 설명이 커밋에서 미리 채워져 있고 고칠 수 있습니다. <code>Push &amp; create PR</code>을 누르면 push한 뒤 <code>gh pr create</code>를 돌립니다.</li>
+        <li><b>글은 누를 때만 AI가 씁니다.</b> <code>Write with AI</code>를 누르면 앱이 에이전트 CLI를 한 번 따로 불러 제목과 설명을 채웁니다. 세션 대화는 건드리지 않습니다.</li>
+        <li><b>기본 브랜치로는 한 번에 못 보냅니다.</b> 지금 규칙 그대로입니다. 강제 push는 넣지 않습니다.</li>
+      </ol>
+    </div>
+    <div class="card fig">
+      <div class="cap">점수표 p01 (추정)</div>
+      <b>56.5 → 61.5</b>
+      <small>G2, G6이 반쪽에서 예가 되면 깊이 70 → 80. 넓이(이슈 출처 수)는 M3의 몫입니다. G6은 커밋 메시지까지(4번째 PR) 되어야 확실히 예입니다.</small>
+    </div>
+  </div>
+</div>
+
+<section class="panel" id="p1">
+  <div class="phead"><div class="num">1</div><div>
+    <h2>지금: 버튼이 에이전트에게 문장 하나를 보냅니다</h2>
+    <p><code>web/src/diff/gitAction.ts:28-41</code>. 버튼을 누르면 세션에 아래 문장이 들어가고, 에이전트가 push와 <code>gh pr create</code>를 합니다. 에이전트가 일하는 중이거나 질문에 막혀 있으면 버튼이 꺼집니다. 터미널 세션에는 버튼이 없습니다.</p>
+  </div></div>
+  <div class="half">
+    <div class="app dock">
+      <div class="ph"><span class="pt">Diff</span><span class="r">parser-fix</span><span class="sp"></span><button class="btn">Push &amp; PR</button></div>
+      <div class="files">M <b>+41</b> <i>-12</i>  crates/parse/src/lex.rs<br>M <b>+8</b> <i>-0</i>   crates/parse/tests/lex.rs<br>A <b>+22</b>      docs/lexer.md</div>
+    </div>
+    <div class="app"><div class="chat">
+      <div class="bub">Push this branch, then open a PR. Never push to the default branch.</div>
+      <div class="said">I'll push parser-fix and open a pull request…</div>
+      <div>⏺ Bash(git push -u origin parser-fix)<br>⏺ Bash(gh pr create --title "Fix lexer…" --body …)</div>
+    </div></div>
+  </div>
+  <div class="notes" style="margin-top:12px"><ul>
+    <li>무엇이 나갈지(커밋 몇 개, 어느 리모트, 제목과 설명)는 에이전트가 정하고, 사용자는 끝난 뒤에 봅니다.</li>
+    <li>한 번에 에이전트 한 턴이 듭니다. 대화가 길면 그만큼 다시 읽습니다.</li>
+    <li>점수표 규칙: "정해진 문장을 에이전트에게 보내는 버튼은 반쪽"입니다.</li>
+  </ul></div>
+</section>
+
+<section class="panel" id="p2">
+  <div class="phead"><div class="num">2</div><div>
+    <h2>A. 확인 줄만: 한 번 누르고, 글은 AI가 쓰고, 고칠 수 없음</h2>
+    <p>T3 Code, monocode, Paseo의 방식입니다. 버튼을 누르면 확인 줄이 나오고, 확인하면 앱이 push하고 AI가 쓴 제목과 설명으로 PR을 만듭니다. 글은 PR이 만들어진 뒤에야 보입니다.</p>
+  </div></div>
+  <div class="two">
+    <div class="app dock">
+      <div class="ph"><span class="pt">Diff</span><span class="r">parser-fix</span><span class="sp"></span><button class="btn">Push &amp; PR</button></div>
+      <div class="confirm"><p>Push 3 commits to origin/parser-fix and create a pull request into main? Head commit: 4f2a91c. Claude writes the title and description.</p>
+        <button class="btn p">Push &amp; create PR</button> <button class="btn">Cancel</button></div>
+      <div class="files">M <b>+41</b> <i>-12</i>  crates/parse/src/lex.rs<br>M <b>+8</b> <i>-0</i>   crates/parse/tests/lex.rs</div>
+    </div>
+    <div class="notes">
+      <div class="cap">얻는 것</div>
+      <ul><li>가장 빠릅니다. 두 번 누르면 끝납니다.</li><li>만드는 양이 가장 적습니다.</li></ul>
+      <div class="cap">약점</div>
+      <ul>
+        <li>남들이 보는 글이 사용자가 읽기 전에 나갑니다. "밖으로 나가는 것은 사용자가 본 그대로"라는 Outbox 규칙과 맞지 않습니다.</li>
+        <li>누를 때마다 AI 호출이 한 번 듭니다. 끌 수 없습니다.</li>
+        <li>base 브랜치와 draft를 고를 자리가 없습니다.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p3">
+  <div class="phead"><div class="num">3</div><div>
+    <h2>B. 폼이 확인<span class="rec">추천</span></h2>
+    <p>Orca, Superset, emdash, vibe-kanban의 방식입니다. PR은 제목과 설명이 보이는 폼에서 만들고, 그 폼의 버튼이 확인입니다. Push만 할 때는 Merge와 같은 확인 한 줄입니다. 에이전트가 일하는 중이어도, 터미널 세션이어도 쓸 수 있습니다. 에이전트에게 묻지 않기 때문입니다.</p>
+  </div></div>
+  <div class="two">
+    <div>
+      <p class="when"><b>PR이 아직 없을 때</b> · Diff 패널 머리의 버튼을 누르면 그 아래로 폼이 열립니다</p>
+      <div class="app dock">
+        <div class="ph"><span class="pt">Diff</span><span class="r">parser-fix</span><span class="sp"></span><button class="btn">Push &amp; PR</button></div>
+        <div class="form">
+          <label>Title<span class="inp">Fix lexer panic on unterminated string</span></label>
+          <label>Description<span class="inp area">- Fix lexer panic on unterminated string
+- Add a regression test
+- Document the lexer states</span></label>
+          <div class="frow"><label style="flex:1">Into<span class="inp sel">main</span></label><span class="chk" style="margin-top:14px">Draft</span></div>
+          <div class="frow"><button class="btn">Write with AI</button><span class="fact">Filled from your 3 commits. You can edit it.</span></div>
+          <div class="fact">Pushes 3 commits to origin/parser-fix first. Head commit: 4f2a91c.</div>
+          <div class="frow"><button class="btn p">Push &amp; create PR</button><button class="btn">Cancel</button></div>
+        </div>
+      </div>
+      <p class="when"><b>Write with AI를 누른 뒤</b> · 몇 초 동안 칸이 잠기고, 끝나면 채워집니다. 다시 고칠 수 있습니다</p>
+      <div class="app dock">
+        <div class="form">
+          <label>Title<span class="inp">Fix lexer panic on unterminated strings</span></label>
+          <label>Description<span class="inp area">## Summary
+The lexer indexed past the end of input when a string had no closing quote. It now returns an UnterminatedString error with the start position.
+
+## Testing
+cargo test -p parse (2 new tests)</span></label>
+          <div class="frow"><button class="btn">Write again</button><span class="fact">Written by Claude from the diff. Read it before you send it.</span></div>
+        </div>
+      </div>
+      <p class="when"><b>PR이 이미 있을 때 (Push만)</b> · Merge 확인과 같은 따뜻한 띠</p>
+      <div class="app dock">
+        <div class="ph"><span class="pt">Diff</span><span class="r">parser-fix</span><span class="sp"></span><button class="btn">Push</button></div>
+        <div class="confirm"><p>Push 2 commits to origin/parser-fix? Head commit: 9c1d0aa. PR #57 gets them.</p>
+          <button class="btn p">Push</button> <button class="btn">Cancel</button></div>
+      </div>
+      <p class="when"><b>끝난 뒤</b> · 패널 아래 한 줄. 대화 머리에는 지금의 PR 칩이 생깁니다</p>
+      <div class="app dock">
+        <div class="ph"><span class="pt">Diff</span><span class="r">parser-fix</span><span class="sp"></span><span class="chip ok"><span class="dot"></span>#57 Open</span><button class="btn off">Commit</button></div>
+        <div class="note">Pull request #57 created.<button class="btn">Open</button><span class="x">×</span></div>
+      </div>
+      <p class="when"><b>안 됐을 때</b> · 폼은 그대로 남고 이유 한 줄과 할 일이 나옵니다. 고친 글은 지워지지 않습니다</p>
+      <div class="app dock"><div class="form">
+        <div class="err">Not pushed: origin has newer commits on parser-fix. Pull first, then push again.</div>
+        <div class="err">Not pushed: git needs you to sign in. Run git push once in a terminal tab, then try again.</div>
+        <div class="err">Pushed, but the pull request was not created: the GitHub CLI (gh) is not signed in. <u>Open Settings › Git</u></div>
+        <div class="err">Nothing was sent: the branch changed after this was shown (new head 7be02d1). Look again.</div>
+        <div>A pull request for this branch already exists: #57. <u>Open</u></div>
+      </div></div>
+    </div>
+    <div class="notes">
+      <div class="cap">규칙</div>
+      <ul>
+        <li>창이 보여 준 맨 위 커밋(<code>head</code>)을 요청에 실어 보냅니다. 코어가 지금의 HEAD와 다르면 거절합니다. Merge가 쓰는 규칙입니다.</li>
+        <li>코어는 <code>git push &lt;remote&gt; HEAD:refs/heads/&lt;branch&gt;</code>만 돌립니다. 처음이면 <code>--set-upstream</code>을 붙입니다. 맨 <code>git push</code>는 쓰지 않습니다(git 설정이 다른 곳으로 보낼 수 있어서).</li>
+        <li>기본 브랜치, detached, 리모트보다 뒤처진 브랜치에서는 버튼이 꺼져 있고 이유가 나옵니다. 지금과 같습니다.</li>
+        <li>강제 push 없음. 리베이스한 뒤에는 지금처럼 "Rebase or merge first"에서 멈춥니다.</li>
+        <li>창(사용자)만 할 수 있습니다. 에이전트 세션과 폰의 브라우저 페이지는 거절됩니다. Merge와 같습니다.</li>
+        <li>PR 설명은 <code>gh pr create --body-file -</code>로 넘깁니다. 토큰은 gh가 갖고 있고 Nunchiro는 읽지 않습니다.</li>
+        <li>제목, 설명, 브랜치 이름은 바깥 글입니다. 화면에는 글자로만 그립니다.</li>
+      </ul>
+      <div class="cap">Write with AI</div>
+      <ul>
+        <li>세션의 에이전트 CLI를 따로 한 번 부릅니다(Orca, monocode 방식). 도구 없이, 그 에이전트의 가장 작은 모델로, 세션의 계정으로.</li>
+        <li>넣는 것: 커밋 제목, 바뀐 파일 통계, 60,000자까지의 diff, 저장소의 PR 템플릿. 모두 "지시가 아닌 자료"로 표시합니다.</li>
+        <li>누르지 않으면 토큰이 0입니다. 한 번에 대략 입력 5천~2만, 출력 1천 토큰(추정).</li>
+        <li>ACP 에이전트와 터미널 세션에는 이 버튼이 없습니다. 커밋에서 채운 글만 있습니다.</li>
+      </ul>
+      <div class="cap">바뀌지 않는 것</div>
+      <ul>
+        <li>커밋은 지금처럼 에이전트에게 부탁합니다(안 C에서 다룹니다). 바뀐 파일이 남아 있으면 버튼은 <code>Commit</code>입니다.</li>
+        <li>에이전트가 스스로 push하는 것은 막지 않습니다.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p4">
+  <div class="phead"><div class="num">4</div><div>
+    <h2>C. B에 더해 커밋도 앱이</h2>
+    <p>T3 Code와 Orca는 커밋도 앱이 합니다. 파일을 고르고, 메시지를 비워 두면 AI가 씁니다. G6("AI 커밋 메시지와 PR 글")을 온전히 예로 만들려면 이것까지 필요합니다. B의 네 번째 PR로 붙일 수 있습니다.</p>
+  </div></div>
+  <div class="two">
+    <div class="app dock">
+      <div class="ph"><span class="pt">Diff</span><span class="r">parser-fix</span><span class="sp"></span><button class="btn">Commit</button></div>
+      <div class="form">
+        <div class="chk on">crates/parse/src/lex.rs</div>
+        <div class="chk on">crates/parse/tests/lex.rs</div>
+        <div class="chk">notes.txt <span class="fact">&nbsp;untracked</span></div>
+        <label>Commit message<span class="inp" style="color:var(--faint)">Leave empty to write it with AI</span></label>
+        <div class="frow"><button class="btn p">Commit</button><button class="btn">Commit, then push…</button><button class="btn">Cancel</button></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="cap">드는 것</div>
+      <ul>
+        <li>무엇을 스테이지할지 고르는 화면이 새로 필요합니다. 새 파일(untracked)은 기본으로 빼 둡니다.</li>
+        <li>에이전트는 자기가 무엇을 왜 바꿨는지 압니다. 앱의 AI는 diff만 봅니다. 메시지 품질은 써 봐야 압니다.</li>
+        <li>커밋 훅이 코어에서 돌게 됩니다(에이전트가 돌릴 때와 같은 사용자, 같은 폴더).</li>
+      </ul>
+      <p>커밋은 밖으로 나가지 않고 되돌릴 수 있어서 확인 줄이 없습니다. <code>Commit, then push…</code>는 B의 확인으로 이어집니다.</p>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p5">
+  <div class="phead"><div class="num">5</div><div><h2>비교</h2></div></div>
+  <div class="card"><table>
+    <tr><th></th><th>지금</th><th>A 확인 줄만</th><th>B 폼이 확인 (추천)</th><th>C 커밋도</th></tr>
+    <tr><td>누가 git을 돌리나</td><td>에이전트</td><td>코어</td><td>코어</td><td>코어</td></tr>
+    <tr><td>나가기 전에 보이는 것</td><td class="no">없음</td><td class="mid">커밋 수, 가는 곳</td><td class="yes">커밋 수, 가는 곳, 제목, 설명</td><td class="yes">B + 커밋할 파일</td></tr>
+    <tr><td>PR 글</td><td>에이전트</td><td>AI, 고칠 수 없음</td><td>커밋에서 채움, 누르면 AI, 고칠 수 있음</td><td>B와 같음</td></tr>
+    <tr><td>토큰</td><td>에이전트 한 턴</td><td>누를 때마다 작은 호출 1번</td><td>0, <code>Write with AI</code>를 누를 때만 1번</td><td>B + 커밋 메시지 1번(비워 둘 때)</td></tr>
+    <tr><td>에이전트가 일하는 중일 때</td><td class="no">못 누름</td><td class="yes">됨</td><td class="yes">됨</td><td class="yes">됨</td></tr>
+    <tr><td>터미널 세션</td><td class="no">버튼 없음</td><td class="yes">됨</td><td class="yes">됨</td><td class="yes">됨</td></tr>
+    <tr><td>G2 push와 PR</td><td class="mid">반쪽</td><td class="yes">예</td><td class="yes">예</td><td class="yes">예</td></tr>
+    <tr><td>G6 AI 커밋 메시지와 PR 글</td><td class="mid">반쪽</td><td class="mid">PR 글만</td><td class="mid">PR 글만 (판정자에 따라 반쪽)</td><td class="yes">예</td></tr>
+    <tr><td>만드는 양</td><td></td><td>PR 2개</td><td>PR 3개</td><td>PR 4개 (B의 3개 + 1)</td></tr>
+  </table></div>
+</section>
+
+<section class="panel" id="p6">
+  <div class="phead"><div class="num">6</div><div><h2>다른 앱</h2><p>소스에서 확인했습니다. 앱을 띄워 보지는 않았습니다. 파일과 줄은 명세에 있습니다.</p></div></div>
+  <div class="card"><table>
+    <tr><th>앱</th><th>push</th><th>PR</th><th>확인</th><th>글</th><th>기본 브랜치</th><th>강제 push</th></tr>
+    <tr><td>Orca</td><td>메인 프로세스, <code>--set-upstream … HEAD:branch</code></td><td><code>gh pr create --body-file</code></td><td>폼 (Title, Description, Base, Draft)</td><td>에이전트 CLI를 따로 불러 씀, 고칠 수 있음</td><td>PR 막음</td><td>리베이스 뒤에만 <code>--force-with-lease</code></td></tr>
+    <tr><td>T3 Code</td><td>서버, 처음에 <code>-u</code></td><td>REST, 토큰은 <code>gh auth token</code></td><td>없음</td><td>서버의 AI 호출, PR 글은 못 고침</td><td>경고 대화 상자</td><td>없음</td></tr>
+    <tr><td>Superset</td><td>호스트 서비스</td><td>Octokit</td><td>폼 (Title, Description, Draft)</td><td>마지막 커밋 제목, AI 없음</td><td>base와 같으면 거절</td><td>없음</td></tr>
+    <tr><td>monocode</td><td>Tauri 백엔드, <code>-u</code></td><td><code>gh pr create</code></td><td>없음</td><td>작은 모델로 AI 호출, 못 고침</td><td>확인 창</td><td>없음</td></tr>
+    <tr><td>emdash</td><td>코어</td><td>Octokit</td><td>대화 상자</td><td>브랜치 이름, AI 없음</td><td>찾지 못함</td><td>화면에 없음</td></tr>
+    <tr><td>vibe-kanban</td><td>서버, refspec 명시</td><td><code>gh pr create</code></td><td>대화 상자</td><td>첫 프롬프트, 뒤에 에이전트가 고침</td><td>찾지 못함</td><td>거절되면 경고 뒤 강제</td></tr>
+  </table></div>
+  <div class="notes" style="margin-top:12px"><ul>
+    <li>표의 여섯 앱은 모두 push와 PR을 앱이 직접 합니다. 읽은 앱 가운데 에이전트에게 문장을 넘기는 것은 Nunchiro와 zeron뿐입니다(cmux, bb는 기능 없음).</li>
+    <li>폼이 있는 앱 넷, 없는 앱 셋입니다. 폼이 없는 앱은 글을 고칠 수 없습니다.</li>
+    <li>우리의 차이: 보여 준 커밋을 코어가 다시 확인합니다(다른 앱에는 없음). 기본 브랜치는 경고가 아니라 막습니다. AI는 누를 때만 씁니다.</li>
+  </ul></div>
+</section>
+
+<section class="panel" id="p7">
+  <div class="phead"><div class="num">7</div><div><h2>문구 (영어만, 출시 전까지)</h2></div></div>
+  <div class="card"><table>
+    <tr><th>자리</th><th>문구</th><th>안</th></tr>
+    <tr><td>Push 확인</td><td><code>Push {n} commits to {remote}/{branch}? Head commit: {head}.</code> + PR이 있으면 <code>PR #{pr} gets them.</code></td><td>A B C</td></tr>
+    <tr><td>버튼</td><td><code>Push</code> · <code>Push &amp; create PR</code> · <code>Create PR</code> · <code>Cancel</code></td><td>B C</td></tr>
+    <tr><td>폼의 칸</td><td><code>Title</code> · <code>Description</code> · <code>Into</code> · <code>Draft</code></td><td>B C</td></tr>
+    <tr><td>폼 아래 줄</td><td><code>Pushes {n} commits to {remote}/{branch} first. Head commit: {head}.</code></td><td>B C</td></tr>
+    <tr><td>미리 채움 설명</td><td><code>Filled from your {n} commits. You can edit it.</code></td><td>B C</td></tr>
+    <tr><td>AI 버튼</td><td><code>Write with AI</code> · <code>Write again</code> · 쓰는 중 <code>Writing…</code></td><td>B C</td></tr>
+    <tr><td>AI가 쓴 뒤</td><td><code>Written by {agent} from the diff. Read it before you send it.</code></td><td>B C</td></tr>
+    <tr><td>AI가 못 썼을 때</td><td><code>{agent} could not write it: {reason}. Your text is unchanged.</code></td><td>B C</td></tr>
+    <tr><td>끝난 뒤</td><td><code>Pushed {n} commits to {remote}/{branch}.</code> · <code>Pull request #{pr} created.</code> + <code>Open</code></td><td>B C</td></tr>
+    <tr><td>거절됨</td><td><code>Not pushed: {remote} has newer commits on {branch}. Pull first, then push again.</code></td><td>B C</td></tr>
+    <tr><td>로그인</td><td><code>Not pushed: git needs you to sign in. Run git push once in a terminal tab, then try again.</code></td><td>B C</td></tr>
+    <tr><td>gh 로그인</td><td><code>Pushed, but the pull request was not created: the GitHub CLI (gh) is not signed in.</code> + <code>Open Settings › Git</code></td><td>B C</td></tr>
+    <tr><td>그 사이 바뀜</td><td><code>Nothing was sent: the branch changed after this was shown (new head {head}). Look again.</code></td><td>A B C</td></tr>
+    <tr><td>PR이 이미 있음</td><td><code>A pull request for this branch already exists: #{pr}.</code> + <code>Open</code></td><td>B C</td></tr>
+    <tr><td>push 훅이 막음</td><td><code>Not pushed: the pre-push hook failed.</code> + 훅의 마지막 20줄</td><td>B C</td></tr>
+    <tr><td>커밋 메시지 칸</td><td><code>Commit message</code> · <code>Leave empty to write it with AI</code> · <code>Commit, then push…</code></td><td>C</td></tr>
+  </table></div>
+  <p class="when" style="margin-top:12px">없어지는 문구: <code>gitActions.prompt.push</code>, <code>.pushPr</code>, <code>.createPr</code> (B). <code>.commit*</code>과 <code>.pull</code>은 C 전까지 남습니다. <code>gitActions.why.shell</code>, <code>.notRunning</code>, <code>.blocked</code>, <code>.working</code>은 push와 PR에서는 더 쓰이지 않습니다.</p>
+</section>
+
+<section class="panel" id="p8">
+  <div class="phead"><div class="num">8</div><div><h2>답할 질문</h2><p>정해진 답: 1-3은 추천대로(B, 누를 때만, 강제 push 없음). 4는 바뀜: 에이전트에게 부탁하는 길도 남기고, 버튼 옆 메뉴에서 고른 길을 기억합니다. 각 질문 아래가 추천입니다.</p></div></div>
+  <div class="card qa"><b>1. A, B, C 가운데 어느 것입니까?</b><small>추천: B. PR 1(push), PR 2(PR 폼), PR 3(Write with AI) 순서로 냅니다. C(앱 커밋)는 B를 써 본 뒤 네 번째 PR로 정합니다.</small></div>
+  <div class="card qa"><b>2. AI 글은 누를 때만 씁니까, 폼이 열릴 때 저절로 씁니까?</b><small>추천: 누를 때만. 토큰을 사용자가 정합니다. Orca는 "폼을 열 때 저절로"가 설정에 있고 기본은 꺼져 있습니다. 다른 답: 설정에 스위치를 두고 기본은 끔.</small></div>
+  <div class="card qa"><b>3. 강제 push를 넣습니까?</b><small>추천: 넣지 않음. T3 Code와 monocode도 없습니다. 리베이스 뒤에는 터미널에서 합니다. 다른 답: Orca처럼 리베이스 뒤에만 <code>--force-with-lease</code>를 따로 확인받고.</small></div>
+  <div class="card qa"><b>4. 에이전트에게 부탁하는 길을 남깁니까?</b><small>추천: push와 PR에서는 없앱니다(버튼 하나, 길 하나). 에이전트에게는 채팅으로 언제든 말할 수 있습니다. 커밋은 C 전까지 지금처럼 에이전트에게 부탁합니다.</small></div>
+</section>
+</div>
+</body>
+</html>

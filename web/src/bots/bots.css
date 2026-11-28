@@ -452,7 +452,7 @@
 }
 .nb-hint {
   font-size: var(--fs-11);
-  color: var(--faint);
+  color: var(--muted); /* text, so the text token: --faint is for icons and borders (3:1) */
 }
 .nb-job {
   margin: var(--sp-8) 18px 0;
