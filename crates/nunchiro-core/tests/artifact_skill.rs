@@ -200,12 +200,17 @@ fn permissions(folder: &Path) -> Value {
     ]
     .iter()
     .map(|p| format!("Edit(/{f}/{p})"))
-    // Every Claude seat is also denied the files only the core writes: the bots' memory (`<home>/artifacts/<id>`).
+    // Every Claude seat is also denied the files only the core writes: the bots' memory (`<home>/artifacts/<id>`), each
+    // rule beside its any-case twin.
     .chain(
         [
+            "[tT][eE][aA][mM]/*/[mM][eE][mM][oO][rR][yY].[mM][dD]",
             "team/*/MEMORY.md",
+            "[tT][eE][aA][mM]/*/[mM][eE][mM][oO][rR][yY]/**",
             "team/*/memory/**",
+            "[tT][eE][aA][mM]/[uU][sS][eE][rR].[mM][dD]",
             "team/USER.md",
+            "[mM][eE][mM][oO][rR][yY]-[sS][tT][aA][tT][eE]/**",
             "memory-state/**",
         ]
         .iter()
