@@ -260,7 +260,7 @@ fn acp_agents_list_rows() {
     assert_eq!(gemini["source"], "known");
     assert_eq!(gemini["label"], "Gemini CLI");
     assert_eq!(gemini["acp"], true);
-    assert_eq!(gemini["args"], json!(["--experimental-acp"]));
+    assert_eq!(gemini["args"], json!(["--acp"]));
     assert_eq!(gemini["env"], json!(["GEMINI_API_KEY"]));
     assert!(
         gemini["found_path"]
@@ -379,6 +379,8 @@ fn acp_new_requests_owner_only() {
         json!({"op":"acp_agent_sign_in_state","attempt":"x"}),
         json!({"op":"acp_agent_sign_in_cancel","attempt":"x"}),
         json!({"op":"acp_agent_sign_out","name":"fake"}),
+        // The test message runs the agent and spends its allowance.
+        json!({"op":"acp_agent_try","name":"fake"}),
     ];
     // The agent CLI in a session also reads the owner token from core.token: the peer check swaps it for the
     // session's, so it is the same session caller.
@@ -1641,4 +1643,218 @@ fn acp_stopping_core_ends_sign_in_and_sign_out() {
     core.raw(json!({"op":"stop"}));
     wait_gone(signing_in, "a sign-in outlived the core");
     wait_gone(signing_out, "a sign-out outlived the core");
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The test message: one real turn of an approved agent, confined as the check, on the owner's click only
+
+fn approved_fake(core: &Core, name: &str, modes: &[&str]) {
+    core.ok(json!({"op":"acp_agent_add","entry":core.fake(name, modes, &[])}));
+    core.approve(name);
+}
+fn try_turn(core: &Core, name: &str) -> Value {
+    let reply = core.ok(json!({"op":"acp_agent_try","name":name}));
+    assert_eq!(reply["type"], "acp_turn", "{reply}");
+    reply["turn"].clone()
+}
+fn info(core: &Core) -> Value {
+    serde_json::from_slice(&core.file("agent.log.info").unwrap()).unwrap()
+}
+fn check_folders(core: &Core) -> usize {
+    fs::read_dir(core.home.join("acp-check")).map_or(0, |d| d.count())
+}
+
+#[test]
+fn acp_try_answers_in_the_check_folder_and_is_recorded() {
+    let core = Core::new("try-ok", "");
+    approved_fake(&core, "fake", &["info"]);
+    let turn = try_turn(&core, "fake");
+    assert_eq!(turn["sent"], true, "{turn}");
+    assert_eq!(turn["answer_read"], true, "{turn}");
+    assert_eq!(turn["turn_end"], true, "{turn}");
+    // Control characters are gone and the text is trimmed.
+    assert_eq!(turn["text"], "ready", "{turn}");
+    assert!(turn["error"].is_null(), "{turn}");
+    assert!(turn["at"].as_u64().unwrap() > 0, "{turn}");
+    // It ran in a fresh folder under acp-check/, never a project, and that folder is gone.
+    let cwd = info(&core)["cwd"].as_str().unwrap().to_string();
+    assert!(cwd.contains("/acp-check/"), "{cwd}");
+    assert!(!Path::new(&cwd).exists(), "{cwd}");
+    wait_gone(
+        info(&core)["pid"].as_i64().unwrap() as i32,
+        "the agent outlived the try",
+    );
+    // The prompt is the fixed text.
+    let log = String::from_utf8(core.file("agent.log").unwrap()).unwrap();
+    assert!(log.contains("Reply with the one word: ready."), "{log}");
+    // The last result is stored and listed.
+    let listed = core.ok(json!({"op":"acp_agents"}))["turns"]["fake"].clone();
+    assert_eq!(listed["text"], "ready", "{listed}");
+    assert!(core.file("agent-turns.json").is_some());
+}
+
+#[test]
+fn acp_try_needs_approval() {
+    let core = Core::new("try-unapproved", "");
+    core.ok(json!({"op":"acp_agent_add","entry":core.fake("fake", &[], &[])}));
+    assert!(
+        core.err(json!({"op":"acp_agent_try","name":"fake"}))
+            .contains("approve the agent first")
+    );
+    assert!(core.file("agent.log").is_none(), "an unapproved agent ran");
+}
+
+#[test]
+fn acp_try_no_answer_fails_at_the_cap_and_ends_the_agent() {
+    let core = Core::with_env("try-silent", &[("NUNCHIRO_ACP_TRY_CAP_MS", "800")]);
+    approved_fake(&core, "fake", &["info", "try-silent"]);
+    let turn = try_turn(&core, "fake");
+    assert_eq!(turn["sent"], true, "{turn}");
+    assert_eq!(turn["answer_read"], false, "{turn}");
+    assert_eq!(turn["turn_end"], false, "{turn}");
+    assert_eq!(turn["failure"], "no_answer", "{turn}");
+    wait_gone(
+        info(&core)["pid"].as_i64().unwrap() as i32,
+        "the agent outlived the cap",
+    );
+    assert_eq!(check_folders(&core), 0);
+}
+
+#[test]
+fn acp_try_empty_answer_and_error_result_fail() {
+    let core = Core::new("try-empty", "");
+    approved_fake(&core, "empty", &["try-empty"]);
+    let turn = try_turn(&core, "empty");
+    assert_eq!(turn["turn_end"], true, "{turn}");
+    assert_eq!(turn["answer_read"], false, "{turn}");
+    assert_eq!(turn["failure"], "empty", "{turn}");
+    approved_fake(&core, "error", &["try-error"]);
+    let turn = try_turn(&core, "error");
+    assert_eq!(turn["sent"], true, "{turn}");
+    assert_eq!(turn["turn_end"], false, "{turn}");
+    assert_eq!(turn["failure"], "error", "{turn}");
+    assert!(
+        turn["error"].as_str().unwrap().contains("quota exceeded"),
+        "{turn}"
+    );
+}
+
+#[test]
+fn acp_try_auth_required_is_a_sign_in_failure() {
+    let core = Core::new("try-auth", "");
+    approved_fake(&core, "fake", &["auth"]);
+    let turn = try_turn(&core, "fake");
+    assert_eq!(turn["sent"], false, "{turn}");
+    assert_eq!(turn["failure"], "not_signed_in", "{turn}");
+}
+
+#[test]
+fn acp_try_refuses_what_the_agent_asks() {
+    let core = Core::new("try-ask", "");
+    approved_fake(&core, "fake", &["try-ask"]);
+    let turn = try_turn(&core, "fake");
+    assert_eq!(turn["turn_end"], true, "{turn}");
+    let log = String::from_utf8(core.file("agent.log").unwrap()).unwrap();
+    let answer = log
+        .lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .find(|m| m["id"].as_str().is_some_and(|id| id.starts_with("agent-")))
+        .unwrap_or_else(|| panic!("no answer to the permission request: {log}"));
+    assert_eq!(answer["result"]["outcome"]["optionId"], "no", "{answer}");
+    assert_eq!(check_folders(&core), 0);
+}
+
+#[test]
+fn acp_try_refused_for_a_full_token() {
+    let core = Core::new("try-full", "");
+    approved_fake(&core, "fake", &[]);
+    let made = core.ok(json!({"op":"token_create","scope":"full"}));
+    let reply = core.raw_as(
+        made["secret"].as_str().unwrap(),
+        json!({"op":"acp_agent_try","name":"fake"}),
+    );
+    assert!(reply["Err"].is_string(), "{reply}");
+    assert!(
+        core.file("agent.log").is_none(),
+        "a full token ran the agent"
+    );
+}
+
+#[test]
+fn acp_try_agent_that_stops_reading_fails_fast_and_frees_the_slot() {
+    let core = Core::new("try-flood", "");
+    approved_fake(&core, "fake", &["info", "try-flood"]);
+    let began = Instant::now();
+    let turn = try_turn(&core, "fake");
+    assert!(began.elapsed() < Duration::from_secs(10), "{turn}");
+    assert!(
+        turn["error"]
+            .as_str()
+            .unwrap()
+            .contains("not reading its input"),
+        "{turn}"
+    );
+    wait_gone(
+        info(&core)["pid"].as_i64().unwrap() as i32,
+        "the agent outlived the try",
+    );
+    assert_eq!(check_folders(&core), 0);
+    // The slot is free again: a second try runs (and fails the same way) instead of "a test message is running".
+    assert_eq!(try_turn(&core, "fake")["sent"], true);
+}
+
+#[test]
+fn acp_try_stores_the_agent_error_cut_and_clean() {
+    let core = Core::new("try-huge", "");
+    approved_fake(&core, "fake", &["try-huge-error"]);
+    let turn = try_turn(&core, "fake");
+    let error = turn["error"].as_str().unwrap();
+    assert!(error.chars().count() <= 200, "{} chars", error.len());
+    assert!(!error.chars().any(char::is_control), "{error:?}");
+    assert!(core.file("agent-turns.json").unwrap().len() < 4096);
+}
+
+#[test]
+fn acp_try_cancel_ends_a_running_test_and_a_second_waits_its_turn() {
+    let core = Core::new("try-cancel", "");
+    approved_fake(&core, "fake", &["info", "try-silent"]);
+    let began = Instant::now();
+    let running = {
+        let (home, token) = (
+            core.home.clone(),
+            fs::read_to_string(core.home.join("core.token")).unwrap(),
+        );
+        thread::spawn(move || {
+            let mut s = UnixStream::connect(home.join("core.sock")).unwrap();
+            let line = json!({"token": token, "request": {"op":"acp_agent_try","name":"fake"}})
+                .to_string()
+                + "\n";
+            s.write_all(line.as_bytes()).unwrap();
+            let mut reply = String::new();
+            let _ = BufReader::new(s).read_line(&mut reply);
+            serde_json::from_str::<Value>(&reply).unwrap()
+        })
+    };
+    let until = Instant::now() + Duration::from_secs(15);
+    while !core
+        .file("agent.log")
+        .is_some_and(|log| String::from_utf8_lossy(&log).contains("session/prompt"))
+    {
+        assert!(Instant::now() < until, "the prompt never reached the agent");
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert!(
+        core.err(json!({"op":"acp_agent_try","name":"fake"}))
+            .contains("a test message is running")
+    );
+    core.ok(json!({"op":"acp_agent_try","name":"fake","cancel":true}));
+    let reply = running.join().unwrap();
+    assert_eq!(reply["Err"], "Cancelled.", "{reply}");
+    assert!(began.elapsed() < Duration::from_secs(30));
+    wait_gone(
+        info(&core)["pid"].as_i64().unwrap() as i32,
+        "the agent outlived Cancel",
+    );
+    // A cancelled test keeps no result.
+    assert!(core.ok(json!({"op":"acp_agents"}))["turns"]["fake"].is_null());
 }

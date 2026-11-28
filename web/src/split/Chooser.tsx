@@ -24,7 +24,7 @@ export function Chooser({ t, core, onPick, onClose }: { t: T; core: CoreClient; 
   const list = useRef<HTMLDivElement>(null);
   const [agentsOff] = useFeatureSetting(AGENTS_OFF); // ticket 358
   // The library's user widgets follow the built-in ones, as in the library (rendered by the widget host like a bar icon).
-  const mine = (useWidgetList(core).list?.widgets ?? []).map((w) => ({ id: userKind(w.name), icon: '', title: w.name, note: t(w.state === 'approved' ? 'rest.st.noteMine' : 'rest.st.noteMineOff') }));
+  const mine = (useWidgetList(core).list?.widgets ?? []).map((w) => ({ id: userKind(w.name), icon: '', title: w.title ?? w.name, note: t(w.state === 'approved' ? 'rest.st.noteMine' : 'rest.st.noteMineOff') }));
   useEffect(() => list.current?.querySelector<HTMLElement>('[role="option"]')?.focus(), []);
   const key = (e: KeyboardEvent<HTMLDivElement>) => {
     const all = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="option"]')];

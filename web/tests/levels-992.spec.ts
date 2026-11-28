@@ -9,7 +9,7 @@ import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { type Core, expect, openWindow, test } from './fixtures';
 import { asSeat, mateMenu, mates, openSeat, openTeam, roster, tokenClaude, tokenOf } from './leader-990';
-import { openSettings } from './settings-modal';
+import { openLevels, openSettings } from './settings-modal';
 import { openWidget } from './schedules-seed';
 
 const team = (core: Core) => roster<{ name: string; level?: string; level_max?: string; next_level?: string; model?: string }>(core); // ticket 1168: the roster as the core keeps it
@@ -141,8 +141,9 @@ test('levels_settings: the Team form holds the level rule, with Auto\'s limit an
   await form.getByRole('button', { name: 'Cancel', exact: true }).click();
 
   // Levels (ticket 993): one line of what is stored, and Edit opens the table in place. The defaults until changed; a
-  // cell writes the core's table and the line follows; the row's reset and the card's put the defaults back.
-  const table = body.getByRole('region', { name: 'Levels', exact: true });
+  // cell writes the core's table and the line follows; the row's reset and the card's put the defaults back. The table
+  // is in the Bots view's Models and limits; Settings > Team's Levels line opens it there.
+  const table = (await openLevels(app)).getByRole('region', { name: 'Levels', exact: true });
   const line = table.locator('[data-row="levels"] .team-lvsum');
   await expect(line).toHaveText('Haiku Sonnet Opus');
   await expect(table.getByRole('combobox')).toHaveCount(0);
@@ -197,10 +198,11 @@ test('levels_none: with no teammates the Team page has the Levels line, folded, 
   await openWindow(app, {}, core);
   const body = await page(app, 'team');
   await expect(body).toContainText('No teammates yet');
-  const levels = body.getByRole('region', { name: 'Levels', exact: true });
+  await expect(body.locator('[data-open-levels]')).toBeVisible();
+  const levels = (await openLevels(app)).getByRole('region', { name: 'Levels', exact: true });
   await expect(levels.locator('.team-lvsum')).toHaveText('Haiku Sonnet Opus');
   await expect(levels.getByRole('combobox')).toHaveCount(0);
-  await expect(app.locator('.lvl:not(.settings *)')).toHaveCount(0);
+  await expect(app.locator('.lvl:not(.settings *, [data-bots-levels] *)')).toHaveCount(0); // the table's own marks aside
 });
 
 // Sixth look, Home S2-1: in the Team side view the chip ends the row at the pane's right edge, and the 280 px menu and

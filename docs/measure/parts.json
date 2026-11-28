@@ -888,7 +888,7 @@
        "exec",
        "playwright",
        "test",
-       "settings-shell.spec.ts",
+       "settings-one-head.spec.ts",
        "inputs-one-style.spec.ts"
       ]
      ]

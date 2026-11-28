@@ -11,7 +11,7 @@ import { type Core, expect, nunchiro, openWindow, test } from './fixtures';
 import { asSeat, mateMenu, mates, openSeat, openTeam, roster, tokenClaude, tokenOf } from './leader-990';
 import { acpAgent, acpSets, fakeCodex, setLevels } from './levels-seed';
 import { add, openWidget } from './schedules-seed';
-import { closeSettings, openSettings } from './settings-modal';
+import { closeModal, openLevels, openSettings } from './settings-modal';
 
 const team = (core: Core) => roster<{ name: string; kind: string; agent?: string; level?: string }>(core); // ticket 1168: the roster as the core keeps it
 const features = (core: Core) => (JSON.parse(fs.readFileSync(path.join(core.home, 'settings.json'), 'utf8')).features ?? {}) as Record<string, unknown>;
@@ -131,13 +131,13 @@ test('levels994_seats: a seat shows the model it runs on the tree row, the heade
 
   // The table changes (in Settings, as a user changes it): the open seat still shows what it opened with; its menu
   // shows what the level starts now.
-  const levels = (await teamPage(app)).getByRole('region', { name: 'Levels', exact: true });
+  const levels = (await openLevels(app)).getByRole('region', { name: 'Levels', exact: true });
   await levels.getByRole('button', { name: 'Edit Levels', exact: true }).click();
   await levels.getByRole('combobox', { name: 'Light, Claude Model' }).selectOption('sonnet');
   await levels.getByRole('combobox', { name: 'Light, Claude Effort' }).selectOption('high');
   await levels.getByRole('combobox', { name: 'Light, Codex Model' }).selectOption('gpt-6.1-terra');
   await expect.poll(() => features(core)['team.levels']).toEqual({ claude: { light: { model: 'sonnet', effort: 'high' } }, codex: { light: { model: 'gpt-6.1-terra', effort: 'low' } } });
-  await closeSettings(app);
+  await closeModal(app);
   await expect(row(inbox.id).locator('.lvl-mark')).toHaveText('Haiku');
   await row(inbox.id).click();
   await expect(app.locator('.shead button.lvl-chip')).toHaveText('Haiku');
@@ -157,7 +157,10 @@ test('levels994_table: the Levels table has a row per agent (Claude, Codex, an A
   mates(core, [{ id: 'mate-scout', name: 'Scout', kind: 'acp', agent: 'acme' } as never]);
   await openWindow(app, {}, core);
   const body = await teamPage(app);
-  const table = body.getByRole('region', { name: 'Levels', exact: true });
+  // A teammate on an unfilled ACP agent has no level to pick: its row reads the one pair.
+  await expect(body.locator('[data-row="team:mate-scout"] [data-rule]')).toHaveText('Default');
+  await expect(body.locator('[data-row="team:mate-scout"] .team-where')).toHaveText('Assistants · acme');
+  const table = (await openLevels(app)).getByRole('region', { name: 'Levels', exact: true });
   const line = table.locator('[data-row="levels"] .team-lvsum');
   await expect(line).toHaveText('Haiku Sonnet Opus');
   await expect(line.locator('.lvl')).toHaveCount(3);
@@ -191,9 +194,6 @@ test('levels994_table: the Levels table has a row per agent (Claude, Codex, an A
   await expect(table.getByRole('combobox', { name: 'Light, acme Model' }).locator('option')).toHaveText(['Default', 'Fast', 'Smart']);
   await expect(table.getByRole('combobox', { name: 'Light, acme Effort' }).locator('option')).toHaveText(['Default', 'Low', 'High']);
   await expect(table.getByRole('button', { name: /^Reset / })).toHaveCount(0);
-  // A teammate on it has no level to pick: its row reads the one pair.
-  await expect(body.locator('[data-row="team:mate-scout"] [data-rule]')).toHaveText('Default');
-  await expect(body.locator('[data-row="team:mate-scout"] .team-where')).toHaveText('Assistants · acme');
 
   // Filling a slot writes the core's table under the agent's name; the line gains the agent, the row loses its note.
   await table.getByRole('combobox', { name: 'Light, acme Model' }).selectOption('smart');
@@ -202,7 +202,11 @@ test('levels994_table: the Levels table has a row per agent (Claude, Codex, an A
   await expect.poll(() => features(core)['team.levels']).toEqual({ 'acp:acme': { light: { model: 'smart' }, deep: { effort: 'high' } } });
   await expect(acme.locator('.sds')).toHaveCount(0);
   await expect(line.locator('[data-agent]')).toHaveText(['Claude Haiku Sonnet Opus', 'acme Smart Default Default · High']);
-  await expect(body.locator('[data-row="team:mate-scout"] [data-rule]')).toHaveText('Auto');
+  // The teammate on it now has levels: its Team row reads Auto. Then back to the table, open again.
+  await closeModal(app);
+  await expect((await teamPage(app)).locator('[data-row="team:mate-scout"] [data-rule]')).toHaveText('Auto');
+  await openLevels(app);
+  await table.getByRole('button', { name: 'Edit Levels', exact: true }).click();
   // A cell put back to the default is not stored; the row's reset and the card's remove what is left.
   await table.getByRole('combobox', { name: 'Light, acme Model' }).selectOption('');
   await expect.poll(() => features(core)['team.levels']).toEqual({ 'acp:acme': { deep: { effort: 'high' } } });

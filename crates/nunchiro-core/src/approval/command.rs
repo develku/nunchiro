@@ -45,6 +45,7 @@ impl Default for Stored {
 
 /// What the row shows. `state` is `None` when there is no override: new sessions run the agent found on PATH.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct CommandView {
     pub agent: String,
     pub state: Option<State>,
@@ -56,6 +57,7 @@ pub struct CommandView {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct CommandCheck {
     pub version: Option<String>,
     pub error: Option<String>,

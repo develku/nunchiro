@@ -35,11 +35,15 @@ keys-basics.spec.ts
 
 # diff: the changed-file list against the start commit (ticket 419: git-actions made diff_list 3x slower unseen)
 diff.spec.ts | lists exactly the changed and untracked files|two windows viewing the same diff|diff_list_arrows
+# the Diff header's Push run by the app behind its confirm strip (local bare remote)
+git-push.spec.ts
+pr-create.spec.ts
 
 # board and settings open
 board.spec.ts
 settings.spec.ts
 settings-search.spec.ts
+settings-one-head.spec.ts
 
 # the existing gate's pixel and dead-click checks and the browser-access pair
 visual-conformance.spec.ts
@@ -75,3 +79,11 @@ sidechat-card-1097.spec.ts | item2_empty_composer_digit|digit_hint_in_empty_comp
 remember-choices.spec.ts
 # a shell beside the agent: the Terminal icon opens one in the agent's folder, New terminal too
 shell-beside-agent.spec.ts
+
+# a registered Settings page keeps the focus on its title after a nav click
+settings-registered-title-focus.spec.ts
+# a turn's changed-files card shows once the turn ends and stays where it is; the tab strip's "+" stays at the end
+chat-turn-files.spec.ts | chat_turn_card_does_not_move_while_the_turn_ends
+
+# task dependencies on the Team board: waiting, blocking, freed, stuck and early cards; the drawer and the Wait for menu
+task-deps.spec.ts

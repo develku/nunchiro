@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>M7: 처음부터 되는 에이전트 종류를 늘리기</title>
+<style>
+/*COMMON_CSS*/
+.steps{counter-reset:s}
+.step{display:grid;grid-template-columns:22px 96px minmax(0,1fr) auto;gap:10px;align-items:start;padding:9px 0;box-shadow:inset 0 1px 0 var(--tint-1);font-size:12px}
+.step:first-child{box-shadow:none}
+.step::before{counter-increment:s;content:counter(s);display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--tint-2);font-size:10px;font-weight:600}
+.step.done::before{content:'✓';background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.step b{font-weight:600;font-size:13px}.step small{display:block;color:var(--muted)}
+.cost{display:flex;gap:8px;align-items:baseline;padding:8px 10px;border-radius:8px;background:var(--tint-1);font-size:12px;margin:0 0 6px}
+.cost b{white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="nav">
+  <a href="#p1">1 지금</a><a href="#p2">2 A 목록만</a><a href="#p3">3 B 네 단계 + 진짜 한 턴 (추천)</a><a href="#p4">4 어떤 종류</a><a href="#p5">5 사용자가 내는 것</a><a href="#p6">6 진짜 턴 확인</a><a href="#p7">7 C 온라인 목록</a><a href="#p8">8 비교</a><a href="#p9">9 다른 앱</a><a href="#p10">10 점수</a><a href="#p11">11 문구</a><a href="#p12">12 질문</a>
+  <button onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">밝게 / 어둡게</button>
+</div>
+
+<div class="top">
+  <h1>처음부터 되는 에이전트 종류를 늘리기: 설치, 승인, 로그인, 그리고 진짜 한 턴</h1>
+  <p>점수표 p06(에이전트 호환)은 지금 45점입니다. 깊이(줄)는 90인데 넓이가 0입니다. 넓이는 "점수 매기는 날 진짜 한 턴을 끝낸 에이전트 종류의 수"이고, 가장 앞선 Orca는 45가지를 목록에 둡니다. 아래는 종류를 늘리는 세 가지 안과, 설치·로그인이 창에서 어떻게 보이는지, 진짜 턴을 어떻게 확인하는지입니다.</p>
+  <div class="sum">
+    <div class="card">
+      <div class="cap">추천: B, 두 번에 나눠 만들기</div>
+      <ol>
+        <li><b>길은 ACP 하나입니다.</b> Claude와 Codex 말고는 모두 ACP(에이전트 표준 연결)로 붙입니다. ACP는 "보냄, 답 읽음, 턴 끝"이 규약에 있어서 진짜 턴을 정확히 확인할 수 있습니다. 화면을 읽어야 하는 터미널 전용 도구는 세지 않습니다.</li>
+        <li><b>먼저 "진짜 한 턴"을 만듭니다.</b> 설정의 에이전트 줄에 <code>Send a test message</code>가 생깁니다. 짧은 문장 하나를 보내고 답과 턴 끝을 확인합니다. 다른 앱은 여기까지 하지 않습니다(연결만 확인).</li>
+        <li><b>다음에 목록을 늘립니다.</b> 9가지에서 18가지쯤으로. 줄마다 설치 명령, 로그인 방법, 비용 한 줄이 붙습니다.</li>
+        <li><b>설치는 보이는 터미널 탭에서.</b> Nunchiro가 명령을 적어 두고, Return은 사용자가 누릅니다.</li>
+        <li><b>목표는 12가지입니다.</b> 9가지로는 80에 겨우 닿거나 못 닿습니다(10번).</li>
+      </ol>
+    </div>
+    <div class="card fig">
+      <div class="cap">p06 추정</div>
+      <b>45 → 81</b>
+      <small>12가지가 진짜 턴을 끝냈을 때. 9가지면 77.6이고, VC1(새 버전 전달 확인)까지 "예"여야 80.07입니다. 추정이지 약속이 아닙니다.</small>
+    </div>
+  </div>
+</div>
+
+<section class="panel" id="p1">
+  <div class="phead"><div class="num">1</div><div>
+    <h2>지금: 목록 9가지, 연결 확인까지만</h2>
+    <p>Settings &gt; Accounts에 "Add an agent" 타일이 있습니다. 타일을 누르면 명령과 변수 이름을 적는 폼이 열리고, <code>Check</code>가 연결(ACP 인사와 새 세션)을 확인한 뒤 <code>Approve and add</code>로 승인합니다. 진짜 ACP 에이전트로 한 턴을 끝낸 기록은 아직 없습니다.</p>
+  </div></div>
+  <div class="two">
+    <div class="win"><div class="sbody">
+      <h4 style="margin-top:0">Your agents</h4>
+      <div class="pcard">
+        <div class="prow"><span class="mark">C</span><span class="pname">Claude</span><span class="pmeta"><span class="mono">2.1.130</span> · 2 accounts</span><span></span><span class="pchip ok">Signed in</span></div>
+        <div class="prow"><span class="mark">X</span><span class="pname">Codex</span><span class="pmeta"><span class="mono">0.124.0</span> · 1 account</span><span></span><span class="pchip ok">Signed in</span></div>
+      </div>
+      <h4>Add an agent</h4>
+      <p class="pmeta" style="margin:0 0 6px">Agent programs</p>
+      <div class="tiles">
+        <div class="tile"><span class="mark">Gm</span>Gemini CLI<span class="st">Install ↗</span></div>
+        <div class="tile"><span class="mark">O</span>OpenCode<span class="st">Installed · Set up</span></div>
+        <div class="tile"><span class="mark">Gs</span>goose<span class="st">Install ↗</span></div>
+        <div class="tile"><span class="mark">A</span>Aider<span class="st">Terminal only</span></div>
+        <div class="tile"><span class="mark">Cu</span>Cursor<span class="st">Install ↗</span></div>
+        <div class="tile"><span class="mark">Gk</span>Grok<span class="st">Install ↗</span></div>
+        <div class="tile"><span class="mark">Ag</span>Antigravity<span class="st">Installed · Set up</span></div>
+        <div class="tile"><span class="mark">Mc</span>Muse Code<span class="st">Enter manually</span></div>
+        <div class="tile"><span class="mark">Pi</span>Pi<span class="st">Install ↗</span></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <div class="cap">읽은 것</div>
+      <ul>
+        <li>목록은 앱에 들어 있고 온라인에서 받지 않습니다 (<code>acp/known.toml</code>). API 키 서비스 3가지(OpenRouter, GLM, Kimi)는 OpenCode로 도는 것이라 "종류"가 아닙니다.</li>
+        <li><code>Install</code>은 설치 안내 웹 쪽을 여는 링크입니다.</li>
+        <li><code>Check</code>는 가둔 빈 폴더에서 5초 동안 인사와 새 세션만 확인합니다. 메시지는 보내지 않습니다.</li>
+        <li>Gemini CLI의 스위치가 목록에는 <code>--experimental-acp</code>인데, 오늘 Gemini 문서는 <code>--acp</code>입니다. 고쳐야 합니다.</li>
+        <li>이 Mac에 깔린 것: <code>claude</code>, <code>codex</code>, <code>opencode</code>, <code>agy</code>(Antigravity), <code>hermes</code>. 나머지는 없습니다.</li>
+      </ul>
+      <div class="cap">점수에서 빠지는 곳</div>
+      <ul>
+        <li>넓이 0: 이번 채점에서 Claude·Codex의 채팅 줄 검사도, 진짜 ACP 턴도 돌지 않았습니다.</li>
+        <li>A3 "반": ACP가 가짜 에이전트로만 확인됨.</li>
+        <li>VC1 "반": 새 Claude·Codex 버전에서 전달을 확인하고 막거나 알리는 검사가 없음 (이 시안 밖).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p2">
+  <div class="phead"><div class="num">2</div><div>
+    <h2>A. 목록만 늘리기</h2>
+    <p><code>known.toml</code>에 줄을 더합니다(Copilot, Kiro, Kilo, Mistral Vibe, Cline 등). 화면과 흐름은 그대로입니다. 진짜 턴은 점수 매기는 날 사용자가 스크립트로 한 종류씩 돌립니다.</p>
+  </div></div>
+  <div class="half">
+    <div class="notes"><div class="cap">얻는 것</div><ul><li>가장 작습니다. 데이터 파일과 타일 몇 줄.</li><li>이미 깔고 로그인한 사람에게는 충분합니다.</li></ul></div>
+    <div class="notes"><div class="cap">약점</div><ul>
+      <li>새 사용자는 "무엇을 깔고, 어디서 로그인하고, 돈이 드는지"를 여전히 밖에서 찾아야 합니다.</li>
+      <li>앱은 그 에이전트가 정말 답하는지 모릅니다. <code>Passed</code>는 연결됐다는 뜻일 뿐입니다.</li>
+      <li>12가지를 손으로 돌리면 채점 때마다 한 시간쯤 듭니다.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section class="panel" id="p3">
+  <div class="phead"><div class="num">3</div><div>
+    <h2>B. 네 단계가 보이는 줄 + 진짜 한 턴 <span class="rec">추천</span></h2>
+    <p>타일을 열면 폼 대신 네 단계가 순서대로 보입니다: 설치, 승인, 로그인, 시험 메시지. 끝난 단계는 체크가 되고, 지금 할 단계에만 버튼이 있습니다. 맨 위에 비용 한 줄이 있습니다.</p>
+  </div></div>
+  <div class="two">
+    <div>
+      <p class="when"><b>타일</b> · 상태 말이 한 단어 더 정확해집니다</p>
+      <div class="win"><div class="sbody">
+        <h4 style="margin-top:0">Your agents</h4>
+        <div class="pcard">
+          <div class="prow"><span class="mark">C</span><span class="pname">Claude</span><span class="pmeta"><span class="mono">2.1.130</span> · 2 accounts</span><span></span><span class="pchip ok">Answered today</span></div>
+          <div class="prow"><span class="mark">X</span><span class="pname">Codex</span><span class="pmeta"><span class="mono">0.124.0</span> · 1 account</span><span></span><span class="pchip ok">Answered today</span></div>
+          <div class="prow"><span class="mark">O</span><span class="pname">OpenCode</span><span class="pmeta"><span class="mono">1.4.7</span> · opencode acp</span><span></span><span class="pchip ok">Answered 3 days ago</span></div>
+          <div class="prow"><span class="mark">Ag</span><span class="pname">Antigravity</span><span class="pmeta"><span class="mono">1.3.0</span> · agy acp</span><button class="btn">Send a test message</button><span class="pchip">Not tried</span></div>
+        </div>
+        <h4>Add an agent</h4>
+        <div class="tiles">
+          <div class="tile on"><span class="mark">Co</span>GitHub Copilot<span class="st">Free plan works</span></div>
+          <div class="tile"><span class="mark">Ki</span>Kiro<span class="st">Free plan works</span></div>
+          <div class="tile"><span class="mark">Kl</span>Kilo Code<span class="st">Free models</span></div>
+          <div class="tile"><span class="mark">Mv</span>Mistral Vibe<span class="st">Free plan works</span></div>
+          <div class="tile"><span class="mark">Cu</span>Cursor<span class="st">Free plan, limited</span></div>
+          <div class="tile"><span class="mark">Cl</span>Cline<span class="st">Free models</span></div>
+          <div class="tile"><span class="mark">Gs</span>goose<span class="st">Your own model</span></div>
+          <div class="tile"><span class="mark">Gm</span>Gemini CLI<span class="st">Paid key</span></div>
+          <div class="tile"><span class="mark">Qw</span>Qwen Code<span class="st">Paid plan</span></div>
+        </div>
+      </div></div>
+
+      <p class="when"><b>타일을 열었을 때</b> · GitHub Copilot, 설치 전</p>
+      <div class="win"><div class="sbody">
+        <div class="cost"><b>Cost</b><span>The Free plan works, with a small monthly allowance. Pro is $10 a month. Checked 2026-11-27 · <a>GitHub plans ↗</a></span></div>
+        <div class="steps">
+          <div class="step"><b>Install</b><span><span class="mono">npm install -g @github/copilot</span><small>Nunchiro opens a terminal tab with this command typed. You press Return. · <a>Install guide ↗</a></small></span><span class="pact"><button class="btn q">Copy</button><button class="btn p">Open in a terminal tab</button></span></div>
+          <div class="step"><b>Approve</b><span><small>After it is installed, you read the exact command Nunchiro will run and approve it.</small></span><span></span></div>
+          <div class="step"><b>Sign in</b><span><small>With your GitHub account, in the browser.</small></span><span></span></div>
+          <div class="step"><b>Test</b><span><small>One short message, to see that it answers.</small></span><span></span></div>
+        </div>
+      </div></div>
+
+      <p class="when"><b>설치와 승인이 끝나고 로그인할 때</b></p>
+      <div class="win"><div class="sbody">
+        <div class="steps">
+          <div class="step done"><b>Install</b><span><span class="mono">/opt/homebrew/bin/copilot</span> · <span class="mono">1.0.83</span></span><span></span></div>
+          <div class="step done"><b>Approve</b><span><span class="mono">copilot --acp</span> · no variables<small>Checked: connected in 420 ms</small></span><span class="pact"><button class="btn q">Change</button></span></div>
+          <div class="step"><b>Sign in</b><span>Not signed in.<small>Copilot opens GitHub in your browser. Nunchiro stores no token.</small></span><span class="pact"><button class="btn q">Sign in using a terminal</button><button class="btn p">Sign in</button></span></div>
+          <div class="step"><b>Test</b><span><small>One short message, to see that it answers.</small></span><span></span></div>
+        </div>
+      </div></div>
+
+      <p class="when"><b>시험 메시지</b> · 누르기 전, 그리고 답이 온 뒤</p>
+      <div class="stack">
+        <div class="win"><div class="sbody"><div class="steps">
+          <div class="step done"><b>Sign in</b><span>Signed in</span><span></span></div>
+          <div class="step"><b>Test</b><span>Sends “Reply with the one word: ready.” in an empty folder.<small>It uses a little of your Copilot allowance. Anything the agent asks permission for is refused.</small></span><span class="pact"><button class="btn p">Send a test message</button></span></div>
+        </div></div></div>
+        <div class="win"><div class="sbody"><div class="steps">
+          <div class="step done"><b>Sign in</b><span>Signed in</span><span></span></div>
+          <div class="step done"><b>Test</b><span>Answered “ready” in 3.1 s.<small>Message sent · answer read · turn ended · Copilot 1.0.83 · today 14:02</small></span><span class="pact"><button class="btn q">Send again</button><button class="btn p">Start a session</button></span></div>
+        </div></div></div>
+      </div>
+
+      <p class="when"><b>안 됐을 때</b> · 무엇이 안 됐는지와 다음 할 일 한 줄</p>
+      <div class="stack">
+        <div class="win"><div class="sbody"><div class="steps"><div class="step"><b>Test</b><span style="color:var(--bad)">No answer in 60 seconds.<small style="color:var(--muted)">The agent connected but did not answer. Check your plan’s limit, or try again.</small></span><span class="pact"><button class="btn">Send again</button></span></div></div></div></div>
+        <div class="win"><div class="sbody"><div class="steps"><div class="step"><b>Test</b><span style="color:var(--bad)">Copilot says the allowance is used up.<small style="color:var(--muted)">“You have no AI credits left this month.” · <a>GitHub plans ↗</a></small></span><span class="pact"><button class="btn">Send again</button></span></div></div></div></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="cap">규칙</div>
+      <ul>
+        <li><b>설치:</b> 공급사가 npm이나 brew 방식을 문서에 두면 그것을 씁니다. <code>curl … | bash</code>뿐이면 전체를 그대로 보여 줍니다. Nunchiro는 명령을 적기만 하고 실행은 사용자가 합니다. 명령과 출처 주소는 앱에 들어 있는 목록에서 옵니다.</li>
+        <li><b>승인:</b> 지금과 같습니다. 정확한 명령과 변수 이름을 보여 주고, 보여 준 것과 저장된 것이 같을 때만 승인됩니다. 설치된 경로가 채워져 있어서 대부분 버튼 한 번입니다.</li>
+        <li><b>로그인:</b> 지금 있는 두 길입니다. 에이전트가 ACP로 알려 준 방법(브라우저), 또는 터미널 탭에서 그 도구의 로그인 명령. Nunchiro는 토큰을 읽거나 저장하지 않습니다.</li>
+        <li><b>시험 메시지:</b> 정해진 한 문장. 가둔 빈 폴더에서, 최대 60초, 에이전트가 권한을 물으면 거절합니다. 사용자의 프로젝트는 건드리지 않습니다.</li>
+        <li><b>칩:</b> <code>Not tried</code> → <code>Answered {when}</code>. 에이전트 버전이 바뀌면 <code>Not tried on {version}</code>으로 돌아갑니다. 막지는 않습니다.</li>
+        <li><b>저절로 보내지 않습니다.</b> 시험 메시지는 사용자가 누를 때만 갑니다. 남의 한도를 몰래 쓰지 않기 위해서입니다.</li>
+        <li><b>비용 줄:</b> 확인한 날짜와 공급사 가격 쪽 링크가 붙습니다. 가격은 자주 바뀌므로 숫자는 링크가 기준입니다.</li>
+      </ul>
+      <div class="cap">Claude와 Codex</div>
+      <ul><li>같은 칩을 씁니다. 이 둘은 터미널에서 돌므로, 시험은 지금의 채팅 확인(메시지가 들어가고 턴이 끝남)을 한 번 돌리는 것입니다.</li></ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p4">
+  <div class="phead"><div class="num">4</div><div>
+    <h2>어떤 종류를 넣나</h2>
+    <p>기준은 셋입니다. 공급사가 ACP 스위치를 문서에 적었다, 다른 앱 셋 이상이 지원한다, 새로 돈을 내지 않고 한 턴을 끝낼 길이 있다. 가격과 무료 범위는 2026-11-27에 공급사 쪽을 읽은 것이고, 설치하거나 돌려 보지는 않았습니다.</p>
+  </div></div>
+  <div class="card"><table>
+    <tr><th>#</th><th>종류</th><th>ACP로 띄우는 법</th><th>설치</th><th>로그인</th><th>돈</th></tr>
+    <tr><td>1</td><td>Claude Code</td><td>터미널 (지금)</td><td class="yes">있음</td><td class="yes">됨</td><td>지금 쓰는 요금제</td></tr>
+    <tr><td>2</td><td>Codex</td><td>터미널 (지금)</td><td class="yes">있음</td><td class="yes">됨</td><td>지금 쓰는 요금제</td></tr>
+    <tr><td>3</td><td>OpenCode</td><td><code>opencode acp</code></td><td class="yes">있음</td><td>TUI에서 <code>/connect</code></td><td class="yes">무료 모델 있음<small>대부분 "한시적". 카드가 필요한지는 확인 못 함</small></td></tr>
+    <tr><td>4</td><td>Antigravity</td><td><code>agy acp</code></td><td class="yes">있음</td><td>Google 계정 (브라우저)</td><td class="yes">무료 개인 요금제<small>주마다 채워지는 기본 한도, 숫자 없음</small></td></tr>
+    <tr><td>5</td><td>GitHub Copilot CLI</td><td><code>copilot --acp</code></td><td><code>npm install -g @github/copilot</code></td><td>GitHub 계정</td><td class="yes">Free 요금제에 포함<small>한도 숫자 없음. Pro $10/월</small></td></tr>
+    <tr><td>6</td><td>Kiro</td><td><code>kiro-cli acp</code></td><td><code>curl … cli.kiro.dev/install | bash</code></td><td>AWS Builder ID, Google 또는 GitHub</td><td class="yes">Free: 월 50 크레딧<small>Pro $20/월</small></td></tr>
+    <tr><td>7</td><td>Kilo Code</td><td><code>kilo acp</code></td><td><code>npm install -g @kilocode/cli</code></td><td>Kilo 계정 (<code>/connect</code>)</td><td class="yes">Auto Free (무료 모델로 보냄)</td></tr>
+    <tr><td>8</td><td>Mistral Vibe</td><td><code>vibe-acp</code> (별도 실행 파일)</td><td><code>curl … mistral.ai/vibe/install.sh | bash</code></td><td>Mistral 계정</td><td class="yes">Free: "제한된 코딩 세션"<small>Pro $14.99/월</small></td></tr>
+    <tr><td>9</td><td>Cursor</td><td><code>agent acp</code></td><td><code>curl … cursor.com/install | bash</code></td><td>Cursor 계정</td><td class="mid">Free에 "제한된 에이전트 요청"<small>CLI가 Free에서 되는지 공식 쪽에서 확인 못 함</small></td></tr>
+    <tr><td>10</td><td>Cline</td><td><code>cline --acp</code></td><td><code>npm install -g cline</code></td><td>Cline 계정</td><td class="mid">"무료 모델 선택지"<small>목록과 한도는 쪽에 없음</small></td></tr>
+    <tr><td>11</td><td>Hermes</td><td><code>hermes acp</code></td><td class="yes">있음</td><td>모델 제공자 고르기 (<code>hermes model</code>)</td><td class="mid">제공자에 달림<small>이 Mac의 hermes가 무엇에 붙어 있는지 보지 않음</small></td></tr>
+    <tr><td>12</td><td>goose</td><td><code>goose acp</code></td><td><code>brew install block-goose-cli</code></td><td>모델 제공자 고르기</td><td class="mid">자기 모델<small>무료 제공자 키, 또는 로컬 모델(이 16GB Mac에서는 권하지 않음)</small></td></tr>
+  </table></div>
+  <div class="half" style="margin-top:14px">
+    <div class="notes"><div class="cap">예비 (돈이 들거나 확인이 덜 됨)</div><ul>
+      <li><b>Gemini CLI</b> <code>gemini --acp</code>: 무료 Google 로그인이 2026-06-18에 끝나고 Antigravity로 옮겨졌습니다. 유료 API 키로만.</li>
+      <li><b>Qwen Code</b> <code>qwen --acp</code>: 무료 로그인이 닫혔다고 합니다(직접 읽지 못함). 유료 구독이나 자기 키.</li>
+      <li><b>Factory Droid</b> <code>droid exec --output-format acp</code>: 무료는 자기 키만. Pro $20/월.</li>
+      <li><b>Auggie</b> <code>auggie --acp</code>: 무료 없음. $20/월부터.</li>
+      <li><b>Grok</b> <code>grok agent stdio</code>: 요금제 확인 못 함. Paseo의 문구로는 구독 필요.</li>
+      <li><b>Amp</b>: 자체 ACP가 없습니다. 제3자 연결 도구가 필요하고 무료 범위가 줄었습니다.</li>
+    </ul></div>
+    <div class="notes"><div class="cap">세지 않는 것</div><ul>
+      <li><b>API 키 서비스 타일</b>(OpenRouter, GLM, Kimi): OpenCode로 도는 것이라 새 종류가 아닙니다.</li>
+      <li><b>터미널 전용</b>(Aider): Nunchiro가 턴 끝을 읽지 못합니다. 목록에는 두되 "진짜 턴" 수에는 넣지 않습니다.</li>
+      <li><b>Claude·Codex의 ACP 변환기</b>: 같은 에이전트를 두 번 세는 것입니다.</li>
+    </ul>
+    <p>Orca의 45는 대부분 "터미널에서 그 명령을 띄운다"입니다. 그 방식으로 수를 맞추면 빠르지만, 점수표가 묻는 것은 "보냄, 답 읽음, 턴 끝 봄"이라 ACP로만 정직하게 셀 수 있습니다.</p></div>
+  </div>
+</section>
+
+<section class="panel" id="p5">
+  <div class="phead"><div class="num">5</div><div>
+    <h2>사용자가 내는 것</h2>
+    <p>만드는 일은 에이전트가 하지만, 아래는 사용자의 계정과 손이 필요합니다. 에이전트는 로그인하지 않고, 계정을 만들지 않습니다.</p>
+  </div></div>
+  <div class="card"><table>
+    <tr><th></th><th>한 번</th><th>채점 때마다</th></tr>
+    <tr><td><b>설치</b></td><td>7가지를 새로 깝니다 (Copilot, Kiro, Kilo, Mistral Vibe, Cursor, Cline, goose). npm 3, brew 1, curl 설치 스크립트 3. 10~15분.</td><td>없음. 에이전트가 스스로 업데이트하면 버전만 바뀝니다.</td></tr>
+    <tr><td><b>로그인</b></td><td>브라우저 로그인 7~8번: GitHub, AWS Builder ID(또는 Google/GitHub), Kilo, Mistral, Cursor, Cline, OpenCode 연결, 그리고 Hermes·goose의 모델 제공자. 새 계정이 4~5개 생깁니다(Kilo, Mistral, Cursor, Cline, AWS Builder ID).</td><td>만료된 로그인만 다시.</td></tr>
+    <tr><td><b>구독</b></td><td class="yes">새로 내는 돈 0원이 목표입니다. 무료 범위가 위 표대로일 때.</td><td>짧은 턴 12번. Claude·Codex는 지금 요금제에서, 나머지는 무료 한도에서.</td></tr>
+    <tr><td><b>위험</b></td><td colspan="2">무료 범위는 자주 줄어듭니다. 올해만 Gemini CLI(6월), Qwen(4월), Amp(5월)가 줄었습니다. 그래서 12가지에 예비를 둡니다. 9~10번이 안 되면 유료 하나(예: Copilot Pro $10/월)가 가장 싼 메움입니다.</td></tr>
+    <tr><td><b>개인 정보</b></td><td colspan="2">각 서비스의 약관에 사용자가 동의하는 일입니다. 시험 메시지는 빈 폴더에서 한 문장이라 코드가 나가지 않습니다. 그 뒤 실제로 쓰는 세션은 그 서비스로 코드를 보냅니다.</td></tr>
+  </table></div>
+</section>
+
+<section class="panel" id="p6">
+  <div class="phead"><div class="num">6</div><div>
+    <h2>진짜 턴을 어떻게 확인하나</h2>
+    <p>같은 확인을 두 곳에서 씁니다. 창에서는 사용자가 줄마다 누르고, 채점 때는 스크립트가 깔려 있는 종류를 모두 돌려 기록 파일을 남깁니다.</p>
+  </div></div>
+  <div class="two">
+    <div class="stack">
+      <div class="term"><span class="dim">$ sh scripts/scenario/agent-kinds.sh          # owner-run: uses your sign-ins, on a test home, never ~/.nunchiro</span>
+kind          version    sent  answer  turn end   time
+claude        2.1.130    yes   yes     yes        2.4 s   <span class="ok">PASS</span>
+codex         0.124.0    yes   yes     yes        3.0 s   <span class="ok">PASS</span>
+opencode      1.4.7      yes   yes     yes        4.2 s   <span class="ok">PASS</span>
+antigravity   1.3.0      yes   yes     yes        2.9 s   <span class="ok">PASS</span>
+copilot       1.0.83     yes   yes     yes        3.1 s   <span class="ok">PASS</span>
+kiro          1.9.2      yes   no      no         60 s    FAIL  no answer in 60 seconds
+cursor        —          —     —       —          —       SKIP  not installed
+…
+<span class="ok">11 kinds completed a real turn</span> · 1 failed · 6 skipped
+record: docs/measure/evidence/agent-kinds-2026-12-02.json</div>
+      <div class="card" style="padding:12px 16px"><table>
+        <tr><th>확인</th><th>ACP 에이전트</th><th>Claude, Codex</th></tr>
+        <tr><td>보냄</td><td><code>session/prompt</code>를 보냄</td><td>메시지가 입력칸에 들어가고 Enter가 먹음</td></tr>
+        <tr><td>답 읽음</td><td><code>session/update</code>에서 글을 읽음 (빈 답은 실패)</td><td>채팅에 답이 보임</td></tr>
+        <tr><td>턴 끝 봄</td><td>프롬프트의 답에 <code>stopReason</code>이 옴</td><td>턴 끝 표시를 읽음</td></tr>
+      </table></div>
+    </div>
+    <div class="notes">
+      <div class="cap">정한 것</div>
+      <ul>
+        <li>세 가지가 모두 "예"인 종류만 셉니다. 연결만 된 것은 세지 않습니다.</li>
+        <li>가짜 에이전트는 스크립트 자체의 시험에만 쓰고 수에 넣지 않습니다. 기록에 실행 파일 경로와 버전이 남습니다.</li>
+        <li>스크립트는 사용자의 <code>~/.nunchiro</code>와 설치된 앱을 건드리지 않습니다. 시험용 홈에 코어를 따로 띄웁니다. 에이전트는 자기 로그인을 그대로 씁니다.</li>
+        <li>깔려 있지 않거나 로그인 안 된 종류는 SKIP으로 적고 0으로 셉니다.</li>
+        <li>점수표의 "Real agent turns" 단계가 이 명령 하나가 됩니다. 기준은 같고, 손으로 하던 것을 기록으로 남길 뿐입니다.</li>
+      </ul>
+      <div class="cap">다른 앱은</div>
+      <ul><li>T3 Code, Paseo, Orca, Superset 모두 버전과 연결(<code>initialize</code>, <code>session/new</code>)까지만 봅니다. 진짜 메시지를 보내 확인하는 앱은 찾지 못했습니다. 이것이 Nunchiro의 차이입니다: "연결됨"이 아니라 "답함".</li></ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p7">
+  <div class="phead"><div class="num">7</div><div>
+    <h2>C. B + 온라인 ACP 목록에서 고르기 (지금은 아님)</h2>
+    <p>ACP 공식 목록(오늘 46가지)을 앱에서 읽고, 고르면 Nunchiro가 실행 파일을 받아 깝니다. T3 Code와 Orca가 이렇게 합니다.</p>
+  </div></div>
+  <div class="half">
+    <div class="notes"><div class="cap">얻는 것</div><ul><li>목록이 저절로 늘어납니다. 새 에이전트가 나오면 앱 업데이트 없이 보입니다.</li><li>설치가 버튼 하나입니다.</li></ul></div>
+    <div class="notes"><div class="cap">드는 것</div><ul>
+      <li>Nunchiro가 실행 파일을 받아 돌리게 됩니다. 지금은 "목록은 앱에 들어 있고 온라인에서 받지 않는다"가 정해진 규칙입니다. 바꾸려면 사용자의 결정과 보안 검토가 필요합니다.</li>
+      <li>코어가 닿는 호스트가 하나 늘고(PRIVACY.md), 받은 것의 해시 확인, 버전 폴더, 지우기를 새로 만들어야 합니다.</li>
+      <li>점수에는 더하지 않습니다. 세는 것은 "진짜 턴을 끝낸 수"라, 목록에 보이는 수가 아닙니다.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section class="panel" id="p8">
+  <div class="phead"><div class="num">8</div><div><h2>비교</h2></div></div>
+  <div class="card"><table>
+    <tr><th></th><th>A 목록만</th><th>B 네 단계 + 진짜 턴 (추천)</th><th>C 온라인 목록</th></tr>
+    <tr><td>목록의 종류</td><td>18쯤</td><td>18쯤</td><td>46+ (받아 옴)</td></tr>
+    <tr><td>설치</td><td>웹 쪽 링크</td><td>명령을 터미널 탭에 적어 줌, Return은 사용자</td><td class="mid">Nunchiro가 받아 깖</td></tr>
+    <tr><td>비용 안내</td><td class="no">없음</td><td class="yes">줄마다 한 줄 + 확인 날짜 + 링크</td><td>B와 같음 (목록에 없는 것은 "모름")</td></tr>
+    <tr><td>답하는지 확인</td><td class="no">스크립트로만</td><td class="yes">창의 버튼 + 스크립트</td><td>B와 같음</td></tr>
+    <tr><td>코어가 닿는 새 호스트</td><td>없음</td><td>없음</td><td class="mid">ACP 목록, 각 배포처</td></tr>
+    <tr><td>만드는 양</td><td>작은 PR 1개</td><td>PR 2개</td><td>B 뒤에 PR 2~3개, 보안 검토</td></tr>
+    <tr><td>p06 추정 (12가지가 턴을 끝내면)</td><td>81</td><td>81</td><td>81</td></tr>
+  </table></div>
+  <p class="when" style="margin-top:12px">점수는 세 안이 같습니다. 세는 것은 사용자의 Mac에서 진짜 턴을 끝낸 수이기 때문입니다. B를 고르는 이유는 점수가 아니라, 새 사용자가 12가지를 손으로 맞추는 대신 줄을 따라 누르면 되고, 앱이 "답함"을 알게 된다는 점입니다.</p>
+</section>
+
+<section class="panel" id="p9">
+  <div class="phead"><div class="num">9</div><div>
+    <h2>다른 앱</h2>
+    <p>소스에서 확인했습니다. 앱을 띄워 보지는 않았습니다. 경로는 <code>the peers' source clones</code> 아래입니다.</p>
+  </div></div>
+  <div class="card"><table>
+    <tr><th>앱</th><th>종류</th><th>설치를 어떻게 보이나</th><th>로그인</th><th>되는지 확인</th></tr>
+    <tr><td>Orca</td><td>터미널 45가지, 그 가운데 20가지는 ACP 채팅, 10가지는 자체 다운로드<small class="src">src/shared/agent-launch/catalog/tui-agent.ts:2-46 · src/main/acp/launch/acp-launch-registry.ts:171-192</small></td><td>"Installed" / "Available to install". Install은 홈페이지 링크. 24가지에 설치·로그인 명령 문구<small class="src">AgentDetectionCatalog.tsx:105,120 · AgentCatalogRow.tsx:274-284 · agent-session-setup-commands.ts:9-131</small></td><td>도구의 로그인 명령을 안내</td><td>PATH와 <code>--version</code>, 최소 버전<small class="src">tui-agent-detection-commands.ts:8</small></td></tr>
+    <tr><td>T3 Code</td><td>내장 8가지 + ACP 공식 목록<small class="src">apps/server/src/provider/builtInDrivers.ts:29-39 · AcpRegistrySupport.ts:50</small></td><td>마법사 "Provider → Identity → Sign in", 목록에서 받아 깖 (binary, npx, uvx; 해시 확인)<small class="src">AddProviderInstanceDialog.logic.ts:9 · AcpRegistrySupport.ts:131-149</small></td><td>"Not authenticated", "Sign in", "Signed in as"<small class="src">providerStatus.ts:61-96</small></td><td><code>--version</code>, ACP 인사와 새 세션. 메시지는 안 보냄<small class="src">probe.ts:330-420</small></td></tr>
+    <tr><td>emdash</td><td>플러그인 44가지</td><td>Install 버튼이 명령을 직접 실행, sudo로 다시 시도<small class="src">InstallDependencyCard.tsx:56-63</small></td><td>종류별 방법 목록</td><td>실행 파일 찾기만</td></tr>
+    <tr><td>Paseo</td><td>내장 6 + ACP 목록 40<small class="src">packages/app/src/data/acp-provider-catalog.ts:3-388</small></td><td>문서 링크</td><td>—</td><td>진단: <code>--version</code>, 인사, 새 세션<small class="src">generic-acp-agent.ts:82-128</small></td></tr>
+    <tr><td>vibe-kanban</td><td>9가지, 대부분 <code>npx</code>로 버전 고정 실행<small class="src">crates/executors/src/executors/mod.rs:110-121</small></td><td>설치 없음 (npx)</td><td>자격 파일의 수정 시각만 봄<small class="src">mod.rs:205-209</small></td><td>없음</td></tr>
+    <tr><td>Superset</td><td>터미널 20 + ACP 6</td><td>최소 버전과 올리는 명령<small class="src">chat-v3/acpCatalogue.ts:20-73</small></td><td>—</td><td><code>--version</code></td></tr>
+  </table></div>
+  <div class="notes" style="margin-top:12px"><ul>
+    <li><b>업계 표준:</b> 종류마다 실행 명령, 설치 명령, 로그인 명령을 목록으로 갖고, PATH와 <code>--version</code>으로 깔렸는지 봅니다. 넓은 앱은 ACP 공식 목록을 읽습니다.</li>
+    <li><b>B가 따르는 것:</b> Orca의 종류별 설치·로그인 문구, T3 Code의 단계가 보이는 추가 흐름과 로그인 상태 말.</li>
+    <li><b>Nunchiro가 다른 점:</b> 진짜 메시지로 확인합니다. 설치 명령을 몰래 돌리지 않습니다. 비용을 줄마다 말합니다(다른 앱의 문구에는 거의 없습니다).</li>
+  </ul></div>
+</section>
+
+<section class="panel" id="p10">
+  <div class="phead"><div class="num">10</div><div>
+    <h2>점수에 주는 것 (추정)</h2>
+    <p>p06은 깊이(10줄을 가장 앞선 앱과 견줌)와 넓이의 평균입니다. 넓이 = 100 × log2(1 + 우리 수) / log2(1 + 45).</p>
+  </div></div>
+  <div class="half">
+    <div class="card" style="padding:14px 18px">
+      <div class="cap">p06 에이전트 호환</div>
+      <div class="bar2"><span>지금 (0가지)</span><i style="width:45%"></i><b>45</b></div>
+      <div class="bar2"><span>Claude·Codex만 채점에 넣음 (2)</span><i style="width:59%"></i><b>59</b></div>
+      <div class="bar2"><span>PR 1 뒤, 깔린 것만 (4~5, A3 예)</span><i style="width:70%"></i><b>68~71</b></div>
+      <div class="bar2"><span>9가지</span><i style="width:77.6%"></i><b>77.6</b></div>
+      <div class="bar2"><span>12가지</span><i style="width:81%"></i><b>81.0</b></div>
+      <div class="bar2"><span>12가지 + VC1 예</span><i style="width:83.5%"></i><b>83.5</b></div>
+      <p class="when">9가지 + VC1 예 = 80.07. 한 종류만 그날 실패해도 80 아래라 12가지를 권합니다.</p>
+    </div>
+    <div class="notes">
+      <div class="cap">읽는 법</div>
+      <ul>
+        <li>깊이는 지금 90입니다(A3, VC1이 "반"). 진짜 ACP 턴 하나로 A3가 "예"가 되어 95가 됩니다.</li>
+        <li>VC1은 이 시안이 다루지 않습니다. 새 Claude·Codex 버전에서 전달을 확인하고 막거나 알리는 검사가 따로 필요합니다.</li>
+        <li>넓이는 채점 때마다 다시 잽니다. 그날 깔려 있고, 로그인돼 있고, 한도가 남은 종류만 셉니다.</li>
+      </ul>
+      <div class="cap">함께 오르는 것</div>
+      <ul><li>p22 확장성 EX5("표준으로 다른 에이전트가 붙는다, 진짜 턴 필요"): "반"에서 "예". EX3와 함께 p22가 80.4가 됩니다.</li></ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p11">
+  <div class="phead"><div class="num">11</div><div><h2>문구 (영어만, 출시 전까지)</h2></div></div>
+  <div class="card"><table>
+    <tr><th>자리</th><th>문구</th><th>PR</th></tr>
+    <tr><td>단계 이름</td><td><code>Install</code> · <code>Approve</code> · <code>Sign in</code> · <code>Test</code></td><td>2</td></tr>
+    <tr><td>설치 단계</td><td><code>Nunchiro opens a terminal tab with this command typed. You press Return.</code><br><code>Open in a terminal tab</code> · <code>Copy</code> · <code>Install guide ↗</code><br><code>Not found yet. This checks again when you come back to the window.</code></td><td>2</td></tr>
+    <tr><td>승인 단계, 하기 전</td><td><code>After it is installed, you read the exact command Nunchiro will run and approve it.</code></td><td>2</td></tr>
+    <tr><td>승인 단계, 한 뒤</td><td><code>Checked: connected in {ms} ms</code> · <code>no variables</code> · <code>Change</code></td><td>2</td></tr>
+    <tr><td>로그인 단계</td><td><code>Not signed in.</code> · <code>{agent} opens {service} in your browser. Nunchiro stores no token.</code> · <code>With your {service} account, in the browser.</code> (버튼은 지금의 <code>Sign in</code>, <code>Sign in using a terminal</code>)</td><td>2</td></tr>
+    <tr><td>시험 단계, 하기 전</td><td><code>One short message, to see that it answers.</code><br><code>Sends “Reply with the one word: ready.” in an empty folder.</code><br><code>It uses a little of your {agent} allowance. Anything the agent asks permission for is refused.</code><br><code>Send a test message</code></td><td>1</td></tr>
+    <tr><td>시험 중</td><td><code>Waiting for {agent} to answer…</code> · <code>Cancel</code></td><td>1</td></tr>
+    <tr><td>시험 뒤</td><td><code>Answered “{text}” in {seconds} s.</code><br><code>Message sent · answer read · turn ended · {agent} {version} · {when}</code><br><code>Send again</code> · <code>Start a session</code></td><td>1</td></tr>
+    <tr><td>시험 실패</td><td><code>No answer in 60 seconds.</code> + <code>The agent connected but did not answer. Check your plan’s limit, or try again.</code><br><code>{agent} is not signed in.</code><br><code>{agent} answered with an error: “{text}”</code><br><code>{agent} sent an empty answer.</code><br><code>{agent} stopped before the turn ended.</code></td><td>1</td></tr>
+    <tr><td>칩</td><td><code>Not tried</code> · <code>Answered today</code> · <code>Answered {n} days ago</code> · <code>Not tried on {version}</code> · <code>Test failed</code></td><td>1</td></tr>
+    <tr><td>비용 줄</td><td><code>Cost</code> · <code>Checked {date}</code> · <code>{service} plans ↗</code><br>타일의 한마디: <code>Free plan works</code> · <code>Free plan, limited</code> · <code>Free models</code> · <code>Your own model</code> · <code>Paid plan</code> · <code>Paid key</code> · <code>Cost not checked</code></td><td>2</td></tr>
+    <tr><td>비용 문장 (목록의 값)</td><td><code>The Free plan works, with a small monthly allowance. Pro is $10 a month.</code> (Copilot)<br><code>The Free plan gives 50 credits a month. Pro is $20 a month.</code> (Kiro)<br><code>Free models are offered for a limited time. Other models are paid per use.</code> (OpenCode)<br><code>Needs a paid API key. Free Google sign-in ended in June 2026.</code> (Gemini CLI)<br><code>Runs on a model you connect. What it costs depends on that provider.</code> (goose, Hermes)</td><td>2</td></tr>
+    <tr><td>터미널 전용 줄</td><td><code>Terminal only: Nunchiro cannot tell when it finishes, so there is no test.</code></td><td>2</td></tr>
+  </table></div>
+</section>
+
+<section class="panel" id="p12">
+  <div class="phead"><div class="num">12</div><div><h2>사용자가 답할 질문</h2><p>각 질문 아래가 추천입니다. 만들기는 승인 뒤에 시작합니다.</p></div></div>
+  <div class="card qa"><b>1. A, B, C 가운데 어느 것입니까?</b><small>추천: B. PR 1(진짜 한 턴과 채점 스크립트)을 먼저, PR 2(목록, 네 단계, 비용 줄)를 다음에. C는 "목록은 온라인에서 받지 않는다"를 바꾸는 일이라 따로 정합니다.</small></div>
+  <div class="card qa"><b>2. 몇 가지를 목표로 합니까?</b><small>추천: 12가지(4번 표). 9가지는 VC1까지 되어야 80.07이고 한 종류만 실패해도 내려갑니다. 다른 답: 9가지 + VC1을 먼저.</small></div>
+  <div class="card qa"><b>3. 설치 7가지와 브라우저 로그인 7~8번, 새 계정 4~5개를 사용자가 해 주실 수 있습니까?</b><small>추천: 예, PR 2가 들어온 뒤 한 번에(15~30분). 창의 줄을 따라 누르면 되고, 그 자체가 흐름의 시험입니다. 에이전트는 로그인하지 않습니다. 새 계정이 싫은 서비스는 빼고 예비에서 고릅니다.</small></div>
+  <div class="card qa"><b>4. 무료 범위가 모자라면 유료 하나를 씁니까?</b><small>추천: 지금은 아니오. 먼저 무료로 되는 수를 세어 봅니다. 11가지에서 멈추면 그때 가장 싼 것(예: Copilot Pro $10/월)을 여쭙니다.</small></div>
+  <div class="card qa"><b>5. 설치 명령을 Nunchiro가 직접 실행해도 됩니까?</b><small>추천: 아니오. 터미널 탭에 적어 두고 Return은 사용자가 누릅니다. 인터넷에서 받은 설치 스크립트를 앱이 조용히 돌리지 않습니다. 다른 답: emdash처럼 버튼이 바로 실행.</small></div>
+  <div class="card qa"><b>6. 시험 메시지를 버전이 바뀔 때 저절로 다시 보냅니까?</b><small>추천: 아니오. 칩만 <code>Not tried on {version}</code>으로 바뀝니다. 사용자의 한도를 몰래 쓰지 않습니다.</small></div>
+</section>
+</div>
+</body>
+</html>

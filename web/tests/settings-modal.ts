@@ -29,3 +29,16 @@ export async function closeModal(app: Page) {
   if (await x.count()) await x.click();
   await expect(app.locator('.ovl')).toHaveCount(0);
 }
+
+/** The level table and Worker models: Settings > Team's Levels line opens the Bots view with Models and limits open.
+ *  Returns that fold. */
+export async function openLevels(app: Page) {
+  // A reload keeps the Bots view open (as it keeps Settings), and nothing behind it takes a click.
+  if (await app.getByRole('dialog', { name: 'Bots' }).isVisible()) await closeModal(app);
+  await openSettings(app);
+  await app.locator('.settings > nav button[data-page="team"]').click();
+  await app.locator('.sbody [data-open-levels]').click();
+  const fold = app.getByRole('dialog', { name: 'Bots' }).locator('[data-bots-levels]');
+  await expect(fold).toHaveAttribute('open', '');
+  return fold;
+}

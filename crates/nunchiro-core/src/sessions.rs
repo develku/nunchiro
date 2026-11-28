@@ -92,7 +92,7 @@ fn hand_edits(kind: AgentKind) -> bool {
 #[derive(Clone, Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
-    /// Ticket 1083: the user's home (`$HOME`), read once when the core opens; the unset worktrees folder lies in it.
+    /// Ticket 1083: holds the unset `nunchiro/worktrees`, set at open: `$HOME`, or beside a core's own home (`worktree_user_home`).
     #[serde(skip)]
     user_home: PathBuf,
     // v1a-06
@@ -123,6 +123,8 @@ struct Settings {
     orchestration: OrchestrationSettings,
     // Ticket 211: canonical folders the owner allowed Usage to read through a link; `usage.rs` reads the file itself.
     usage_link_roots: Vec<PathBuf>,
+    triggers_port: Option<u16>, // the webhook port, absent 47800; `schedule/webhook.rs` reads the file itself
+    triggers_poll_secs: Option<u64>, // GitHub triggers' read interval, absent 120 s; `schedule/github.rs` reads it
     // Ticket 250: absorb features' own values by dotted key (`quit_settings` checks key and size); read with `feature`.
     features: BTreeMap<String, serde_json::Value>,
 }
@@ -435,6 +437,8 @@ pub struct Sessions {
     #[cfg(test)]
     saves: std::sync::atomic::AtomicUsize,
     // Ticket 300 step 2: rows an ended session's cancel walked, and session snapshots taken (tests count lock work).
+    /// Counts saves, requests and transcript reads (`revision`), so a window skips a snapshot nothing changed.
+    revision: std::sync::atomic::AtomicU64,
     #[cfg(test)]
     exit_walked: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
@@ -449,6 +453,9 @@ pub struct Sessions {
     /// Look 11-17 v8 (Home S2-B): the entries the owner asked to run again on a failed run's card; the schedule timer
     /// runs them off this lock (`schedule::fire`), as Run now.
     pub(crate) schedule_reruns: Vec<String>,
+    /// The owner's Start on a trigger's card: its id, the trigger, the run and the subject; the schedule timer starts
+    /// them off this lock (`schedule::fire`). The card stays until the start ran.
+    pub(crate) trigger_starts: Vec<(String, String, crate::schedule::Run, Option<String>)>,
     /// Ticket 1004: the check-ins that wait for the judge, at most one per task (`check_in_due`); the server's loop
     /// has them judged off this lock (`start_judge`: git is read there).
     pub(crate) check_ins: Vec<crate::ledger::CheckIn>,
@@ -519,7 +526,37 @@ struct Writes {
 /// after its own, and the Stop reply's drain returns only once an earlier tick's drain is done.
 static DRAINING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 impl Sessions {
+    /// What the snapshot reads moved (a save, a request, a transcript read, a machine's push); `revision` adds the
+    /// queue's saves.
+    pub(crate) fn changed(&self) {
+        self.revision
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+    /// Idle CPU: a window loop builds no snapshot while this and the output count stand still (http/mod.rs). What it
+    /// does not count (the clock, a file) a window still sees within its `SNAPSHOT_FORCE`.
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision.load(std::sync::atomic::Ordering::SeqCst) + self.queue.revision()
+    }
     pub fn handle(&mut self, request: Request) -> Response {
+        // Any request may change what the snapshot reads without a save (an Outbox yes, a draft brought home, a
+        // setting); only the reads a window repeats while idle are left out.
+        if !matches!(
+            request,
+            Request::Snapshot
+                | Request::List
+                | Request::AgentList { .. }
+                | Request::QueueConnect
+                | Request::BoardSnapshot
+                | Request::TreeGet
+                | Request::DiffList { .. }
+                | Request::PrBranch { .. }
+                | Request::WidgetList
+                | Request::ScheduleList
+                | Request::RoomRead { .. }
+                | Request::ChatPage { .. }
+        ) {
+            self.changed();
+        }
         if self.left {
             return Err("core is stopping".into());
         }
@@ -556,8 +593,7 @@ impl Sessions {
             Request::Browser { .. } | Request::BrowserNext | Request::BrowserDone { .. } => {
                 Err("browser verbs run only on the owner socket".into())
             }
-            // v1b-02
-            Request::ChatPage { .. } => Err("chat requires unlocked transport dispatch".into()),
+            Request::ChatPage { .. } => Err("chat requires unlocked transport dispatch".into()), // v1b-02
             Request::HandoffPreview { .. } | Request::HandoffSend { .. } => {
                 Err("handoff requires unlocked transport dispatch".into())
             }
@@ -571,13 +607,14 @@ impl Sessions {
                 Err("the PR view requires the window".into())
             }
             Request::PrBranch { .. } => Err("the PR view requires the window".into()), // ticket 373
-            // v2-10c: answered by the socket server after its owner check.
-            Request::LibsResolve { .. } | Request::LibsEntry { .. } => {
-                Err("libraries require owner dispatch".into())
+            Request::GitPush { .. } | Request::PrDraft { .. } | Request::PrCreate { .. } => {
+                Err("push requires the window".into())
             }
-            // Ticket 573: answered by the socket server after its owner check.
+            Request::LibsResolve { .. } | Request::LibsEntry { .. } => {
+                Err("libraries require owner dispatch".into()) // the socket server answers after its owner check
+            }
             Request::TokenCreate { .. } | Request::TokenList | Request::TokenRevoke { .. } => {
-                Err("tokens require owner dispatch".into())
+                Err("tokens require owner dispatch".into()) // ticket 573: the socket server answers after its owner check
             }
             Request::AccountList
             | Request::AccountCheck { .. }
@@ -628,14 +665,13 @@ impl Sessions {
             Request::AcpAgents
             | Request::AcpAgentCheck { .. }
             | Request::AcpAgentAdd { .. }
-            | Request::AcpAgentLogin { .. } => {
-                Err("agent setup requires unlocked transport dispatch".into()) // V2-4b
-            }
-            Request::AcpAgentSignIn { .. }
+            | Request::AcpAgentLogin { .. }
+            | Request::AcpAgentSignIn { .. }
             | Request::AcpAgentSignInState { .. }
             | Request::AcpAgentSignInCancel { .. }
-            | Request::AcpAgentSignOut { .. } => {
-                Err("agent setup requires unlocked transport dispatch".into()) // ticket 358
+            | Request::AcpAgentSignOut { .. }
+            | Request::AcpAgentTry { .. } => {
+                Err("agent setup requires unlocked transport dispatch".into()) // V2-4b, ticket 358
             }
             Request::ExtensionsList
             | Request::ExtensionsMcpAdd { .. }
@@ -1362,8 +1398,12 @@ impl Sessions {
             Request::WidgetList
             | Request::WidgetRun { .. }
             | Request::WidgetAct { .. } /* v1b-20 */
-            | Request::WidgetPage { .. } /* v1b-22 */ => {
+            | Request::WidgetPage { .. } /* v1b-22 */
+            | Request::Plugin { .. } => {
                 Err("widget requests run outside the registry lock".into())
+            }
+            Request::Trigger { .. } => {
+                Err("trigger requests are the owner's socket's (`nunchiro trigger`)".into())
             }
             // v1b-05
             Request::ImagePut { .. } => Err("image uploads run outside the registry lock".into()),
@@ -1753,18 +1793,6 @@ fn retire_send(
 mod tests; // 2026-11-20: moved out for the 1 MiB publish scan
 
 #[cfg(test)]
-type BeforeDecide = Box<dyn FnOnce(&std::sync::Mutex<Sessions>)>;
-/// Ticket 32: the fake `claude` and `codex` unit tests run, set once (`agent_program`).
+mod test_hooks;
 #[cfg(test)]
-static FAKE_AGENTS: std::sync::OnceLock<(String, String)> = std::sync::OnceLock::new();
-#[cfg(test)]
-thread_local! {
-    // Ticket 32: runs at the start of `Launch::prepare` on the thread that prepares.
-    static IN_PREPARE: std::cell::Cell<Option<Box<dyn FnOnce()>>> = const { std::cell::Cell::new(None) };
-    static IN_HOOKS_CHECK: std::cell::Cell<Option<Box<dyn FnOnce() -> bool>>> = const { std::cell::Cell::new(None) };
-}
-#[cfg(test)]
-thread_local! {
-    // Ticket 39: runs in `handoff_send` between the first decision (and prepare) and the lock that decides again.
-    static BEFORE_DECIDE: std::cell::Cell<Option<BeforeDecide>> = const { std::cell::Cell::new(None) };
-}
+use test_hooks::*;

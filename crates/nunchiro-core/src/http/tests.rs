@@ -534,6 +534,105 @@ fn a_window_takes_the_registry_only_for_output_it_watches_and_once_per_batch() {
     );
 }
 
+// An open window on an idle core sleeps until there is work: its loop and the browser supervisor each wake at most a
+// few times a second. (Output wakes are process-wide; nextest runs it in its own process, where every round is quiet.)
+#[test]
+fn an_idle_window_and_browser_supervisor_wake_rarely() {
+    let (mut ws, stopping, home) = window("idle-wakes");
+    // The window's first pushes, then past the loop's active period after connecting.
+    if let tungstenite::stream::MaybeTlsStream::Plain(s) = ws.get_ref() {
+        s.set_read_timeout(Some(Duration::from_millis(100)))
+            .unwrap();
+    }
+    let settle = Instant::now() + Duration::from_secs(3);
+    while Instant::now() < settle {
+        let _ = ws.read();
+    }
+    let counts = super::output_counts(&home);
+    let browser = super::browser::of(&home);
+    let passes = || counts.passes.load(Ordering::SeqCst);
+    let supervised = || browser.wakes.load(Ordering::SeqCst);
+    // Output of other tests in this process (plain `cargo test`) wakes every window: such a round is measured again.
+    let mut rounds = 0;
+    let (window_rate, browser_rate, quiet) = loop {
+        rounds += 1;
+        let woken = || {
+            crate::pty::output_seq() + crate::pty::RINGS.load(Ordering::SeqCst) // output and other wakes
+        };
+        let seq = woken();
+        thread::sleep(Duration::from_millis(2500)); // past the loop's active period after any earlier output
+        let (p, b, at) = (passes(), supervised(), Instant::now());
+        thread::sleep(Duration::from_secs(4));
+        let secs = at.elapsed().as_secs_f64();
+        let quiet = woken() == seq;
+        if quiet || rounds == 4 {
+            break (
+                (passes() - p) as f64 / secs,
+                (supervised() - b) as f64 / secs,
+                quiet,
+            );
+        }
+    };
+    stopping.store(true, Ordering::SeqCst);
+    let _ = std::fs::remove_dir_all(&home);
+    eprintln!(
+        "idle wakes per second: window loop {window_rate:.1}, browser supervisor {browser_rate:.1} (quiet: {quiet})"
+    );
+    assert!(
+        !quiet || window_rate <= 3.0,
+        "the idle window loop woke {window_rate:.1} times a second"
+    );
+    assert!(
+        browser_rate <= 3.0,
+        "the idle browser supervisor woke {browser_rate:.1} times a second"
+    );
+}
+
+// Idle CPU: a window whose frames change nothing (the Mac window's once-a-second `queue_connect`, here four a second)
+// builds and serialises no snapshot for them; with nothing changed it builds one a `SNAPSHOT_FORCE` at most.
+#[test]
+fn an_idle_window_builds_no_snapshot_for_frames_that_change_nothing() {
+    let (mut ws, stopping, home) = window("idle-builds");
+    if let tungstenite::stream::MaybeTlsStream::Plain(s) = ws.get_ref() {
+        s.set_read_timeout(Some(Duration::from_millis(50))).unwrap();
+    }
+    let counts = super::output_counts(&home);
+    let builds = || counts.builds.load(Ordering::SeqCst);
+    let woken = || crate::pty::output_seq() + crate::pty::RINGS.load(Ordering::SeqCst);
+    let mut rounds = 0;
+    let (rate, quiet) = loop {
+        rounds += 1;
+        let seq = woken();
+        let settle = Instant::now() + Duration::from_millis(2500);
+        while Instant::now() < settle {
+            let _ = ws.read();
+        }
+        let (b, at) = (builds(), Instant::now());
+        let mut id = 1;
+        while at.elapsed() < Duration::from_secs(4) {
+            id += 1;
+            let beat = serde_json::json!({"id": id, "request": {"op": "queue_connect"}});
+            ws.send(Message::Text(beat.to_string().into())).unwrap();
+            let next = Instant::now() + Duration::from_millis(250);
+            while Instant::now() < next {
+                let _ = ws.read();
+            }
+        }
+        let rate = (builds() - b) as f64 / at.elapsed().as_secs_f64();
+        let quiet = woken() == seq;
+        if quiet || rounds == 4 {
+            break (rate, quiet);
+        }
+    };
+    stopping.store(true, Ordering::SeqCst);
+    let _ = std::fs::remove_dir_all(&home);
+    eprintln!("idle snapshot builds per second with 4 frames a second: {rate:.1} (quiet: {quiet})");
+    assert!(
+        !quiet || rate <= 1.5,
+        "the idle window built {rate:.1} snapshots a second"
+    );
+}
+
 /// v1a-55: a core with no sessions and one authenticated window on it; the core stops when `stopping` is set.
 fn window(
     name: &str,
@@ -555,7 +654,7 @@ fn window(
     (connect(port, &token), stopping, home)
 }
 
-fn connect(
+pub(crate) fn connect(
     port: u16,
     token: &str,
 ) -> tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<std::net::TcpStream>> {

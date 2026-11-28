@@ -74,3 +74,34 @@ test('search_scope_is_remembered: Search opens on the scope used last, also afte
   await expect(panel.getByRole('radio', { name: 'Sessions' })).toHaveAttribute('aria-checked', 'true');
   await expect(panel.getByRole('searchbox')).toHaveAccessibleName('Search sessions');
 });
+
+// A real drive: a fresh conversation beside a stuck agent in the project's checkout opened on the remembered New worktree,
+// and started in a new worktree instead of that agent's folder. The tab strip's "+" in front of an agent in the checkout
+// opens on Current folder (as Orca's "+" opens in the same workspace); that start does not forget New worktree, which the
+// "+" in front of a worktree agent still opens on.
+test('remembered_new_worktree_stays_out_of_a_fresh_conversation_beside_an_agent_in_the_checkout', async ({ app, core }) => {
+  const alpha = repo(core, 'alpha');
+  const stuck = core.agent(alpha, 'stuck', 'never-trigger');
+  await openWindow(app, {}, core);
+  await popFor(app, 'alpha');
+  await place(app, 'New worktree').click();
+  await pop(app).getByRole('option', { name: 'Claude', exact: true }).click();
+  await expect(pop(app)).toHaveCount(0, { timeout: 15_000 });
+  const claudes = () => core.cli('snapshot', '--json').sessions as { id: string; kind: string; cwd: string }[];
+  await expect.poll(() => claudes().filter((s) => s.kind === 'claude').length).toBe(2);
+  const inWt = claudes().find((s) => s.kind === 'claude' && s.id !== stuck.id)!;
+  expect(inWt.cwd).not.toBe(alpha);
+  // In front of the stuck agent in the checkout: Current folder, and a start there lands in the checkout.
+  await app.locator(`.tab[data-tab="${stuck.id}"]`).click();
+  await plus(app).click();
+  await expect(pop(app)).toContainText('alpha');
+  await expect(place(app, 'Current folder')).toHaveAttribute('aria-checked', 'true');
+  await pop(app).getByRole('option', { name: 'Claude', exact: true }).click();
+  await expect(pop(app)).toHaveCount(0, { timeout: 15_000 });
+  await expect.poll(() => claudes().filter((s) => s.kind === 'claude').length).toBe(3);
+  expect(claudes().find((s) => s.kind === 'claude' && s.id !== stuck.id && s.id !== inWt.id)!.cwd).toBe(alpha);
+  // In front of the worktree agent: still New worktree.
+  await app.locator(`.tab[data-tab="${inWt.id}"]`).click();
+  await plus(app).click();
+  await expect(place(app, 'New worktree')).toHaveAttribute('aria-checked', 'true');
+});

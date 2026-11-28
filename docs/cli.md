@@ -555,9 +555,9 @@ Without `--path` the folder is `<worktrees folder>/<project folder>/<random id>`
 as Orca's `--name` does: it must be one new plain name (not starting with `.`) right under
 `<worktrees folder>/<project folder>/`, where the worktrees folder is the `worktrees_dir` setting, a folder this
 project's worktrees already use (`$NUNCHIRO_HOME/worktrees` only while a record of this project lies there), or the
-unset default. Unset, the worktrees folder is `~/nunchiro/worktrees` (in the user's home; made on first use, and refused when `~/nunchiro` is a link or not a folder). Set a folder to use another disk. A record made under `../.worktrees` (ticket 1061) keeps working. A path
+unset default. Unset, the worktrees folder is `~/nunchiro/worktrees` for the default data folder `~/.nunchiro`, and `<its home>-worktrees/nunchiro/worktrees` beside any other `NUNCHIRO_HOME` (leading dots dropped), so two cores never share one. It is made on first use, and refused when its `nunchiro` folder, or any folder above it, is a link or not a folder. Set a folder to use another disk. A record made under `../.worktrees` (ticket 1061) keeps working. A path
 anywhere else, one that already exists, or one a worktree record already names is refused and nothing is created. When
-the user's home is not known or cannot be written, the command fails and names the `worktrees_dir`
+that folder cannot be made or written, the command fails and names the `worktrees_dir`
 setting to change.
 Inside a session the record names the session as its creator (shown only; any caller may open or remove it).
 
@@ -581,6 +581,7 @@ sends and room messages, and as the parent of the sessions it starts. Every rule
 |---|---|
 | `read` | `agent list`, `get`, `read`, `wait`; `worktree list`; `agent check`, `thread read`; `session read`; `events` |
 | `supervised` | read, plus `agent start`, room `send`/`ask`/`reply`, and `prompt`, `send`, `cancel`, `session close` of the sessions this token started |
+| `trigger` | `trigger fire` and nothing else ([triggers.md](triggers.md)) |
 | `full` | what a session token may do, minus what no token may do (below); it acts on a session (`prompt`, `send`, `cancel`, `session close`, `label`, `resize`) only when this token started it, and removes, renames or forgets only the worktrees it created |
 
 A session a token started is a token session for its whole life. A resumed run of it (by anyone, the owner's Resume
@@ -614,7 +615,7 @@ made with `--project` sees and reaches only that project's sessions, worktrees, 
 its room with `--project`.
 A refusal is exit 1 with the core's message, such as `operation not granted to a read token`.
 
-### `nunchiro token create --scope read|supervised|full [--project <dir>] [--expires 30m|12h|7d]`
+### `nunchiro token create --scope read|supervised|full|trigger [--project <dir>] [--expires 30m|12h|7d]`
 Owner only. Prints the token's secret once, alone on stdout (`export NUNCHIRO_TOKEN=$(nunchiro token create --scope
 read)`), and its id on stderr. `$NUNCHIRO_HOME/tokens.json` keeps only the secret's SHA-256, so a lost secret is
 revoked and made again. Without `--expires` the token lasts until it is revoked.
@@ -695,6 +696,16 @@ A task waits while one of them has not landed (closed as merged or done). `task 
 Refused with a sentence: the task itself, an id that is no open task of this place, a dropped task, an order that
 would go round (a task waiting for one that already waits for it, however far), more than 8. An older Nunchiro opens
 a ledger with this order and drops it on its next write.
+While a task waits, `task staff` and every start of a seat that writes in its worktree are refused ("Not started:
+…"); a seat that does not write may start, and the core starts no Reviewer for it. When a task lands, the lead of
+the tasks that waited for it gets one line (through its queue, and in the room) naming those it freed and those that
+still wait (typed into the lead's box where auto-advance is on, as a room line where it is off); it is sent once,
+also over a restart, and only while the lead's seat runs (else when it runs again). An automatic task others wait for
+is never removed unseen: when its worktree goes back to the user or it is dropped empty, it closes as dropped, so its
+waiters ask. A
+task whose blocker was dropped reads `needs` with `asks: …` and its lead is told; the user's clear (`task after
+<id> --none` from the owner's shell or the board) is told to the lead too. A wait added to a task whose writer already
+runs leaves the seat alone and reads `started before "<title>" landed`.
 
 ### `nunchiro task list`
 `nunchiro task list [--all] [--project DIR]` and `nunchiro task show <id>`. Each task with its state now (`needs`,
@@ -1138,7 +1149,83 @@ active = 1                                 # the tab shown first (0-based)
 ## Window-only APIs
 
 The window's local API has operations with no CLI command: files (list, read, search), chat history,
-approvals status, the board, and the quit settings. The core README lists each request.
+approvals status, the board, and the quit settings. Every request, answer and event is in the published schema
+([api.md](api.md)); the window's own operations are marked `x-stability: window` there and may change.
+
+### `nunchiro api schema`
+Prints the local API as one JSON Schema (draft 2020-12), the file `docs/api/nunchiro-api.schema.json`: the envelope
+a caller writes to `core.sock`, the response it reads back, and the lines of `nunchiro events`. Each request
+variant carries `x-stability`: `stable` for what an outside token may call, `window` for the rest. Needs no core.
+See [api.md](api.md) for the socket, the callers and an example client.
+
+## Plugins
+
+A plugin is one folder, `$NUNCHIRO_HOME/plugins/<id>/`, that adds panels, commands and settings; see
+[plugins.md](plugins.md). It is off and not approved after it is made or copied in, and runs nothing until both
+change. `new` and `check` touch only the folder, so they work inside an agent session; the others are the owner's.
+
+### `nunchiro plugin new <id> [--with panel,command,setting,gate]`
+Writes a starter plugin (all four parts by default; `gate` is a check that allows every start) that passes `plugin check`. Never replaces a file.
+
+### `nunchiro plugin check <id>`
+Checks `plugin.toml` by the core's rules, then runs each script panel, command and check once in the widget sandbox on a
+sample input, before and without any approval. Prints `ok` or `failed` per part; exit 1 when any part failed.
+
+### `nunchiro plugin list [--json]`
+One row per plugin: id, on or off, and approved, not approved, changed since approval, or broken (with why); also
+which setting stops it (`script_widgets` or `web_widgets`).
+
+### `nunchiro plugin on <id>`
+Turns the plugin on. Its parts still run only while its approval matches its files.
+
+### `nunchiro plugin off <id>`
+Turns the plugin off; its panels leave the Widget library and its commands stop.
+
+### `nunchiro plugin allow <id>`
+Approves the plugin's files as they are now (the same as Review in the window). From inside an agent session it
+asks the owner instead: one waiting item in the window.
+
+### `nunchiro plugin run <id> <command>`
+Runs one of the plugin's commands now, with no project, and prints its output.
+
+### `nunchiro plugin remove <id>`
+Moves the folder to `$NUNCHIRO_HOME/plugins/.removed/<id>-<time>` and forgets its switch and settings; move it back
+to undo.
+
+### `nunchiro plugin catalog [--json]`
+Lists the plugin catalogue (`plugins/catalog.json` of the Nunchiro repository, read from GitHub): id, version, name
+and what it does.
+
+### `nunchiro plugin install <id>`
+Downloads the catalogue's plugin at its pinned commit, checks every file's SHA-256 and writes the folder only when
+all match (an older version moves to `plugins/.removed/`). It is off and not approved: run `plugin allow` and
+`plugin on` after reading what it asks for.
+## Triggers
+
+A trigger starts an agent run when something outside calls it; see [triggers.md](triggers.md). Only the owner adds,
+pauses and removes one; the owner or a token of the `trigger` scope fires one.
+
+### `nunchiro trigger add <name> --on cli|webhook|github --kind claude|codex --project <dir> --task <text> [--repo <owner/name> --event checks_failed|changes_requested|labeled] [--issue-label <l>] [--any-author] [--label <name>] [--model <m>] [--effort <e>] [--auto]`
+Owner only. Adds a trigger that starts this run. `--on webhook` reads the shared secret from stdin (one line, at
+least 16 characters). `--on github` reads `--repo` with your `gh` for `--event` (`labeled` takes `--issue-label`); pull request events
+watch your own pull requests unless `--any-author`.
+Without `--auto` a fire leaves a card in Decisions and starts on Start.
+
+### `nunchiro trigger list [--json]`
+Owner only. Name, how it is fired, ask or auto, on or off, project, and the last fire (its session or why not).
+
+### `nunchiro trigger fire <name> [--data @<file>|-]`
+Fires a `cli` trigger; the data reaches the session after the task as quoted data (4 KB at most). The owner, or a
+token made with `--scope trigger`.
+
+### `nunchiro trigger pause <name>`
+Owner only. The trigger stays listed and fires nothing; a webhook trigger's address closes when none is on.
+
+### `nunchiro trigger resume <name>`
+Owner only. Turns it on again.
+
+### `nunchiro trigger remove <name>`
+Owner only.
 
 ## Other machines
 

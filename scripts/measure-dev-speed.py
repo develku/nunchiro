@@ -462,13 +462,15 @@ def seat_time(events, now):
         elif e["type"] == "room_message" and (e.get("data") or {}).get("kind") == "team":
             team = e["data"].get("team") or {}
             if team.get("what") == "advance":
-                # the core's own lines (advance.rs room_line): a nudge carries the quiet minutes before it
+                # the core's own lines (advance.rs room_line): a nudge carries the quiet minutes before it. The journal
+                # keeps them as "act" and "quiet_min" without the body; a live event still has the body.
                 body = e["data"].get("body") or ""
                 m = re.match(r"core nudged .* \(quiet (\d+) min\)$", body)
-                kind = ("nudge" if m else "card" if body.startswith("core asked the user") else
-                        "resend" if body.startswith("core sent the waiting message") else
-                        "moved" if body.endswith(" moves again") else "other")
-                stalls.append(dict(seat=team.get("seat"), at=t, kind=kind, quiet_min=int(m[1]) if m else 0))
+                kind = e["data"].get("act") or ("nudge" if m else "card" if body.startswith("core asked the user") else
+                                                "resend" if body.startswith("core sent the waiting message") else
+                                                "moved" if body.endswith(" moves again") else "other")
+                quiet = e["data"].get("quiet_min", int(m[1]) if m else 0)
+                stalls.append(dict(seat=team.get("seat"), at=t, kind=kind, quiet_min=quiet))
     for s, (st, since) in cur.items():
         states.setdefault(s, {}).setdefault(st, 0)
         states[s][st] += now - since

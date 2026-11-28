@@ -2,6 +2,7 @@
 // mocked `machine_probe`, one-click Add with a toast, and Connect/Test on each card. The real core answers everything else.
 import type { Page } from '@playwright/test';
 import { expect, openWindow, test } from './fixtures';
+import { startOf } from './start-op';
 
 type Req = { op: string; host?: string; user?: string; port?: number; alias?: string; label?: string; retry?: boolean; replace?: boolean; session?: unknown };
 const ALIASES = ['macbook', 'macbook-lan', 'mini', 'studio'];
@@ -21,7 +22,7 @@ async function machines(app: Page, rows: unknown[] = []) {
       else if (r?.op === 'machine_probe') ok(msg.id, { type: 'machine_probe', error: r.host === 'studio' ? 'ssh: connect to host studio port 22: Connection refused' : null });
       else if (r?.op === 'add_machine') { added.push(r.alias!); ok(msg.id, { type: 'ack' }); }
       else if (r?.op === 'machine_details') ok(msg.id, { type: 'machine_details', machines: r.alias ? [row(r.alias, 'up')] : rows });
-      else if (r?.op === 'start') ok(msg.id, { type: 'ack' }); // Open terminal: the real core would run ssh
+      else if (startOf(r)) ok(msg.id, { type: 'ack' }); // Open terminal: the real core would run ssh
       else if (r?.op === 'machine_status' && !r.label) ok(msg.id, { type: 'machines', machines: ['studio', 'mini'].map((m) => ({ machine: m, status: 'x', channel: row(m, m === 'studio' ? 'down' : 'up').channel })) });
       else if (r?.op === 'machine_status') ok(msg.id, { type: 'machines', machines: [{ machine: r.label, status: 'x', channel: row(r.label!, r.label === 'studio' ? 'down' : 'up').channel }] });
       else server.send(raw);
@@ -140,7 +141,7 @@ test('machines_open_terminal: Open terminal starts a local shell tab running ssh
   await studio.locator('.machine-row').click();
   await studio.getByRole('button', { name: 'Open terminal', exact: true }).click();
   await expect(app.locator('.toast')).toContainText('Opened a terminal tab: ssh studio');
-  expect(sent.find((r) => r.op === 'start')).toEqual({ op: 'start', session: { kind: 'shell', project: '', label: 'ssh studio', args: ['ssh', '-o', 'HostName=studio.lan', '-o', 'User=me', '-o', 'Port=2222', '--', 'studio'], resume: null } });
+  expect(sent.map(startOf).find((r) => r)).toEqual({ op: 'start', session: { kind: 'shell', project: '', label: 'ssh studio', args: ['ssh', '-o', 'HostName=studio.lan', '-o', 'User=me', '-o', 'Port=2222', '--', 'studio'], resume: null } });
 });
 
 test('machines_retry_on_wake: coming back to the window retries every machine that is not up, at most once per 10 s', async ({ app }) => {

@@ -21,6 +21,7 @@ const FILE_MAX: u64 = (PACKAGE_MAX + BRIEFS_KEPT * (BRIEF_MAX + 1024) + 4096) as
 const KINDS: [&str; 4] = ["mockup", "doc", "code", "url"];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct Package {
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -37,6 +38,7 @@ pub struct Package {
 
 /// One quoted line of the conversation. Added and removed whole; no verb changes its words.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Quote {
     /// Who said it ("the user", "Lead · Main"), and when, as the lead read it in the conversation.
     pub who: String,
@@ -52,6 +54,7 @@ pub struct Quote {
 
 /// The lead's own text: what came before, what is decided, what must not change.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Background {
     pub text: String,
     pub by: String,
@@ -60,6 +63,7 @@ pub struct Background {
 
 /// One thing the owner will see when the work is done.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct See {
     pub text: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -72,12 +76,15 @@ pub struct See {
 
 /// An approval, only ever the user's own (no session sets one): who and when.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Approved {
     pub by: String,
     pub at: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[cfg_attr(test, schemars(rename = "PackageLink"))]
 pub struct Link {
     /// `mockup`, `doc`, `code` or `url`.
     pub kind: String,
@@ -91,6 +98,7 @@ pub struct Link {
 /// The instruction text a seat received with its first prompt from `task staff` (the lead's words, or the core's
 /// review prompt), kept as sent. The package block and the notes head in front of it are not repeated here.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 pub struct Brief {
     pub session: String,
     pub name: String,
@@ -100,6 +108,7 @@ pub struct Brief {
 
 /// What a `task package` verb carries besides its text (`Request::Task.package`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct Fill {
     #[serde(skip_serializing_if = "Option::is_none")]

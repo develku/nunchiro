@@ -1,0 +1,35 @@
+side-terminal	2.11	rgb(148, 151, 151) on rgb(217, 219, 217)	span.num	3
+side-browser	2.11	rgb(148, 151, 151) on rgb(217, 219, 217)	span.num	3
+onboarding-keys	3.04	rgb(132, 137, 140) on rgb(237, 238, 236)	li.kbd	s
+onboarding-keys	3.04	rgb(132, 137, 140) on rgb(237, 238, 236)	span.sr	used as kind key
+onboarding-keys	3.04	rgb(132, 137, 140) on rgb(237, 238, 236)	li.kbd	p
+tree-decision-line	4.40	rgb(159, 80, 15) on rgb(223, 225, 223)	span.sw	needs you
+tree-decision-line	3.39	rgb(134, 140, 146) on rgb(255, 255, 255)	span.dot	·
+decision-deny-instruction	4.40	rgb(159, 80, 15) on rgb(223, 225, 223)	span.sw	needs you
+decision-deny-instruction	3.39	rgb(134, 140, 146) on rgb(255, 255, 255)	span.dot	·
+decision-card	4.40	rgb(159, 80, 15) on rgb(223, 225, 223)	span.sw	needs you
+decision-card	3.39	rgb(134, 140, 146) on rgb(255, 255, 255)	span.dot	·
+decision-card	4.15	rgb(170, 65, 56) on rgb(214, 216, 214)	button.b.d	Deny
+dialog-quit	4.40	rgb(159, 80, 15) on rgb(223, 225, 223)	span.sw	needs you
+dialog-quit	3.39	rgb(134, 140, 146) on rgb(255, 255, 255)	span.dot	·
+dialog-quit	4.15	rgb(170, 65, 56) on rgb(214, 216, 214)	button.b.d	Deny
+dialog-close-notice	4.40	rgb(159, 80, 15) on rgb(223, 225, 223)	span.sw	needs you
+dialog-close-notice	3.39	rgb(134, 140, 146) on rgb(255, 255, 255)	span.dot	·
+dialog-close-notice	4.15	rgb(170, 65, 56) on rgb(214, 216, 214)	button.b.d	Deny
+bots-lead-header	3.55	rgb(138, 94, 14) on rgb(210, 204, 189)	span.skipm	!
+bots-lead-header	4.14	rgb(138, 94, 14) on rgb(225, 219, 207)	span.pm-text	Bypass permissions
+bots-roster	3.55	rgb(138, 94, 14) on rgb(210, 204, 189)	span.skipm	!
+bots-roster	4.14	rgb(138, 94, 14) on rgb(225, 219, 207)	span.pm-text	Bypass permissions
+bots-page	3.55	rgb(138, 94, 14) on rgb(210, 204, 189)	span.skipm	!
+bots-page	4.14	rgb(138, 94, 14) on rgb(225, 219, 207)	span.pm-text	Bypass permissions
+bots-page-models	3.55	rgb(138, 94, 14) on rgb(210, 204, 189)	span.skipm	!
+bots-page-models	4.14	rgb(138, 94, 14) on rgb(225, 219, 207)	span.pm-text	Bypass permissions
+bots-new	3.55	rgb(138, 94, 14) on rgb(210, 204, 189)	span.skipm	!
+bots-new	4.14	rgb(138, 94, 14) on rgb(225, 219, 207)	span.pm-text	Bypass permissions
+team-side	2.11	rgb(148, 151, 151) on rgb(217, 219, 217)	span.num	3
+team-side	3.55	rgb(138, 94, 14) on rgb(210, 204, 189)	span.skipm	!
+team-side	4.14	rgb(138, 94, 14) on rgb(225, 219, 207)	span.pm-text	Bypass permissions
+team-wide	2.17	rgb(159, 161, 161) on rgb(234, 235, 233)	span.num	3
+team-wide	4.09	rgb(138, 94, 14) on rgb(225, 218, 204)	span.skipm	!
+team-wide	3.50	rgb(132, 137, 140) on rgb(254, 254, 253)	span.	just now
+team-wide	3.50	rgb(132, 137, 140) on rgb(254, 254, 253)	button.lead-more	⋯

@@ -680,6 +680,7 @@ button.lead-go {
 .lead-free {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-8);
   padding: var(--sp-6) var(--sp-8);
@@ -691,6 +692,7 @@ button.lead-go {
 .lead-free .lead-hand {
   margin-left: auto;
   color: var(--link-text);
+  white-space: nowrap; /* a narrow side wraps the button under the sentence, not its words onto three lines */
 }
 .lead-menu {
   position: absolute;
@@ -1183,8 +1185,80 @@ button.lead-go {
   outline-offset: -1px;
 }
 .tcard[data-waits-seat],
+.tcard[data-waits-task],
 .tcard[data-gone] {
   opacity: 0.7;
+}
+/* Task dependencies (mockup docs/design/task-deps-m5/index.html panel 3): a card whose menu only sets what it waits for
+   shows its ⋯ under the pointer or the focus, so a board with no dependency draws as before. */
+.tcard:not(:hover):not(:focus-within) > .lead-more[data-quiet] {
+  opacity: 0;
+}
+/* The words of a waiting card's one pill (not its stage chips) read 4.5:1 through the card's dimming (--faint would not). */
+.tcard-stages > .tcard-wait,
+.tcard-stages > .tcard-ask {
+  color: var(--text);
+}
+/* A dimmed card is its own stacking layer: the card whose menu is open goes over the cards after it. */
+.lead-menu[data-up] {
+  top: auto;
+  bottom: 100%;
+}
+.tcard:has(> .lead-menu) {
+  z-index: 6;
+}
+/* The book's needs-you mark is a light beside the word, not a picture: the --light-you dot. */
+.tcard-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: var(--sp-4);
+  border-radius: var(--r-pill);
+  background: var(--light-you);
+  vertical-align: middle;
+}
+/* On a warm stage chip the warm light would vanish: it takes the chip's word colour there. */
+.tcard-stages > [data-at='you'] .tcard-dot {
+  background: var(--on-status);
+}
+.tcard-do {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-8);
+}
+.lead-answer[data-kind='secondary'] {
+  background: var(--tint-2);
+  color: var(--text);
+}
+.lead-answer[data-kind='quiet-bad'] {
+  background: none;
+  color: var(--bad-text);
+}
+.lead-answer[data-kind='quiet-bad']:hover {
+  background: var(--tint-1);
+}
+.twaits {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: var(--sp-12);
+  padding: var(--sp-12);
+}
+.twaits ul {
+  display: grid;
+  gap: var(--sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.twaits li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-8);
+  font-size: var(--fs-13);
+}
+.twaits p {
+  margin: 0;
 }
 .tcard-go {
   display: flex;

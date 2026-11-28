@@ -94,8 +94,16 @@ test('schedule_rows: a row is three lines in the side and one line of columns in
   await expect(r).toHaveAttribute('data-last', 'none'); // never ran: no dot
   await expect(r.locator('.sched-dot .tdot')).toHaveCount(0);
   const [sw, name, l2, task, dot, line] = await Promise.all(['.stog', '.sched-name', '.sched-l2', '.sched-task', '.sched-dot', '.sched-row'].map((s) => box(r.locator(s))));
-  expect([sw.width, sw.height]).toEqual([28, 16]); // the small switch: the name is what the eye lands on
-  expect(name.height).toBeGreaterThanOrEqual(sw.height);
+  // The design book's one switch (#69 retired the small 28 x 16 one, so the name-is-taller check went with it): its box is
+  // --switch-w wide and one --hit target high, and the drawn track is --switch-w by --switch-h.
+  const book = await r.locator('.stog').evaluate((e) => {
+    const css = getComputedStyle(e);
+    const track = getComputedStyle(e, '::before');
+    return { box: ['--switch-w', '--hit'].map((v) => parseFloat(css.getPropertyValue(v))), track: [track.width, track.height].map(parseFloat), want: ['--switch-w', '--switch-h'].map((v) => parseFloat(css.getPropertyValue(v))) };
+  });
+  expect([...book.box, ...book.want].every((n) => n > 0), 'the book tokens resolve').toBe(true);
+  expect([sw.width, sw.height]).toEqual(book.box);
+  expect(book.track).toEqual(book.want);
   expect(Math.abs(mid(sw) - mid(name))).toBeLessThan(4);
   expect(Math.abs(mid(sw) - mid(dot))).toBeLessThan(4);
   expect(sw.x).toBeLessThan(name.x);
@@ -501,7 +509,7 @@ test('schedule_remove_empty: Remove asks first; with none left the widget says w
   // Rule 8: besides those two lines the widget's fixed text is its title and its two button names.
   const buttons = await widget.locator('.schedv-head button').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''));
   expect(buttons).toEqual(['Add schedule', 'Open as a tab']);
-  expect(await widget.locator('.schedv-body').evaluate((e) => (e as HTMLElement).innerText.split(/\s+/).filter(Boolean).join(' '))).toBe('No schedules yet. Add one, or ask your lead to set one up. New schedule'); // ticket 1099: the empty state's Add is a button
+  expect(await widget.locator('.schedv-body').evaluate((e) => (e as HTMLElement).innerText.split(/\s+/).filter(Boolean).join(' '))).toBe('No schedules yet. Add one, or ask your lead to set one up. New schedule Triggers Add trigger No triggers yet.'); // ticket 1099: the empty state's Add is a button; the triggers under the list (docs/triggers.md)
   await widget.getByRole('button', { name: 'Add schedule', exact: true }).click();
   await expect(empty).toHaveCount(0);
   await expect(widget.getByRole('form', { name: 'Add schedule' })).toBeVisible();

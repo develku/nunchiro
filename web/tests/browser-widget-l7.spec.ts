@@ -173,13 +173,22 @@ test('l7_full_size_draws_the_page_at_real_size_when_it_fits', async ({ app, core
   await expect(p).toHaveAttribute('data-max', '');
   // The sidebars, the centre tab row and the status bar give way; the title row and the pane's two rows stay.
   for (const sel of ['.sbar.l', '.zh', '.status']) await expect(app.locator(sel).first()).toBeHidden();
+  // The rows that stay (the title row and the pane's two rows) take the design book's heights: the window is sized from
+  // what they take, so "when it fits" means exactly 800 px of slot, not a height that held for an older chrome.
+  await expect.poll(async () => (await slot.boundingBox())!.width).toBeGreaterThan(1000);
+  const full = (await slot.boundingBox())!;
+  const [cols, rows] = [1440 - full.width, 940 - full.height];
+  await app.setViewportSize({ width: 1440, height: Math.ceil(rows) + 800 });
   await expect.poll(async () => scale((await slot.boundingBox())!)).toBe(1);
   // The app was told the larger slot (the native view follows it).
   await expect.poll(async () => Math.round((await calls(app, 'browser_show')).at(-1)!.h as number)).toBeGreaterThanOrEqual(800);
-  await app.setViewportSize({ width: 1440, height: 900 });
-  await expect.poll(async () => scale((await slot.boundingBox())!)).toBe(0.975); // 784 px under the title row and the two rows: 1248x780
-  await app.setViewportSize({ width: 1000, height: 700 });
-  await expect.poll(async () => scale((await slot.boundingBox())!)).toBe(0.7); // a smaller window: fitted, its width binds (896 px; ticket 1041: the icon bars are 48 px)
+  await app.setViewportSize({ width: 1440, height: Math.ceil(rows) + 780 });
+  await expect.poll(async () => scale((await slot.boundingBox())!)).toBe(0.975); // 780 px of slot: 1248x780
+  await app.setViewportSize({ width: 1000, height: Math.ceil(rows) + 800 }); // tall enough that only the width binds
+  // A smaller window: fitted, its width binds (the icon bars and the pane's edges take `cols`).
+  const small = { width: 1000 - cols, height: Math.ceil(rows) + 800 - rows };
+  expect(small.width / 1280, 'the width binds').toBeLessThan(small.height / 800);
+  await expect.poll(async () => scale((await slot.boundingBox())!)).toBe(scale(small));
   // Back to side width: everything returns.
   await p.getByRole('button', { name: 'Back to side width' }).click();
   for (const sel of ['.sbar.l', '.zh', '.status']) await expect(app.locator(sel).first()).toBeVisible();

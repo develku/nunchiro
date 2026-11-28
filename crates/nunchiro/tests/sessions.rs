@@ -258,7 +258,7 @@ fn sessions_start_in_project_or_isolated_worktree() {
             _ => panic!(),
         };
         let expected = if worktree {
-            h.home.join("user/nunchiro/worktrees/repo").join(&s.id[..8]) // dogfood F4: an 8-character folder
+            own_worktrees(&h.home).join("repo").join(&s.id[..8]) // dogfood F4: an 8-character folder
         } else {
             project.clone()
         };
@@ -3314,7 +3314,7 @@ fn worktree_create_honours_path_and_refuses_others() {
     let project = h.home.join("repo");
     git_repo(&project);
     let project_arg = project.to_str().unwrap();
-    let under = h.home.join("user/nunchiro/worktrees/repo");
+    let under = own_worktrees(&h.home).join("repo");
     let create = |branch: &str, path: &std::path::Path| {
         cli(
             &h,
@@ -3354,7 +3354,7 @@ fn worktree_create_honours_path_and_refuses_others() {
     for (n, path) in [
         under.join("link/x"),       // a symlinked parent that leads outside the root
         h.home.join("elsewhere/x"), // outside every worktree root
-        h.home.join("user/nunchiro/worktrees/x"), // the root itself, not the project's folder
+        own_worktrees(&h.home).join("x"), // the root itself, not the project's folder
         h.home.join("worktrees/repo/x"), // the old default root, which no record of this project uses
         under.join("deep/x"),            // nested
         under.join(".hidden"),           // hidden name
@@ -3544,4 +3544,17 @@ fn agent_start_env_reaches_the_agent_and_refused_keys_start_nothing() {
     );
     assert_eq!(count(), before);
     h.request(Request::Close { id: session.id });
+}
+
+/// A core on its own NUNCHIRO_HOME keeps its unset-default worktrees beside that home, not in the user's home.
+fn own_worktrees(home: &std::path::Path) -> std::path::PathBuf {
+    let home = std::fs::canonicalize(home).unwrap();
+    let name = format!(
+        "{}-worktrees",
+        home.file_name()
+            .unwrap()
+            .to_string_lossy()
+            .trim_start_matches('.')
+    );
+    home.with_file_name(name).join("nunchiro/worktrees")
 }

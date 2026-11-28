@@ -1309,6 +1309,14 @@ fn core_makes_no_other_network_call() {
         "agent_update.rs names another URL"
     );
     assert!(update.contains("\"https://registry.npmjs.org/\""));
+    // The plugin catalogue reads one origin, this repository's raw files on GitHub (PRIVACY.md).
+    let catalogue = fs::read_to_string(root.join("plugins_online.rs")).unwrap();
+    assert_eq!(
+        catalogue.matches("://").count(),
+        1,
+        "plugins_online.rs names another URL"
+    );
+    assert!(catalogue.contains("\"https://raw.githubusercontent.com/develku/nunchiro/\""));
     let mut stack = vec![root.clone()];
     while let Some(dir) = stack.pop() {
         for e in fs::read_dir(dir).unwrap() {
@@ -1328,7 +1336,7 @@ fn core_makes_no_other_network_call() {
             }
             if !matches!(
                 rel.as_str(),
-                "themes_online.rs" | "libs/mod.rs" | "agent_update.rs"
+                "themes_online.rs" | "libs/mod.rs" | "agent_update.rs" | "plugins_online.rs"
             ) {
                 assert!(
                     !text.contains("Client::new("),
