@@ -335,12 +335,28 @@ fn a_folder_named_in_the_owners_window_message_is_the_assistants_for_the_convers
         "mode",
         "outside: the mode asks"
     );
+    for line in [
+        format!("mkdir -p {r}/labels/Billing"),
+        format!("ls {r}/inbox"),
+        format!("grep -l Subject {r}/inbox/a.eml"),
+    ] {
+        assert_eq!(hook("Bash", json!({"command": line})), "allow", "{line}");
+    }
+    fs::create_dir_all(run.join("labels/Billing")).unwrap();
     assert_eq!(
         hook(
             "Bash",
-            json!({"command": format!("mkdir -p {r}/labels/Billing && mv -n {r}/inbox/a.eml {r}/labels/Billing/")})
+            json!({"command": format!("mv -n {r}/inbox/a.eml {r}/labels/Billing/")})
         ),
         "allow"
+    );
+    assert_eq!(
+        hook(
+            "Bash",
+            json!({"command": format!("mkdir -p {r}/x && mv -n {r}/notes.txt {r}/x/")})
+        ),
+        "ask",
+        "one changing command per line"
     );
     assert_eq!(
         hook("Bash", json!({"command": format!("rm {r}/inbox/a.eml")})),
@@ -379,6 +395,21 @@ fn a_folder_named_in_the_owners_window_message_is_the_assistants_for_the_convers
         "allow",
         "inbox is still given"
     );
+    // Naming the removed folder again gives it back at once: Claude still has it, so no `/add-dir` goes in.
+    let adds = || screen().matches("/add-dir").count();
+    let before = adds();
+    let again = window(
+        &home,
+        offer(&format!("and {}/notes.txt too", run.display())),
+    );
+    assert_eq!(again["Ok"]["folders"], json!([run.clone()]), "{again}");
+    assert_eq!(row().folders, vec![run.join("inbox"), run.clone()]);
+    assert_eq!(
+        hook("Edit", json!({"file_path": run.join("notes.txt")})),
+        "allow"
+    );
+    thread::sleep(Duration::from_millis(500));
+    assert_eq!(adds(), before);
     // The grant file goes with the run.
     let grants = home.join("folders").join(format!("{}.json", seat.id));
     assert!(grants.exists());

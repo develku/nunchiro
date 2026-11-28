@@ -9,10 +9,25 @@ use std::time::{Duration, Instant};
 /// One run's folders on their way in: the queue, and the one being added now.
 #[derive(Default)]
 pub(crate) struct Granting {
-    pending: Vec<PathBuf>,
+    /// Each folder with the time it was offered: the deadline counts from there, typed or not.
+    pending: Vec<(PathBuf, Instant)>,
     now: Option<Adding>,
 }
 impl Granting {
+    fn offer(&mut self, folder: PathBuf, at: Instant) {
+        let busy = self.now.as_ref().is_some_and(|a| a.folder == folder);
+        if !busy && !self.pending.iter().any(|(f, _)| *f == folder) {
+            self.pending.push((folder, at));
+        }
+    }
+    /// The offers past `GIVE_UP` that were never typed (no box showed in time) leave the queue.
+    fn expire(&mut self, at: Instant) -> Vec<PathBuf> {
+        let (old, keep) = std::mem::take(&mut self.pending)
+            .into_iter()
+            .partition(|(_, offered)| at.duration_since(*offered) > GIVE_UP);
+        self.pending = keep;
+        old.into_iter().map(|(f, _)| f).collect()
+    }
     /// `/add-dir` is on the screen now: its questions are the core's, not cards.
     pub(super) fn adding(&self) -> bool {
         self.now.is_some()
@@ -20,7 +35,7 @@ impl Granting {
 }
 struct Adding {
     folder: PathBuf,
-    typed: Instant,
+    offered: Instant,
     entered: bool,
     /// The core's Down went out for the first question (Enter only after it).
     downed: bool,
@@ -51,13 +66,32 @@ impl Sessions {
         }
         let had = meta.folders.clone();
         let named = folder_grant::named(text, &self.settings.user_home, &self.home);
-        let g = self.folder_grants.entry(id.to_string()).or_default();
-        let mut coming = vec![];
-        for folder in named.into_iter().filter(|f| !had.contains(f)) {
-            let busy = g.now.as_ref().is_some_and(|a| a.folder == folder);
-            if !g.pending.contains(&folder) && !busy {
-                g.pending.push(folder.clone());
+        // A folder the owner removed in this run is still one of Claude's working folders: naming it again gives it
+        // back at once, with no `/add-dir` (Claude would not ask again).
+        let mut grants = folder_grant::load(&self.home, id);
+        let back: Vec<PathBuf> = named
+            .iter()
+            .filter(|f| !had.contains(f) && grants.removed.contains(f))
+            .cloned()
+            .collect();
+        if !back.is_empty() {
+            grants.removed.retain(|r| !back.contains(r));
+            if let Ok(entry) = self.entry(id) {
+                entry.meta.folders.extend(back.iter().cloned());
+                grants.granted = entry.meta.folders.clone();
             }
+            if let Err(e) = folder_grant::save(&self.home, id, &grants).and_then(|()| self.save()) {
+                eprintln!("session {id}: folder access: {e}");
+            }
+        }
+        let at = Instant::now();
+        let g = self.folder_grants.entry(id.to_string()).or_default();
+        let mut coming = back.clone();
+        for folder in named
+            .into_iter()
+            .filter(|f| !had.contains(f) && !back.contains(f))
+        {
+            g.offer(folder.clone(), at);
             coming.push(folder);
         }
         coming
@@ -92,7 +126,14 @@ impl Sessions {
         // An empty box, or one that shows only Claude's faint suggested prompt (typing replaces it).
         let at_box = composer(&text, entry.meta.kind)
             .is_some_and(|b| b.trim().is_empty() || entry.observer.screen.composer_faint());
+        let (user_home, home) = (self.settings.user_home.clone(), self.home.clone());
         let g = self.folder_grants.entry(id.to_string()).or_default();
+        for folder in g.expire(at) {
+            eprintln!(
+                "session {id}: {} was never added (no input box in time)",
+                folder.display()
+            );
+        }
         let mut keys: Vec<u8> = vec![];
         let mut done: Option<(PathBuf, bool)> = None;
         match &mut g.now {
@@ -101,23 +142,31 @@ impl Sessions {
                 return Ok(());
             }
             None if idle && at_box => {
-                let folder = g.pending.remove(0);
+                let (folder, offered) = g.pending.remove(0);
+                // Checked again now: the path may lead elsewhere since it was named (a folder swapped for a link).
+                if !folder_grant::still(&folder, &user_home, &home) {
+                    eprintln!(
+                        "session {id}: {} changed since it was named",
+                        folder.display()
+                    );
+                    return Ok(());
+                }
                 keys.extend(format!("/add-dir {}", folder.display()).bytes());
                 g.now = Some(Adding {
                     folder,
-                    typed: at,
+                    offered,
                     entered: false,
                     downed: false,
                     key: at,
                 });
             }
             None => {}
-            Some(a) if at.duration_since(a.typed) > GIVE_UP => {
+            Some(a) if at.duration_since(a.offered) > GIVE_UP => {
                 keys.push(0x1b); // a question still open is left with Esc
                 done = Some((a.folder.clone(), false));
             }
             Some(a) if !a.entered => {
-                if at.duration_since(a.typed) >= ENTER_AFTER {
+                if at.duration_since(a.key) >= ENTER_AFTER {
                     keys.push(b'\r');
                     a.entered = true;
                     a.key = at;
@@ -147,6 +196,12 @@ impl Sessions {
                 .write(&keys)?;
         }
         match done {
+            Some((folder, true)) if !folder_grant::still(&folder, &user_home, &home) => {
+                eprintln!(
+                    "session {id}: {} changed while it was added",
+                    folder.display()
+                );
+            }
             Some((folder, true)) => {
                 let entry = self.entry(id)?;
                 if !entry.meta.folders.contains(&folder) {
@@ -189,5 +244,29 @@ impl Sessions {
         grants.granted = self.entry(id)?.meta.folders.clone();
         grants.removed.retain(|r| !grants.granted.contains(r));
         folder_grant::save(&self.home, id, &grants)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A folder offered but never typed (no box ever showed) is dropped at the same deadline as one typed, so it cannot
+    // hold the seat's sends for ever.
+    #[test]
+    fn an_offer_never_typed_is_dropped_at_the_deadline() {
+        let at = Instant::now();
+        let mut g = Granting::default();
+        g.offer(
+            PathBuf::from("/x/old"),
+            at - GIVE_UP - Duration::from_secs(1),
+        );
+        g.offer(PathBuf::from("/x/new"), at);
+        assert_eq!(g.expire(at), vec![PathBuf::from("/x/old")]);
+        assert_eq!(
+            g.expire(at + GIVE_UP + Duration::from_secs(1)),
+            vec![PathBuf::from("/x/new")]
+        );
+        assert!(g.pending.is_empty());
     }
 }

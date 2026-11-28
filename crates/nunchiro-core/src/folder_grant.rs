@@ -109,6 +109,21 @@ fn paths(line: &str) -> Vec<String> {
     out
 }
 
+/// Just before the add and once Claude says it is in: `folder` is still the folder that path names, and allowed.
+pub fn still(folder: &Path, user_home: &Path, core_home: &Path) -> bool {
+    named_folder(folder).as_deref() == Some(folder) && !refused(folder, user_home, core_home)
+}
+
+/// A character never typed into the seat's terminal: a control, format or line/paragraph separator (`\p{Cc}`,
+/// `\p{Cf}`, `\p{Zl}`, `\p{Zp}`, as the window's drop of a file path refuses).
+fn unsafe_char(c: char) -> bool {
+    c.is_control()
+        || matches!(c as u32,
+            0xAD | 0x600..=0x605 | 0x61C | 0x6DD | 0x70F | 0x890..=0x891 | 0x8E2 | 0x180E | 0x200B..=0x200F
+            | 0x2028..=0x202E | 0x2060..=0x2064 | 0x2066..=0x206F | 0xFEFF | 0xFFF9..=0xFFFB | 0x110BD | 0x110CD
+            | 0x13430..=0x1343F | 0x1BCA0..=0x1BCA3 | 0x1D173..=0x1D17A | 0xE0001 | 0xE0020..=0xE007F)
+}
+
 /// The folder a typed path names, canonical (links resolved): the path itself when it is a folder, the folder of a
 /// file when it is one; `None` when it does not exist or holds `..`.
 fn named_folder(path: &Path) -> Option<PathBuf> {
@@ -116,6 +131,9 @@ fn named_folder(path: &Path) -> Option<PathBuf> {
         return None;
     }
     let real = std::fs::canonicalize(path).ok()?;
+    if real.to_string_lossy().chars().any(unsafe_char) {
+        return None;
+    }
     if real.is_dir() {
         Some(real)
     } else {
@@ -150,7 +168,12 @@ pub fn refused(folder: &Path, user_home: &Path, core_home: &Path) -> bool {
     let loads = [".claude", ".mcp.json", "CLAUDE.md", "CLAUDE.local.md"]
         .iter()
         .any(|name| std::fs::symlink_metadata(folder.join(name)).is_ok());
-    !allowed
+    // Any dot folder on the way (`~/work/.aws`, `/Volumes/Backup/x/.ssh`): credentials and settings live there.
+    let dotted = folder
+        .components()
+        .any(|c| c.as_os_str().to_str().is_none_or(|n| n.starts_with('.')));
+    dotted
+        || !allowed
         || home.starts_with(folder)
         || core.starts_with(folder)
         || folder.starts_with(&core)
@@ -183,6 +206,13 @@ fn writable(path: &Path, grants: &Grants) -> bool {
     plain
         && landing(path).is_some_and(|p| {
             grants.granted.iter().any(|g| p.starts_with(g))
+                && !grants.removed.iter().any(|r| {
+                    p.starts_with(r)
+                        && !grants
+                            .granted
+                            .iter()
+                            .any(|g| g.starts_with(r) && p.starts_with(g))
+                })
                 && !p.components().any(|c| {
                     [
                         ".claude",
@@ -202,47 +232,46 @@ fn writable(path: &Path, grants: &Grants) -> bool {
         })
 }
 
-/// `mv -n` of a source moves the entry itself (a link is not followed): its folder must be inside, and so the name.
+/// `mv -n` moves a plain file only (no folder, no link, no second hard link): its folder must be inside, and so the
+/// name.
 fn movable(path: &Path, grants: &Grants) -> bool {
-    std::fs::symlink_metadata(path).is_ok()
+    std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_file() && m.nlink() == 1)
         && path
             .parent()
             .zip(path.file_name())
             .is_some_and(|(dir, name)| writable(&dir.join(name), grants) && writable(dir, grants))
 }
 
-/// One plain line of `mkdir -p <paths>` and `mv -n <sources> <target>` commands joined by ` && ` or line breaks, every
-/// path full and inside a granted folder. Words are plain (letters, digits and `._/-+,:@%=`, one space between), so the
-/// shell reads them as they are: no quote, glob, `~`, `$`, redirect or other separator.
+/// One `mkdir -p <paths>` or one `mv -n <files> <target>`, every path full and inside a granted folder. One command
+/// only: paths are checked on the disk as it is before the line runs, and a first command could change what a second
+/// one's paths lead to. Words are plain (letters, digits and `._/-+,:@%=`, one space between), so the shell reads
+/// them as they are: no quote, glob, `~`, `$`, redirect, line break or other separator.
 fn file_line(command: &str, grants: &Grants) -> bool {
-    command
-        .split('\n')
-        .flat_map(|l| l.split(" && "))
-        .all(|part| {
-            let words: Vec<&str> = part.trim_matches(' ').split(' ').collect();
-            if words.iter().any(|w| {
-                w.is_empty()
-                    || !w
-                        .bytes()
-                        .all(|b| b.is_ascii_alphanumeric() || b"._/-+,:@%=".contains(&b))
-            }) {
-                return false;
+    std::iter::once(command).all(|part| {
+        let words: Vec<&str> = part.trim_matches(' ').split(' ').collect();
+        if words.iter().any(|w| {
+            w.is_empty()
+                || !w
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"._/-+,:@%=".contains(&b))
+        }) {
+            return false;
+        }
+        let paths = |ws: &[&str]| ws.iter().all(|w| w.starts_with('/'));
+        match words.as_slice() {
+            ["mkdir", "-p", rest @ ..] => {
+                !rest.is_empty()
+                    && paths(rest)
+                    && rest.iter().all(|p| writable(Path::new(p), grants))
             }
-            let paths = |ws: &[&str]| ws.iter().all(|w| w.starts_with('/'));
-            match words.as_slice() {
-                ["mkdir", "-p", rest @ ..] => {
-                    !rest.is_empty()
-                        && paths(rest)
-                        && rest.iter().all(|p| writable(Path::new(p), grants))
-                }
-                ["mv", "-n", rest @ ..] if rest.len() >= 2 && paths(rest) => {
-                    let (target, sources) = rest.split_last().unwrap();
-                    sources.iter().all(|s| movable(Path::new(s), grants))
-                        && writable(Path::new(target), grants)
-                }
-                _ => false,
+            ["mv", "-n", rest @ ..] if rest.len() >= 2 && paths(rest) => {
+                let (target, sources) = rest.split_last().unwrap();
+                sources.iter().all(|s| movable(Path::new(s), grants))
+                    && writable(Path::new(target), grants)
             }
-        })
+            _ => false,
+        }
+    })
 }
 
 /// The programs a plain read line may run unasked inside a granted folder (the owner's list, nothing else).
@@ -302,7 +331,7 @@ fn wild(pattern: &[char], name: &[char]) -> bool {
 }
 
 /// A path a read may touch: it exists, and resolved it is inside a granted folder, in no dot folder or Claude file
-/// there (any letter case), and no file with a second hard link.
+/// there (any letter case), neither in nor above a removed folder, and no file with a second hard link.
 fn readable(path: &Path, grants: &Grants) -> bool {
     if !path.is_absolute() || path.components().any(|c| c == Component::ParentDir) {
         return false;
@@ -320,6 +349,14 @@ fn readable(path: &Path, grants: &Grants) -> bool {
                 })
             })
         })
+    }) && !grants.removed.iter().any(|r| {
+        // A removed folder: nothing in it (unless given again below it), and no read whose start holds it.
+        r.starts_with(&real)
+            || real.starts_with(r)
+                && !grants
+                    .granted
+                    .iter()
+                    .any(|g| g.starts_with(r) && real.starts_with(g))
     }) && std::fs::metadata(&real).is_ok_and(|m| m.is_dir() || m.nlink() == 1)
 }
 
@@ -452,19 +489,39 @@ pub fn decide(tool: &str, input: &Value, cwd: Option<&Path>, grants: &Grants) ->
         _ => None,
     };
     // While a folder is removed, a path the hook cannot place (relative, `..`, a link to nowhere) is refused too, and
-    // so is a Glob pattern whose fixed start lands there.
-    let pattern = (tool == "Glob")
+    // so is a Glob search whose start (the folder part of its fixed prefix, from `path` or the working folder) lands
+    // in it or holds it.
+    let start = (tool == "Glob")
         .then(|| input.get("pattern").and_then(Value::as_str))
         .flatten()
-        .filter(|p| p.starts_with(['/', '~']) || p.contains(".."))
-        .map(|p| Path::new(&p[..p.find(['*', '?', '[', '{']).unwrap_or(p.len())]));
+        .and_then(|p| {
+            let fixed = &p[..p.find(['*', '?', '[', '{']).unwrap_or(p.len())];
+            let dir = Path::new(&fixed[..fixed.rfind('/').map_or(0, |at| at + 1)]);
+            if p.starts_with(['/', '~']) {
+                Some(dir.to_path_buf())
+            } else {
+                match target.or(cwd) {
+                    Some(base) => Some(base.join(dir)),
+                    None => p.contains("..").then(|| dir.to_path_buf()),
+                }
+            }
+        });
     let gone = |t: &Path| {
         landing(t).is_none_or(|p| {
-            grants.removed.iter().any(|r| p.starts_with(r))
+            grants
+                .removed
+                .iter()
+                .any(|r| p.starts_with(r) || r.starts_with(&p))
                 && !grants.granted.iter().any(|g| p.starts_with(g))
         })
     };
-    if !grants.removed.is_empty() && target.into_iter().chain(pattern).any(gone) {
+    if !grants.removed.is_empty()
+        && target
+            .map(Path::to_path_buf)
+            .into_iter()
+            .chain(start)
+            .any(|t| gone(&t))
+    {
         return Some(Verdict::Deny(
             "Home seat: the owner removed this folder's access for this conversation",
         ));
@@ -626,6 +683,35 @@ mod tests {
         std::os::unix::fs::symlink(home.join(".ssh"), home.join("docs/ssh-link")).unwrap();
         let no = |p: PathBuf| refused(&std::fs::canonicalize(&p).unwrap(), &home, &core);
         assert!(!no(home.join("docs/work")), "an ordinary folder");
+        for d in ["docs/.aws", "vol/x/.ssh/keys"] {
+            std::fs::create_dir_all(home.join(d)).unwrap();
+            assert!(no(home.join(d)), "a dot folder below: {d}");
+        }
+        // A name with a control or format character never reaches the terminal.
+        std::fs::create_dir_all(home.join("docs/a\u{202e}b")).unwrap();
+        std::fs::create_dir_all(home.join("docs/c\u{7}d")).unwrap();
+        assert!(
+            named(
+                &format!("in {}/docs/a\u{202e}b", home.display()),
+                &home,
+                &core
+            )
+            .is_empty()
+        );
+        assert!(
+            named(
+                &format!("in '{}/docs/c\u{7}d'", home.display()),
+                &home,
+                &core
+            )
+            .is_empty()
+        );
+        // Checked again just before the add: a folder swapped for a link is no longer the one named.
+        let work = std::fs::canonicalize(home.join("docs/work")).unwrap();
+        assert!(still(&work, &home, &core));
+        std::fs::rename(home.join("docs/work"), home.join("docs/work-old")).unwrap();
+        std::os::unix::fs::symlink(home.join(".ssh"), home.join("docs/work")).unwrap();
+        assert!(!still(&work, &home, &core));
         for p in [
             PathBuf::from("/"),
             PathBuf::from("/etc"),
@@ -710,11 +796,19 @@ mod tests {
         let i = inside.display();
         assert!(allow(
             "Bash",
-            sh(format!(
-                "mkdir -p {i}/labels/Billing {i}/labels/Meetings && mv -n {i}/inbox/a.eml {i}/labels/Billing/"
-            )),
+            sh(format!("mkdir -p {i}/labels/Billing {i}/labels/Meetings")),
             &grants
         ));
+        assert!(allow(
+            "Bash",
+            sh(format!("mv -n {i}/inbox/a.eml {i}/inbox/a2.eml")),
+            &grants
+        ));
+        // One changing command per line, and `mv -n` moves plain files only: a first command can change what a
+        // second one's paths lead to (a folder moved onto a name whose link leads out).
+        std::fs::create_dir_all(inside.join("d")).unwrap();
+        std::os::unix::fs::symlink(&outside, inside.join("d/link")).unwrap();
+        std::os::unix::fs::symlink(inside.join("inbox/a.eml"), inside.join("alias.eml")).unwrap();
         for line in [
             format!("rm {i}/inbox/a.eml"),
             format!("rm -rf {i}"),
@@ -725,6 +819,12 @@ mod tests {
             format!("mkdir -p {i}/x || rm -rf {i}"),
             format!("mkdir -p {i}/x && cat {i}/inbox/a.eml"),
             "mkdir -p labels".to_string(),
+            format!("mkdir -p {i}/labels/Billing && mv -n {i}/inbox/a.eml {i}/labels/Billing/"),
+            format!("mv -n {i}/d {i}/e && mv -n {i}/inbox/a.eml {i}/e/link/"),
+            format!("mv -n {i}/d {i}/e && mkdir -p {i}/e/link/made"),
+            format!("mkdir -p {i}/x\nmkdir -p {i}/y"),
+            format!("mv -n {i}/d {i}/e"),
+            format!("mv -n {i}/alias.eml {i}/inbox/"),
         ] {
             assert!(!allow("Bash", sh(line.clone()), &grants), "{line}");
         }
@@ -762,6 +862,15 @@ mod tests {
             json!({"pattern": format!("{}/**/*.eml", inside.display())})
         ));
         assert!(deny("Glob", json!({"pattern": "../run/**"})));
+        // A start above the removed folder reaches into it too.
+        let r = root.display();
+        assert!(deny("Glob", json!({"pattern": format!("{r}/ru*/**")})));
+        assert!(deny(
+            "Glob",
+            json!({"pattern": format!("{r}/*/inbox/a.eml")})
+        ));
+        assert!(deny("Glob", json!({"path": root, "pattern": "run/**"})));
+        assert!(deny("Grep", json!({"pattern": "x", "path": root})));
         assert!(
             decide("Glob", &json!({"pattern": "**/*.eml"}), None, &gone).is_none(),
             "the seat's own folder"
@@ -872,6 +981,22 @@ mod tests {
         };
         assert!(!run(&format!("cat {i}/inbox/a.eml"), &root, &gone));
         assert!(!run("ls", &inside, &gone));
+        // A folder removed inside one still given: nothing in it, and no recursive read over it.
+        let nested = Grants {
+            granted: vec![inside.clone()],
+            removed: vec![inside.join("inbox")],
+        };
+        assert!(!run(&format!("cat {i}/inbox/a.eml"), &root, &nested));
+        assert!(!run(&format!("grep -rl Subject {i}"), &root, &nested));
+        assert!(!run(&format!("ls {i}/inbox"), &root, &nested));
+        let write = |line: String| {
+            matches!(
+                decide("Bash", &json!({"command": line}), Some(&root), &nested),
+                Some(Verdict::Allow(_))
+            )
+        };
+        assert!(!write(format!("mkdir -p {i}/inbox/x")));
+        assert!(write(format!("mkdir -p {i}/x")));
         let _ = std::fs::remove_dir_all(root);
     }
 
