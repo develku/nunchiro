@@ -23,10 +23,6 @@ use std::{
 fn wait(what: &str, done: impl FnMut() -> bool) {
     wait_for(what, 15, done)
 }
-/// Past the card's 10 s undo time.
-fn wait_long(what: &str, done: impl FnMut() -> bool) {
-    wait_for(what, 30, done)
-}
 fn wait_for(what: &str, secs: u64, mut done: impl FnMut() -> bool) {
     let until = Instant::now() + Duration::from_secs(secs);
     while !done() {
@@ -112,7 +108,7 @@ fn mate(home: &Path, name: &str, project: Option<PathBuf>) -> Teammate {
         .unwrap()
 }
 
-/// A fake Claude in raw mode: its input box, `/add-dir <folder>` with both questions (the cursor on "No, leave it out",
+/// A fake Claude in raw mode: its input box (between two rules, as Claude draws it), `/add-dir <folder>` with both questions (the cursor on "No, leave it out",
 /// then on "1. Yes, for this session"), the "Added" line; any other line is echoed as "got: <line>".
 const FAKE: &str = r#"#!/usr/bin/python3
 import os, sys, tty
@@ -120,7 +116,7 @@ if sys.argv[1:2] == ["--version"]:
     print("2.1.332 (Claude Code)"); sys.exit(0)
 tty.setraw(0)
 out = lambda s: (os.write(1, s.encode()))
-box = lambda: out("\r\n❯ \r\n")
+box = lambda: out("\r\n" + "─" * 60 + "\r\n❯ \r\n" + "─" * 60 + "\r\n")
 out("\x1b[2J\x1b[H"); box()
 line, state, folder, yes = "", None, "", False
 def first():
@@ -228,12 +224,14 @@ fn a_folder_named_in_the_owners_window_message_is_the_assistants_for_the_convers
         .to_string();
     // Its turn ends (the fake sends no hook of its own).
     let stop = || {
-        let r = raw(
-            &home,
-            &owner,
-            json!({"op":"hook","id":seat.id,"event":"Stop","payload":{}}),
-        );
-        eprintln!("stop: {r}");
+        for event in ["UserPromptSubmit", "Stop"] {
+            let r = raw(
+                &home,
+                &owner,
+                json!({"op":"hook","id":seat.id,"event":event,"payload":{}}),
+            );
+            assert!(r["Err"].is_null(), "{r}");
+        }
     };
     wait("the brief with the schedule's task was typed", || {
         screen().contains("got: ")
@@ -246,27 +244,8 @@ fn a_folder_named_in_the_owners_window_message_is_the_assistants_for_the_convers
         json!({"op":"agent_prompt","id":seat.id,"text":format!("look at {}", other.display())}),
     );
     assert!(said["Err"].is_null(), "{said}");
-    wait_for("the socket's message was typed", 20, || {
-        screen().contains("look at") || {
-            eprintln!(
-                "queue: {:?}\nscreen: {:?}",
-                row()
-                    .send_queue
-                    .iter()
-                    .map(|q| q.status.clone())
-                    .collect::<Vec<_>>(),
-                screen()
-                    .chars()
-                    .rev()
-                    .take(300)
-                    .collect::<String>()
-                    .chars()
-                    .rev()
-                    .collect::<String>()
-            );
-            thread::sleep(Duration::from_secs(2));
-            false
-        }
+    wait("the socket's message was typed", || {
+        screen().contains("look at")
     });
     stop();
     let text = format!(
