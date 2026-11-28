@@ -198,10 +198,10 @@ pub(crate) fn spawn(
         .spawn(move || {
             let mut seen = Seen::default();
             let mut last: Option<Instant> = None;
+            let mut cache = None;
             while !stopping.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(500));
-                let on = super::triggers::load(&home)
-                    .is_ok_and(|all| all.iter().any(|t| t.on == Source::Github && !t.paused));
+                let on = super::triggers::on_cached(&home, Source::Github, &mut cache);
                 if !on || last.is_some_and(|l| l.elapsed() < every(&home)) {
                     continue;
                 }

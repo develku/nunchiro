@@ -952,8 +952,9 @@ pub(crate) fn spawn(
             let mut cleaner = Cleaner::default();
             let mut next = Instant::now() + EVERY;
             while !stopping.load(Ordering::SeqCst) {
-                thread::sleep(Duration::from_millis(250));
-                if Instant::now() < next {
+                // Asleep until the next look or the core's stop, which wakes it at once.
+                crate::server::wait_stop(&stopping, next.saturating_duration_since(Instant::now()));
+                if stopping.load(Ordering::SeqCst) || Instant::now() < next {
                     continue;
                 }
                 next = Instant::now() + EVERY;
@@ -1649,7 +1650,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(home);
     }
 
-    // SHOULD 5 (r2): the task sees `stopping` within its 250 ms step, so the core's bounded wait ends at once when idle.
+    // SHOULD 5 (r2): the core's stop wakes the task, so the core's bounded wait ends at once when idle.
     #[test]
     fn the_task_ends_soon_after_stopping() {
         let home = home("wtc-stop");
@@ -1658,7 +1659,7 @@ mod tests {
         ));
         let stopping = Arc::new(AtomicBool::new(false));
         let task = spawn(home.clone(), registry, stopping.clone()).unwrap();
-        stopping.store(true, Ordering::SeqCst);
+        crate::server::stop(&stopping);
         let until = Instant::now() + Duration::from_secs(2);
         while !task.is_finished() {
             assert!(Instant::now() < until, "the task did not end");

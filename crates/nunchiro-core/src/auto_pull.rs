@@ -88,8 +88,9 @@ pub(crate) fn spawn(
         .spawn(move || {
             let mut next = Instant::now() + EVERY;
             while !stopping.load(Ordering::SeqCst) {
-                thread::sleep(Duration::from_millis(250));
-                if Instant::now() < next {
+                // Asleep until the next pass or the core's stop, which wakes it at once.
+                crate::server::wait_stop(&stopping, next.saturating_duration_since(Instant::now()));
+                if stopping.load(Ordering::SeqCst) || Instant::now() < next {
                     continue;
                 }
                 next = Instant::now() + EVERY;
