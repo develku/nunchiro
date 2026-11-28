@@ -15,7 +15,7 @@ import { useImages } from '../images/attach';
 import { asks, blocked, heldIds, holdText, refuseSecond, takeHeld } from './held';
 import { claimSteer, enqueue, finishSteer, markSent, nextRow, noteSteer, putBack, queueIds, queueOf, recordStop, setPaused, takeAll, takeRow, unclaimSteer, unsend, useQueues, type Row } from './queued';
 import { useSideChats } from './useSideChats';
-import { forgetPastes, typedOnly } from './pasted';
+import { typedBox } from './typed';
 import type { T } from '../i18n';
 
 type Deps = {
@@ -55,6 +55,7 @@ const logRow = (s: Session, send: string) => (s as Session & { send_log?: { id: 
 export function useComposerSend({ core, sessions, current, ordered, images, handoff, setHandoff, sideChats, follow, open, addTab, accountsP, readAccounts, t, setPaneNote, connected, snapped }: Deps) {
   const forking = useRef(false);
   const latest = useRef(sessions); // the folder wait below reads snapshots that arrive while it waits
+  const heldOffers = useRef(new Map<string, string>()); // a held first message's folder offer, for its release
   latest.current = sessions;
   const sentTo = useRef(new Set<string>()); // v25-quiet-chat: sessions this window has already sent a message to
   const sendingFork = useRef(new Set<string>());
@@ -320,6 +321,10 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
         return;
       }
     const typed = el.value;
+    // The Assistant's folders: the typed words when every change to the box was typing (typed.ts); a held message
+    // keeps that offer for its release, never its image path lines.
+    const offerText = released ? (heldOffers.current.get(target.id) ?? '') : !ho && !row && !retry && target.kind !== 'shell' && typedBox(el) ? typed : '';
+    heldOffers.current.delete(target.id);
     const text = [typed, ...saved.paths].filter(Boolean).join('\n');
     // v1b-05 (end of block)
     // v25-quiet-chat (ticket 294 item 2): the first message to a session, while a dialog (trust, imports) is still asked, would be taken
@@ -331,6 +336,7 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
       el.closest('.cbox')?.removeAttribute('data-shell'); // ticket 1044: the "!" cue ends with the text
       noDraft(target.id);
       saved.done();
+      heldOffers.current.set(target.id, offerText);
       return holdText(target.id, text);
     }
     // v2-3b: this Enter carries the handoff: the core starts (or reuses) the other agent's session in this folder and
@@ -387,11 +393,9 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
       }
       // The Assistant's folders (folder_grant.rs): only the words typed in this box, no paste, handoff or image path.
       // The message waits until the folders they name are in, as the core holds the seat meanwhile (at most ~35 s).
-      const offer = !ho && !row && !retry && target.kind !== 'shell' ? typedOnly(target.id, typed) : '';
-      if (offer.includes('/')) await folderWait(core, target.id, offer, () => latest.current);
+      if (offerText.includes('/')) await folderWait(core, target.id, offerText, () => latest.current);
       if (!retry || clean) await core.sendText(target.id, outgoing, seen, true);
       acknowledged = true;
-      forgetPastes(target.id);
       sentTo.current.add(target.id);
       saved.done(); // v1b-05
       await new Promise((r) => setTimeout(r, 120));
