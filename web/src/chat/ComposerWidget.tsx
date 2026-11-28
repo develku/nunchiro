@@ -84,13 +84,21 @@ type Props = { first: boolean; pin?: string } & Pick<ReturnType<typeof useCompos
     owner: Decision[];
   };
 
-/** Ticket 1030: the floating card's height as `--dock-h`, so the output's last lines and its "new" chip stay clear of it. */
+/** Ticket 1030: the floating card's height as `--dock-h`, so the output's last lines and its "new" chip stay clear of it.
+ *  The dock is capped at 60% of the output above it (`--dock-max`): a tall card scrolls inside and never covers the tabs. */
 const dockHeight = (el: HTMLDivElement | null) => {
   if (!el) return;
   const root = document.documentElement.style;
-  const watch = new ResizeObserver(() => root.setProperty('--dock-h', `${Math.ceil(el.offsetHeight)}px`));
+  const fit = () => {
+    const out = document.querySelector('.chat:not([data-off]) .cscroll')?.getBoundingClientRect();
+    const top = el.parentElement?.getBoundingClientRect().top;
+    if (out && top !== undefined) el.style.setProperty('--dock-max', `${Math.max(120, Math.floor((top - out.top) * 0.6))}px`);
+    root.setProperty('--dock-h', `${Math.ceil(el.offsetHeight)}px`);
+  };
+  const watch = new ResizeObserver(fit);
   watch.observe(el);
-  return () => void (watch.disconnect(), root.removeProperty('--dock-h'));
+  window.addEventListener('resize', fit);
+  return () => void (watch.disconnect(), window.removeEventListener('resize', fit), root.removeProperty('--dock-h'));
 };
 
 /** The composer of the focused session, or of a pinned one (`pin`). Its send path is useComposerSend's. */
@@ -306,7 +314,7 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
       {target && dockAsks.length + dockOut.length + dockNight.length > 0 && (
         <div className="dock" ref={dockHeight}>
           {dockNight.map((d) => (
-            <div key={d.id} className="dock-out">
+            <div key={d.id} className="dock-out dock-fit">
               <NightTidyCard d={d} core={core} onAnswer={onAnswer} t={t} />
               <p className="dc-hint dc-also">{t('decisions.alsoInDecisions')}</p>
             </div>

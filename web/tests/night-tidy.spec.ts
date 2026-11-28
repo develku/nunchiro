@@ -92,7 +92,7 @@ test('night_tidy_card: changed lines start checked, outside proposals unchecked,
   expect(fs.existsSync(path.join(state(core), 'tidy.json'))).toBe(false);
 });
 
-test('night_tidy_stale: a memory changed since the tidy is not applied, says so, and the checked proposal still settles', async ({ app, core }) => {
+test('night_tidy_stale: a memory changed since the tidy is not applied, the checked proposal still settles, and the card with nothing left goes', async ({ app, core }) => {
   await seedCard(app, core);
   await openWindow(app, {}, core);
   await icon(app, 'right', 'Decisions').click();
@@ -102,7 +102,8 @@ test('night_tidy_stale: a memory changed since the tidy is not applied, says so,
   fs.appendFileSync(file, '- 2026-11-28 A line added during the look. (from: you)\n');
   await tidy.getByRole('checkbox', { name: 'Keep: Invoices from Acme go to finance with the PO number.' }).check();
   await tidy.getByRole('button', { name: 'Apply checked' }).click();
-  await expect(tidy.locator('[data-nt-stale]')).toHaveText("Bom's memory changed since the tidy, so its lines were not applied. Its checked proposals were kept; it is tidied again next night.");
+  // Nothing of Bom's is left to look at: the card goes, never "Night tidy for 0 bots".
+  await expect(tidy).toHaveCount(0);
   const now = index(core);
   expect(now).toContain('Weekly review Friday.');
   expect(now).toContain('Invoices from Acme go to finance with the PO number. (from: mail)');
@@ -190,6 +191,17 @@ test('night_tidy_docked: the card docks in the Chief\'s chat, or in the bot\'s o
   const heading = await app.locator('.cscroll > .empty h3').boundingBox();
   const dock = await app.locator('.composer > .dock').boundingBox();
   expect(heading && dock && heading.y + heading.height <= dock.y).toBe(true);
+  // A short window: the dock is capped, so it stays below the tab strip, the heading stays above it and the buttons show.
+  await app.setViewportSize({ width: 1440, height: 560 });
+  await expect(async () => {
+    const tabs = await app.locator('.tabs').boundingBox();
+    const box = await app.locator('.composer > .dock').boundingBox();
+    const head = await app.locator('.cscroll > .empty h3').boundingBox();
+    expect(tabs && box && box.y >= tabs.y + tabs.height).toBe(true);
+    expect(head && box && head.y + head.height <= box.y && head.y >= tabs!.y + tabs!.height).toBe(true);
+  }).toPass();
+  await expect(docked(app).getByRole('button', { name: 'Apply checked' })).toBeInViewport();
+  await app.setViewportSize({ width: 1440, height: 900 });
   await openSessionFromPalette(app, bom.id);
   await expect(docked(app)).toHaveCount(0);
   chief = false;

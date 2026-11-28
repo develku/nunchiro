@@ -2201,7 +2201,28 @@ fn a_tidy_apply_reports_each_bot_and_one_refusal_stops_none() {
         let (_, base) = m.tidy_input().unwrap();
         assert!(m.keep_tidy(vec![], &base, "haiku", 1, 1).unwrap());
     }
-    // Ana's index changes after her tidy: hers is stale.
+    // One card for both; Ana's index changes after her tidy: hers is stale.
+    let tidy_cards = |reg: &std::sync::Mutex<crate::sessions::Sessions>| {
+        reg.lock()
+            .unwrap()
+            .queue
+            .owner_items()
+            .into_iter()
+            .filter(|i| matches!(i.owner, Some(crate::queue::OwnerAsk::NightTidy { .. })))
+            .count()
+    };
+    reg.lock()
+        .unwrap()
+        .queue
+        .ask_owner(
+            &b,
+            crate::queue::OwnerAsk::NightTidy {
+                bots: vec![a.clone(), b.clone()],
+                place: home.clone(),
+            },
+        )
+        .unwrap();
+    assert_eq!(tidy_cards(&reg), 1);
     team.bot_memory(&a)
         .unwrap()
         .add("A new line.", Source::You, None, 2)
@@ -2217,6 +2238,8 @@ fn a_tidy_apply_reports_each_bot_and_one_refusal_stops_none() {
     };
     assert_eq!(not_applied.keys().collect::<Vec<_>>(), vec!["bot-nope"]);
     assert_eq!(stale, vec![a.clone()]);
+    // Bom applied and Ana's stale tidy left nothing to look at: the card goes (never a card for 0 bots).
+    assert_eq!(tidy_cards(&reg), 0);
     let texts = |id: &str| -> Vec<String> {
         team.bot_memory(id)
             .unwrap()

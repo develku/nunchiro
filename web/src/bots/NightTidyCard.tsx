@@ -120,6 +120,7 @@ export function NightTidyCard({ d, core, onAnswer, t }: { d: Decision; core: Cor
         <b>{title}</b>
         {ran?.at_ms && <span className="dim">{t('tidy.night.ran', { time: hhmm(ran.at_ms), model: ran.model ?? '', tokens: kTokens(tokens) })}</span>}
       </div>
+      <div className="nt-body">
       {parts.map((p) => {
         const changes = p.removed.length + p.added.length;
         return (
@@ -158,6 +159,7 @@ export function NightTidyCard({ d, core, onAnswer, t }: { d: Decision; core: Cor
         );
       })}
       <p className="nt-note dim">{t('tidy.night.note')}</p>
+      </div>
       {stale.map((name) => (
         <p key={name} className="dc-hint" data-nt-stale>
           {t('tidy.night.stale', { name })}

@@ -296,6 +296,16 @@
   flex-direction: column;
   gap: 6px;
   padding-bottom: 6px;
+  max-height: var(--dock-max, none);
+}
+/* A card that fits itself to the capped dock: its body scrolls, its buttons stay in view (night tidy). */
+.composer > .dock > .dock-fit {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.composer > .dock > .dock-fit > .deccard {
+  min-height: 0;
 }
 .composer > .dock > * {
   box-sizing: border-box;

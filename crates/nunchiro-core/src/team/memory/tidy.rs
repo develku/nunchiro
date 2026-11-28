@@ -531,8 +531,8 @@ pub(crate) fn window(
     let mates = team.list()?;
     // Each bot on its own: one bot's refusal never stops the others; it is reported by bot id.
     let (mut not_applied, mut stale) = (std::collections::BTreeMap::new(), vec![]);
+    let mut settled = std::collections::BTreeSet::new();
     if let Some(apply) = &apply {
-        let mut settled = std::collections::BTreeSet::new();
         for (id, checked) in apply {
             let applied = mates
                 .iter()
@@ -540,7 +540,7 @@ pub(crate) fn window(
                 .ok_or_else(|| format!("no bot {id}"))
                 .and_then(|_| team.bot_memory(id))
                 .and_then(|m| m.apply_tidy(checked, now));
-            // A bot not applied keeps the card, so the owner reads why (Discard closes it).
+            // A bot not applied keeps the card while it has something to show, so the owner reads why.
             match applied {
                 Ok(true) => {
                     settled.insert(id.clone());
@@ -551,17 +551,8 @@ pub(crate) fn window(
                 }
             }
         }
-        let done = |i: &crate::queue::Decision| {
-            matches!(&i.owner, Some(crate::queue::OwnerAsk::NightTidy { bots, .. })
-                if bots.iter().all(|b| settled.contains(b)))
-        };
-        let _ = registry
-            .lock()
-            .map_err(|_| "session registry unavailable".to_string())?
-            .queue
-            .answer_owner(done);
     }
-    let parts = mates
+    let parts: Vec<Part> = mates
         .iter()
         .filter_map(|t| {
             team.bot_memory(&t.id)
@@ -570,6 +561,18 @@ pub(crate) fn window(
                 .ok()?
         })
         .collect();
+    if apply.is_some() {
+        // A card goes once each of its bots was applied or has nothing left to look at (a stale tidy with no proposal).
+        let done = |i: &crate::queue::Decision| {
+            matches!(&i.owner, Some(crate::queue::OwnerAsk::NightTidy { bots, .. })
+                if bots.iter().all(|b| settled.contains(b) || !parts.iter().any(|p| &p.id == b)))
+        };
+        let _ = registry
+            .lock()
+            .map_err(|_| "session registry unavailable".to_string())?
+            .queue
+            .answer_owner(done);
+    }
     Ok(crate::api::Reply::MemoryTidy {
         parts,
         not_applied,

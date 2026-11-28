@@ -304,7 +304,7 @@ fn a_home_path_with_pattern_characters_still_gets_the_memory_rules() {
 
 #[test]
 fn a_night_tidy_runs_for_a_bot_that_talked_and_raises_one_card() {
-    let (core, launches, [seat, _, _, _]) = family("memory-night");
+    let (core, launches, [seat, other, _, _]) = family("memory-night");
     let home = core.home.clone();
     let team = crate::team::Team::open(&home);
     let mate = |name: &str| crate::team::Teammate {
@@ -321,8 +321,17 @@ fn a_night_tidy_runs_for_a_bot_that_talked_and_raises_one_card() {
         next_level: None,
         agent: None,
     };
-    let bom = team.save(None, mate("Bom")).unwrap()[0].id.clone();
-    let quiet = team.save(None, mate("Mina")).unwrap()[0].id.clone();
+    let id_of = |all: Vec<crate::team::Teammate>, name: &str| {
+        all.into_iter().find(|t| t.name == name).unwrap().id
+    };
+    // Boo comes first and its run fails (the bin answers no JSON for its index): Bom still tidies after it.
+    let boo = id_of(team.save(None, mate("Boo")).unwrap(), "Boo");
+    team.bot_memory(&boo)
+        .unwrap()
+        .add("Boom line.", Source::You, None, 1)
+        .unwrap();
+    let bom = id_of(team.save(None, mate("Bom")).unwrap(), "Bom");
+    let quiet = id_of(team.save(None, mate("Mina")).unwrap(), "Mina");
     let m = team.bot_memory(&bom).unwrap();
     m.add("Weekly review Friday.", Source::Conversation, None, 1)
         .unwrap();
@@ -340,7 +349,7 @@ fn a_night_tidy_runs_for_a_bot_that_talked_and_raises_one_card() {
     fs::write(
         &bin,
         format!(
-            "#!/bin/sh\ncat > /dev/null\necho run >> '{}'\necho '{answer}'\n",
+            "#!/bin/sh\nin=$(cat)\necho run >> '{}'\ncase \"$in\" in *Boom*) echo 'not json'; exit 0;; esac\necho '{answer}'\n",
             ran.display()
         ),
     )
@@ -359,12 +368,23 @@ fn a_night_tidy_runs_for_a_bot_that_talked_and_raises_one_card() {
         let mut core = registry.lock().unwrap();
         core.entries.get_mut(&seat.id).unwrap().meta.teammate = Some(bom.clone());
         core.queue.activity(&seat.id, now - day).unwrap();
+        core.entries.get_mut(&other.id).unwrap().meta.teammate = Some(boo.clone());
+        core.queue.activity(&other.id, now - day).unwrap();
     }
     night(now);
     assert_eq!(
         fs::read_to_string(&ran).unwrap().lines().count(),
-        1,
-        "only the bot that talked"
+        2,
+        "only the bots that talked"
+    );
+    let order: Vec<String> = team.list().unwrap().into_iter().map(|t| t.id).collect();
+    assert!(
+        order.iter().position(|i| *i == boo) < order.iter().position(|i| *i == bom),
+        "Boo is tidied first"
+    );
+    assert!(
+        team.bot_memory(&boo).unwrap().pending_tidy().is_none(),
+        "Boo's run failed"
     );
     let part = m.tidy_part(&bom, "Bom").unwrap().unwrap();
     assert_eq!(part.added[0].text, "Weekly review is on Friday at 10:00.");
