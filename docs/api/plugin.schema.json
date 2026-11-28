@@ -244,6 +244,19 @@
       ],
       "type": "string"
     },
+    "Skill": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "The folder under `skills/` and the `name` in its SKILL.md.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "StatusItem": {
       "additionalProperties": false,
       "properties": {
@@ -330,6 +343,13 @@
       "description": "Values the user sets on the Plugins page; every run gets them as `settings`.",
       "items": {
         "$ref": "#/$defs/Setting"
+      },
+      "type": "array"
+    },
+    "skill": {
+      "description": "Skills for new Claude sessions: each names `skills/<name>/`, whose SKILL.md alone reaches them (`skills.rs`).",
+      "items": {
+        "$ref": "#/$defs/Skill"
       },
       "type": "array"
     },

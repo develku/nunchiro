@@ -64,6 +64,9 @@ key = "Meta+Alt+KeyQ"         # the window's key names; Meta always (so no termi
 name = "quiet"
 text = "Quiet"                # 1 to 24 characters
 command = "status"            # optional
+
+[[skill]]                     # skills/review/SKILL.md, for new Claude sessions (at most 16; see Skills)
+name = "review"
 ```
 
 A panel takes the fields of a script or web widget's `widget.toml`, and every part is checked by the same rules: a
@@ -147,6 +150,30 @@ schedule's changed task leaves a line in the core's log. With `on_error = "allow
 busy action is skipped: the core's log says so, and the Plugins page counts the skipped checks. A check cannot answer a permission, skip an outward card or widen
 anything: allow, refuse and replacement text are its only outputs. With no plugin on, nothing is run.
 
+## Skills (`[[skill]]`)
+
+A skill is instructions for new Claude sessions: `[[skill]] name = "review"` names `skills/review/SKILL.md` in the
+plugin's folder. Once the plugin is approved and on, each new Claude session starts with it. Nunchiro copies only
+the SKILL.md files, from the approved copy, into its own data folder and passes that folder to Claude; nothing else
+in the plugin's folder (scripts, `hooks/`, `.mcp.json`, `bin/`, its own `plugin.json`) reaches Claude, and nothing is
+written under `~/.claude`.
+
+```markdown
+---
+name: review
+description: Review a change before it is pushed.
+---
+
+Read the diff and list what is missing.
+```
+
+A plugin skill is text only. Its frontmatter has `name` (the folder's name) and `description` and nothing else:
+keys such as `hooks` or `allowed-tools` would run commands, so a SKILL.md with one cannot be approved. Nor can one
+with a `` !`command` `` line, which Claude runs when the skill loads, or with hidden characters. The approval sheet
+lists each skill ("skill review instructs Claude sessions"), and a plugin with a skill asks again after any change to
+its files. Turned off, removed or blocked, the next session starts without it; a session that already loaded it
+keeps it until it ends. A locked Home seat and Codex sessions get no plugin skills.
+
 ## Browse and install
 
 Plugins, Browse plugins (or `nunchiro plugin catalog`) lists the catalogue: `plugins/catalog.json` of the Nunchiro
@@ -172,5 +199,6 @@ The window and scripts use the same request, `{"op": "plugin", "action": {"do": 
 
 ## Not yet
 
-- Skills, hooks and MCP servers in a plugin (today they are extension folders, `nunchiro extensions`).
+- MCP servers in a plugin (today they are extension folders, `nunchiro extensions`). A plugin never ships raw
+  agent hooks.
 - Plugins from outside the catalogue by a git URL and commit; submissions to the catalogue.

@@ -126,6 +126,15 @@ pub struct View {
     /// A plugin's shortcuts and status items, as its access lines (the sheet lists them under its parts).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extras: Vec<String>,
+    /// A plugin's skills with their SKILL.md text, so the user reads what will instruct Claude before the yes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skills: Vec<SkillText>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub struct SkillText {
+    pub name: String,
+    pub text: String,
 }
 
 /// Held by whatever runs a subject. Only `check` makes one; re-run `check` right before spawning, because
@@ -266,6 +275,10 @@ fn plugin_subject(home: &Path, id: &str, part: Option<&str>) -> Result<Subject, 
         .to_vec();
     let text = String::from_utf8(bytes).map_err(|_| "plugin.toml is not UTF-8")?;
     let plugin = crate::plugins::parse(&text, id)?;
+    // A skill that could run a command is refused before anything shows it (`plugins/skills.rs`).
+    crate::plugins::skills::check_skills(&plugin, |path| {
+        files.iter().find(|f| f.path() == path).map(|f| f.bytes())
+    })?;
     let manifest = match part {
         None => crate::plugins::summary(&plugin),
         Some(part) => crate::plugins::part_manifest(&plugin, part)?,
@@ -330,18 +343,35 @@ fn view(name: &str, s: Subject, stored: Option<&store::Approval>) -> View {
         .unwrap_or_default();
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
     let read_home_wide = home.is_some_and(|h| s.manifest.read.iter().any(|e| home_wide(e, &h))); // v1b-33
-    let parts = crate::plugins::split(name)
-        .and_then(|(id, _)| crate::plugins::parse(&s.text, id).ok())
-        .map(|p| crate::plugins::parts(&p))
+    let plugin =
+        crate::plugins::split(name).and_then(|(id, _)| crate::plugins::parse(&s.text, id).ok());
+    let parts = plugin
+        .as_ref()
+        .map(crate::plugins::parts)
         .unwrap_or_default();
+    let skills = plugin
+        .iter()
+        .flat_map(|p| &p.skill)
+        .filter_map(|k| {
+            let path = format!("skills/{}/SKILL.md", k.name);
+            let f = s.files.iter().find(|f| f.path() == path)?;
+            Some(SkillText {
+                name: k.name.clone(),
+                text: String::from_utf8_lossy(f.bytes()).into_owned(),
+            })
+        })
+        .collect();
     let extras = access_of(name, &s)
         .unwrap_or_default()
         .into_iter()
-        .filter(|a| a.contains(" on key ") || a.starts_with("status item "))
+        .filter(|a| {
+            a.contains(" on key ") || a.starts_with("status item ") || a.starts_with("skill ")
+        })
         .collect();
     View {
         parts,
         extras,
+        skills,
         updated,
         added: new,
         read_home_wide,

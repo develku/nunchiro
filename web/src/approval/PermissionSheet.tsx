@@ -258,6 +258,12 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
                 </ul>
               </>
             )}
+            {(view.skills ?? []).map((s) => (
+              <div key={s.name}>
+                <b>{t('plugins.sheet.skill', { name: s.name })}</b>
+                <pre data-field="skill-text">{s.text}</pre>
+              </div>
+            ))}
           </div>
         )}
         {view && m && (

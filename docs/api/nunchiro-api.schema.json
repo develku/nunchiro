@@ -1021,6 +1021,13 @@
           "description": "v1b-33: a `read` entry covers the user's whole home (`home_wide` against the core's HOME); the sheet warns.",
           "type": "boolean"
         },
+        "skills": {
+          "description": "A plugin's skills with their SKILL.md text, so the user reads what will instruct Claude before the yes.",
+          "items": {
+            "$ref": "#/$defs/SkillText"
+          },
+          "type": "array"
+        },
         "state": {
           "$ref": "#/$defs/ApprovalState"
         },
@@ -6301,6 +6308,13 @@
           "description": "Values the user sets on the Plugins page; every run gets them as `settings`.",
           "items": {
             "$ref": "#/$defs/Setting"
+          },
+          "type": "array"
+        },
+        "skill": {
+          "description": "Skills for new Claude sessions: each names `skills/<name>/`, whose SKILL.md alone reaches them (`skills.rs`).",
+          "items": {
+            "$ref": "#/$defs/Skill"
           },
           "type": "array"
         },
@@ -15890,6 +15904,34 @@
         "unknown"
       ],
       "type": "string"
+    },
+    "Skill": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "The folder under `skills/` and the `name` in its SKILL.md.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "SkillText": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "text"
+      ],
+      "type": "object"
     },
     "SkipPermissions": {
       "description": "Bypass permissions (Claude `bypassPermissions`) for one session. `Unavailable`: Claude's Shift+Tab cycle has no such\nmode (the session was not launched with the flags that list it); `Available`: pickable; `Disabled`: Claude's own\nsettings turn it off (`permissions.disableBypassPermissionsMode`); `NeedsSetting`: not in this session's cycle and the\nstored choice is Ask, so a new session would not have it either.",

@@ -27,6 +27,7 @@ pub const SCHEMA_URL: &str =
 const STORE: &str = "plugins.json";
 const MAX_BYTES: usize = 64 * 1024;
 const MAX_PARTS: usize = 32;
+const MAX_SKILLS: usize = 16;
 
 /// `plugin.toml`. Unknown keys refuse the whole file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -63,6 +64,16 @@ pub struct Plugin {
     /// Short items in the status bar; pressing one runs its command.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub status: Vec<StatusItem>,
+    /// Skills for new Claude sessions: each names `skills/<name>/`, whose SKILL.md alone reaches them (`skills.rs`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skill: Vec<Skill>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Skill {
+    /// The folder under `skills/` and the `name` in its SKILL.md.
+    pub name: String,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
@@ -364,6 +375,18 @@ pub fn parse(text: &str, id: &str) -> Result<Plugin, String> {
             return Err(format!("status item {}: no command {c:?}", s.name));
         }
     }
+    let mut skills = BTreeSet::new();
+    for s in &p.skill {
+        if !approval::valid_name(&s.name)
+            || !skills.insert(s.name.as_str())
+            || skills.len() > MAX_SKILLS
+        {
+            return Err(format!(
+                "skill {:?} is invalid or repeated, or past {MAX_SKILLS} skills",
+                s.name
+            ));
+        }
+    }
     let mut keys = BTreeSet::new();
     for s in &p.setting {
         if !approval::valid_name(&s.key) || !keys.insert(s.key.as_str()) {
@@ -487,7 +510,7 @@ pub struct Part {
 /// A plugin with a check keeps the rule from before access: any change asks again, because a check reads (and can
 /// replace) every message agents, schedules and tokens send, so a changed script must not run unreviewed.
 pub(crate) fn hash_only(p: &Plugin) -> bool {
-    !p.gate.is_empty()
+    !p.gate.is_empty() || !p.skill.is_empty()
 }
 /// What a plugin can reach, one line each, as its approval records it: its author, every part with its command line
 /// (and a panel's interval), and each host, folder, message box, action and failure rule a part has. A change that
@@ -533,6 +556,9 @@ pub(crate) fn access(p: &Plugin) -> BTreeSet<String> {
         if let Some(c) = &item.command {
             out.insert(format!("status item {} runs command {c}", item.name));
         }
+    }
+    for s in &p.skill {
+        out.insert(format!("skill {} instructs Claude sessions", s.name));
     }
     if let Some(a) = &p.author {
         out.insert(format!("author {a}"));
@@ -1701,5 +1727,6 @@ const PANEL_SH: &str = "#!/bin/sh\n# A panel: runs in a sandbox once the plugin 
 const GATE_SH: &str = "#!/bin/sh\n# A check: runs before a new session starts. $NUNCHIRO_CONTEXT has event, asker (owner, agent, schedule, token),\n# start (kind, project, worktree, label) and settings. Print {\"allow\": true}, or {\"allow\": false, \"reason\": \"one line\"}.\nprintf '{\"allow\": true}\\n'\n";
 const COMMAND_SH: &str = "#!/bin/sh\n# A command: a row in the command palette; what it prints shows as a note (show = \"note\").\ngreeting=$(/usr/bin/sed -n 's/.*\"greeting\":\"\\([^\"]*\\)\".*/\\1/p' \"$NUNCHIRO_CONTEXT\")\necho \"${greeting:-Hello} from a plugin command.\"\n";
 
+pub(crate) mod skills;
 #[cfg(test)]
 mod tests;
