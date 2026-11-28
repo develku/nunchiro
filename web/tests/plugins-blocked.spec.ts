@@ -47,3 +47,16 @@ test('a_refresh_that_blocks_a_plugin_says_so_once', async ({ app, core }) => {
   await app.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(app.getByText('Quiet hours was turned off: its catalogue blocks it. It sent files to a stranger.')).toBeVisible();
 });
+
+test('a_plugin_that_was_off_is_not_told_it_was_turned_off', async ({ app, core }) => {
+  const to = path.join(core.home, 'plugins/quiet-hours');
+  fs.mkdirSync(to, { recursive: true });
+  for (const f of fs.readdirSync(EXAMPLE)) fs.copyFileSync(path.join(EXAMPLE, f), path.join(to, f));
+  fs.writeFileSync(path.join(core.home, 'plugins.json'), JSON.stringify({ on: [], installed: { 'quiet-hours': { commit: COMMIT, origin: ORIGIN } } }));
+  fs.writeFileSync(path.join(core.home, 'plugin-kill-list.json'), JSON.stringify({ lists: { [ORIGIN]: [Date.now(), []] }, tried: { [ORIGIN]: Date.now() } }));
+  await openWindow(app);
+  fs.writeFileSync(path.join(core.home, 'plugin-kill-list.json'), JSON.stringify({ lists: { [ORIGIN]: [Date.now(), [{ id: 'quiet-hours', reason: 'It sent files to a stranger.' }]] }, tried: { [ORIGIN]: Date.now() } }));
+  await app.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(app.getByText('Quiet hours is blocked by its catalogue. It sent files to a stranger.')).toBeVisible();
+  await expect(app.getByText(/was turned off/)).toHaveCount(0);
+});
