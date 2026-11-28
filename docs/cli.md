@@ -1170,7 +1170,7 @@ See [api.md](api.md) for the socket, the callers and an example client.
 ## Plugins
 
 A plugin is one folder, `$NUNCHIRO_HOME/plugins/<id>/`, that adds panels, commands and settings; see
-[plugins.md](plugins.md). It is off and not approved after it is made or copied in, and runs nothing until both
+[plugins.md](plugins.md), the guide to writing one. It is off and not approved after it is made or copied in, and runs nothing until both
 change. `new` and `check` touch only the folder, so they work inside an agent session; the others are the owner's.
 
 ### `nunchiro plugin new <id> [--with panel,command,setting,gate]`

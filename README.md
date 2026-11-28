@@ -45,6 +45,7 @@ signing, and macOS may not keep folder permissions across installs.
 
 [docs/first-run.md](docs/first-run.md) explains each step, the macOS folder permissions Nunchiro may ask for, and how
 to quit and update. The `nunchiro` command is described in [docs/cli.md](docs/cli.md).
+To add panels, commands, settings or checks of your own, write a plugin: [docs/plugins.md](docs/plugins.md).
 
 A new worktree of this repository needs its own packages and `web/dist` before `cargo test` builds the app:
 `scripts/setup-worktree.sh` does both. `orca.yaml` names it as the worktree setup script, so Nunchiro offers to run it
