@@ -95,14 +95,12 @@ struct Settings {
     /// Ticket 1083: holds the unset `nunchiro/worktrees`, set at open: `$HOME`, or beside a core's own home (`worktree_user_home`).
     #[serde(skip)]
     user_home: PathBuf,
-    // v1a-06
-    machines: BTreeMap<String, crate::machines::Config>,
+    machines: BTreeMap<String, crate::machines::Config>, // v1a-06
     disable_hook_injection: bool,
     worktrees_dir: Option<PathBuf>,
     stale_after_ms: Option<u64>,
     permission_answers: BTreeMap<PathBuf, bool>,
-    // v1a-09
-    session_lifetime: Lifetime,
+    session_lifetime: Lifetime, // v1a-09
     start_at_login: bool,
     // v1b-19: off until the security review (ticket 21) turns it on.
     script_widgets: bool,
@@ -383,8 +381,7 @@ pub struct Sessions {
     window_size: Option<(u16, u16)>,
     // Ticket 32: account folder -> its logout tab (in memory). While that row is listed, no agent starts on the folder.
     pub(crate) logouts: BTreeMap<PathBuf, String>,
-    // v1b-15
-    board_error: Option<String>,
+    board_error: Option<String>, // v1b-15
     // S9: the rows the board last observed, with the `board_key` they were built at.
     board_rows: Option<(u64, Vec<Session>)>,
     // S9: the `board_key` and time of the last board observation.
@@ -582,8 +579,7 @@ impl Sessions {
             | Request::MachineTrust { .. } => {
                 Err("machine discovery requires unlocked owner dispatch".into())
             }
-            // v1a-06: transport requests are handled outside the registry lock.
-            Request::RemoteService { .. }
+            Request::RemoteService { .. } // v1a-06: transport requests are handled outside the registry lock
             | Request::Remote { .. }
             | Request::Forwarded { .. }
             | Request::MachineStatus { .. } => Err("transport requires owner dispatch".into()),
@@ -607,7 +603,11 @@ impl Sessions {
                 Err("the PR view requires the window".into())
             }
             Request::PrBranch { .. } => Err("the PR view requires the window".into()), // ticket 373
-            Request::GitPush { .. } | Request::PrDraft { .. } | Request::PrCreate { .. } => {
+            Request::GitPush { .. }
+            | Request::PrDraft { .. }
+            | Request::PrCreate { .. }
+            | Request::PrWrite { .. }
+            | Request::PrWriteCancel { .. } => {
                 Err("push requires the window".into())
             }
             Request::LibsResolve { .. } | Request::LibsEntry { .. } => {

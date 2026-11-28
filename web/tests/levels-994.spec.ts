@@ -92,6 +92,10 @@ test('levels994_seats: a seat shows the model it runs on the tree row, the heade
   }
   await expect(row(inbox.id).locator('.lvl')).toHaveAttribute('title', 'Level 1 of 3 · Light');
   await expect(row(chief).locator('.lvl-mark')).toHaveText('Sonnet'); // the lead's own level
+  // The lead row is the tree's fullest (name, Chief tag, idle time): at the default tree width the model pair is still
+  // drawn whole, and the time gives way first (owner rule: screens show the real model). Its box holds its whole text.
+  await expect(row(chief).locator('.lvl-pair')).toHaveAttribute('title', 'Sonnet');
+  expect(await row(chief).locator('.lvl-pair > span').evaluate((e) => e.scrollWidth <= e.clientWidth + 0.5), 'the pair is not cut').toBe(true);
   await noLevelWords(app.getByRole('navigation', { name: 'Projects' }));
 
   // The chat header: the same pair on the chip. A Codex seat on its default model says so with its effort.

@@ -35,9 +35,23 @@ A cell is one task driven in the running app on this Mac. A cell counted from do
   shortcut the screen does not show, no setting changed beforehand. For the CLIs (Claude Code, Codex) and the herdr
   TUI the default path is what their first screen and its on-screen hints offer.
 - Seconds are compared between apps, so every app of a run is driven the same way: by the owner's hand with a screen
-  recording, or by computer use for all of them. The typed text is the same in every app.
+  recording, or by computer use for all of them. The typed text is the same in every app. The apps are driven in one
+  session and take turns task by task, so they share the Mac's load and the agent service's speed of that hour; a
+  drive does not start while the 1-minute load is 15 or more (the start bar of scripts/measure/measurelib.py).
 - Recorded per drive: steps (every click, key chord or typed field) and seconds from the first input to the "done
   when" state on screen, read from the recording. Three drives, the median of each.
+- Seconds of a computer-use drive. A driver's own pace is not the app's: the same four steps took 7 s from one
+  driver and 27 s from another. So the user's part of every step is a fixed time and only the app's part is measured:
+  seconds = over the steps, the step's user time plus the app's wait after it.
+  - User time, from the Keystroke-Level Model (Card, Moran and Newell 1980: M 1.35 s to prepare, P 1.1 s to point,
+    K 0.28 s per key or button press): a click M + P + K = 2.73 s; a key or chord M + K per key; a typed field M + K
+    per character.
+  - The wait, from a recording of the app's window that has the time in each picture's name
+    (`python3 -B scripts/measure/drive.py record`): from the time stamped right before the step's input to the first
+    picture that shows the screen ready for the next step, or the task's "done when" state after the last step. It
+    counts in full and is never negative. It holds the tool's own time to deliver the input, the same for every app.
+  - `drive.py seconds` adds a drive up. What the driver does between two steps (looking, thinking) is in no figure.
+  A hand drive keeps the seconds of its recording; a run never mixes the two.
 - T1 starts at the place the app's public page sends a new user: its download button, or the README's build steps
   when there is no download. It runs on a macOS user account that never ran the app, with an agent CLI already
   signed in. Download, unpacking, the Gatekeeper dialog and onboarding all count.
@@ -55,8 +69,10 @@ of any driven app) / (this app's seconds). "partial" counts half of that; "no" c
 waits does not win.
 
 - A Nunchiro cell that was not driven in this run scores 0 (not measured).
-- A peer cell stays valid while that peer's version is the one recorded; a peer cell that was never driven is left
-  out of that peer's mean and cannot be the best.
+- A peer cell's steps stay valid while that peer's version is the one recorded; its seconds count only beside
+  Nunchiro seconds of the same session (a wait depends on the load and on the agent's answer time of that hour), so
+  the peers are driven again in every run. A peer cell that was never driven is left out of that peer's mean and
+  cannot be the best.
 - A task counts only when at least two peers were driven on it; otherwise Nunchiro's score for it is 0.
 
 An app's part score is the mean over the part's tasks.

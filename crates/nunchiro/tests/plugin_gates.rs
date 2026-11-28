@@ -167,6 +167,7 @@ fn an_off_unapproved_or_changed_plugin_decides_nothing() {
     assert!(!c.home.join("plugins/guard/cache").exists());
     ok(&c.home, &["plugin", "allow", "guard"]);
     assert!(stderr(&start(&c.home, None, false)).contains("stopped this start"));
+    // A plugin with a check asks again after any change, its script alone included: it decides nothing until then.
     std::fs::write(
         c.home.join("plugins/guard/gate.sh"),
         format!("#!/bin/sh\n{REFUSE}\n# changed\n"),

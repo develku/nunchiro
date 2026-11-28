@@ -861,6 +861,14 @@ that label (a seat of an agent with no account by that label runs on the lead's 
 account. An unknown label is refused with the list. A lead is refused and asks the user; the lead hears the change in
 its room. With it set, a session of that place may start sessions on that account as on its own.
 
+### `nunchiro task merge-ask on|off`
+`nunchiro task merge-ask on|off --project DIR` (off by default) is the owner's choice of a merge card before task work
+merges into the lead's working branch. Off, `nunchiro task ask-merge <id>` on approved, committed work raises no card
+while the project's checkout is on a named branch that is not the default one (origin's, `main` or `master`): it tells
+the lead to merge exactly the reviewed commit there. On the default branch or a detached HEAD the card always asks. On
+(Settings > Team, "Ask me before merging task work"), every merge takes the card. A lead is refused; the lead hears
+the change in its room.
+
 ### `nunchiro task cap 2|4|6|8`
 `nunchiro task cap 2|4|6|8 --project DIR` (ticket 1081 part B, 4 by default) is the owner's choice of how many live seats
 the place may have before the core stops starting Reviewers. Every live seat of the place counts: each task's seats

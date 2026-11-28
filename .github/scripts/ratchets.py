@@ -7,8 +7,8 @@ loosen its own gate; only the counted files come from the checkout.
 
 1. No baseline gains a line or a higher count: scripts/dead-click.baseline, scripts/noop-click.baseline and
    scripts/overlap.baseline only lose lines (the browser scans that read them run in the web job's core set; the no-op
-   scan runs in the weekly full run, full.yml); scripts/raw-literals.baseline and scripts/file-sizes.baseline only
-   lower their numbers.
+   scan runs in the weekly full run, full.yml); a number in scripts/raw-literals.baseline or scripts/file-sizes.baseline
+   may rise only as far as the base commit's own count, which the gate allows anyway (catching the file up with main).
 2. No raw-literal count (scripts/raw-literal-ratchet.sh) and no source file's line count (scripts/file-size-ratchet.sh)
    rises above the larger of its base baseline number and the base commit's own count: main may already be over a
    baseline (that is its own fix), but no change makes it worse.
@@ -52,10 +52,6 @@ def main():
             t.extractall(base, filter="data")
         for path in SETS:
             bad += [f"{path} gained a line: {l}" for l in sorted(set(lines(read(path))) - set(lines(read(base / path))))]
-        for path, parse in ((RAW, raw_counts), (SIZES, size_counts)):
-            old = parse(read(base / path))
-            bad += [f"{path} raised {k}: {old.get(k, 0)} to {n}" for k, n in sorted(parse(read(path)).items()) if n > old.get(k, 0)]
-
         # raw literals: the base's counter over both trees
         count = lambda src: raw_counts(subprocess.run(["sh", str(base / "scripts/raw-literals.sh"), str(src)],  # noqa: E731
                                                       capture_output=True, text=True, check=True).stdout)
@@ -64,6 +60,9 @@ def main():
             allowed[k] = max(allowed.get(k, 0), n)
         bad += [f"raw literals: {a} {p}: {n}, allowed {allowed.get((a, p), 0)}" for (a, p), n in sorted(count(Path("web/src")).items())
                 if n > allowed.get((a, p), 0)]
+        # the baseline may catch up with what the gate already allows, never pass it
+        bad += [f"{RAW} raised {k}: to {n}, allowed {allowed.get(k, 0)}" for k, n in sorted(raw_counts(read(RAW)).items())
+                if n > allowed.get(k, 0)]
 
         # file sizes: the base's source-file pattern (scorecard.py SOURCE, NOT_SOURCE), as the judge counts
         spec = importlib.util.spec_from_file_location("base_scorecard", base / "scripts/measure/scorecard.py")
@@ -77,6 +76,8 @@ def main():
                 cap = max(listed.get(p, LIMIT), size(base / p))
                 if size(Path(p)) > cap:
                     bad.append(f"file size: {p}: {size(Path(p))} lines, allowed {cap}")
+        bad += [f"{SIZES} raised {p}: to {n}, allowed {max(listed.get(p, 0), size(base / p))}"
+                for p, n in sorted(size_counts(read(SIZES)).items()) if n > max(listed.get(p, 0), size(base / p))]
     for b in bad:
         print(f"ratchets: {b}", file=sys.stderr)
     if bad:

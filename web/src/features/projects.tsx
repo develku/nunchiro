@@ -19,7 +19,7 @@ import { currentFeature, useFeatureSetting, writeFeature } from '../settings/use
 import { copyText } from '../terminal/clipboard';
 import { basename, EMPTY_TREE, projectName, TREE_SET } from '../tree';
 import { AlertSheet, askRemoveProject } from '../tree/Dialogs';
-import { pickIcon, ProjectIcon } from '../tree/ProjectTools';
+import { iconChanged, pickIcon, ProjectIcon } from '../tree/ProjectTools';
 import type { TreeState } from '../types';
 import { registerSettingsPage, registerSettingsSection, type PageContext } from './registry';
 import { SetupScripts } from './setup-scripts';
@@ -107,6 +107,9 @@ function LocateDialog({ core, t, project, name, to, onDone, onClose }: { core: C
       .then(
         (r) => {
           const { project: now, tree } = r as { project: string; tree: TreeState };
+          // The new path's icon may have been read (and kept as none) from a snapshot that came before this reply,
+          // while the core was still moving it: read it again now that the move is done.
+          iconChanged(now);
           onDone(now, tree);
         },
         (e) => setError(LOCATE_SAYS.includes(rawError(e)) ? rawError(e) : plainError(t, e)),

@@ -130,6 +130,23 @@ class Ratchets(unittest.TestCase):
         self.commit("big new file")
         self.assertEqual(self.check()[0], 1)
 
+    def test_a_baseline_may_catch_up_with_the_base_s_own_count(self):
+        # main is over its baselines (a.css 2 hex, big.rs 2,600 lines): writing those numbers down loosens nothing,
+        # since the gate already allows them; one more, or a file the base never had, still fails
+        self.put("scripts/raw-literals.baseline", "hex a.css 2\n")
+        self.put("scripts/file-sizes.baseline", "# header\n2600 src/big.rs\n1700 src/mid.rs\n")
+        self.commit("catch up")
+        self.assertEqual(self.check()[0], 0, self.check()[1])
+        for rel, text in (("scripts/raw-literals.baseline", "hex a.css 3\n"), ("scripts/raw-literals.baseline", "hex b.css 1\n"),
+                          ("scripts/file-sizes.baseline", "2601 src/big.rs\n")):
+            self.git("reset", "-q", "--hard", "base")
+            self.put(rel, text)
+            self.commit("too far " + rel)
+            code, out = self.check()
+            self.assertEqual(code, 1, text)
+            self.assertIn(rel, out)
+        self.git("reset", "-q", "--hard", "base")
+
     def test_a_baseline_may_shrink_but_never_grow(self):
         self.put("scripts/dead-click.baseline", "")
         self.put("scripts/raw-literals.baseline", "")

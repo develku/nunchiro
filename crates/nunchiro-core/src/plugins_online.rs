@@ -234,15 +234,26 @@ impl Catalog {
             let _ = fs::remove_dir_all(&fresh);
         }
         written?;
-        // Installed is off: an update (or the same files approved before) never runs before the owner says so.
+        // An update that asks for nothing beyond its approval stays as it was (Orca's rule); anything else is off
+        // until the owner reviews it and turns it on.
+        let approved =
+            crate::approval::status(&self.home, &format!("{}{id}", crate::plugins::PREFIX))
+                .is_ok_and(|v| v.state == crate::approval::State::Approved);
+        if approved {
+            return Ok(());
+        }
         crate::plugins::turn_off(&self.home, id)
     }
 }
-/// A catalogue fetch; its errors name the catalogue, not the themes the client was first written for.
+/// A catalogue fetch; its errors name the plugin list, not the theme server the client was first written for. One
+/// literal reason, so the window's error check sees it (web/tests/core-reasons.ts).
 fn get(origin: &str, total: Duration, path: &str, cap: usize) -> Result<Vec<u8>, String> {
     Client::new(origin, total)?
         .get(path, cap)
-        .map_err(|e| e.replace("theme server", "the plugin catalogue"))
+        .map_err(|e| format!("the plugin list could not be read: {}", ours(&e)))
+}
+fn ours(e: &str) -> String {
+    e.replace("theme server", "the plugin catalogue")
 }
 static INSTALL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 

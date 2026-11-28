@@ -161,10 +161,11 @@ function PluginsPage({ core, t }: Pick<PageContext, 'core' | 't'>) {
                   )
                 }
                 why={
-                  (p.needs || !!p.skipped) && (
+                  (p.needs || !!p.skipped || p.updated) && (
                     <>
                       {p.needs && <Why id={`plg-needs-${p.id}`} reason={t(p.needs === 'web_widgets' ? 'plugins.needs.web' : 'plugins.needs.script')} />}
                       {!!p.skipped && <Why id={`plg-skipped-${p.id}`} reason={t('plugins.skipped', { n: p.skipped })} />}
+                      {p.updated && <Why id={`plg-updated-${p.id}`} reason={t('plugins.updated')} />}
                     </>
                   )
                 }

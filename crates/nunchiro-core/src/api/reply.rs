@@ -201,6 +201,12 @@ pub enum Reply {
     PrDraft {
         draft: crate::git_write::Draft,
     },
+    // `pr_write`: the agent's text for the form, and which agent wrote it.
+    PrWritten {
+        title: String,
+        body: String,
+        agent: String,
+    },
     // `pr_create`: the new PR, and how many commits were pushed first.
     PrCreated {
         url: String,
