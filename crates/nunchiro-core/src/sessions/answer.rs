@@ -479,6 +479,20 @@ impl Sessions {
                 }
                 return Ok(Reply::Ack);
             }
+            // Night tidy: Discard keeps every bot's index as it is (Apply is `memory_tidy`, with the checked lines).
+            if let Some(queue::OwnerAsk::NightTidy { bots, .. }) = &item.owner {
+                if !matches!(answer, queue::Answer::Deny | queue::Answer::DenyWith { .. }) {
+                    return Err("a night tidy card is applied with its checked lines".into());
+                }
+                self.queue.answer_owner(|i| i.id == id)?;
+                let team = crate::team::Team::open(&self.home);
+                for bot in bots {
+                    if let Ok(m) = team.bot_memory(bot) {
+                        m.drop_tidy();
+                    }
+                }
+                return Ok(Reply::Ack);
+            }
             // Ticket 1005: the tidy card. A yes asks the seat to tidy the file (opened when it is not running, as a sent
             // goal); a no only dismisses it.
             if let Some(queue::OwnerAsk::Tidy { teammate, file, .. }) = &item.owner {

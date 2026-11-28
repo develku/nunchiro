@@ -30,6 +30,8 @@ const asks = new Set<(id?: string) => void>();
 export const openBots = (id?: string) => asks.forEach((f) => f(id));
 /** `openBots(LEVELS_FOLD)`: the roster with Models and limits (the level table, Worker models) open. */
 export const LEVELS_FOLD = '#levels';
+/** `openBots(id + MEMORY_TAB)`: that bot's page on its Memory tab. */
+export const MEMORY_TAB = '#memory';
 export const onOpenBots = (f: (id?: string) => void) => (asks.add(f), () => void asks.delete(f));
 
 /** The 36 faces a bot can have (the core's `SHAPES` and `TILES`, team/bots.rs): six heads on six tiles. */

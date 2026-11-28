@@ -1,0 +1,96 @@
+/* Night tidy's card (bots/NightTidyCard.tsx): changed lines checked, what waits from outside unchecked. */
+.nt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+  font-size: var(--fs-13);
+}
+/* The bots' lines scroll when the card is capped (a docked card in a short window); the head and buttons stay. */
+.nt-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+  min-height: 0;
+  overflow-y: auto;
+}
+.nt-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  flex-wrap: wrap;
+}
+.nt .dim {
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.nt-name {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  margin: 0;
+}
+.nt-name .sp {
+  flex: 1;
+}
+.nt-changes {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-8);
+  overflow: hidden;
+}
+.nt-line,
+.nt-prop {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-8);
+  padding: var(--sp-4) var(--sp-8);
+}
+.nt-line[data-nt='remove'] {
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+}
+.nt-line[data-nt='remove'] .nt-text {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.nt-line[data-nt='add'] {
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+.nt-prop {
+  border-radius: var(--r-8);
+  background: var(--tint-1);
+}
+.nt-prop > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nt-src {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+.nt-line .nt-src,
+.nt-sign,
+.nt-date {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.nt-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nt-note,
+.nt-count,
+.nt-notkept {
+  margin: 0;
+}
+.nt-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+}
+.nt-foot .sp {
+  flex: 1;
+}

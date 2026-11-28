@@ -2158,3 +2158,106 @@ fn openers_hold_a_new_seat_by_who_opens_it() {
     assert_eq!(who(Opener::Fresh(None)), None);
     assert_eq!(who(Opener::Undo("old", "seat")), None);
 }
+
+/// Bot memory: a fresh Lead takes over the old seat's outside-read mark (it reads the old seat's handoff).
+#[test]
+fn a_fresh_lead_carries_the_old_seats_outside_mark() {
+    use crate::sessions::Sessions;
+    let (home, proj) = (home(), self::home());
+    let (id, _log) = fake_lead(&home, &proj, ", \"load\"");
+    let reg = std::sync::Mutex::new(Sessions::open(&home).unwrap());
+    let fresh = ticking(&reg, || {
+        let old = open_seat(&reg, &id, None, None, Opener::Window)
+            .unwrap()
+            .session
+            .id;
+        until("the old seat took its brief", || {
+            reg.lock().unwrap().seat_idle(&old)
+        });
+        crate::team::mark_outside(&home, &old, crate::team::Source::Web).unwrap();
+        fresh_lead(&reg, &id, Fresh::Close, std::time::Duration::from_secs(30))
+            .unwrap()
+            .session
+    });
+    assert_eq!(
+        crate::team::outside(&home, std::slice::from_ref(&fresh.id)),
+        Some(crate::team::Source::Web)
+    );
+    reg.lock().unwrap().stop().unwrap();
+}
+
+/// Night tidy's Apply: each bot on its own; a stale or unknown bot is reported by id and the others still apply.
+#[test]
+fn a_tidy_apply_reports_each_bot_and_one_refusal_stops_none() {
+    let home = home();
+    let team = Team::open(&home);
+    let a = team.save(None, mate("Ana", None)).unwrap()[0].id.clone();
+    let b = team.save(None, mate("Bom", None)).unwrap()[1].id.clone();
+    let reg = std::sync::Mutex::new(crate::sessions::Sessions::open(&home).unwrap());
+    for id in [&a, &b] {
+        let m = team.bot_memory(id).unwrap();
+        m.add("Review is on Fridays.", Source::You, None, 1)
+            .unwrap();
+        let (_, base) = m.tidy_input().unwrap();
+        assert!(m.keep_tidy(vec![], &base, "haiku", 1, 1).unwrap());
+    }
+    // One card for both; Ana's index changes after her tidy: hers is stale.
+    let tidy_cards = |reg: &std::sync::Mutex<crate::sessions::Sessions>| {
+        reg.lock()
+            .unwrap()
+            .queue
+            .owner_items()
+            .into_iter()
+            .filter(|i| matches!(i.owner, Some(crate::queue::OwnerAsk::NightTidy { .. })))
+            .count()
+    };
+    reg.lock()
+        .unwrap()
+        .queue
+        .ask_owner(
+            &b,
+            crate::queue::OwnerAsk::NightTidy {
+                bots: vec![a.clone(), b.clone()],
+                place: home.clone(),
+            },
+        )
+        .unwrap();
+    assert_eq!(tidy_cards(&reg), 1);
+    team.bot_memory(&a)
+        .unwrap()
+        .add("A new line.", Source::You, None, 2)
+        .unwrap();
+    team.bot_memory(&b)
+        .unwrap()
+        .add("Acme bills monthly.", Source::Mail, None, 3)
+        .unwrap();
+    let json = format!(
+        r#"{{"op":"memory_tidy","apply":{{"bot-nope":{{}},"{a}":{{"drop":["Review is on Fridays."]}},"{b}":{{"drop":["Review is on Fridays."]}}}}}}"#
+    );
+    let Reply::MemoryTidy {
+        not_applied, stale, ..
+    } = window(&reg, &home, serde_json::from_str(&json).unwrap()).unwrap()
+    else {
+        panic!("not a tidy reply")
+    };
+    assert_eq!(not_applied.keys().collect::<Vec<_>>(), vec!["bot-nope"]);
+    assert_eq!(stale, vec![a.clone()]);
+    // A proposal for Bom that arrived after the card was drawn (not seen): the card stays for it.
+    assert_eq!(tidy_cards(&reg), 1);
+    let new = team.bot_memory(&b).unwrap().proposals().0[0].id.clone();
+    let json = format!(r#"{{"op":"memory_tidy","apply":{{"{b}":{{"seen":["{new}"]}}}}}}"#);
+    window(&reg, &home, serde_json::from_str(&json).unwrap()).unwrap();
+    // Now nothing of Ana's or Bom's is left to look at: the card goes (never a card for 0 bots).
+    assert_eq!(tidy_cards(&reg), 0);
+    let texts = |id: &str| -> Vec<String> {
+        team.bot_memory(id)
+            .unwrap()
+            .facts()
+            .unwrap()
+            .into_iter()
+            .map(|f| f.text)
+            .collect()
+    };
+    assert_eq!(texts(&b), Vec::<String>::new(), "Bom's tidy applied");
+    assert_eq!(texts(&a).len(), 2, "Ana's stale tidy did not");
+}

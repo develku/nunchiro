@@ -105,6 +105,25 @@ test('docked_permission_card_is_solid_and_swells: --raised, radius 12, no glass,
   expect((await css(docked(app).locator('[data-act="deny"]'), 'background-color'))['background-color']).toBe(await role(app, '--tint-2'));
 });
 
+// The dock is capped in a short window: a card taller than the cap scrolls in the dock, so its buttons stay reachable.
+test('docked_tall_outbox_card_stays_reachable: at 560 px the dock scrolls and Send and Discard can be reached', async ({ app, core }) => {
+  const body = Array.from({ length: 40 }, (_, i) => `Line ${i + 1} of a long mail about the Thursday review.`).join('\n');
+  await front(app, core, () => [], (s) => [{ ...OUTBOX(s), owner: { ...OUTBOX(s).owner, args: { ...OUTBOX(s).owner.args, body } } }]);
+  await app.setViewportSize({ width: 1440, height: 560 });
+  await expect(outbox(app)).toHaveCount(1);
+  const tabs = await app.locator('.tabs').boundingBox();
+  const dock = await app.locator('.composer > .dock').boundingBox();
+  expect(tabs && dock && dock.y >= tabs.y + tabs.height).toBe(true);
+  for (const act of ['send-outbox', 'discard']) {
+    const button = outbox(app).locator(`[data-act="${act}"]`);
+    await button.scrollIntoViewIfNeeded();
+    await expect(button).toBeInViewport({ ratio: 1 });
+    const box = (await button.boundingBox())!;
+    const d = (await app.locator('.composer > .dock').boundingBox())!;
+    expect(box.y >= d.y && box.y + box.height <= d.y + d.height).toBe(true);
+  }
+});
+
 test('docked_question_and_outbox_cards_wear_the_still_ring: the same solid card as the permission card, no swell', async ({ app, core }) => {
   await front(app, core, (s) => [QUEST(s)], (s) => [OUTBOX(s)]);
   await expect(docked(app).locator('.dc-item[data-item="q1"]')).toHaveCount(1);

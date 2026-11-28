@@ -871,3 +871,27 @@
   align-self: center;
   color: var(--muted);
 }
+.mem-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-8);
+  flex-wrap: wrap;
+}
+.mem-stats {
+  margin: var(--sp-4) 0 0;
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+.mem-tidy {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-12);
+  flex-wrap: wrap;
+}
+.mem-tidy > span {
+  flex: 1;
+  min-width: 0;
+}
+.mem-tidy .dim {
+  color: var(--muted);
+}

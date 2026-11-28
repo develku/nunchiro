@@ -657,6 +657,10 @@ impl Memory {
     /// The owner's look at a proposal: `keep` adds it with its own source and date, otherwise it goes.
     pub fn settle(&self, id: &str, keep: bool) -> Result<(), String> {
         let _one = write_lock()?;
+        self.settle_now(id, keep)
+    }
+    /// `settle`, under a write lock the caller holds.
+    fn settle_now(&self, id: &str, keep: bool) -> Result<(), String> {
         let mut w = self.waiting();
         let at = w
             .proposals
@@ -688,9 +692,13 @@ impl Memory {
         files.extend(Self::files_in(&self.copies()));
         files
     }
+    /// Files made from every line at once (a waiting night tidy's answer): a forget deletes them whole.
+    fn derived(&self) -> Vec<PathBuf> {
+        vec![self.tidy_file()]
+    }
 
     /// Deletes one line: from the index, every saved copy (old-format lines too), every topic file, USER.md when it is
-    /// there, and the waiting proposals. `words`: the line's text, or words only one line holds. A forget a crash cut
+    /// there, the waiting proposals, and whatever was derived from it (`derived`). `words`: the line's text, or words only one line holds. A forget a crash cut
     /// short finds what is left and finishes.
     pub fn forget(&self, words: &str) -> Result<String, String> {
         let words = words.trim();
@@ -735,6 +743,12 @@ impl Memory {
                 }
             }
         };
+        for file in self.derived() {
+            match fs::remove_file(&file) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
+                _ => {}
+            }
+        }
         // The copies and topic files first, the index last: a rerun after a crash still finds the line.
         for file in files.iter().rev() {
             let body = Self::read_text(file);
@@ -902,6 +916,8 @@ impl Memory {
 
     /// The saved copies, newest first. Copies past `keep_days` go first (a `before` copy is kept for good).
     pub fn saved_copies(&self, keep_days: u64, now_ms: u64) -> Vec<SavedCopy> {
+        // A copy past its days is deleted under the write lock, never under a forget or an undo that reads it.
+        let _one = write_lock();
         let mut copies: Vec<(u64, String, PathBuf)> = Self::files_in(&self.copies())
             .into_iter()
             .filter_map(|p| {
@@ -1116,11 +1132,31 @@ pub fn outside_of(tool: &str, input: &serde_json::Value) -> Option<Source> {
 pub struct Settings {
     /// Days a saved copy is kept: 7, 30 or 90.
     pub keep_days: u64,
+    /// Night tidy for every bot (`tidy.rs`), every `every` nights (1, 3 or 7), on Claude's `model`.
+    pub tidy: bool,
+    pub every: u64,
+    pub model: String,
+    /// A bot's own choice on its Memory tab, by bot id: `on` or `off` (absent: it follows `tidy`).
+    pub bots: std::collections::BTreeMap<String, String>,
 }
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             keep_days: KEEP_DAYS,
+            tidy: true,
+            every: 1,
+            model: tidy::MODELS[0].into(),
+            bots: Default::default(),
+        }
+    }
+}
+impl Settings {
+    /// Whether night tidy runs for bot `id`.
+    pub fn tidies(&self, id: &str) -> bool {
+        match self.bots.get(id).map(String::as_str) {
+            Some("on") => true,
+            Some("off") => false,
+            _ => self.tidy,
         }
     }
 }
@@ -1131,6 +1167,19 @@ pub(crate) fn check_settings(value: &serde_json::Value) -> Result<(), String> {
         serde_json::from_value(value.clone()).map_err(|e| format!("memory settings: {e}"))?;
     if ![7, 30, 90].contains(&s.keep_days) {
         return Err("saved copies are kept 7, 30 or 90 days".into());
+    }
+    if ![1, 3, 7].contains(&s.every) {
+        return Err("night tidy runs every night, every 3 nights or weekly".into());
+    }
+    if !tidy::MODELS.contains(&s.model.as_str()) {
+        return Err(format!("night tidy runs on {}", tidy::MODELS.join(" or ")));
+    }
+    if s.bots.len() > 1000
+        || s.bots
+            .iter()
+            .any(|(id, v)| !store::valid_id(id) || !matches!(v.as_str(), "on" | "off"))
+    {
+        return Err("a bot's night tidy is on or off".into());
     }
     Ok(())
 }
@@ -1258,6 +1307,9 @@ pub(crate) fn instruction_like(text: &str) -> bool {
     ];
     SAYS.iter().any(|s| t.contains(s))
 }
+
+#[path = "memory/tidy.rs"]
+pub(crate) mod tidy;
 
 #[cfg(test)]
 #[path = "memory/tests.rs"]

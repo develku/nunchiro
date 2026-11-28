@@ -301,3 +301,144 @@ fn a_home_path_with_pattern_characters_still_gets_the_memory_rules() {
         assert!(deny.iter().any(|r| r == rule), "{rule}: {deny:?}");
     }
 }
+
+#[test]
+fn a_night_tidy_runs_for_a_bot_that_talked_and_raises_one_card() {
+    let (core, launches, [seat, other, _, _]) = family("memory-night");
+    let home = core.home.clone();
+    let team = crate::team::Team::open(&home);
+    let mate = |name: &str| crate::team::Teammate {
+        id: String::new(),
+        name: name.into(),
+        job: "Keeps the mail in order.".into(),
+        kind: AgentKind::Claude,
+        model: None,
+        effort: None,
+        project: None,
+        lead: false,
+        level: None,
+        level_max: None,
+        next_level: None,
+        agent: None,
+    };
+    let id_of = |all: Vec<crate::team::Teammate>, name: &str| {
+        all.into_iter().find(|t| t.name == name).unwrap().id
+    };
+    // Boo comes first and its run fails (the bin answers no JSON for its index): Bom still tidies after it.
+    let boo = id_of(team.save(None, mate("Boo")).unwrap(), "Boo");
+    team.bot_memory(&boo)
+        .unwrap()
+        .add("Boom line.", Source::You, None, 1)
+        .unwrap();
+    let bom = id_of(team.save(None, mate("Bom")).unwrap(), "Bom");
+    let quiet = id_of(team.save(None, mate("Mina")).unwrap(), "Mina");
+    let m = team.bot_memory(&bom).unwrap();
+    m.add("Weekly review Friday.", Source::Conversation, None, 1)
+        .unwrap();
+    m.add("Review is on Fridays at 10.", Source::You, None, 2)
+        .unwrap();
+    team.bot_memory(&quiet)
+        .unwrap()
+        .add("Quiet line.", Source::You, None, 1)
+        .unwrap();
+    let before = m.facts().unwrap();
+    // The bin answers as Claude's print mode would; it records that it ran.
+    let ran = home.join("ran");
+    let bin = home.join("fake-claude");
+    let answer = serde_json::json!({"result": serde_json::json!({"lines": [{"text": "Weekly review is on Friday at 10:00.", "from": [1, 2]}, {"text": "Keep the rest.", "from": [3]}]}).to_string(), "usage": {"input_tokens": 40, "output_tokens": 2}});
+    fs::write(
+        &bin,
+        format!(
+            "#!/bin/sh\nin=$(cat)\necho run >> '{}'\ncase \"$in\" in *Boom*) echo 'not json'; exit 0;; esac\necho '{answer}'\n",
+            ran.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&bin, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let registry = std::sync::Mutex::new(core);
+    let night = |now: u64| {
+        crate::team::memory_night(&registry, &home, now, Some(&bin), &Default::default()).unwrap()
+    };
+    // A new home only notes the time: no tidy the first day.
+    let day = 86_400_000;
+    let now = 1_795_780_800_000u64; // noon UTC: past three in the morning in any zone near it
+    night(now - 3 * day);
+    assert!(!ran.exists());
+    {
+        let mut core = registry.lock().unwrap();
+        core.entries.get_mut(&seat.id).unwrap().meta.teammate = Some(bom.clone());
+        core.queue.activity(&seat.id, now - day).unwrap();
+        core.entries.get_mut(&other.id).unwrap().meta.teammate = Some(boo.clone());
+        core.queue.activity(&other.id, now - day).unwrap();
+    }
+    night(now);
+    assert_eq!(
+        fs::read_to_string(&ran).unwrap().lines().count(),
+        2,
+        "only the bots that talked"
+    );
+    let order: Vec<String> = team.list().unwrap().into_iter().map(|t| t.id).collect();
+    assert!(
+        order.iter().position(|i| *i == boo) < order.iter().position(|i| *i == bom),
+        "Boo is tidied first"
+    );
+    assert!(
+        team.bot_memory(&boo).unwrap().pending_tidy().is_none(),
+        "Boo's run failed"
+    );
+    let part = m.tidy_part(&bom, "Bom").unwrap().unwrap();
+    assert_eq!(part.added[0].text, "Weekly review is on Friday at 10:00.");
+    // A rewritten line takes the most outside source of the whole prompt: here a conversation's.
+    assert_eq!(part.added[0].from, Some(Source::Conversation));
+    assert_eq!(part.tokens, 42);
+    let core = registry.into_inner().unwrap();
+    let cards: Vec<_> = core
+        .queue
+        .owner_items()
+        .into_iter()
+        .filter(|i| matches!(&i.owner, Some(crate::queue::OwnerAsk::NightTidy { .. })))
+        .collect();
+    assert_eq!(cards.len(), 1, "no Chief: one card in the bot's own chat");
+    assert_eq!(cards[0].session_id, bom);
+    // The index did not change: the tidy waits for the user's look.
+    assert_eq!(m.facts().unwrap(), before);
+    end_family(core, launches);
+}
+
+#[test]
+fn an_answer_from_a_marked_seat_and_a_read_of_its_transcript_pass_the_mark() {
+    let (core, launches, [lead, worker, sub, _]) = family("memory-answer");
+    let mut core = core;
+    let home = core.home.clone();
+    crate::team::mark_outside(&home, &worker.id, Source::Mail).unwrap();
+    // The marked worker answers its own worker's question: that session heard it.
+    let item = core
+        .queue
+        .acp_ask(
+            &sub.id,
+            crate::queue::Kind::Question,
+            "Which branch?".into(),
+        )
+        .unwrap();
+    core.pass_outside(
+        &worker.id,
+        &Request::Answer {
+            item,
+            answer: crate::queue::Answer::AllowOnce,
+            confirmed: false,
+        },
+    );
+    let marked = |id: &str| crate::team::outside(&home, &[id.to_string()]);
+    assert_eq!(marked(&sub.id), Some(Source::Mail));
+    // Its lead reads its transcript (the read the core serves off its lock): the lead is marked.
+    assert_eq!(marked(&lead.id), None);
+    let read = Request::AgentRead {
+        id: worker.id.clone(),
+        source: "transcript".into(),
+        lines: 10,
+    };
+    let checked = core.check_reader(&lead, &read);
+    assert!(checked.is_ok(), "{checked:?}");
+    assert_eq!(marked(&lead.id), Some(Source::Mail));
+    end_family(core, launches);
+}

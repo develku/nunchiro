@@ -296,6 +296,19 @@
   flex-direction: column;
   gap: 6px;
   padding-bottom: 6px;
+  max-height: var(--dock-max, none);
+}
+.composer > .dock[data-over] {
+  overflow-y: auto;
+}
+/* A card that fits itself to the capped dock: its body scrolls, its buttons stay in view (night tidy). */
+.composer > .dock > .dock-fit {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.composer > .dock > .dock-fit > .deccard {
+  min-height: 0;
 }
 .composer > .dock > * {
   box-sizing: border-box;
@@ -306,6 +319,10 @@
 /* The output's last lines and its "new" chip stay clear of the card (ComposerWidget sets --dock-h). */
 :root:has(.composer > .dock) .chat:not([data-off]) .cscroll {
   padding-bottom: calc(18px + var(--dock-h, 0px));
+}
+:root:has(.composer > .dock) .chat:not([data-off]) .cscroll > .empty {
+  bottom: calc(18px + var(--dock-h, 0px)); /* the empty chat's heading sits above the card, never under it */
+  overflow: hidden;
 }
 :root:has(.composer > .dock) .chat:not([data-off]) .newchip {
   bottom: calc(12px + var(--dock-h, 0px));

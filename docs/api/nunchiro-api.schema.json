@@ -5232,6 +5232,30 @@
       },
       "type": "object"
     },
+    "NotKept": {
+      "additionalProperties": false,
+      "description": "A line from outside content that read like an instruction: not kept, only counted for the owner.",
+      "properties": {
+        "at_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "from": {
+          "$ref": "#/$defs/Source2"
+        },
+        "start": {
+          "description": "The first words, so the owner can tell which.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "from",
+        "at_ms"
+      ],
+      "type": "object"
+    },
     "NotesListed": {
       "description": "A note as the list shows it.",
       "properties": {
@@ -5874,6 +5898,30 @@
           "type": "object"
         },
         {
+          "description": "Night tidy (team/memory/tidy.rs): the bots whose tidy or proposals wait for the owner's look, in the Chief's\nchat (each bot's own without a Chief). The lines are read with `memory_tidy`; Apply goes through it too.",
+          "properties": {
+            "bots": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "place": {
+              "type": "string"
+            },
+            "type": {
+              "const": "night_tidy",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "bots",
+            "place"
+          ],
+          "type": "object"
+        },
+        {
           "description": "Ticket 1113: an owner-only request to close one foreign session.",
           "properties": {
             "from": {
@@ -6180,6 +6228,75 @@
         "title",
         "kind",
         "runs"
+      ],
+      "type": "object"
+    },
+    "Part2": {
+      "description": "One bot's part of the card: the lines a tidy would remove and add, and the proposals that wait.",
+      "properties": {
+        "added": {
+          "items": {
+            "$ref": "#/$defs/Fact"
+          },
+          "type": "array"
+        },
+        "at_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "not_kept": {
+          "items": {
+            "$ref": "#/$defs/NotKept"
+          },
+          "type": "array"
+        },
+        "outside": {
+          "default": false,
+          "description": "The tidy read a line from outside, so even its removals of the owner's lines start unchecked on the card.",
+          "type": "boolean"
+        },
+        "proposals": {
+          "items": {
+            "$ref": "#/$defs/Proposal"
+          },
+          "type": "array"
+        },
+        "removed": {
+          "items": {
+            "$ref": "#/$defs/Fact"
+          },
+          "type": "array"
+        },
+        "tokens": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "removed",
+        "added",
+        "proposals",
+        "not_kept",
+        "tokens"
       ],
       "type": "object"
     },
@@ -6625,6 +6742,43 @@
       "required": [
         "case",
         "cause"
+      ],
+      "type": "object"
+    },
+    "Proposal": {
+      "additionalProperties": false,
+      "description": "A fact that waits for the owner: it came from a seat that read outside content.",
+      "properties": {
+        "at_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "date": {
+          "type": "string"
+        },
+        "from": {
+          "$ref": "#/$defs/Source2"
+        },
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "topic": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "date",
+        "text",
+        "from",
+        "at_ms"
       ],
       "type": "object"
     },
@@ -9247,6 +9401,44 @@
             "type",
             "id",
             "text"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Night tidy's card and numbers (`team::Op::MemoryTidy`).",
+          "properties": {
+            "not_applied": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "After an Apply, by bot id: why that bot's checked lines were not applied.",
+              "type": "object"
+            },
+            "parts": {
+              "items": {
+                "$ref": "#/$defs/Part2"
+              },
+              "type": "array"
+            },
+            "stale": {
+              "description": "After an Apply: the bots whose tidy was made from a memory that changed since, so their lines were not\napplied (their checked proposals were); each is tidied again next night.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "stats": {
+              "$ref": "#/$defs/Stats"
+            },
+            "type": {
+              "const": "memory_tidy",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "parts",
+            "stats"
           ],
           "type": "object"
         },
@@ -16250,6 +16442,32 @@
       "required": [
         "kind",
         "project"
+      ],
+      "type": "object"
+    },
+    "Stats": {
+      "description": "The night tidies of the last days, for the Memory group's numbers.",
+      "properties": {
+        "off": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runs": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tokens": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "runs",
+        "tokens",
+        "off"
       ],
       "type": "object"
     },

@@ -100,7 +100,7 @@ test('bot_memory_settings: the Bots view has a Memory group beside Models and li
   await expect(keep.getByRole('radio', { name: '30 days' })).toBeChecked();
   await keep.getByRole('radio', { name: '7 days' }).click();
   await expect(keep.getByRole('radio', { name: '7 days' })).toBeChecked();
-  await expect.poll(() => features(core)['team.memory']).toEqual({ keep_days: 7 });
+  await expect.poll(() => features(core)['team.memory']).toMatchObject({ keep_days: 7 });
   await view.locator('[data-bot="bot-bom"]').click();
   await view.getByRole('tab', { name: 'Memory' }).click();
   await expect(view.getByRole('region', { name: 'Saved copies' })).toContainText('kept 7 days');

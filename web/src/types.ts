@@ -52,6 +52,8 @@ export type OwnerAsk =
   // Ticket 1005: the core's own card for teammate `teammate`'s memory `file` (MEMORY.md or the shared USER.md), past the
   // 6 KB its brief quotes; `name` is the teammate's name. allow_once asks the seat to tidy it, deny dismisses.
   | { type: 'tidy'; teammate: string; name: string; file: string; place: string }
+  // Night tidy (team/memory/tidy.rs): the bots whose tidy or proposals wait; the lines come from `memory_tidy`.
+  | { type: 'night_tidy'; bots: string[]; place: string }
   // Ticket 993: a lead proposes a schedule (`change` add) or a change to one (`id`); `run` and `when` are the schedule's
   // (schedule/mod.rs `Run`, `When`), `line` the core's one sentence of them. Nothing is stored before the yes.
   // Eighth look (Home S2-B): `failed` is a run of schedule `id` that failed or could not start, with the core's `reason`;

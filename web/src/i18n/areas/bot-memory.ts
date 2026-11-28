@@ -52,6 +52,42 @@ declare module '../index' {
     'memory.keep': true;
     'memory.keep.desc': true;
     'memory.keep.days': true;
+    'memory.tidy': true;
+    'memory.tidy.desc': true;
+    'memory.tidy.every': true;
+    'memory.tidy.every.1': true;
+    'memory.tidy.every.3': true;
+    'memory.tidy.every.7': true;
+    'memory.tidy.runs': true;
+    'memory.tidy.runs.desc': true;
+    'memory.tidy.agent': true;
+    'memory.tidy.model': true;
+    'memory.tidy.codex': true;
+    'memory.tidy.stats': true;
+    'memory.tidy.bot': true;
+    'memory.tidy.bot.follow': true;
+    'memory.tidy.state.on': true;
+    'memory.tidy.state.off': true;
+    'memory.tidy.choice': true;
+    'memory.tidy.choice.follow': true;
+    'memory.tidy.choice.on': true;
+    'memory.tidy.choice.off': true;
+    'tidy.night.title': true;
+    'tidy.night.title.one': true;
+    'tidy.night.ran': true;
+    'tidy.night.counts': true;
+    'tidy.night.from': true;
+    'tidy.night.notKept': true;
+    'tidy.night.notKept.one': true;
+    'tidy.night.note': true;
+    'tidy.night.checked': true;
+    'tidy.night.discard': true;
+    'tidy.night.apply': true;
+    'tidy.night.open': true;
+    'tidy.night.remove': true;
+    'tidy.night.add': true;
+    'tidy.night.keep': true;
+    'tidy.night.stale': true;
   }
 }
 export const en = {
@@ -105,4 +141,40 @@ export const en = {
   'memory.keep': 'Keep saved copies',
   'memory.keep.desc': 'Undo works on a copy while it is kept. Forget also deletes the line from every copy.',
   'memory.keep.days': '{n} days',
+  'memory.tidy': 'Night tidy',
+  'memory.tidy.desc': 'When Nunchiro is idle, only for bots that talked since. It uses your usage.',
+  'memory.tidy.every': 'How often',
+  'memory.tidy.every.1': 'Every night',
+  'memory.tidy.every.3': 'Every 3 nights',
+  'memory.tidy.every.7': 'Weekly',
+  'memory.tidy.runs': 'Tidy runs on',
+  'memory.tidy.runs.desc': 'An agent that runs with no tools reads only the index, never what waits from outside.',
+  'memory.tidy.agent': 'Agent',
+  'memory.tidy.model': 'Model',
+  'memory.tidy.codex': 'Codex: not available, its runs keep their shell tool and your MCP servers',
+  'memory.tidy.stats': '{runs} runs and {tokens} tokens in the last 7 nights · {off} bots turned it off',
+  'memory.tidy.bot': 'Night tidy for {name}',
+  'memory.tidy.bot.follow': 'follows the memory settings for every bot: {state}.',
+  'memory.tidy.state.on': '{every}, on Claude {model}',
+  'memory.tidy.state.off': 'off',
+  'memory.tidy.choice': "{name}'s night tidy",
+  'memory.tidy.choice.follow': 'Follow',
+  'memory.tidy.choice.on': 'On',
+  'memory.tidy.choice.off': 'Off',
+  'tidy.night.title': 'Night tidy for {n} bots',
+  'tidy.night.title.one': 'Night tidy for {name}',
+  'tidy.night.ran': 'ran {time} · Claude · {model} · {tokens} tokens',
+  'tidy.night.counts': '{changes} changed lines · {proposals} waiting from outside',
+  'tidy.night.from': 'from {source} · waiting since {date}',
+  'tidy.night.notKept.one': '1 line was not kept: it read like an instruction inside outside content.',
+  'tidy.night.notKept': '{n} lines were not kept: they read like instructions inside outside content.',
+  'tidy.night.note': "The old memory stays as a saved copy. Undo in each bot's Memory while it is kept.",
+  'tidy.night.checked': '{n} of {total} lines checked',
+  'tidy.night.discard': 'Discard',
+  'tidy.night.apply': 'Apply checked',
+  'tidy.night.open': "Open {name}'s memory",
+  'tidy.night.remove': 'Remove: {text}',
+  'tidy.night.add': 'Add: {text}',
+  'tidy.night.keep': 'Keep: {text}',
+  'tidy.night.stale': "{name}'s memory changed since the tidy, so its lines were not applied. Its checked proposals were kept; it is tidied again next night.",
 };

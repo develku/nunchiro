@@ -7,8 +7,9 @@ import { ErrorLine, rawError } from '../errors';
 import type { Key, T } from '../i18n';
 import { Icon } from '../icons/Icon';
 import { PLAIN } from '../plainText';
-import { Row, Sec, Seg } from '../settings/shell/Row';
-import { useCoreFeature } from '../settings/useFeatureSetting';
+import { Row, Sec, Seg, Select, Switch } from '../settings/shell/Row';
+import { CoreFeatureClient, useCoreFeature } from '../settings/useFeatureSetting';
+import { kTokens, type TidyStats } from './NightTidyCard';
 import type { Bot } from './bots';
 
 export type Source = 'you' | 'conversation' | 'unknown' | 'mail' | 'web' | 'tool';
@@ -19,7 +20,11 @@ type Change = { do: 'forget'; text: string } | { do: 'edit'; text: string } | { 
 
 /** The Memory settings' key in the core's settings (`team::MEMORY_KEY`). */
 export const MEMORY_KEY = 'team.memory';
-export type MemorySettings = { keep_days: number };
+export type MemorySettings = { keep_days: number; tidy: boolean; every: number; model: string; bots: Record<string, 'on' | 'off'> };
+/** The core's defaults (team/memory.rs `Settings`): a stored value from an earlier build may lack the later fields. */
+const DEFAULTS: MemorySettings = { keep_days: 30, tidy: true, every: 1, model: 'haiku', bots: {} };
+const MODELS = ['haiku', 'sonnet'] as const; // tidy.rs MODELS
+const EVERY = ['1', '3', '7'] as const;
 /** Index lines shown before "N more lines". */
 const SHOWN = 5;
 
@@ -32,7 +37,8 @@ function copyWhen(t: T, at: number) {
 const KINDS = ['tidy', 'edit', 'undo', 'before'];
 
 // The approved mockup's line icons (stroked, unlike the filled Octicons of `Icon`): a line's source and a topic file.
-const LINE_ICONS: Record<Source | 'file', string[]> = {
+const LINE_ICONS: Record<Source | 'file' | 'moon', string[]> = {
+  moon: ['M13 9.5A5.5 5.5 0 1 1 6.5 3a4.5 4.5 0 0 0 6.5 6.5Z'],
   you: ['M3 13.5a5 5 0 0 1 10 0', 'M8 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z'],
   conversation: ['M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2Z'],
   unknown: ['M6.2 6a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.6', 'M8 11.6v.1'],
@@ -41,7 +47,7 @@ const LINE_ICONS: Record<Source | 'file', string[]> = {
   tool: ['M10 2.5a3 3 0 0 0-3 4L2.75 10.75a1.4 1.4 0 0 0 2 2L9 8.5a3 3 0 0 0 4-3l-1.75 1.75-1.75-1.75 1.75-1.75Z'],
   file: ['M4 1.75h5l3 3v9.5H4Z', 'M9 1.75v3h3'],
 };
-function LineIcon({ name }: { name: Source | 'file' }) {
+export function LineIcon({ name }: { name: Source | 'file' | 'moon' }) {
   return (
     <svg className="mem-icon" viewBox="0 0 16 16" width={12} height={12} fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
       {(LINE_ICONS[name] ?? []).map((d) => (
@@ -70,6 +76,9 @@ export function MemoryTab({ core, t, bot }: { core: CoreClient; t: T; bot: Bot }
   const more = view.facts.length - SHOWN;
   return (
     <div className="mem" data-bot-memory={bot.id}>
+      <CoreFeatureClient.Provider value={core}>
+        <TidyChoice t={t} bot={bot} />
+      </CoreFeatureClient.Provider>
       <section className="bot-card" aria-label={t('memory.always')}>
         <header>
           {t('memory.always')} <small>{t('memory.always.note')}</small>
@@ -196,18 +205,80 @@ export function MemoryTab({ core, t, bot }: { core: CoreClient; t: T; bot: Bot }
 }
 
 /** The Bots view's Memory group: settings for every bot (inside a CoreFeatureClient provider). */
-export function MemoryRows({ t }: { t: T }) {
-  const [settings, set, error] = useCoreFeature<MemorySettings>(MEMORY_KEY, { keep_days: 30 });
+export function MemoryRows({ t, core }: { t: T; core: CoreClient }) {
+  const [stored, set, error] = useCoreFeature<MemorySettings>(MEMORY_KEY, DEFAULTS);
+  const settings = { ...DEFAULTS, ...stored };
+  const [stats, setStats] = useState<TidyStats | null>(null);
+  useEffect(() => void core.request({ op: 'memory_tidy' }).then((r) => setStats((r as { stats: TidyStats }).stats), () => {}), [core]);
   const days = ['7', '30', '90'] as const;
+  const save = (change: Partial<MemorySettings>) => void set({ ...settings, ...change });
   return (
     <Sec label={t('memory.settings')}>
+      <Row
+        label={t('memory.tidy')}
+        desc={t('memory.tidy.desc')}
+        setting={MEMORY_KEY}
+        control={
+          <span className="mem-ctl">
+            <Switch checked={settings.tidy} label={t('memory.tidy')} onChange={(on) => save({ tidy: on })} />
+            <Seg name="memory-every" label={t('memory.tidy.every')} value={String(settings.every) as (typeof EVERY)[number]} options={EVERY.map((n) => [n, t(`memory.tidy.every.${n}` as Key)])} onChange={(n) => save({ every: Number(n) })} />
+          </span>
+        }
+      />
+      <Row
+        label={t('memory.tidy.runs')}
+        desc={t('memory.tidy.runs.desc')}
+        setting={MEMORY_KEY}
+        control={
+          <span className="mem-ctl">
+            {/* Only an agent that runs with no tools tidies: Claude. Codex is shown, off, with why. */}
+            <Select value="claude" label={t('memory.tidy.agent')} onChange={() => {}}>
+              <option value="claude">Claude</option>
+              <option value="codex" disabled>
+                {t('memory.tidy.codex')}
+              </option>
+            </Select>
+            <Select value={settings.model} label={t('memory.tidy.model')} onChange={(m) => save({ model: m })}>
+              {MODELS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </Select>
+          </span>
+        }
+        extra={stats && <p className="mem-stats dim" data-memory-stats>{t('memory.tidy.stats', { runs: stats.runs, tokens: kTokens(stats.tokens), off: stats.off })}</p>}
+      />
       <Row
         label={t('memory.keep')}
         desc={t('memory.keep.desc')}
         setting={MEMORY_KEY}
-        control={<Seg name="memory-keep" label={t('memory.keep')} value={String(settings.keep_days) as (typeof days)[number]} options={days.map((d) => [d, t('memory.keep.days', { n: d })])} onChange={(d) => void set({ ...settings, keep_days: Number(d) })} />}
+        control={<Seg name="memory-keep" label={t('memory.keep')} value={String(settings.keep_days) as (typeof days)[number]} options={days.map((d) => [d, t('memory.keep.days', { n: d })])} onChange={(d) => save({ keep_days: Number(d) })} />}
       />
       <ErrorLine t={t} error={error} />
     </Sec>
+  );
+}
+
+/** The Memory tab's night tidy row: this bot follows the setting for every bot, or turns it on or off for itself. */
+function TidyChoice({ t, bot }: { t: T; bot: Bot }) {
+  const [stored, set, error] = useCoreFeature<MemorySettings>(MEMORY_KEY, DEFAULTS);
+  const settings = { ...DEFAULTS, ...stored };
+  const choice = settings.bots[bot.id] ?? 'follow';
+  const state = settings.tidy ? t('memory.tidy.state.on', { every: t(`memory.tidy.every.${settings.every}` as Key), model: settings.model }) : t('memory.tidy.state.off');
+  const pick = (c: 'follow' | 'on' | 'off') => {
+    const bots = { ...settings.bots };
+    if (c === 'follow') delete bots[bot.id];
+    else bots[bot.id] = c;
+    void set({ ...settings, bots });
+  };
+  return (
+    <section className="bot-card mem-tidy" aria-label={t('memory.tidy.bot', { name: bot.name })} data-memory-tidy>
+      <span>
+        <b>{t('memory.tidy.bot', { name: bot.name })}</b> <span className="dim">{t('memory.tidy.bot.follow', { state })}</span>
+      </span>
+      <Seg name={`memory-tidy-${bot.id}`} label={t('memory.tidy.choice', { name: bot.name })} value={choice} options={[['follow', t('memory.tidy.choice.follow')], ['on', t('memory.tidy.choice.on')], ['off', t('memory.tidy.choice.off')]]} onChange={pick} />
+      <ErrorLine t={t} error={error} />
+    </section>
   );
 }

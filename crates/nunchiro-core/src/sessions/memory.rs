@@ -154,6 +154,14 @@ impl Sessions {
         Ok(())
     }
 
+    /// One of bot `bot`'s seats was active after `since` (ms).
+    pub(crate) fn teammate_active_since(&self, bot: &str, since: u64) -> bool {
+        self.entries.values().any(|e| {
+            e.meta.teammate.as_deref() == Some(bot)
+                && self.queue.attention(&e.meta.id).last_activity > since
+        })
+    }
+
     /// A seat read room messages (`agent check`, a thread, an answer): one from a marked seat marks it, and so does one
     /// from a seat the core cannot see.
     pub(super) fn hear(&self, seat: &str, messages: &[crate::room::Message]) {

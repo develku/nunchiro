@@ -410,6 +410,8 @@ pub(crate) fn spawn(
     home: PathBuf,
     stopping: Arc<AtomicBool>,
 ) -> std::io::Result<std::thread::JoinHandle<()>> {
+    // The bots' night tidy has its own thread, started beside this one (server.rs is at its size limit).
+    crate::team::tidy_spawn(registry.clone(), home.clone(), stopping.clone())?;
     std::thread::Builder::new()
         .name("advance".into())
         .spawn(move || {

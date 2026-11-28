@@ -785,6 +785,15 @@ SOUL.md of a bot whose first chat is over. Known limit: this stops a seat's file
 mode runs as the same user and can rewrite the records, as it can `sessions.json`. `--from-user` is the seat's own
 claim.
 
+Night tidy: from 3 a.m., once a night (or every 3 nights, or weekly, in the Bots view's Memory group) and only while no
+session works, Claude in print mode with no tools and no MCP servers (haiku unless the Memory group picks sonnet) reads
+the index of each bot that talked since the last tidy and answers a shorter one. It reads only the index, never a
+proposal. Each new line keeps the newest date and the most outside source of the lines it came from. Nothing changes
+then: one card in the Chief's chat (each bot's own chat without a Chief, and in Decisions) shows the lines it would
+remove and add, checked, and the proposals, unchecked. Apply checked keeps the checked lines, with the index before it
+as a saved copy; Discard keeps every index as it is. A bot turns night tidy on or off for itself on its Memory tab.
+Codex is not offered: its exec mode keeps its shell tool and the account's MCP servers.
+
 An index from before this format is rewritten once into it, newest first, each line a fact from a conversation dated by
 the file (a line that starts with a date keeps it); the old file is kept as a saved copy for good. The user's own
 changes keep the version before them as a saved copy, kept 30 days, which Undo puts back.

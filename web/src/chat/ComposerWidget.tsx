@@ -29,6 +29,7 @@ import { busyRow, takeRow, useQueue } from './queued';
 import type { RefObject } from 'react';
 import type { T } from '../i18n';
 import { FOLLOWUP } from '../features/followup-default';
+import { NightTidyCard } from '../bots/NightTidyCard';
 import { DecisionCard, digitButton, focusCard } from './DecisionCard'; // ticket 1030
 import { OutboxCard } from '../lead/OutboxCard';
 import { alsoInDecisions, asks as waitingAsks, rowPlan, type Item } from '../tree/decisions';
@@ -83,13 +84,28 @@ type Props = { first: boolean; pin?: string } & Pick<ReturnType<typeof useCompos
     owner: Decision[];
   };
 
-/** Ticket 1030: the floating card's height as `--dock-h`, so the output's last lines and its "new" chip stay clear of it. */
+/** Ticket 1030: the floating card's height as `--dock-h`, so the output's last lines and its "new" chip stay clear of it.
+ *  The dock is capped at 60% of the output above it (`--dock-max`), so it never covers the tabs; cards taller than the
+ *  cap scroll in the dock (`data-over`), so every button stays reachable. */
 const dockHeight = (el: HTMLDivElement | null) => {
   if (!el) return;
   const root = document.documentElement.style;
-  const watch = new ResizeObserver(() => root.setProperty('--dock-h', `${Math.ceil(el.offsetHeight)}px`));
-  watch.observe(el);
-  return () => void (watch.disconnect(), root.removeProperty('--dock-h'));
+  const fit = () => {
+    const out = document.querySelector('.chat:not([data-off]) .cscroll')?.getBoundingClientRect();
+    const top = el.parentElement?.getBoundingClientRect().top;
+    if (out && top !== undefined) el.style.setProperty('--dock-max', `${Math.max(120, Math.floor((top - out.top) * 0.6))}px`);
+    // Scrolls only when over the cap: a scrolling box clips, and a card that fits keeps its whole ring and shadow.
+    el.toggleAttribute('data-over', el.scrollHeight > el.clientHeight + 1);
+    root.setProperty('--dock-h', `${Math.ceil(el.offsetHeight)}px`);
+  };
+  // The dock itself stops growing at the cap, so its cards are watched too (and the cards that arrive later).
+  const watch = new ResizeObserver(fit);
+  const cards = () => [el, ...el.children].forEach((c) => watch.observe(c));
+  const added = new MutationObserver(() => (cards(), fit()));
+  cards();
+  added.observe(el, { childList: true });
+  window.addEventListener('resize', fit);
+  return () => void (watch.disconnect(), added.disconnect(), window.removeEventListener('resize', fit), root.removeProperty('--dock-h'));
 };
 
 /** The composer of the focused session, or of a pinned one (`pin`). Its send path is useComposerSend's. */
@@ -218,6 +234,8 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
     return true;
   };
   const dockOut = inFront ? owner.filter((d) => d.owner?.type === 'outward' && d.session_id === target.id) : [];
+  // Night tidy's card docks in the chat of the bot it is for (the Chief's, or each bot's own without a Chief).
+  const dockNight = inFront ? owner.filter((d) => d.owner?.type === 'night_tidy' && !!target.teammate && d.session_id === target.teammate) : [];
   // Ticket 1130 C6 (owner Q2; mockup docs/design/first-use-b-1130/mockup.html #c6): a pasted stdio `claude mcp add` line
   // shows one offer row with the name and the whole command. Nothing is added before the click; the text stays in the box
   // and Enter still sends it. The add is Settings > Skills & hooks' own sealed `extensions_mcp_add` (env values never
@@ -300,8 +318,14 @@ export function ComposerWidget({ first, pin, composerHidden, pinned, current, te
         </div>
       )}
       {/* Floats over the output's bottom edge: an arrival never resizes the composer or the terminal (answer-strip rule). */}
-      {target && dockAsks.length + dockOut.length > 0 && (
+      {target && dockAsks.length + dockOut.length + dockNight.length > 0 && (
         <div className="dock" ref={dockHeight}>
+          {dockNight.map((d) => (
+            <div key={d.id} className="dock-out dock-fit">
+              <NightTidyCard d={d} core={core} onAnswer={onAnswer} t={t} />
+              <p className="dc-hint dc-also">{t('decisions.alsoInDecisions')}</p>
+            </div>
+          ))}
           {dockOut.map((d) => (
             <div key={d.id} className="dock-out">
               <OutboxCard d={d} onAnswer={onAnswer} t={t} />

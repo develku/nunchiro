@@ -228,6 +228,9 @@ pub enum OwnerAsk {
         file: String,
         place: PathBuf,
     },
+    /// Night tidy (team/memory/tidy.rs): the bots whose tidy or proposals wait for the owner's look, in the Chief's
+    /// chat (each bot's own without a Chief). The lines are read with `memory_tidy`; Apply goes through it too.
+    NightTidy { bots: Vec<String>, place: PathBuf },
     /// Ticket 1113: an owner-only request to close one foreign session.
     SessionClose {
         #[serde(default)]
@@ -275,6 +278,7 @@ const OWNER_KINDS: &[&str] = &[
     "session_close", // ticket 1113
     "cap",           // ticket 1099
     "bot",
+    "night_tidy", // bot memory night tidy
 ];
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
@@ -2253,6 +2257,10 @@ impl Queue {
                     ..
                 },
             ) => teammate == m && file == f,
+            // One night tidy card per chat; a later night's replaces it.
+            (Some(OwnerAsk::NightTidy { .. }), OwnerAsk::NightTidy { .. }) => {
+                i.session_id == session
+            }
             // Ticket 1099: one card per place; a newer ask replaces the one not yet answered.
             (Some(OwnerAsk::Cap { place, .. }), OwnerAsk::Cap { place: p, .. }) => place == p,
             // One card per offered name and place; a reworded offer replaces it.
@@ -2393,6 +2401,11 @@ impl Queue {
                 from,
                 ..
             } => format!("{from} offers a new bot, {name} ({job}): {why}"),
+            OwnerAsk::NightTidy { bots, .. } => format!(
+                "Night tidy for {} bot{} is ready for a look.",
+                bots.len(),
+                if bots.len() == 1 { "" } else { "s" }
+            ),
             OwnerAsk::Tidy { name, file, .. } => format!(
                 "{name}'s {file} is over the 6 KB its brief quotes, so the rest does not reach {name}: let {name} tidy it?"
             ),
