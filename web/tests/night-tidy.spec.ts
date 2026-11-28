@@ -162,6 +162,10 @@ test('night_tidy_docked: the card docks in the Chief\'s chat, or in the bot\'s o
   await openSessionFromPalette(app, nuni.id);
   await expect(docked(app)).toHaveAccessibleName('Night tidy for Bom');
   await expect(docked(app).getByRole('checkbox', { name: `Add: ${merged.text}` })).toBeChecked();
+  // The empty chat's heading sits above the docked card, never under it.
+  const heading = await app.locator('.cscroll > .empty h3').boundingBox();
+  const dock = await app.locator('.composer > .dock').boundingBox();
+  expect(heading && dock && heading.y + heading.height <= dock.y).toBe(true);
   await openSessionFromPalette(app, bom.id);
   await expect(docked(app)).toHaveCount(0);
   chief = false;

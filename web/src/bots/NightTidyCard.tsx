@@ -10,6 +10,8 @@ import type { OnAnswer, T } from '../tree/DecisionLine';
 import type { Decision } from '../types';
 import { LineIcon, type Fact, type Source } from './BotMemory';
 import { MEMORY_TAB, openBots } from './bots';
+import { Face } from './Face';
+import { useTeamNow } from '../lead/lead';
 import './night-tidy.css';
 
 type Proposal = { id: string; date: string; text: string; from: Source; topic?: string; at_ms: number };
@@ -28,6 +30,7 @@ export function NightTidyCard({ d, core, onAnswer, t }: { d: Decision; core: Cor
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const bots = d.owner?.type === 'night_tidy' ? d.owner.bots : [];
+  const team = useTeamNow();
   useEffect(() => {
     let live = true;
     core.request({ op: 'memory_tidy' }).then(
@@ -91,6 +94,7 @@ export function NightTidyCard({ d, core, onAnswer, t }: { d: Decision; core: Cor
   return (
     <div className="deccard hosted nt" role="group" aria-label={title} data-item={d.id} data-night-tidy>
       <div className="nt-head">
+        <LineIcon name="moon" />
         <b>{title}</b>
         {ran?.at_ms && <span className="dim">{t('tidy.night.ran', { time: hhmm(ran.at_ms), model: ran.model ?? '', tokens: kTokens(tokens) })}</span>}
       </div>
@@ -99,6 +103,7 @@ export function NightTidyCard({ d, core, onAnswer, t }: { d: Decision; core: Cor
         return (
           <section key={p.id} className="nt-bot" aria-label={p.name} data-nt-bot={p.id}>
             <p className="nt-name">
+              {((b) => b && <Face t={t} face={b.face} name={b.name} eyes="rest" size={18} />)(team.bots?.find((b) => b.id === p.id))}
               <b>{p.name}</b> <span className="dim">{t('tidy.night.counts', { changes, proposals: p.proposals.length })}</span>
               <span className="sp" />
               <button type="button" className="b" data-act="open-memory" onClick={() => openBots(p.id + MEMORY_TAB)}>

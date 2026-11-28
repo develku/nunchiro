@@ -37,7 +37,8 @@ function copyWhen(t: T, at: number) {
 const KINDS = ['tidy', 'edit', 'undo', 'before'];
 
 // The approved mockup's line icons (stroked, unlike the filled Octicons of `Icon`): a line's source and a topic file.
-const LINE_ICONS: Record<Source | 'file', string[]> = {
+const LINE_ICONS: Record<Source | 'file' | 'moon', string[]> = {
+  moon: ['M13 9.5A5.5 5.5 0 1 1 6.5 3a4.5 4.5 0 0 0 6.5 6.5Z'],
   you: ['M3 13.5a5 5 0 0 1 10 0', 'M8 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z'],
   conversation: ['M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2Z'],
   unknown: ['M6.2 6a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.6', 'M8 11.6v.1'],
@@ -46,7 +47,7 @@ const LINE_ICONS: Record<Source | 'file', string[]> = {
   tool: ['M10 2.5a3 3 0 0 0-3 4L2.75 10.75a1.4 1.4 0 0 0 2 2L9 8.5a3 3 0 0 0 4-3l-1.75 1.75-1.75-1.75 1.75-1.75Z'],
   file: ['M4 1.75h5l3 3v9.5H4Z', 'M9 1.75v3h3'],
 };
-export function LineIcon({ name }: { name: Source | 'file' }) {
+export function LineIcon({ name }: { name: Source | 'file' | 'moon' }) {
   return (
     <svg className="mem-icon" viewBox="0 0 16 16" width={12} height={12} fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
       {(LINE_ICONS[name] ?? []).map((d) => (

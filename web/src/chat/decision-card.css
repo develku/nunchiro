@@ -307,6 +307,10 @@
 :root:has(.composer > .dock) .chat:not([data-off]) .cscroll {
   padding-bottom: calc(18px + var(--dock-h, 0px));
 }
+:root:has(.composer > .dock) .chat:not([data-off]) .cscroll > .empty {
+  bottom: calc(18px + var(--dock-h, 0px)); /* the empty chat's heading sits above the card, never under it */
+  overflow: hidden;
+}
 :root:has(.composer > .dock) .chat:not([data-off]) .newchip {
   bottom: calc(12px + var(--dock-h, 0px));
 }
