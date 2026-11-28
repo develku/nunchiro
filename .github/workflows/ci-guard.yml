@@ -9,6 +9,10 @@ on:
   pull_request_target:
     branches: [main]
     types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+  # The merge queue needs every required check on its merge commit. The pull request already passed this guard (with
+  # ci-reviewed when it touched the gate) before it could enter the queue, so the queue run only reports that.
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
@@ -19,7 +23,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Merge queue run
+        if: github.event_name == 'merge_group'
+        run: echo "checked on the pull request before it entered the queue"
       - name: Changes to the gate need the ci-reviewed label
+        if: github.event_name == 'pull_request_target'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}

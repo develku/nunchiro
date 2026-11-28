@@ -2749,7 +2749,7 @@ fn waiting_starts_go_one_at_a_time() {
         let held = raw(&l.home, &l.main, start);
         assert_eq!(
             held["Err"],
-            "This Mac is low on memory, so the new session is waiting. It starts by itself when memory is free, and you get a message then. Do not start it again",
+            "This Mac is low on memory, so the new session is waiting. It starts by itself when memory is free, and you get a message then. Do not start it again. It starts with no first prompt: send it one when that message comes",
             "{held}"
         );
     }
@@ -2776,12 +2776,19 @@ fn waiting_starts_go_one_at_a_time() {
         let apart = started(b).saturating_sub(started(a));
         assert!(apart >= 3000, "{a} to {b}: {apart} ms");
     }
+    // A bot-task trial: a held seat started with no prompt while its lead thought it worked. The line names the seat
+    // and says it has no first prompt yet.
     wait("the asker got no lines", || {
         ["one", "two", "three"].iter().all(|n| {
+            let id = rows(&l.home)
+                .into_iter()
+                .find(|r| r.label == *n)
+                .map(|r| r.id)
+                .unwrap_or_default();
             told(
                 &l.home,
                 "Main",
-                &format!("{n} started after waiting for memory."),
+                &format!("{n} started after waiting for memory, with no first prompt: send it its brief now (nunchiro agent prompt {id} \"<brief>\")."),
             )
         })
     });

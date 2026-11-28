@@ -248,6 +248,16 @@ function FolderSheet({ core, name, subject = 'widget', onClose, onGranted, t: gi
                 </li>
               ))}
             </ul>
+            {!!view.extras?.length && (
+              <>
+                <b>{t('plugins.sheet.extras')}</b>
+                <ul className="ps-parts" data-field="extras">
+                  {view.extras.map((x) => (
+                    <li key={x}>{x}</li>
+                  ))}
+                </ul>
+              </>
+            )}
           </div>
         )}
         {view && m && (

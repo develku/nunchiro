@@ -56,7 +56,7 @@ test('extensions_page_in_agents_group_within_two_clicks: the page sits in the ag
   await openExtensions(app);
   const nav = app.getByRole('navigation', { name: 'Settings pages' });
   // The page's button sits in the agents group, after Providers, Usage and Schedules (scene c).
-  await expect(nav.locator('[data-group="agents"] button[data-page]')).toHaveText(['Providers', 'Usage', 'Team', 'Assistants', 'Notes', 'Skills & hooks']); // Team: ticket 970; Assistants: Home assistants; Notes: ticket 990 (21ef73729); Schedules left for its widget: ticket 993
+  await expect(nav.locator('[data-group="agents"] button[data-page]')).toHaveText(['Providers', 'Usage', 'Team', 'Assistants', 'Notes', 'Skills & hooks', 'Plugins']); // Plugins: #86; Team: ticket 970; Assistants: Home assistants; Notes: ticket 990 (21ef73729); Schedules left for its widget: ticket 993
   // Ticket 391: the shipped skill sits in the Nunchiro defaults card, on; Skills and hooks lists custom folders only, off by default.
   const base = app.getByRole('region', { name: 'Nunchiro defaults' });
   await expect(base.getByRole('switch', { name: 'Nunchiro skill' })).toBeChecked();

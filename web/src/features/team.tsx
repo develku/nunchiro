@@ -148,6 +148,8 @@ function TeamPage({ core, t, projects, closeSettings, toast, sessions }: Pick<Pa
     if (!menu) return;
     const row = () => document.querySelector<HTMLElement>(`.settings [data-row="team:${CSS.escape(menu)}"]`);
     row()?.querySelector<HTMLElement>('.lead-menu button')?.focus();
+    // The last rows' menu opens under the page's fold: it comes into view whole, not only its first item.
+    row()?.querySelector<HTMLElement>('.lead-menu')?.scrollIntoView({ block: 'nearest' });
     const away = (e: PointerEvent) => !(e.target as Element).closest?.('.lead-menu, .lead-more') && setMenu(null);
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && (e.preventDefault(), setMenu(null), row()?.querySelector<HTMLElement>('.lead-more')?.focus());
     document.addEventListener('pointerdown', away, true);

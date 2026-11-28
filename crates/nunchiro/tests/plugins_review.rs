@@ -328,15 +328,15 @@ fn tokens_and_agents_get_no_plugin_request_and_a_change_stops_the_runner() {
         ],
     );
     let until = Instant::now() + Duration::from_secs(20);
-    while std::fs::read_to_string(&out).map_or(true, |t| t.is_empty()) {
-        assert!(Instant::now() < until);
+    // Until the whole answer is written (the shell writes it in more than one piece under load).
+    while !std::fs::read_to_string(&out).is_ok_and(|t| t.contains("not granted")) {
+        assert!(
+            Instant::now() < until,
+            "{:?}",
+            std::fs::read_to_string(&out)
+        );
         std::thread::sleep(Duration::from_millis(50));
     }
-    assert!(
-        std::fs::read_to_string(&out)
-            .unwrap()
-            .contains("not granted")
-    );
     assert_eq!(finished(&c)["Ok"]["run"]["output"]["text"], "hi\n");
     // A file added after approval asks for nothing new: it still runs.
     std::fs::write(dir.join("extra.sh"), "#!/bin/sh\n").unwrap();
