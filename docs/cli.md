@@ -750,8 +750,9 @@ route is a local tool (a script the user names). The line is plain words with on
 `._/-+,:@%=`: no quotes, globs, `~`, `$`, redirects or separators), and every word is a full path to a regular file:
 the program, then the files it uses. No bare word and no word starting with `=` (a launcher's bare words, and zsh's
 `=name`, would run code the card does not bind), so put recipients and text in a file. Each file is at most 32 KB
-(checked before it is read); the card shows the text of every file it names, the program's too when it is a script (a
-binary program is bound by its hash only), and its hash covers the line and every file's content as read at staging.
+(checked before it is read) and UTF-8 text, the program too (a binary program is refused: the card could not show
+it). The card shows the text of every file the line names, and its hash covers the line and every file's content as
+read at staging. Only the files on this line are shown and checked; files the program opens by itself are not.
 After the yes the seat runs exactly that line once; its hook reads the files again, so a file changed after the yes
 makes another call, which asks like any shell command, as does a call that asks to run outside Claude's sandbox. A
 command card has no Open by hand. Staging (`nunchiro outbox stage`)

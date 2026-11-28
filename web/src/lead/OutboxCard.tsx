@@ -25,7 +25,8 @@ const opOf = (tool: string) => tool.split('__').pop() ?? tool;
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
 type File = { path: string; text?: string };
 // A command card (outbox.rs `COMMAND`): the exact line Send runs once, and the text of each file it names as the core
-// read it, the program's too when it is a script (a binary program is bound by its hash only). No Open by hand.
+// read it, the program's too (it must be text). Files the program opens by itself are not on it, and the card says so.
+// No Open by hand.
 const files = (v: unknown): File[] => (Array.isArray(v) ? v.filter((f): f is File => typeof f?.path === 'string' && typeof f.text === 'string') : []);
 
 export function OutboxCard({ d, onAnswer, t }: { d: Decision; onAnswer: OnAnswer; t: T }) {
@@ -99,6 +100,7 @@ export function OutboxCard({ d, onAnswer, t }: { d: Decision; onAnswer: OnAnswer
               <p className="obx-why">{t('outbox.card.lines', { n: plain(f.text ?? '').split('\n').length })}</p>
             </div>
           ))}
+          <p className="obx-why">{t('outbox.card.filesOnly')}</p>
         </>
       )}
       <dl className="obx-fields">

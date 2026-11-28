@@ -252,8 +252,8 @@ pub fn command_words(line: &str) -> Result<Vec<&str>, String> {
 
 /// The call a card binds and the seat's hook checks: an MCP call's arguments as they are; a command's line with every
 /// file it names (`command_words`), read now. Each is a regular file of at most `FILE_MAX` bytes (the size is checked
-/// before the read): the program by its hash, and its text when it is UTF-8 (a script); each other file by its hash
-/// and its whole text, which must be UTF-8. The card shows every text. A file that changes after the owner's yes makes
+/// before the read), bound by its hash and its whole text, which must be UTF-8: the program too, so a binary program
+/// (code the card cannot show) is refused. The card shows every text. A file that changes after the owner's yes makes
 /// another call, which the card does not allow.
 pub fn bound(tool: &str, args: &Value) -> Result<Value, String> {
     use sha2::{Digest, Sha256};
@@ -266,7 +266,7 @@ pub fn bound(tool: &str, args: &Value) -> Result<Value, String> {
         .ok_or("a command card needs `command`")?;
     let words = command_words(line)?;
     let mut files = vec![];
-    for (i, word) in words.iter().enumerate() {
+    for word in &words {
         let meta = std::fs::metadata(word).map_err(|e| format!("{word}: {e}"))?;
         if !meta.is_file() {
             return Err(format!(
@@ -292,11 +292,9 @@ pub fn bound(tool: &str, args: &Value) -> Result<Value, String> {
             return Err(format!("{word} grew while it was read"));
         }
         let mut file = serde_json::json!({"path": word, "sha256": hex(&Sha256::digest(&bytes))});
-        match String::from_utf8(bytes) {
-            Ok(text) => file["text"] = file_text(word, text)?.into(),
-            Err(_) if i == 0 => {} // a binary program: bound by its hash only
-            Err(_) => return Err(format!("{word} is not text, so the card cannot show it")),
-        }
+        let text = String::from_utf8(bytes)
+            .map_err(|_| format!("{word} is not text, so the card cannot show it"))?;
+        file["text"] = file_text(word, text)?.into();
         files.push(file);
     }
     Ok(serde_json::json!({"command": line, "files": files}))

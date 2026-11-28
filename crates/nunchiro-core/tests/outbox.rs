@@ -800,6 +800,9 @@ fn outbox_command_card_runs_exactly_its_line_once() {
     let text = "To: Jordan Lee <jordan@partner.example.com>\nSubject: Re: Can we find an hour?\n\nTuesday 14:00?\n";
     fs::write(&draft, text).unwrap();
     fs::write(work.join("blob.bin"), [0u8, 159, 146, 150]).unwrap();
+    let binary = work.join("send-bin");
+    fs::write(&binary, [0xcfu8, 0xfa, 0xed, 0xfe, 0x07, 0x00]).unwrap();
+    fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
     fs::write(work.join("big.eml"), "x".repeat(32 * 1024 + 1)).unwrap();
     let fifo = work.join("pipe");
     assert!(
@@ -856,6 +859,8 @@ fn outbox_command_card_runs_exactly_its_line_once() {
         format!("{} {}", send.display(), work.join("missing.eml").display()),
         format!("{} {}", send.display(), work.join("big.eml").display()),
         format!("{} {}", send.display(), fifo.display()),
+        // Review: a program the card cannot show as text (a binary) is refused too.
+        format!("{} {}", binary.display(), draft.display()),
     ] {
         let refused = stage(&bad);
         assert!(refused["Err"].is_string(), "{bad:?}: {refused}");

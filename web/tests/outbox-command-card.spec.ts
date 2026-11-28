@@ -54,6 +54,7 @@ test('outbox command card: the line and its file are shown, Run and Discard only
   // The program's text is shown too, and a file named twice is shown twice (keys by place, not by path).
   await expect(box).toContainText('File it uses: /work/bin/send-mail');
   await expect(box.locator('.obx-body')).toHaveText([script, text, text]);
+  await expect(box).toContainText('Only the files on this line are shown and checked; files the program opens by itself are not.');
   await expect(box.locator('[data-act="send-outbox"]')).toHaveText('Run');
   await expect(box.locator('[data-act="open-outbox"]')).toHaveCount(0);
   await box.locator('[data-act="discard"]').click();

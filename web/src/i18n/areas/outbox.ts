@@ -10,6 +10,7 @@ declare module '../index' {
     'outbox.card.kindCommand': true;
     'outbox.card.run': true;
     'outbox.card.file': true;
+    'outbox.card.filesOnly': true;
     'outbox.field.command': true;
     'outbox.card.kindMail': true;
     'outbox.card.kindEvent': true;
@@ -54,6 +55,7 @@ export const en = {
   'outbox.card.kindCommand': "Outbox · command",
   'outbox.card.run': "Run",
   'outbox.card.file': "File it uses: {path}",
+  'outbox.card.filesOnly': "Only the files on this line are shown and checked; files the program opens by itself are not.",
   'outbox.field.command': "Command",
   'outbox.card.kindMail': "Outbox · mail draft",
   'outbox.card.kindEvent': "Outbox · event draft",
