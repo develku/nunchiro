@@ -89,7 +89,9 @@ impl Sessions {
         let idle = !self.queue.attention(id).working && !self.pending_enter.contains_key(id);
         let entry = self.entry(id)?;
         let text = entry.observer.screen.text();
-        let at_box = composer(&text, entry.meta.kind).is_some_and(|b| b.trim().is_empty());
+        // An empty box, or one that shows only Claude's faint suggested prompt (typing replaces it).
+        let at_box = composer(&text, entry.meta.kind)
+            .is_some_and(|b| b.trim().is_empty() || entry.observer.screen.composer_faint());
         let g = self.folder_grants.entry(id.to_string()).or_default();
         let mut keys: Vec<u8> = vec![];
         let mut done: Option<(PathBuf, bool)> = None;
