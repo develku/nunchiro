@@ -4593,6 +4593,13 @@
     "Listed": {
       "description": "One row of the Plugins page.",
       "properties": {
+        "blocked": {
+          "description": "Why the catalogue it came from blocks it (its kill list): it is off and cannot be turned on.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "error": {
           "type": [
             "string",

@@ -228,11 +228,14 @@ fn approve_and_turn_on(home: &std::path::Path) {
         &view.hash,
     )
     .unwrap();
-    fs::write(
-        home.join("plugins.json"),
-        json!({"on": ["hello"]}).to_string(),
-    )
-    .unwrap();
+    // The switch, kept with the rest of the store (where an install came from).
+    let file = home.join("plugins.json");
+    let mut store: Value = fs::read(&file)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(json!({}));
+    store["on"] = json!(["hello"]);
+    fs::write(&file, store.to_string()).unwrap();
 }
 fn hello(home: &std::path::Path) -> plugins::Listed {
     plugins::list(home, true, false)

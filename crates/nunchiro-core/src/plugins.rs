@@ -491,6 +491,29 @@ struct Store {
     on: BTreeSet<String>,
     #[serde(default)]
     settings: BTreeMap<String, BTreeMap<String, Value>>,
+    /// The plugins installed from a catalogue: the commit and the catalogue's origin, for its kill list.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    installed: BTreeMap<String, Installed>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct Installed {
+    pub commit: String,
+    pub origin: String,
+}
+/// Records where an install from a catalogue came from (`plugins_online.rs`), for its kill list.
+pub(crate) fn record_install(home: &Path, id: &str, at: Installed) -> Result<(), String> {
+    let mut store = load(home);
+    store.installed.insert(id.into(), at);
+    save(home, &store)
+}
+/// Every catalogue a plugin was installed from, with the plugins and commits from it.
+pub(crate) fn installed(home: &Path) -> BTreeMap<String, Installed> {
+    load(home).installed
+}
+/// Why the catalogue it came from blocks this plugin (its kill list); `None` when it is not on the list.
+pub(crate) fn blocked(home: &Path, id: &str) -> Option<String> {
+    let at = load(home).installed.remove(id)?;
+    crate::plugins_online::killed(home, &at.origin, id, &at.commit)
 }
 fn load(home: &Path) -> Store {
     fs::read(home.join(STORE))
@@ -512,8 +535,13 @@ pub(crate) fn turn_off(home: &Path, id: &str) -> Result<(), String> {
 }
 /// A part's plugin is on (the switch on the Plugins page); its approval is checked separately.
 pub(crate) fn on(home: &Path, name: &str) -> Result<(), String> {
+    crate::plugins_online::refresh_if_stale(home);
     match split(name) {
         Some((id, _)) if !load(home).on.contains(id) => Err(format!("plugin {id} is off")),
+        Some((id, _)) => match blocked(home, id) {
+            Some(why) => Err(format!("plugin {id} is blocked by its catalogue: {why}")),
+            None => Ok(()),
+        },
         _ => Ok(()),
     }
 }
@@ -607,6 +635,9 @@ pub struct Listed {
     /// Changed since its approval but asking for nothing new (`approval::View::updated`): still approved.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub updated: bool,
+    /// Why the catalogue it came from blocks it (its kill list): it is off and cannot be turned on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocked: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plugin: Option<Plugin>,
     /// The current value of each setting (stored, else the default).
@@ -625,11 +656,13 @@ fn is_zero(n: &u64) -> bool {
     *n == 0
 }
 pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
+    crate::plugins_online::refresh_if_stale(home);
     let store = load(home);
     ids(home)
         .into_iter()
         .map(|id| {
-            let on = store.on.contains(&id);
+            let why = blocked(home, &id);
+            let on = store.on.contains(&id) && why.is_none(); // a blocked plugin runs nothing
             let name = format!("{PREFIX}{id}");
             let parsed = approval::status(home, &name)
                 .and_then(|v| Ok((v.state, v.updated, parse(&v.manifest_text, &id)?)));
@@ -655,6 +688,7 @@ pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
                         on,
                         state: Some(state),
                         updated,
+                        blocked: why.clone(),
                         plugin: Some(p),
                         error: None,
                         needs,
@@ -666,6 +700,7 @@ pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
                     on,
                     state: None,
                     updated: false,
+                    blocked: why.clone(),
                     plugin: None,
                     values: BTreeMap::new(),
                     error: Some(e),
@@ -820,6 +855,9 @@ pub(crate) fn handle(
         }
         Action::Set { id, on } => {
             read(home, &id)?;
+            if on && let Some(why) = blocked(home, &id) {
+                return Err(format!("plugin {id} is blocked by its catalogue: {why}"));
+            }
             let mut store = load(home);
             let off = !on;
             if on {
@@ -939,6 +977,7 @@ pub(crate) fn handle(
             let mut store = load(home);
             store.on.remove(&id);
             store.settings.remove(&id);
+            store.installed.remove(&id);
             save(home, &store)?;
             // Its approval goes with it: the same folder moved back asks again.
             approval::forget_plugin(home, &id)?;
@@ -1110,7 +1149,10 @@ fn gates(
     let mut replaced: Option<(String, String)> = None;
     // All checks of one action together get `BUDGET`; one past it refuses, as a check that does not answer.
     let deadline = std::time::Instant::now() + BUDGET;
-    for id in ids(home).into_iter().filter(|id| store.on.contains(id)) {
+    for id in ids(home)
+        .into_iter()
+        .filter(|id| store.on.contains(id) && blocked(home, id).is_none())
+    {
         let Ok(p) = read(home, &id) else { continue };
         let mine: Vec<&Gate> = p.gate.iter().filter(|g| g.on == on).collect();
         if mine.is_empty() || approval::check(home, &format!("{PREFIX}{id}")).is_err() {

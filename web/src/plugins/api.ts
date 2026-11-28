@@ -28,6 +28,8 @@ export interface Listed {
   state?: ApprovalState;
   /** Changed since its approval but asking for nothing new, so still approved. */
   updated?: boolean;
+  /** Why the catalogue it came from blocks it (its kill list): off, and its switch cannot turn it on. */
+  blocked?: string;
   plugin?: Plugin;
   values?: Record<string, unknown>;
   error?: string;

@@ -57,6 +57,8 @@ declare module '../index' {
     'plugins.ran': true;
     'plugins.ranEmpty': true;
     'plugins.drafted': true;
+    'plugins.state.blocked': true;
+    'plugins.blocked': true;
     'plugins.sheet.asked': true;
     'plugins.sheet.added': true;
     'plugins.updated': true;
@@ -131,6 +133,8 @@ export const en = {
   "plugins.ran": "{name}: {text}",
   "plugins.ranEmpty": "{name} ran and printed nothing.",
   "plugins.drafted": "{name} put its output in the message box. Nothing was sent.",
+  "plugins.state.blocked": "Blocked",
+  "plugins.blocked": "Its catalogue blocks it: {why} It stays off.",
   "plugins.sheet.asked": "asked once, and again when a change asks for more",
   "plugins.sheet.added": "New since you approved it:",
   "plugins.updated": "Its files changed since you approved it; it asks for nothing new, so it stays approved.",

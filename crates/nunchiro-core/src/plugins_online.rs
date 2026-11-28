@@ -18,6 +18,12 @@ use std::time::{Duration, Instant};
 pub const ORIGIN: &str = "https://raw.githubusercontent.com/develku/nunchiro/";
 /// The catalogue itself is read from `main`; what it points at is pinned by commit and hash.
 pub const CATALOG: &str = "main/plugins/catalog.json";
+/// Plugins the catalogue blocks (Orca's kill list): not installed, and an installed copy is turned off.
+pub const KILL_LIST: &str = "main/plugins/kill-list.json";
+/// The kill lists read, by catalogue origin.
+const KILL_CACHE: &str = "plugin-kill-list.json";
+/// How old a kill list may be before a plugin run or the Plugins page reads it again (Orca: 6 hours).
+const KILL_FRESH_MS: u64 = 6 * 60 * 60 * 1000;
 const CATALOG_CAP: usize = 256 * 1024;
 const FILE_CAP: usize = 256 * 1024;
 const MAX_FILES: usize = 50;
@@ -137,6 +143,98 @@ pub fn parse(bytes: &[u8]) -> Result<Vec<Entry>, String> {
         .collect())
 }
 
+/// One plugin the catalogue blocks: every copy, or only the listed commits.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Killed {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub commits: Vec<String>,
+    pub reason: String,
+}
+#[derive(Deserialize)]
+struct KillList {
+    version: u32,
+    plugins: Vec<serde_json::Value>,
+}
+/// A kill list's entries. The file must be version 1; an entry this Nunchiro cannot read is skipped, so it never
+/// discards the others (Orca's rule: blocking more is the safe direction).
+pub fn parse_kill_list(bytes: &[u8]) -> Result<Vec<Killed>, String> {
+    let list: KillList =
+        serde_json::from_slice(bytes).map_err(|e| format!("the kill list is not valid: {e}"))?;
+    if list.version != 1 {
+        return Err(format!(
+            "the kill list's version {} is newer than this Nunchiro reads",
+            list.version
+        ));
+    }
+    Ok(list
+        .plugins
+        .into_iter()
+        .take(4096)
+        .filter_map(|v| serde_json::from_value::<Killed>(v).ok())
+        .filter(|k| plain(&k.reason, 1024) && !k.reason.is_empty())
+        .collect())
+}
+#[derive(Default, Serialize, Deserialize)]
+struct KillCache {
+    #[serde(default)]
+    lists: BTreeMap<String, (u64, Vec<Killed>)>,
+}
+fn kill_cache(home: &Path) -> KillCache {
+    fs::read(home.join(KILL_CACHE))
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default()
+}
+/// Why the catalogue at `origin` blocks plugin `id` at `commit`, from its last kill list read.
+pub(crate) fn killed(home: &Path, origin: &str, id: &str, commit: &str) -> Option<String> {
+    kill_cache(home)
+        .lists
+        .remove(origin)?
+        .1
+        .into_iter()
+        .find(|k| k.id == id && (k.commits.is_empty() || k.commits.iter().any(|c| c == commit)))
+        .map(|k| k.reason)
+}
+/// Reads the kill lists again off the caller's thread when one an installed plugin came from is older than 6 hours.
+/// Nothing is read while no plugin came from a catalogue.
+pub(crate) fn refresh_if_stale(home: &Path) {
+    static RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    let installed = crate::plugins::installed(home);
+    if installed.is_empty() {
+        return;
+    }
+    let cache = kill_cache(home);
+    let now = crate::queue::now_ms();
+    let stale: std::collections::BTreeSet<String> = installed
+        .into_values()
+        .map(|i| i.origin)
+        .filter(|o| {
+            cache
+                .lists
+                .get(o)
+                .is_none_or(|(at, _)| now.saturating_sub(*at) > KILL_FRESH_MS)
+        })
+        .collect();
+    if stale.is_empty() || RUNNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    let home = home.to_path_buf();
+    std::thread::spawn(move || {
+        for origin in stale {
+            let catalog = Catalog {
+                origin,
+                home: home.clone(),
+            };
+            if let Err(e) = catalog.refresh_kill_list() {
+                eprintln!("plugin kill list: {e}");
+            }
+        }
+        RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
+    });
+}
+
 pub struct Catalog {
     origin: String,
     home: PathBuf,
@@ -156,18 +254,45 @@ impl Catalog {
             home: home.into(),
         })
     }
+    /// Reads this catalogue's kill list, keeps it, and turns off every installed copy it now blocks.
+    pub fn refresh_kill_list(&self) -> Result<Vec<Killed>, String> {
+        let list = parse_kill_list(&get(&self.origin, TOTAL, KILL_LIST, CATALOG_CAP)?)?;
+        let _one = INSTALL.lock().map_err(|_| "plugin installs unavailable")?;
+        let mut cache = kill_cache(&self.home);
+        cache
+            .lists
+            .insert(self.origin.clone(), (crate::queue::now_ms(), list.clone()));
+        let bytes = serde_json::to_vec(&cache).map_err(|e| e.to_string())?;
+        crate::store::atomic_write(&self.home.join(KILL_CACHE), &bytes)?;
+        for (id, at) in crate::plugins::installed(&self.home) {
+            if at.origin == self.origin
+                && killed(&self.home, &self.origin, &id, &at.commit).is_some()
+            {
+                crate::plugins::turn_off(&self.home, &id)?;
+                crate::sandbox::stop_subjects(&self.home, &crate::plugins::part_name(&id, ""));
+            }
+        }
+        Ok(list)
+    }
     pub fn entries(&self) -> Result<Vec<Entry>, String> {
         parse(&get(&self.origin, TOTAL, CATALOG, CATALOG_CAP)?)
     }
     /// Downloads `id`'s files at its commit, checks each hash, and only then puts the folder in `plugins/<id>`
     /// (an older one goes to `plugins/.removed/`, as Remove does). One mismatch installs nothing.
     pub fn install(&self, id: &str) -> Result<(), String> {
+        // A kill list that cannot be read now is the one read last (Orca keeps its cached list too).
+        let _ = self.refresh_kill_list();
         let until = Instant::now() + TOTAL;
         let entry = self
             .entries()?
             .into_iter()
             .find(|e| e.id == id)
             .ok_or_else(|| format!("no plugin {id} in the catalogue"))?;
+        if let Some(why) = killed(&self.home, &self.origin, id, &entry.commit) {
+            return Err(format!(
+                "plugin {id} is on the catalogue's kill list: {why}"
+            ));
+        }
         let mut got = vec![];
         for f in &entry.files {
             let left = until.saturating_duration_since(Instant::now());
@@ -234,6 +359,14 @@ impl Catalog {
             let _ = fs::remove_dir_all(&fresh);
         }
         written?;
+        crate::plugins::record_install(
+            &self.home,
+            id,
+            crate::plugins::Installed {
+                commit: entry.commit.clone(),
+                origin: self.origin.clone(),
+            },
+        )?;
         // An update that asks for nothing beyond its approval stays as it was (Orca's rule); anything else is off
         // until the owner reviews it and turns it on.
         let approved =

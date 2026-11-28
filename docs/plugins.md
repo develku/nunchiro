@@ -143,6 +143,11 @@ hash matches; one file changed after the catalogue was made installs nothing. An
 approved, so it runs nothing until you review it. When the catalogue has a newer version, the button says Update;
 the old folder moves to `plugins/.removed/` and the new one asks for approval again.
 
+The catalogue also keeps a kill list (`plugins/kill-list.json`): a plugin found harmful, every copy or only some
+commits, with the reason. A plugin on it is not installed, and an installed copy is turned off, says why on the
+Plugins page and cannot be turned on. Nunchiro reads the list on each install and again every 6 hours while a plugin
+from the catalogue is installed; a list it cannot read leaves the last one it read in force.
+
 The catalogue holds Nunchiro's own examples for now. It is a folder of the main repository, read from GitHub the
 way a separate catalogue repository would be; `scripts/plugin-catalog.py` writes it.
 
