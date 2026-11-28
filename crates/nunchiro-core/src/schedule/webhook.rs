@@ -55,26 +55,43 @@ pub(crate) fn spawn(
                     (Some(_), false) => open = None,
                     _ => {}
                 }
-                // Accept for about a second, then look at the triggers again.
-                for _ in 0..20 {
-                    if let Some(l) = &open
-                        && let Ok((stream, _)) = l.accept()
-                    {
-                        // At most LIVE_MAX requests are read at once: idle connections cannot pile up threads.
-                        if LIVE.fetch_add(1, Ordering::SeqCst) >= LIVE_MAX {
-                            LIVE.fetch_sub(1, Ordering::SeqCst);
-                            drop(stream);
-                            continue;
-                        }
-                        let (registry, stopping, home) =
-                            (registry.clone(), stopping.clone(), home.clone());
-                        std::thread::spawn(move || {
-                            serve(stream, &registry, &stopping, &home);
-                            LIVE.fetch_sub(1, Ordering::SeqCst);
-                        });
-                        continue;
+                // Accept for about a second, then look at the triggers again. The wait is on the listener (or a plain
+                // sleep with none open), not a 50 ms retry: an idle core wakes here once a second.
+                let until = std::time::Instant::now() + Duration::from_secs(1);
+                loop {
+                    let left = until.saturating_duration_since(std::time::Instant::now());
+                    if left.is_zero() {
+                        break;
                     }
-                    std::thread::sleep(Duration::from_millis(50));
+                    let Some(l) = &open else {
+                        std::thread::sleep(left);
+                        break;
+                    };
+                    match l.accept() {
+                        Ok((stream, _)) => {
+                            // At most LIVE_MAX requests are read at once: idle connections cannot pile up threads.
+                            if LIVE.fetch_add(1, Ordering::SeqCst) >= LIVE_MAX {
+                                LIVE.fetch_sub(1, Ordering::SeqCst);
+                                drop(stream);
+                                continue;
+                            }
+                            let (registry, stopping, home) =
+                                (registry.clone(), stopping.clone(), home.clone());
+                            std::thread::spawn(move || {
+                                serve(stream, &registry, &stopping, &home);
+                                LIVE.fetch_sub(1, Ordering::SeqCst);
+                            });
+                        }
+                        // Nothing waiting: sleep on the listener until a connect or the second is up.
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                            crate::server::wait_readable(
+                                &[std::os::fd::AsRawFd::as_raw_fd(l)],
+                                left,
+                            )
+                        }
+                        // A failed accept (out of files) leaves the listener readable: no spin on it.
+                        Err(_) => std::thread::sleep(Duration::from_millis(50)),
+                    }
                 }
             }
         })
