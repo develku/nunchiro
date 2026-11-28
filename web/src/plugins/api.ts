@@ -21,6 +21,10 @@ export interface Plugin {
   command?: { name: string; title?: string; show: Show }[];
   setting?: PluginSetting[];
   gate?: { name: string; title?: string; on: 'session.start.before' | 'prompt.send.before' }[];
+  /** Shortcuts for its commands, in the window's key names (`Meta+Shift+KeyH`). */
+  keybinding?: { command: string; key: string }[];
+  /** Short items in the status bar; pressing one runs its command. */
+  status?: { name: string; text: string; command?: string }[];
 }
 export interface Listed {
   id: string;

@@ -53,6 +53,17 @@ name = "status"
 title = "Quiet hours: am I in quiet time?"
 command = ["/bin/sh", "status.sh"]
 show = "note"                 # note, panel, or send (the focused agent's composer, as a draft it never sends itself)
+
+[[keybinding]]                # a shortcut for one of its commands (at most 16)
+command = "status"
+key = "Meta+Alt+KeyQ"         # the window's key names; Meta always (so no terminal or typed key is taken), then
+                              # one key. A key the window or you already hold stays yours.
+
+[[status]]                    # an item in the status bar (at most 2), shown with the plugin mark; pressing it
+                              # runs its command. A change of its text asks for approval again.
+name = "quiet"
+text = "Quiet"                # 1 to 24 characters
+command = "status"            # optional
 ```
 
 A panel takes the fields of a script or web widget's `widget.toml`, and every part is checked by the same rules: a
