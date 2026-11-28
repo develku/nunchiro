@@ -49,6 +49,9 @@ function carryDraft(from: string, to: string) {
   shown.value = text;
   shown.dispatchEvent(new Event('input', { bubbles: true }));
 }
+/** As the core's `hands_over`: only a project's lead gets a handover turn (the Home lead's new conversation starts
+ *  clean), so only its button says it writes what is unfinished. */
+export const handsOver = (mate: Teammate) => !!mate.lead && !!mate.project;
 /** As the core's `seat_busy` (team.rs `Fresh::Now`): a turn runs or waits at a question, so the press stops it. */
 export const seatBusy = (s: Session | null) => !!s && (s.attention.working || s.attention.waiting);
 /** Round 6: the agent can continue this seat's conversation later (it has a conversation id; an ACP agent without
@@ -57,9 +60,7 @@ export const seatBusy = (s: Session | null) => !!s && (s.attention.working || s.
 export const canContinue = (s: Session | null) => !s || !!s.agent_session_id;
 async function runFresh(mate: Teammate, project: string, how: 'now' | 'handover' | 'close') {
   const old = liveSeat(mate.id);
-  // As the core's `hands_over`: only a project's lead gets a handover turn (the Home lead's new conversation starts clean).
-  const handsOver = !!mate.lead && !!mate.project;
-  const quick = how === 'close' || (how === 'now' && !(handsOver && old && !seatBusy(old)));
+  const quick = how === 'close' || (how === 'now' && !(handsOver(mate) && old && !seatBusy(old)));
   setFresh({ mate, project, phase: 'wait', quick, hidden: quick });
   try {
     const { session } = await openFresh(mate.id, how);
@@ -96,7 +97,7 @@ export function askFresh(team: Team, project: string) {
 export function FreshButton({ t, mate, seat, live }: { t: T; mate: Teammate; seat: Session; live: Session | null }) {
   // Round 6: shown but not offered where the press would lose the conversation; the tooltip says why.
   const lost = !canContinue(live);
-  const tip = lost ? 'lead.newConvNoContinue' : seatBusy(live) ? 'lead.newConvStops' : mate.lead && live ? 'lead.newConvHands' : 'lead.newConvOpens';
+  const tip = lost ? 'lead.newConvNoContinue' : seatBusy(live) ? 'lead.newConvStops' : handsOver(mate) && live ? 'lead.newConvHands' : 'lead.newConvOpens';
   return (
     <button className="hbtn fresh-seat" aria-disabled={lost || undefined} data-tip={t(tip, { name: mate.name })} onClick={() => lost || newConversation(mate, seat.project)}>
       {t('lead.newConv')}
