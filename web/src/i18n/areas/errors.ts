@@ -89,6 +89,8 @@ declare module '../index' {
     'err.memWait.gone': true;
     'err.pluginRefusedSend': true;
     'err.pluginRefusedSend.todo': true;
+    'err.pluginCatalogBad': true;
+    'err.pluginCatalogBad.todo': true;
   }
 }
 
@@ -182,6 +184,8 @@ export const en = {
   'err.memWait.gone': 'This start is no longer waiting: it started or was dropped meanwhile.',
   'err.pluginRefusedSend': 'Not sent: the plugin {name} refused it.',
   'err.pluginRefusedSend.todo': 'Its reason is under Details. Change the message, or turn the plugin off in Settings > Plugins.',
+  'err.pluginCatalogBad': 'The online plugin list has a problem, so nothing was installed.',
+  'err.pluginCatalogBad.todo': 'Details below say what. Try again later, or update Nunchiro.',
 };
 
 export const ko = {
