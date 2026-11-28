@@ -842,7 +842,7 @@ fn hold_session_start(
             }),
             Done::Cancelled | Done::Dropped => Err(String::new()),
         };
-        let line = crate::pressure::asker_line(&name, done, &result);
+        let line = crate::pressure::session_line(&name, done, &result);
         if let Ok(mut sessions) = registry.lock()
             && let Err(e) = sessions.memory_line(&caller.id, line)
         {

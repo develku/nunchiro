@@ -192,9 +192,10 @@ export function useComposerSend({ core, sessions, current, ordered, images, hand
   const looked = useRef(new Map<string, number>());
   const watchSent = async (s: Session, row: Row) => {
     const sent = row.sent;
-    if (!sent || watching.current.has(row.id)) return;
-    // A working Claude sends many snapshots: one chat_page per row a second, and a skipped look comes back by itself.
-    const wait = (looked.current.get(row.id) ?? 0) + LOOK_MS - Date.now();
+    if (!sent) return;
+    // A working Claude sends many snapshots: one chat_page per row a second, and a skipped look comes back by itself,
+    // one skipped while the last is still out too (that look may have read the page before this snapshot's line).
+    const wait = watching.current.has(row.id) ? LOOK_MS : (looked.current.get(row.id) ?? 0) + LOOK_MS - Date.now();
     if (wait > 0) return void setTimeout(() => setWake((n) => n + 1), wait);
     looked.current.set(row.id, Date.now());
     watching.current.add(row.id);

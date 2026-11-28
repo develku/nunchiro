@@ -53,6 +53,17 @@ name = "status"
 title = "Quiet hours: am I in quiet time?"
 command = ["/bin/sh", "status.sh"]
 show = "note"                 # note, panel, or send (the focused agent's composer, as a draft it never sends itself)
+
+[[keybinding]]                # a shortcut for one of its commands (at most 16)
+command = "status"
+key = "Meta+Alt+KeyQ"         # the window's key names; Meta always (so no terminal or typed key is taken), then
+                              # one key. A key the window or you already hold stays yours.
+
+[[status]]                    # an item in the status bar (at most 2), shown with the plugin mark; pressing it
+                              # runs its command. A change of its text asks for approval again.
+name = "quiet"
+text = "Quiet"                # 1 to 24 characters
+command = "status"            # optional
 ```
 
 A panel takes the fields of a script or web widget's `widget.toml`, and every part is checked by the same rules: a
@@ -144,6 +155,11 @@ repository on GitHub. Each entry pins a plugin to one commit and lists every fil
 hash matches; one file changed after the catalogue was made installs nothing. An installed plugin is off and not
 approved, so it runs nothing until you review it. When the catalogue has a newer version, the button says Update;
 the old folder moves to `plugins/.removed/` and the new one asks for approval again.
+
+The catalogue also keeps a kill list (`plugins/kill-list.json`): a plugin found harmful, every copy or only some
+commits, with the reason. A plugin on it is not installed, and an installed copy is turned off, says why on the
+Plugins page and cannot be turned on. Nunchiro reads the list on each install and again every 6 hours while a plugin
+from the catalogue is installed; a list it cannot read leaves the last one it read in force.
 
 The catalogue holds Nunchiro's own examples for now. It is a folder of the main repository, read from GitHub the
 way a separate catalogue repository would be; `scripts/plugin-catalog.py` writes it.

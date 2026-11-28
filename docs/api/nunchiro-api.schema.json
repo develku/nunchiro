@@ -978,6 +978,13 @@
           "description": "The equivalent command line (read level).",
           "type": "string"
         },
+        "extras": {
+          "description": "A plugin's shortcuts and status items, as its access lines (the sheet lists them under its parts).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "hash": {
           "description": "The hash a grant must quote, so the user approves exactly what the sheet showed.",
           "type": "string"
@@ -3849,6 +3856,23 @@
       ],
       "type": "object"
     },
+    "Keybinding": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "description": "One of this plugin's commands.",
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "key"
+      ],
+      "type": "object"
+    },
     "Kid": {
       "properties": {
         "id": {
@@ -4605,6 +4629,13 @@
     "Listed": {
       "description": "One row of the Plugins page.",
       "properties": {
+        "blocked": {
+          "description": "Why the catalogue it came from blocks it (its kill list): it is off and cannot be turned on.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "error": {
           "type": [
             "string",
@@ -6242,6 +6273,13 @@
           "description": "The folder's name: a-z, 0-9, - and _ (up to 64).",
           "type": "string"
         },
+        "keybinding": {
+          "description": "Keyboard shortcuts for its commands (`Meta+Shift+KeyH`: the window's own key names). A key the window or the\nuser already holds stays theirs.",
+          "items": {
+            "$ref": "#/$defs/Keybinding"
+          },
+          "type": "array"
+        },
         "name": {
           "type": "string"
         },
@@ -6263,6 +6301,13 @@
           "description": "Values the user sets on the Plugins page; every run gets them as `settings`.",
           "items": {
             "$ref": "#/$defs/Setting"
+          },
+          "type": "array"
+        },
+        "status": {
+          "description": "Short items in the status bar; pressing one runs its command.",
+          "items": {
+            "$ref": "#/$defs/StatusItem"
           },
           "type": "array"
         },
@@ -16059,6 +16104,30 @@
       "required": [
         "kind",
         "project"
+      ],
+      "type": "object"
+    },
+    "StatusItem": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "description": "One of this plugin's commands, run when the item is pressed.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "text": {
+          "description": "At most 24 characters.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "text"
       ],
       "type": "object"
     },

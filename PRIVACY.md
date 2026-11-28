@@ -22,7 +22,7 @@ What leaves your Mac is listed below. `tests/scenario/test_outbound_hosts.py` fa
 |---|---|---|
 | `cdnjs.cloudflare.com`, `cdn.jsdelivr.net`, `unpkg.com`, `cdn.tailwindcss.com`, `code.jquery.com` | After you approve a script library that an artifact page names: the file is downloaded once at its pinned version, then served from the cache | A download request for that file |
 | `raw.githubusercontent.com` | "Browse themes online" in the theme settings | Download requests for theme files at a pinned commit |
-| `raw.githubusercontent.com` | "Browse plugins" on the Plugins page and `nunchiro plugin catalog` or `install` | Download requests for this repository's plugin catalogue, and for a plugin's files at its pinned commit |
+| `raw.githubusercontent.com` | "Browse plugins" on the Plugins page and `nunchiro plugin catalog` or `install`; the kill list also on each install and, while a plugin installed from the catalogue is in its folder and the last read is over 6 hours old (after a failed attempt, not again for 15 minutes), when the window opens or comes back into focus, the palette or the Plugins page lists plugins, or a plugin panel or command runs; a plugin check never reads it | Download requests for this repository's plugin catalogue and its kill list, and for a plugin's files at its pinned commit |
 | `www.google.com`, `duckduckgo.com`, `www.bing.com`, `kagi.com` | A search typed in the browser widget goes to the engine you chose; pages you open there load as in any browser | Your search text |
 | `claude.ai` | A claude.ai artifact link in a chat shows as a link; it opens when you click it | Nothing until you click |
 

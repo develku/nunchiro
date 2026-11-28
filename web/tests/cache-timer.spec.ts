@@ -16,7 +16,8 @@ async function idle(app: Page, core: Core, ttl?: number) {
   const s = core.agent(core.project('p'), 'alpha', 'x');
   await openWindow(app, {}, core);
   core.hook(s.id, 'UserPromptSubmit');
-  await expect(app.locator(`.row.wt2[data-hint-session="${s.id}"]`)).toBeVisible();
+  // The countdown starts at a stop the window saw after a turn it saw: wait for the row to read working first.
+  await expect(app.locator(`.row.wt2[data-hint-session="${s.id}"]`)).toHaveAttribute('data-kind', 'work');
   await expect(timer(app, s.id)).toHaveCount(0); // working: nothing yet
   core.hook(s.id, 'Stop');
   return s.id;

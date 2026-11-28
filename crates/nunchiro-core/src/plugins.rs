@@ -56,6 +56,81 @@ pub struct Plugin {
     /// Checks that may refuse a new session or replace a message an agent, a schedule or a token sends.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gate: Vec<Gate>,
+    /// Keyboard shortcuts for its commands (`Meta+Shift+KeyH`: the window's own key names). A key the window or the
+    /// user already holds stays theirs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keybinding: Vec<Keybinding>,
+    /// Short items in the status bar; pressing one runs its command.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub status: Vec<StatusItem>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Keybinding {
+    /// One of this plugin's commands.
+    pub command: String,
+    pub key: String,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct StatusItem {
+    pub name: String,
+    /// At most 24 characters.
+    pub text: String,
+    /// One of this plugin's commands, run when the item is pressed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+}
+/// Shortcuts and status items a plugin may add, at most.
+const MAX_KEYS: usize = 16;
+const MAX_STATUS: usize = 2;
+/// A shortcut as the window names keys: modifiers (Meta among them, so a typed key or a terminal's control key is
+/// never taken), then one key code.
+fn valid_key(key: &str) -> bool {
+    let mut parts: Vec<&str> = key.split('+').collect();
+    let Some(code) = parts.pop() else {
+        return false;
+    };
+    const MODS: [&str; 4] = ["Control", "Alt", "Shift", "Meta"];
+    // Meta always: without it a plugin could take Ctrl+C, Ctrl+D or Ctrl+Z from every terminal and agent, or a
+    // character Alt types on some layouts.
+    let mods_ok = parts.iter().all(|m| MODS.contains(m))
+        && parts.iter().collect::<BTreeSet<_>>().len() == parts.len()
+        && parts.contains(&"Meta");
+    let one = |p: &str, rest: &str| {
+        code.strip_prefix(p)
+            .is_some_and(|c| c.len() == 1 && rest.contains(c))
+    };
+    let named = [
+        "Comma",
+        "Period",
+        "Slash",
+        "Semicolon",
+        "Quote",
+        "BracketLeft",
+        "BracketRight",
+        "Backslash",
+        "Minus",
+        "Equal",
+        "Backquote",
+        "Enter",
+        "Space",
+        "ArrowUp",
+        "ArrowDown",
+        "ArrowLeft",
+        "ArrowRight",
+    ];
+    let function = code
+        .strip_prefix('F')
+        .and_then(|n| n.parse::<u8>().ok())
+        .is_some_and(|n| (1..=12).contains(&n));
+    mods_ok
+        && (one("Key", "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+            || one("Digit", "0123456789")
+            || named.contains(&code)
+            || function)
 }
 /// A check run before an action: it answers `{"allow": true}`, `{"allow": false, "reason": "..."}` or, before a
 /// message, `{"allow": true, "text": "..."}` to replace it. It can do nothing else.
@@ -254,6 +329,41 @@ pub fn parse(text: &str, id: &str) -> Result<Plugin, String> {
         }
         part_manifest(&p, name)?;
     }
+    let has_command = |c: &str| p.command.iter().any(|x| x.name == c);
+    if p.keybinding.len() > MAX_KEYS || p.status.len() > MAX_STATUS {
+        return Err(format!(
+            "a plugin has at most {MAX_KEYS} shortcuts and {MAX_STATUS} status items"
+        ));
+    }
+    let mut chords = BTreeSet::new();
+    for k in &p.keybinding {
+        if !has_command(&k.command) {
+            return Err(format!("shortcut {}: no command {:?}", k.key, k.command));
+        }
+        if !valid_key(&k.key) || !chords.insert(k.key.as_str()) {
+            return Err(format!(
+                "shortcut {:?} is invalid or repeated: use modifiers with Meta among them, then one key, as Meta+Shift+KeyH",
+                k.key
+            ));
+        }
+    }
+    let mut items = BTreeSet::new();
+    for s in &p.status {
+        if !approval::valid_name(&s.name) || !items.insert(s.name.as_str()) {
+            return Err(format!("status item {:?} is invalid or repeated", s.name));
+        }
+        if s.text.is_empty() || s.text.chars().count() > 24 || !shown(&s.text) {
+            return Err(format!(
+                "status item {}: its text is 1 to 24 plain characters",
+                s.name
+            ));
+        }
+        if let Some(c) = &s.command
+            && !has_command(c)
+        {
+            return Err(format!("status item {}: no command {c:?}", s.name));
+        }
+    }
     let mut keys = BTreeSet::new();
     for s in &p.setting {
         if !approval::valid_name(&s.key) || !keys.insert(s.key.as_str()) {
@@ -414,6 +524,16 @@ pub(crate) fn access(p: &Plugin) -> BTreeSet<String> {
     for panel in &p.panel {
         out.insert(format!("panel {} is a {} panel", panel.name, panel.kind));
     }
+    for k in &p.keybinding {
+        out.insert(format!("command {} on key {}", k.command, k.key));
+    }
+    for item in &p.status {
+        out.insert(format!("status item {}", item.name));
+        out.insert(format!("status item {} shows {:?}", item.name, item.text));
+        if let Some(c) = &item.command {
+            out.insert(format!("status item {} runs command {c}", item.name));
+        }
+    }
     if let Some(a) = &p.author {
         out.insert(format!("author {a}"));
     }
@@ -508,6 +628,33 @@ struct Store {
     on: BTreeSet<String>,
     #[serde(default)]
     settings: BTreeMap<String, BTreeMap<String, Value>>,
+    /// The plugins installed from a catalogue: the commit and the catalogue's origin, for its kill list.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    installed: BTreeMap<String, Installed>,
+    /// Plugins that were on when their catalogue's kill list turned them off: a check of theirs that fails closed
+    /// keeps refusing.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    turned_off: BTreeSet<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct Installed {
+    pub commit: String,
+    pub origin: String,
+}
+/// Records where an install from a catalogue came from (`plugins_online.rs`), for its kill list.
+pub(crate) fn record_install(home: &Path, id: &str, at: Installed) -> Result<(), String> {
+    change(home, |store| {
+        store.installed.insert(id.into(), at);
+    })
+}
+/// Every catalogue a plugin was installed from, with the plugins and commits from it.
+pub(crate) fn installed(home: &Path) -> BTreeMap<String, Installed> {
+    load(home).installed
+}
+/// Why the catalogue it came from blocks this plugin (its kill list); `None` when it is not on the list.
+pub(crate) fn blocked(home: &Path, id: &str) -> Option<String> {
+    let at = load(home).installed.remove(id)?;
+    crate::plugins_online::killed(home, &at.origin, id, &at.commit)
 }
 fn load(home: &Path) -> Store {
     fs::read(home.join(STORE))
@@ -515,22 +662,42 @@ fn load(home: &Path) -> Store {
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default()
 }
+/// One change of plugins.json at a time: two switches at once never lose one.
+fn change<T>(home: &Path, f: impl FnOnce(&mut Store) -> T) -> Result<T, String> {
+    static STORE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _one = STORE_LOCK.lock().map_err(|_| "plugins unavailable")?;
+    let mut store = load(home);
+    let out = f(&mut store);
+    save(home, &store)?;
+    Ok(out)
+}
 fn save(home: &Path, store: &Store) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(store).map_err(|e| e.to_string())?;
     crate::store::atomic_write(&home.join(STORE), &bytes)
 }
+/// Switches off a plugin its catalogue's kill list names, remembering that it was on.
+pub(crate) fn turn_off_blocked(home: &Path, id: &str) -> Result<(), String> {
+    change(home, |store| {
+        if store.on.remove(id) {
+            store.turned_off.insert(id.into());
+        }
+    })
+}
 /// Switches a plugin off (an install from the catalogue).
 pub(crate) fn turn_off(home: &Path, id: &str) -> Result<(), String> {
-    let mut store = load(home);
-    if store.on.remove(id) {
-        save(home, &store)?;
-    }
-    Ok(())
+    change(home, |store| {
+        store.on.remove(id);
+    })
 }
 /// A part's plugin is on (the switch on the Plugins page); its approval is checked separately.
 pub(crate) fn on(home: &Path, name: &str) -> Result<(), String> {
+    crate::plugins_online::refresh_if_stale(home);
     match split(name) {
         Some((id, _)) if !load(home).on.contains(id) => Err(format!("plugin {id} is off")),
+        Some((id, _)) => match blocked(home, id) {
+            Some(why) => Err(format!("plugin {id} is blocked by its catalogue: {why}")),
+            None => Ok(()),
+        },
         _ => Ok(()),
     }
 }
@@ -624,6 +791,9 @@ pub struct Listed {
     /// Changed since its approval but asking for nothing new (`approval::View::updated`): still approved.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub updated: bool,
+    /// Why the catalogue it came from blocks it (its kill list): it is off and cannot be turned on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocked: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plugin: Option<Plugin>,
     /// The current value of each setting (stored, else the default).
@@ -642,11 +812,13 @@ fn is_zero(n: &u64) -> bool {
     *n == 0
 }
 pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
+    crate::plugins_online::refresh_if_stale(home);
     let store = load(home);
     ids(home)
         .into_iter()
         .map(|id| {
-            let on = store.on.contains(&id);
+            let why = blocked(home, &id);
+            let on = store.on.contains(&id) && why.is_none(); // a blocked plugin runs nothing
             let name = format!("{PREFIX}{id}");
             let parsed = approval::status(home, &name)
                 .and_then(|v| Ok((v.state, v.updated, parse(&v.manifest_text, &id)?)));
@@ -672,6 +844,7 @@ pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
                         on,
                         state: Some(state),
                         updated,
+                        blocked: why.clone(),
                         plugin: Some(p),
                         error: None,
                         needs,
@@ -683,6 +856,7 @@ pub fn list(home: &Path, script_on: bool, web_on: bool) -> Vec<Listed> {
                     on,
                     state: None,
                     updated: false,
+                    blocked: why.clone(),
                     plugin: None,
                     values: BTreeMap::new(),
                     error: Some(e),
@@ -837,15 +1011,19 @@ pub(crate) fn handle(
         }
         Action::Set { id, on } => {
             read(home, &id)?;
-            let mut store = load(home);
-            let off = !on;
-            if on {
-                store.on.insert(id.clone());
-            } else {
-                store.on.remove(&id);
+            if on && let Some(why) = blocked(home, &id) {
+                return Err(format!("plugin {id} is blocked by its catalogue: {why}"));
             }
+            let off = !on;
             // Saved first, so no new run starts between the stop and the switch.
-            save(home, &store)?;
+            change(home, |store| {
+                store.turned_off.remove(&id);
+                if on {
+                    store.on.insert(id.clone());
+                } else {
+                    store.on.remove(&id);
+                }
+            })?;
             if off {
                 crate::sandbox::stop_subjects(home, &part_name(&id, "")); // a part still running stops now
             }
@@ -859,9 +1037,9 @@ pub(crate) fn handle(
                 .find(|s| s.key == key)
                 .ok_or_else(|| format!("plugin {id} has no setting {key}"))?;
             value(s, &v)?;
-            let mut store = load(home);
-            store.settings.entry(id).or_default().insert(key, v);
-            save(home, &store)?;
+            change(home, |store| {
+                store.settings.entry(id).or_default().insert(key, v);
+            })?;
             listed(home)
         }
         Action::Run {
@@ -953,10 +1131,12 @@ pub(crate) fn handle(
                 return Err("invalid plugin id".into());
             }
             set_aside(home, &id)?;
-            let mut store = load(home);
-            store.on.remove(&id);
-            store.settings.remove(&id);
-            save(home, &store)?;
+            change(home, |store| {
+                store.on.remove(&id);
+                store.settings.remove(&id);
+                store.installed.remove(&id);
+                store.turned_off.remove(&id);
+            })?;
             // Its approval goes with it: the same folder moved back asks again.
             approval::forget_plugin(home, &id)?;
             listed(home)
@@ -1112,10 +1292,29 @@ fn gates(
     event: Value,
 ) -> Result<Option<(String, String)>, (String, String)> {
     let store = load(home);
+    let enabled = script_widgets(home);
+    // A check its catalogue blocks is never run; one that fails closed (`on_error = "refuse"`) keeps failing closed,
+    // so a blocked guard never lets through what it stopped.
+    if enabled {
+        for id in ids(home) {
+            // Only a check that was deciding: approved, and on when its catalogue blocked it.
+            let was_deciding = (store.on.contains(&id) || store.turned_off.contains(&id))
+                && approval::check(home, &format!("{PREFIX}{id}")).is_ok();
+            let Some(why) = blocked(home, &id).filter(|_| was_deciding) else {
+                continue;
+            };
+            if let Ok(p) = read(home, &id)
+                && p.gate
+                    .iter()
+                    .any(|g| g.on == on && g.on_error == OnError::Refuse)
+            {
+                return Err((p.name, format!("blocked by its catalogue: {why}")));
+            }
+        }
+    }
     if store.on.is_empty() {
         return Ok(None);
     }
-    let enabled = script_widgets(home);
     // Script parts are off: no check runs, as no panel or command does (the Plugins page says so).
     let Ok(config) = widgets::Config::core(enabled) else {
         return Ok(None);
@@ -1127,7 +1326,10 @@ fn gates(
     let mut replaced: Option<(String, String)> = None;
     // All checks of one action together get `BUDGET`; one past it refuses, as a check that does not answer.
     let deadline = std::time::Instant::now() + BUDGET;
-    for id in ids(home).into_iter().filter(|id| store.on.contains(id)) {
+    for id in ids(home)
+        .into_iter()
+        .filter(|id| store.on.contains(id) && blocked(home, id).is_none())
+    {
         let Ok(p) = read(home, &id) else { continue };
         let mine: Vec<&Gate> = p.gate.iter().filter(|g| g.on == on).collect();
         if mine.is_empty() || approval::check(home, &format!("{PREFIX}{id}")).is_err() {

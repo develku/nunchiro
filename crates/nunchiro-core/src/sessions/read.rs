@@ -382,7 +382,12 @@ impl Sessions {
                 .is_some_and(|p| p.input_blocked());
         meta.completion_seq = meta.attention.completion_seq;
         // Ticket 286: a shell left after its agent quit has no agent footer and answers nothing.
-        let shell_left = self.entries.get(&meta.id).is_some_and(|e| e.agent_ended);
+        // Shown only once its card is judged (`card_judged`, at most `ENDED_MARK_WAIT`): before, a crash read as a
+        // finished turn (a done row, a "Just finished" line), then as failed.
+        let shell_left = self
+            .entries
+            .get(&meta.id)
+            .is_some_and(|e| e.agent_ended && e.card_due.is_none());
         meta.agent_ended = shell_left;
         let live = meta.state == SessionState::Running && !shell_left;
         // CHAT-PERMCHIP: read from the live screen, never stored. S9: read once per screen change, not per snapshot.
