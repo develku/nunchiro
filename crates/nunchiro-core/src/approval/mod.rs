@@ -266,6 +266,10 @@ fn plugin_subject(home: &Path, id: &str, part: Option<&str>) -> Result<Subject, 
         .to_vec();
     let text = String::from_utf8(bytes).map_err(|_| "plugin.toml is not UTF-8")?;
     let plugin = crate::plugins::parse(&text, id)?;
+    // A skill that could run a command is refused before anything shows it (`plugins/skills.rs`).
+    crate::plugins::skills::check_skills(&plugin, |path| {
+        files.iter().find(|f| f.path() == path).map(|f| f.bytes())
+    })?;
     let manifest = match part {
         None => crate::plugins::summary(&plugin),
         Some(part) => crate::plugins::part_manifest(&plugin, part)?,
@@ -337,7 +341,9 @@ fn view(name: &str, s: Subject, stored: Option<&store::Approval>) -> View {
     let extras = access_of(name, &s)
         .unwrap_or_default()
         .into_iter()
-        .filter(|a| a.contains(" on key ") || a.starts_with("status item "))
+        .filter(|a| {
+            a.contains(" on key ") || a.starts_with("status item ") || a.starts_with("skill ")
+        })
         .collect();
     View {
         parts,

@@ -136,7 +136,7 @@ export const en = {
   "plugins.ran": "{name}: {text}",
   "plugins.ranEmpty": "{name} ran and printed nothing.",
   "plugins.drafted": "{name} put its output in the message box. Nothing was sent.",
-  "plugins.sheet.extras": "Shortcuts and status items",
+  "plugins.sheet.extras": "Shortcuts, status items and skills",
   "plugins.blockedNote": "{name} was turned off: its catalogue blocks it. {why}",
   "plugins.blockedNoteOff": "{name} is blocked by its catalogue. {why}",
   "plugins.state.blocked": "Blocked",

@@ -8104,7 +8104,7 @@ fn a_plugin_skill_reaches_an_unlocked_claude_start_only() {
             .unwrap()
             .into_iter()
             .map(|o| o.into_string().unwrap())
-            .filter(|f| f.contains("plugin-skills"))
+            .filter(|f| f.contains("/plugin-skills/sk-"))
             .count()
     };
     assert_eq!(dirs(false), 1);

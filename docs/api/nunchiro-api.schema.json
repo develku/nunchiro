@@ -6304,6 +6304,13 @@
           },
           "type": "array"
         },
+        "skill": {
+          "description": "Skills for new Claude sessions: each names `skills/<name>/`, whose SKILL.md alone reaches them (`skills.rs`).",
+          "items": {
+            "$ref": "#/$defs/Skill"
+          },
+          "type": "array"
+        },
         "status": {
           "description": "Short items in the status bar; pressing one runs its command.",
           "items": {
@@ -15890,6 +15897,19 @@
         "unknown"
       ],
       "type": "string"
+    },
+    "Skill": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "The folder under `skills/` and the `name` in its SKILL.md.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
     },
     "SkipPermissions": {
       "description": "Bypass permissions (Claude `bypassPermissions`) for one session. `Unavailable`: Claude's Shift+Tab cycle has no such\nmode (the session was not launched with the flags that list it); `Available`: pickable; `Disabled`: Claude's own\nsettings turn it off (`permissions.disableBypassPermissionsMode`); `NeedsSetting`: not in this session's cycle and the\nstored choice is Ask, so a new session would not have it either.",

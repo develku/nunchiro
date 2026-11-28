@@ -1033,7 +1033,7 @@ fn folder_permissions(folder: &Path) -> Option<serde_json::Value> {
 /// nothing here writes the agents' home folders. Ticket 362's `agent_permission::claude_limits` is the one read of them,
 /// of Claude's settings files only, read-only.
 /// `locked` (ticket 1002, owner R2): a Home seat lock gets the shipped skill only: no custom plugin folder (its hooks
-/// could rewrite a call after the lock hashed it) and no own MCP server.
+/// could rewrite a call after the lock hashed it), no own MCP server and no plugin skill.
 pub(super) fn extension_flags(
     home: &Path,
     settings: &Settings,
@@ -1052,6 +1052,7 @@ pub(super) fn extension_flags(
             }
             if !locked {
                 out.extend(crate::extensions::claude_flags(home, &on, project));
+                out.extend(crate::plugins::skills::claude_skill_flags(home));
             }
         }
         AgentKind::Codex => {
