@@ -6,9 +6,10 @@
 # stablyai/orca 2fbb071e).
 # Rust runs on macOS only: nunchiro-core uses macOS APIs (libproc, LOCAL_PEERTOKEN, renameatx_np) and does not build for
 # Linux, so the tests are split over macOS runners from one nextest archive instead of over Linux runners.
-# Two steps on pull requests: every push runs only the Linux jobs; the macOS jobs run once the pull request is ready
-# (auto-merge on, or the `ready-ci` label), because the free plan's 5 macOS runners cannot serve every push. Until then
-# `gate` fails, so nothing merges untested; turning auto-merge on or adding the label starts the full run.
+# Pull requests run only the Linux jobs; the macOS jobs run in the merge queue, on the tree that will land, and on main.
+# The free plan's 5 macOS runners cannot serve every push, and a pull request's own macOS run tested a tree that the queue
+# tests again, so it only delayed the queue. The `ready-ci` label still asks for a pull request's macOS run (to see a
+# failure before queueing); then `gate` waits for it. Nothing lands untested: the queue's run is required.
 name: CI
 
 on:
@@ -206,14 +207,13 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.base_ref }}
-      # Main and merge-queue runs are always ready. The event's pull request is read as it is now, so a later push to a
-      # ready pull request runs the full set too.
+      # Main and merge-queue runs are always ready; a pull request only with the `ready-ci` label. The event's pull request
+      # is read as it is now, so a later push to a labelled pull request runs the full set too.
       - id: ready
         run: echo "ready=$READY" >> "$GITHUB_OUTPUT"
         env:
           READY: >-
-            ${{ github.event_name != 'pull_request' || github.event.pull_request.auto_merge != null
-            || contains(github.event.pull_request.labels.*.name, 'ready-ci') }}
+            ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ready-ci') }}
 
   app:
     needs: changes
@@ -280,8 +280,8 @@ jobs:
   # ci.yml:660-696; Orca pr.yml:1279). Add every new job to `needs`. The allowed skips: `app` when `changes` said no app
   # input changed, `rust-build`, `rust-test` and `web` when `changes` said only safe docs changed, and `rust-build` and
   # `rust-test` when it said only window code and tests no Rust file reads changed, and `rust-test` when rust-build ran
-  # the tests itself (a push to main) and says so in its `tests` output. A pull request that is not ready skips the macOS
-  # jobs without an allowed reason, so it fails here, unless none of them would have run (only safe docs changed).
+  # the tests itself (a push to main) and says so in its `tests` output, and the four macOS jobs on a pull request without
+  # the `ready-ci` label: the merge queue runs them on the tree that lands, and its run of this check is required.
   gate:
     if: always()
     needs: [lint, changes, rust-build, rust-test, app, web]
@@ -290,6 +290,7 @@ jobs:
     steps:
       - env:
           RESULTS: ${{ toJSON(needs) }}
+          EVENT: ${{ github.event_name }}
         run: |
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           echo "$RESULTS" | jq -e '.changes.outputs.app as $app | .changes.outputs.docs_only as $docs
@@ -297,8 +298,8 @@ jobs:
             .value.result == "success" or (.key == "app" and .value.result == "skipped" and $app == "false")
             or ((.key == "rust-build" or .key == "rust-test" or .key == "web") and .value.result == "skipped" and $docs == "true")
             or ((.key == "rust-build" or .key == "rust-test") and .value.result == "skipped" and $webonly == "true")
-            or (.key == "rust-test" and .value.result == "skipped" and $tests == "true"))' > /dev/null && exit 0
-          if [ "$(echo "$RESULTS" | jq -r '.changes.outputs.ready')" != true ]; then
-            echo "::error::macOS checks run when auto-merge is on or the ready-ci label is set"
-          fi
+            or (.key == "rust-test" and .value.result == "skipped" and $tests == "true")
+            or ((.key == "rust-build" or .key == "rust-test" or .key == "app" or .key == "web")
+              and .value.result == "skipped" and $ready == "false" and $event == "pull_request"))' \
+            --arg event "$EVENT" --arg ready "$(echo "$RESULTS" | jq -r '.changes.outputs.ready')" > /dev/null && exit 0
           exit 1
