@@ -68,8 +68,8 @@ test('cache_timer_tracks_every_project_with_a_scoped_files_view: a Files view ne
 // Node side: the store on a clock the test sets, and the one interval it starts, captured.
 const t = makeT('en', 'en');
 const T0 = 50_000_000;
-const sess = (id: string, kind: Session['kind'], working: boolean, more: { state?: string; waiting?: boolean; stale?: boolean } = {}): Session =>
-  ({ id, kind, project: '/p', cwd: '/p', label: id, state: more.state ?? 'running', agent_version: null, untested: false, pid: 1, pending: [], attention: { working, waiting: !!more.waiting, stale: !!more.stale, failed: false, last_activity: 0 } }) as Session;
+const sess = (id: string, kind: Session['kind'], working: boolean, more: { state?: string; waiting?: boolean; stale?: boolean; seq?: number } = {}): Session =>
+  ({ id, kind, project: '/p', cwd: '/p', label: id, state: more.state ?? 'running', agent_version: null, untested: false, pid: 1, pending: [], completion_seq: more.seq ?? 0, attention: { working, waiting: !!more.waiting, stale: !!more.stale, failed: false, last_activity: 0 } }) as Session;
 const html = (...ids: string[]) => renderToStaticMarkup(createElement(CacheTimer, { ids, t }));
 /** Runs `body` with Date.now at `clock.at` and setInterval recorded (its callbacks run when the test says). */
 function clocked(body: (clock: { at: number; ticks: (() => void)[]; live: () => number }) => void) {
@@ -104,6 +104,18 @@ base('cache_timer_shows_cache_cold_at_zero: 0:01 before the expiry, "cache cold"
     clock.at = T0 + 2 * FIVE_MIN;
     trackCache([sess('a', 'claude', false)], true, FIVE_MIN); // a later snapshot of the same idle session
     expect(html('a')).toContain('>cache cold<');
+  }),
+);
+
+base('cache_timer_starts_on_a_turn_the_window_never_saw_working: a finished-turn count that grows starts 5:00; a session first seen idle shows nothing', () =>
+  clocked(() => {
+    // A turn shorter than one window update: the window sees the session idle before and after, with one more finished turn.
+    trackCache([sess('a', 'claude', false), sess('b', 'claude', false, { seq: 3 })], true, FIVE_MIN);
+    expect(html('a')).toBe('');
+    expect(html('b')).toBe(''); // finished before this window saw it: no known stop
+    trackCache([sess('a', 'claude', false, { seq: 1 }), sess('b', 'claude', false, { seq: 3 })], true, FIVE_MIN);
+    expect(html('a')).toContain('>5:00<');
+    expect(html('b')).toBe('');
   }),
 );
 
