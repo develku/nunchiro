@@ -103,9 +103,15 @@ fn with<T>(f: impl FnOnce(&mut HashMap<String, Job>) -> T) -> Result<T, String> 
     Ok(f(guard.get_or_insert_with(HashMap::new)))
 }
 
-/// Clones that have not ended. An unreadable list counts as one, so a core swap waits rather than ends a clone.
+/// Clones that have not ended. An unreadable list counts as one, so a core swap waits rather than ends a clone. As in
+/// `stop_all`, the lib tests' many cores share this list: a core test counts no clone this module's tests started.
 pub(crate) fn running() -> usize {
-    with(|all| all.values().filter(|j| j.ended.is_none()).count()).unwrap_or(1)
+    with(|all| {
+        all.values()
+            .filter(|j| j.ended.is_none() && (!cfg!(test) || !test_job(j)))
+            .count()
+    })
+    .unwrap_or(1)
 }
 
 /// Each request answers at once with the job's state; a refused start is a failed state that has no job behind it.
