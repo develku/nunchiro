@@ -282,6 +282,8 @@ const BEFORE: Record<string, string> = {
   'composer.mcp.sealed': 'Sealed',
   'composer.mcp.kept': 'The conversation is kept.',
   'composer.mcp.listed': 'Listed in Settings > Skills & hooks, where you can remove it.',
+  'composer.folder.given': '{folder} · read and write for this conversation',
+  'composer.folder.remove': 'Remove',
 };
 
 const src = path.resolve(import.meta.dirname, '../src');
