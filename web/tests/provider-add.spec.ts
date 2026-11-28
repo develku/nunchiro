@@ -180,10 +180,11 @@ test('tiles_route_by_what_each_tool_can_do', async ({ app, core }) => {
   // Terminal only: no ACP form for Aider.
   await expect(tile(app, 'aider')).toContainText('Terminal only');
   await expect(tile(app, 'aider').and(app.locator('button'))).toHaveCount(0);
-  // Not installed: the tool's install page, no form.
+  // A listed agent: its four steps with the install command, no page opened and no bare form.
   await tile(app, 'cursor').click();
-  expect(await app.evaluate(() => (window as any).__opened)).toBe('https://cursor.com/docs/cli/overview');
-  await expect(form(app, 'Cursor')).toHaveCount(0);
+  expect(await app.evaluate(() => (window as any).__opened)).toBeUndefined();
+  await expect(app.locator('[data-field="acp-steps"]')).toContainText('curl https://cursor.com/install -fsS | bash');
+  await expect(form(app, 'Cursor').getByRole('textbox', { name: 'Command' })).toHaveCount(0);
   // No confirmed ACP switch: the install page and the blank form.
   await tile(app, 'pi').click();
   expect(await app.evaluate(() => (window as any).__opened)).toBe('https://pi.dev');
@@ -195,8 +196,9 @@ test('tiles_route_by_what_each_tool_can_do', async ({ app, core }) => {
   await expect(form(app, 'Kimi').locator('.prv-tag')).toHaveText(['MOONSHOT_API_KEY×']);
   // No "new" chips from the mock, and every group is complete.
   await expect(app.locator('#s-accounts')).not.toContainText('새로 필요');
-  await expect(app.locator('#s-accounts .prv-tile')).toHaveCount(12);
-  await expect(tile(app, 'gemini')).toContainText('Installed');
+  await expect(app.locator('#s-accounts .prv-tile')).toHaveCount(21);
+  // A listed agent's tile says what it costs.
+  await expect(tile(app, 'gemini')).toContainText('Paid key');
   // vc-4 (look 1117): every tile says its state; Muse Code (no install page known) is set up by hand.
   await expect(tile(app, 'muse').locator('.prv-st')).toHaveText('Set up');
   for (const st of await app.locator('#s-accounts .prv-tile .prv-st').allTextContents()) expect(st.trim()).not.toBe('');
