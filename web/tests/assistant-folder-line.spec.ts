@@ -45,28 +45,50 @@ function record(page: import('@playwright/test').Page) {
   return { sent, ops: (op: string) => sent.filter((r) => r.op === op) };
 }
 
-test('folder_offer_typed_words: Enter offers only the words typed in the box, before the message goes; a paste offers none', async ({ page, chatCore }) => {
+/** A paste as the system makes it: `beforeinput` and `paste` with the text, then the text in the box and its `input`. */
+async function paste(box: import('@playwright/test').Locator, text: string) {
+  await box.evaluate((el, t) => {
+    const data = new DataTransfer();
+    data.setData('text/plain', t);
+    el.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertFromPaste', data: t, bubbles: true, cancelable: true }));
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    const box = el as HTMLTextAreaElement;
+    box.setRangeText(t, box.selectionStart, box.selectionEnd, 'end');
+    el.dispatchEvent(new InputEvent('input', { inputType: 'insertFromPaste', data: t, bubbles: true }));
+  }, text);
+}
+
+test('folder_offer_typed_words: Enter offers a box of typed keys only, before the message goes; a paste, an edited paste or a recalled prompt offers nothing', async ({ page, chatCore }) => {
   const a = chatCore.chat('a', true, false, 'p');
   const w = record(page);
   await openChat(page, a.id);
   const box = page.locator('#composer');
-  await box.fill('file the PDFs in /Users/someone/Documents/Orders please');
+  const typed = 'file the PDFs in /Users/someone/Documents/Orders please';
+  await box.click();
+  await box.pressSequentially(typed);
   await box.press('Enter');
   await expect.poll(() => w.ops('send_text').length).toBe(1);
-  expect(w.ops('folder_offer')).toEqual([{ op: 'folder_offer', id: a.id, text: 'file the PDFs in /Users/someone/Documents/Orders please' }]);
+  expect(w.ops('folder_offer')).toEqual([{ op: 'folder_offer', id: a.id, text: typed }]);
   expect(w.sent.findIndex((r) => r.op === 'folder_offer')).toBeLessThan(w.sent.findIndex((r) => r.op === 'send_text'));
-  // A pasted path is no typed word: nothing is offered for it.
-  await box.fill('file the PDFs in ');
-  await box.evaluate((el, text) => {
-    const data = new DataTransfer();
-    data.setData('text/plain', text);
-    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
-    const box = el as HTMLTextAreaElement;
-    box.setRangeText(text, box.value.length, box.value.length, 'end');
-    el.dispatchEvent(new InputEvent('input', { inputType: 'insertFromPaste', data: text, bubbles: true }));
-  }, '/Users/someone/Documents/Pasted');
-  await expect(box).toHaveValue('file the PDFs in /Users/someone/Documents/Pasted');
+  // A pasted path, even with typed words around it: no offer for the message.
+  await box.pressSequentially('file the PDFs in ');
+  await paste(box, '/Users/someone/Documents/Pasted');
+  await box.pressSequentially(' now');
+  await expect(box).toHaveValue('file the PDFs in /Users/someone/Documents/Pasted now');
   await box.press('Enter');
   await expect.poll(() => w.ops('send_text').length).toBe(2);
   expect(w.ops('folder_offer')).toHaveLength(1);
+  // Text Nunchiro put in the box (here a recalled earlier prompt), then typed on: no offer either.
+  await box.evaluate((el) => {
+    const box = el as HTMLTextAreaElement;
+    box.value = 'an earlier prompt from /Users/someone/Elsewhere';
+  });
+  await box.pressSequentially(' again');
+  await box.press('Enter');
+  await expect.poll(() => w.ops('send_text').length).toBe(3);
+  expect(w.ops('folder_offer')).toHaveLength(1);
+  // After that send the box is clean again: typed words offer.
+  await box.pressSequentially('and /Users/someone/Documents/Orders');
+  await box.press('Enter');
+  await expect.poll(() => w.ops('folder_offer').length).toBe(2);
 });
